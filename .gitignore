@@ -1,0 +1,6 @@
+backend/.env
+backend/node_modules
+admin/node_modules
+admin/dist
+backend/tmp
+backend/logs
