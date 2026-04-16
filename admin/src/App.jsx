@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import './index.css'
 import {
@@ -12,8 +12,48 @@ import {
   saveFeedback,
 } from './api'
 
+function TopDebugBanner() {
+  return (
+    <div
+      style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 5000,
+        marginBottom: '0.75rem',
+        padding: '0.85rem 1rem',
+        borderRadius: '14px',
+        background: '#c62828',
+        color: '#fff',
+        fontWeight: 700,
+        textAlign: 'center',
+      }}
+    >
+      Ja, diese App.jsx laeuft
+    </div>
+  )
+}
+
 function getOfferCategoryLabel(offer) {
   return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
+}
+
+function formatValidityLabel(offer) {
+  const hasValidFrom = Boolean(offer?.validFrom)
+  const hasValidTo = Boolean(offer?.validTo)
+
+  if (hasValidFrom && hasValidTo) {
+    return `gueltig von ${dayjs(offer.validFrom).format('DD.MM.YYYY')} bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
+  }
+
+  if (hasValidFrom) {
+    return `gueltig ab ${dayjs(offer.validFrom).format('DD.MM.YYYY')}`
+  }
+
+  if (hasValidTo) {
+    return `gueltig bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
+  }
+
+  return 'aktuell verfuegbar, Enddatum nicht erkannt'
 }
 
 function normalizeCategoryLabel(value) {
@@ -23,6 +63,15 @@ function normalizeCategoryLabel(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
+}
+
+function normalizeRetailerKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 const CATEGORY_GROUP_RULES = [
@@ -84,45 +133,16 @@ const CATEGORY_GROUP_RULES = [
 function getMainCategoryLabel(category) {
   const normalized = normalizeCategoryLabel(category)
 
-  if (/(weisswein|weiss|rotwein|rose|ros[eé]|schaumwein|perlwein|prosecco|sekt|aperitif|digestif)/.test(normalized)) {
-    return 'Wein'
-  }
-
-  if (/(flaschenbier|dosenbier|helles|bier|radler|weizenbier)/.test(normalized)) {
-    return 'Bier'
-  }
-
-  if (/(gemahlen|ganze bohne|eiskaffee|kaffee|capsules|kapseln|espresso)/.test(normalized)) {
-    return 'Kaffee'
-  }
-
-  if (/(limonaden|mineralwasser|wasser|frucht gemusesafte|frucht gemuesesafte|sirupe|energydrinks|eistee|smoothies|milch joghurtgetranke|milch joghurtgetranke)/.test(normalized)) {
-    return 'Alkoholfreie Getraenke'
-  }
-
-  if (/(hartkase|frischkase|huttenkase|huettenkase|feta|mozarella|kase)/.test(normalized)) {
-    return 'Kaese'
-  }
-
-  if (/(pizza|pommes|eiscreme|eis am stiel|stanizl|tiefkuhl|tiefkuehl)/.test(normalized)) {
-    return 'Tiefkuehlkost'
-  }
-
-  if (/(reis|pasta|beilagen|sugo|wurzsauce|wurzsauce|pesto|kochzutaten|dressings|basis fixprodukte|mais champions|bohnen|frische pasta)/.test(normalized)) {
-    return 'Kochen & Vorrat'
-  }
-
-  if (/(tafelschokolade|fruchtgummi|schnitten|kekse|chips|knabberein|snacks|susswaren|suesswaren|schokoriegel|zuckerl|bonbons|nachos dips)/.test(normalized)) {
-    return 'Suesses & Snacks'
-  }
-
-  if (/(duschgele|shampoo|spulung|spuelung|deoderants|windeln|einlagen binden|gesichtspflege und reinigung|zahnbursten aufsteckbursten|zahnbuersten aufsteckbuersten)/.test(normalized)) {
-    return 'Drogerie & Hygiene'
-  }
-
-  if (/(tabs pads|reinigungsgerate tucher|reinigungsgeraete tuecher)/.test(normalized)) {
-    return 'Haushalt'
-  }
+  if (/(weisswein|weiss|rotwein|rose|ros[eé]|schaumwein|perlwein|prosecco|sekt|aperitif|digestif)/.test(normalized)) return 'Wein'
+  if (/(flaschenbier|dosenbier|helles|bier|radler|weizenbier)/.test(normalized)) return 'Bier'
+  if (/(gemahlen|ganze bohne|eiskaffee|kaffee|capsules|kapseln|espresso)/.test(normalized)) return 'Kaffee'
+  if (/(limonaden|mineralwasser|wasser|frucht gemusesafte|frucht gemuesesafte|sirupe|energydrinks|eistee|smoothies|milch joghurtgetranke|milch joghurtgetranke)/.test(normalized)) return 'Alkoholfreie Getraenke'
+  if (/(hartkase|frischkase|huttenkase|huettenkase|feta|mozarella|kase)/.test(normalized)) return 'Kaese'
+  if (/(pizza|pommes|eiscreme|eis am stiel|stanizl|tiefkuhl|tiefkuehl)/.test(normalized)) return 'Tiefkuehlkost'
+  if (/(reis|pasta|beilagen|sugo|wurzsauce|wurzsauce|pesto|kochzutaten|dressings|basis fixprodukte|mais champions|bohnen|frische pasta)/.test(normalized)) return 'Kochen & Vorrat'
+  if (/(tafelschokolade|fruchtgummi|schnitten|kekse|chips|knabberein|snacks|susswaren|suesswaren|schokoriegel|zuckerl|bonbons|nachos dips)/.test(normalized)) return 'Suesses & Snacks'
+  if (/(duschgele|shampoo|spulung|spuelung|deoderants|windeln|einlagen binden|gesichtspflege und reinigung|zahnbursten aufsteckbursten|zahnbuersten aufsteckbuersten)/.test(normalized)) return 'Drogerie & Hygiene'
+  if (/(tabs pads|reinigungsgerate tucher|reinigungsgeraete tuecher)/.test(normalized)) return 'Haushalt'
 
   return category
 }
@@ -136,13 +156,8 @@ function resolveMainCategoryLabel(category) {
     }
   }
 
-  if (normalized === 'lebensmittel') {
-    return 'Weitere Lebensmittel'
-  }
-
-  if (normalized === 'getraenke' || normalized === 'getranke') {
-    return 'Weitere Getraenke'
-  }
+  if (normalized === 'lebensmittel') return 'Weitere Lebensmittel'
+  if (normalized === 'getraenke' || normalized === 'getranke') return 'Weitere Getraenke'
 
   return getMainCategoryLabel(category) || category || 'Weitere Kategorien'
 }
@@ -168,6 +183,121 @@ function buildCategoryGroups(categories = []) {
     .sort((left, right) => left.mainCategory.localeCompare(right.mainCategory, 'de'))
 }
 
+function flattenRankingOffers(ranking) {
+  const seen = new Set()
+  const offers = []
+
+  for (const group of ranking?.rankedGroups || []) {
+    for (const offer of group.offers || []) {
+      const offerId = offer?.id || offer?._id || `${offer?.title}-${offer?.retailerName}-${offer?.priceCurrent?.amount}`
+
+      if (seen.has(offerId)) continue
+
+      seen.add(offerId)
+      offers.push({
+        ...offer,
+        id: offerId,
+      })
+    }
+  }
+
+  return offers
+}
+
+function getOfferRetailerKey(offer, retailers = []) {
+  if (offer?.retailerKey) return offer.retailerKey
+
+  const fromLookup = (retailers || []).find((item) => item.retailerName === offer?.retailerName)
+  if (fromLookup?.retailerKey) return fromLookup.retailerKey
+
+  return normalizeRetailerKey(offer?.retailerName)
+}
+
+function filterOffers(offers, filters, retailers) {
+  const searchNeedle = String(filters.queryInput || '').trim().toLowerCase()
+
+  return (offers || []).filter((offer) => {
+    const offerRetailerKey = getOfferRetailerKey(offer, retailers)
+    const offerCategory = getOfferCategoryLabel(offer)
+
+    if (filters.selectedRetailers.length > 0 && !filters.selectedRetailers.includes(offerRetailerKey)) return false
+    if (filters.selectedCategories.length > 0 && !filters.selectedCategories.includes(offerCategory)) return false
+    if (offer.customerProgramRequired && !filters.retailerPrograms?.[offerRetailerKey]) return false
+
+    if (searchNeedle) {
+      const haystack = [
+        offer.title,
+        offer.retailerName,
+        offerCategory,
+        offer.categoryPrimary,
+        offer.categorySecondary,
+        offer.quantityText,
+        offer.conditionsText,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      if (!haystack.includes(searchNeedle)) return false
+    }
+
+    return true
+  })
+}
+
+function buildClientRanking(baseRanking, filteredOffers) {
+  const grouped = new Map()
+
+  for (const offer of filteredOffers) {
+    const unit = offer?.normalizedUnitPrice?.unit || 'ohne Einheit'
+
+    if (!grouped.has(unit)) {
+      grouped.set(unit, [])
+    }
+
+    grouped.get(unit).push(offer)
+  }
+
+  const rankedGroups = [...grouped.entries()]
+    .map(([unit, offers]) => {
+      const sortedOffers = [...offers].sort((left, right) => {
+        const leftUnit = Number(left?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+        const rightUnit = Number(right?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+
+        if (leftUnit !== rightUnit) return leftUnit - rightUnit
+
+        const leftPrice = Number(left?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
+        const rightPrice = Number(right?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
+
+        return leftPrice - rightPrice
+      })
+
+      return { unit, offers: sortedOffers }
+    })
+    .sort((left, right) => {
+      const leftBest = Number(left.offers?.[0]?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+      const rightBest = Number(right.offers?.[0]?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+      return leftBest - rightBest
+    })
+
+  const firstBestOffer = rankedGroups[0]?.offers?.[0]
+  const resultCount = filteredOffers.length
+
+  return {
+    ...baseRanking,
+    rankedGroups,
+    summary: {
+      ...(baseRanking?.summary || {}),
+      resultCount,
+      displayedCount: resultCount,
+      completeResultSetVisible: true,
+      bestUnitPrice: firstBestOffer?.normalizedUnitPrice
+        ? `${firstBestOffer.normalizedUnitPrice.amount}/${firstBestOffer.normalizedUnitPrice.unit}`
+        : '-',
+    },
+  }
+}
+
 function getSupportingSourceBadges(offer) {
   const sources = Array.isArray(offer?.supportingSources) ? offer.supportingSources : []
   const seen = new Set()
@@ -176,10 +306,7 @@ function getSupportingSourceBadges(offer) {
     .map((source) => source.label || source.channel || 'Quelle')
     .filter(Boolean)
     .filter((label) => {
-      if (seen.has(label)) {
-        return false
-      }
-
+      if (seen.has(label)) return false
       seen.add(label)
       return true
     })
@@ -195,15 +322,74 @@ function MetricCard({ label, value, tone = 'default' }) {
   )
 }
 
+function LandingInfoCard({ title, children }) {
+  return (
+    <section className="panel">
+      <div className="panel__header">
+        <h2>{title}</h2>
+        <p>{children}</p>
+      </div>
+    </section>
+  )
+}
+
+function HeroLoaderModal({ open }) {
+  if (!open) return null
+
+  return (
+    <div
+      aria-live="polite"
+      aria-busy="true"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 3000,
+        display: 'grid',
+        placeItems: 'center',
+        background: 'rgba(12, 16, 26, 0.68)',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      <style>{`
+        @keyframes kkSpin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      <div
+        className="panel"
+        style={{
+          width: 'min(92vw, 520px)',
+          textAlign: 'center',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+        }}
+      >
+        <div className="panel__header" style={{ alignItems: 'center' }}>
+          <h2>Einen Moment, wir suchen gerade ...</h2>
+          <p>kaufklug.at laedt die aktuellen Angebote fuer dich.</p>
+        </div>
+
+        <div
+          style={{
+            width: '48px',
+            height: '48px',
+            margin: '8px auto 0',
+            borderRadius: '999px',
+            border: '4px solid rgba(255,255,255,0.18)',
+            borderTopColor: 'currentColor',
+            animation: 'kkSpin 0.9s linear infinite',
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 function ProductImage({ offerId, src, alt, compact = false }) {
   const primarySrc = offerId ? getOfferImageUrl(offerId) : src
   const [currentSrc, setCurrentSrc] = useState(primarySrc || src || '')
   const [fallbackTried, setFallbackTried] = useState(false)
-
-  useEffect(() => {
-    setCurrentSrc(primarySrc || src || '')
-    setFallbackTried(false)
-  }, [primarySrc, src])
 
   if (!currentSrc) {
     return (
@@ -233,26 +419,6 @@ function ProductImage({ offerId, src, alt, compact = false }) {
   )
 }
 
-function AppNavigation({ activePage, onChange }) {
-  return (
-    <nav className="page-nav" aria-label="Seitenwahl">
-      {[
-        { id: 'search', label: 'Suche' },
-        { id: 'diagnostics', label: 'Diagnose' },
-      ].map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={`page-nav__button ${activePage === item.id ? 'page-nav__button--active' : ''}`}
-          onClick={() => onChange(item.id)}
-        >
-          {item.label}
-        </button>
-      ))}
-    </nav>
-  )
-}
-
 function ComparisonGroupList({ title, description, groups }) {
   return (
     <section className="panel">
@@ -270,8 +436,7 @@ function ComparisonGroupList({ title, description, groups }) {
                 <div>
                   <h3>{group.label}</h3>
                   <p>
-                    {group.retailerCount} Haendler | {group.offerCount} Angebote | bester Wert {group.bestUnitPrice}/
-                    {group.unit}
+                    {group.retailerCount} Haendler | {group.offerCount} Angebote | bester Wert {group.bestUnitPrice}/{group.unit}
                   </p>
                 </div>
               </div>
@@ -294,21 +459,22 @@ function ComparisonGroupList({ title, description, groups }) {
   )
 }
 
-function CategoryPicker({ categories, selectedCategories, onToggle, onToggleMainCategory, onClear }) {
+function CategoryMenu({ categories, selectedCategories, onToggle, onToggleMainCategory, onClear }) {
   const [expandedGroups, setExpandedGroups] = useState({})
   const groups = buildCategoryGroups(categories)
 
   return (
-    <div className="category-picker">
-      <div className="category-picker__header">
+    <div>
+      <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
         <div>
           <h3>Kategorien</h3>
-          <p>Waehle Hauptkategorien direkt oder klappe sie auf, um einzelne Unterkategorien gezielt an- oder abzuwaehlen.</p>
+          <p>Die Direktsuche und Kategorien ergaenzen sich.</p>
         </div>
         <button type="button" className="ghost-button" onClick={onClear}>
           Zuruecksetzen
         </button>
       </div>
+
       <div className="category-group-list">
         {groups.map((group) => {
           const selectedCount = group.subcategories.filter((category) => selectedCategories.includes(category)).length
@@ -326,6 +492,7 @@ function CategoryPicker({ categories, selectedCategories, onToggle, onToggleMain
                 >
                   {group.mainCategory} ({group.subcategories.length})
                 </button>
+
                 <button
                   type="button"
                   className="ghost-button ghost-button--small"
@@ -342,20 +509,16 @@ function CategoryPicker({ categories, selectedCategories, onToggle, onToggleMain
 
               {expanded ? (
                 <div className="chip-grid chip-grid--subcategories">
-                  {group.subcategories.map((category) => {
-                    const active = selectedCategories.includes(category)
-
-                    return (
-                      <button
-                        key={category}
-                        type="button"
-                        className={`chip chip--subtle ${active ? 'chip--active' : ''}`}
-                        onClick={() => onToggle(category)}
-                      >
-                        {category}
-                      </button>
-                    )
-                  })}
+                  {group.subcategories.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      className={`chip chip--subtle ${selectedCategories.includes(category) ? 'chip--active' : ''}`}
+                      onClick={() => onToggle(category)}
+                    >
+                      {category}
+                    </button>
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -366,53 +529,58 @@ function CategoryPicker({ categories, selectedCategories, onToggle, onToggleMain
   )
 }
 
-function RetailerPicker({ retailers, selectedRetailers, onToggle, onClear }) {
+function RetailerMenu({ retailers, selectedRetailers, onToggle, onClear }) {
   return (
-    <div className="category-picker">
-      <div className="category-picker__header">
+    <div>
+      <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
         <div>
-          <h3>Anbieter</h3>
-          <p>Mehrfachauswahl aktiv. So kannst du nur deine bevorzugten Haendler vergleichen.</p>
+          <h3>Supermaerkte</h3>
+          <p>Waehle nur die Maerkte, die fuer dich wirklich passen.</p>
         </div>
         <button type="button" className="ghost-button" onClick={onClear}>
           Zuruecksetzen
         </button>
       </div>
-      <div className="chip-grid">
-        {(retailers || []).map((retailer) => {
-          const active = selectedRetailers.includes(retailer.retailerKey)
 
-          return (
-            <button
-              key={retailer.retailerKey}
-              type="button"
-              className={`chip ${active ? 'chip--active' : ''}`}
-              onClick={() => onToggle(retailer.retailerKey)}
-            >
-              {retailer.retailerName}
-            </button>
-          )
-        })}
+      <div className="chip-grid">
+        {(retailers || []).map((retailer) => (
+          <button
+            key={retailer.retailerKey}
+            type="button"
+            className={`chip ${selectedRetailers.includes(retailer.retailerKey) ? 'chip--active' : ''}`}
+            onClick={() => onToggle(retailer.retailerKey)}
+          >
+            {retailer.retailerName}
+          </button>
+        ))}
       </div>
     </div>
   )
 }
 
-function RetailerProgramSettings({ retailers, selectedRetailers, retailerPrograms, onToggleProgram }) {
+function ProgramMenu({ retailers, selectedRetailers, retailerPrograms, onToggleProgram }) {
   const visibleRetailers = (retailers || []).filter((retailer) => selectedRetailers.includes(retailer.retailerKey))
 
   if (visibleRetailers.length === 0) {
-    return null
+    return (
+      <div className="category-picker__header">
+        <div>
+          <h3>Kundenkarte / App</h3>
+          <p>Waehle zuerst mindestens einen Supermarkt aus.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="category-picker">
-      <div className="category-picker__header">
+    <div>
+      <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
         <div>
-          <h3>Kundenkarte / App pro Anbieter</h3>
-          <p>Hier legst du pro ausgewaehltem Anbieter fest, ob du Karten- oder App-Angebote nutzen kannst.</p>
+          <h3>Kundenkarte / App</h3>
+          <p>Hier legst du fest, bei welchen Anbietern du Karten- oder App-Angebote nutzen kannst.</p>
         </div>
       </div>
+
       <div className="program-settings">
         {visibleRetailers.map((retailer) => (
           <label className="program-filter" key={retailer.retailerKey}>
@@ -423,9 +591,7 @@ function RetailerProgramSettings({ retailers, selectedRetailers, retailerProgram
             />
             <div>
               <strong>{retailer.retailerName}: Kundenkarte/App vorhanden</strong>
-              <p>
-                Wenn aktiv, zeigen wir fuer {retailer.retailerName} auch Angebote, die nur mit Kundenkarte oder App gelten.
-              </p>
+              <p>Wenn aktiv, zeigen wir auch Angebote, die nur mit Kundenkarte oder App gelten.</p>
             </div>
           </label>
         ))}
@@ -476,6 +642,7 @@ function SearchResultGroups({ ranking }) {
 
                   <div className="user-card__facts">
                     <span>Menge: {offer.quantityText || 'nicht erkannt'}</span>
+                    <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
                   </div>
 
                   <div className="user-card__highlights">
@@ -485,16 +652,13 @@ function SearchResultGroups({ ranking }) {
                     </div>
                     <div className="highlight-pill">
                       <span>Ersparnis zum alten Preis</span>
-                      <strong>
-                        {offer.savingsAmount !== null ? `${offer.savingsAmount} EUR` : 'nicht ableitbar'}
-                      </strong>
+                      <strong>{offer.savingsAmount !== null ? `${offer.savingsAmount} EUR` : 'nicht ableitbar'}</strong>
                     </div>
                     <div className="highlight-pill">
                       <span>Nur mit App/Kundenkarte?</span>
                       <strong>{offer.customerProgramRequired ? 'Ja' : 'Nein'}</strong>
                     </div>
                   </div>
-
                 </div>
               </article>
             ))}
@@ -508,9 +672,9 @@ function SearchResultGroups({ ranking }) {
 function SearchPage({
   ranking,
   rankingLoading,
+  preferencesLoading,
   selectedCategories,
   selectedRetailers,
-  unitFilter,
   queryInput,
   retailerPrograms,
   onToggleCategory,
@@ -518,115 +682,242 @@ function SearchPage({
   onToggleRetailer,
   onClearCategories,
   onClearRetailers,
-  onUnitChange,
   onQueryChange,
   onToggleRetailerProgram,
 }) {
-  const rankingSummary = ranking?.summary || {}
-  const mixedUnits = unitFilter === 'all'
-  const activeFilterSummary = [
-    selectedCategories.length > 0 ? `${selectedCategories.length} Kategorien aktiv` : 'alle Kategorien',
-    selectedRetailers.length > 0 ? `${selectedRetailers.length} Anbieter aktiv` : 'alle Anbieter',
-    queryInput.trim() ? `Suche: "${queryInput.trim()}"` : 'ohne Suchbegriff',
-    unitFilter === 'all' ? 'alle Einheiten' : `Einheit: ${unitFilter}`,
-    Object.values(retailerPrograms || {}).filter(Boolean).length > 0
-      ? `${Object.values(retailerPrograms || {}).filter(Boolean).length} Anbieter mit gespeicherter Kundenkarte/App`
-      : 'keine gespeicherte Kundenkarte/App',
-  ]
+  const [openMenu, setOpenMenu] = useState(null)
+  const isPageBusy = rankingLoading || preferencesLoading
+  const allOffers = useMemo(() => flattenRankingOffers(ranking), [ranking])
+
+  const filteredOffers = useMemo(() => {
+    return filterOffers(
+      allOffers,
+      {
+        queryInput,
+        selectedCategories,
+        selectedRetailers,
+        retailerPrograms,
+      },
+      ranking?.retailers || []
+    )
+  }, [allOffers, queryInput, selectedCategories, selectedRetailers, retailerPrograms, ranking?.retailers])
+
+  const clientRanking = useMemo(() => buildClientRanking(ranking, filteredOffers), [ranking, filteredOffers])
+
+  const totalOfferCount = allOffers.length
+  const visibleOfferCount = filteredOffers.length
+  const retailerCount = ranking?.retailers?.length || 0
+  const categoryCount = ranking?.categories?.length || 0
+  const selectedRetailerCount = selectedRetailers.length
+  const selectedCategoryCount = selectedCategories.length
+  const savedProgramCount = Object.values(retailerPrograms || {}).filter(Boolean).length
+
+  function toggleMenu(menuName) {
+    setOpenMenu((current) => (current === menuName ? null : menuName))
+  }
 
   return (
     <>
-      <header className="hero hero--search">
-        <div>
-          <p className="eyebrow">einfachsparen suche</p>
-          <h1>Finde schnell die besten aktuellen Angebote, um maximal Geld zu sparen</h1>
-          <p className="subtitle">
-            Suche wie ein Mensch einkauft: nach Produkten, nach mehreren Kategorien gleichzeitig und mit klarer,
-            transparenter Reihung der besten Treffer.
+      <HeroLoaderModal open={isPageBusy} />
+
+      <section
+        className="panel"
+        style={{
+          position: 'sticky',
+          top: 48,
+          zIndex: 1200,
+          marginBottom: '0.75rem',
+          opacity: isPageBusy ? 0 : 1,
+          pointerEvents: isPageBusy ? 'none' : 'auto',
+          transition: 'opacity 240ms ease',
+        }}
+      >
+        <div className="panel__header">
+          <p>
+            <strong>
+              Aktuell {totalOfferCount} Angebote | {retailerCount} Supermaerkte | {categoryCount} Kategorien | {visibleOfferCount} sichtbar
+            </strong>
           </p>
         </div>
-        <div className="hero__status hero__status--search">
-          <div>
-            <span>Aktuell passende Treffer</span>
-            <strong>{rankingSummary.resultCount || 0}</strong>
-          </div>
-          <div>
-            <span>Angezeigt</span>
-            <strong>{rankingSummary.displayedCount || 0}</strong>
-          </div>
-          <div>
-            <span>{mixedUnits ? 'Einheiten' : 'Bester Vergleichswert'}</span>
-            <strong>{mixedUnits ? 'gemischt' : rankingSummary.bestUnitPrice ?? '-'}</strong>
-          </div>
-          <div>
-            <span>{mixedUnits ? 'Direkter Vergleich' : 'Spannweite'}</span>
-            <strong>{mixedUnits ? 'pro Einheit' : `${rankingSummary.spreadPercent ?? 0}%`}</strong>
-          </div>
-        </div>
-      </header>
-
-      <section className="search-shell search-shell--top">
-        <section className="search-controls">
-          <div className="search-controls__grid search-controls__grid--hero">
-            <label className="field field--hero-search">
-              <span>Suchbegriff</span>
-              <input
-                type="text"
-                value={queryInput}
-                onChange={(event) => onQueryChange(event.target.value)}
-                placeholder="z. B. Kaese, Wein, Mineralwasser, Baguette"
-              />
-            </label>
-            <label className="field">
-              <span>Einheit</span>
-              <select value={unitFilter} onChange={(event) => onUnitChange(event.target.value)}>
-                <option value="all">Alle Einheiten</option>
-                {(ranking?.units || []).map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="search-explainer">
-            <p><strong>So liest du die Treffer:</strong> Wir zeigen zuerst das aktuell guenstigste Angebot pro fair vergleichbarer Einheit.</p>
-            <p><strong>Bedingungen stehen direkt unter dem Produktnamen.</strong> Vor allem "ab x Stk." oder Kundenkartenpflicht springt damit sofort ins Auge.</p>
-            <p><strong>Crawling vs. Anzeige:</strong> Oben siehst du alle aktuell passenden Treffer fuer deinen Filter. Gleichzeitig zeigen wir bewusst nur die besten {rankingSummary.displayedCount || 0} Angebote direkt in der Liste.</p>
-            <p><strong>Aktiver Filter:</strong> {activeFilterSummary.join(' | ')}</p>
-          </div>
-
-          <RetailerPicker
-            retailers={ranking?.retailers}
-            selectedRetailers={selectedRetailers}
-            onToggle={onToggleRetailer}
-            onClear={onClearRetailers}
-          />
-
-          <RetailerProgramSettings
-            retailers={ranking?.retailers}
-            selectedRetailers={selectedRetailers}
-            retailerPrograms={retailerPrograms}
-            onToggleProgram={onToggleRetailerProgram}
-          />
-
-          <CategoryPicker
-            categories={ranking?.categories}
-            selectedCategories={selectedCategories}
-            onToggle={onToggleCategory}
-            onToggleMainCategory={onToggleMainCategory}
-            onClear={onClearCategories}
-          />
-        </section>
       </section>
 
-      <section className="panel">
-        <div className="panel__header">
-          <h2>Ergebnisse fuer echte Kaufentscheidungen</h2>
-          <p>Weniger Technik, mehr Klarheit: Preis, Vergleichswert, Ersparnis und Bedingungen.</p>
+      <section
+        className="panel"
+        style={{
+          position: 'sticky',
+          top: 124,
+          zIndex: 1190,
+          marginBottom: '1rem',
+          opacity: isPageBusy ? 0 : 1,
+          pointerEvents: isPageBusy ? 'none' : 'auto',
+          transition: 'opacity 240ms ease',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            alignItems: 'center',
+          }}
+        >
+          <label className="field field--hero-search" style={{ flex: '1 1 320px', minWidth: '260px', marginBottom: 0 }}>
+            <span>Was suchst du?</span>
+            <input
+              type="text"
+              value={queryInput}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="z. B. Kaese, Wein, Mineralwasser, Baguette"
+            />
+          </label>
+
+          <button type="button" className={`ghost-button ${openMenu === 'retailers' ? 'chip--active' : ''}`} onClick={() => toggleMenu('retailers')}>
+            Supermaerkte {selectedRetailerCount > 0 ? `(${selectedRetailerCount})` : ''}
+          </button>
+
+          <button type="button" className={`ghost-button ${openMenu === 'categories' ? 'chip--active' : ''}`} onClick={() => toggleMenu('categories')}>
+            Kategorien {selectedCategoryCount > 0 ? `(${selectedCategoryCount})` : ''}
+          </button>
+
+          <button type="button" className={`ghost-button ${openMenu === 'programs' ? 'chip--active' : ''}`} onClick={() => toggleMenu('programs')}>
+            Kundenkarte / App {savedProgramCount > 0 ? `(${savedProgramCount})` : ''}
+          </button>
         </div>
-        {rankingLoading ? <p className="status">Ranking wird geladen...</p> : <SearchResultGroups ranking={ranking} />}
+
+        {openMenu ? (
+          <div
+            style={{
+              marginTop: '1rem',
+              paddingTop: '1rem',
+              borderTop: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            {openMenu === 'retailers' ? (
+              <RetailerMenu
+                retailers={ranking?.retailers}
+                selectedRetailers={selectedRetailers}
+                onToggle={onToggleRetailer}
+                onClear={onClearRetailers}
+              />
+            ) : null}
+
+            {openMenu === 'categories' ? (
+              <CategoryMenu
+                categories={ranking?.categories}
+                selectedCategories={selectedCategories}
+                onToggle={onToggleCategory}
+                onToggleMainCategory={onToggleMainCategory}
+                onClear={onClearCategories}
+              />
+            ) : null}
+
+            {openMenu === 'programs' ? (
+              <ProgramMenu
+                retailers={ranking?.retailers}
+                selectedRetailers={selectedRetailers}
+                retailerPrograms={retailerPrograms}
+                onToggleProgram={onToggleRetailerProgram}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section
+        className="hero hero--search"
+        style={{
+          width: '100%',
+          opacity: isPageBusy ? 0 : 1,
+          pointerEvents: isPageBusy ? 'none' : 'auto',
+          transition: 'opacity 240ms ease',
+        }}
+      >
+        <div style={{ width: '100%' }}>
+          <p className="eyebrow">kaufklug.at</p>
+          <h1>Die smarte Art, Zeit, Geld und Wege beim Einkauf zu sparen.</h1>
+          <p className="subtitle">Der Postkasten ist voll mit Prospekten. Aber niemand hat Zeit, alles zu vergleichen.</p>
+          <p className="subtitle">kaufklug.at zeigt dir, wo du deine Produkte gerade wirklich am guenstigsten bekommst.</p>
+          <p className="subtitle">Damit du beim Einkaufen Geld, Zeit und unnoetige Wege sparst – kostenlos, ohne Datenmissbrauch und von Menschen fuer Menschen.</p>
+
+          <div className="panel" style={{ marginTop: '1.5rem', width: '100%' }}>
+            <div className="panel__header">
+              <h2>Wie funktioniert kaufklug.at?</h2>
+              <p>kaufklug.at sucht laufend nach aktuellen Angeboten, vergleicht sie und zeigt dir die wirklich guten Deals.</p>
+              <p>Du waehlst einfach, was du brauchst, welche Supermaerkte fuer dich passen und ob du eine Kundenkarte hast.</p>
+              <p>Dann speicherst du deine Produkte in der Einkaufsliste – und wir zeigen dir, wie du dabei moeglichst viel Geld sparst. Dazu berechnet kaufklug.at auch die optimale Einkaufsroute, je nachdem, wo du gerade bist oder von zuhause losfaehrst.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="metrics"
+        style={{
+          opacity: isPageBusy ? 0 : 1,
+          pointerEvents: isPageBusy ? 'none' : 'auto',
+          transition: 'opacity 240ms ease',
+        }}
+      >
+        <MetricCard label="Kosten fuer dich" value="0 EUR" tone="accent" />
+        <MetricCard label="Datennutzung" value="fair" />
+        <MetricCard label="Aktuelle Angebote" value={totalOfferCount} />
+        <MetricCard label="Passende Treffer" value={visibleOfferCount} />
+      </section>
+
+      <section
+        className="panel-grid"
+        style={{
+          opacity: isPageBusy ? 0 : 1,
+          pointerEvents: isPageBusy ? 'none' : 'auto',
+          transition: 'opacity 240ms ease',
+        }}
+      >
+        <LandingInfoCard title="1. Angebote verstehen statt Prospekte waelzen">
+          Jede Woche landen unzaehlige Prospekte im Postkasten. kaufklug.at nimmt dir das Durchsehen und Vergleichen ab.
+        </LandingInfoCard>
+
+        <LandingInfoCard title="2. Nur das sehen, was fuer dich wichtig ist">
+          Du filterst nach Produkten, Kategorien, Supermaerkten und Kundenkarte. So bekommst du keine Werbeflut, sondern passende Treffer.
+        </LandingInfoCard>
+
+        <LandingInfoCard title="3. Geld sparen und den Weg gleich mitdenken">
+          kaufklug.at zeigt dir nicht nur gute Angebote, sondern hilft dir auch dabei, deinen Einkauf sinnvoll und mit moeglichst wenig Umwegen zu planen.
+        </LandingInfoCard>
+      </section>
+
+      <section
+        className="panel"
+        style={{
+          opacity: isPageBusy ? 0 : 1,
+          pointerEvents: isPageBusy ? 'none' : 'auto',
+          transition: 'opacity 240ms ease',
+        }}
+      >
+        <div className="panel__header">
+          <h2>Warum ist kaufklug.at wirklich nuetzlich?</h2>
+          <p>Weil Sparen im Alltag oft nicht am Willen scheitert, sondern an unuebersichtlichen Prospekten, zu vielen Apps und zu wenig Zeit.</p>
+        </div>
+        <div className="search-explainer">
+          <p><strong>Du musst nicht mehr alles selbst vergleichen.</strong> kaufklug.at sammelt und ordnet aktuelle Angebote fuer dich.</p>
+          <p><strong>Du entscheidest nur noch, was du brauchst.</strong> Den Rest filtern und sortieren wir so, dass es alltagstauglich bleibt.</p>
+          <p><strong>Du sparst nicht nur beim Preis.</strong> Auch Zeit, Suchaufwand und unnoetige Wege werden reduziert.</p>
+          <p><strong>Die Nutzung bleibt fair.</strong> Kostenlos fuer dich, ohne Datenmissbrauch und mit klarem Fokus auf echten Nutzen.</p>
+        </div>
+      </section>
+
+      <section
+        className="panel"
+        style={{
+          opacity: isPageBusy ? 0 : 1,
+          pointerEvents: isPageBusy ? 'none' : 'auto',
+          transition: 'opacity 240ms ease',
+        }}
+      >
+        <div className="panel__header">
+          <h2>Die besten Treffer fuer deinen Einkauf</h2>
+          <p>Klar filterbar, schnell erfassbar und darauf ausgelegt, dir moeglichst viel Ersparnis bei moeglichst wenig Aufwand zu bringen.</p>
+        </div>
+        {rankingLoading ? <p className="status">Angebote werden geladen...</p> : <SearchResultGroups ranking={clientRanking} />}
       </section>
     </>
   )
@@ -649,11 +940,9 @@ function DiagnosticsPage({
     <>
       <header className="hero">
         <div>
-          <p className="eyebrow">einfachsparen admin diagnostik</p>
+          <p className="eyebrow">kaufklug.at admin diagnostik</p>
           <h1>Aktuelle Crawl-Qualitaet fuer Graz-Umgebung</h1>
-          <p className="subtitle">
-            Fruehe Qualitaetsansicht fuer Quellen, Jobs, Rohdaten, Normalisierung und Vergleichsgruppen.
-          </p>
+          <p className="subtitle">Fruehe Qualitaetsansicht fuer Quellen, Jobs, Rohdaten, Normalisierung und Vergleichsgruppen.</p>
         </div>
         <div className="hero__status">
           <div>
@@ -670,7 +959,7 @@ function DiagnosticsPage({
           </div>
           <div>
             <span>Snapshot</span>
-            <strong>{dayjs(snapshot?.generatedAt).format('DD.MM.YYYY HH:mm:ss')}</strong>
+            <strong>{snapshot?.generatedAt ? dayjs(snapshot.generatedAt).format('DD.MM.YYYY HH:mm:ss') : '-'}</strong>
           </div>
         </div>
       </header>
@@ -705,9 +994,7 @@ function DiagnosticsPage({
                 <span>{source.retailerName}</span>
                 <span>{source.channel}</span>
                 <span className={`pill pill--${source.latestStatus}`}>{source.latestStatus}</span>
-                <a href={source.sourceUrl} target="_blank" rel="noreferrer">
-                  oeffnen
-                </a>
+                <a href={source.sourceUrl} target="_blank" rel="noreferrer">oeffnen</a>
               </div>
             ))}
           </div>
@@ -740,6 +1027,8 @@ function DiagnosticsPage({
         description="Moeglichst konkrete Vergleichsgruppen ueber mehrere Haendler hinweg. Nur sichere aktuelle Einheiten."
         groups={comparisons.exactMatches}
       />
+
+      {comparisons.unavailable ? <p className="status">{comparisons.message}</p> : null}
 
       <ComparisonGroupList
         title="Vergleichsansicht: Kategorie-Benchmarks"
@@ -809,21 +1098,16 @@ function DiagnosticsPage({
                   </span>
                 </div>
                 <h3>{offer.title}</h3>
-                <p className="offer-card__meta">
-                  {offer.categoryPrimary} | {getOfferCategoryLabel(offer)}
-                </p>
+                <p className="offer-card__meta">{offer.categoryPrimary} | {getOfferCategoryLabel(offer)}</p>
                 <p>
-                  {offer.priceCurrent?.amount || '-'} {offer.priceCurrent?.currency || 'EUR'} |{' '}
-                  {offer.normalizedUnitPrice?.amount || '-'} {offer.normalizedUnitPrice?.unit || ''}
+                  {offer.priceCurrent?.amount || '-'} {offer.priceCurrent?.currency || 'EUR'} | {offer.normalizedUnitPrice?.amount || '-'} {offer.normalizedUnitPrice?.unit || ''}
                 </p>
                 <p>{formatValidityLabel(offer)}</p>
                 {offer.conditionsText ? <p>{offer.conditionsText}</p> : null}
                 {Array.isArray(offer.supportingSources) && offer.supportingSources.length > 0 ? (
                   <div className="source-chip-list">
                     {getSupportingSourceBadges(offer).map((label) => (
-                      <span className="source-chip" key={`${offer._id}-${label}`}>
-                        {label}
-                      </span>
+                      <span className="source-chip" key={`${offer._id}-${label}`}>{label}</span>
                     ))}
                   </div>
                 ) : null}
@@ -840,7 +1124,10 @@ function DiagnosticsPage({
 }
 
 function App() {
-  const [activePage, setActivePage] = useState('search')
+  const pathname = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : ''
+  const initialPage = pathname.includes('diagnose') || pathname.includes('diagnostic') ? 'diagnostics' : 'search'
+
+  const [activePage] = useState(initialPage)
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
@@ -852,7 +1139,6 @@ function App() {
   const [rankingLoading, setRankingLoading] = useState(true)
   const [selectedCategories, setSelectedCategories] = useState([])
   const [selectedRetailers, setSelectedRetailers] = useState([])
-  const [unitFilter, setUnitFilter] = useState('all')
   const [retailerPrograms, setRetailerPrograms] = useState({})
   const [queryInput, setQueryInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -874,21 +1160,14 @@ function App() {
         setPreferencesLoading(true)
         const preferenceResult = await fetchCurrentUserPreferences()
 
-        if (!active) {
-          return
-        }
+        if (!active) return
 
         setRetailerPrograms(preferenceResult.retailerPrograms || {})
       } catch (preferenceError) {
-        if (!active) {
-          return
-        }
-
+        if (!active) return
         setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht geladen werden.')
       } finally {
-        if (active) {
-          setPreferencesLoading(false)
-        }
+        if (active) setPreferencesLoading(false)
       }
     }
 
@@ -901,24 +1180,17 @@ function App() {
           fetchEssence(),
         ])
 
-        if (!active) {
-          return
-        }
+        if (!active) return
 
         setHealth(healthResult)
         setSnapshot(snapshotResult)
         setEssence(essenceResult)
         setError('')
       } catch (loadError) {
-        if (!active) {
-          return
-        }
-
+        if (!active) return
         setError(loadError.message || 'Dashboard data could not be loaded.')
       } finally {
-        if (active) {
-          setLoading(false)
-        }
+        if (active) setLoading(false)
       }
     }
 
@@ -939,32 +1211,23 @@ function App() {
       try {
         setRankingLoading(true)
         const rankingResult = await fetchOfferRanking({
-          categories: selectedCategories.join(','),
-          retailers: selectedRetailers.join(','),
-          programRetailers: Object.entries(retailerPrograms)
-            .filter(([, hasProgram]) => hasProgram)
-            .map(([retailerKey]) => retailerKey)
-            .join(','),
-          unit: unitFilter,
-          q: searchTerm,
-          limit: 120,
+          categories: '',
+          retailers: '',
+          programRetailers: '',
+          unit: 'all',
+          q: '',
+          limit: 'all',
         })
 
-        if (!active) {
-          return
-        }
+        if (!active) return
 
         setRanking(rankingResult)
+        setError('')
       } catch (rankingError) {
-        if (!active) {
-          return
-        }
-
+        if (!active) return
         setError(rankingError.message || 'Ranking data could not be loaded.')
       } finally {
-        if (active) {
-          setRankingLoading(false)
-        }
+        if (active) setRankingLoading(false)
       }
     }
 
@@ -973,7 +1236,7 @@ function App() {
     return () => {
       active = false
     }
-  }, [selectedCategories, selectedRetailers, unitFilter, searchTerm, retailerPrograms])
+  }, [])
 
   async function reloadAll() {
     const [healthResult, snapshotResult, essenceResult, rankingResult] = await Promise.all([
@@ -981,15 +1244,12 @@ function App() {
       fetchDashboardSnapshot(),
       fetchEssence(),
       fetchOfferRanking({
-        categories: selectedCategories.join(','),
-        retailers: selectedRetailers.join(','),
-        programRetailers: Object.entries(retailerPrograms)
-          .filter(([, hasProgram]) => hasProgram)
-          .map(([retailerKey]) => retailerKey)
-          .join(','),
-        unit: unitFilter,
-        q: searchTerm,
-        limit: 120,
+        categories: '',
+        retailers: '',
+        programRetailers: '',
+        unit: 'all',
+        q: '',
+        limit: 'all',
       }),
     ])
 
@@ -1008,11 +1268,7 @@ function App() {
   function handleToggleMainCategory(_mainCategory, subcategories) {
     setSelectedCategories((current) => {
       const allSelected = subcategories.every((subcategory) => current.includes(subcategory))
-
-      if (allSelected) {
-        return current.filter((category) => !subcategories.includes(category))
-      }
-
+      if (allSelected) return current.filter((category) => !subcategories.includes(category))
       return [...new Set([...current, ...subcategories])]
     })
   }
@@ -1059,25 +1315,17 @@ function App() {
     }
   }
 
-  if (loading && !snapshot) {
-    return <main className="shell"><p className="status">Lade Ansicht...</p></main>
-  }
-
-  if (error && !snapshot) {
-    return <main className="shell"><p className="status status--error">{error}</p></main>
-  }
-
   return (
     <main className="shell">
-      <AppNavigation activePage={activePage} onChange={setActivePage} />
+      <TopDebugBanner />
 
       {activePage === 'search' ? (
         <SearchPage
           ranking={ranking}
-          rankingLoading={rankingLoading || preferencesLoading}
+          rankingLoading={rankingLoading}
+          preferencesLoading={preferencesLoading}
           selectedCategories={selectedCategories}
           selectedRetailers={selectedRetailers}
-          unitFilter={unitFilter}
           queryInput={queryInput}
           retailerPrograms={retailerPrograms}
           onToggleCategory={handleToggleCategory}
@@ -1085,21 +1333,26 @@ function App() {
           onToggleRetailer={handleToggleRetailer}
           onClearCategories={() => setSelectedCategories([])}
           onClearRetailers={() => setSelectedRetailers([])}
-          onUnitChange={setUnitFilter}
           onQueryChange={setQueryInput}
           onToggleRetailerProgram={handleToggleRetailerProgram}
         />
       ) : (
-        <DiagnosticsPage
-          health={health}
-          snapshot={snapshot}
-          essence={essence}
-          error={error}
-          feedbackState={feedbackState}
-          feedbackNote={feedbackNote}
-          setFeedbackNote={setFeedbackNote}
-          handleSaveFeedback={handleSaveFeedback}
-        />
+        <>
+          {loading && !snapshot ? <p className="status">Lade Ansicht...</p> : null}
+          {error && !snapshot ? <p className="status status--error">{error}</p> : null}
+          {snapshot ? (
+            <DiagnosticsPage
+              health={health}
+              snapshot={snapshot}
+              essence={essence}
+              error={error}
+              feedbackState={feedbackState}
+              feedbackNote={feedbackNote}
+              setFeedbackNote={setFeedbackNote}
+              handleSaveFeedback={handleSaveFeedback}
+            />
+          ) : null}
+        </>
       )}
     </main>
   )
