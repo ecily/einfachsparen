@@ -203,6 +203,7 @@ function buildComparisonSignature({ title = '', brand = '' }) {
   const stopwords = new Set([
     'adeg',
     'aktiv',
+    'bipa',
     'billa',
     'dm',
     'drogerie',

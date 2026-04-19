@@ -251,6 +251,24 @@ const RETAILER_DEFINITIONS = [
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
     notes: 'Oeffentliche Aggregator-Quelle fuer aktuelle PAGRO-Angebote.',
   },
+  {
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    channel: 'aggregator',
+    label: 'Aktionsfinder BIPA Aktionen',
+    sourceUrl: 'https://www.aktionsfinder.at/pv/bipa/',
+    capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: true },
+    notes: 'Aggregator fuer breite aktuelle BIPA-Angebotsabdeckung.',
+  },
+  {
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    channel: 'aggregator',
+    label: 'Marktguru BIPA Angebote',
+    sourceUrl: 'https://www.marktguru.at/r/bipa',
+    capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
+    notes: 'Zweite oeffentliche Aggregator-Quelle fuer aktuelle BIPA-Angebote.',
+  },
 ];
 
 module.exports = {

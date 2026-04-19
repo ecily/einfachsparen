@@ -238,6 +238,7 @@ function buildConditionsText(promotion) {
 function buildComparisonSignature({ title = '', brand = '' }) {
   const stopwords = new Set([
     'adeg',
+    'bipa',
     'billa',
     'hofer',
     'lidl',
