@@ -4,6 +4,9 @@ const RawDocument = require('../../models/RawDocument');
 const Offer = require('../../models/Offer');
 const AdminFeedback = require('../../models/AdminFeedback');
 const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
+const logger = require('../../lib/logger');
+
+const COMPARISON_SNAPSHOT_TIMEOUT_MS = 8000;
 
 function buildCurrentAvailabilityMatch() {
   const now = new Date();
@@ -24,6 +27,66 @@ function buildCurrentAvailabilityMatch() {
       },
     ],
   };
+}
+
+function createEmptyComparisonSnapshot(message) {
+  return {
+    generatedAt: new Date().toISOString(),
+    comparableOfferCount: 0,
+    exactMatches: [],
+    categoryBenchmarks: [],
+    unavailable: true,
+    message,
+  };
+}
+
+async function withTimeout(task, timeoutMs, timeoutMessage) {
+  let timeoutId = null;
+
+  try {
+    return await Promise.race([
+      task(),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(timeoutMessage));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function buildComparisonSnapshotSafely() {
+  const startedAt = Date.now();
+
+  try {
+    const snapshot = await withTimeout(
+      () => buildComparisonSnapshot(),
+      COMPARISON_SNAPSHOT_TIMEOUT_MS,
+      `Comparison snapshot timed out after ${COMPARISON_SNAPSHOT_TIMEOUT_MS}ms`
+    );
+
+    logger.info('Dashboard comparison snapshot built', {
+      durationMs: Date.now() - startedAt,
+      comparableOfferCount: snapshot.comparableOfferCount,
+      exactMatchCount: snapshot.exactMatches.length,
+      categoryBenchmarkCount: snapshot.categoryBenchmarks.length,
+    });
+
+    return snapshot;
+  } catch (error) {
+    logger.warn('Dashboard comparison snapshot unavailable', {
+      durationMs: Date.now() - startedAt,
+      message: error.message,
+    });
+
+    return createEmptyComparisonSnapshot(
+      'Vergleichsgruppen konnten diesmal nicht rechtzeitig geladen werden. Die restliche Diagnose bleibt verfuegbar.'
+    );
+  }
 }
 
 async function buildDashboardSnapshot() {
@@ -99,7 +162,7 @@ async function buildDashboardSnapshot() {
       },
       { $sort: { retailerName: 1 } },
     ]),
-    buildComparisonSnapshot(),
+    buildComparisonSnapshotSafely(),
   ]);
 
   const activeSourceCount = sources.filter((source) => source.active).length;

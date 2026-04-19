@@ -200,9 +200,24 @@ function parseNormalizedUnitPrice(infoText, currentPrice) {
 }
 
 function buildComparisonSignature({ title = '', brand = '' }) {
+  const stopwords = new Set([
+    'adeg',
+    'aktiv',
+    'billa',
+    'dm',
+    'drogerie',
+    'hofer',
+    'lidl',
+    'markt',
+    'pagro',
+    'penny',
+    'spar',
+    'diskont',
+  ]);
+
   return normalizeTitleForMatch(`${brand} ${title}`)
     .split(' ')
-    .filter((token) => token.length > 2)
+    .filter((token) => token.length > 2 && !stopwords.has(token))
     .slice(0, 8)
     .join('-');
 }
@@ -258,7 +273,10 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
       infoText,
     });
     const parsedInfo = parseNormalizedUnitPrice(infoText, currentPrice);
-    const customerProgramRequired = /(kundenkarte|app|lidl plus|joe|karte|club)/i.test(infoText);
+    const normalizedInfoText = normalizeTitleForMatch(infoText);
+    const customerProgramRequired = /(kundenkarte|app|lidl plus|joe|karte|club|bonuskarte|payback)/i.test(
+      normalizedInfoText
+    );
     const issues = [];
 
     if (!scopeDecision.included) {

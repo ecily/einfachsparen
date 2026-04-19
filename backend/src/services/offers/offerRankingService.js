@@ -1,5 +1,22 @@
 const Offer = require('../../models/Offer');
 
+const OFFER_RANKING_FIELDS = [
+  'retailerKey',
+  'retailerName',
+  'title',
+  'brand',
+  'categoryPrimary',
+  'categorySecondary',
+  'conditionsText',
+  'customerProgramRequired',
+  'quantityText',
+  'validFrom',
+  'validTo',
+  'normalizedUnitPrice',
+  'priceCurrent',
+  'priceReference',
+].join(' ');
+
 function normalizeStringList(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item || '').trim()).filter(Boolean);
@@ -248,29 +265,13 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     retailerName: offer.retailerName,
     title: offer.title,
     brand: offer.brand,
-    imageUrl: offer.imageUrl,
     categoryPrimary: offer.categoryPrimary,
     categorySecondary: offer.categorySecondary,
     displayCategory: selectDisplayCategory(offer),
     quantityText: offer.quantityText,
     conditionsText: offer.conditionsText,
     customerProgramRequired: offer.customerProgramRequired,
-    sourceUrl: offer.sourceUrl,
-    supportingSources: Array.isArray(offer.supportingSources)
-      ? offer.supportingSources
-          .map((item) => ({
-            label: item.label || item.channel || 'Quelle',
-            channel: item.channel || '',
-            sourceUrl: item.sourceUrl || '',
-            observedUrl: item.observedUrl || '',
-            matchType: item.matchType || '',
-          }))
-          .filter((item) => item.label || item.sourceUrl || item.observedUrl)
-      : [],
-    supportingSourceCount: Array.isArray(offer.supportingSources) ? offer.supportingSources.length : 0,
-    supportingSourceLabels: Array.isArray(offer.supportingSources)
-      ? offer.supportingSources.map((item) => item.label).filter(Boolean)
-      : [],
+    validFrom: offer.validFrom,
     validTo: offer.validTo,
     normalizedUnitPrice: offer.normalizedUnitPrice,
     priceCurrent: offer.priceCurrent,
@@ -285,7 +286,7 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
       offer.priceReference?.amount && offer.priceCurrent?.amount && offer.priceReference.amount > 0
         ? Number((((offer.priceReference.amount - offer.priceCurrent.amount) / offer.priceReference.amount) * 100).toFixed(2))
         : null,
-    validityLabel: offer.validTo ? 'gueltig bis' : 'aktueller Live-Snapshot',
+    validityLabel: offer.validTo ? 'gueltig bis' : 'aktuell verfuegbar, Enddatum nicht erkannt',
   };
 }
 
@@ -384,19 +385,12 @@ function buildGroupedRankings(offers) {
         const leftSavings = left.savingsAmount ?? -1;
         const rightSavings = right.savingsAmount ?? -1;
 
-        if (rightSavings !== leftSavings) {
-          return rightSavings - leftSavings;
-        }
+      if (rightSavings !== leftSavings) {
+        return rightSavings - leftSavings;
+      }
 
-        const leftEvidence = Array.isArray(left.supportingSources) ? left.supportingSources.length : 0;
-        const rightEvidence = Array.isArray(right.supportingSources) ? right.supportingSources.length : 0;
-
-        if (rightEvidence !== leftEvidence) {
-          return rightEvidence - leftEvidence;
-        }
-
-        if (left.customerProgramRequired !== right.customerProgramRequired) {
-          return Number(left.customerProgramRequired) - Number(right.customerProgramRequired);
+      if (left.customerProgramRequired !== right.customerProgramRequired) {
+        return Number(left.customerProgramRequired) - Number(right.customerProgramRequired);
         }
 
         if (left.normalizedUnitPrice.amount !== right.normalizedUnitPrice.amount) {
@@ -559,12 +553,13 @@ async function buildOfferRanking({
   onlyWithoutProgram = false,
   limit = 30,
 }) {
-  const safeLimit = Math.max(5, Math.min(Number(limit) || 30, 200));
+  const limitValue = String(limit || '30').trim().toLowerCase();
+  const showAllMatching = limitValue === 'all';
+  const safeLimit = showAllMatching ? null : Math.max(5, Math.min(Number(limit) || 30, 500));
   const selectedCategories = normalizeStringList(categories);
   const selectedRetailers = normalizeStringList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
-  const rawFetchLimit = query ? 500 : safeLimit * 4;
   const filters = buildFilters({
     categories: selectedCategories,
     query: '',
@@ -573,16 +568,10 @@ async function buildOfferRanking({
     onlyWithoutProgram: withoutProgram,
   });
 
-  const [rawOffers, countSeedOffers, categorySeeds, units, retailerOptions] = await Promise.all([
+  const [candidateOffers, categorySeeds, units, retailerOptions] = await Promise.all([
     Offer.find(filters)
+      .select(OFFER_RANKING_FIELDS)
       .sort({ 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
-      .limit(rawFetchLimit)
-      .lean(),
-    Offer.find(filters)
-      .select(
-        'retailerKey retailerName title brand categoryPrimary categorySecondary customerProgramRequired normalizedUnitPrice quantityText validTo'
-      )
-      .limit(10000)
       .lean(),
     Offer.find({
       ...buildCurrentAvailabilityMatch(),
@@ -618,16 +607,7 @@ async function buildOfferRanking({
 
   const fullyFilteredOffers = dedupeOffers(
     applyQueryMatch(
-      applyProgramEligibility(rawOffers, {
-        programRetailers: selectedProgramRetailers,
-        onlyWithoutProgram: withoutProgram,
-      }),
-      query
-    )
-  );
-  const fullMatchingOffers = dedupeOffers(
-    applyQueryMatch(
-      applyProgramEligibility(countSeedOffers, {
+      applyProgramEligibility(candidateOffers, {
         programRetailers: selectedProgramRetailers,
         onlyWithoutProgram: withoutProgram,
       }),
@@ -662,7 +642,7 @@ async function buildOfferRanking({
 
       return String(left.title).localeCompare(String(right.title), 'de');
     })
-    .slice(0, safeLimit);
+    .slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit);
 
   const bestUnitPrice = offers[0]?.normalizedUnitPrice?.amount || null;
   const worstUnitPrice = offers[offers.length - 1]?.normalizedUnitPrice?.amount || null;
@@ -689,7 +669,7 @@ async function buildOfferRanking({
       retailers: selectedRetailers,
       programRetailers: selectedProgramRetailers,
       onlyWithoutProgram: withoutProgram,
-      limit: safeLimit,
+      limit: showAllMatching ? 'all' : safeLimit,
     },
     categories: [...categoryCounts.entries()]
       .filter(([, count]) => count >= 2)
@@ -704,8 +684,10 @@ async function buildOfferRanking({
     retailers: buildRetailerOptions(retailerOptions),
     units: units.filter(Boolean).sort(),
     summary: {
-      resultCount: fullMatchingOffers.length,
+      resultCount: fullyFilteredOffers.length,
       displayedCount: rankedOffers.length,
+      requestedDisplay: showAllMatching ? 'all' : safeLimit,
+      completeResultSetVisible: rankedOffers.length === fullyFilteredOffers.length,
       bestUnitPrice,
       worstUnitPrice,
       spreadPercent:

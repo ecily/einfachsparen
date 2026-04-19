@@ -26,48 +26,14 @@ function uniqueRetailerCount(offers) {
   return new Set(offers.map((offer) => offer.retailerKey)).size;
 }
 
-function createGroupMap(offers, keyBuilder, labelBuilder) {
-  const groups = new Map();
-
-  for (const offer of offers) {
-    const key = keyBuilder(offer);
-
-    if (!key) {
-      continue;
-    }
-
-    const dedupeKey = `${offer.retailerKey}:${offer.title}:${offer.normalizedUnitPrice.amount}:${offer.validTo?.toISOString?.() || offer.validTo}`;
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        label: labelBuilder(offer),
-        offers: [],
-        dedupe: new Set(),
-      });
-    }
-
-    const group = groups.get(key);
-
-    if (group.dedupe.has(dedupeKey)) {
-      continue;
-    }
-
-    group.dedupe.add(dedupeKey);
-    group.offers.push(offer);
-  }
-
-  return groups;
-}
-
-function finalizeGroups(groupMap, { minRetailers = 2, topN = 8 }) {
-  return [...groupMap.values()]
+function finalizeGroups(groups = [], { minRetailers = 2, topN = 8 }) {
+  return groups
     .map((group) => {
       const sortedOffers = group.offers.sort(
         (left, right) => left.normalizedUnitPrice.amount - right.normalizedUnitPrice.amount
       );
-      const retailerCount = uniqueRetailerCount(sortedOffers);
-      const bestUnitPrice = sortedOffers[0]?.normalizedUnitPrice?.amount || null;
+      const retailerCount = group.retailerCount || uniqueRetailerCount(sortedOffers);
+      const bestUnitPrice = group.bestUnitPrice || sortedOffers[0]?.normalizedUnitPrice?.amount || null;
 
       return {
         key: group.key,
@@ -94,9 +60,8 @@ function finalizeGroups(groupMap, { minRetailers = 2, topN = 8 }) {
     .slice(0, topN);
 }
 
-async function buildComparisonSnapshot() {
-  const now = new Date();
-  const offers = await Offer.find({
+function buildCurrentAvailabilityMatch(now) {
+  return {
     'quality.comparisonSafe': true,
     'normalizedUnitPrice.amount': { $ne: null },
     $and: [
@@ -113,31 +78,250 @@ async function buildComparisonSnapshot() {
         ],
       },
     ],
-  }).lean();
+  };
+}
 
-  const exactGroups = createGroupMap(
-    offers,
-    (offer) =>
-      offer.comparisonSignature && offer.comparisonQuantityKey
-        ? `${offer.comparisonSignature}::${offer.comparisonQuantityKey}::${offer.normalizedUnitPrice.unit}`
-        : '',
-    (offer) => offer.title
-  );
+function buildDateStringExpression(fieldPath) {
+  return {
+    $cond: [
+      { $ifNull: [fieldPath, false] },
+      { $dateToString: { date: fieldPath, format: '%Y-%m-%dT%H:%M:%S.%LZ' } },
+      '',
+    ],
+  };
+}
 
-  const categoryGroups = createGroupMap(
-    offers,
-    (offer) => {
-      const categoryKey = offer.comparisonCategoryKey || offer.categorySecondary || offer.categoryPrimary;
-      return categoryKey ? `${categoryKey}::${offer.normalizedUnitPrice.unit}` : '';
+function buildNonEmptyFieldExpression(fieldPath) {
+  return {
+    $cond: [
+      { $gt: [{ $strLenCP: { $ifNull: [fieldPath, ''] } }, 0] },
+      fieldPath,
+      null,
+    ],
+  };
+}
+
+function buildExactGroupKeyExpression() {
+  return {
+    $cond: [
+      {
+        $and: [
+          { $gt: [{ $strLenCP: { $ifNull: ['$comparisonSignature', ''] } }, 0] },
+          { $gt: [{ $strLenCP: { $ifNull: ['$comparisonQuantityKey', ''] } }, 0] },
+          { $gt: [{ $strLenCP: { $ifNull: ['$normalizedUnitPrice.unit', ''] } }, 0] },
+        ],
+      },
+      {
+        $concat: [
+          '$comparisonSignature',
+          '::',
+          '$comparisonQuantityKey',
+          '::',
+          '$normalizedUnitPrice.unit',
+        ],
+      },
+      null,
+    ],
+  };
+}
+
+function buildCategoryBaseExpression() {
+  return {
+    $ifNull: [
+      buildNonEmptyFieldExpression('$comparisonCategoryKey'),
+      {
+        $ifNull: [
+          buildNonEmptyFieldExpression('$categorySecondary'),
+          buildNonEmptyFieldExpression('$categoryPrimary'),
+        ],
+      },
+    ],
+  };
+}
+
+function buildCategoryGroupKeyExpression() {
+  const categoryBaseExpression = buildCategoryBaseExpression();
+
+  return {
+    $cond: [
+      {
+        $and: [
+          { $ifNull: [categoryBaseExpression, false] },
+          { $gt: [{ $strLenCP: { $ifNull: ['$normalizedUnitPrice.unit', ''] } }, 0] },
+        ],
+      },
+      {
+        $concat: [categoryBaseExpression, '::', '$normalizedUnitPrice.unit'],
+      },
+      null,
+    ],
+  };
+}
+
+function buildComparisonGroupsPipeline({ keyExpression, labelExpression, topN }) {
+  return [
+    {
+      $addFields: {
+        comparisonGroupKey: keyExpression,
+        comparisonGroupLabel: labelExpression,
+        comparisonDedupeKey: {
+          $concat: [
+            '$retailerKey',
+            ':',
+            '$title',
+            ':',
+            { $toString: '$normalizedUnitPrice.amount' },
+            ':',
+            buildDateStringExpression('$validTo'),
+          ],
+        },
+      },
     },
-    (offer) => `${offer.categorySecondary || offer.categoryPrimary} / ${offer.normalizedUnitPrice.unit}`
-  );
+    {
+      $match: {
+        comparisonGroupKey: { $ne: null },
+      },
+    },
+    {
+      $sort: {
+        comparisonGroupKey: 1,
+        'normalizedUnitPrice.amount': 1,
+        retailerName: 1,
+        title: 1,
+      },
+    },
+    {
+      $group: {
+        _id: {
+          key: '$comparisonGroupKey',
+          dedupeKey: '$comparisonDedupeKey',
+        },
+        key: { $first: '$comparisonGroupKey' },
+        label: { $first: '$comparisonGroupLabel' },
+        unit: { $first: '$normalizedUnitPrice.unit' },
+        retailerKey: { $first: '$retailerKey' },
+        offer: {
+          $first: {
+            _id: '$_id',
+            retailerKey: '$retailerKey',
+            retailerName: '$retailerName',
+            title: '$title',
+            brand: '$brand',
+            categoryPrimary: '$categoryPrimary',
+            categorySecondary: '$categorySecondary',
+            quantityText: '$quantityText',
+            conditionsText: '$conditionsText',
+            validTo: '$validTo',
+            normalizedUnitPrice: '$normalizedUnitPrice',
+            priceCurrent: '$priceCurrent',
+          },
+        },
+      },
+    },
+    {
+      $sort: {
+        key: 1,
+        'offer.normalizedUnitPrice.amount': 1,
+        'offer.title': 1,
+      },
+    },
+    {
+      $group: {
+        _id: '$key',
+        key: { $first: '$key' },
+        label: { $first: '$label' },
+        unit: { $first: '$unit' },
+        retailerKeys: { $addToSet: '$retailerKey' },
+        offerCount: { $sum: 1 },
+        bestUnitPrice: { $first: '$offer.normalizedUnitPrice.amount' },
+        offers: { $push: '$offer' },
+      },
+    },
+    {
+      $addFields: {
+        retailerCount: { $size: '$retailerKeys' },
+      },
+    },
+    {
+      $match: {
+        retailerCount: { $gte: 2 },
+        offerCount: { $gte: 2 },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        key: 1,
+        label: 1,
+        unit: 1,
+        retailerCount: 1,
+        offerCount: 1,
+        bestUnitPrice: 1,
+        offers: { $slice: ['$offers', 4] },
+      },
+    },
+    {
+      $sort: {
+        retailerCount: -1,
+        offerCount: -1,
+        bestUnitPrice: 1,
+      },
+    },
+    {
+      $limit: topN,
+    },
+  ];
+}
+
+async function buildComparisonSnapshot() {
+  const now = new Date();
+  const categoryBaseExpression = buildCategoryBaseExpression();
+  const [snapshot] = await Offer.aggregate([
+    {
+      $match: buildCurrentAvailabilityMatch(now),
+    },
+    {
+      $project: {
+        retailerKey: 1,
+        retailerName: 1,
+        title: 1,
+        brand: 1,
+        categoryPrimary: 1,
+        categorySecondary: 1,
+        comparisonSignature: 1,
+        comparisonQuantityKey: 1,
+        comparisonCategoryKey: 1,
+        quantityText: 1,
+        conditionsText: 1,
+        validTo: 1,
+        normalizedUnitPrice: 1,
+        priceCurrent: 1,
+      },
+    },
+    {
+      $facet: {
+        comparableOfferCount: [{ $count: 'count' }],
+        exactMatches: buildComparisonGroupsPipeline({
+          keyExpression: buildExactGroupKeyExpression(),
+          labelExpression: '$title',
+          topN: 6,
+        }),
+        categoryBenchmarks: buildComparisonGroupsPipeline({
+          keyExpression: buildCategoryGroupKeyExpression(),
+          labelExpression: {
+            $concat: [categoryBaseExpression, ' / ', '$normalizedUnitPrice.unit'],
+          },
+          topN: 8,
+        }),
+      },
+    },
+  ]).option({ maxTimeMS: 7000 });
 
   return {
     generatedAt: new Date().toISOString(),
-    comparableOfferCount: offers.length,
-    exactMatches: finalizeGroups(exactGroups, { minRetailers: 2, topN: 6 }),
-    categoryBenchmarks: finalizeGroups(categoryGroups, { minRetailers: 2, topN: 8 }),
+    comparableOfferCount: snapshot?.comparableOfferCount?.[0]?.count || 0,
+    exactMatches: finalizeGroups(snapshot?.exactMatches || [], { minRetailers: 2, topN: 6 }),
+    categoryBenchmarks: finalizeGroups(snapshot?.categoryBenchmarks || [], { minRetailers: 2, topN: 8 }),
   };
 }
 
