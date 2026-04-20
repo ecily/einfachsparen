@@ -8,6 +8,7 @@ const crawlRoutes = require('./routes/crawl.routes');
 const essenceRoutes = require('./routes/essence.routes');
 const feedbackRoutes = require('./routes/feedback.routes');
 const offerRoutes = require('./routes/offer.routes');
+const filterRoutes = require('./routes/filter.routes');
 const userPreferencesRoutes = require('./routes/userPreferences.routes');
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api/sources', sourceRoutes);
 app.use('/api/crawl', crawlRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/offers', offerRoutes);
+app.use('/api/filters', filterRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 
 app.use((error, req, res, next) => {

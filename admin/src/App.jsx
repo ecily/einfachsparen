@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import './index.css'
 import {
@@ -11,27 +11,6 @@ import {
   saveCurrentUserPreferences,
   saveFeedback,
 } from './api'
-
-function TopDebugBanner() {
-  return (
-    <div
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 5000,
-        marginBottom: '0.75rem',
-        padding: '0.85rem 1rem',
-        borderRadius: '14px',
-        background: '#c62828',
-        color: '#fff',
-        fontWeight: 700,
-        textAlign: 'center',
-      }}
-    >
-      Ja, diese App.jsx laeuft
-    </div>
-  )
-}
 
 function getOfferCategoryLabel(offer) {
   return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
@@ -216,13 +195,25 @@ function getOfferRetailerKey(offer, retailers = []) {
 function filterOffers(offers, filters, retailers) {
   const searchNeedle = String(filters.queryInput || '').trim().toLowerCase()
 
+  if (!filters.selectedRetailers.length) {
+    return []
+  }
+
   return (offers || []).filter((offer) => {
     const offerRetailerKey = getOfferRetailerKey(offer, retailers)
     const offerCategory = getOfferCategoryLabel(offer)
 
-    if (filters.selectedRetailers.length > 0 && !filters.selectedRetailers.includes(offerRetailerKey)) return false
-    if (filters.selectedCategories.length > 0 && !filters.selectedCategories.includes(offerCategory)) return false
-    if (offer.customerProgramRequired && !filters.retailerPrograms?.[offerRetailerKey]) return false
+    if (!filters.selectedRetailers.includes(offerRetailerKey)) {
+      return false
+    }
+
+    if (filters.selectedCategories.length > 0 && !filters.selectedCategories.includes(offerCategory)) {
+      return false
+    }
+
+    if (offer.customerProgramRequired && !filters.retailerPrograms?.[offerRetailerKey]) {
+      return false
+    }
 
     if (searchNeedle) {
       const haystack = [
@@ -238,7 +229,9 @@ function filterOffers(offers, filters, retailers) {
         .join(' ')
         .toLowerCase()
 
-      if (!haystack.includes(searchNeedle)) return false
+      if (!haystack.includes(searchNeedle)) {
+        return false
+      }
     }
 
     return true
@@ -298,41 +291,6 @@ function buildClientRanking(baseRanking, filteredOffers) {
   }
 }
 
-function getSupportingSourceBadges(offer) {
-  const sources = Array.isArray(offer?.supportingSources) ? offer.supportingSources : []
-  const seen = new Set()
-
-  return sources
-    .map((source) => source.label || source.channel || 'Quelle')
-    .filter(Boolean)
-    .filter((label) => {
-      if (seen.has(label)) return false
-      seen.add(label)
-      return true
-    })
-    .slice(0, 4)
-}
-
-function MetricCard({ label, value, tone = 'default' }) {
-  return (
-    <article className={`metric-card metric-card--${tone}`}>
-      <span className="metric-card__label">{label}</span>
-      <strong className="metric-card__value">{value}</strong>
-    </article>
-  )
-}
-
-function LandingInfoCard({ title, children }) {
-  return (
-    <section className="panel">
-      <div className="panel__header">
-        <h2>{title}</h2>
-        <p>{children}</p>
-      </div>
-    </section>
-  )
-}
-
 function HeroLoaderModal({ open }) {
   if (!open) return null
 
@@ -367,7 +325,7 @@ function HeroLoaderModal({ open }) {
       >
         <div className="panel__header" style={{ alignItems: 'center' }}>
           <h2>Einen Moment, wir suchen gerade ...</h2>
-          <p>kaufklug.at laedt die aktuellen Angebote fuer dich.</p>
+          <p>kaufklug.at laedt passende Angebote und deine gespeicherten Einstellungen.</p>
         </div>
 
         <div
@@ -390,6 +348,11 @@ function ProductImage({ offerId, src, alt, compact = false }) {
   const primarySrc = offerId ? getOfferImageUrl(offerId) : src
   const [currentSrc, setCurrentSrc] = useState(primarySrc || src || '')
   const [fallbackTried, setFallbackTried] = useState(false)
+
+  useEffect(() => {
+    setCurrentSrc(primarySrc || src || '')
+    setFallbackTried(false)
+  }, [primarySrc, src])
 
   if (!currentSrc) {
     return (
@@ -419,60 +382,39 @@ function ProductImage({ offerId, src, alt, compact = false }) {
   )
 }
 
-function ComparisonGroupList({ title, description, groups }) {
-  return (
-    <section className="panel">
-      <div className="panel__header">
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-      {(groups || []).length === 0 ? (
-        <p className="status">Noch keine belastbaren Vergleichsgruppen vorhanden.</p>
-      ) : (
-        <div className="comparison-list">
-          {groups.map((group) => (
-            <article className="comparison-card" key={group.key}>
-              <div className="comparison-card__top">
-                <div>
-                  <h3>{group.label}</h3>
-                  <p>
-                    {group.retailerCount} Haendler | {group.offerCount} Angebote | bester Wert {group.bestUnitPrice}/{group.unit}
-                  </p>
-                </div>
-              </div>
-              <div className="comparison-offers">
-                {group.offers.map((offer) => (
-                  <div className="comparison-offer" key={offer.id}>
-                    <strong>{offer.retailerName}</strong>
-                    <span>{offer.normalizedUnitPrice.amount}/{offer.normalizedUnitPrice.unit}</span>
-                    <span>{offer.priceCurrent.amount} {offer.priceCurrent.currency}</span>
-                    <span>{offer.priceGapPercent > 0 ? `+${offer.priceGapPercent}%` : 'Bestwert'}</span>
-                    <p>{offer.title}</p>
-                  </div>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function CategoryMenu({ categories, selectedCategories, onToggle, onToggleMainCategory, onClear }) {
+function CategoryMenu({ categories, selectedCategories, onToggle, onToggleMainCategory, onClear, onDone, disabled }) {
   const [expandedGroups, setExpandedGroups] = useState({})
   const groups = buildCategoryGroups(categories)
+
+  if (disabled) {
+    return (
+      <div className="category-picker__header">
+        <div>
+          <h3>Kategorien</h3>
+          <p>Waehle zuerst mindestens einen Supermarkt aus. Danach kannst du die Treffer per Kategorie eingrenzen.</p>
+        </div>
+        <button type="button" className="ghost-button" onClick={onDone}>
+          Fertig
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div>
       <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
         <div>
           <h3>Kategorien</h3>
-          <p>Die Direktsuche und Kategorien ergaenzen sich.</p>
+          <p>Wandle deine Supermarkt-Auswahl jetzt in passende Produktbereiche um.</p>
         </div>
-        <button type="button" className="ghost-button" onClick={onClear}>
-          Zuruecksetzen
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button type="button" className="ghost-button" onClick={onDone}>
+            Fertig
+          </button>
+          <button type="button" className="ghost-button" onClick={onClear}>
+            Zuruecksetzen
+          </button>
+        </div>
       </div>
 
       <div className="category-group-list">
@@ -529,17 +471,22 @@ function CategoryMenu({ categories, selectedCategories, onToggle, onToggleMainCa
   )
 }
 
-function RetailerMenu({ retailers, selectedRetailers, onToggle, onClear }) {
+function RetailerMenu({ retailers, selectedRetailers, onToggle, onClear, onDone }) {
   return (
     <div>
       <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
         <div>
           <h3>Supermaerkte</h3>
-          <p>Waehle nur die Maerkte, die fuer dich wirklich passen.</p>
+          <p>Diese Auswahl bestimmt, in welchen Maerkten wir fuer dich ueberhaupt suchen.</p>
         </div>
-        <button type="button" className="ghost-button" onClick={onClear}>
-          Zuruecksetzen
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button type="button" className="ghost-button" onClick={onDone}>
+            Fertig
+          </button>
+          <button type="button" className="ghost-button" onClick={onClear}>
+            Zuruecksetzen
+          </button>
+        </div>
       </div>
 
       <div className="chip-grid">
@@ -558,7 +505,7 @@ function RetailerMenu({ retailers, selectedRetailers, onToggle, onClear }) {
   )
 }
 
-function ProgramMenu({ retailers, selectedRetailers, retailerPrograms, onToggleProgram }) {
+function ProgramMenu({ retailers, selectedRetailers, retailerPrograms, onToggleProgram, onDone }) {
   const visibleRetailers = (retailers || []).filter((retailer) => selectedRetailers.includes(retailer.retailerKey))
 
   if (visibleRetailers.length === 0) {
@@ -566,8 +513,11 @@ function ProgramMenu({ retailers, selectedRetailers, retailerPrograms, onToggleP
       <div className="category-picker__header">
         <div>
           <h3>Kundenkarte / App</h3>
-          <p>Waehle zuerst mindestens einen Supermarkt aus.</p>
+          <p>Waehle zuerst mindestens einen Supermarkt aus. Danach kannst du Angebote mit App- oder Kartenpflicht einbeziehen.</p>
         </div>
+        <button type="button" className="ghost-button" onClick={onDone}>
+          Fertig
+        </button>
       </div>
     )
   }
@@ -577,8 +527,11 @@ function ProgramMenu({ retailers, selectedRetailers, retailerPrograms, onToggleP
       <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
         <div>
           <h3>Kundenkarte / App</h3>
-          <p>Hier legst du fest, bei welchen Anbietern du Karten- oder App-Angebote nutzen kannst.</p>
+          <p>Aktiviere dies nur fuer Maerkte, bei denen du Karte oder App wirklich nutzt.</p>
         </div>
+        <button type="button" className="ghost-button" onClick={onDone}>
+          Fertig
+        </button>
       </div>
 
       <div className="program-settings">
@@ -604,7 +557,7 @@ function SearchResultGroups({ ranking }) {
   const groups = ranking?.rankedGroups || []
 
   if (groups.length === 0) {
-    return <p className="status">Keine passenden, sicher vergleichbaren Angebote fuer den aktuellen Filter gefunden.</p>
+    return <p className="status">Keine passenden Angebote fuer den aktuellen Filter gefunden.</p>
   }
 
   return (
@@ -614,14 +567,16 @@ function SearchResultGroups({ ranking }) {
           <div className="user-group__header">
             <div>
               <h3>{group.unit} direkt vergleichbar</h3>
-              <p>Hier stehen nur Angebote mit derselben Einheit, damit der Vergleich fair und leicht lesbar bleibt.</p>
+              <p>Bestes Angebot zuerst, danach die weiteren Treffer derselben Einheit.</p>
             </div>
             <span className="pill pill--reviewed">{group.offers.length} Treffer</span>
           </div>
+
           <div className="user-results">
             {group.offers.map((offer, index) => (
               <article className={`user-card ${index === 0 ? 'user-card--best' : ''}`} key={offer.id}>
                 <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
+
                 <div className="user-card__content">
                   <div className="user-card__top">
                     <div>
@@ -633,10 +588,11 @@ function SearchResultGroups({ ranking }) {
                       </div>
                       <h3>{offer.title}</h3>
                     </div>
+
                     <div className="user-card__price">
                       {offer.conditionsText ? <span className="user-card__price-condition">{offer.conditionsText}</span> : null}
-                      <strong>{offer.priceCurrent.amount} {offer.priceCurrent.currency}</strong>
-                      <span>{offer.normalizedUnitPrice.amount}/{offer.normalizedUnitPrice.unit}</span>
+                      <strong>{offer.priceCurrent?.amount} {offer.priceCurrent?.currency}</strong>
+                      <span>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</span>
                     </div>
                   </div>
 
@@ -648,12 +604,14 @@ function SearchResultGroups({ ranking }) {
                   <div className="user-card__highlights">
                     <div className="highlight-pill highlight-pill--price">
                       <span>Vergleichspreis</span>
-                      <strong>{offer.normalizedUnitPrice.amount}/{offer.normalizedUnitPrice.unit}</strong>
+                      <strong>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</strong>
                     </div>
+
                     <div className="highlight-pill">
                       <span>Ersparnis zum alten Preis</span>
                       <strong>{offer.savingsAmount !== null ? `${offer.savingsAmount} EUR` : 'nicht ableitbar'}</strong>
                     </div>
+
                     <div className="highlight-pill">
                       <span>Nur mit App/Kundenkarte?</span>
                       <strong>{offer.customerProgramRequired ? 'Ja' : 'Nein'}</strong>
@@ -665,6 +623,88 @@ function SearchResultGroups({ ranking }) {
           </div>
         </section>
       ))}
+    </div>
+  )
+}
+
+function ActiveFilterChips({
+  selectedRetailers,
+  selectedCategories,
+  retailerPrograms,
+  retailers,
+  queryInput,
+  onRemoveRetailer,
+  onRemoveCategory,
+  onClearQuery,
+  onRemoveProgram,
+  onOpenRetailers,
+}) {
+  const retailerLookup = useMemo(() => {
+    return new Map((retailers || []).map((retailer) => [retailer.retailerKey, retailer.retailerName]))
+  }, [retailers])
+
+  const activeProgramKeys = Object.entries(retailerPrograms || {})
+    .filter(([, enabled]) => Boolean(enabled))
+    .map(([retailerKey]) => retailerKey)
+
+  const hasAnyFilters = selectedRetailers.length > 0 || selectedCategories.length > 0 || activeProgramKeys.length > 0 || Boolean(queryInput.trim())
+
+  if (!hasAnyFilters) {
+    return (
+      <div
+        style={{
+          marginTop: '0.85rem',
+          paddingTop: '0.85rem',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          display: 'grid',
+          gap: '0.35rem',
+        }}
+      >
+        <p style={{ margin: 0, opacity: 0.82 }}>Starte mit deinen Supermaerkten. Suche und Kategorien wirken nur innerhalb dieser Auswahl.</p>
+        <div>
+          <button type="button" className="chip chip--active" onClick={onOpenRetailers}>
+            Supermaerkte auswaehlen
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: '0.85rem',
+        paddingTop: '0.85rem',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        display: 'grid',
+        gap: '0.55rem',
+      }}
+    >
+      <div className="chip-grid">
+        {selectedRetailers.map((retailerKey) => (
+          <button key={`retailer-${retailerKey}`} type="button" className="chip chip--active" onClick={() => onRemoveRetailer(retailerKey)}>
+            {retailerLookup.get(retailerKey) || retailerKey} ×
+          </button>
+        ))}
+
+        {queryInput.trim() ? (
+          <button type="button" className="chip chip--active" onClick={onClearQuery}>
+            Suchbegriff: {queryInput.trim()} ×
+          </button>
+        ) : null}
+
+        {selectedCategories.map((category) => (
+          <button key={`category-${category}`} type="button" className="chip chip--subtle chip--active" onClick={() => onRemoveCategory(category)}>
+            {category} ×
+          </button>
+        ))}
+
+        {activeProgramKeys.map((retailerKey) => (
+          <button key={`program-${retailerKey}`} type="button" className="chip chip--subtle chip--active" onClick={() => onRemoveProgram(retailerKey)}>
+            Kundenkarte/App: {retailerLookup.get(retailerKey) || retailerKey} ×
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -686,8 +726,32 @@ function SearchPage({
   onToggleRetailerProgram,
 }) {
   const [openMenu, setOpenMenu] = useState(null)
+  const stickyRef = useRef(null)
   const isPageBusy = rankingLoading || preferencesLoading
+  const hasRetailerScope = selectedRetailers.length > 0
+  const trimmedQuery = queryInput.trim()
+
   const allOffers = useMemo(() => flattenRankingOffers(ranking), [ranking])
+
+  const scopedOffersForRetailers = useMemo(() => {
+    if (!hasRetailerScope) return []
+
+    return allOffers.filter((offer) => {
+      const offerRetailerKey = getOfferRetailerKey(offer, ranking?.retailers || [])
+      return selectedRetailers.includes(offerRetailerKey)
+    })
+  }, [allOffers, hasRetailerScope, ranking?.retailers, selectedRetailers])
+
+  const availableCategories = useMemo(() => {
+    const categorySet = new Set()
+
+    for (const offer of scopedOffersForRetailers) {
+      const categoryLabel = getOfferCategoryLabel(offer)
+      if (categoryLabel) categorySet.add(categoryLabel)
+    }
+
+    return [...categorySet].sort((left, right) => left.localeCompare(right, 'de'))
+  }, [scopedOffersForRetailers])
 
   const filteredOffers = useMemo(() => {
     return filterOffers(
@@ -707,13 +771,49 @@ function SearchPage({
   const totalOfferCount = allOffers.length
   const visibleOfferCount = filteredOffers.length
   const retailerCount = ranking?.retailers?.length || 0
-  const categoryCount = ranking?.categories?.length || 0
+  const categoryCount = availableCategories.length
   const selectedRetailerCount = selectedRetailers.length
   const selectedCategoryCount = selectedCategories.length
   const savedProgramCount = Object.values(retailerPrograms || {}).filter(Boolean).length
+  const hasRefinements = Boolean(trimmedQuery) || selectedCategoryCount > 0 || savedProgramCount > 0
 
   function toggleMenu(menuName) {
     setOpenMenu((current) => (current === menuName ? null : menuName))
+  }
+
+  function collapseMenuToStickyBar() {
+    setOpenMenu(null)
+
+    if (stickyRef.current) {
+      const top = stickyRef.current.getBoundingClientRect().top + window.scrollY - 12
+      window.scrollTo({
+        top: Math.max(0, top),
+        behavior: 'smooth',
+      })
+    }
+  }
+
+  let resultsTitle = 'Waehle zuerst deine Supermaerkte'
+  let resultsSubtitle = 'Danach kannst du nach Produkten suchen, Kategorien eingrenzen und optional Angebote mit Kundenkarte oder App einbeziehen.'
+
+  if (hasRetailerScope && !hasRefinements) {
+    resultsTitle = 'Alle relevanten Angebote aus deinen Supermaerkten'
+    resultsSubtitle = `${selectedRetailerCount} gewaehlte Supermaerkte · ${visibleOfferCount} Angebote sichtbar`
+  }
+
+  if (hasRetailerScope && hasRefinements && !trimmedQuery && selectedCategoryCount > 0) {
+    resultsTitle = 'Angebote in deinen gewaehlten Kategorien'
+    resultsSubtitle = `${selectedRetailerCount} Supermaerkte · ${selectedCategoryCount} Kategorien · ${visibleOfferCount} Angebote sichtbar`
+  }
+
+  if (hasRetailerScope && trimmedQuery && selectedCategoryCount === 0) {
+    resultsTitle = `Ergebnisse fuer "${trimmedQuery}" in deinen Supermaerkten`
+    resultsSubtitle = `${selectedRetailerCount} Supermaerkte · ${visibleOfferCount} Angebote sichtbar`
+  }
+
+  if (hasRetailerScope && trimmedQuery && selectedCategoryCount > 0) {
+    resultsTitle = `${visibleOfferCount} passende Angebote fuer "${trimmedQuery}"`
+    resultsSubtitle = `${selectedRetailerCount} Supermaerkte · ${selectedCategoryCount} Kategorien aktiv`
   }
 
   return (
@@ -721,74 +821,89 @@ function SearchPage({
       <HeroLoaderModal open={isPageBusy} />
 
       <section
+        ref={stickyRef}
         className="panel"
         style={{
           position: 'sticky',
-          top: 48,
+          top: 0,
           zIndex: 1200,
-          marginBottom: '0.75rem',
-          opacity: isPageBusy ? 0 : 1,
-          pointerEvents: isPageBusy ? 'none' : 'auto',
-          transition: 'opacity 240ms ease',
-        }}
-      >
-        <div className="panel__header">
-          <p>
-            <strong>
-              Aktuell {totalOfferCount} Angebote | {retailerCount} Supermaerkte | {categoryCount} Kategorien | {visibleOfferCount} sichtbar
-            </strong>
-          </p>
-        </div>
-      </section>
-
-      <section
-        className="panel"
-        style={{
-          position: 'sticky',
-          top: 124,
-          zIndex: 1190,
           marginBottom: '1rem',
           opacity: isPageBusy ? 0 : 1,
           pointerEvents: isPageBusy ? 'none' : 'auto',
           transition: 'opacity 240ms ease',
+          padding: '0.9rem 1rem',
         }}
       >
         <div
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: '0.75rem',
+            gap: '0.6rem',
             alignItems: 'center',
           }}
         >
-          <label className="field field--hero-search" style={{ flex: '1 1 320px', minWidth: '260px', marginBottom: 0 }}>
+          <button
+            type="button"
+            className={`ghost-button ${openMenu === 'retailers' ? 'chip--active' : ''}`}
+            onClick={() => toggleMenu('retailers')}
+          >
+            Supermaerkte {selectedRetailerCount > 0 ? `(${selectedRetailerCount})` : ''}
+          </button>
+
+          <label className="field field--hero-search" style={{ flex: '1 1 320px', minWidth: '240px', marginBottom: 0, opacity: hasRetailerScope ? 1 : 0.72 }}>
             <span>Was suchst du?</span>
             <input
               type="text"
               value={queryInput}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="z. B. Kaese, Wein, Mineralwasser, Baguette"
+              placeholder={hasRetailerScope ? 'z. B. Milch, Kaffee, Butter' : 'Waehle zuerst Supermaerkte'}
+              disabled={!hasRetailerScope}
             />
           </label>
 
-          <button type="button" className={`ghost-button ${openMenu === 'retailers' ? 'chip--active' : ''}`} onClick={() => toggleMenu('retailers')}>
-            Supermaerkte {selectedRetailerCount > 0 ? `(${selectedRetailerCount})` : ''}
-          </button>
-
-          <button type="button" className={`ghost-button ${openMenu === 'categories' ? 'chip--active' : ''}`} onClick={() => toggleMenu('categories')}>
+          <button
+            type="button"
+            className={`ghost-button ${openMenu === 'categories' ? 'chip--active' : ''}`}
+            onClick={() => toggleMenu('categories')}
+            disabled={!hasRetailerScope}
+            style={!hasRetailerScope ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+          >
             Kategorien {selectedCategoryCount > 0 ? `(${selectedCategoryCount})` : ''}
           </button>
 
-          <button type="button" className={`ghost-button ${openMenu === 'programs' ? 'chip--active' : ''}`} onClick={() => toggleMenu('programs')}>
+          <button
+            type="button"
+            className={`ghost-button ${openMenu === 'programs' ? 'chip--active' : ''}`}
+            onClick={() => toggleMenu('programs')}
+            disabled={!hasRetailerScope}
+            style={!hasRetailerScope ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+          >
             Kundenkarte / App {savedProgramCount > 0 ? `(${savedProgramCount})` : ''}
           </button>
         </div>
 
+        <p style={{ margin: '0.75rem 0 0', opacity: 0.82 }}>
+          Schritt 1: Supermaerkte waehlen. Schritt 2: Produkt suchen. Schritt 3: Kategorien eingrenzen. Kundenkarte / App ist optional.
+        </p>
+
+        <ActiveFilterChips
+          selectedRetailers={selectedRetailers}
+          selectedCategories={selectedCategories}
+          retailerPrograms={retailerPrograms}
+          retailers={ranking?.retailers}
+          queryInput={queryInput}
+          onRemoveRetailer={onToggleRetailer}
+          onRemoveCategory={onToggleCategory}
+          onClearQuery={() => onQueryChange('')}
+          onRemoveProgram={(retailerKey) => onToggleRetailerProgram(retailerKey, false)}
+          onOpenRetailers={() => setOpenMenu('retailers')}
+        />
+
         {openMenu ? (
           <div
             style={{
-              marginTop: '1rem',
-              paddingTop: '1rem',
+              marginTop: '0.85rem',
+              paddingTop: '0.85rem',
               borderTop: '1px solid rgba(255,255,255,0.08)',
             }}
           >
@@ -798,16 +913,19 @@ function SearchPage({
                 selectedRetailers={selectedRetailers}
                 onToggle={onToggleRetailer}
                 onClear={onClearRetailers}
+                onDone={collapseMenuToStickyBar}
               />
             ) : null}
 
             {openMenu === 'categories' ? (
               <CategoryMenu
-                categories={ranking?.categories}
+                categories={availableCategories}
                 selectedCategories={selectedCategories}
                 onToggle={onToggleCategory}
                 onToggleMainCategory={onToggleMainCategory}
                 onClear={onClearCategories}
+                onDone={collapseMenuToStickyBar}
+                disabled={!hasRetailerScope}
               />
             ) : null}
 
@@ -817,6 +935,7 @@ function SearchPage({
                 selectedRetailers={selectedRetailers}
                 retailerPrograms={retailerPrograms}
                 onToggleProgram={onToggleRetailerProgram}
+                onDone={collapseMenuToStickyBar}
               />
             ) : null}
           </div>
@@ -824,68 +943,52 @@ function SearchPage({
       </section>
 
       <section
-        className="hero hero--search"
+        className="panel"
         style={{
-          width: '100%',
+          marginBottom: '1rem',
           opacity: isPageBusy ? 0 : 1,
           pointerEvents: isPageBusy ? 'none' : 'auto',
           transition: 'opacity 240ms ease',
         }}
       >
-        <div style={{ width: '100%' }}>
-          <p className="eyebrow">kaufklug.at</p>
-          <h1>Die smarte Art, Zeit, Geld und Wege beim Einkauf zu sparen.</h1>
-          <p className="subtitle">Der Postkasten ist voll mit Prospekten. Aber niemand hat Zeit, alles zu vergleichen.</p>
-          <p className="subtitle">kaufklug.at zeigt dir, wo du deine Produkte gerade wirklich am guenstigsten bekommst.</p>
-          <p className="subtitle">Damit du beim Einkaufen Geld, Zeit und unnoetige Wege sparst – kostenlos, ohne Datenmissbrauch und von Menschen fuer Menschen.</p>
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          <div>
+            <p className="eyebrow">kaufklug.at</p>
+            <h1 style={{ marginBottom: '0.8rem' }}>Die smarte Art, Zeit, Geld und Wege beim Einkauf zu sparen.</h1>
+            <p className="subtitle" style={{ marginBottom: '0.45rem' }}>
+              Der Postkasten ist voll mit Prospekten. Aber niemand hat Zeit, alles zu vergleichen.
+            </p>
+            <p className="subtitle" style={{ marginBottom: '0.45rem' }}>
+              kaufklug.at zeigt dir, wo du deine Produkte gerade wirklich am guenstigsten bekommst.
+            </p>
+            <p className="subtitle">
+              Damit du beim Einkaufen Geld, Zeit und unnoetige Wege sparst – kostenlos, ohne Datenmissbrauch und von Menschen fuer Menschen.
+            </p>
+          </div>
 
-          <div className="panel" style={{ marginTop: '1.5rem', width: '100%' }}>
-            <div className="panel__header">
-              <h2>Wie funktioniert kaufklug.at?</h2>
-              <p>kaufklug.at sucht laufend nach aktuellen Angeboten, vergleicht sie und zeigt dir die wirklich guten Deals.</p>
-              <p>Du waehlst einfach, was du brauchst, welche Supermaerkte fuer dich passen und ob du eine Kundenkarte hast.</p>
-              <p>Dann speicherst du deine Produkte in der Einkaufsliste – und wir zeigen dir, wie du dabei moeglichst viel Geld sparst. Dazu berechnet kaufklug.at auch die optimale Einkaufsroute, je nachdem, wo du gerade bist oder von zuhause losfaehrst.</p>
-            </div>
+          <div
+            style={{
+              padding: '1rem 1.1rem',
+              borderRadius: '18px',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          >
+            <h2 style={{ marginBottom: '0.65rem' }}>Warum hilft kaufklug.at wirklich beim Sparen?</h2>
+            <p style={{ marginBottom: '0.45rem', opacity: 0.88 }}>
+              Weil das Backend laufend aktuelle Angebote sammelt und das Frontend sie fuer dich einfach filterbar und verstaendlich macht.
+            </p>
+            <p style={{ marginBottom: '0.45rem', opacity: 0.88 }}>
+              Zuerst waehlst du deine Supermaerkte. Danach verfeinerst du die Treffer mit Suche, Kategorien und optional mit Kundenkarte / App.
+            </p>
+            <p style={{ opacity: 0.88 }}>
+              So siehst du die wirklich relevanten Angebote schneller und in einer Reihenfolge, die beim Sparen hilft.
+            </p>
           </div>
         </div>
       </section>
 
       <section
-        className="metrics"
-        style={{
-          opacity: isPageBusy ? 0 : 1,
-          pointerEvents: isPageBusy ? 'none' : 'auto',
-          transition: 'opacity 240ms ease',
-        }}
-      >
-        <MetricCard label="Kosten fuer dich" value="0 EUR" tone="accent" />
-        <MetricCard label="Datennutzung" value="fair" />
-        <MetricCard label="Aktuelle Angebote" value={totalOfferCount} />
-        <MetricCard label="Passende Treffer" value={visibleOfferCount} />
-      </section>
-
-      <section
-        className="panel-grid"
-        style={{
-          opacity: isPageBusy ? 0 : 1,
-          pointerEvents: isPageBusy ? 'none' : 'auto',
-          transition: 'opacity 240ms ease',
-        }}
-      >
-        <LandingInfoCard title="1. Angebote verstehen statt Prospekte waelzen">
-          Jede Woche landen unzaehlige Prospekte im Postkasten. kaufklug.at nimmt dir das Durchsehen und Vergleichen ab.
-        </LandingInfoCard>
-
-        <LandingInfoCard title="2. Nur das sehen, was fuer dich wichtig ist">
-          Du filterst nach Produkten, Kategorien, Supermaerkten und Kundenkarte. So bekommst du keine Werbeflut, sondern passende Treffer.
-        </LandingInfoCard>
-
-        <LandingInfoCard title="3. Geld sparen und den Weg gleich mitdenken">
-          kaufklug.at zeigt dir nicht nur gute Angebote, sondern hilft dir auch dabei, deinen Einkauf sinnvoll und mit moeglichst wenig Umwegen zu planen.
-        </LandingInfoCard>
-      </section>
-
-      <section
         className="panel"
         style={{
           opacity: isPageBusy ? 0 : 1,
@@ -894,30 +997,73 @@ function SearchPage({
         }}
       >
         <div className="panel__header">
-          <h2>Warum ist kaufklug.at wirklich nuetzlich?</h2>
-          <p>Weil Sparen im Alltag oft nicht am Willen scheitert, sondern an unuebersichtlichen Prospekten, zu vielen Apps und zu wenig Zeit.</p>
+          <h2>{resultsTitle}</h2>
+          <p>{resultsSubtitle}</p>
         </div>
-        <div className="search-explainer">
-          <p><strong>Du musst nicht mehr alles selbst vergleichen.</strong> kaufklug.at sammelt und ordnet aktuelle Angebote fuer dich.</p>
-          <p><strong>Du entscheidest nur noch, was du brauchst.</strong> Den Rest filtern und sortieren wir so, dass es alltagstauglich bleibt.</p>
-          <p><strong>Du sparst nicht nur beim Preis.</strong> Auch Zeit, Suchaufwand und unnoetige Wege werden reduziert.</p>
-          <p><strong>Die Nutzung bleibt fair.</strong> Kostenlos fuer dich, ohne Datenmissbrauch und mit klarem Fokus auf echten Nutzen.</p>
-        </div>
-      </section>
 
-      <section
-        className="panel"
-        style={{
-          opacity: isPageBusy ? 0 : 1,
-          pointerEvents: isPageBusy ? 'none' : 'auto',
-          transition: 'opacity 240ms ease',
-        }}
-      >
-        <div className="panel__header">
-          <h2>Die besten Treffer fuer deinen Einkauf</h2>
-          <p>Klar filterbar, schnell erfassbar und darauf ausgelegt, dir moeglichst viel Ersparnis bei moeglichst wenig Aufwand zu bringen.</p>
-        </div>
-        {rankingLoading ? <p className="status">Angebote werden geladen...</p> : <SearchResultGroups ranking={clientRanking} />}
+        {rankingLoading ? (
+          <p className="status">Angebote werden geladen...</p>
+        ) : !hasRetailerScope ? (
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <p className="status" style={{ marginBottom: 0 }}>
+              Noch keine Supermaerkte ausgewaehlt.
+            </p>
+            <p style={{ margin: 0, opacity: 0.84 }}>
+              Waehlst du zuerst deine Maerkte, werden Suche und Kategorien sofort sinnvoll und transparent.
+            </p>
+            <div>
+              <button type="button" className="ghost-button chip--active" onClick={() => toggleMenu('retailers')}>
+                Supermaerkte auswaehlen
+              </button>
+            </div>
+            <p style={{ margin: 0, opacity: 0.72 }}>
+              Aktuell insgesamt verfuegbar: {totalOfferCount} Angebote aus {retailerCount} Supermaerkten.
+            </p>
+          </div>
+        ) : visibleOfferCount === 0 ? (
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <p className="status" style={{ marginBottom: 0 }}>
+              Keine passenden Angebote fuer die aktuelle Kombination gefunden.
+            </p>
+            <p style={{ margin: 0, opacity: 0.84 }}>
+              Versuche einen anderen Suchbegriff oder entferne einzelne Filter.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {trimmedQuery ? (
+                <button type="button" className="ghost-button" onClick={() => onQueryChange('')}>
+                  Suchbegriff loeschen
+                </button>
+              ) : null}
+              {selectedCategoryCount > 0 ? (
+                <button type="button" className="ghost-button" onClick={onClearCategories}>
+                  Kategorien loeschen
+                </button>
+              ) : null}
+              {savedProgramCount > 0 ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    for (const retailerKey of Object.keys(retailerPrograms || {})) {
+                      if (retailerPrograms[retailerKey]) {
+                        onToggleRetailerProgram(retailerKey, false)
+                      }
+                    }
+                  }}
+                >
+                  Kundenkarte / App loeschen
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <>
+            <p style={{ margin: '0 0 1rem', opacity: 0.8 }}>
+              Aktuell {visibleOfferCount} sichtbare Angebote in {selectedRetailerCount} gewaehlten Supermaerkten · {categoryCount} verfuegbare Kategorien innerhalb deiner Auswahl
+            </p>
+            <SearchResultGroups ranking={clientRanking} />
+          </>
+        )}
       </section>
     </>
   )
@@ -967,94 +1113,12 @@ function DiagnosticsPage({
       {error ? <p className="status status--error">{error}</p> : null}
 
       <section className="metrics">
-        <MetricCard label="Quellen aktiv" value={summary.sourceCount || 0} />
-        <MetricCard label="Rohdokumente" value={summary.rawDocumentCount || 0} />
-        <MetricCard label="Gespeichert gesamt" value={summary.storedOfferCount || 0} tone="accent" />
-        <MetricCard label="Aktuell gueltig" value={summary.activeOfferCount || 0} />
-        <MetricCard label="Pruefung offen" value={summary.offersPendingReview || 0} />
-        <MetricCard label="Sicher vergleichbar" value={summary.comparisonSafeOffers || 0} />
-        <MetricCard label="Vergleichsbasis" value={comparisons.comparableOfferCount || 0} />
-      </section>
-
-      <section className="panel-grid">
-        <section className="panel">
-          <div className="panel__header">
-            <h2>Quellenstatus</h2>
-            <p>Welche Anbieterquellen aktuell registriert und zuletzt gelaufen sind.</p>
-          </div>
-          <div className="table">
-            <div className="table__row table__row--head">
-              <span>Anbieter</span>
-              <span>Kanal</span>
-              <span>Status</span>
-              <span>Quelle</span>
-            </div>
-            {(snapshot?.sources || []).map((source) => (
-              <div className="table__row" key={source._id}>
-                <span>{source.retailerName}</span>
-                <span>{source.channel}</span>
-                <span className={`pill pill--${source.latestStatus}`}>{source.latestStatus}</span>
-                <a href={source.sourceUrl} target="_blank" rel="noreferrer">oeffnen</a>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel__header">
-            <h2>Haendlerabdeckung</h2>
-            <p>Wie viele aktuell gueltige Angebote je Anbieter schon normalisiert und sicher vergleichbar sind.</p>
-          </div>
-          <div className="job-list">
-            {(snapshot?.retailerSummary || []).map((item) => (
-              <article className="job-card" key={item._id}>
-                <div className="job-card__top">
-                  <strong>{item.retailerName}</strong>
-                  <span className={`pill ${item.offerCount > 0 ? 'pill--success' : 'pill--partial'}`}>
-                    {item.offerCount > 0 ? 'befuellt' : 'leer'}
-                  </span>
-                </div>
-                <p>Aktuell gueltig {item.offerCount || 0}</p>
-                <p>Sicher vergleichbar {item.comparisonSafeCount || 0} | Mit Issues {item.issueCount || 0}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      </section>
-
-      <ComparisonGroupList
-        title="Vergleichsansicht: naheliegende Produkttreffer"
-        description="Moeglichst konkrete Vergleichsgruppen ueber mehrere Haendler hinweg. Nur sichere aktuelle Einheiten."
-        groups={comparisons.exactMatches}
-      />
-
-      {comparisons.unavailable ? <p className="status">{comparisons.message}</p> : null}
-
-      <ComparisonGroupList
-        title="Vergleichsansicht: Kategorie-Benchmarks"
-        description="Breitere Vergleichsgruppen nach Kategorie und Einheit. Gut fuer erste Preisniveaus, nicht SKU-exakt."
-        groups={comparisons.categoryBenchmarks}
-      />
-
-      <section className="panel">
-        <div className="panel__header">
-          <h2>Letzte Crawl-Jobs</h2>
-          <p>Fruehdiagnose fuer Laufstatus, Fehler und Mengen pro Quelle.</p>
-        </div>
-        <div className="job-list">
-          {(snapshot?.latestJobs || []).map((job) => (
-            <article className="job-card" key={job._id}>
-              <div className="job-card__top">
-                <strong>{job.retailerKey}</strong>
-                <span className={`pill pill--${job.status}`}>{job.status}</span>
-              </div>
-              <p>{dayjs(job.startedAt).format('DD.MM.YYYY HH:mm')}</p>
-              <p>Dokumente {job.stats?.rawDocuments || 0} | Angebote {job.stats?.offersStored || 0}</p>
-              {(job.warningMessages || []).length > 0 ? <p>{job.warningMessages[0]}</p> : null}
-              {(job.errorMessages || []).length > 0 ? <p className="job-card__error">{job.errorMessages[0]}</p> : null}
-            </article>
-          ))}
-        </div>
+        <article className="metric-card"><span className="metric-card__label">Quellen aktiv</span><strong className="metric-card__value">{summary.sourceCount || 0}</strong></article>
+        <article className="metric-card"><span className="metric-card__label">Rohdokumente</span><strong className="metric-card__value">{summary.rawDocumentCount || 0}</strong></article>
+        <article className="metric-card metric-card--accent"><span className="metric-card__label">Gespeichert gesamt</span><strong className="metric-card__value">{summary.storedOfferCount || 0}</strong></article>
+        <article className="metric-card"><span className="metric-card__label">Aktuell gueltig</span><strong className="metric-card__value">{summary.activeOfferCount || 0}</strong></article>
+        <article className="metric-card"><span className="metric-card__label">Pruefung offen</span><strong className="metric-card__value">{summary.offersPendingReview || 0}</strong></article>
+        <article className="metric-card"><span className="metric-card__label">Vergleichsbasis</span><strong className="metric-card__value">{comparisons.comparableOfferCount || 0}</strong></article>
       </section>
 
       <section className="panel">
@@ -1080,45 +1144,6 @@ function DiagnosticsPage({
           </div>
         </div>
       </section>
-
-      <section className="panel">
-        <div className="panel__header">
-          <h2>Angebotsstichprobe</h2>
-          <p>Konkrete Beispiele fuer erkannte Preise, Geltung, Bilder und Vergleichssicherheit.</p>
-        </div>
-        <div className="offer-list">
-          {(snapshot?.offerSamples || []).map((offer) => (
-            <article className="offer-card offer-card--with-image" key={offer._id}>
-              <ProductImage offerId={offer._id} src={offer.imageUrl} alt={offer.title} compact />
-              <div className="offer-card__body">
-                <div className="job-card__top">
-                  <strong>{offer.retailerName}</strong>
-                  <span className={`pill pill--${offer.adminReview?.status || 'pending'}`}>
-                    {offer.adminReview?.status || 'pending'}
-                  </span>
-                </div>
-                <h3>{offer.title}</h3>
-                <p className="offer-card__meta">{offer.categoryPrimary} | {getOfferCategoryLabel(offer)}</p>
-                <p>
-                  {offer.priceCurrent?.amount || '-'} {offer.priceCurrent?.currency || 'EUR'} | {offer.normalizedUnitPrice?.amount || '-'} {offer.normalizedUnitPrice?.unit || ''}
-                </p>
-                <p>{formatValidityLabel(offer)}</p>
-                {offer.conditionsText ? <p>{offer.conditionsText}</p> : null}
-                {Array.isArray(offer.supportingSources) && offer.supportingSources.length > 0 ? (
-                  <div className="source-chip-list">
-                    {getSupportingSourceBadges(offer).map((label) => (
-                      <span className="source-chip" key={`${offer._id}-${label}`}>{label}</span>
-                    ))}
-                  </div>
-                ) : null}
-                {(offer.quality?.issues || []).length > 0 ? (
-                  <p className="job-card__error">{offer.quality.issues.join(' | ')}</p>
-                ) : null}
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
     </>
   )
 }
@@ -1141,16 +1166,7 @@ function App() {
   const [selectedRetailers, setSelectedRetailers] = useState([])
   const [retailerPrograms, setRetailerPrograms] = useState({})
   const [queryInput, setQueryInput] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
   const [preferencesLoading, setPreferencesLoading] = useState(true)
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setSearchTerm(queryInput.trim())
-    }, 250)
-
-    return () => clearTimeout(timeout)
-  }, [queryInput])
 
   useEffect(() => {
     let active = true
@@ -1163,6 +1179,7 @@ function App() {
         if (!active) return
 
         setRetailerPrograms(preferenceResult.retailerPrograms || {})
+        setSelectedRetailers(preferenceResult.selectedRetailers || [])
       } catch (preferenceError) {
         if (!active) return
         setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht geladen werden.')
@@ -1259,6 +1276,18 @@ function App() {
     setRanking(rankingResult)
   }
 
+  async function persistUserPreferences(nextRetailers, nextPrograms) {
+    try {
+      await saveCurrentUserPreferences({
+        selectedRetailers: nextRetailers,
+        retailerPrograms: nextPrograms,
+      })
+      setError('')
+    } catch (preferenceError) {
+      setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht gespeichert werden.')
+    }
+  }
+
   function handleToggleCategory(category) {
     setSelectedCategories((current) =>
       current.includes(category) ? current.filter((item) => item !== category) : [...current, category]
@@ -1274,9 +1303,19 @@ function App() {
   }
 
   function handleToggleRetailer(retailerKey) {
-    setSelectedRetailers((current) =>
-      current.includes(retailerKey) ? current.filter((item) => item !== retailerKey) : [...current, retailerKey]
-    )
+    setSelectedRetailers((current) => {
+      const nextRetailers = current.includes(retailerKey)
+        ? current.filter((item) => item !== retailerKey)
+        : [...current, retailerKey]
+
+      persistUserPreferences(nextRetailers, retailerPrograms)
+      return nextRetailers
+    })
+  }
+
+  function handleClearRetailers() {
+    setSelectedRetailers([])
+    persistUserPreferences([], retailerPrograms)
   }
 
   async function handleToggleRetailerProgram(retailerKey, hasProgram) {
@@ -1286,15 +1325,7 @@ function App() {
     }
 
     setRetailerPrograms(nextPrograms)
-
-    try {
-      await saveCurrentUserPreferences({
-        retailerPrograms: nextPrograms,
-      })
-      setError('')
-    } catch (preferenceError) {
-      setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht gespeichert werden.')
-    }
+    await persistUserPreferences(selectedRetailers, nextPrograms)
   }
 
   async function handleSaveFeedback() {
@@ -1317,8 +1348,6 @@ function App() {
 
   return (
     <main className="shell">
-      <TopDebugBanner />
-
       {activePage === 'search' ? (
         <SearchPage
           ranking={ranking}
@@ -1332,7 +1361,7 @@ function App() {
           onToggleMainCategory={handleToggleMainCategory}
           onToggleRetailer={handleToggleRetailer}
           onClearCategories={() => setSelectedCategories([])}
-          onClearRetailers={() => setSelectedRetailers([])}
+          onClearRetailers={handleClearRetailers}
           onQueryChange={setQueryInput}
           onToggleRetailerProgram={handleToggleRetailerProgram}
         />

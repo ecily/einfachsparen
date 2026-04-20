@@ -3,6 +3,8 @@ const { crawlAktionsfinderSource } = require('./aktionsfinderCrawler');
 const { crawlOfficialSource } = require('./officialSourceCrawler');
 const { crawlMarktguruSource } = require('./marketguruCrawler');
 const { dedupeOffersAcrossSources } = require('./catalogDeduper');
+const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
+const logger = require('../../lib/logger');
 
 async function crawlSource({ source, region, trigger = 'manual' }) {
   if (source.channel === 'aggregator') {
@@ -50,10 +52,45 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
   }
 
   const dedupeResult = await dedupeOffersAcrossSources({ retailerKeys });
+  let filterMetadata = {
+    ok: true,
+    skipped: false,
+  };
+
+  try {
+    const syncResult = await rebuildFilterMetadata({
+      trigger: `crawl:${trigger}`,
+      loggerContext: {
+        region,
+        retailerScope: retailerKeys,
+      },
+    });
+
+    filterMetadata = {
+      ok: true,
+      skipped: false,
+      ...syncResult,
+    };
+  } catch (error) {
+    filterMetadata = {
+      ok: false,
+      skipped: false,
+      message: error.message,
+    };
+
+    logger.error('Filter metadata rebuild failed after crawl', {
+      message: error.message,
+      stack: error.stack,
+      trigger,
+      region,
+      retailerKeys,
+    });
+  }
 
   return {
     sources: results,
     dedupe: dedupeResult,
+    filterMetadata,
   };
 }
 

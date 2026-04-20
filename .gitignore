@@ -4,3 +4,5 @@ admin/node_modules
 admin/dist
 backend/tmp
 backend/logs
+mobile/node_modules
+mobile/.expo

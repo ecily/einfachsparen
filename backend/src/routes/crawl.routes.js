@@ -18,6 +18,7 @@ router.post('/run', async (req, res, next) => {
       region: env.CRAWL_REGION,
       results: crawlResult.sources,
       dedupe: crawlResult.dedupe,
+      filterMetadata: crawlResult.filterMetadata,
     });
   } catch (error) {
     next(error);
