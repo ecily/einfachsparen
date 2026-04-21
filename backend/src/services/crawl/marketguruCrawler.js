@@ -9,6 +9,7 @@ const {
   buildSourceEvidence,
 } = require('./sourceEvidence');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
+const { determineOfferCategory, buildInclusiveScopeDecision } = require('./categoryClassifier');
 
 function createHash(value) {
   return require('node:crypto').createHash('sha256').update(String(value || '')).digest('hex');
@@ -96,59 +97,6 @@ function parseDateRange(value) {
   return {
     validFrom: new Date(Date.UTC(startYear, startMonth - 1, startDay, 12, 0, 0)),
     validTo: new Date(Date.UTC(endYear, endMonth - 1, endDay, 12, 0, 0)),
-  };
-}
-
-function determineCategory(title = '', categoryHint = '') {
-  const haystack = normalizeTitleForMatch(`${title} ${categoryHint}`);
-
-  if (
-    /(bier|wein|wasser|saft|cola|getrank|getraenke|schaumwein|spirituose|whisky|limonade|kaffee|tee|sirup|eistee|smoothie|energydrink|rotwein|weisswein|rose|aperitif|digestif|schnaps|gin|vodka|likor|likor|sekt|prosecco|joghurtgetrank|milchgetrank)/.test(
-      haystack
-    )
-  ) {
-    return 'Getraenke';
-  }
-
-  if (
-    /(shampoo|dusch|zahnpasta|zahnburste|zahnbuerste|aufsteckburste|aufsteckbuerste|deo|deodorant|hygiene|drogerie|kosmetik|seife|windel|toilettenpapier|hygienepapier|einlagen|binden|gesichtspflege|hautpflege)/.test(
-      haystack
-    )
-  ) {
-    return 'Drogerie / Hygiene';
-  }
-
-  if (
-    /(haushalt|reiniger|muellbeutel|geschirr|waschmittel|papier|kuche|kueche|haushalts|schwamm|folie|beutel|tabs|pads|spulmittel|spuelmittel|reinigungsgerate|reinigungsgeraete|tucher|tuecher)/.test(
-      haystack
-    )
-  ) {
-    return 'Haushalt';
-  }
-
-  return 'Lebensmittel';
-}
-
-function detectScopeDecision({ title = '', categoryPrimary = '', infoText = '' }) {
-  const haystack = normalizeTitleForMatch(`${title} ${categoryPrimary} ${infoText}`);
-  const excludedPatterns = [
-    /(damenbekleidung|herrenbekleidung|kinderbekleidung|bekleidung|mode|shirt|hose|jacke|socke|schuh|sandale|pyjama|pullover|kleid|leggings|unterwasche|unterhemd|cardigan)/,
-    /(pflanze|blume|orchidee|blumenerde|hochbeeterde|erde|kompost|gartenpflanze|gartnern|topfpflanze|garten)/,
-    /(werkzeug|akkuschrauber|bohrer|maschine|drucker|monitor|tablet|smartphone|kopfhorer|fernseher|tv|notebook|laptop|kamera|montagestander|montagestaender|helm)/,
-    /(spielzeug|fahrrad|autozubehor|motoroel|reifen|sportartikel|camping)/,
-    /(katzenfutter|hundefutter|tiernahrung|haustier|katzenstreu|katzenpflege|nassfutter|trockenfutter)/,
-  ];
-
-  if (excludedPatterns.some((pattern) => pattern.test(haystack))) {
-    return {
-      included: false,
-      reason: 'Kategorie liegt ausserhalb des V1-Scope',
-    };
-  }
-
-  return {
-    included: ['Lebensmittel', 'Getraenke', 'Drogerie / Hygiene', 'Haushalt'].includes(categoryPrimary),
-    reason: '',
   };
 }
 
@@ -267,22 +215,17 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
       return;
     }
 
-    const categoryPrimary = determineCategory(title, infoText);
-    const scopeDecision = detectScopeDecision({
+    const categoryPrimary = determineOfferCategory({
       title,
-      categoryPrimary,
-      infoText,
+      contextText: infoText,
     });
+    const scopeDecision = buildInclusiveScopeDecision();
     const parsedInfo = parseNormalizedUnitPrice(infoText, currentPrice);
     const normalizedInfoText = normalizeTitleForMatch(infoText);
     const customerProgramRequired = /(kundenkarte|app|lidl plus|joe|karte|club|bonuskarte|payback)/i.test(
       normalizedInfoText
     );
     const issues = [];
-
-    if (!scopeDecision.included) {
-      issues.push(scopeDecision.reason || 'Kategorie liegt ausserhalb des V1-Scope');
-    }
 
     if (!parsedInfo.normalizedUnitPrice.comparable) {
       issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
@@ -342,7 +285,7 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
       quality: {
         completenessScore: [currentPrice, validFrom, validTo, categoryPrimary].filter(Boolean).length / 4,
         parsingConfidence: parsedInfo.normalizedUnitPrice.comparable ? 0.86 : 0.74,
-        comparisonSafe: parsedInfo.normalizedUnitPrice.comparable && scopeDecision.included,
+        comparisonSafe: parsedInfo.normalizedUnitPrice.comparable,
         issues,
       },
       rawFacts: {
@@ -420,10 +363,7 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
       crawlJobId: crawlJob._id,
       region,
     });
-    const filteredOutOffers = normalizedOffers.filter((offer) => offer.scope?.included === false);
-    const offerDocuments = normalizedOffers
-      .filter((offer) => offer.scope?.included !== false)
-      .map(({ scope, ...offer }) => offer);
+    const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
 
     if (offerDocuments.length > 0) {
       await Offer.insertMany(offerDocuments, { ordered: false });
@@ -440,9 +380,7 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
         warnings: offerDocuments.filter((offer) => offer.quality.issues.length > 0).length,
         errors: 0,
       },
-      warningMessages: filteredOutOffers.length > 0
-        ? [`${filteredOutOffers.length} Marktguru-Angebote ausserhalb des V1-Scope wurden nicht gespeichert.`]
-        : [],
+      warningMessages: [],
       errorMessages: [],
       metadata: {
         sourceLabel: source.label,

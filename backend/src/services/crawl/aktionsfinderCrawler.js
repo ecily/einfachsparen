@@ -161,10 +161,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         sourceUrl: source.sourceUrl,
       })
     );
-    const filteredOutOffers = normalizedOffers.filter((offer) => offer.scope?.included === false);
-    const offerDocuments = normalizedOffers
-      .filter((offer) => offer.scope?.included !== false)
-      .map(({ scope, ...offer }) => offer);
+    const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
 
     if (offerDocuments.length > 0) {
       await Offer.insertMany(offerDocuments, { ordered: false });
@@ -188,9 +185,6 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         errors: 0,
       },
       warningMessages: [
-        ...(filteredOutOffers.length > 0
-          ? [`${filteredOutOffers.length} Randkategorien ausserhalb des V1-Scope wurden nicht gespeichert.`]
-          : []),
         ...(fallbackOfficial ? ['ADEG liefert aktuell nur einen offiziellen Flugblatt-Hinweis, aber keine extrahierbaren Einzelangebote.'] : []),
       ],
       errorMessages: [],
@@ -199,8 +193,6 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         sourceUrl: source.sourceUrl,
         rawDocumentId: rawDocument._id,
         essence,
-        filteredOutOffers: filteredOutOffers.length,
-        filteredOutReasons: [...new Set(filteredOutOffers.map((offer) => offer.scope?.reason).filter(Boolean))],
         fallbackOfficial,
       },
     });

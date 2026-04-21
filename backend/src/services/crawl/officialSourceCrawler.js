@@ -10,6 +10,11 @@ const {
   buildSourceEvidence,
 } = require('./sourceEvidence');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
+const {
+  determineOfferCategory,
+  determineOfferSubcategory,
+  buildInclusiveScopeDecision,
+} = require('./categoryClassifier');
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -225,47 +230,6 @@ function buildOfficialNormalizedUnitPrice({ priceAmount, quantityText }) {
   };
 }
 
-function determineCategory(title = '', categoryHint = '') {
-  const haystack = normalizeTitleForMatch(`${title} ${categoryHint}`);
-
-  if (/(bier|wein|wasser|saft|cola|getrank|getranke|schaumwein|spirituose|whisky|limonade|kaffee|tee|sirup|eistee|smoothie|energydrink|rotwein|weisswein|rose|aperitif|digestif|schnaps|gin|vodka|likor|sekt|prosecco|milchgetrank|joghurtgetrank)/.test(haystack)) {
-    return 'Getraenke';
-  }
-
-  if (/(shampoo|dusch|zahnpasta|zahnburste|zahnbuerste|aufsteckburste|aufsteckbuerste|deo|deodorant|hygiene|drogerie|kosmetik|seife|windel|toilettenpapier|hygienepapier|einlagen|binden|gesichtspflege|hautpflege)/.test(haystack)) {
-    return 'Drogerie / Hygiene';
-  }
-
-  if (/(haushalt|reiniger|muellbeutel|geschirr|waschmittel|papier|kueche|haushalts|schwamm|folie|beutel|tabs|pads|spulmittel|spuelmittel|reinigungsgerate|reinigungsgeraete|tucher|tuecher)/.test(haystack)) {
-    return 'Haushalt';
-  }
-
-  return 'Lebensmittel';
-}
-
-function detectScopeDecision({ title = '', categoryPrimary = '', categoryHint = '' }) {
-  const haystack = normalizeTitleForMatch(`${title} ${categoryPrimary} ${categoryHint}`);
-  const excludedPatterns = [
-    /(damenbekleidung|herrenbekleidung|kinderbekleidung|bekleidung|mode|shirt|hose|jacke|socke|schuh|sandale|pyjama|pullover|kleid|leggings|unterwasche)/,
-    /(pflanze|blume|orchidee|blumenerde|hochbeeterde|erde|kompost|gartenpflanze|gartnern|topfpflanze|garten)/,
-    /(werkzeug|akkuschrauber|bohrer|maschine|drucker|monitor|tablet|smartphone|kopfhorer|fernseher|tv|notebook|laptop|kamera|montagestander|montagestaender|helm)/,
-    /(spielzeug|fahrrad|autozubehor|motorol|reifen|sportartikel|camping)/,
-    /(katzenfutter|hundefutter|tiernahrung|haustier|katzenstreu|katzenpflege|hundefutter|nassfutter|trockenfutter)/,
-  ];
-
-  if (excludedPatterns.some((pattern) => pattern.test(haystack))) {
-    return {
-      included: false,
-      reason: 'Kategorie liegt ausserhalb des V1-Scope',
-    };
-  }
-
-  return {
-    included: ['Lebensmittel', 'Getraenke', 'Drogerie / Hygiene', 'Haushalt'].includes(categoryPrimary),
-    reason: '',
-  };
-}
-
 function extractImageUrl(card) {
   return (
     card.find('.at-product-images_img').attr('data-src')
@@ -304,20 +268,15 @@ function parseHoferOffersFromPage({
       quantityText,
     });
     const brandAndTitle = title;
-    const categoryPrimary = determineCategory(brandAndTitle, additionalInfo);
-    const scopeDecision = detectScopeDecision({
+    const categoryPrimary = determineOfferCategory({
       title: brandAndTitle,
-      categoryPrimary,
-      categoryHint: additionalInfo,
+      contextText: additionalInfo,
     });
+    const scopeDecision = buildInclusiveScopeDecision();
     const issues = [];
 
     if (!title || !currentPrice) {
       return;
-    }
-
-    if (!scopeDecision.included) {
-      issues.push(scopeDecision.reason || 'Kategorie liegt ausserhalb des V1-Scope');
     }
 
     if (!normalizedUnitPrice.comparable) {
@@ -337,7 +296,10 @@ function parseHoferOffersFromPage({
       title,
       brand: '',
       categoryPrimary,
-      categorySecondary: categoryPrimary,
+      categorySecondary: determineOfferSubcategory({
+        primaryCategory: categoryPrimary,
+        fallbackLabel: categoryPrimary,
+      }),
       comparisonSignature: normalizeTitleForMatch(title).split(' ').slice(0, 8).join('-'),
       comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
       comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
@@ -372,7 +334,7 @@ function parseHoferOffersFromPage({
       quality: {
         completenessScore: [currentPrice, validFrom, categoryPrimary].filter(Boolean).length / 3,
         parsingConfidence: normalizedUnitPrice.comparable ? 0.84 : 0.72,
-        comparisonSafe: normalizedUnitPrice.comparable && scopeDecision.included,
+        comparisonSafe: normalizedUnitPrice.comparable,
         issues,
       },
       rawFacts: {
@@ -648,22 +610,18 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
   const { currentPrice, referencePrice } = buildBillaPrice(hit);
   const normalizedUnitPrice = buildBillaNormalizedUnitPrice(hit, currentPrice);
   const title = sanitizeWhitespace(`${hit?.brand?.name || ''} ${hit?.name || ''}`) || sanitizeWhitespace(hit?.name || '');
-  const categoryPrimary = determineCategory(`${hit?.category || ''} ${title}`, hit?.category || '');
-  const scopeDecision = detectScopeDecision({
-    title: `${title} ${hit?.category || ''}`,
-    categoryPrimary,
-    categoryHint: hit?.category || '',
+  const categoryPrimary = determineOfferCategory({
+    title,
+    contextText: hit?.category || '',
+    sourceCategory: hit?.category || '',
   });
+  const scopeDecision = buildInclusiveScopeDecision();
   const quantityText = sanitizeWhitespace(
     [hit?.amount, hit?.volumeLabelShort || hit?.packageLabel || hit?.packageLabelKey].filter(Boolean).join(' ')
   );
   const conditionsText = buildBillaConditionsText(hit);
   const customerProgramRequired = Boolean(hit?.price?.loyalty);
   const issues = [];
-
-  if (!scopeDecision.included) {
-    issues.push(scopeDecision.reason || 'Kategorie liegt ausserhalb des V1-Scope');
-  }
 
   if (!normalizedUnitPrice.comparable) {
     issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
@@ -684,7 +642,11 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
     title,
     brand: sanitizeWhitespace(hit?.brand?.name || ''),
     categoryPrimary,
-    categorySecondary: sanitizeWhitespace(hit?.category || categoryPrimary),
+    categorySecondary: determineOfferSubcategory({
+      primaryCategory: categoryPrimary,
+      sourceCategory: hit?.category || '',
+      fallbackLabel: categoryPrimary,
+    }),
     comparisonSignature: normalizeTitleForMatch(title).split(' ').slice(0, 8).join('-'),
     comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
     comparisonCategoryKey: normalizeTitleForMatch(hit?.category || categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
@@ -719,7 +681,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
     quality: {
       completenessScore: [currentPrice, title, categoryPrimary].filter(Boolean).length / 3,
       parsingConfidence: normalizedUnitPrice.comparable ? 0.88 : 0.76,
-      comparisonSafe: normalizedUnitPrice.comparable && scopeDecision.included,
+      comparisonSafe: normalizedUnitPrice.comparable,
       issues,
     },
     rawFacts: {
@@ -778,10 +740,7 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
       observedUrl: source.sourceUrl,
     })
   );
-  const filteredOutOffers = normalizedOffers.filter((offer) => offer.scope?.included === false);
-  const offerDocuments = normalizedOffers
-    .filter((offer) => offer.scope?.included !== false)
-    .map(({ scope, ...offer }) => offer);
+  const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
 
   if (offerDocuments.length > 0) {
     await Offer.insertMany(offerDocuments, { ordered: false });
@@ -790,7 +749,6 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
   return {
     hitCount: hits.length,
     offerDocuments,
-    filteredOutOffers,
     rawDocuments: 1,
   };
 }
@@ -897,10 +855,7 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
     allOffers.push(...pageOffers);
   }
 
-  const filteredOutOffers = allOffers.filter((offer) => offer.scope?.included === false);
-  const offerDocuments = allOffers
-    .filter((offer) => offer.scope?.included !== false)
-    .map(({ scope, ...offer }) => offer);
+  const offerDocuments = allOffers.map(({ scope, ...offer }) => offer);
 
   if (offerDocuments.length > 0) {
     await Offer.insertMany(offerDocuments, { ordered: false });
@@ -908,7 +863,6 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
 
   return {
     offerDocuments,
-    filteredOutOffers,
     rawDocumentCount,
   };
 }
@@ -970,12 +924,6 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += hoferResult.offerDocuments.length;
       extraRawDocuments += hoferResult.rawDocumentCount;
-
-      if (hoferResult.filteredOutOffers.length > 0) {
-        warningMessages.push(
-          `${hoferResult.filteredOutOffers.length} offizielle HOFER-Angebote ausserhalb des V1-Scope wurden nicht gespeichert.`
-        );
-      }
     } else if (source.sourceUrl.includes('billa.at/unsere-aktionen/aktionen')) {
       const billaOfficialResult = await crawlBillaOfficialPromotions({
         source,
@@ -985,12 +933,6 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += billaOfficialResult.offerDocuments.length;
       extraRawDocuments += billaOfficialResult.rawDocuments;
-
-      if (billaOfficialResult.filteredOutOffers.length > 0) {
-        warningMessages.push(
-          `${billaOfficialResult.filteredOutOffers.length} offizielle BILLA-Angebote ausserhalb des V1-Scope wurden nicht gespeichert.`
-        );
-      }
     } else {
       const nestedDocuments = await fetchNestedHtmlDocuments({
         source,

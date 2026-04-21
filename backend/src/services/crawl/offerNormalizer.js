@@ -1,4 +1,9 @@
 const { buildSourceEvidence, sanitizeWhitespace } = require('./sourceEvidence');
+const {
+  determineOfferCategory,
+  determineOfferSubcategory,
+  buildInclusiveScopeDecision,
+} = require('./categoryClassifier');
 
 function parseNumericAmount(value) {
   if (value === null || value === undefined || value === '$undefined') {
@@ -133,70 +138,6 @@ function buildComparisonQuantityKey(comparableBase) {
   return `${String(comparableBase.quantity).replace('.', '_')}-${comparableBase.unit}`;
 }
 
-function determineCategory(productGroups = [], title = '') {
-  const haystack = toAsciiLower(
-    `${title} ${productGroups.map((group) => `${group.title} ${group.detailUrlPath || ''}`).join(' ')}`
-  );
-
-  if (/(bier|wein|wasser|saft|cola|getraenk|schaumwein|spirituose|whisky|limonade|kaffee|tee|sirup|eistee|smoothie|energydrink|rose|rotwein|weisswein|aperitif|digestif|schnaps|gin|vodka|likor|sekt|prosecco|milchgetraenk|joghurtgetraenk)/.test(haystack)) {
-    return 'Getraenke';
-  }
-
-  if (/(shampoo|dusch|zahnpasta|zahnbuerste|aufsteckbuerste|deo|deodorant|hygiene|drogerie|kosmetik|seife|windel|toilettenpapier|hygienepapier|einlagen|binden|gesichtspflege|hautpflege)/.test(haystack)) {
-    return 'Drogerie / Hygiene';
-  }
-
-  if (/(haushalt|reiniger|muellbeutel|geschirr|waschmittel|papier|kueche|haushalts|schwamm|folie|beutel|tabs|pads|spuelmittel|reinigungsgeraete|tuecher)/.test(haystack)) {
-    return 'Haushalt';
-  }
-
-  return 'Lebensmittel';
-}
-
-function detectScopeDecision({ productGroups = [], title = '', categoryPrimary = '' }) {
-  const haystack = toAsciiLower(
-    `${title} ${categoryPrimary} ${productGroups.map((group) => group.title || '').join(' ')}`
-  );
-  const excludedPatterns = [
-    {
-      pattern: /(damenbekleidung|herrenbekleidung|kinderbekleidung|bekleidung|mode|shirt|hose|jacke|socke|schuh|sandale|pyjama|pullover|kleid|leggings|unterwaesche)/,
-      reason: 'Bekleidung liegt ausserhalb des V1-Scope',
-    },
-    {
-      pattern: /(pflanze|blume|orchidee|blumenerde|hochbeeterde|erde|kompost|gartenpflanze|gaertnern|topfpflanze|garten)/,
-      reason: 'Pflanzen liegen ausserhalb des V1-Scope',
-    },
-    {
-      pattern: /(werkzeug|akkuschrauber|bohrer|maschine|drucker|monitor|tablet|smartphone|kopfhoerer|fernseher|tv|notebook|laptop|kamera)/,
-      reason: 'Technik und Werkzeug liegen ausserhalb des V1-Scope',
-    },
-    {
-      pattern: /(spielzeug|fahrrad|autozubehoer|motoroel|reifen|sportartikel|camping)/,
-      reason: 'Freizeit- und Sonderartikel liegen ausserhalb des V1-Scope',
-    },
-    {
-      pattern: /(katzenfutter|hundefutter|tiernahrung|haustier|katzenstreu|katzenpflege|nassfutter|trockenfutter)/,
-      reason: 'Tierbedarf liegt ausserhalb des V1-Scope',
-    },
-  ];
-
-  for (const rule of excludedPatterns) {
-    if (rule.pattern.test(haystack)) {
-      return {
-        included: false,
-        reason: rule.reason,
-      };
-    }
-  }
-
-  const included = ['Lebensmittel', 'Getraenke', 'Drogerie / Hygiene', 'Haushalt'].includes(categoryPrimary);
-
-  return {
-    included,
-    reason: included ? '' : 'Kategorie liegt ausserhalb des V1-Scope',
-  };
-}
-
 function deriveBenefitType(promotion) {
   const title = toAsciiLower(`${promotion.title || ''} ${promotion.description || ''}`);
 
@@ -309,17 +250,22 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   const comparableBase = buildComparableBase(product);
   const priceReferenceAmount = parseNumericAmount(promotion.originalPrice ?? promotion.oldPrice);
   const normalizedUnitPrice = buildNormalizedUnitPrice(promotion);
-  const categoryPrimary = determineCategory(productGroups, promotion.title);
-  const scopeDecision = detectScopeDecision({
-    productGroups,
+  const categoryPrimary = determineOfferCategory({
     title: promotion.title,
-    categoryPrimary,
+    contextText: promotion.description || '',
+    sourceCategory: productGroups[0]?.title || '',
+    productGroups,
   });
+  const scopeDecision = buildInclusiveScopeDecision();
   const quantityText = buildQuantityText(product);
   const conditionsText = buildConditionsText(promotion);
   const customerProgramRequired = detectCustomerProgramRequired(promotion);
   const issues = [];
-  const comparisonCategory = sanitizeWhitespace(productGroups[0]?.title || categoryPrimary);
+  const comparisonCategory = determineOfferSubcategory({
+    primaryCategory: categoryPrimary,
+    sourceCategory: productGroups[0]?.title || '',
+    fallbackLabel: categoryPrimary,
+  });
   const brand = sanitizeWhitespace(product.brand?.name || '');
   const comparisonQuantityKey = buildComparisonQuantityKey(comparableBase);
   const comparisonSignature = buildComparisonSignature({
@@ -330,10 +276,6 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     typeof promotion.clickoutUrl === 'string' && promotion.clickoutUrl && promotion.clickoutUrl !== '$undefined'
       ? promotion.clickoutUrl
       : sourceUrl;
-
-  if (!scopeDecision.included) {
-    issues.push(scopeDecision.reason);
-  }
 
   if (!priceCurrentAmount) {
     issues.push('Kein aktueller Preis erkannt');
@@ -409,7 +351,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     quality: {
       completenessScore: completenessBase / 4,
       parsingConfidence: normalizedUnitPrice.comparable ? 0.9 : 0.82,
-      comparisonSafe: normalizedUnitPrice.comparable && scopeDecision.included,
+      comparisonSafe: normalizedUnitPrice.comparable,
       issues,
     },
     rawFacts: {

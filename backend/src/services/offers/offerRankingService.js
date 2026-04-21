@@ -1,4 +1,5 @@
 const Offer = require('../../models/Offer');
+const { computeOfferSavings } = require('./promotionMath');
 
 const OFFER_RANKING_FIELDS = [
   'retailerKey',
@@ -7,6 +8,7 @@ const OFFER_RANKING_FIELDS = [
   'brand',
   'categoryPrimary',
   'categorySecondary',
+  'benefitType',
   'conditionsText',
   'customerProgramRequired',
   'quantityText',
@@ -15,6 +17,8 @@ const OFFER_RANKING_FIELDS = [
   'normalizedUnitPrice',
   'priceCurrent',
   'priceReference',
+  'rawFacts',
+  'supportingSources',
 ].join(' ');
 
 function normalizeStringList(value) {
@@ -58,26 +62,22 @@ function buildCurrentAvailabilityMatch() {
 }
 
 function isUsefulCategory(category) {
-  const value = String(category || '').trim();
-
-  if (!value) {
-    return false;
-  }
-
-  return !/(bluetooth lautsprecher|gartengeraete|garten|spielzeug|bekleidung|katzenpflege|katzen|hunde|nassfutter|trockenfutter|haustier|motoroel|reifen|tv|notebook|laptop|monitor|tablet|smartphone|akku|helm|cardigan|leggings|shirt|unterhemd|pflanze|blume|orchidee)/i.test(
-    value
-  );
+  return Boolean(String(category || '').trim());
 }
 
 function isGenericCategory(category) {
   return /^(lebensmittel|getraenke|getränke|haushalt|drogerie \/ hygiene|dose|in öl)$/i.test(String(category || '').trim());
 }
 
+function isBroadCategory(category) {
+  return /^(lebensmittel|getraenke|getranke|haushalt|drogerie \/ hygiene|tierbedarf|garten \/ pflanzen|kleidung \/ mode|technik \/ elektronik|freizeit \/ sonstiges|baby \/ kinder|dose|in ol)$/i.test(String(category || '').trim());
+}
+
 function selectDisplayCategory(offer) {
   const primary = String(offer?.categoryPrimary || '').trim();
   const secondary = String(offer?.categorySecondary || '').trim();
 
-  if (secondary && isUsefulCategory(secondary) && !isGenericCategory(secondary)) {
+  if (secondary && isUsefulCategory(secondary) && !isBroadCategory(secondary)) {
     return secondary;
   }
 
@@ -252,6 +252,7 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
 }
 
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
+  const savings = computeOfferSavings(offer);
   const priceGapPercent = bestUnitPrice
     ? Number((((offer.normalizedUnitPrice.amount - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
     : 0;
@@ -278,14 +279,9 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     priceReference: offer.priceReference,
     priceGapPercent,
     relativeScore: Number((spread * 100).toFixed(2)),
-    savingsAmount:
-      offer.priceReference?.amount && offer.priceCurrent?.amount
-        ? Number((offer.priceReference.amount - offer.priceCurrent.amount).toFixed(2))
-        : null,
-    savingsPercent:
-      offer.priceReference?.amount && offer.priceCurrent?.amount && offer.priceReference.amount > 0
-        ? Number((((offer.priceReference.amount - offer.priceCurrent.amount) / offer.priceReference.amount) * 100).toFixed(2))
-        : null,
+    savingsAmount: savings.savingsAmount,
+    savingsPercent: savings.savingsPercent,
+    minimumPurchaseQuantity: savings.requiredQuantity,
     validityLabel: offer.validTo ? 'gueltig bis' : 'aktuell verfuegbar, Enddatum nicht erkannt',
   };
 }
@@ -616,14 +612,8 @@ async function buildOfferRanking({
   );
   const offers = fullyFilteredOffers
     .sort((left, right) => {
-      const leftSavings =
-        left.priceReference?.amount && left.priceCurrent?.amount
-          ? Number((left.priceReference.amount - left.priceCurrent.amount).toFixed(2))
-          : -1;
-      const rightSavings =
-        right.priceReference?.amount && right.priceCurrent?.amount
-          ? Number((right.priceReference.amount - right.priceCurrent.amount).toFixed(2))
-          : -1;
+      const leftSavings = computeOfferSavings(left).savingsAmount ?? -1;
+      const rightSavings = computeOfferSavings(right).savingsAmount ?? -1;
 
       if (rightSavings !== leftSavings) {
         return rightSavings - leftSavings;
@@ -653,7 +643,7 @@ async function buildOfferRanking({
   for (const seed of categorySeeds) {
     const label = selectDisplayCategory(seed);
 
-    if (!label || !isUsefulCategory(label) || isGenericCategory(label)) {
+    if (!label || !isUsefulCategory(label) || isBroadCategory(label)) {
       continue;
     }
 
