@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import './index.css'
 import {
@@ -11,6 +11,104 @@ import {
   saveCurrentUserPreferences,
   saveFeedback,
 } from './api'
+
+function getApiBase() {
+  const envBase =
+    (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE || import.meta.env?.VITE_API_BASE_URL)) ||
+    ''
+
+  const windowBase =
+    typeof window !== 'undefined' && typeof window.__SM_API__ === 'string'
+      ? window.__SM_API__
+      : ''
+
+  const base = envBase || windowBase || '/api'
+  return String(base).replace(/\/+$/, '')
+}
+
+function buildApiUrl(path) {
+  const normalizedPath = `/${String(path || '').replace(/^\/+/, '')}`
+  return `${getApiBase()}${normalizedPath}`
+}
+
+function extractArrayPayload(payload, preferredKeys = []) {
+  if (Array.isArray(payload)) return payload
+
+  for (const key of preferredKeys) {
+    if (Array.isArray(payload?.[key])) {
+      return payload[key]
+    }
+  }
+
+  const fallbackKeys = ['items', 'results', 'data', 'docs']
+  for (const key of fallbackKeys) {
+    if (Array.isArray(payload?.[key])) {
+      return payload[key]
+    }
+  }
+
+  return []
+}
+
+async function fetchJson(path) {
+  const response = await fetch(buildApiUrl(path), {
+    method: 'GET',
+    mode: 'cors',
+    credentials: 'omit',
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  let payload = null
+
+  try {
+    payload = await response.json()
+  } catch {
+    payload = null
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.message || `Request failed: ${response.status}`)
+  }
+
+  return payload
+}
+
+async function fetchFilterRetailers() {
+  const payload = await fetchJson('/filters/retailers')
+  const retailers = extractArrayPayload(payload, ['retailers'])
+
+  return retailers
+    .filter((item) => item && typeof item === 'object')
+    .map((item, index) => ({
+      retailerKey: item.retailerKey || normalizeRetailerKey(item.retailerName || `retailer-${index}`),
+      retailerName: item.retailerName || item.name || item.retailerKey || `Supermarkt ${index + 1}`,
+      offerCount: Number(item.offerCount || 0),
+      activeOfferCount: Number(item.activeOfferCount || item.offerCount || 0),
+      isActive: item.isActive !== false,
+      sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index,
+    }))
+    .filter((item) => item.isActive)
+    .sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
+      return right.activeOfferCount - left.activeOfferCount || left.retailerName.localeCompare(right.retailerName, 'de')
+    })
+}
+
+async function fetchFilterCategories() {
+  const payload = await fetchJson('/filters/categories')
+  return extractArrayPayload(payload, ['categories'])
+}
+
+function normalizeRetailerKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
 
 function getOfferCategoryLabel(offer) {
   return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
@@ -35,131 +133,13 @@ function formatValidityLabel(offer) {
   return 'aktuell verfuegbar, Enddatum nicht erkannt'
 }
 
-function normalizeCategoryLabel(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
+function getOfferRetailerKey(offer, retailers = []) {
+  if (offer?.retailerKey) return offer.retailerKey
 
-function normalizeRetailerKey(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
+  const fromLookup = (retailers || []).find((item) => item.retailerName === offer?.retailerName)
+  if (fromLookup?.retailerKey) return fromLookup.retailerKey
 
-const CATEGORY_GROUP_RULES = [
-  { mainCategory: 'Wein', patterns: ['weisswein', 'weißwein', 'rotwein', 'rose', 'rosé', 'wein', 'schaumwein', 'perlwein', 'sekt', 'dessertwein', 'portwein'] },
-  { mainCategory: 'Bier', patterns: ['bier', 'flaschenbier', 'dosenbier', 'radler', 'weizenbier', 'helles'] },
-  { mainCategory: 'Spirituosen', patterns: ['aperitif', 'digestif', 'schnaps', 'vodka', 'gin', 'likor', 'likör', 'cognac', 'whiskey', 'alkohol'] },
-  { mainCategory: 'Kaffee', patterns: ['kaffee', 'ganze bohne', 'gemahlen', 'eiskaffee', 'loslich', 'löslich', 'kapseln', 'pads', 'espresso'] },
-  { mainCategory: 'Mehl', patterns: ['weizenmehl', 'dinkelmehl', 'mehl'] },
-  { mainCategory: 'Oel', patterns: ['raps', 'olive', 'olivenol', 'olivenöl', 'oel', 'öl'] },
-  { mainCategory: 'Konserven', patterns: ['konserven', 'eingelegtes', 'in sose', 'in soße', 'in ol', 'in öl', 'im eigenen saft', 'geschalte tomaten', 'geschälte tomaten', 'gestuckelte tomaten', 'gestückelte tomaten'] },
-  {
-    mainCategory: 'Wasser, Saefte & Softdrinks',
-    patterns: ['limonaden', 'mineralwasser', 'wasser', 'sirupe', 'energydrinks', 'eistee', 'smoothies', 'fresh juice', 'safte', 'saefte', 'getranke', 'getraenke', 'milch joghurtgetranke', 'milch joghurtgetraenke', 'kindergetranke', 'kindergetraenke', 'alkoholfreie alternativen', 'still', 'prickelnd'],
-  },
-  {
-    mainCategory: 'Kaese & Feinkost',
-    patterns: ['kase', 'käse', 'hartkase', 'hartkäse', 'frischkase', 'frischkäse', 'huttenkase', 'hüttenkäse', 'feta', 'mozarella', 'mozzarella', 'weichkase', 'weichkäse', 'schmelzkase', 'schmelzkäse', 'grill brat', 'ofenkase', 'ofenkäse', 'feinkost'],
-  },
-  {
-    mainCategory: 'Milchprodukte & Fruehstueck',
-    patterns: ['fruchtjoghurt', 'milchalternativen', 'milchprodukte', 'cornflakes', 'cerealien', 'hafer', 'musli', 'müsli', 'aufstriche', 'susse aufstriche', 'süße aufstriche', 'schoko nussaufstriche', 'marmeladen', 'nussmuse', 'kakao'],
-  },
-  {
-    mainCategory: 'Brot, Gebaeck & Suesses Gebaeck',
-    patterns: ['brot', 'geback', 'gebäck', 'aufbackbrotchen', 'aufbackbrötchen', 'baguette', 'weissbrote', 'weißbrote', 'brioche', 'striezel', 'plunder', 'kuchen', 'muffins', 'konditorei', 'desserts', 'waffeln'],
-  },
-  {
-    mainCategory: 'Suesses & Snacks',
-    patterns: ['tafelschokolade', 'schokolade', 'fruchtgummi', 'schnitten', 'schokoriegel', 'kekse', 'chips', 'knabberein', 'snacks', 'susswaren', 'suesswaren', 'sussigkeiten', 'süßigkeiten', 'susses', 'süßes', 'zuckerl', 'bonbons', 'traubenzucker', 'nachos', 'dips', 'kaugummi', 'proteinriegel', 'kleine snacks'],
-  },
-  {
-    mainCategory: 'Tiefkuehlkost & Eis',
-    patterns: ['tiefkuhl', 'tiefkühl', 'pizza', 'pommes', 'eis', 'eiscreme', 'eis am stiel', 'stanizl', 'eis snacks', 'menuschalen', 'menüschalen', 'fertiggerichte'],
-  },
-  {
-    mainCategory: 'Kochen & Vorrat',
-    patterns: ['asien', 'sugo', 'reis', 'pasta', 'beilagen', 'kochzutaten', 'dressings', 'wurzsauce', 'würzsauce', 'pasten', 'basis', 'fixprodukte', 'gewurz', 'gewürz', 'bohnen', 'mais', 'champions', 'pesto', 'ketchup', 'mayonaise', 'senf', 'kren', 'suppen', 'kapern', 'linsen', 'erbsen', 'hulsenfruchte', 'hülsenfrüchte', 'essig', 'tomatenprodukte', 'spaghetti', 'penne', 'fussili', 'fusilli'],
-  },
-  {
-    mainCategory: 'Obst & Gemuese',
-    patterns: ['gemuse', 'gemüse', 'obst', 'gurken', 'kartoffeln', 'salate', 'apfel', 'birnen', 'trauben', 'zitrusfruchte', 'zitrusfrüchte', 'steinobst', 'beeren', 'tomaten'],
-  },
-  {
-    mainCategory: 'Fleisch, Wurst & Fisch',
-    patterns: ['fisch', 'fleisch', 'wurst', 'schinken', 'salami', 'geflugel', 'geflügel', 'speck', 'rindfleisch', 'schweinefleisch', 'huhn', 'tofu', 'seitan'],
-  },
-  {
-    mainCategory: 'Drogerie & Hygiene',
-    patterns: ['duschgele', 'shampoo', 'spulung', 'spülung', 'einlagen', 'binden', 'deoderants', 'deodorants', 'gesichtspflege', 'reinigung', 'zahnbursten', 'zahnbürsten', 'zahnpasta', 'pflege', 'drogerie', 'hygiene', 'hand', 'ganzkorper', 'ganzkörper'],
-  },
-  { mainCategory: 'Baby & Kind', patterns: ['windeln', 'babynahrung', 'glaschen', 'gläschen', 'baby'] },
-  {
-    mainCategory: 'Haushalt & Reinigung',
-    patterns: ['haushalt', 'tabs', 'reinigungsgerate', 'reinigungsgeräte', 'tucher', 'tücher', 'kuchenreiniger', 'küchenreiniger', 'spulmittel', 'spülmittel', 'badreiniger', 'weichspuler', 'weichspüler', 'beutel', 'folien'],
-  },
-  { mainCategory: 'Tierbedarf', patterns: ['katze', 'katzepflege', 'hund', 'tier'] },
-]
-
-function getMainCategoryLabel(category) {
-  const normalized = normalizeCategoryLabel(category)
-
-  if (/(weisswein|weiss|rotwein|rose|ros[eé]|schaumwein|perlwein|prosecco|sekt|aperitif|digestif)/.test(normalized)) return 'Wein'
-  if (/(flaschenbier|dosenbier|helles|bier|radler|weizenbier)/.test(normalized)) return 'Bier'
-  if (/(gemahlen|ganze bohne|eiskaffee|kaffee|capsules|kapseln|espresso)/.test(normalized)) return 'Kaffee'
-  if (/(limonaden|mineralwasser|wasser|frucht gemusesafte|frucht gemuesesafte|sirupe|energydrinks|eistee|smoothies|milch joghurtgetranke|milch joghurtgetranke)/.test(normalized)) return 'Alkoholfreie Getraenke'
-  if (/(hartkase|frischkase|huttenkase|huettenkase|feta|mozarella|kase)/.test(normalized)) return 'Kaese'
-  if (/(pizza|pommes|eiscreme|eis am stiel|stanizl|tiefkuhl|tiefkuehl)/.test(normalized)) return 'Tiefkuehlkost'
-  if (/(reis|pasta|beilagen|sugo|wurzsauce|wurzsauce|pesto|kochzutaten|dressings|basis fixprodukte|mais champions|bohnen|frische pasta)/.test(normalized)) return 'Kochen & Vorrat'
-  if (/(tafelschokolade|fruchtgummi|schnitten|kekse|chips|knabberein|snacks|susswaren|suesswaren|schokoriegel|zuckerl|bonbons|nachos dips)/.test(normalized)) return 'Suesses & Snacks'
-  if (/(duschgele|shampoo|spulung|spuelung|deoderants|windeln|einlagen binden|gesichtspflege und reinigung|zahnbursten aufsteckbursten|zahnbuersten aufsteckbuersten)/.test(normalized)) return 'Drogerie & Hygiene'
-  if (/(tabs pads|reinigungsgerate tucher|reinigungsgeraete tuecher)/.test(normalized)) return 'Haushalt'
-
-  return category
-}
-
-function resolveMainCategoryLabel(category) {
-  const normalized = normalizeCategoryLabel(category)
-
-  for (const group of CATEGORY_GROUP_RULES) {
-    if (group.patterns.some((pattern) => normalized.includes(pattern))) {
-      return group.mainCategory
-    }
-  }
-
-  if (normalized === 'lebensmittel') return 'Weitere Lebensmittel'
-  if (normalized === 'getraenke' || normalized === 'getranke') return 'Weitere Getraenke'
-
-  return getMainCategoryLabel(category) || category || 'Weitere Kategorien'
-}
-
-function buildCategoryGroups(categories = []) {
-  const grouped = new Map()
-
-  for (const category of categories) {
-    const mainCategory = resolveMainCategoryLabel(category)
-
-    if (!grouped.has(mainCategory)) {
-      grouped.set(mainCategory, [])
-    }
-
-    grouped.get(mainCategory).push(category)
-  }
-
-  return [...grouped.entries()]
-    .map(([mainCategory, subcategories]) => ({
-      mainCategory,
-      subcategories: [...new Set(subcategories)].sort((left, right) => left.localeCompare(right, 'de')),
-    }))
-    .sort((left, right) => left.mainCategory.localeCompare(right.mainCategory, 'de'))
+  return normalizeRetailerKey(offer?.retailerName)
 }
 
 function flattenRankingOffers(ranking) {
@@ -183,115 +163,66 @@ function flattenRankingOffers(ranking) {
   return offers
 }
 
-function getOfferRetailerKey(offer, retailers = []) {
-  if (offer?.retailerKey) return offer.retailerKey
-
-  const fromLookup = (retailers || []).find((item) => item.retailerName === offer?.retailerName)
-  if (fromLookup?.retailerKey) return fromLookup.retailerKey
-
-  return normalizeRetailerKey(offer?.retailerName)
+function normalizeCategoryDocuments(categories = []) {
+  return (categories || [])
+    .filter((item) => item && typeof item === 'object')
+    .map((category, index) => ({
+      mainCategoryKey: category?.mainCategoryKey || normalizeRetailerKey(category?.mainCategoryLabel || `category-${index}`),
+      mainCategoryLabel: category?.mainCategoryLabel || 'Weitere Kategorien',
+      offerCount: Number(category?.offerCount || 0),
+      isActive: category?.isActive !== false,
+      subcategories: (category?.subcategories || [])
+        .filter((item) => item && typeof item === 'object')
+        .map((subcategory, subIndex) => ({
+          subcategoryKey: subcategory?.subcategoryKey || normalizeRetailerKey(subcategory?.subcategoryLabel || `subcategory-${subIndex}`),
+          subcategoryLabel: subcategory?.subcategoryLabel || category?.mainCategoryLabel || 'Weitere Kategorien',
+          offerCount: Number(subcategory?.offerCount || 0),
+        }))
+        .sort((left, right) => right.offerCount - left.offerCount || left.subcategoryLabel.localeCompare(right.subcategoryLabel, 'de')),
+    }))
+    .filter((item) => item.isActive)
+    .sort((left, right) => right.offerCount - left.offerCount || left.mainCategoryLabel.localeCompare(right.mainCategoryLabel, 'de'))
 }
 
-function filterOffers(offers, filters, retailers) {
-  const searchNeedle = String(filters.queryInput || '').trim().toLowerCase()
+function getSavingsValue(offer) {
+  const raw = Number(offer?.savingsAmount)
+  return Number.isFinite(raw) ? raw : -1
+}
 
-  if (!filters.selectedRetailers.length) {
-    return []
-  }
+function filterAndSortOffers(offers, filters, retailers) {
+  if (!filters.selectedRetailers.length) return []
 
-  return (offers || []).filter((offer) => {
-    const offerRetailerKey = getOfferRetailerKey(offer, retailers)
-    const offerCategory = getOfferCategoryLabel(offer)
+  const result = (offers || []).filter((offer) => {
+    const retailerKey = getOfferRetailerKey(offer, retailers)
+    const mainCategory = offer?.categoryPrimary || ''
+    const subCategory = getOfferCategoryLabel(offer)
 
-    if (!filters.selectedRetailers.includes(offerRetailerKey)) {
-      return false
-    }
+    if (!filters.selectedRetailers.includes(retailerKey)) return false
 
-    if (filters.selectedCategories.length > 0 && !filters.selectedCategories.includes(offerCategory)) {
-      return false
-    }
-
-    if (offer.customerProgramRequired && !filters.retailerPrograms?.[offerRetailerKey]) {
-      return false
-    }
-
-    if (searchNeedle) {
-      const haystack = [
-        offer.title,
-        offer.retailerName,
-        offerCategory,
-        offer.categoryPrimary,
-        offer.categorySecondary,
-        offer.quantityText,
-        offer.conditionsText,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-
-      if (!haystack.includes(searchNeedle)) {
-        return false
-      }
+    if (filters.selectedLabels.length > 0) {
+      const matchesMain = filters.selectedLabels.includes(mainCategory)
+      const matchesSub = filters.selectedLabels.includes(subCategory)
+      if (!matchesMain && !matchesSub) return false
     }
 
     return true
   })
+
+  return [...result].sort((left, right) => {
+    const savingsDiff = getSavingsValue(right) - getSavingsValue(left)
+    if (savingsDiff !== 0) return savingsDiff
+
+    const leftPrice = Number(left?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
+    const rightPrice = Number(right?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
+    if (leftPrice !== rightPrice) return leftPrice - rightPrice
+
+    const leftUnit = Number(left?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+    const rightUnit = Number(right?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+    return leftUnit - rightUnit
+  })
 }
 
-function buildClientRanking(baseRanking, filteredOffers) {
-  const grouped = new Map()
-
-  for (const offer of filteredOffers) {
-    const unit = offer?.normalizedUnitPrice?.unit || 'ohne Einheit'
-
-    if (!grouped.has(unit)) {
-      grouped.set(unit, [])
-    }
-
-    grouped.get(unit).push(offer)
-  }
-
-  const rankedGroups = [...grouped.entries()]
-    .map(([unit, offers]) => {
-      const sortedOffers = [...offers].sort((left, right) => {
-        const leftUnit = Number(left?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-        const rightUnit = Number(right?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-
-        if (leftUnit !== rightUnit) return leftUnit - rightUnit
-
-        const leftPrice = Number(left?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
-        const rightPrice = Number(right?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
-
-        return leftPrice - rightPrice
-      })
-
-      return { unit, offers: sortedOffers }
-    })
-    .sort((left, right) => {
-      const leftBest = Number(left.offers?.[0]?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-      const rightBest = Number(right.offers?.[0]?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-      return leftBest - rightBest
-    })
-
-  const firstBestOffer = rankedGroups[0]?.offers?.[0]
-  const resultCount = filteredOffers.length
-
-  return {
-    ...baseRanking,
-    rankedGroups,
-    summary: {
-      ...(baseRanking?.summary || {}),
-      resultCount,
-      displayedCount: resultCount,
-      completeResultSetVisible: true,
-      bestUnitPrice: firstBestOffer?.normalizedUnitPrice
-        ? `${firstBestOffer.normalizedUnitPrice.amount}/${firstBestOffer.normalizedUnitPrice.unit}`
-        : '-',
-    },
-  }
-}
-
-function HeroLoaderModal({ open }) {
+function HeroLoaderModal({ open, label }) {
   if (!open) return null
 
   return (
@@ -324,8 +255,8 @@ function HeroLoaderModal({ open }) {
         }}
       >
         <div className="panel__header" style={{ alignItems: 'center' }}>
-          <h2>Einen Moment, wir suchen gerade ...</h2>
-          <p>kaufklug.at laedt passende Angebote und deine gespeicherten Einstellungen.</p>
+          <h2>Einen Moment, wir laden gerade ...</h2>
+          <p>{label || 'kaufklug.at laedt Supermaerkte, Kategorien und deine gespeicherten Einstellungen.'}</p>
         </div>
 
         <div
@@ -341,6 +272,113 @@ function HeroLoaderModal({ open }) {
         />
       </div>
     </div>
+  )
+}
+
+function AppPromoModal({ open, onClose }) {
+  if (!open) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="app-promo-title"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 3200,
+        display: 'grid',
+        placeItems: 'center',
+        background: 'rgba(8, 12, 20, 0.76)',
+        backdropFilter: 'blur(10px)',
+        padding: '1rem',
+      }}
+    >
+      <div
+        className="panel"
+        style={{
+          width: 'min(96vw, 560px)',
+          boxShadow: '0 28px 80px rgba(0,0,0,0.35)',
+          borderRadius: '24px',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gap: '1rem',
+            padding: '1.25rem 1.25rem 1.35rem',
+          }}
+        >
+          <div style={{ display: 'grid', gap: '0.5rem' }}>
+            <p className="eyebrow" style={{ margin: 0 }}>kaufklug.at APP</p>
+            <h2 id="app-promo-title" style={{ margin: 0 }}>kaufklug.at ist besser als APP.</h2>
+            <p style={{ margin: 0, opacity: 0.88 }}>
+              hol dir die APP aufs Handy und spare von ueberall.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) 220px',
+              gap: '1rem',
+              alignItems: 'center',
+            }}
+          >
+            <div style={{ display: 'grid', gap: '0.45rem' }}>
+              <p style={{ margin: 0, opacity: 0.84 }}>
+                Bald kannst du hier den QR Code scannen und die App direkt herunterladen.
+              </p>
+              <p style={{ margin: 0, opacity: 0.74 }}>
+                Mit der App wird kaufklug.at noch schneller, direkter und alltagstauglicher.
+              </p>
+            </div>
+
+            <div
+              aria-label="QR Code Platzhalter"
+              style={{
+                width: '100%',
+                aspectRatio: '1 / 1',
+                borderRadius: '20px',
+                border: '1px dashed rgba(255,255,255,0.24)',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025))',
+                display: 'grid',
+                placeItems: 'center',
+                textAlign: 'center',
+                padding: '1rem',
+              }}
+            >
+              <div style={{ display: 'grid', gap: '0.35rem' }}>
+                <strong>QR Code</strong>
+                <span style={{ opacity: 0.72 }}>Platzhalter fuer spaeteren Download</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="ghost-button" onClick={onClose}>
+              Vielleicht spaeter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SectionCard({ children, style = {} }) {
+  return (
+    <section
+      className="panel"
+      style={{
+        borderRadius: '24px',
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
+      {children}
+    </section>
   )
 }
 
@@ -382,689 +420,462 @@ function ProductImage({ offerId, src, alt, compact = false }) {
   )
 }
 
-function CategoryMenu({ categories, selectedCategories, onToggle, onToggleMainCategory, onClear, onDone, disabled }) {
-  const [expandedGroups, setExpandedGroups] = useState({})
-  const groups = buildCategoryGroups(categories)
-
-  if (disabled) {
-    return (
-      <div className="category-picker__header">
-        <div>
-          <h3>Kategorien</h3>
-          <p>Waehle zuerst mindestens einen Supermarkt aus. Danach kannst du die Treffer per Kategorie eingrenzen.</p>
-        </div>
-        <button type="button" className="ghost-button" onClick={onDone}>
-          Fertig
-        </button>
-      </div>
-    )
-  }
-
+function HeroBlock() {
   return (
-    <div>
-      <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
-        <div>
-          <h3>Kategorien</h3>
-          <p>Wandle deine Supermarkt-Auswahl jetzt in passende Produktbereiche um.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button type="button" className="ghost-button" onClick={onDone}>
-            Fertig
-          </button>
-          <button type="button" className="ghost-button" onClick={onClear}>
-            Zuruecksetzen
-          </button>
-        </div>
-      </div>
-
-      <div className="category-group-list">
-        {groups.map((group) => {
-          const selectedCount = group.subcategories.filter((category) => selectedCategories.includes(category)).length
-          const allSelected = selectedCount === group.subcategories.length && group.subcategories.length > 0
-          const partiallySelected = selectedCount > 0 && !allSelected
-          const expanded = Boolean(expandedGroups[group.mainCategory]) || selectedCount > 0
-
-          return (
-            <div className="category-group" key={group.mainCategory}>
-              <div className="category-group__top">
-                <button
-                  type="button"
-                  className={`chip ${allSelected ? 'chip--active' : partiallySelected ? 'chip--partial' : ''}`}
-                  onClick={() => onToggleMainCategory(group.mainCategory, group.subcategories)}
-                >
-                  {group.mainCategory} ({group.subcategories.length})
-                </button>
-
-                <button
-                  type="button"
-                  className="ghost-button ghost-button--small"
-                  onClick={() =>
-                    setExpandedGroups((current) => ({
-                      ...current,
-                      [group.mainCategory]: !current[group.mainCategory],
-                    }))
-                  }
-                >
-                  {expanded ? 'Unterkategorien verbergen' : 'Unterkategorien zeigen'}
-                </button>
-              </div>
-
-              {expanded ? (
-                <div className="chip-grid chip-grid--subcategories">
-                  {group.subcategories.map((category) => (
-                    <button
-                      key={category}
-                      type="button"
-                      className={`chip chip--subtle ${selectedCategories.includes(category) ? 'chip--active' : ''}`}
-                      onClick={() => onToggle(category)}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function RetailerMenu({ retailers, selectedRetailers, onToggle, onClear, onDone }) {
-  return (
-    <div>
-      <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
-        <div>
-          <h3>Supermaerkte</h3>
-          <p>Diese Auswahl bestimmt, in welchen Maerkten wir fuer dich ueberhaupt suchen.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button type="button" className="ghost-button" onClick={onDone}>
-            Fertig
-          </button>
-          <button type="button" className="ghost-button" onClick={onClear}>
-            Zuruecksetzen
-          </button>
-        </div>
-      </div>
-
-      <div className="chip-grid">
-        {(retailers || []).map((retailer) => (
-          <button
-            key={retailer.retailerKey}
-            type="button"
-            className={`chip ${selectedRetailers.includes(retailer.retailerKey) ? 'chip--active' : ''}`}
-            onClick={() => onToggle(retailer.retailerKey)}
-          >
-            {retailer.retailerName}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function ProgramMenu({ retailers, selectedRetailers, retailerPrograms, onToggleProgram, onDone }) {
-  const visibleRetailers = (retailers || []).filter((retailer) => selectedRetailers.includes(retailer.retailerKey))
-
-  if (visibleRetailers.length === 0) {
-    return (
-      <div className="category-picker__header">
-        <div>
-          <h3>Kundenkarte / App</h3>
-          <p>Waehle zuerst mindestens einen Supermarkt aus. Danach kannst du Angebote mit App- oder Kartenpflicht einbeziehen.</p>
-        </div>
-        <button type="button" className="ghost-button" onClick={onDone}>
-          Fertig
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      <div className="category-picker__header" style={{ marginBottom: '0.75rem' }}>
-        <div>
-          <h3>Kundenkarte / App</h3>
-          <p>Aktiviere dies nur fuer Maerkte, bei denen du Karte oder App wirklich nutzt.</p>
-        </div>
-        <button type="button" className="ghost-button" onClick={onDone}>
-          Fertig
-        </button>
-      </div>
-
-      <div className="program-settings">
-        {visibleRetailers.map((retailer) => (
-          <label className="program-filter" key={retailer.retailerKey}>
-            <input
-              type="checkbox"
-              checked={Boolean(retailerPrograms?.[retailer.retailerKey])}
-              onChange={(event) => onToggleProgram(retailer.retailerKey, event.target.checked)}
-            />
-            <div>
-              <strong>{retailer.retailerName}: Kundenkarte/App vorhanden</strong>
-              <p>Wenn aktiv, zeigen wir auch Angebote, die nur mit Kundenkarte oder App gelten.</p>
-            </div>
-          </label>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function SearchResultGroups({ ranking }) {
-  const groups = ranking?.rankedGroups || []
-
-  if (groups.length === 0) {
-    return <p className="status">Keine passenden Angebote fuer den aktuellen Filter gefunden.</p>
-  }
-
-  return (
-    <div className="user-group-list">
-      {groups.map((group) => (
-        <section className="user-group" key={group.unit}>
-          <div className="user-group__header">
-            <div>
-              <h3>{group.unit} direkt vergleichbar</h3>
-              <p>Bestes Angebot zuerst, danach die weiteren Treffer derselben Einheit.</p>
-            </div>
-            <span className="pill pill--reviewed">{group.offers.length} Treffer</span>
-          </div>
-
-          <div className="user-results">
-            {group.offers.map((offer, index) => (
-              <article className={`user-card ${index === 0 ? 'user-card--best' : ''}`} key={offer.id}>
-                <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
-
-                <div className="user-card__content">
-                  <div className="user-card__top">
-                    <div>
-                      <div className="user-card__eyebrow">
-                        <span>Rang {index + 1}</span>
-                        <span>{offer.retailerName}</span>
-                        <span>{getOfferCategoryLabel(offer)}</span>
-                        {offer.customerProgramRequired ? <span>nur mit Kundenkarte/App</span> : <span>ohne Kundenkarte/App</span>}
-                      </div>
-                      <h3>{offer.title}</h3>
-                    </div>
-
-                    <div className="user-card__price">
-                      {offer.conditionsText ? <span className="user-card__price-condition">{offer.conditionsText}</span> : null}
-                      <strong>{offer.priceCurrent?.amount} {offer.priceCurrent?.currency}</strong>
-                      <span>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</span>
-                    </div>
-                  </div>
-
-                  <div className="user-card__facts">
-                    <span>Menge: {offer.quantityText || 'nicht erkannt'}</span>
-                    <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
-                  </div>
-
-                  <div className="user-card__highlights">
-                    <div className="highlight-pill highlight-pill--price">
-                      <span>Vergleichspreis</span>
-                      <strong>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</strong>
-                    </div>
-
-                    <div className="highlight-pill">
-                      <span>Ersparnis zum alten Preis</span>
-                      <strong>{offer.savingsAmount !== null ? `${offer.savingsAmount} EUR` : 'nicht ableitbar'}</strong>
-                    </div>
-
-                    <div className="highlight-pill">
-                      <span>Nur mit App/Kundenkarte?</span>
-                      <strong>{offer.customerProgramRequired ? 'Ja' : 'Nein'}</strong>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  )
-}
-
-function ActiveFilterChips({
-  selectedRetailers,
-  selectedCategories,
-  retailerPrograms,
-  retailers,
-  queryInput,
-  onRemoveRetailer,
-  onRemoveCategory,
-  onClearQuery,
-  onRemoveProgram,
-  onOpenRetailers,
-}) {
-  const retailerLookup = useMemo(() => {
-    return new Map((retailers || []).map((retailer) => [retailer.retailerKey, retailer.retailerName]))
-  }, [retailers])
-
-  const activeProgramKeys = Object.entries(retailerPrograms || {})
-    .filter(([, enabled]) => Boolean(enabled))
-    .map(([retailerKey]) => retailerKey)
-
-  const hasAnyFilters = selectedRetailers.length > 0 || selectedCategories.length > 0 || activeProgramKeys.length > 0 || Boolean(queryInput.trim())
-
-  if (!hasAnyFilters) {
-    return (
-      <div
-        style={{
-          marginTop: '0.85rem',
-          paddingTop: '0.85rem',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          display: 'grid',
-          gap: '0.35rem',
-        }}
-      >
-        <p style={{ margin: 0, opacity: 0.82 }}>Starte mit deinen Supermaerkten. Suche und Kategorien wirken nur innerhalb dieser Auswahl.</p>
-        <div>
-          <button type="button" className="chip chip--active" onClick={onOpenRetailers}>
-            Supermaerkte auswaehlen
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div
+    <SectionCard
       style={{
-        marginTop: '0.85rem',
-        paddingTop: '0.85rem',
-        borderTop: '1px solid rgba(255,255,255,0.08)',
-        display: 'grid',
-        gap: '0.55rem',
+        marginBottom: '1rem',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))',
       }}
     >
-      <div className="chip-grid">
-        {selectedRetailers.map((retailerKey) => (
-          <button key={`retailer-${retailerKey}`} type="button" className="chip chip--active" onClick={() => onRemoveRetailer(retailerKey)}>
-            {retailerLookup.get(retailerKey) || retailerKey} ×
-          </button>
-        ))}
+      <div
+        style={{
+          display: 'grid',
+          gap: '0.9rem',
+          padding: '1.25rem 1.25rem 1.35rem',
+        }}
+      >
+        <p className="eyebrow" style={{ margin: 0 }}>kaufklug.at</p>
+        <h1 style={{ margin: 0 }}>Die kluge Art, Geld bei jedem Einkauf zu sparen.</h1>
 
-        {queryInput.trim() ? (
-          <button type="button" className="chip chip--active" onClick={onClearQuery}>
-            Suchbegriff: {queryInput.trim()} ×
-          </button>
-        ) : null}
-
-        {selectedCategories.map((category) => (
-          <button key={`category-${category}`} type="button" className="chip chip--subtle chip--active" onClick={() => onRemoveCategory(category)}>
-            {category} ×
-          </button>
-        ))}
-
-        {activeProgramKeys.map((retailerKey) => (
-          <button key={`program-${retailerKey}`} type="button" className="chip chip--subtle chip--active" onClick={() => onRemoveProgram(retailerKey)}>
-            Kundenkarte/App: {retailerLookup.get(retailerKey) || retailerKey} ×
-          </button>
-        ))}
+        <div style={{ display: 'grid', gap: '0.55rem', maxWidth: '960px' }}>
+          <p className="subtitle" style={{ margin: 0 }}>
+            kaufklug.at durchsucht fuer dich automatisch die vielen Angebote und Prospekte, die sonst taeglich im Postkasten landen.
+          </p>
+          <p className="subtitle" style={{ margin: 0 }}>
+            Du musst nicht mehr selbst alles vergleichen. Die Seite zeigt dir uebersichtlich, welcher Supermarkt bei deinen gesuchten Produkten gerade am guenstigsten ist.
+          </p>
+          <p className="subtitle" style={{ margin: 0 }}>
+            So siehst du auf einen Blick, was sich wirklich lohnt – nach Supermarkt, Kategorie und Unterkategorie geordnet und leicht verstaendlich dargestellt.
+          </p>
+        </div>
       </div>
-    </div>
+    </SectionCard>
+  )
+}
+
+function RetailerSelectorBlock({ retailers, selectedRetailers, onToggleRetailer, loading }) {
+  return (
+    <SectionCard style={{ marginBottom: '1rem' }}>
+      <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
+        <div style={{ display: 'grid', gap: '0.2rem' }}>
+          <p className="eyebrow" style={{ margin: 0 }}>1. Supermaerkte waehlen</p>
+          <h2 style={{ margin: 0 }}>Welche Supermaerkte interessieren dich?</h2>
+          <p style={{ margin: 0, opacity: 0.82 }}>
+            Du kannst einen oder mehrere Supermaerkte auswaehlen und spaeter jederzeit wieder aendern.
+          </p>
+        </div>
+
+        {loading ? (
+          <p className="status" style={{ marginBottom: 0 }}>Supermaerkte werden geladen...</p>
+        ) : (
+          <div className="chip-grid">
+            {(retailers || []).map((retailer) => (
+              <button
+                key={retailer.retailerKey}
+                type="button"
+                className={`chip ${selectedRetailers.includes(retailer.retailerKey) ? 'chip--active' : ''}`}
+                onClick={() => onToggleRetailer(retailer.retailerKey)}
+              >
+                {retailer.retailerName} {retailer.activeOfferCount ? `(${retailer.activeOfferCount})` : ''}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  )
+}
+
+function CategorySelectorBlock({
+  categories,
+  selectedLabels,
+  expandedMainKeys,
+  onToggleMainCategory,
+  onToggleSubcategory,
+  onToggleExpanded,
+  loading,
+  disabled,
+}) {
+  return (
+    <SectionCard style={{ marginBottom: '1rem' }}>
+      <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
+        <div style={{ display: 'grid', gap: '0.2rem' }}>
+          <p className="eyebrow" style={{ margin: 0 }}>2. Kategorien waehlen</p>
+          <h2 style={{ margin: 0 }}>Welche Kategorien interessieren dich?</h2>
+          <p style={{ margin: 0, opacity: 0.82 }}>
+            Waehle Hauptkategorien. Wenn du genauer filtern willst, klappe sie auf und markiere passende Unterkategorien.
+          </p>
+        </div>
+
+        {disabled ? (
+          <p className="status" style={{ marginBottom: 0 }}>Waehle zuerst mindestens einen Supermarkt.</p>
+        ) : loading ? (
+          <p className="status" style={{ marginBottom: 0 }}>Kategorien werden geladen...</p>
+        ) : (
+          <div style={{ display: 'grid', gap: '0.8rem' }}>
+            {(categories || []).map((group) => {
+              const isMainSelected = selectedLabels.includes(group.mainCategoryLabel)
+              const isExpanded = expandedMainKeys.includes(group.mainCategoryKey) || isMainSelected
+
+              return (
+                <div
+                  key={group.mainCategoryKey}
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '18px',
+                    padding: '0.9rem 0.95rem',
+                    background: 'rgba(255,255,255,0.025)',
+                    display: 'grid',
+                    gap: '0.8rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      gap: '0.65rem',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={`chip ${isMainSelected ? 'chip--active' : ''}`}
+                      onClick={() => onToggleMainCategory(group)}
+                      style={{ justifySelf: 'start' }}
+                    >
+                      {group.mainCategoryLabel} ({group.offerCount})
+                    </button>
+
+                    <button
+                      type="button"
+                      className="ghost-button ghost-button--small"
+                      onClick={() => onToggleExpanded(group.mainCategoryKey)}
+                    >
+                      {isExpanded ? 'Unterkategorien verbergen' : `Unterkategorien zeigen (${group.subcategories.length})`}
+                    </button>
+                  </div>
+
+                  {isExpanded ? (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: '0.65rem',
+                      }}
+                    >
+                      <div
+                        className="chip-grid chip-grid--subcategories"
+                        style={{
+                          maxHeight: '220px',
+                          overflowY: 'auto',
+                          paddingRight: '0.2rem',
+                        }}
+                      >
+                        {group.subcategories.map((subcategory) => (
+                          <button
+                            key={subcategory.subcategoryKey}
+                            type="button"
+                            className={`chip chip--subtle ${selectedLabels.includes(subcategory.subcategoryLabel) ? 'chip--active' : ''}`}
+                            onClick={() => onToggleSubcategory(subcategory.subcategoryLabel)}
+                          >
+                            {subcategory.subcategoryLabel} {subcategory.offerCount ? `(${subcategory.offerCount})` : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  )
+}
+
+function ActionBlock({
+  canSearch,
+  selectedRetailerCount,
+  selectedCategoryCount,
+  onApplySearch,
+  onReset,
+  hasPendingChanges,
+}) {
+  return (
+    <SectionCard style={{ marginBottom: '1rem' }}>
+      <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
+        <div style={{ display: 'grid', gap: '0.2rem' }}>
+          <p className="eyebrow" style={{ margin: 0 }}>3. Suche starten</p>
+          <h2 style={{ margin: 0 }}>Jetzt passende Angebote laden</h2>
+          <p style={{ margin: 0, opacity: 0.82 }}>
+            Mit Klick auf „Los“ werden die Angebote nach deiner Auswahl geladen. Mit „Reset“ loeschst du alle Filter und startest neu.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '0.7rem',
+          }}
+        >
+          <div
+            style={{
+              padding: '0.85rem 0.95rem',
+              borderRadius: '16px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Supermaerkte</strong>
+            <span style={{ opacity: 0.8 }}>{selectedRetailerCount > 0 ? `${selectedRetailerCount} ausgewaehlt` : 'Keine Auswahl'}</span>
+          </div>
+
+          <div
+            style={{
+              padding: '0.85rem 0.95rem',
+              borderRadius: '16px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Kategorien / Unterkategorien</strong>
+            <span style={{ opacity: 0.8 }}>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewaehlt` : 'Keine Auswahl'}</span>
+          </div>
+
+          <div
+            style={{
+              padding: '0.85rem 0.95rem',
+              borderRadius: '16px',
+              background: hasPendingChanges ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Status</strong>
+            <span style={{ opacity: 0.8 }}>{hasPendingChanges ? 'Neue Auswahl bereit zum Starten' : 'Aktuelle Auswahl bereits geladen'}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="ghost-button chip--active"
+            onClick={onApplySearch}
+            disabled={!canSearch}
+            style={!canSearch ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+          >
+            Los
+          </button>
+
+          <button type="button" className="ghost-button" onClick={onReset}>
+            Reset
+          </button>
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function ResultsBlock({ rankingLoading, hasAppliedRetailerScope, visibleOfferCount, offers }) {
+  return (
+    <SectionCard>
+      <div style={{ display: 'grid', gap: '1rem', padding: '1.1rem 1.1rem 1.15rem' }}>
+        <div className="panel__header" style={{ marginBottom: 0 }}>
+          <h2>Ergebnisse</h2>
+          <p>Sortiert von der groessten Ersparnis zur kleinsten.</p>
+        </div>
+
+        {!hasAppliedRetailerScope ? (
+          <p className="status" style={{ marginBottom: 0 }}>
+            Noch keine Suche gestartet. Waehle zuerst deine Filter und klicke dann auf „Los“.
+          </p>
+        ) : rankingLoading ? (
+          <div style={{ display: 'grid', gap: '0.8rem' }}>
+            <p className="status" style={{ marginBottom: 0 }}>Angebote werden geladen...</p>
+            <div
+              style={{
+                display: 'grid',
+                gap: '0.75rem',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              }}
+            >
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  style={{
+                    minHeight: '140px',
+                    borderRadius: '18px',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : visibleOfferCount === 0 ? (
+          <div style={{ display: 'grid', gap: '0.55rem' }}>
+            <p className="status" style={{ marginBottom: 0 }}>
+              Keine passenden Angebote gefunden.
+            </p>
+            <p style={{ margin: 0, opacity: 0.82 }}>
+              Aendere deine Supermaerkte oder Kategorien und starte die Suche erneut.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p style={{ margin: 0, opacity: 0.82 }}>{visibleOfferCount} Angebote gefunden.</p>
+
+            <div className="user-results" style={{ display: 'grid', gap: '0.85rem' }}>
+              {offers.map((offer, index) => (
+                <article className={`user-card ${index === 0 ? 'user-card--best' : ''}`} key={offer.id}>
+                  <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
+
+                  <div className="user-card__content">
+                    <div className="user-card__top">
+                      <div>
+                        <div className="user-card__eyebrow">
+                          <span>Rang {index + 1}</span>
+                          <span>{offer.retailerName}</span>
+                          <span>{getOfferCategoryLabel(offer)}</span>
+                          {offer.customerProgramRequired ? <span>nur mit Kundenkarte/App</span> : <span>ohne Kundenkarte/App</span>}
+                        </div>
+                        <h3>{offer.title}</h3>
+                      </div>
+
+                      <div className="user-card__price">
+                        {offer.conditionsText ? <span className="user-card__price-condition">{offer.conditionsText}</span> : null}
+                        <strong>{offer.priceCurrent?.amount} {offer.priceCurrent?.currency}</strong>
+                        <span>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</span>
+                      </div>
+                    </div>
+
+                    <div className="user-card__facts">
+                      <span>Menge: {offer.quantityText || 'nicht erkannt'}</span>
+                      <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
+                    </div>
+
+                    <div className="user-card__highlights">
+                      <div className="highlight-pill highlight-pill--price">
+                        <span>Ersparnis</span>
+                        <strong>{getSavingsValue(offer) >= 0 ? `${getSavingsValue(offer)} EUR` : 'nicht ableitbar'}</strong>
+                      </div>
+
+                      <div className="highlight-pill">
+                        <span>Vergleichspreis</span>
+                        <strong>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</strong>
+                      </div>
+
+                      <div className="highlight-pill">
+                        <span>Kategorie</span>
+                        <strong>{getOfferCategoryLabel(offer)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </SectionCard>
   )
 }
 
 function SearchPage({
+  retailers,
+  categories,
+  filtersLoading,
   ranking,
   rankingLoading,
   preferencesLoading,
-  selectedCategories,
-  selectedRetailers,
-  queryInput,
-  retailerPrograms,
-  onToggleCategory,
-  onToggleMainCategory,
-  onToggleRetailer,
-  onClearCategories,
-  onClearRetailers,
-  onQueryChange,
-  onToggleRetailerProgram,
+  draftRetailers,
+  draftCategoryLabels,
+  appliedRetailers,
+  appliedCategoryLabels,
+  error,
+  hasPendingChanges,
+  onToggleDraftRetailer,
+  onToggleDraftMainCategory,
+  onToggleDraftSubcategory,
+  onApplySearch,
+  onResetAll,
 }) {
-  const [openMenu, setOpenMenu] = useState(null)
-  const stickyRef = useRef(null)
-  const isPageBusy = rankingLoading || preferencesLoading
-  const hasRetailerScope = selectedRetailers.length > 0
-  const trimmedQuery = queryInput.trim()
+  const [expandedMainKeys, setExpandedMainKeys] = useState([])
+  const isInitialBusy = preferencesLoading || filtersLoading
+  const hasAppliedRetailerScope = appliedRetailers.length > 0
 
   const allOffers = useMemo(() => flattenRankingOffers(ranking), [ranking])
 
-  const scopedOffersForRetailers = useMemo(() => {
-    if (!hasRetailerScope) return []
-
-    return allOffers.filter((offer) => {
-      const offerRetailerKey = getOfferRetailerKey(offer, ranking?.retailers || [])
-      return selectedRetailers.includes(offerRetailerKey)
-    })
-  }, [allOffers, hasRetailerScope, ranking?.retailers, selectedRetailers])
-
-  const availableCategories = useMemo(() => {
-    const categorySet = new Set()
-
-    for (const offer of scopedOffersForRetailers) {
-      const categoryLabel = getOfferCategoryLabel(offer)
-      if (categoryLabel) categorySet.add(categoryLabel)
-    }
-
-    return [...categorySet].sort((left, right) => left.localeCompare(right, 'de'))
-  }, [scopedOffersForRetailers])
-
-  const filteredOffers = useMemo(() => {
-    return filterOffers(
+  const resultOffers = useMemo(() => {
+    return filterAndSortOffers(
       allOffers,
       {
-        queryInput,
-        selectedCategories,
-        selectedRetailers,
-        retailerPrograms,
+        selectedRetailers: appliedRetailers,
+        selectedLabels: appliedCategoryLabels,
       },
-      ranking?.retailers || []
+      retailers || []
     )
-  }, [allOffers, queryInput, selectedCategories, selectedRetailers, retailerPrograms, ranking?.retailers])
+  }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers])
 
-  const clientRanking = useMemo(() => buildClientRanking(ranking, filteredOffers), [ranking, filteredOffers])
-
-  const totalOfferCount = allOffers.length
-  const visibleOfferCount = filteredOffers.length
-  const retailerCount = ranking?.retailers?.length || 0
-  const categoryCount = availableCategories.length
-  const selectedRetailerCount = selectedRetailers.length
-  const selectedCategoryCount = selectedCategories.length
-  const savedProgramCount = Object.values(retailerPrograms || {}).filter(Boolean).length
-  const hasRefinements = Boolean(trimmedQuery) || selectedCategoryCount > 0 || savedProgramCount > 0
-
-  function toggleMenu(menuName) {
-    setOpenMenu((current) => (current === menuName ? null : menuName))
-  }
-
-  function collapseMenuToStickyBar() {
-    setOpenMenu(null)
-
-    if (stickyRef.current) {
-      const top = stickyRef.current.getBoundingClientRect().top + window.scrollY - 12
-      window.scrollTo({
-        top: Math.max(0, top),
-        behavior: 'smooth',
-      })
-    }
-  }
-
-  let resultsTitle = 'Waehle zuerst deine Supermaerkte'
-  let resultsSubtitle = 'Danach kannst du nach Produkten suchen, Kategorien eingrenzen und optional Angebote mit Kundenkarte oder App einbeziehen.'
-
-  if (hasRetailerScope && !hasRefinements) {
-    resultsTitle = 'Alle relevanten Angebote aus deinen Supermaerkten'
-    resultsSubtitle = `${selectedRetailerCount} gewaehlte Supermaerkte · ${visibleOfferCount} Angebote sichtbar`
-  }
-
-  if (hasRetailerScope && hasRefinements && !trimmedQuery && selectedCategoryCount > 0) {
-    resultsTitle = 'Angebote in deinen gewaehlten Kategorien'
-    resultsSubtitle = `${selectedRetailerCount} Supermaerkte · ${selectedCategoryCount} Kategorien · ${visibleOfferCount} Angebote sichtbar`
-  }
-
-  if (hasRetailerScope && trimmedQuery && selectedCategoryCount === 0) {
-    resultsTitle = `Ergebnisse fuer "${trimmedQuery}" in deinen Supermaerkten`
-    resultsSubtitle = `${selectedRetailerCount} Supermaerkte · ${visibleOfferCount} Angebote sichtbar`
-  }
-
-  if (hasRetailerScope && trimmedQuery && selectedCategoryCount > 0) {
-    resultsTitle = `${visibleOfferCount} passende Angebote fuer "${trimmedQuery}"`
-    resultsSubtitle = `${selectedRetailerCount} Supermaerkte · ${selectedCategoryCount} Kategorien aktiv`
+  function handleToggleExpanded(mainCategoryKey) {
+    setExpandedMainKeys((current) =>
+      current.includes(mainCategoryKey)
+        ? current.filter((item) => item !== mainCategoryKey)
+        : [...current, mainCategoryKey]
+    )
   }
 
   return (
     <>
-      <HeroLoaderModal open={isPageBusy} />
+      <HeroLoaderModal
+        open={isInitialBusy}
+        label="kaufklug.at laedt Supermaerkte, Kategorien und deine gespeicherten Einstellungen."
+      />
 
-      <section
-        ref={stickyRef}
-        className="panel"
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 1200,
-          marginBottom: '1rem',
-          opacity: isPageBusy ? 0 : 1,
-          pointerEvents: isPageBusy ? 'none' : 'auto',
-          transition: 'opacity 240ms ease',
-          padding: '0.9rem 1rem',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0.6rem',
-            alignItems: 'center',
-          }}
-        >
-          <button
-            type="button"
-            className={`ghost-button ${openMenu === 'retailers' ? 'chip--active' : ''}`}
-            onClick={() => toggleMenu('retailers')}
-          >
-            Supermaerkte {selectedRetailerCount > 0 ? `(${selectedRetailerCount})` : ''}
-          </button>
+      <HeroBlock />
 
-          <label className="field field--hero-search" style={{ flex: '1 1 320px', minWidth: '240px', marginBottom: 0, opacity: hasRetailerScope ? 1 : 0.72 }}>
-            <span>Was suchst du?</span>
-            <input
-              type="text"
-              value={queryInput}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder={hasRetailerScope ? 'z. B. Milch, Kaffee, Butter' : 'Waehle zuerst Supermaerkte'}
-              disabled={!hasRetailerScope}
-            />
-          </label>
-
-          <button
-            type="button"
-            className={`ghost-button ${openMenu === 'categories' ? 'chip--active' : ''}`}
-            onClick={() => toggleMenu('categories')}
-            disabled={!hasRetailerScope}
-            style={!hasRetailerScope ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-          >
-            Kategorien {selectedCategoryCount > 0 ? `(${selectedCategoryCount})` : ''}
-          </button>
-
-          <button
-            type="button"
-            className={`ghost-button ${openMenu === 'programs' ? 'chip--active' : ''}`}
-            onClick={() => toggleMenu('programs')}
-            disabled={!hasRetailerScope}
-            style={!hasRetailerScope ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-          >
-            Kundenkarte / App {savedProgramCount > 0 ? `(${savedProgramCount})` : ''}
-          </button>
-        </div>
-
-        <p style={{ margin: '0.75rem 0 0', opacity: 0.82 }}>
-          Schritt 1: Supermaerkte waehlen. Schritt 2: Produkt suchen. Schritt 3: Kategorien eingrenzen. Kundenkarte / App ist optional.
-        </p>
-
-        <ActiveFilterChips
-          selectedRetailers={selectedRetailers}
-          selectedCategories={selectedCategories}
-          retailerPrograms={retailerPrograms}
-          retailers={ranking?.retailers}
-          queryInput={queryInput}
-          onRemoveRetailer={onToggleRetailer}
-          onRemoveCategory={onToggleCategory}
-          onClearQuery={() => onQueryChange('')}
-          onRemoveProgram={(retailerKey) => onToggleRetailerProgram(retailerKey, false)}
-          onOpenRetailers={() => setOpenMenu('retailers')}
-        />
-
-        {openMenu ? (
-          <div
-            style={{
-              marginTop: '0.85rem',
-              paddingTop: '0.85rem',
-              borderTop: '1px solid rgba(255,255,255,0.08)',
-            }}
-          >
-            {openMenu === 'retailers' ? (
-              <RetailerMenu
-                retailers={ranking?.retailers}
-                selectedRetailers={selectedRetailers}
-                onToggle={onToggleRetailer}
-                onClear={onClearRetailers}
-                onDone={collapseMenuToStickyBar}
-              />
-            ) : null}
-
-            {openMenu === 'categories' ? (
-              <CategoryMenu
-                categories={availableCategories}
-                selectedCategories={selectedCategories}
-                onToggle={onToggleCategory}
-                onToggleMainCategory={onToggleMainCategory}
-                onClear={onClearCategories}
-                onDone={collapseMenuToStickyBar}
-                disabled={!hasRetailerScope}
-              />
-            ) : null}
-
-            {openMenu === 'programs' ? (
-              <ProgramMenu
-                retailers={ranking?.retailers}
-                selectedRetailers={selectedRetailers}
-                retailerPrograms={retailerPrograms}
-                onToggleProgram={onToggleRetailerProgram}
-                onDone={collapseMenuToStickyBar}
-              />
-            ) : null}
+      {error ? (
+        <SectionCard style={{ marginBottom: '1rem' }}>
+          <div style={{ padding: '1rem 1.1rem' }}>
+            <p className="status status--error" style={{ marginBottom: 0 }}>{error}</p>
           </div>
-        ) : null}
-      </section>
+        </SectionCard>
+      ) : null}
 
-      <section
-        className="panel"
-        style={{
-          marginBottom: '1rem',
-          opacity: isPageBusy ? 0 : 1,
-          pointerEvents: isPageBusy ? 'none' : 'auto',
-          transition: 'opacity 240ms ease',
-        }}
-      >
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          <div>
-            <p className="eyebrow">kaufklug.at</p>
-            <h1 style={{ marginBottom: '0.8rem' }}>Die smarte Art, Zeit, Geld und Wege beim Einkauf zu sparen.</h1>
-            <p className="subtitle" style={{ marginBottom: '0.45rem' }}>
-              Der Postkasten ist voll mit Prospekten. Aber niemand hat Zeit, alles zu vergleichen.
-            </p>
-            <p className="subtitle" style={{ marginBottom: '0.45rem' }}>
-              kaufklug.at zeigt dir, wo du deine Produkte gerade wirklich am guenstigsten bekommst.
-            </p>
-            <p className="subtitle">
-              Damit du beim Einkaufen Geld, Zeit und unnoetige Wege sparst – kostenlos, ohne Datenmissbrauch und von Menschen fuer Menschen.
-            </p>
-          </div>
+      <RetailerSelectorBlock
+        retailers={retailers}
+        selectedRetailers={draftRetailers}
+        onToggleRetailer={onToggleDraftRetailer}
+        loading={filtersLoading}
+      />
 
-          <div
-            style={{
-              padding: '1rem 1.1rem',
-              borderRadius: '18px',
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))',
-              border: '1px solid rgba(255,255,255,0.06)',
-            }}
-          >
-            <h2 style={{ marginBottom: '0.65rem' }}>Warum hilft kaufklug.at wirklich beim Sparen?</h2>
-            <p style={{ marginBottom: '0.45rem', opacity: 0.88 }}>
-              Weil das Backend laufend aktuelle Angebote sammelt und das Frontend sie fuer dich einfach filterbar und verstaendlich macht.
-            </p>
-            <p style={{ marginBottom: '0.45rem', opacity: 0.88 }}>
-              Zuerst waehlst du deine Supermaerkte. Danach verfeinerst du die Treffer mit Suche, Kategorien und optional mit Kundenkarte / App.
-            </p>
-            <p style={{ opacity: 0.88 }}>
-              So siehst du die wirklich relevanten Angebote schneller und in einer Reihenfolge, die beim Sparen hilft.
-            </p>
-          </div>
-        </div>
-      </section>
+      <CategorySelectorBlock
+        categories={categories}
+        selectedLabels={draftCategoryLabels}
+        expandedMainKeys={expandedMainKeys}
+        onToggleMainCategory={onToggleDraftMainCategory}
+        onToggleSubcategory={onToggleDraftSubcategory}
+        onToggleExpanded={handleToggleExpanded}
+        loading={filtersLoading}
+        disabled={!draftRetailers.length}
+      />
 
-      <section
-        className="panel"
-        style={{
-          opacity: isPageBusy ? 0 : 1,
-          pointerEvents: isPageBusy ? 'none' : 'auto',
-          transition: 'opacity 240ms ease',
-        }}
-      >
-        <div className="panel__header">
-          <h2>{resultsTitle}</h2>
-          <p>{resultsSubtitle}</p>
-        </div>
+      <ActionBlock
+        canSearch={draftRetailers.length > 0}
+        selectedRetailerCount={draftRetailers.length}
+        selectedCategoryCount={draftCategoryLabels.length}
+        onApplySearch={onApplySearch}
+        onReset={onResetAll}
+        hasPendingChanges={hasPendingChanges}
+      />
 
-        {rankingLoading ? (
-          <p className="status">Angebote werden geladen...</p>
-        ) : !hasRetailerScope ? (
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>
-              Noch keine Supermaerkte ausgewaehlt.
-            </p>
-            <p style={{ margin: 0, opacity: 0.84 }}>
-              Waehlst du zuerst deine Maerkte, werden Suche und Kategorien sofort sinnvoll und transparent.
-            </p>
-            <div>
-              <button type="button" className="ghost-button chip--active" onClick={() => toggleMenu('retailers')}>
-                Supermaerkte auswaehlen
-              </button>
-            </div>
-            <p style={{ margin: 0, opacity: 0.72 }}>
-              Aktuell insgesamt verfuegbar: {totalOfferCount} Angebote aus {retailerCount} Supermaerkten.
-            </p>
-          </div>
-        ) : visibleOfferCount === 0 ? (
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>
-              Keine passenden Angebote fuer die aktuelle Kombination gefunden.
-            </p>
-            <p style={{ margin: 0, opacity: 0.84 }}>
-              Versuche einen anderen Suchbegriff oder entferne einzelne Filter.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {trimmedQuery ? (
-                <button type="button" className="ghost-button" onClick={() => onQueryChange('')}>
-                  Suchbegriff loeschen
-                </button>
-              ) : null}
-              {selectedCategoryCount > 0 ? (
-                <button type="button" className="ghost-button" onClick={onClearCategories}>
-                  Kategorien loeschen
-                </button>
-              ) : null}
-              {savedProgramCount > 0 ? (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => {
-                    for (const retailerKey of Object.keys(retailerPrograms || {})) {
-                      if (retailerPrograms[retailerKey]) {
-                        onToggleRetailerProgram(retailerKey, false)
-                      }
-                    }
-                  }}
-                >
-                  Kundenkarte / App loeschen
-                </button>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <>
-            <p style={{ margin: '0 0 1rem', opacity: 0.8 }}>
-              Aktuell {visibleOfferCount} sichtbare Angebote in {selectedRetailerCount} gewaehlten Supermaerkten · {categoryCount} verfuegbare Kategorien innerhalb deiner Auswahl
-            </p>
-            <SearchResultGroups ranking={clientRanking} />
-          </>
-        )}
-      </section>
+      <ResultsBlock
+        rankingLoading={rankingLoading}
+        hasAppliedRetailerScope={hasAppliedRetailerScope}
+        visibleOfferCount={resultOffers.length}
+        offers={resultOffers}
+      />
     </>
   )
 }
@@ -1157,16 +968,20 @@ function App() {
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
   const [ranking, setRanking] = useState(null)
+  const [retailers, setRetailers] = useState([])
+  const [categories, setCategories] = useState([])
   const [error, setError] = useState('')
   const [feedbackState, setFeedbackState] = useState('idle')
   const [feedbackNote, setFeedbackNote] = useState('')
   const [loading, setLoading] = useState(true)
-  const [rankingLoading, setRankingLoading] = useState(true)
-  const [selectedCategories, setSelectedCategories] = useState([])
-  const [selectedRetailers, setSelectedRetailers] = useState([])
-  const [retailerPrograms, setRetailerPrograms] = useState({})
-  const [queryInput, setQueryInput] = useState('')
+  const [filtersLoading, setFiltersLoading] = useState(true)
+  const [rankingLoading, setRankingLoading] = useState(false)
+  const [draftSelectedRetailers, setDraftSelectedRetailers] = useState([])
+  const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
+  const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
+  const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState([])
   const [preferencesLoading, setPreferencesLoading] = useState(true)
+  const [showAppPromoModal, setShowAppPromoModal] = useState(true)
 
   useEffect(() => {
     let active = true
@@ -1178,8 +993,10 @@ function App() {
 
         if (!active) return
 
-        setRetailerPrograms(preferenceResult.retailerPrograms || {})
-        setSelectedRetailers(preferenceResult.selectedRetailers || [])
+        const prefRetailers = preferenceResult.selectedRetailers || []
+
+        setDraftSelectedRetailers(prefRetailers)
+        setAppliedSelectedRetailers(prefRetailers)
       } catch (preferenceError) {
         if (!active) return
         setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht geladen werden.')
@@ -1211,8 +1028,34 @@ function App() {
       }
     }
 
+    async function loadFilterMetadata() {
+      try {
+        setFiltersLoading(true)
+
+        const [retailerResult, categoryResult] = await Promise.all([
+          fetchFilterRetailers(),
+          fetchFilterCategories(),
+        ])
+
+        if (!active) return
+
+        setRetailers(retailerResult)
+        setCategories(normalizeCategoryDocuments(categoryResult))
+        setError('')
+      } catch (filterError) {
+        if (!active) return
+        setRetailers([])
+        setCategories([])
+        setError(filterError.message || 'Filterdaten konnten nicht geladen werden.')
+      } finally {
+        if (active) setFiltersLoading(false)
+      }
+    }
+
     loadPreferences()
     loadDiagnostics()
+    loadFilterMetadata()
+
     const interval = setInterval(loadDiagnostics, 20000)
 
     return () => {
@@ -1225,11 +1068,18 @@ function App() {
     let active = true
 
     async function loadRanking() {
+      if (!appliedSelectedRetailers.length) {
+        setRanking(null)
+        setRankingLoading(false)
+        return
+      }
+
       try {
         setRankingLoading(true)
+
         const rankingResult = await fetchOfferRanking({
           categories: '',
-          retailers: '',
+          retailers: appliedSelectedRetailers.join(','),
           programRetailers: '',
           unit: 'all',
           q: '',
@@ -1242,6 +1092,7 @@ function App() {
         setError('')
       } catch (rankingError) {
         if (!active) return
+        setRanking(null)
         setError(rankingError.message || 'Ranking data could not be loaded.')
       } finally {
         if (active) setRankingLoading(false)
@@ -1253,34 +1104,24 @@ function App() {
     return () => {
       active = false
     }
-  }, [])
+  }, [appliedSelectedRetailers])
 
   async function reloadAll() {
-    const [healthResult, snapshotResult, essenceResult, rankingResult] = await Promise.all([
+    const [healthResult, snapshotResult, essenceResult] = await Promise.all([
       fetchHealth(),
       fetchDashboardSnapshot(),
       fetchEssence(),
-      fetchOfferRanking({
-        categories: '',
-        retailers: '',
-        programRetailers: '',
-        unit: 'all',
-        q: '',
-        limit: 'all',
-      }),
     ])
 
     setHealth(healthResult)
     setSnapshot(snapshotResult)
     setEssence(essenceResult)
-    setRanking(rankingResult)
   }
 
-  async function persistUserPreferences(nextRetailers, nextPrograms) {
+  async function persistUserPreferences(nextRetailers) {
     try {
       await saveCurrentUserPreferences({
         selectedRetailers: nextRetailers,
-        retailerPrograms: nextPrograms,
       })
       setError('')
     } catch (preferenceError) {
@@ -1288,44 +1129,51 @@ function App() {
     }
   }
 
-  function handleToggleCategory(category) {
-    setSelectedCategories((current) =>
-      current.includes(category) ? current.filter((item) => item !== category) : [...current, category]
-    )
-  }
-
-  function handleToggleMainCategory(_mainCategory, subcategories) {
-    setSelectedCategories((current) => {
-      const allSelected = subcategories.every((subcategory) => current.includes(subcategory))
-      if (allSelected) return current.filter((category) => !subcategories.includes(category))
-      return [...new Set([...current, ...subcategories])]
-    })
-  }
-
-  function handleToggleRetailer(retailerKey) {
-    setSelectedRetailers((current) => {
+  function handleToggleDraftRetailer(retailerKey) {
+    setDraftSelectedRetailers((current) => {
       const nextRetailers = current.includes(retailerKey)
         ? current.filter((item) => item !== retailerKey)
         : [...current, retailerKey]
 
-      persistUserPreferences(nextRetailers, retailerPrograms)
+      persistUserPreferences(nextRetailers)
       return nextRetailers
     })
   }
 
-  function handleClearRetailers() {
-    setSelectedRetailers([])
-    persistUserPreferences([], retailerPrograms)
+  function handleToggleDraftMainCategory(group) {
+    const labelsToToggle = [group.mainCategoryLabel, ...(group.subcategories || []).map((item) => item.subcategoryLabel)]
+
+    setDraftSelectedCategoryLabels((current) => {
+      const mainSelected = current.includes(group.mainCategoryLabel)
+
+      if (mainSelected) {
+        return current.filter((label) => !labelsToToggle.includes(label))
+      }
+
+      return [...new Set([...current, group.mainCategoryLabel])]
+    })
   }
 
-  async function handleToggleRetailerProgram(retailerKey, hasProgram) {
-    const nextPrograms = {
-      ...retailerPrograms,
-      [retailerKey]: hasProgram,
-    }
+  function handleToggleDraftSubcategory(subcategoryLabel) {
+    setDraftSelectedCategoryLabels((current) =>
+      current.includes(subcategoryLabel)
+        ? current.filter((item) => item !== subcategoryLabel)
+        : [...current, subcategoryLabel]
+    )
+  }
 
-    setRetailerPrograms(nextPrograms)
-    await persistUserPreferences(selectedRetailers, nextPrograms)
+  function handleApplySearch() {
+    setAppliedSelectedRetailers([...draftSelectedRetailers])
+    setAppliedSelectedCategoryLabels([...draftSelectedCategoryLabels])
+  }
+
+  function handleResetAll() {
+    setDraftSelectedRetailers([])
+    setDraftSelectedCategoryLabels([])
+    setAppliedSelectedRetailers([])
+    setAppliedSelectedCategoryLabels([])
+    setRanking(null)
+    persistUserPreferences([])
   }
 
   async function handleSaveFeedback() {
@@ -1346,24 +1194,33 @@ function App() {
     }
   }
 
+  const hasPendingChanges =
+    JSON.stringify(draftSelectedRetailers) !== JSON.stringify(appliedSelectedRetailers) ||
+    JSON.stringify(draftSelectedCategoryLabels) !== JSON.stringify(appliedSelectedCategoryLabels)
+
   return (
     <main className="shell">
+      <AppPromoModal open={showAppPromoModal} onClose={() => setShowAppPromoModal(false)} />
+
       {activePage === 'search' ? (
         <SearchPage
+          retailers={retailers}
+          categories={categories}
+          filtersLoading={filtersLoading}
           ranking={ranking}
           rankingLoading={rankingLoading}
           preferencesLoading={preferencesLoading}
-          selectedCategories={selectedCategories}
-          selectedRetailers={selectedRetailers}
-          queryInput={queryInput}
-          retailerPrograms={retailerPrograms}
-          onToggleCategory={handleToggleCategory}
-          onToggleMainCategory={handleToggleMainCategory}
-          onToggleRetailer={handleToggleRetailer}
-          onClearCategories={() => setSelectedCategories([])}
-          onClearRetailers={handleClearRetailers}
-          onQueryChange={setQueryInput}
-          onToggleRetailerProgram={handleToggleRetailerProgram}
+          draftRetailers={draftSelectedRetailers}
+          draftCategoryLabels={draftSelectedCategoryLabels}
+          appliedRetailers={appliedSelectedRetailers}
+          appliedCategoryLabels={appliedSelectedCategoryLabels}
+          error={error}
+          hasPendingChanges={hasPendingChanges}
+          onToggleDraftRetailer={handleToggleDraftRetailer}
+          onToggleDraftMainCategory={handleToggleDraftMainCategory}
+          onToggleDraftSubcategory={handleToggleDraftSubcategory}
+          onApplySearch={handleApplySearch}
+          onResetAll={handleResetAll}
         />
       ) : (
         <>

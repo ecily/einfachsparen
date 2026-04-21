@@ -10,6 +10,7 @@ async function getOrCreatePreferences() {
   if (!preferences) {
     const created = await UserPreference.create({
       profileKey: DEFAULT_PROFILE_KEY,
+      selectedRetailers: [],
       retailerPrograms: {},
     });
 
@@ -26,6 +27,7 @@ router.get('/current', async (req, res, next) => {
     res.json({
       ok: true,
       profileKey: preferences.profileKey,
+      selectedRetailers: Array.isArray(preferences.selectedRetailers) ? preferences.selectedRetailers : [],
       retailerPrograms: preferences.retailerPrograms || {},
       updatedAt: preferences.updatedAt,
     });
@@ -36,6 +38,11 @@ router.get('/current', async (req, res, next) => {
 
 router.put('/current', async (req, res, next) => {
   try {
+    const incomingRetailers = Array.isArray(req.body?.selectedRetailers) ? req.body.selectedRetailers : [];
+    const sanitizedRetailers = incomingRetailers
+      .map((retailerKey) => String(retailerKey || '').trim())
+      .filter(Boolean);
+
     const incomingPrograms =
       req.body && typeof req.body.retailerPrograms === 'object' && !Array.isArray(req.body.retailerPrograms)
         ? req.body.retailerPrograms
@@ -49,11 +56,12 @@ router.put('/current', async (req, res, next) => {
       { profileKey: DEFAULT_PROFILE_KEY },
       {
         $set: {
+          selectedRetailers: sanitizedRetailers,
           retailerPrograms: sanitizedPrograms,
         },
       },
       {
-        new: true,
+        returnDocument: 'after',
         upsert: true,
         setDefaultsOnInsert: true,
       }
@@ -62,6 +70,7 @@ router.put('/current', async (req, res, next) => {
     res.json({
       ok: true,
       profileKey: preferences.profileKey,
+      selectedRetailers: Array.isArray(preferences.selectedRetailers) ? preferences.selectedRetailers : [],
       retailerPrograms: preferences.retailerPrograms || {},
       updatedAt: preferences.updatedAt,
     });
