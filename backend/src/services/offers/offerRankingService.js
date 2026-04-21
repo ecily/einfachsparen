@@ -1,4 +1,6 @@
 const Offer = require('../../models/Offer');
+const Category = require('../../models/Category');
+const Retailer = require('../../models/Retailer');
 const { computeOfferSavings } = require('./promotionMath');
 
 const OFFER_RANKING_FIELDS = [
@@ -21,6 +23,9 @@ const OFFER_RANKING_FIELDS = [
   'supportingSources',
 ].join(' ');
 
+const RANKING_CACHE_TTL_MS = 60 * 1000;
+const rankingResponseCache = new Map();
+
 function normalizeStringList(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item || '').trim()).filter(Boolean);
@@ -38,6 +43,48 @@ function normalizeBoolean(value) {
 
 function normalizeProgramRetailers(value) {
   return normalizeStringList(value);
+}
+
+function buildRankingCacheKey({
+  categories = '',
+  query = '',
+  unit = 'all',
+  retailers = '',
+  programRetailers = '',
+  onlyWithoutProgram = false,
+  limit = 30,
+}) {
+  return JSON.stringify({
+    categories: normalizeStringList(categories).sort(),
+    query: String(query || '').trim().toLowerCase(),
+    unit: String(unit || 'all').trim().toLowerCase(),
+    retailers: normalizeStringList(retailers).sort(),
+    programRetailers: normalizeProgramRetailers(programRetailers).sort(),
+    onlyWithoutProgram: normalizeBoolean(onlyWithoutProgram),
+    limit: String(limit || '30').trim().toLowerCase(),
+  });
+}
+
+function getCachedRankingResponse(cacheKey) {
+  const entry = rankingResponseCache.get(cacheKey);
+
+  if (!entry) {
+    return null;
+  }
+
+  if (Date.now() - entry.createdAt > RANKING_CACHE_TTL_MS) {
+    rankingResponseCache.delete(cacheKey);
+    return null;
+  }
+
+  return entry.value;
+}
+
+function setCachedRankingResponse(cacheKey, value) {
+  rankingResponseCache.set(cacheKey, {
+    createdAt: Date.now(),
+    value,
+  });
 }
 
 function buildCurrentAvailabilityMatch() {
@@ -420,6 +467,39 @@ function buildRetailerOptions(items) {
     .sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'));
 }
 
+function buildCategoryLabelsFromDocuments(items) {
+  const labels = new Map();
+
+  for (const item of items || []) {
+    const mainLabel = String(item?.mainCategoryLabel || '').trim();
+
+    if (mainLabel && !isBroadCategory(mainLabel)) {
+      labels.set(mainLabel, (labels.get(mainLabel) || 0) + Number(item?.offerCount || 0));
+    }
+
+    for (const subcategory of item?.subcategories || []) {
+      const subLabel = String(subcategory?.subcategoryLabel || '').trim();
+
+      if (!subLabel || isBroadCategory(subLabel)) {
+        continue;
+      }
+
+      labels.set(subLabel, (labels.get(subLabel) || 0) + Number(subcategory?.offerCount || 0));
+    }
+  }
+
+  return [...labels.entries()]
+    .filter(([, count]) => count >= 1)
+    .sort((left, right) => {
+      if (right[1] !== left[1]) {
+        return right[1] - left[1];
+      }
+
+      return left[0].localeCompare(right[0], 'de');
+    })
+    .map(([label]) => label);
+}
+
 function parseShoppingItems(value) {
   return String(value || '')
     .split(/\r?\n|,/)
@@ -556,6 +636,21 @@ async function buildOfferRanking({
   const selectedRetailers = normalizeStringList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
+  const cacheKey = buildRankingCacheKey({
+    categories,
+    query,
+    unit,
+    retailers,
+    programRetailers,
+    onlyWithoutProgram,
+    limit,
+  });
+  const cachedResponse = getCachedRankingResponse(cacheKey);
+
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
   const filters = buildFilters({
     categories: selectedCategories,
     query: '',
@@ -564,41 +659,26 @@ async function buildOfferRanking({
     onlyWithoutProgram: withoutProgram,
   });
 
-  const [candidateOffers, categorySeeds, units, retailerOptions] = await Promise.all([
+  const retailerMatch = selectedRetailers.length > 0
+    ? { isActive: true, retailerKey: { $in: selectedRetailers } }
+    : { isActive: true };
+  const [candidateOffers, categoryDocuments, units, retailerOptions] = await Promise.all([
     Offer.find(filters)
       .select(OFFER_RANKING_FIELDS)
       .sort({ 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
       .lean(),
-    Offer.find({
-      ...buildCurrentAvailabilityMatch(),
-      'quality.comparisonSafe': true,
-      'normalizedUnitPrice.amount': { $ne: null },
-    })
-      .select('categoryPrimary categorySecondary')
-      .limit(5000)
+    Category.find({ isActive: true })
+      .select('mainCategoryLabel offerCount subcategories')
       .lean(),
     Offer.distinct('normalizedUnitPrice.unit', {
       ...buildCurrentAvailabilityMatch(),
       'quality.comparisonSafe': true,
       'normalizedUnitPrice.amount': { $ne: null },
     }),
-    Offer.aggregate([
-      {
-        $match: {
-          ...buildCurrentAvailabilityMatch(),
-          'quality.comparisonSafe': true,
-          'normalizedUnitPrice.amount': { $ne: null },
-        },
-      },
-      {
-        $group: {
-          _id: '$retailerKey',
-          name: { $first: '$retailerName' },
-          offerCount: { $sum: 1 },
-        },
-      },
-      { $sort: { name: 1 } },
-    ]),
+    Retailer.find(retailerMatch)
+      .select('retailerKey retailerName activeOfferCount')
+      .sort({ sortOrder: 1, retailerName: 1 })
+      .lean(),
   ]);
 
   const fullyFilteredOffers = dedupeOffers(
@@ -638,19 +718,7 @@ async function buildOfferRanking({
   const worstUnitPrice = offers[offers.length - 1]?.normalizedUnitPrice?.amount || null;
   const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
 
-  const categoryCounts = new Map();
-
-  for (const seed of categorySeeds) {
-    const label = selectDisplayCategory(seed);
-
-    if (!label || !isUsefulCategory(label) || isBroadCategory(label)) {
-      continue;
-    }
-
-    categoryCounts.set(label, (categoryCounts.get(label) || 0) + 1);
-  }
-
-  return {
+  const response = {
     generatedAt: new Date().toISOString(),
     filters: {
       categories: selectedCategories,
@@ -661,17 +729,13 @@ async function buildOfferRanking({
       onlyWithoutProgram: withoutProgram,
       limit: showAllMatching ? 'all' : safeLimit,
     },
-    categories: [...categoryCounts.entries()]
-      .filter(([, count]) => count >= 2)
-      .sort((left, right) => {
-        if (right[1] !== left[1]) {
-          return right[1] - left[1];
-        }
-
-        return left[0].localeCompare(right[0], 'de');
-      })
-      .map(([label]) => label),
-    retailers: buildRetailerOptions(retailerOptions),
+    categories: buildCategoryLabelsFromDocuments(categoryDocuments),
+    retailers: retailerOptions.map((item) => ({
+      key: item.retailerKey,
+      retailerKey: item.retailerKey,
+      retailerName: item.retailerName,
+      offerCount: item.activeOfferCount || 0,
+    })),
     units: units.filter(Boolean).sort(),
     summary: {
       resultCount: fullyFilteredOffers.length,
@@ -689,6 +753,9 @@ async function buildOfferRanking({
     rankedGroups: buildGroupedRankings(rankedOffers),
     rankedOffers,
   };
+
+  setCachedRankingResponse(cacheKey, response);
+  return response;
 }
 
 module.exports = {

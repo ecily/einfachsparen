@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import './index.css'
 import {
@@ -6,7 +6,6 @@ import {
   fetchDashboardSnapshot,
   fetchEssence,
   fetchHealth,
-  fetchOfferRanking,
   getOfferImageUrl,
   saveCurrentUserPreferences,
   saveFeedback,
@@ -96,9 +95,28 @@ async function fetchFilterRetailers() {
     })
 }
 
-async function fetchFilterCategories() {
-  const payload = await fetchJson('/filters/categories')
+async function fetchFilterCategories(retailerKeys = []) {
+  const params = new URLSearchParams()
+
+  if (Array.isArray(retailerKeys) && retailerKeys.length > 0) {
+    params.set('retailers', retailerKeys.join(','))
+  }
+
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const payload = await fetchJson(`/filters/categories${suffix}`)
   return extractArrayPayload(payload, ['categories'])
+}
+
+async function fetchOfferRankingDirect(params = {}) {
+  const searchParams = new URLSearchParams()
+
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === '') continue
+    searchParams.set(key, String(value))
+  }
+
+  const suffix = searchParams.toString() ? `?${searchParams.toString()}` : ''
+  return fetchJson(`/offers/ranking${suffix}`)
 }
 
 function normalizeRetailerKey(value) {
@@ -108,6 +126,10 @@ function normalizeRetailerKey(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+function buildRetailerSelectionKey(retailerKeys = []) {
+  return [...new Set((retailerKeys || []).filter(Boolean))].sort().join('|')
 }
 
 function getOfferCategoryLabel(offer) {
@@ -143,6 +165,15 @@ function getOfferRetailerKey(offer, retailers = []) {
 }
 
 function flattenRankingOffers(ranking) {
+  if (Array.isArray(ranking?.rankedOffers)) {
+    return ranking.rankedOffers
+      .filter((offer) => offer && typeof offer === 'object')
+      .map((offer) => ({
+        ...offer,
+        id: offer?.id || offer?._id || `${offer?.title}-${offer?.retailerName}-${offer?.priceCurrent?.amount}`,
+      }))
+  }
+
   const seen = new Set()
   const offers = []
 
@@ -178,10 +209,84 @@ function normalizeCategoryDocuments(categories = []) {
           subcategoryLabel: subcategory?.subcategoryLabel || category?.mainCategoryLabel || 'Weitere Kategorien',
           offerCount: Number(subcategory?.offerCount || 0),
         }))
+        .filter((subcategory) => {
+          const mainLabel = String(category?.mainCategoryLabel || '').trim().toLowerCase()
+          const subLabel = String(subcategory?.subcategoryLabel || '').trim().toLowerCase()
+          return Boolean(subLabel) && subLabel !== mainLabel
+        })
+        .filter((subcategory, subIndex, items) =>
+          items.findIndex((item) => item.subcategoryKey === subcategory.subcategoryKey || item.subcategoryLabel === subcategory.subcategoryLabel) === subIndex
+        )
         .sort((left, right) => right.offerCount - left.offerCount || left.subcategoryLabel.localeCompare(right.subcategoryLabel, 'de')),
     }))
     .filter((item) => item.isActive)
     .sort((left, right) => right.offerCount - left.offerCount || left.mainCategoryLabel.localeCompare(right.mainCategoryLabel, 'de'))
+}
+
+function buildMainSelectionToken(mainCategoryKey) {
+  return `main:${mainCategoryKey}`
+}
+
+function buildSubSelectionToken(mainCategoryKey, subcategoryKey) {
+  return `sub:${mainCategoryKey}:${subcategoryKey}`
+}
+
+function getGroupSelectionState(group, selectionTokens = []) {
+  const mainToken = buildMainSelectionToken(group.mainCategoryKey)
+  const selectedSubcategoryKeys = (group.subcategories || [])
+    .filter((subcategory) => selectionTokens.includes(buildSubSelectionToken(group.mainCategoryKey, subcategory.subcategoryKey)))
+    .map((subcategory) => subcategory.subcategoryKey)
+
+  return {
+    mainSelected: selectionTokens.includes(mainToken),
+    selectedSubcategoryKeys,
+  }
+}
+
+function pruneSelectionTokens(selectionTokens = [], categories = []) {
+  const validTokens = new Set()
+
+  for (const group of categories || []) {
+    validTokens.add(buildMainSelectionToken(group.mainCategoryKey))
+
+    for (const subcategory of group.subcategories || []) {
+      validTokens.add(buildSubSelectionToken(group.mainCategoryKey, subcategory.subcategoryKey))
+    }
+  }
+
+  return (selectionTokens || []).filter((token) => validTokens.has(token))
+}
+
+function buildSelectedCategoryQueryLabels(selectionTokens = [], categories = []) {
+  const labels = []
+
+  for (const group of categories || []) {
+    const selectionState = getGroupSelectionState(group, selectionTokens)
+
+    if (selectionState.selectedSubcategoryKeys.length > 0) {
+      for (const subcategory of group.subcategories || []) {
+        if (selectionState.selectedSubcategoryKeys.includes(subcategory.subcategoryKey)) {
+          labels.push(subcategory.subcategoryLabel)
+        }
+      }
+
+      continue
+    }
+
+    if (selectionState.mainSelected) {
+      labels.push(group.mainCategoryLabel)
+    }
+  }
+
+  return [...new Set(labels.filter(Boolean))]
+}
+
+function areStringSetsEqual(left = [], right = []) {
+  if (left.length !== right.length) return false
+
+  const leftSorted = [...left].sort()
+  const rightSorted = [...right].sort()
+  return leftSorted.every((value, index) => value === rightSorted[index])
 }
 
 function getSavingsValue(offer) {
@@ -189,23 +294,37 @@ function getSavingsValue(offer) {
   return Number.isFinite(raw) ? raw : -1
 }
 
-function filterAndSortOffers(offers, filters, retailers) {
+function filterAndSortOffers(offers, filters, retailers, categories) {
   if (!filters.selectedRetailers.length) return []
+
+  const selectedRetailers = new Set(filters.selectedRetailers)
+  const categoryGroups = categories || []
+  const hasCategorySelection = filters.selectedCategoryTokens.length > 0
 
   const result = (offers || []).filter((offer) => {
     const retailerKey = getOfferRetailerKey(offer, retailers)
-    const mainCategory = offer?.categoryPrimary || ''
-    const subCategory = getOfferCategoryLabel(offer)
+    const mainCategoryKey = normalizeRetailerKey(offer?.categoryPrimary || '')
+    const subCategoryKey = normalizeRetailerKey(getOfferCategoryLabel(offer))
 
-    if (!filters.selectedRetailers.includes(retailerKey)) return false
+    if (!selectedRetailers.has(retailerKey)) return false
 
-    if (filters.selectedLabels.length > 0) {
-      const matchesMain = filters.selectedLabels.includes(mainCategory)
-      const matchesSub = filters.selectedLabels.includes(subCategory)
-      if (!matchesMain && !matchesSub) return false
+    if (!hasCategorySelection) {
+      return true
     }
 
-    return true
+    const matchingGroup = categoryGroups.find((group) => group.mainCategoryKey === mainCategoryKey)
+
+    if (!matchingGroup) {
+      return false
+    }
+
+    const selectionState = getGroupSelectionState(matchingGroup, filters.selectedCategoryTokens)
+
+    if (selectionState.selectedSubcategoryKeys.length > 0) {
+      return selectionState.selectedSubcategoryKeys.some((subcategoryKey) => subcategoryKey === subCategoryKey)
+    }
+
+    return selectionState.mainSelected
   })
 
   return [...result].sort((left, right) => {
@@ -489,7 +608,7 @@ function RetailerSelectorBlock({ retailers, selectedRetailers, onToggleRetailer,
 
 function CategorySelectorBlock({
   categories,
-  selectedLabels,
+  selectedCategoryTokens,
   expandedMainKeys,
   onToggleMainCategory,
   onToggleSubcategory,
@@ -515,8 +634,9 @@ function CategorySelectorBlock({
         ) : (
           <div style={{ display: 'grid', gap: '0.8rem' }}>
             {(categories || []).map((group) => {
-              const isMainSelected = selectedLabels.includes(group.mainCategoryLabel)
-              const isExpanded = expandedMainKeys.includes(group.mainCategoryKey) || isMainSelected
+              const selectionState = getGroupSelectionState(group, selectedCategoryTokens)
+              const isMainSelected = selectionState.mainSelected
+              const isExpanded = expandedMainKeys.includes(group.mainCategoryKey) || isMainSelected || selectionState.selectedSubcategoryKeys.length > 0
 
               return (
                 <div
@@ -575,8 +695,8 @@ function CategorySelectorBlock({
                           <button
                             key={subcategory.subcategoryKey}
                             type="button"
-                            className={`chip chip--subtle ${selectedLabels.includes(subcategory.subcategoryLabel) ? 'chip--active' : ''}`}
-                            onClick={() => onToggleSubcategory(subcategory.subcategoryLabel)}
+                            className={`chip chip--subtle ${selectionState.selectedSubcategoryKeys.includes(subcategory.subcategoryKey) ? 'chip--active' : ''}`}
+                            onClick={() => onToggleSubcategory(group, subcategory)}
                           >
                             {subcategory.subcategoryLabel} {subcategory.offerCount ? `(${subcategory.offerCount})` : ''}
                           </button>
@@ -601,6 +721,7 @@ function ActionBlock({
   onApplySearch,
   onReset,
   hasPendingChanges,
+  searching,
 }) {
   return (
     <SectionCard style={{ marginBottom: '1rem' }}>
@@ -662,10 +783,10 @@ function ActionBlock({
             type="button"
             className="ghost-button chip--active"
             onClick={onApplySearch}
-            disabled={!canSearch}
-            style={!canSearch ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            disabled={!canSearch || searching}
+            style={!canSearch || searching ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
-            Los
+            {searching ? 'Wir suchen gerade ...' : 'Los'}
           </button>
 
           <button type="button" className="ghost-button" onClick={onReset}>
@@ -692,7 +813,7 @@ function ResultsBlock({ rankingLoading, hasAppliedRetailerScope, visibleOfferCou
           </p>
         ) : rankingLoading ? (
           <div style={{ display: 'grid', gap: '0.8rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>Angebote werden geladen...</p>
+            <p className="status" style={{ marginBottom: 0 }}>Moment, wir suchen gerade die besten Angebote fuer dich ...</p>
             <div
               style={{
                 display: 'grid',
@@ -812,11 +933,12 @@ function SearchPage({
       allOffers,
       {
         selectedRetailers: appliedRetailers,
-        selectedLabels: appliedCategoryLabels,
+        selectedCategoryTokens: appliedCategoryLabels,
       },
-      retailers || []
+      retailers || [],
+      categories || []
     )
-  }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers])
+  }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, categories])
 
   function handleToggleExpanded(mainCategoryKey) {
     setExpandedMainKeys((current) =>
@@ -852,7 +974,7 @@ function SearchPage({
 
       <CategorySelectorBlock
         categories={categories}
-        selectedLabels={draftCategoryLabels}
+        selectedCategoryTokens={draftCategoryLabels}
         expandedMainKeys={expandedMainKeys}
         onToggleMainCategory={onToggleDraftMainCategory}
         onToggleSubcategory={onToggleDraftSubcategory}
@@ -868,6 +990,7 @@ function SearchPage({
         onApplySearch={onApplySearch}
         onReset={onResetAll}
         hasPendingChanges={hasPendingChanges}
+        searching={rankingLoading}
       />
 
       <ResultsBlock
@@ -982,6 +1105,8 @@ function App() {
   const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState([])
   const [preferencesLoading, setPreferencesLoading] = useState(true)
   const [showAppPromoModal, setShowAppPromoModal] = useState(true)
+  const categoryCacheRef = useRef(new Map())
+  const rankingCacheRef = useRef(new Map())
 
   useEffect(() => {
     let active = true
@@ -1004,6 +1129,39 @@ function App() {
         if (active) setPreferencesLoading(false)
       }
     }
+
+    async function loadFilterMetadata() {
+      try {
+        setFiltersLoading(true)
+        const retailerResult = await fetchFilterRetailers()
+
+        if (!active) return
+
+        setRetailers(retailerResult)
+        setError('')
+      } catch (filterError) {
+        if (!active) return
+        setRetailers([])
+        setError(filterError.message || 'Filterdaten konnten nicht geladen werden.')
+      } finally {
+        if (active) setFiltersLoading(false)
+      }
+    }
+
+    loadPreferences()
+    loadFilterMetadata()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activePage !== 'diagnostics') {
+      return undefined
+    }
+
+    let active = true
 
     async function loadDiagnostics() {
       try {
@@ -1028,23 +1186,45 @@ function App() {
       }
     }
 
-    async function loadFilterMetadata() {
-      try {
-        setFiltersLoading(true)
+    loadDiagnostics()
+    const interval = setInterval(loadDiagnostics, 20000)
 
-        const [retailerResult, categoryResult] = await Promise.all([
-          fetchFilterRetailers(),
-          fetchFilterCategories(),
-        ])
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [activePage])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadScopedCategories() {
+      try {
+        const cacheKey = buildRetailerSelectionKey(draftSelectedRetailers)
+        const cachedCategories = categoryCacheRef.current.get(cacheKey)
+
+        if (cachedCategories) {
+          if (!active) return
+          setCategories(cachedCategories)
+          setDraftSelectedCategoryLabels((current) => pruneSelectionTokens(current, cachedCategories))
+          setAppliedSelectedCategoryLabels((current) => pruneSelectionTokens(current, cachedCategories))
+          setError('')
+          return
+        }
+
+        setFiltersLoading(true)
+        const categoryResult = await fetchFilterCategories(draftSelectedRetailers)
 
         if (!active) return
 
-        setRetailers(retailerResult)
-        setCategories(normalizeCategoryDocuments(categoryResult))
+        const nextCategories = normalizeCategoryDocuments(categoryResult)
+        categoryCacheRef.current.set(cacheKey, nextCategories)
+        setCategories(nextCategories)
+        setDraftSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
+        setAppliedSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
         setError('')
       } catch (filterError) {
         if (!active) return
-        setRetailers([])
         setCategories([])
         setError(filterError.message || 'Filterdaten konnten nicht geladen werden.')
       } finally {
@@ -1052,17 +1232,12 @@ function App() {
       }
     }
 
-    loadPreferences()
-    loadDiagnostics()
-    loadFilterMetadata()
-
-    const interval = setInterval(loadDiagnostics, 20000)
+    loadScopedCategories()
 
     return () => {
       active = false
-      clearInterval(interval)
     }
-  }, [])
+  }, [draftSelectedRetailers])
 
   useEffect(() => {
     let active = true
@@ -1075,9 +1250,20 @@ function App() {
       }
 
       try {
+        const cacheKey = buildRetailerSelectionKey(appliedSelectedRetailers)
+        const cachedRanking = rankingCacheRef.current.get(cacheKey)
+
+        if (cachedRanking) {
+          if (!active) return
+          setRanking(cachedRanking)
+          setRankingLoading(false)
+          setError('')
+          return
+        }
+
         setRankingLoading(true)
 
-        const rankingResult = await fetchOfferRanking({
+        const rankingResult = await fetchOfferRankingDirect({
           categories: '',
           retailers: appliedSelectedRetailers.join(','),
           programRetailers: '',
@@ -1088,6 +1274,7 @@ function App() {
 
         if (!active) return
 
+        rankingCacheRef.current.set(cacheKey, rankingResult)
         setRanking(rankingResult)
         setError('')
       } catch (rankingError) {
@@ -1141,25 +1328,34 @@ function App() {
   }
 
   function handleToggleDraftMainCategory(group) {
-    const labelsToToggle = [group.mainCategoryLabel, ...(group.subcategories || []).map((item) => item.subcategoryLabel)]
+    const mainToken = buildMainSelectionToken(group.mainCategoryKey)
+    const subcategoryTokens = (group.subcategories || []).map((item) => buildSubSelectionToken(group.mainCategoryKey, item.subcategoryKey))
 
     setDraftSelectedCategoryLabels((current) => {
-      const mainSelected = current.includes(group.mainCategoryLabel)
+      const next = current.filter((token) => token !== mainToken && !subcategoryTokens.includes(token))
+      const selectionState = getGroupSelectionState(group, current)
 
-      if (mainSelected) {
-        return current.filter((label) => !labelsToToggle.includes(label))
+      if (selectionState.mainSelected) {
+        return next
       }
 
-      return [...new Set([...current, group.mainCategoryLabel])]
+      return [...next, mainToken]
     })
   }
 
-  function handleToggleDraftSubcategory(subcategoryLabel) {
-    setDraftSelectedCategoryLabels((current) =>
-      current.includes(subcategoryLabel)
-        ? current.filter((item) => item !== subcategoryLabel)
-        : [...current, subcategoryLabel]
-    )
+  function handleToggleDraftSubcategory(group, subcategory) {
+    const mainToken = buildMainSelectionToken(group.mainCategoryKey)
+    const subToken = buildSubSelectionToken(group.mainCategoryKey, subcategory.subcategoryKey)
+
+    setDraftSelectedCategoryLabels((current) => {
+      const withoutMain = current.filter((token) => token !== mainToken)
+
+      if (withoutMain.includes(subToken)) {
+        return withoutMain.filter((token) => token !== subToken)
+      }
+
+      return [...withoutMain, subToken]
+    })
   }
 
   function handleApplySearch() {
@@ -1195,8 +1391,8 @@ function App() {
   }
 
   const hasPendingChanges =
-    JSON.stringify(draftSelectedRetailers) !== JSON.stringify(appliedSelectedRetailers) ||
-    JSON.stringify(draftSelectedCategoryLabels) !== JSON.stringify(appliedSelectedCategoryLabels)
+    !areStringSetsEqual(draftSelectedRetailers, appliedSelectedRetailers) ||
+    !areStringSetsEqual(draftSelectedCategoryLabels, appliedSelectedCategoryLabels)
 
   return (
     <main className="shell">
