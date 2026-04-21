@@ -3,13 +3,13 @@ const cheerio = require('cheerio');
 const crypto = require('node:crypto');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
-const RawDocument = require('../../models/RawDocument');
 const Offer = require('../../models/Offer');
 const {
   sanitizeWhitespace,
   normalizeTitleForMatch,
   buildSourceEvidence,
 } = require('./sourceEvidence');
+const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -515,7 +515,7 @@ async function attachBillaOfficialEvidence({ source, crawlJobId, region }) {
     sample: hits.slice(0, 25),
   };
 
-  await RawDocument.create({
+  await createCompactRawDocument({
     sourceId: source._id,
     crawlJobId,
     retailerKey: source.retailerKey,
@@ -527,7 +527,11 @@ async function attachBillaOfficialEvidence({ source, crawlJobId, region }) {
     contentHash: createHash(JSON.stringify(payload)),
     contentSnippet: `Official BILLA promotion hits: ${hits.length}`,
     extractedPreview: hits.slice(0, 10).map((hit) => hit.name).filter(Boolean),
-    payload,
+    payload: {
+      retailerKey: source.retailerKey,
+      hitCount: hits.length,
+      sampleNames: hits.slice(0, 5).map((hit) => sanitizeWhitespace(hit?.name || '')).filter(Boolean),
+    },
   });
 
   const now = new Date();
@@ -746,7 +750,7 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
 
   await Offer.deleteMany({ sourceId: source._id });
 
-  await RawDocument.create({
+  await createCompactRawDocument({
     sourceId: source._id,
     crawlJobId,
     retailerKey: source.retailerKey,
@@ -758,7 +762,11 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
     contentHash: createHash(JSON.stringify(payload)),
     contentSnippet: `Official BILLA promotion hits: ${hits.length}`,
     extractedPreview: hits.slice(0, 10).map((hit) => hit.name).filter(Boolean),
-    payload,
+    payload: {
+      retailerKey: source.retailerKey,
+      hitCount: hits.length,
+      sampleNames: hits.slice(0, 5).map((hit) => sanitizeWhitespace(hit?.name || '')).filter(Boolean),
+    },
   });
 
   const normalizedOffers = hits.map((hit) =>
@@ -807,7 +815,7 @@ async function fetchNestedHtmlDocuments({ source, crawlJobId, region, links, lim
       const title = sanitizeWhitespace(cheerio.load(html)('title').text()) || link.label;
 
       rawDocuments.push(
-        await RawDocument.create({
+        await createCompactRawDocument({
           sourceId: source._id,
           crawlJobId,
           retailerKey: source.retailerKey,
@@ -856,7 +864,7 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
     const { html, canonicalUrl } = await fetchHtml(current.url);
     const title = sanitizeWhitespace(cheerio.load(html)('title').text()) || current.label;
 
-    await RawDocument.create({
+    await createCompactRawDocument({
       sourceId: source._id,
       crawlJobId,
       retailerKey: source.retailerKey,
@@ -918,6 +926,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
   });
 
   try {
+    await clearRawDocumentsForSource(source._id);
+
     const { html, canonicalUrl } = await fetchHtml(source.sourceUrl);
     const links = extractRelevantLinks({
       html,
@@ -926,7 +936,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     });
     const pageTitle = sanitizeWhitespace(cheerio.load(html)('title').text()) || source.label;
 
-    const rootDocument = await RawDocument.create({
+    const rootDocument = await createCompactRawDocument({
       sourceId: source._id,
       crawlJobId: crawlJob._id,
       retailerKey: source.retailerKey,
@@ -940,7 +950,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extractedPreview: links.slice(0, 10).map((item) => `${item.type.toUpperCase()}: ${item.label}`),
       payload: {
         linkCount: links.length,
-        links,
+        pageLinkCount: links.filter((item) => item.type === 'page').length,
+        pdfLinkCount: links.filter((item) => item.type === 'pdf').length,
       },
     });
 

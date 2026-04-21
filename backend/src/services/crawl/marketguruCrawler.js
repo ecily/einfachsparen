@@ -2,13 +2,13 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
-const RawDocument = require('../../models/RawDocument');
 const Offer = require('../../models/Offer');
 const {
   sanitizeWhitespace,
   normalizeTitleForMatch,
   buildSourceEvidence,
 } = require('./sourceEvidence');
+const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 
 function createHash(value) {
   return require('node:crypto').createHash('sha256').update(String(value || '')).digest('hex');
@@ -376,6 +376,8 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
   });
 
   try {
+    await clearRawDocumentsForSource(source._id);
+
     const response = await axios.get(source.sourceUrl, {
       timeout: 30000,
       headers: {
@@ -388,7 +390,7 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
     const html = String(response.data);
     const $ = cheerio.load(html);
     const title = sanitizeWhitespace($('title').text()) || source.label;
-    const rootDocument = await RawDocument.create({
+    const rootDocument = await createCompactRawDocument({
       sourceId: source._id,
       crawlJobId: crawlJob._id,
       retailerKey: source.retailerKey,
@@ -406,6 +408,7 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
         .filter(Boolean),
       payload: {
         retailerName: source.retailerName,
+        offerPreviewCount: $('.offer-list-item').length,
       },
     });
 

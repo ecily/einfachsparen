@@ -2,7 +2,6 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
-const RawDocument = require('../../models/RawDocument');
 const Offer = require('../../models/Offer');
 const {
   buildPayloadDigest,
@@ -11,6 +10,7 @@ const {
   parseSectionRecord,
 } = require('./aktionsfinderParser');
 const { normalizePromotionToOffer } = require('./offerNormalizer');
+const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 
 function uniquePromotions(promotions) {
   const seen = new Map();
@@ -92,6 +92,8 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
   });
 
   try {
+    await clearRawDocumentsForSource(source._id);
+
     const response = await axios.get(source.sourceUrl, {
       timeout: 30000,
       headers: {
@@ -123,7 +125,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       }
     }
 
-    const rawDocument = await RawDocument.create({
+    const rawDocument = await createCompactRawDocument({
       sourceId: source._id,
       crawlJobId: crawlJob._id,
       retailerKey: source.retailerKey,
@@ -136,14 +138,13 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       contentSnippet: digest.contentSnippet,
       extractedPreview: promotions.slice(0, 5).map((promotion) => promotion.title).filter(Boolean),
       payload: {
-        html,
-        parsedSections: {
-          popular: sections.popular?.title || null,
-          assortment: sections.assortment?.title || null,
-          groupedVendor: sections.grouped?.vendor?.name || null,
-          groupCount: sections.grouped?.initialPromotionGroupList?.content?.length || 0,
-        },
-        fallbackOfficial,
+        promotionCount: promotions.length,
+        popularSectionTitle: sections.popular?.title || null,
+        assortmentSectionTitle: sections.assortment?.title || null,
+        groupedVendor: sections.grouped?.vendor?.name || null,
+        groupCount: sections.grouped?.initialPromotionGroupList?.content?.length || 0,
+        fallbackOfficialUrl: fallbackOfficial?.officialUrl || '',
+        fallbackOfficialTeaser: fallbackOfficial?.teaser || '',
       },
     });
 
