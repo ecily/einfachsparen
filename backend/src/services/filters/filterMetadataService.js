@@ -45,26 +45,28 @@ function getOfferLastSeenAt(offer) {
 }
 
 function buildCacheRawFacts(rawFacts = {}) {
-  return {
-    snapshotCurrent: Boolean(rawFacts?.snapshotCurrent),
+  const compact = {
+    sourceType: rawFacts?.sourceType || '',
+    validityText: rawFacts?.validityText || '',
+    infoText: rawFacts?.infoText || '',
     discountPercentage: rawFacts?.discountPercentage ?? null,
     minimalAcceptance: rawFacts?.minimalAcceptance ?? null,
     minimumPurchaseQuantity: rawFacts?.minimumPurchaseQuantity ?? null,
     requiredQuantity: rawFacts?.requiredQuantity ?? null,
-    tags: Array.isArray(rawFacts?.tags) ? rawFacts.tags.slice(0, 8) : [],
-    loyaltyTags: Array.isArray(rawFacts?.loyaltyTags) ? rawFacts.loyaltyTags.slice(0, 8) : [],
+    snapshotCurrent: Boolean(rawFacts?.snapshotCurrent),
   };
+
+  return Object.fromEntries(
+    Object.entries(compact).filter(([, value]) => value !== '' && value !== null && value !== undefined && value !== false)
+  );
 }
 
 function isOfferActive(offer, now = new Date()) {
-  const snapshotCurrent = Boolean(offer?.rawFacts?.snapshotCurrent);
-  const validFrom = offer?.validFrom ? new Date(offer.validFrom) : null;
-  const validTo = offer?.validTo ? new Date(offer.validTo) : null;
+  if (typeof offer?.isActiveNow === 'boolean') {
+    return offer.isActiveNow;
+  }
 
-  const hasStarted = validFrom ? validFrom <= now : snapshotCurrent;
-  const hasNotEnded = validTo ? validTo >= now : snapshotCurrent;
-
-  return hasStarted && hasNotEnded;
+  return offer?.status === 'active';
 }
 
 function buildRetailerDocuments(offers, now) {
@@ -276,18 +278,41 @@ function buildOfferCacheDocuments(offers, now) {
 
     current.offers.push({
       id: String(offer._id),
+      offerKey: offer.offerKey || '',
+      dedupeKey: offer.dedupeKey || '',
       retailerKey,
       retailerName,
       title: offer.title,
+      titleNormalized: offer.titleNormalized || '',
       brand: offer.brand || '',
-      searchText: [offer.title, offer.brand, mainCategoryLabel, subcategoryLabel, retailerName].filter(Boolean).join(' '),
+      searchText: offer.searchText || [offer.title, offer.brand, mainCategoryLabel, subcategoryLabel, retailerName].filter(Boolean).join(' '),
       categoryPrimary: mainCategoryLabel,
       categorySecondary: subcategoryLabel || '',
+      categoryKey: offer.categoryKey || mainCategoryKey,
       quantityText: offer.quantityText || '',
       conditionsText: offer.conditionsText || '',
       customerProgramRequired: Boolean(offer.customerProgramRequired),
+      hasConditions: Boolean(offer.hasConditions),
+      isMultiBuy: Boolean(offer.isMultiBuy),
+      effectiveDiscountType: offer.effectiveDiscountType || 'unknown',
+      comparisonGroup: offer.comparisonGroup || '',
+      status: offer.status || 'unknown',
+      isActiveNow: Boolean(offer.isActiveNow),
+      isActiveToday: Boolean(offer.isActiveToday),
+      sortScoreDefault: Number(offer.sortScoreDefault || 0),
+      quality: {
+        comparisonSafe: Boolean(offer?.quality?.comparisonSafe),
+        parsingConfidence: Number(offer?.quality?.parsingConfidence || 0),
+        completenessScore: Number(offer?.quality?.completenessScore || 0),
+      },
       validFrom: offer.validFrom || null,
       validTo: offer.validTo || null,
+      packCount: offer.packCount ?? null,
+      unitValue: offer.unitValue ?? null,
+      unitType: offer.unitType || '',
+      totalComparableAmount: offer.totalComparableAmount ?? null,
+      comparableUnit: offer.comparableUnit || '',
+      packageType: offer.packageType || '',
       normalizedUnitPrice: offer.normalizedUnitPrice || {},
       priceCurrent: offer.priceCurrent || {},
       priceReference: offer.priceReference || {},
@@ -350,18 +375,37 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
       [
         'retailerKey',
         'retailerName',
+        'offerKey',
+        'dedupeKey',
         'title',
         'brand',
+        'titleNormalized',
+        'categoryKey',
         'categoryPrimary',
         'categorySecondary',
+        'comparisonGroup',
         'validFrom',
         'validTo',
+        'status',
+        'isActiveNow',
+        'isActiveToday',
         'quantityText',
+        'packCount',
+        'unitValue',
+        'unitType',
+        'totalComparableAmount',
+        'comparableUnit',
+        'packageType',
         'conditionsText',
         'customerProgramRequired',
+        'hasConditions',
+        'isMultiBuy',
+        'effectiveDiscountType',
+        'sortScoreDefault',
         'normalizedUnitPrice',
         'priceCurrent',
         'priceReference',
+        'quality',
         'imageUrl',
         'benefitType',
         'rawFacts',

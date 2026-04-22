@@ -10,11 +10,16 @@ function buildOfferCard(offer, bestUnitPrice) {
     retailerKey: offer.retailerKey,
     retailerName: offer.retailerName,
     title: offer.title,
+    titleNormalized: offer.titleNormalized || '',
     brand: offer.brand,
+    categoryKey: offer.categoryKey || '',
+    comparisonGroup: offer.comparisonGroup || '',
     categoryPrimary: offer.categoryPrimary,
     categorySecondary: offer.categorySecondary,
     quantityText: offer.quantityText,
     conditionsText: offer.conditionsText,
+    customerProgramRequired: Boolean(offer.customerProgramRequired),
+    effectiveDiscountType: offer.effectiveDiscountType || 'unknown',
     validTo: offer.validTo,
     normalizedUnitPrice: offer.normalizedUnitPrice,
     priceCurrent: offer.priceCurrent,
@@ -62,22 +67,11 @@ function finalizeGroups(groups = [], { minRetailers = 2, topN = 8 }) {
 
 function buildCurrentAvailabilityMatch(now) {
   return {
+    status: 'active',
+    isActiveNow: true,
     'quality.comparisonSafe': true,
+    comparisonGroup: { $ne: '' },
     'normalizedUnitPrice.amount': { $ne: null },
-    $and: [
-      {
-        $or: [
-          { validFrom: { $lte: now } },
-          { validFrom: null, 'rawFacts.snapshotCurrent': true },
-        ],
-      },
-      {
-        $or: [
-          { validTo: { $gte: now } },
-          { validTo: null, 'rawFacts.snapshotCurrent': true },
-        ],
-      },
-    ],
   };
 }
 
@@ -102,33 +96,13 @@ function buildNonEmptyFieldExpression(fieldPath) {
 }
 
 function buildExactGroupKeyExpression() {
-  return {
-    $cond: [
-      {
-        $and: [
-          { $gt: [{ $strLenCP: { $ifNull: ['$comparisonSignature', ''] } }, 0] },
-          { $gt: [{ $strLenCP: { $ifNull: ['$comparisonQuantityKey', ''] } }, 0] },
-          { $gt: [{ $strLenCP: { $ifNull: ['$normalizedUnitPrice.unit', ''] } }, 0] },
-        ],
-      },
-      {
-        $concat: [
-          '$comparisonSignature',
-          '::',
-          '$comparisonQuantityKey',
-          '::',
-          '$normalizedUnitPrice.unit',
-        ],
-      },
-      null,
-    ],
-  };
+  return buildNonEmptyFieldExpression('$comparisonGroup');
 }
 
 function buildCategoryBaseExpression() {
   return {
     $ifNull: [
-      buildNonEmptyFieldExpression('$comparisonCategoryKey'),
+      buildNonEmptyFieldExpression('$categoryKey'),
       {
         $ifNull: [
           buildNonEmptyFieldExpression('$categorySecondary'),
@@ -165,14 +139,21 @@ function buildComparisonGroupsPipeline({ keyExpression, labelExpression, topN })
         comparisonGroupKey: keyExpression,
         comparisonGroupLabel: labelExpression,
         comparisonDedupeKey: {
-          $concat: [
-            '$retailerKey',
-            ':',
-            '$title',
-            ':',
-            { $toString: '$normalizedUnitPrice.amount' },
-            ':',
-            buildDateStringExpression('$validTo'),
+          $ifNull: [
+            buildNonEmptyFieldExpression('$dedupeKey'),
+            {
+              $concat: [
+                '$retailerKey',
+                ':',
+                '$titleNormalized',
+                ':',
+                '$comparisonGroup',
+                ':',
+                { $toString: '$normalizedUnitPrice.amount' },
+                ':',
+                buildDateStringExpression('$validTo'),
+              ],
+            },
           ],
         },
       },
@@ -206,11 +187,16 @@ function buildComparisonGroupsPipeline({ keyExpression, labelExpression, topN })
             retailerKey: '$retailerKey',
             retailerName: '$retailerName',
             title: '$title',
+            titleNormalized: '$titleNormalized',
             brand: '$brand',
+            categoryKey: '$categoryKey',
+            comparisonGroup: '$comparisonGroup',
             categoryPrimary: '$categoryPrimary',
             categorySecondary: '$categorySecondary',
             quantityText: '$quantityText',
             conditionsText: '$conditionsText',
+            customerProgramRequired: '$customerProgramRequired',
+            effectiveDiscountType: '$effectiveDiscountType',
             validTo: '$validTo',
             normalizedUnitPrice: '$normalizedUnitPrice',
             priceCurrent: '$priceCurrent',
@@ -285,12 +271,22 @@ async function buildComparisonSnapshot() {
         retailerKey: 1,
         retailerName: 1,
         title: 1,
+        titleNormalized: 1,
         brand: 1,
         categoryPrimary: 1,
         categorySecondary: 1,
         comparisonSignature: 1,
         comparisonQuantityKey: 1,
         comparisonCategoryKey: 1,
+        comparisonGroup: 1,
+        categoryKey: 1,
+        comparableUnit: 1,
+        totalComparableAmount: 1,
+        customerProgramRequired: 1,
+        effectiveDiscountType: 1,
+        dedupeKey: 1,
+        status: 1,
+        isActiveNow: 1,
         quantityText: 1,
         conditionsText: 1,
         validTo: 1,
@@ -303,7 +299,12 @@ async function buildComparisonSnapshot() {
         comparableOfferCount: [{ $count: 'count' }],
         exactMatches: buildComparisonGroupsPipeline({
           keyExpression: buildExactGroupKeyExpression(),
-          labelExpression: '$title',
+          labelExpression: {
+            $ifNull: [
+              buildNonEmptyFieldExpression('$categorySecondary'),
+              '$title',
+            ],
+          },
           topN: 6,
         }),
         categoryBenchmarks: buildComparisonGroupsPipeline({

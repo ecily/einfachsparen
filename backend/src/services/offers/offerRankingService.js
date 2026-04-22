@@ -93,23 +93,9 @@ function clearRankingResponseCache() {
 }
 
 function buildCurrentAvailabilityMatch() {
-  const now = new Date();
-
   return {
-    $and: [
-      {
-        $or: [
-          { validFrom: { $lte: now } },
-          { validFrom: null, 'rawFacts.snapshotCurrent': true },
-        ],
-      },
-      {
-        $or: [
-          { validTo: { $gte: now } },
-          { validTo: null, 'rawFacts.snapshotCurrent': true },
-        ],
-      },
-    ],
+    status: 'active',
+    isActiveNow: true,
   };
 }
 
@@ -276,12 +262,15 @@ function applyUnitFilter(offers, unit) {
     return offers;
   }
 
-  return offers.filter((offer) => String(offer?.normalizedUnitPrice?.unit || '') === String(unit));
+  return offers.filter(
+    (offer) => String(offer?.comparableUnit || offer?.normalizedUnitPrice?.unit || '') === String(unit)
+  );
 }
 
 function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }) {
   const filters = {
     'quality.comparisonSafe': true,
+    comparisonGroup: { $ne: '' },
     'normalizedUnitPrice.amount': { $ne: null },
     ...buildCurrentAvailabilityMatch(),
   };
@@ -290,15 +279,9 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
   const selectedRetailers = normalizeStringList(retailers);
 
   if (selectedCategories.length > 0) {
-    const categoryConditions = selectedCategories.flatMap((category) => [
-      { categorySecondary: category },
-      { categoryPrimary: category },
-      { comparisonCategoryKey: category.toLowerCase().replace(/[^a-z0-9]+/g, '-') },
-    ]);
-
-    filters.$and.push({
-      $or: categoryConditions,
-    });
+    filters.categoryKey = {
+      $in: selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
+    };
   }
 
   if (selectedRetailers.length > 0) {
@@ -306,7 +289,7 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
   }
 
   if (unit && unit !== 'all') {
-    filters['normalizedUnitPrice.unit'] = unit;
+    filters.comparableUnit = unit;
   }
 
   if (normalizeBoolean(onlyWithoutProgram)) {
@@ -348,15 +331,30 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     retailerKey: offer.retailerKey,
     retailerName: offer.retailerName,
     title: offer.title,
+    titleNormalized: offer.titleNormalized || '',
     brand: offer.brand,
     categoryPrimary: offer.categoryPrimary,
     categorySecondary: offer.categorySecondary,
+    categoryKey: offer.categoryKey || '',
     displayCategory: selectDisplayCategory(offer),
     quantityText: offer.quantityText,
     conditionsText: offer.conditionsText,
     customerProgramRequired: offer.customerProgramRequired,
+    hasConditions: Boolean(offer.hasConditions),
+    isMultiBuy: Boolean(offer.isMultiBuy),
+    effectiveDiscountType: offer.effectiveDiscountType || 'unknown',
+    comparisonGroup: offer.comparisonGroup || '',
+    status: offer.status || 'unknown',
+    isActiveNow: Boolean(offer.isActiveNow),
+    isActiveToday: Boolean(offer.isActiveToday),
     validFrom: offer.validFrom,
     validTo: offer.validTo,
+    packCount: offer.packCount ?? null,
+    unitValue: offer.unitValue ?? null,
+    unitType: offer.unitType || '',
+    totalComparableAmount: offer.totalComparableAmount ?? null,
+    comparableUnit: offer.comparableUnit || '',
+    packageType: offer.packageType || '',
     normalizedUnitPrice: offer.normalizedUnitPrice,
     priceCurrent: offer.priceCurrent,
     priceReference: offer.priceReference,
@@ -366,8 +364,29 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     savingsAmount: savings.savingsAmount,
     savingsPercent: savings.savingsPercent,
     minimumPurchaseQuantity: savings.requiredQuantity,
+    minimumPurchaseQty: offer.minimumPurchaseQty ?? savings.requiredQuantity ?? 1,
+    quality: offer.quality || {},
+    sortScoreDefault: Number(offer.sortScoreDefault || 0),
     validityLabel: offer.validTo ? 'gueltig bis' : 'aktuell verfuegbar, Enddatum nicht erkannt',
   };
+}
+
+function buildConsumerScore(offer) {
+  let score = Number(offer?.sortScoreDefault || 0);
+
+  if (offer?.status === 'active' && offer?.isActiveNow) score += 1000;
+  if (offer?.quality?.comparisonSafe && offer?.comparisonGroup) score += 500;
+
+  const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
+  if (Number.isFinite(unitAmount) && unitAmount > 0) {
+    score += Math.max(0, 200 - Math.min(200, Math.round(unitAmount * 10)));
+  }
+
+  if (!offer?.isMultiBuy && (offer?.minimumPurchaseQuantity || 1) <= 1) score += 100;
+  if (!offer?.customerProgramRequired) score += 80;
+  if (!offer?.hasConditions) score += 60;
+
+  return score;
 }
 
 function buildRetailerDistribution(offers) {
@@ -405,11 +424,12 @@ function dedupeOffers(offers) {
   const unique = [];
 
   for (const offer of offers) {
-    const dedupeKey = [
+    const dedupeKey = offer.dedupeKey || offer.offerKey || [
       offer.retailerKey,
-      offer.title,
+      offer.categoryKey,
+      offer.titleNormalized || offer.title,
+      offer.comparisonGroup,
       offer.normalizedUnitPrice?.amount,
-      offer.normalizedUnitPrice?.unit,
       offer.validTo?.toISOString?.() || offer.validTo,
     ].join('::');
 
@@ -429,9 +449,10 @@ function dedupeByQuery(offers) {
   const unique = [];
 
   for (const offer of offers) {
-    const dedupeKey = [
+    const dedupeKey = offer.dedupeKey || offer.offerKey || [
       offer.retailerKey,
-      offer.title,
+      offer.titleNormalized || offer.title,
+      offer.comparisonGroup,
       offer.quantityText,
       offer.normalizedUnitPrice?.amount,
       offer.normalizedUnitPrice?.unit,
@@ -465,15 +486,11 @@ function buildGroupedRankings(offers) {
     .map(([unit, unitOffers]) => ({
       unit,
       offers: unitOffers.sort((left, right) => {
-        const leftSavings = left.savingsAmount ?? -1;
-        const rightSavings = right.savingsAmount ?? -1;
+        const leftScore = buildConsumerScore(left);
+        const rightScore = buildConsumerScore(right);
 
-      if (rightSavings !== leftSavings) {
-        return rightSavings - leftSavings;
-      }
-
-      if (left.customerProgramRequired !== right.customerProgramRequired) {
-        return Number(left.customerProgramRequired) - Number(right.customerProgramRequired);
+        if (rightScore !== leftScore) {
+          return rightScore - leftScore;
         }
 
         if (left.normalizedUnitPrice.amount !== right.normalizedUnitPrice.amount) {
@@ -484,11 +501,11 @@ function buildGroupedRankings(offers) {
       }),
     }))
     .sort((left, right) => {
-      const leftTopSavings = left.offers[0]?.savingsAmount ?? -1;
-      const rightTopSavings = right.offers[0]?.savingsAmount ?? -1;
+      const leftTopScore = left.offers[0] ? buildConsumerScore(left.offers[0]) : -1;
+      const rightTopScore = right.offers[0] ? buildConsumerScore(right.offers[0]) : -1;
 
-      if (rightTopSavings !== leftTopSavings) {
-        return rightTopSavings - leftTopSavings;
+      if (rightTopScore !== leftTopScore) {
+        return rightTopScore - leftTopScore;
       }
 
       return left.unit.localeCompare(right.unit, 'de');
@@ -548,10 +565,12 @@ function buildCacheMatch({ selectedRetailers = [], selectedCategories = [] }) {
   }
 
   if (selectedCategories.length > 0) {
-    match.$or = [
-      { mainCategoryLabel: { $in: selectedCategories } },
-      { subcategoryLabel: { $in: selectedCategories } },
-    ];
+    const categoryKeys = selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    match.offers = {
+      $elemMatch: {
+        categoryKey: { $in: categoryKeys },
+      },
+    };
   }
 
   return match;
@@ -728,15 +747,23 @@ async function buildOfferRanking({
       .lean(),
   ]);
 
-  const candidateOffers = offerCacheDocuments.flatMap((document) => document.offers || []);
+  const selectedCategoryKeys = new Set(
+    selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+  );
+  const candidateOffers = offerCacheDocuments
+    .flatMap((document) => document.offers || [])
+    .filter((offer) => selectedCategoryKeys.size === 0 || selectedCategoryKeys.has(String(offer.categoryKey || '')));
 
   const fullyFilteredOffers = dedupeOffers(
     applyQueryMatch(
       applyUnitFilter(
-        applyProgramEligibility(candidateOffers, {
-          programRetailers: selectedProgramRetailers,
-          onlyWithoutProgram: withoutProgram,
-        }),
+        applyProgramEligibility(
+          candidateOffers.filter((offer) => offer?.status === 'active' && offer?.isActiveNow),
+          {
+            programRetailers: selectedProgramRetailers,
+            onlyWithoutProgram: withoutProgram,
+          }
+        ),
         unit
       ),
       query
@@ -744,28 +771,22 @@ async function buildOfferRanking({
   );
   const offers = fullyFilteredOffers
     .sort((left, right) => {
-      const leftSavings =
-        left?.savingsAmount !== undefined && left?.savingsAmount !== null
-          ? Number(left.savingsAmount)
-          : (computeOfferSavings(left).savingsAmount ?? -1);
-      const rightSavings =
-        right?.savingsAmount !== undefined && right?.savingsAmount !== null
-          ? Number(right.savingsAmount)
-          : (computeOfferSavings(right).savingsAmount ?? -1);
+      const leftConsumerScore = buildConsumerScore(left);
+      const rightConsumerScore = buildConsumerScore(right);
 
-      if (rightSavings !== leftSavings) {
-        return rightSavings - leftSavings;
-      }
-
-      const rightEvidence = Number(right.evidenceCount || 0);
-      const leftEvidence = Number(left.evidenceCount || 0);
-
-      if (rightEvidence !== leftEvidence) {
-        return rightEvidence - leftEvidence;
+      if (rightConsumerScore !== leftConsumerScore) {
+        return rightConsumerScore - leftConsumerScore;
       }
 
       if (left.normalizedUnitPrice.amount !== right.normalizedUnitPrice.amount) {
         return left.normalizedUnitPrice.amount - right.normalizedUnitPrice.amount;
+      }
+
+      const leftSimple = Number(Boolean(left.customerProgramRequired || left.hasConditions || left.isMultiBuy));
+      const rightSimple = Number(Boolean(right.customerProgramRequired || right.hasConditions || right.isMultiBuy));
+
+      if (leftSimple !== rightSimple) {
+        return leftSimple - rightSimple;
       }
 
       return String(left.title).localeCompare(String(right.title), 'de');

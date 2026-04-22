@@ -24,5 +24,6 @@ const rawDocumentSchema = new mongoose.Schema(
 );
 
 rawDocumentSchema.index({ sourceId: 1, contentHash: 1 });
+rawDocumentSchema.index({ fetchedAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 14 });
 
 module.exports = mongoose.model('RawDocument', rawDocumentSchema);
