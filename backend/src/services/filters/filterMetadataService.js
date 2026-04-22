@@ -44,6 +44,18 @@ function getOfferLastSeenAt(offer) {
   return offer.updatedAt || offer.createdAt || offer.validTo || offer.validFrom || new Date();
 }
 
+function buildCacheRawFacts(rawFacts = {}) {
+  return {
+    snapshotCurrent: Boolean(rawFacts?.snapshotCurrent),
+    discountPercentage: rawFacts?.discountPercentage ?? null,
+    minimalAcceptance: rawFacts?.minimalAcceptance ?? null,
+    minimumPurchaseQuantity: rawFacts?.minimumPurchaseQuantity ?? null,
+    requiredQuantity: rawFacts?.requiredQuantity ?? null,
+    tags: Array.isArray(rawFacts?.tags) ? rawFacts.tags.slice(0, 8) : [],
+    loyaltyTags: Array.isArray(rawFacts?.loyaltyTags) ? rawFacts.loyaltyTags.slice(0, 8) : [],
+  };
+}
+
 function isOfferActive(offer, now = new Date()) {
   const snapshotCurrent = Boolean(offer?.rawFacts?.snapshotCurrent);
   const validFrom = offer?.validFrom ? new Date(offer.validFrom) : null;
@@ -268,6 +280,7 @@ function buildOfferCacheDocuments(offers, now) {
       retailerName,
       title: offer.title,
       brand: offer.brand || '',
+      searchText: [offer.title, offer.brand, mainCategoryLabel, subcategoryLabel, retailerName].filter(Boolean).join(' '),
       categoryPrimary: mainCategoryLabel,
       categorySecondary: subcategoryLabel || '',
       quantityText: offer.quantityText || '',
@@ -280,8 +293,8 @@ function buildOfferCacheDocuments(offers, now) {
       priceReference: offer.priceReference || {},
       imageUrl: offer.imageUrl || '',
       benefitType: offer.benefitType || 'unknown',
-      rawFacts: offer.rawFacts || {},
-      supportingSources: Array.isArray(offer.supportingSources) ? offer.supportingSources : [],
+      rawFacts: buildCacheRawFacts(offer.rawFacts),
+      evidenceCount: Array.isArray(offer.supportingSources) ? offer.supportingSources.length : 0,
       savingsAmount: savings.savingsAmount,
       savingsPercent: savings.savingsPercent,
       minimumPurchaseQuantity: savings.requiredQuantity,

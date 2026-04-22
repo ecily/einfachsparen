@@ -24,7 +24,7 @@ const OFFER_RANKING_FIELDS = [
   'supportingSources',
 ].join(' ');
 
-const RANKING_CACHE_TTL_MS = 60 * 1000;
+const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const rankingResponseCache = new Map();
 
 function normalizeStringList(value) {
@@ -86,6 +86,10 @@ function setCachedRankingResponse(cacheKey, value) {
     createdAt: Date.now(),
     value,
   });
+}
+
+function clearRankingResponseCache() {
+  rankingResponseCache.clear();
 }
 
 function buildCurrentAvailabilityMatch() {
@@ -177,6 +181,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const primaryWords = buildWordString(offer.categoryPrimary);
   const secondaryWords = buildWordString(offer.categorySecondary);
   const retailerWords = buildWordString(offer.retailerName);
+  const aggregateWords = buildWordString(offer.searchText);
   let score = 0;
 
   if (hasPhrase(titleWords, queryTokens)) {
@@ -197,6 +202,10 @@ function scoreOfferAgainstQuery(offer, query) {
 
   if (hasPhrase(retailerWords, queryTokens)) {
     score += 25;
+  }
+
+  if (hasPhrase(aggregateWords, queryTokens)) {
+    score += 15;
   }
 
   for (const token of queryTokens) {
@@ -308,7 +317,24 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
 }
 
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
-  const savings = computeOfferSavings(offer);
+  const fallbackSavings =
+    offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
+      ? null
+      : computeOfferSavings(offer);
+  const savings = {
+    savingsAmount:
+      offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
+        ? offer.savingsAmount
+        : fallbackSavings?.savingsAmount,
+    savingsPercent:
+      offer?.savingsPercent !== undefined && offer?.savingsPercent !== null
+        ? offer.savingsPercent
+        : fallbackSavings?.savingsPercent,
+    requiredQuantity:
+      offer?.minimumPurchaseQuantity !== undefined && offer?.minimumPurchaseQuantity !== null
+        ? offer.minimumPurchaseQuantity
+        : fallbackSavings?.requiredQuantity,
+  };
   const normalizedAmount = Number(offer?.normalizedUnitPrice?.amount ?? 0);
   const priceGapPercent = bestUnitPrice
     ? Number((((normalizedAmount - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
@@ -334,6 +360,7 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     normalizedUnitPrice: offer.normalizedUnitPrice,
     priceCurrent: offer.priceCurrent,
     priceReference: offer.priceReference,
+    imageUrl: offer.imageUrl || '',
     priceGapPercent,
     relativeScore: Number((spread * 100).toFixed(2)),
     savingsAmount: savings.savingsAmount,
@@ -717,15 +744,21 @@ async function buildOfferRanking({
   );
   const offers = fullyFilteredOffers
     .sort((left, right) => {
-      const leftSavings = computeOfferSavings(left).savingsAmount ?? -1;
-      const rightSavings = computeOfferSavings(right).savingsAmount ?? -1;
+      const leftSavings =
+        left?.savingsAmount !== undefined && left?.savingsAmount !== null
+          ? Number(left.savingsAmount)
+          : (computeOfferSavings(left).savingsAmount ?? -1);
+      const rightSavings =
+        right?.savingsAmount !== undefined && right?.savingsAmount !== null
+          ? Number(right.savingsAmount)
+          : (computeOfferSavings(right).savingsAmount ?? -1);
 
       if (rightSavings !== leftSavings) {
         return rightSavings - leftSavings;
       }
 
-      const leftEvidence = Array.isArray(left.supportingSources) ? left.supportingSources.length : 0;
-      const rightEvidence = Array.isArray(right.supportingSources) ? right.supportingSources.length : 0;
+      const rightEvidence = Number(right.evidenceCount || 0);
+      const leftEvidence = Number(left.evidenceCount || 0);
 
       if (rightEvidence !== leftEvidence) {
         return rightEvidence - leftEvidence;
@@ -786,4 +819,5 @@ async function buildOfferRanking({
 module.exports = {
   buildOfferRanking,
   buildBasketSuggestions,
+  clearRankingResponseCache,
 };

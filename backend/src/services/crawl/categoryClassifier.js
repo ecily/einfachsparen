@@ -71,8 +71,8 @@ const CATEGORY_TAXONOMY = [
     patterns: [/(garten|pflanze|blume)/],
     subcategories: [
       { label: 'Pflanzen & Blumen', patterns: [/(pflanze|blume|orchidee|rose|topfpflanze)/] },
-      { label: 'Erde & Duenger', patterns: [/(erde|kompost|dunger|duenger)/] },
-      { label: 'Gartenzubehoer', patterns: [/(gartenzubehor|gartenzubehoer|schlauch|topf|saatsamen|samen)/] },
+      { label: 'Erde & Duenger', patterns: [/(erde|kompost|dunger|duenger|hochbeeterde|blumenerde)/] },
+      { label: 'Gartenzubehoer', patterns: [/(gartenzubehor|gartenzubehoer|schlauch|topf|saatsamen|samen|hochbeet|beet|gartenhaus)/] },
     ],
   },
   {
@@ -112,6 +112,34 @@ const CATEGORY_TAXONOMY = [
       { label: 'Babybedarf', patterns: [/(baby|schnuller|strampler|babyflasche)/] },
       { label: 'Kinderpflege', patterns: [/(kinderpflege|babyshampoo|babycreme|windel)/] },
     ],
+  },
+];
+
+const HARD_CATEGORY_OVERRIDES = [
+  {
+    patterns: [/\b(gefrierschrank|kuehlschrank|kühlschrank|kuhlschrank|kuehltruhe|kühltruhe|no frost)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Kuechengeraete',
+  },
+  {
+    patterns: [/\b(hochbeet|hochbeeterde|blumenerde|pflanzerde|komposterde|erde|duenger|dunger)\b/],
+    main: 'Garten / Pflanzen',
+    sub: 'Erde & Duenger',
+  },
+  {
+    patterns: [/\b(gartenhaus|rasenmaeher|rasenmäher|heckenschere|schlauchwagen|bewaesserung|bewässerung|pavillon)\b/],
+    main: 'Garten / Pflanzen',
+    sub: 'Gartenzubehoer',
+  },
+  {
+    patterns: [/\b(akku schrauber|akkuschrauber|bohrer|bit set|bit-set|werkzeugkoffer|schraubendreher|stichsaege|stichsäge)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Werkzeug & Akkus',
+  },
+  {
+    patterns: [/\b(tv|smart tv|fernseher|oled|q led|qled|monitor|lautsprecher|soundbar)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Unterhaltungselektronik',
   },
 ];
 
@@ -181,7 +209,29 @@ function findBestSubcategoryMatch({ texts = [], mainCategory = '' }) {
   return bestMatch;
 }
 
+function detectHardCategoryOverride({ title = '', contextText = '', sourceCategory = '', productGroups = [] }) {
+  const haystack = normalizeTitleForMatch(getTexts({ title, contextText, sourceCategory, productGroups }).join(' '));
+
+  for (const rule of HARD_CATEGORY_OVERRIDES) {
+    if (rule.patterns.some((pattern) => pattern.test(haystack))) {
+      return {
+        primaryCategory: rule.main,
+        secondaryCategory: rule.sub,
+        confidence: 0.98,
+      };
+    }
+  }
+
+  return null;
+}
+
 function classifyOfferCategory({ title = '', contextText = '', sourceCategory = '', productGroups = [] }) {
+  const hardOverride = detectHardCategoryOverride({ title, contextText, sourceCategory, productGroups });
+
+  if (hardOverride) {
+    return hardOverride;
+  }
+
   const texts = getTexts({ title, contextText, sourceCategory, productGroups });
   let bestMain = null;
   let bestMainScore = 0;

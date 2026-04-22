@@ -18,5 +18,7 @@ const retailerCategoryOfferCacheSchema = new mongoose.Schema(
 
 retailerCategoryOfferCacheSchema.index({ retailerKey: 1, mainCategoryKey: 1, subcategoryKey: 1 }, { unique: true });
 retailerCategoryOfferCacheSchema.index({ retailerKey: 1, mainCategoryKey: 1 });
+retailerCategoryOfferCacheSchema.index({ retailerKey: 1, mainCategoryLabel: 1 });
+retailerCategoryOfferCacheSchema.index({ retailerKey: 1, subcategoryLabel: 1 });
 
 module.exports = mongoose.model('RetailerCategoryOfferCache', retailerCategoryOfferCacheSchema);

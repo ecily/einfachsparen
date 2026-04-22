@@ -4,6 +4,7 @@ const { crawlOfficialSource } = require('./officialSourceCrawler');
 const { crawlMarktguruSource } = require('./marketguruCrawler');
 const { dedupeOffersAcrossSources } = require('./catalogDeduper');
 const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
+const { clearRankingResponseCache } = require('../offers/offerRankingService');
 const logger = require('../../lib/logger');
 
 async function crawlSource({ source, region, trigger = 'manual' }) {
@@ -71,6 +72,7 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
       skipped: false,
       ...syncResult,
     };
+    clearRankingResponseCache();
   } catch (error) {
     filterMetadata = {
       ok: false,
