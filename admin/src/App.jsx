@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import './index.css'
 import {
-  fetchCurrentUserPreferences,
   fetchDashboardSnapshot,
   fetchEssence,
   fetchHealth,
   getOfferImageUrl,
-  saveCurrentUserPreferences,
   saveFeedback,
 } from './api'
 
@@ -85,13 +83,14 @@ async function fetchFilterRetailers() {
       retailerName: item.retailerName || item.name || item.retailerKey || `Supermarkt ${index + 1}`,
       offerCount: Number(item.offerCount || 0),
       activeOfferCount: Number(item.activeOfferCount || item.offerCount || 0),
+      totalOffers: Number(item.totalOffers || item.offerCount || 0),
+      activeOffers: Number(item.activeOffers || item.activeOfferCount || item.offerCount || 0),
       isActive: item.isActive !== false,
       sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index,
     }))
     .sort((left, right) => {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
-      if (left.isActive !== right.isActive) return Number(right.isActive) - Number(left.isActive)
-      return right.activeOfferCount - left.activeOfferCount || left.retailerName.localeCompare(right.retailerName, 'de')
+      return left.retailerName.localeCompare(right.retailerName, 'de')
     })
 }
 
@@ -128,12 +127,57 @@ function normalizeRetailerKey(value) {
     .replace(/^-+|-+$/g, '')
 }
 
-function buildRetailerSelectionKey(retailerKeys = []) {
-  return [...new Set((retailerKeys || []).filter(Boolean))].sort().join('|')
-}
 
 function getOfferCategoryLabel(offer) {
   return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
+}
+
+function isOfferDirectlyComparable(offer) {
+  return Boolean(offer?.quality?.comparisonSafe && offer?.comparisonGroup && offer?.normalizedUnitPrice?.amount)
+}
+
+function getOfferKindLabel(offer) {
+  return isOfferDirectlyComparable(offer) ? 'Direkt vergleichbar' : 'Aehnliches Angebot'
+}
+
+function getOfferStatusLabel(offer) {
+  if (offer?.status === 'active' && offer?.isActiveNow) return 'Aktuell gueltig'
+  if (offer?.status === 'upcoming') return 'Bald gueltig'
+  if (offer?.status === 'expired') return 'Nicht mehr gueltig'
+  if (offer?.isActiveToday) return 'Heute relevant'
+  return 'Status unklar'
+}
+
+function formatCurrencyAmount(amount, currency = 'EUR') {
+  const numericAmount = Number(amount)
+
+  if (!Number.isFinite(numericAmount)) {
+    return 'Preis nicht erkannt'
+  }
+
+  return `${numericAmount.toFixed(2)} ${currency}`
+}
+
+function formatUnitPrice(normalizedUnitPrice) {
+  const amount = Number(normalizedUnitPrice?.amount)
+  const unit = normalizedUnitPrice?.unit
+
+  if (!Number.isFinite(amount) || !unit) {
+    return 'Einheitspreis nicht sicher'
+  }
+
+  return `${amount.toFixed(2)} / ${unit}`
+}
+
+function buildOfferBadges(offer) {
+  const badges = [getOfferKindLabel(offer), getOfferStatusLabel(offer)]
+
+  if (offer?.customerProgramRequired) badges.push('Mit Kundenkarte/App')
+  if (offer?.isMultiBuy) badges.push('Mehrkauf-Angebot')
+  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge noetig')
+  if (offer?.hasConditions && offer?.conditionsText) badges.push('Bedingungen beachten')
+
+  return badges
 }
 
 function formatValidityLabel(offer) {
@@ -192,6 +236,25 @@ function flattenRankingOffers(ranking) {
   }
 
   return offers
+}
+
+function splitRankingOffers(offers = []) {
+  const bestComparableOffers = []
+  const similarOffers = []
+
+  for (const offer of offers || []) {
+    if (isOfferDirectlyComparable(offer)) {
+      bestComparableOffers.push(offer)
+      continue
+    }
+
+    similarOffers.push(offer)
+  }
+
+  return {
+    bestComparableOffers,
+    similarOffers,
+  }
 }
 
 function normalizeCategoryDocuments(categories = []) {
@@ -341,6 +404,40 @@ function filterAndSortOffers(offers, filters, retailers, categories) {
   })
 }
 
+function filterVisibleOffers(offers, filters, retailers, categories) {
+  if (!filters.selectedRetailers.length) return []
+
+  const selectedRetailers = new Set(filters.selectedRetailers)
+  const categoryGroups = categories || []
+  const hasCategorySelection = filters.selectedCategoryTokens.length > 0
+
+  return (offers || []).filter((offer) => {
+    const retailerKey = getOfferRetailerKey(offer, retailers)
+    const mainCategoryKey = normalizeRetailerKey(offer?.categoryPrimary || '')
+    const subCategoryKey = normalizeRetailerKey(getOfferCategoryLabel(offer))
+
+    if (!selectedRetailers.has(retailerKey)) return false
+
+    if (!hasCategorySelection) {
+      return true
+    }
+
+    const matchingGroup = categoryGroups.find((group) => group.mainCategoryKey === mainCategoryKey)
+
+    if (!matchingGroup) {
+      return false
+    }
+
+    const selectionState = getGroupSelectionState(matchingGroup, filters.selectedCategoryTokens)
+
+    if (selectionState.selectedSubcategoryKeys.length > 0) {
+      return selectionState.selectedSubcategoryKeys.some((subcategoryKey) => subcategoryKey === subCategoryKey)
+    }
+
+    return selectionState.mainSelected
+  })
+}
+
 function HeroLoaderModal({ open, label }) {
   if (!open) return null
 
@@ -375,7 +472,7 @@ function HeroLoaderModal({ open, label }) {
       >
         <div className="panel__header" style={{ alignItems: 'center' }}>
           <h2>Einen Moment, wir laden gerade ...</h2>
-          <p>{label || 'kaufklug.at laedt Supermaerkte, Kategorien und deine gespeicherten Einstellungen.'}</p>
+          <p>{label || 'kaufklug.at laedt Supermaerkte und Kategorien.'}</p>
         </div>
 
         <div
@@ -394,97 +491,6 @@ function HeroLoaderModal({ open, label }) {
   )
 }
 
-function AppPromoModal({ open, onClose }) {
-  if (!open) return null
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="app-promo-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 3200,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(8, 12, 20, 0.76)',
-        backdropFilter: 'blur(10px)',
-        padding: '1rem',
-      }}
-    >
-      <div
-        className="panel"
-        style={{
-          width: 'min(96vw, 560px)',
-          boxShadow: '0 28px 80px rgba(0,0,0,0.35)',
-          borderRadius: '24px',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gap: '1rem',
-            padding: '1.25rem 1.25rem 1.35rem',
-          }}
-        >
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            <p className="eyebrow" style={{ margin: 0 }}>kaufklug.at APP</p>
-            <h2 id="app-promo-title" style={{ margin: 0 }}>kaufklug.at ist besser als APP.</h2>
-            <p style={{ margin: 0, opacity: 0.88 }}>
-              hol dir die APP aufs Handy und spare von ueberall.
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) 220px',
-              gap: '1rem',
-              alignItems: 'center',
-            }}
-          >
-            <div style={{ display: 'grid', gap: '0.45rem' }}>
-              <p style={{ margin: 0, opacity: 0.84 }}>
-                Bald kannst du hier den QR Code scannen und die App direkt herunterladen.
-              </p>
-              <p style={{ margin: 0, opacity: 0.74 }}>
-                Mit der App wird kaufklug.at noch schneller, direkter und alltagstauglicher.
-              </p>
-            </div>
-
-            <div
-              aria-label="QR Code Platzhalter"
-              style={{
-                width: '100%',
-                aspectRatio: '1 / 1',
-                borderRadius: '20px',
-                border: '1px dashed rgba(255,255,255,0.24)',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025))',
-                display: 'grid',
-                placeItems: 'center',
-                textAlign: 'center',
-                padding: '1rem',
-              }}
-            >
-              <div style={{ display: 'grid', gap: '0.35rem' }}>
-                <strong>QR Code</strong>
-                <span style={{ opacity: 0.72 }}>Platzhalter fuer spaeteren Download</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button type="button" className="ghost-button" onClick={onClose}>
-              Vielleicht spaeter
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function SectionCard({ children, style = {} }) {
   return (
@@ -579,9 +585,9 @@ function RetailerSelectorBlock({ retailers, selectedRetailers, onToggleRetailer,
       <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div style={{ display: 'grid', gap: '0.2rem' }}>
           <p className="eyebrow" style={{ margin: 0 }}>1. Supermaerkte waehlen</p>
-          <h2 style={{ margin: 0 }}>Welche Supermaerkte interessieren dich?</h2>
+          <h2 style={{ margin: 0 }}>Welche Haendler moechtest du beruecksichtigen?</h2>
           <p style={{ margin: 0, opacity: 0.82 }}>
-            Du kannst einen oder mehrere Supermaerkte auswaehlen und spaeter jederzeit wieder aendern.
+            Alle gepflegten Haendler bleiben immer sichtbar. Die Zahl daneben ist nur eine kurze Orientierung.
           </p>
         </div>
 
@@ -596,7 +602,10 @@ function RetailerSelectorBlock({ retailers, selectedRetailers, onToggleRetailer,
                 className={`chip ${selectedRetailers.includes(retailer.retailerKey) ? 'chip--active' : ''}`}
                 onClick={() => onToggleRetailer(retailer.retailerKey)}
               >
-                {retailer.retailerName} {retailer.activeOfferCount ? `(${retailer.activeOfferCount})` : ''}
+                <span>{retailer.retailerName}</span>{' '}
+                <span className="chip__meta">
+                  {retailer.activeOffers > 0 ? `(${retailer.activeOffers} aktuell)` : '(aktuell keine Treffer)'}
+                </span>
               </button>
             ))}
           </div>
@@ -621,9 +630,9 @@ function CategorySelectorBlock({
       <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div style={{ display: 'grid', gap: '0.2rem' }}>
           <p className="eyebrow" style={{ margin: 0 }}>2. Kategorien waehlen</p>
-          <h2 style={{ margin: 0 }}>Welche Kategorien interessieren dich?</h2>
+          <h2 style={{ margin: 0 }}>Was moechtest du heute guenstiger einkaufen?</h2>
           <p style={{ margin: 0, opacity: 0.82 }}>
-            Waehle Hauptkategorien. Wenn du genauer filtern willst, klappe sie auf und markiere passende Unterkategorien.
+            Waehle zuerst grobe Bereiche. Wenn du genauer suchen willst, oeffne die Unterkategorien.
           </p>
         </div>
 
@@ -728,7 +737,7 @@ function ActionBlock({
       <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div style={{ display: 'grid', gap: '0.2rem' }}>
           <p className="eyebrow" style={{ margin: 0 }}>3. Suche starten</p>
-          <h2 style={{ margin: 0 }}>Jetzt passende Angebote laden</h2>
+          <h2 style={{ margin: 0 }}>Jetzt Angebote laden</h2>
           <p style={{ margin: 0, opacity: 0.82 }}>
             Mit Klick auf „Los“ werden die Angebote nach deiner Auswahl geladen. Mit „Reset“ loeschst du alle Filter und startest neu.
           </p>
@@ -786,11 +795,11 @@ function ActionBlock({
             disabled={!canSearch || searching}
             style={!canSearch || searching ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
-            {searching ? 'Wir suchen gerade ...' : 'Los'}
+            {searching ? 'Wir suchen gerade ...' : 'Angebote zeigen'}
           </button>
 
           <button type="button" className="ghost-button" onClick={onReset}>
-            Reset
+            Auswahl zuruecksetzen
           </button>
         </div>
       </div>
@@ -903,13 +912,180 @@ function ResultsBlock({ rankingLoading, hasAppliedRetailerScope, visibleOfferCou
   )
 }
 
+function OfferCardConsumer({ offer, highlightLabel = '' }) {
+  const badges = buildOfferBadges(offer)
+  const directlyComparable = isOfferDirectlyComparable(offer)
+  const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1)
+
+  return (
+    <article className={`user-card ${directlyComparable ? 'user-card--best' : ''}`}>
+      <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
+
+      <div className="user-card__content">
+        <div className="user-card__top">
+          <div>
+            <div className="user-card__eyebrow">
+              {highlightLabel ? <span>{highlightLabel}</span> : null}
+              <span>{offer.retailerName}</span>
+              <span>{getOfferCategoryLabel(offer)}</span>
+            </div>
+            <h3>{offer.title}</h3>
+          </div>
+
+          <div className="user-card__price">
+            <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
+            <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span>
+          </div>
+        </div>
+
+        <div className="chip-grid">
+          {badges.map((badge) => (
+            <span key={`${offer.id}-${badge}`} className="chip chip--static chip--subtle">
+              {badge}
+            </span>
+          ))}
+        </div>
+
+        <div className="user-card__facts">
+          <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
+          <span>Menge: {offer.quantityText || 'nicht sicher erkannt'}</span>
+        </div>
+
+        <div className="user-card__highlights">
+          <div className={`highlight-pill ${directlyComparable ? 'highlight-pill--price' : ''}`}>
+            <span>{directlyComparable ? 'Bester sicherer Preis' : 'Einordnung'}</span>
+            <strong>{directlyComparable ? formatUnitPrice(offer?.normalizedUnitPrice) : 'Nicht 1:1 vergleichbar'}</strong>
+          </div>
+
+          <div className="highlight-pill">
+            <span>Bedingungen</span>
+            <strong>
+              {offer?.customerProgramRequired
+                ? 'Mit Kundenkarte/App'
+                : offer?.isMultiBuy
+                  ? 'Mehrkauf-Angebot'
+                  : minimumPurchaseQty > 1
+                    ? `Mindestens ${minimumPurchaseQty} noetig`
+                    : offer?.hasConditions
+                      ? 'Bedingungen beachten'
+                      : 'Einfaches Angebot'}
+            </strong>
+          </div>
+
+          <div className="highlight-pill">
+            <span>Preis heute</span>
+            <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
+          </div>
+        </div>
+
+        {offer?.conditionsText ? <p className="user-card__condition">{offer.conditionsText}</p> : null}
+      </div>
+    </article>
+  )
+}
+
+function ResultsSection({ title, subtitle, offers, highlightPrefix }) {
+  if (!offers.length) return null
+
+  return (
+    <div style={{ display: 'grid', gap: '0.85rem' }}>
+      <div className="panel__header" style={{ marginBottom: 0 }}>
+        <h3 style={{ margin: 0 }}>{title}</h3>
+        <p>{subtitle}</p>
+      </div>
+
+      <div className="user-results" style={{ display: 'grid', gap: '0.85rem' }}>
+        {offers.map((offer, index) => (
+          <OfferCardConsumer
+            key={offer.id}
+            offer={offer}
+            highlightLabel={`${highlightPrefix} ${index + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ResultsBlockConsumer({ rankingLoading, hasAppliedRetailerScope, safeOffers, similarOffers }) {
+  const visibleOfferCount = safeOffers.length + similarOffers.length
+
+  return (
+    <SectionCard>
+      <div style={{ display: 'grid', gap: '1rem', padding: '1.1rem 1.1rem 1.15rem' }}>
+        <div className="panel__header" style={{ marginBottom: 0 }}>
+          <h2>Ergebnisse</h2>
+          <p>Direkt vergleichbare Angebote sind klar von aehnlichen Treffern getrennt.</p>
+        </div>
+
+        {!hasAppliedRetailerScope ? (
+          <p className="status" style={{ marginBottom: 0 }}>
+            Noch keine Suche gestartet. Waehle Haendler und Kategorien und lade dann deine Angebote.
+          </p>
+        ) : rankingLoading ? (
+          <div style={{ display: 'grid', gap: '0.8rem' }}>
+            <p className="status" style={{ marginBottom: 0 }}>Moment, wir suchen gerade passende Angebote fuer dich ...</p>
+            <div
+              style={{
+                display: 'grid',
+                gap: '0.75rem',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              }}
+            >
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  style={{
+                    minHeight: '140px',
+                    borderRadius: '18px',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : visibleOfferCount === 0 ? (
+          <div style={{ display: 'grid', gap: '0.55rem' }}>
+            <p className="status" style={{ marginBottom: 0 }}>
+              Aktuell wurden keine passenden Angebote gefunden.
+            </p>
+            <p style={{ margin: 0, opacity: 0.82 }}>
+              Probiere andere Haendler, erweitere Kategorien oder nimm Unterkategorien wieder heraus.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p style={{ margin: 0, opacity: 0.82 }}>
+              {visibleOfferCount} Angebote sichtbar. {safeOffers.length} davon sind direkt vergleichbar.
+            </p>
+
+            <ResultsSection
+              title="Beste sichere Angebote"
+              subtitle="Nur hier behandeln wir Preise als echten Vergleich."
+              offers={safeOffers}
+              highlightPrefix="Sicherer Treffer"
+            />
+
+            <ResultsSection
+              title="Aehnliche interessante Angebote"
+              subtitle="Relevante Treffer fuer deinen Einkauf, aber nicht als exakter Bestpreis."
+              offers={similarOffers}
+              highlightPrefix="Aehnliches Angebot"
+            />
+          </>
+        )}
+      </div>
+    </SectionCard>
+  )
+}
+
 function SearchPage({
   retailers,
   categories,
   filtersLoading,
   ranking,
   rankingLoading,
-  preferencesLoading,
   draftRetailers,
   draftCategoryLabels,
   appliedRetailers,
@@ -923,13 +1099,12 @@ function SearchPage({
   onResetAll,
 }) {
   const [expandedMainKeys, setExpandedMainKeys] = useState([])
-  const isInitialBusy = preferencesLoading || filtersLoading
+  const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
 
   const allOffers = useMemo(() => flattenRankingOffers(ranking), [ranking])
-
-  const resultOffers = useMemo(() => {
-    return filterAndSortOffers(
+  const visibleOffers = useMemo(() => {
+    return filterVisibleOffers(
       allOffers,
       {
         selectedRetailers: appliedRetailers,
@@ -939,6 +1114,7 @@ function SearchPage({
       categories || []
     )
   }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, categories])
+  const { bestComparableOffers, similarOffers } = useMemo(() => splitRankingOffers(visibleOffers), [visibleOffers])
 
   function handleToggleExpanded(mainCategoryKey) {
     setExpandedMainKeys((current) =>
@@ -952,7 +1128,7 @@ function SearchPage({
     <>
       <HeroLoaderModal
         open={isInitialBusy}
-        label="kaufklug.at laedt Supermaerkte, Kategorien und deine gespeicherten Einstellungen."
+        label="kaufklug.at laedt Supermaerkte und Kategorien."
       />
 
       <HeroBlock />
@@ -993,11 +1169,11 @@ function SearchPage({
         searching={rankingLoading}
       />
 
-      <ResultsBlock
+      <ResultsBlockConsumer
         rankingLoading={rankingLoading}
         hasAppliedRetailerScope={hasAppliedRetailerScope}
-        visibleOfferCount={resultOffers.length}
-        offers={resultOffers}
+        safeOffers={bestComparableOffers}
+        similarOffers={similarOffers}
       />
     </>
   )
@@ -1103,32 +1279,13 @@ function App() {
   const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
   const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
   const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState([])
-  const [preferencesLoading, setPreferencesLoading] = useState(true)
-  const [showAppPromoModal, setShowAppPromoModal] = useState(true)
-  const categoryCacheRef = useRef(new Map())
-  const rankingCacheRef = useRef(new Map())
+  const appliedCategoryQueryLabels = useMemo(
+    () => buildSelectedCategoryQueryLabels(appliedSelectedCategoryLabels, categories),
+    [appliedSelectedCategoryLabels, categories]
+  )
 
   useEffect(() => {
     let active = true
-
-    async function loadPreferences() {
-      try {
-        setPreferencesLoading(true)
-        const preferenceResult = await fetchCurrentUserPreferences()
-
-        if (!active) return
-
-        const prefRetailers = preferenceResult.selectedRetailers || []
-
-        setDraftSelectedRetailers(prefRetailers)
-        setAppliedSelectedRetailers(prefRetailers)
-      } catch (preferenceError) {
-        if (!active) return
-        setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht geladen werden.')
-      } finally {
-        if (active) setPreferencesLoading(false)
-      }
-    }
 
     async function loadFilterMetadata() {
       try {
@@ -1138,17 +1295,21 @@ function App() {
         if (!active) return
 
         setRetailers(retailerResult)
+        const defaultRetailers = retailerResult.map((item) => item.retailerKey).filter(Boolean)
+        setDraftSelectedRetailers(defaultRetailers)
+        setAppliedSelectedRetailers(defaultRetailers)
         setError('')
       } catch (filterError) {
         if (!active) return
         setRetailers([])
+        setDraftSelectedRetailers([])
+        setAppliedSelectedRetailers([])
         setError(filterError.message || 'Filterdaten konnten nicht geladen werden.')
       } finally {
         if (active) setFiltersLoading(false)
       }
     }
 
-    loadPreferences()
     loadFilterMetadata()
 
     return () => {
@@ -1200,25 +1361,12 @@ function App() {
 
     async function loadScopedCategories() {
       try {
-        const cacheKey = buildRetailerSelectionKey(draftSelectedRetailers)
-        const cachedCategories = categoryCacheRef.current.get(cacheKey)
-
-        if (cachedCategories) {
-          if (!active) return
-          setCategories(cachedCategories)
-          setDraftSelectedCategoryLabels((current) => pruneSelectionTokens(current, cachedCategories))
-          setAppliedSelectedCategoryLabels((current) => pruneSelectionTokens(current, cachedCategories))
-          setError('')
-          return
-        }
-
         setFiltersLoading(true)
         const categoryResult = await fetchFilterCategories(draftSelectedRetailers)
 
         if (!active) return
 
         const nextCategories = normalizeCategoryDocuments(categoryResult)
-        categoryCacheRef.current.set(cacheKey, nextCategories)
         setCategories(nextCategories)
         setDraftSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
         setAppliedSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
@@ -1250,21 +1398,10 @@ function App() {
       }
 
       try {
-        const cacheKey = buildRetailerSelectionKey(appliedSelectedRetailers)
-        const cachedRanking = rankingCacheRef.current.get(cacheKey)
-
-        if (cachedRanking) {
-          if (!active) return
-          setRanking(cachedRanking)
-          setRankingLoading(false)
-          setError('')
-          return
-        }
-
         setRankingLoading(true)
 
         const rankingResult = await fetchOfferRankingDirect({
-          categories: '',
+          categories: appliedCategoryQueryLabels.join(','),
           retailers: appliedSelectedRetailers.join(','),
           programRetailers: '',
           unit: 'all',
@@ -1274,7 +1411,6 @@ function App() {
 
         if (!active) return
 
-        rankingCacheRef.current.set(cacheKey, rankingResult)
         setRanking(rankingResult)
         setError('')
       } catch (rankingError) {
@@ -1291,7 +1427,7 @@ function App() {
     return () => {
       active = false
     }
-  }, [appliedSelectedRetailers])
+  }, [appliedSelectedRetailers, appliedCategoryQueryLabels])
 
   async function reloadAll() {
     const [healthResult, snapshotResult, essenceResult] = await Promise.all([
@@ -1305,16 +1441,6 @@ function App() {
     setEssence(essenceResult)
   }
 
-  async function persistUserPreferences(nextRetailers) {
-    try {
-      await saveCurrentUserPreferences({
-        selectedRetailers: nextRetailers,
-      })
-      setError('')
-    } catch (preferenceError) {
-      setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht gespeichert werden.')
-    }
-  }
 
   function handleToggleDraftRetailer(retailerKey) {
     setDraftSelectedRetailers((current) => {
@@ -1322,7 +1448,6 @@ function App() {
         ? current.filter((item) => item !== retailerKey)
         : [...current, retailerKey]
 
-      persistUserPreferences(nextRetailers)
       return nextRetailers
     })
   }
@@ -1364,12 +1489,12 @@ function App() {
   }
 
   function handleResetAll() {
-    setDraftSelectedRetailers([])
+    const defaultRetailers = retailers.map((item) => item.retailerKey).filter(Boolean)
+    setDraftSelectedRetailers(defaultRetailers)
     setDraftSelectedCategoryLabels([])
-    setAppliedSelectedRetailers([])
+    setAppliedSelectedRetailers(defaultRetailers)
     setAppliedSelectedCategoryLabels([])
     setRanking(null)
-    persistUserPreferences([])
   }
 
   async function handleSaveFeedback() {
@@ -1396,8 +1521,6 @@ function App() {
 
   return (
     <main className="shell">
-      <AppPromoModal open={showAppPromoModal} onClose={() => setShowAppPromoModal(false)} />
-
       {activePage === 'search' ? (
         <SearchPage
           retailers={retailers}
@@ -1405,7 +1528,6 @@ function App() {
           filtersLoading={filtersLoading}
           ranking={ranking}
           rankingLoading={rankingLoading}
-          preferencesLoading={preferencesLoading}
           draftRetailers={draftSelectedRetailers}
           draftCategoryLabels={draftSelectedCategoryLabels}
           appliedRetailers={appliedSelectedRetailers}

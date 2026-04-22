@@ -57,16 +57,6 @@ export async function fetchBasketSuggestions(params = {}) {
   return response.data
 }
 
-export async function fetchCurrentUserPreferences() {
-  const response = await api.get('/user-preferences/current')
-  return response.data
-}
-
-export async function saveCurrentUserPreferences(payload) {
-  const response = await api.put('/user-preferences/current', payload)
-  return response.data
-}
-
 export function getOfferImageUrl(offerId) {
   return `${apiRoot}/api/offers/${offerId}/image`
 }

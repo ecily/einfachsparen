@@ -190,6 +190,205 @@ function extractOfferLink(card, sourceUrl) {
   }
 }
 
+function extractEmbeddedPayload(html) {
+  const $ = cheerio.load(html);
+  const scriptPayloads = $('script[type="application/json"]')
+    .map((index, element) => String($(element).html() || ''))
+    .get()
+    .map((value) => {
+      try {
+        return JSON.parse(value);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  return scriptPayloads.find((payload) => payload?.data?.offers?.results) || null;
+}
+
+function buildStructuredValidityText(item) {
+  const from = item?.validFrom ? new Date(item.validFrom) : null;
+  const to = item?.validTo ? new Date(item.validTo) : null;
+
+  if (!from && !to) {
+    return '';
+  }
+
+  const format = (value) => {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+      return '';
+    }
+
+    return value.toISOString().slice(0, 10);
+  };
+
+  return [format(from), format(to)].filter(Boolean).join(' - ');
+}
+
+function buildStructuredInfoText(item) {
+  return sanitizeWhitespace(
+    [
+      item?.description || '',
+      item?.quantity && item?.unit?.shortName ? `${item.quantity} ${item.unit.shortName}` : '',
+      item?.referencePrice && item?.unit?.shortName ? `${item.referencePrice} / ${item.unit.shortName}` : '',
+    ]
+      .filter(Boolean)
+      .join(' - ')
+  );
+}
+
+function parseNormalizedUnitPriceFromStructuredOffer(item) {
+  const referenceAmount = parseNumericAmount(item?.referencePrice);
+  const unit = normalizeUnit(item?.unit?.shortName || item?.unit?.name || '');
+
+  if (referenceAmount && ['kg', 'l', 'Stk'].includes(unit)) {
+    return {
+      normalizedUnitPrice: {
+        amount: referenceAmount,
+        unit,
+        comparable: true,
+        confidence: 0.92,
+      },
+      quantityText: sanitizeWhitespace(
+        item?.description
+        || (item?.quantity && item?.unit?.shortName ? `${item.quantity} ${item.unit.shortName}` : '')
+      ),
+      conditionsText: '',
+    };
+  }
+
+  return parseNormalizedUnitPrice(buildStructuredInfoText(item), parseNumericAmount(item?.price));
+}
+
+function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region }) {
+  const now = new Date();
+  const offers = [];
+  const items = payload?.data?.offers?.results || [];
+
+  for (const item of items) {
+    const title = sanitizeWhitespace(item?.product?.name);
+    const brand = sanitizeWhitespace(item?.brand?.name);
+    const currentPrice = parseNumericAmount(item?.price);
+    const oldPrice = parseNumericAmount(item?.oldPrice);
+    const validFrom = item?.validFrom ? new Date(item.validFrom) : null;
+    const validTo = item?.validTo ? new Date(item.validTo) : null;
+    const validityText = buildStructuredValidityText(item);
+    const infoText = buildStructuredInfoText(item);
+    const imageUrl = '';
+    const observedUrl = source.sourceUrl;
+
+    if (!title || !currentPrice) {
+      continue;
+    }
+
+    if (validTo && validTo < now) {
+      continue;
+    }
+
+    if (validFrom && validFrom > now) {
+      continue;
+    }
+
+    const categoryPrimary = determineOfferCategory({
+      title,
+      contextText: infoText,
+      sourceCategory: item?.product?.categoryName || '',
+    });
+    const scopeDecision = buildInclusiveScopeDecision();
+    const parsedInfo = parseNormalizedUnitPriceFromStructuredOffer(item);
+    const normalizedInfoText = normalizeTitleForMatch(infoText);
+    const customerProgramRequired = /(kundenkarte|app|lidl plus|joe|karte|club|bonuskarte|payback)/i.test(
+      normalizedInfoText
+    );
+    const issues = [];
+
+    if (!parsedInfo.normalizedUnitPrice.comparable) {
+      issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+    }
+
+    if (!validFrom || !validTo) {
+      issues.push('Gueltigkeitszeitraum unvollstaendig');
+    }
+
+    if (customerProgramRequired) {
+      issues.push('Angebot erfordert Kundenprogramm oder App');
+    }
+
+    offers.push({
+      crawlJobId,
+      sourceId: source._id,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      region,
+      title,
+      brand,
+      categoryPrimary,
+      categorySecondary: determineOfferSubcategory({
+        primaryCategory: categoryPrimary,
+        sourceCategory: item?.product?.categoryName || '',
+        fallbackLabel: '',
+        title,
+        contextText: infoText,
+      }),
+      comparisonSignature: buildComparisonSignature({ title, brand }),
+      comparisonQuantityKey: parsedInfo.quantityText
+        ? normalizeTitleForMatch(parsedInfo.quantityText).replace(/[^a-z0-9]+/g, '-')
+        : '',
+      comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+      description: '',
+      sourceUrl: observedUrl,
+      imageUrl,
+      supportingSources: [
+        buildSourceEvidence({
+          source,
+          observedUrl,
+          matchType: 'primary',
+        }),
+      ],
+      validFrom,
+      validTo,
+      benefitType: oldPrice && oldPrice > currentPrice ? 'price-cut' : 'unknown',
+      conditionsText: parsedInfo.conditionsText,
+      customerProgramRequired,
+      availabilityScope: region || 'Grossraum Graz',
+      priceCurrent: {
+        amount: currentPrice,
+        currency: 'EUR',
+        originalText: `${currentPrice.toFixed(2)} EUR`,
+      },
+      priceReference: {
+        amount: oldPrice,
+        currency: 'EUR',
+        originalText: oldPrice ? `${oldPrice.toFixed(2)} EUR` : '',
+      },
+      quantityText: parsedInfo.quantityText,
+      normalizedUnitPrice: parsedInfo.normalizedUnitPrice,
+      quality: {
+        completenessScore: [currentPrice, validFrom, validTo, categoryPrimary].filter(Boolean).length / 4,
+        parsingConfidence: parsedInfo.normalizedUnitPrice.comparable ? 0.9 : 0.76,
+        comparisonSafe: parsedInfo.normalizedUnitPrice.comparable,
+        issues,
+      },
+      rawFacts: {
+        sourceType: 'marketguru-embedded-json',
+        validityText,
+        infoText,
+        offerId: String(item?.id || ''),
+        snapshotCurrent: false,
+      },
+      adminReview: {
+        status: issues.length > 0 ? 'pending' : 'reviewed',
+        note: '',
+        feedbackDigest: '',
+      },
+      scope: scopeDecision,
+    });
+  }
+
+  return offers;
+}
+
 function parseOffersFromHtml({ html, source, crawlJobId, region }) {
   const $ = cheerio.load(html);
   const now = new Date();
@@ -342,6 +541,8 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
 
     const html = String(response.data);
     const $ = cheerio.load(html);
+    const embeddedPayload = extractEmbeddedPayload(html);
+    const embeddedOffers = embeddedPayload?.data?.offers?.results || [];
     const title = sanitizeWhitespace($('title').text()) || source.label;
     const rootDocument = await createCompactRawDocument({
       sourceId: source._id,
@@ -354,25 +555,39 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
       title,
       contentHash: createHash(html),
       contentSnippet: sanitizeWhitespace($('body').text()).slice(0, 500),
-      extractedPreview: $('.offer-list-item h3')
-        .slice(0, 8)
-        .map((index, element) => sanitizeWhitespace($(element).text()))
-        .get()
-        .filter(Boolean),
+      extractedPreview: embeddedOffers.length > 0
+        ? embeddedOffers
+          .slice(0, 8)
+          .map((item) => sanitizeWhitespace(item?.product?.name))
+          .filter(Boolean)
+        : $('.offer-list-item h3')
+          .slice(0, 8)
+          .map((index, element) => sanitizeWhitespace($(element).text()))
+          .get()
+          .filter(Boolean),
       payload: {
         retailerName: source.retailerName,
         offerPreviewCount: $('.offer-list-item').length,
+        embeddedOfferPreviewCount: embeddedOffers.length,
+        embeddedOfferTotalResults: Number(embeddedPayload?.data?.offers?.totalResults || 0),
       },
     });
 
     await Offer.deleteMany({ sourceId: source._id });
 
-    const normalizedOffers = parseOffersFromHtml({
-      html,
-      source,
-      crawlJobId: crawlJob._id,
-      region,
-    });
+    const normalizedOffers = embeddedOffers.length > 0
+      ? parseOffersFromEmbeddedPayload({
+        payload: embeddedPayload,
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+      })
+      : parseOffersFromHtml({
+        html,
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+      });
     const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
 
     if (offerDocuments.length > 0) {

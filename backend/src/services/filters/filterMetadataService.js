@@ -4,6 +4,8 @@ const Retailer = require('../../models/Retailer');
 const Category = require('../../models/Category');
 const RetailerCategoryStat = require('../../models/RetailerCategoryStat');
 const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
+const Source = require('../../models/Source');
+const CrawlJob = require('../../models/CrawlJob');
 const logger = require('../../lib/logger');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { computeOfferSavings } = require('../offers/promotionMath');
@@ -69,21 +71,289 @@ function isOfferActive(offer, now = new Date()) {
   return offer?.status === 'active';
 }
 
-function buildRetailerDocuments(existingRetailers, offers, now) {
+const RETAILER_ACTIVE_COVERAGE_TARGETS = {
+  hofer: 60,
+  lidl: 100,
+  spar: 80,
+  billa: 90,
+  'billa-plus': 90,
+  adeg: 20,
+  penny: 40,
+  dm: 35,
+  bipa: 45,
+};
+
+function getRetailerCoverageTarget(retailerKey) {
+  return RETAILER_ACTIVE_COVERAGE_TARGETS[retailerKey] || 25;
+}
+
+function createRetailerCoverageDraft(retailerKey, retailerName, existingRetailer = {}) {
+  return {
+    retailerKey,
+    retailerName: cleanRetailerName(retailerName, retailerKey),
+    offerCount: 0,
+    activeOfferCount: 0,
+    totalOffers: 0,
+    activeOffers: 0,
+    offersBySource: new Map(),
+    offersByChannel: new Map(),
+    firstSeenAt: existingRetailer.firstSeenAt || null,
+    lastSeenAt: existingRetailer.lastSeenAt || null,
+    lastSuccessfulCrawlAt: existingRetailer.lastSuccessfulCrawlAt || null,
+    isActive: typeof existingRetailer.isActive === 'boolean' ? existingRetailer.isActive : false,
+    sortOrder: Number(existingRetailer.sortOrder || 0),
+    sourceIds: new Set(),
+    channels: new Set(),
+    parsingConfidenceSum: 0,
+    parsingConfidenceCount: 0,
+    activeComparisonSafeCount: 0,
+    activeUsableOfferCount: 0,
+    recentSuccessfulCrawlCount: 0,
+    recentFailedCrawlCount: 0,
+    repeatedLowYield: false,
+    crawlStabilityScore: 0,
+    coverageGapReasons: [],
+    coveragePriorityScore: 0,
+    activeCoverageSignal: 'empty',
+    coverageStatus: 'gap',
+    activeCoverageTarget: getRetailerCoverageTarget(retailerKey),
+    activeCoverageRatio: 0,
+    sourceDiversity: 0,
+    channelDiversity: 0,
+    parsingConfidenceAverage: 0,
+    comparisonSafeShare: 0,
+    usableOfferShare: 0,
+  };
+}
+
+function registerSourceContribution(retailer, sourceKey, sourceMeta, isActive, lastSeenAt) {
+  if (!sourceKey) {
+    return;
+  }
+
+  if (!retailer.offersBySource.has(sourceKey)) {
+    retailer.offersBySource.set(sourceKey, {
+      sourceId: sourceMeta.sourceId || null,
+      label: sourceMeta.label || sourceMeta.sourceUrl || sourceKey,
+      channel: sourceMeta.channel || '',
+      offerCount: 0,
+      activeOfferCount: 0,
+      lastSeenAt: lastSeenAt || null,
+    });
+  }
+
+  const current = retailer.offersBySource.get(sourceKey);
+  current.offerCount += 1;
+  current.activeOfferCount += isActive ? 1 : 0;
+
+  if (lastSeenAt && (!current.lastSeenAt || lastSeenAt > current.lastSeenAt)) {
+    current.lastSeenAt = lastSeenAt;
+  }
+
+  if (current.sourceId) {
+    retailer.sourceIds.add(String(current.sourceId));
+  } else {
+    retailer.sourceIds.add(sourceKey);
+  }
+
+  if (current.channel) {
+    retailer.channels.add(current.channel);
+  }
+}
+
+function registerChannelContribution(retailer, channel, isActive) {
+  const normalizedChannel = sanitizeWhitespace(channel || 'other') || 'other';
+
+  if (!retailer.offersByChannel.has(normalizedChannel)) {
+    retailer.offersByChannel.set(normalizedChannel, {
+      channel: normalizedChannel,
+      offerCount: 0,
+      activeOfferCount: 0,
+    });
+  }
+
+  const current = retailer.offersByChannel.get(normalizedChannel);
+  current.offerCount += 1;
+  current.activeOfferCount += isActive ? 1 : 0;
+}
+
+function buildRetailerCoverageReasons(retailer, recentJobs) {
+  const reasons = [];
+  const dominantSource = retailer.offersBySource[0] || null;
+  const now = new Date();
+  const hoursSinceSuccessfulCrawl = retailer.lastSuccessfulCrawlAt
+    ? (now.getTime() - retailer.lastSuccessfulCrawlAt.getTime()) / (1000 * 60 * 60)
+    : Infinity;
+
+  if (retailer.activeOffers === 0) {
+    reasons.push('keine aktiven Offers erfasst');
+  } else if (retailer.activeCoverageRatio < 0.6) {
+    reasons.push('aktive Abdeckung deutlich unter Zielwert');
+  } else if (retailer.activeCoverageRatio < 1) {
+    reasons.push('aktive Abdeckung nur mittelmaessig');
+  }
+
+  if (retailer.sourceDiversity <= 1 && retailer.activeOffers > 0) {
+    reasons.push('aktive Abdeckung haengt an nur einer Quelle');
+  }
+
+  if (dominantSource && retailer.activeOffers > 0 && dominantSource.activeOfferCount / retailer.activeOffers >= 0.75) {
+    reasons.push('starke Abhaengigkeit von einer einzelnen Quelle');
+  }
+
+  if (retailer.totalOffers >= Math.max(20, retailer.activeCoverageTarget) && retailer.activeOffers <= Math.max(5, Math.round(retailer.totalOffers * 0.2))) {
+    reasons.push('viele Gesamtangebote, aber sehr wenige aktive Offers');
+  }
+
+  if (!Number.isFinite(hoursSinceSuccessfulCrawl) || hoursSinceSuccessfulCrawl > 72) {
+    reasons.push('kein frischer erfolgreicher Crawl');
+  }
+
+  if (retailer.recentFailedCrawlCount >= 2) {
+    reasons.push('wiederholte Crawl-Fehler');
+  }
+
+  if (retailer.repeatedLowYield) {
+    reasons.push('wiederholt niedrige Crawl-Ausbeute');
+  }
+
+  if (recentJobs.length === 0) {
+    reasons.push('keine aktuellen Crawl-Runs vorhanden');
+  }
+
+  return reasons;
+}
+
+function finalizeRetailerCoverage(retailer, recentJobs) {
+  retailer.offerCount = retailer.totalOffers;
+  retailer.activeOfferCount = retailer.activeOffers;
+  retailer.sourceDiversity = retailer.sourceIds.size;
+  retailer.channelDiversity = retailer.channels.size;
+  retailer.parsingConfidenceAverage = retailer.parsingConfidenceCount > 0
+    ? Number((retailer.parsingConfidenceSum / retailer.parsingConfidenceCount).toFixed(3))
+    : 0;
+  retailer.comparisonSafeShare = retailer.activeOffers > 0
+    ? Number((retailer.activeComparisonSafeCount / retailer.activeOffers).toFixed(3))
+    : 0;
+  retailer.usableOfferShare = retailer.activeOffers > 0
+    ? Number((retailer.activeUsableOfferCount / retailer.activeOffers).toFixed(3))
+    : 0;
+  retailer.activeCoverageRatio = retailer.activeCoverageTarget > 0
+    ? Number((retailer.activeOffers / retailer.activeCoverageTarget).toFixed(3))
+    : 0;
+  retailer.offersBySource = [...retailer.offersBySource.values()]
+    .sort((left, right) => {
+      if (right.activeOfferCount !== left.activeOfferCount) {
+        return right.activeOfferCount - left.activeOfferCount;
+      }
+
+      if (right.offerCount !== left.offerCount) {
+        return right.offerCount - left.offerCount;
+      }
+
+      return String(left.label || '').localeCompare(String(right.label || ''), 'de');
+    });
+  retailer.offersByChannel = [...retailer.offersByChannel.values()]
+    .sort((left, right) => {
+      if (right.activeOfferCount !== left.activeOfferCount) {
+        return right.activeOfferCount - left.activeOfferCount;
+      }
+
+      return String(left.channel || '').localeCompare(String(right.channel || ''), 'de');
+    });
+
+  if (retailer.activeOffers === 0) {
+    retailer.activeCoverageSignal = 'empty';
+  } else if (retailer.activeCoverageRatio >= 1 && retailer.sourceDiversity >= 2) {
+    retailer.activeCoverageSignal = 'strong';
+  } else if (retailer.activeCoverageRatio >= 0.6) {
+    retailer.activeCoverageSignal = 'medium';
+  } else {
+    retailer.activeCoverageSignal = 'weak';
+  }
+
+  const consideredRuns = recentJobs.length;
+  retailer.crawlStabilityScore = consideredRuns > 0
+    ? Number((retailer.recentSuccessfulCrawlCount / consideredRuns).toFixed(3))
+    : 0;
+
+  retailer.coverageGapReasons = buildRetailerCoverageReasons(retailer, recentJobs);
+
+  if (
+    retailer.activeCoverageSignal === 'strong'
+    && retailer.crawlStabilityScore >= 0.66
+    && retailer.coverageGapReasons.length === 0
+  ) {
+    retailer.coverageStatus = 'trusted';
+  } else if (retailer.activeCoverageSignal === 'empty' || retailer.activeCoverageSignal === 'weak') {
+    retailer.coverageStatus = 'gap';
+  } else {
+    retailer.coverageStatus = 'watch';
+  }
+
+  retailer.coveragePriorityScore = [
+    retailer.activeCoverageSignal === 'empty' ? 60 : 0,
+    retailer.activeCoverageSignal === 'weak' ? 40 : 0,
+    retailer.activeCoverageSignal === 'medium' ? 15 : 0,
+    retailer.sourceDiversity <= 1 ? 20 : 0,
+    retailer.recentFailedCrawlCount >= 2 ? 15 : 0,
+    retailer.repeatedLowYield ? 15 : 0,
+    retailer.lastSuccessfulCrawlAt ? ((Date.now() - retailer.lastSuccessfulCrawlAt.getTime()) > 72 * 60 * 60 * 1000 ? 10 : 0) : 15,
+    retailer.activeCoverageRatio < 0.35 ? 15 : 0,
+  ].reduce((sum, value) => sum + value, 0);
+
+  delete retailer.sourceIds;
+  delete retailer.channels;
+  delete retailer.parsingConfidenceSum;
+  delete retailer.parsingConfidenceCount;
+  delete retailer.activeComparisonSafeCount;
+  delete retailer.activeUsableOfferCount;
+
+  return retailer;
+}
+
+function buildRetailerDocuments(existingRetailers, offers, now, sources, crawlJobs) {
   const retailers = new Map();
+  const sourceLookup = new Map(
+    sources.map((source) => [
+      String(source._id),
+      {
+        sourceId: source._id,
+        label: sanitizeWhitespace(source.label),
+        channel: sanitizeWhitespace(source.channel),
+        sourceUrl: sanitizeWhitespace(source.sourceUrl),
+      },
+    ])
+  );
+  const crawlJobsByRetailer = crawlJobs.reduce((accumulator, job) => {
+    const retailerKey = normalizeRetailerKey(job);
+
+    if (!accumulator.has(retailerKey)) {
+      accumulator.set(retailerKey, []);
+    }
+
+    accumulator.get(retailerKey).push(job);
+    return accumulator;
+  }, new Map());
 
   for (const retailer of existingRetailers) {
     const retailerKey = normalizeRetailerKey(retailer);
 
-    retailers.set(retailerKey, {
+    retailers.set(
       retailerKey,
-      retailerName: cleanRetailerName(retailer.retailerName, retailerKey),
-      offerCount: 0,
-      activeOfferCount: 0,
-      lastSeenAt: retailer.lastSeenAt || null,
-      isActive: typeof retailer.isActive === 'boolean' ? retailer.isActive : false,
-      sortOrder: Number(retailer.sortOrder || 0),
-    });
+      createRetailerCoverageDraft(retailerKey, retailer.retailerName, retailer)
+    );
+  }
+
+  for (const source of sources) {
+    const retailerKey = normalizeRetailerKey(source);
+
+    if (!retailers.has(retailerKey)) {
+      retailers.set(
+        retailerKey,
+        createRetailerCoverageDraft(retailerKey, source.retailerName)
+      );
+    }
   }
 
   for (const offer of offers) {
@@ -93,31 +363,86 @@ function buildRetailerDocuments(existingRetailers, offers, now) {
     const lastSeenAt = getOfferLastSeenAt(offer);
 
     if (!retailers.has(retailerKey)) {
-      retailers.set(retailerKey, {
-        retailerKey,
-        retailerName,
-        offerCount: 0,
-        activeOfferCount: 0,
-        lastSeenAt,
-        isActive: false,
-        sortOrder: 0,
-      });
+      retailers.set(retailerKey, createRetailerCoverageDraft(retailerKey, retailerName));
     }
 
     const current = retailers.get(retailerKey);
-    current.offerCount += 1;
-    current.activeOfferCount += isActive ? 1 : 0;
+    current.totalOffers += 1;
+    current.activeOffers += isActive ? 1 : 0;
+    current.firstSeenAt = !current.firstSeenAt || lastSeenAt < current.firstSeenAt ? lastSeenAt : current.firstSeenAt;
 
-    if (!current.retailerName || lastSeenAt >= current.lastSeenAt) {
+    if (!current.retailerName || !current.lastSeenAt || lastSeenAt >= current.lastSeenAt) {
       current.retailerName = retailerName;
     }
 
-    if (lastSeenAt > current.lastSeenAt) {
+    if (!current.lastSeenAt || lastSeenAt > current.lastSeenAt) {
       current.lastSeenAt = lastSeenAt;
+    }
+
+    current.parsingConfidenceSum += Number(offer?.quality?.parsingConfidence || 0);
+    current.parsingConfidenceCount += 1;
+    current.activeComparisonSafeCount += isActive && Boolean(offer?.quality?.comparisonSafe) ? 1 : 0;
+    current.activeUsableOfferCount += (
+      isActive
+      && Boolean(offer?.quality?.comparisonSafe)
+      && Boolean(offer?.priceCurrent?.amount)
+    ) ? 1 : 0;
+
+    const sourceMeta = sourceLookup.get(String(offer.sourceId || '')) || {
+      sourceId: offer.sourceId || null,
+      label: sanitizeWhitespace(offer.sourceUrl || ''),
+      channel: '',
+      sourceUrl: sanitizeWhitespace(offer.sourceUrl || ''),
+    };
+
+    registerSourceContribution(
+      current,
+      String(sourceMeta.sourceId || sourceMeta.sourceUrl || offer.sourceId || offer.sourceUrl || ''),
+      sourceMeta,
+      isActive,
+      lastSeenAt
+    );
+    registerChannelContribution(current, sourceMeta.channel || 'other', isActive);
+
+    for (const evidence of offer.supportingSources || []) {
+      const evidenceSourceKey = String(evidence.sourceId || evidence.sourceUrl || evidence.observedUrl || '');
+
+      if (evidenceSourceKey) {
+        current.sourceIds.add(evidenceSourceKey);
+      }
+
+      if (evidence.channel) {
+        current.channels.add(evidence.channel);
+      }
     }
   }
 
-  return [...retailers.values()].sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'));
+  for (const [retailerKey, retailer] of retailers.entries()) {
+    const recentJobs = (crawlJobsByRetailer.get(retailerKey) || [])
+      .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime())
+      .slice(0, 8);
+
+    retailer.lastSuccessfulCrawlAt = recentJobs
+      .filter((job) => ['success', 'partial'].includes(job.status) && job.finishedAt)
+      .map((job) => job.finishedAt)
+      .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || retailer.lastSuccessfulCrawlAt;
+    retailer.recentSuccessfulCrawlCount = recentJobs.filter((job) => ['success', 'partial'].includes(job.status)).length;
+    retailer.recentFailedCrawlCount = recentJobs.filter((job) => job.status === 'failed').length;
+    retailer.repeatedLowYield = recentJobs
+      .filter((job) => ['success', 'partial'].includes(job.status))
+      .filter((job) => Number(job?.stats?.offersStored || 0) < Math.max(5, Math.round(retailer.activeCoverageTarget * 0.2)))
+      .length >= 2;
+
+    finalizeRetailerCoverage(retailer, recentJobs);
+  }
+
+  return [...retailers.values()].sort((left, right) => {
+    if (right.coveragePriorityScore !== left.coveragePriorityScore) {
+      return right.coveragePriorityScore - left.coveragePriorityScore;
+    }
+
+    return left.retailerName.localeCompare(right.retailerName, 'de');
+  });
 }
 
 function buildCategoryDocuments(offers, now) {
@@ -383,7 +708,7 @@ async function replaceCollection(Model, documents, session) {
 
 async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } = {}) {
   const now = new Date();
-  const [offers, existingRetailers] = await Promise.all([
+  const [offers, existingRetailers, sources, crawlJobs] = await Promise.all([
     Offer.find({})
       .select(
         [
@@ -430,11 +755,18 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
       )
       .lean(),
     Retailer.find({})
-      .select('retailerKey retailerName offerCount activeOfferCount lastSeenAt isActive sortOrder')
+      .select('retailerKey retailerName offerCount activeOfferCount firstSeenAt lastSeenAt lastSuccessfulCrawlAt isActive sortOrder')
+      .lean(),
+    Source.find({})
+      .select('_id retailerKey retailerName label channel sourceUrl active latestRunAt latestStatus')
+      .lean(),
+    CrawlJob.find({})
+      .select('retailerKey status startedAt finishedAt stats')
+      .sort({ startedAt: -1 })
       .lean(),
   ]);
 
-  const retailerDocuments = buildRetailerDocuments(existingRetailers, offers, now);
+  const retailerDocuments = buildRetailerDocuments(existingRetailers, offers, now, sources, crawlJobs);
   const categoryDocuments = buildCategoryDocuments(offers, now);
   const retailerCategoryStatDocuments = buildRetailerCategoryStatDocuments(offers, now);
   const offerCacheDocuments = buildOfferCacheDocuments(offers, now);
@@ -458,6 +790,9 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
     retailerCategoryStats: retailerCategoryStatDocuments.length,
     offerCacheBuckets: offerCacheDocuments.length,
     activeRetailers: retailerDocuments.filter((item) => item.isActive).length,
+    trustedRetailers: retailerDocuments.filter((item) => item.coverageStatus === 'trusted').length,
+    watchRetailers: retailerDocuments.filter((item) => item.coverageStatus === 'watch').length,
+    gapRetailers: retailerDocuments.filter((item) => item.coverageStatus === 'gap').length,
     activeCategories: categoryDocuments.filter((item) => item.isActive).length,
     processedOffers: offers.length,
     syncedAt: now.toISOString(),
@@ -470,7 +805,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
 
 async function getRetailerFilters() {
   return Retailer.find({})
-    .sort({ sortOrder: 1, retailerName: 1 })
+    .sort({ coveragePriorityScore: -1, sortOrder: 1, retailerName: 1 })
     .lean();
 }
 

@@ -3,6 +3,7 @@ const CrawlJob = require('../../models/CrawlJob');
 const RawDocument = require('../../models/RawDocument');
 const Offer = require('../../models/Offer');
 const AdminFeedback = require('../../models/AdminFeedback');
+const Retailer = require('../../models/Retailer');
 const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
 const logger = require('../../lib/logger');
 
@@ -103,6 +104,7 @@ async function buildDashboardSnapshot() {
     offerSamples,
     recentFeedback,
     retailerSummary,
+    retailerCoverage,
     comparisonSnapshot,
   ] = await Promise.all([
     Source.find().sort({ active: -1, retailerName: 1 }).lean(),
@@ -139,29 +141,14 @@ async function buildDashboardSnapshot() {
       .limit(24)
       .lean(),
     AdminFeedback.find().sort({ createdAt: -1 }).limit(10).lean(),
-    Offer.aggregate([
-      {
-        $match: currentAvailabilityMatch,
-      },
-      {
-        $group: {
-          _id: '$retailerKey',
-          retailerName: { $first: '$retailerName' },
-          offerCount: { $sum: 1 },
-          comparisonSafeCount: {
-            $sum: {
-              $cond: [{ $eq: ['$quality.comparisonSafe', true] }, 1, 0],
-            },
-          },
-          issueCount: {
-            $sum: {
-              $cond: [{ $gt: [{ $size: { $ifNull: ['$quality.issues', []] } }, 0] }, 1, 0],
-            },
-          },
-        },
-      },
-      { $sort: { retailerName: 1 } },
-    ]),
+    Retailer.find({})
+      .select('retailerKey retailerName offerCount activeOfferCount comparisonSafeShare usableOfferShare coverageStatus activeCoverageSignal coverageGapReasons coveragePriorityScore sourceDiversity lastSuccessfulCrawlAt')
+      .sort({ retailerName: 1 })
+      .lean(),
+    Retailer.find({})
+      .select('retailerKey retailerName totalOffers activeOffers offersBySource offersByChannel firstSeenAt lastSeenAt lastSuccessfulCrawlAt activeCoverageSignal coverageStatus coveragePriorityScore coverageGapReasons activeCoverageTarget activeCoverageRatio sourceDiversity channelDiversity parsingConfidenceAverage comparisonSafeShare usableOfferShare crawlStabilityScore recentSuccessfulCrawlCount recentFailedCrawlCount repeatedLowYield')
+      .sort({ coveragePriorityScore: -1, retailerName: 1 })
+      .lean(),
     buildComparisonSnapshotSafely(),
   ]);
 
@@ -196,6 +183,7 @@ async function buildDashboardSnapshot() {
     sources,
     latestJobs,
     retailerSummary,
+    retailerCoverage,
     comparisonSnapshot,
     offerSamples,
     latestEssence,

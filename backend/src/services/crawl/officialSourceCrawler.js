@@ -302,6 +302,194 @@ function extractImageUrl(card) {
   );
 }
 
+function decodeHtmlEntities(value) {
+  return sanitizeWhitespace(cheerio.load(`<span>${String(value || '')}</span>`)('span').text());
+}
+
+function extractLidlFlyerIdentifiers(html) {
+  const $ = cheerio.load(html);
+  const identifiers = new Set();
+
+  $('a[href*="/l/de/flugblatt/"]').each((index, element) => {
+    const href = sanitizeWhitespace($(element).attr('href'));
+    const match = href.match(/\/l\/de\/flugblatt\/([^/]+)\/ar\/\d+/i);
+
+    if (match?.[1]) {
+      identifiers.add(match[1]);
+    }
+  });
+
+  return [...identifiers];
+}
+
+function parseLidlFlyerDate(value) {
+  const match = String(value || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day] = match.map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function buildLidlNormalizedUnitPrice(description, currentPrice) {
+  const text = normalizeTitleForMatch(decodeHtmlEntities(description));
+  const perUnitMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(eur|euro)?\s*\/\s*(kg|kilogramm|l|liter|stk|stueck|stuck)/i);
+
+  if (perUnitMatch) {
+    return {
+      amount: parseNumericAmount(perUnitMatch[1]),
+      unit: normalizeUnitFromText(perUnitMatch[3]),
+      comparable: Boolean(parseNumericAmount(perUnitMatch[1])),
+      confidence: 0.9,
+    };
+  }
+
+  return buildOfficialNormalizedUnitPrice({
+    priceAmount: currentPrice,
+    quantityText: decodeHtmlEntities(description),
+  });
+}
+
+function extractLidlQuantityText(description) {
+  const text = decodeHtmlEntities(description);
+  const quantityMatch = text.match(
+    /(\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl|stk|stueck|stuck)|\d+\s*x\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl))/i
+  );
+
+  return sanitizeWhitespace(quantityMatch?.[1] || '');
+}
+
+function normalizeLidlProductToOffer({
+  product,
+  flyer,
+  source,
+  crawlJobId,
+  region,
+}) {
+  const currentPrice = parseNumericAmount(product?.price);
+  const title = sanitizeWhitespace(product?.title);
+  const brand = sanitizeWhitespace(product?.brand);
+  const description = decodeHtmlEntities(product?.description);
+  const quantityText = extractLidlQuantityText(description);
+  const normalizedUnitPrice = buildLidlNormalizedUnitPrice(description, currentPrice);
+  const categoryPrimary = determineOfferCategory({
+    title: sanitizeWhitespace(`${brand} ${title}`),
+    contextText: [description, product?.wonCategoryPrimary, product?.categoryPrimary].filter(Boolean).join(' '),
+    sourceCategory: product?.wonCategoryPrimary || product?.categoryPrimary || '',
+  });
+  const validFrom = parseLidlFlyerDate(flyer?.offerStartDate || flyer?.startDate);
+  const validTo = parseLidlFlyerDate(flyer?.offerEndDate || flyer?.endDate);
+  const statusInfo = buildOfferStatus(validFrom, validTo);
+  const customerProgramRequired = /lidl plus/i.test(description);
+  const issues = [];
+
+  if (!title || !currentPrice) {
+    return null;
+  }
+
+  if (!normalizedUnitPrice.comparable) {
+    issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+  }
+
+  if (!validFrom || !validTo) {
+    issues.push('Gueltigkeitszeitraum unvollstaendig');
+  }
+
+  if (customerProgramRequired) {
+    issues.push('Angebot erfordert Kundenprogramm oder App');
+  }
+
+  return {
+    crawlJobId,
+    sourceId: source._id,
+    retailerKey: source.retailerKey,
+    retailerName: source.retailerName,
+    region,
+    title,
+    brand,
+    categoryPrimary,
+    categorySecondary: determineOfferSubcategory({
+      primaryCategory: categoryPrimary,
+      sourceCategory: product?.wonCategoryPrimary || product?.categoryPrimary || '',
+      fallbackLabel: categoryPrimary,
+      title,
+      contextText: description,
+    }),
+    comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
+    comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+    comparisonCategoryKey: normalizeTitleForMatch(product?.wonCategoryPrimary || categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+    description,
+    sourceUrl: product?.url || source.sourceUrl,
+    imageUrl: product?.image || '',
+    supportingSources: [
+      buildSourceEvidence({
+        source,
+        observedUrl: product?.url || flyer?.flyerUrlAbsolute || source.sourceUrl,
+        matchType: 'primary',
+      }),
+    ],
+    validFrom,
+    validTo,
+    status: statusInfo.status,
+    isActiveNow: statusInfo.isActiveNow,
+    isActiveToday: statusInfo.isActiveToday,
+    benefitType: customerProgramRequired ? 'conditional-price' : 'price-cut',
+    conditionsText: customerProgramRequired ? 'Nur gueltig mit Lidl Plus' : '',
+    customerProgramRequired,
+    availabilityScope: region || 'Grossraum Graz',
+    priceCurrent: {
+      amount: currentPrice,
+      currency: 'EUR',
+      originalText: `${currentPrice.toFixed(2)} EUR`,
+    },
+    priceReference: {
+      amount: null,
+      currency: 'EUR',
+      originalText: '',
+    },
+    quantityText,
+    normalizedUnitPrice,
+    quality: {
+      completenessScore: [currentPrice, validFrom, validTo, categoryPrimary].filter(Boolean).length / 4,
+      parsingConfidence: normalizedUnitPrice.comparable ? 0.88 : 0.76,
+      comparisonSafe: normalizedUnitPrice.comparable,
+      issues,
+    },
+    rawFacts: {
+      sourceType: 'lidl-official-flyer-api',
+      validityText: [flyer?.offerStartDate, flyer?.offerEndDate].filter(Boolean).join(' - '),
+      infoText: sanitizeWhitespace([product?.categoryPrimary, product?.wonCategoryPrimary].filter(Boolean).join(' / ')),
+      productId: sanitizeWhitespace(product?.productId),
+      snapshotCurrent: false,
+    },
+    adminReview: {
+      status: issues.length > 0 ? 'pending' : 'reviewed',
+      note: '',
+      feedbackDigest: '',
+    },
+    scope: buildInclusiveScopeDecision(),
+  };
+}
+
+async function fetchLidlFlyerByIdentifier(identifier) {
+  const response = await axios.get('https://endpoints.leaflets.schwarz/v4/flyer', {
+    timeout: 30000,
+    params: {
+      flyer_identifier: identifier,
+      region_id: 0,
+    },
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      Accept: 'application/json,text/plain,*/*',
+      'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+    },
+  });
+
+  return response.data?.flyer || null;
+}
+
 function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl }) {
   const $ = cheerio.load(html);
   const offers = [];
@@ -1109,6 +1297,99 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
   };
 }
 
+async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
+  const flyerIdentifiers = extractLidlFlyerIdentifiers(html);
+  const collectedOffers = [];
+  const seenFlyers = [];
+
+  await Offer.deleteMany({ sourceId: source._id });
+
+  for (const identifier of flyerIdentifiers.slice(0, 8)) {
+    let flyer = null;
+
+    try {
+      flyer = await fetchLidlFlyerByIdentifier(identifier);
+    } catch (error) {
+      continue;
+    }
+
+    if (!flyer?.isActive || !flyer?.products || Object.keys(flyer.products).length === 0) {
+      continue;
+    }
+
+    seenFlyers.push({
+      id: flyer.id,
+      name: flyer.name,
+      title: flyer.title,
+      productCount: Object.keys(flyer.products).length,
+      offerStartDate: flyer.offerStartDate || flyer.startDate,
+      offerEndDate: flyer.offerEndDate || flyer.endDate,
+      url: flyer.flyerUrlAbsolute,
+    });
+
+    for (const product of Object.values(flyer.products)) {
+      const normalized = normalizeLidlProductToOffer({
+        product,
+        flyer,
+        source,
+        crawlJobId,
+        region,
+      });
+
+      if (normalized) {
+        collectedOffers.push(normalized);
+      }
+    }
+  }
+
+  const seen = new Set();
+  const offerDocuments = collectedOffers
+    .map(({ scope, ...offer }) => offer)
+    .filter((offer) => {
+      const key = [
+        sanitizeWhitespace(offer.rawFacts?.productId || ''),
+        normalizeTitleForMatch(`${offer.brand || ''} ${offer.title || ''}`),
+        String(offer.priceCurrent?.amount ?? ''),
+        String(offer.validFrom?.toISOString?.() || ''),
+      ].join('::');
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+
+  if (offerDocuments.length > 0) {
+    await Offer.insertMany(offerDocuments, { ordered: false });
+  }
+
+  await createCompactRawDocument({
+    sourceId: source._id,
+    crawlJobId,
+    retailerKey: source.retailerKey,
+    region,
+    documentType: 'json',
+    url: source.sourceUrl,
+    canonicalUrl: source.sourceUrl,
+    title: `${source.label} Flyer Snapshot`,
+    contentHash: createHash(JSON.stringify(seenFlyers)),
+    contentSnippet: `Lidl official flyer API: ${seenFlyers.length} produktfaehige Flyer, ${offerDocuments.length} Offers.`,
+    extractedPreview: seenFlyers.slice(0, 5).map((item) => `${item.name} (${item.productCount})`),
+    payload: {
+      flyerCount: seenFlyers.length,
+      offerCount: offerDocuments.length,
+      flyers: seenFlyers.slice(0, 6),
+    },
+  });
+
+  return {
+    offerDocuments,
+    rawDocuments: 1,
+  };
+}
+
 async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
   const collectedOffers = [];
   const validToHint = extractBipaValidityDate(html);
@@ -1367,6 +1648,16 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += pennyOfficialResult.offerDocuments.length;
       extraRawDocuments += pennyOfficialResult.rawDocuments;
+    } else if (source.retailerKey === 'lidl' && source.sourceUrl.includes('lidl.at/c/flugblatt')) {
+      const lidlOfficialResult = await crawlLidlOfficialFlyers({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        html,
+      });
+
+      offersStored += lidlOfficialResult.offerDocuments.length;
+      extraRawDocuments += lidlOfficialResult.rawDocuments;
     } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
         source,
