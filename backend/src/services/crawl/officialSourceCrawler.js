@@ -128,6 +128,45 @@ function addDays(date, days) {
   return copy;
 }
 
+function buildOfferStatus(validFrom, validTo, snapshotCurrent = false) {
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  let status = 'unknown';
+
+  if (snapshotCurrent) {
+    status = 'active';
+  } else if (validFrom && validFrom > now) {
+    status = 'upcoming';
+  } else if (validTo && validTo < now) {
+    status = 'expired';
+  } else if ((validFrom || validTo) && (!validFrom || validFrom <= now) && (!validTo || validTo >= now)) {
+    status = 'active';
+  }
+
+  return {
+    status,
+    isActiveNow: status === 'active',
+    isActiveToday:
+      status === 'active'
+      || ((!validFrom || validFrom <= endOfToday) && (!validTo || validTo >= startOfToday)),
+  };
+}
+
+function parseDateWithWeekday(value) {
+  const match = String(value || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [day, month, year] = match.slice(1).map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
 function normalizeUnitFromText(value) {
   const normalized = normalizeTitleForMatch(value);
 
@@ -230,6 +269,29 @@ function buildOfficialNormalizedUnitPrice({ priceAmount, quantityText }) {
   };
 }
 
+function buildUnitPriceFromLabel(label, currentPrice) {
+  const text = sanitizeWhitespace(label);
+  const match = text.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|l|liter|ml|stuck|stueck|stk|waschgang)\s+([\d,.]+)/i);
+
+  if (!match) {
+    return buildOfficialNormalizedUnitPrice({
+      priceAmount: currentPrice,
+      quantityText: text,
+    });
+  }
+
+  const amount = parseNumericAmount(match[3]);
+  const unit = normalizeUnitFromText(match[2]);
+  const comparableUnit = unit === 'g' ? 'kg' : unit === 'ml' ? 'l' : unit;
+
+  return {
+    amount,
+    unit: comparableUnit || unit,
+    comparable: Boolean(amount && ['kg', 'l', 'Stk'].includes(comparableUnit || unit)),
+    confidence: amount ? 0.9 : 0,
+  };
+}
+
 function extractImageUrl(card) {
   return (
     card.find('.at-product-images_img').attr('data-src')
@@ -238,6 +300,274 @@ function extractImageUrl(card) {
     || card.find('img').attr('src')
     || ''
   );
+}
+
+function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl }) {
+  const $ = cheerio.load(html);
+  const offers = [];
+
+  $('a[href*="/produkte/"]').each((index, element) => {
+    const card = $(element).closest('.ws-product-tile, li, article, div');
+    const titleLine = sanitizeWhitespace(card.find('[data-test="product-title"]').first().text());
+    const [rawTitle, rawBrand] = titleLine.split('•').map((value) => sanitizeWhitespace(value));
+    const title = rawTitle || sanitizeWhitespace($(element).text());
+    const brand = rawBrand || '';
+    const quantityText = sanitizeWhitespace(
+      card.find('[data-test="product-information-piece-description"]').first().text()
+    );
+    const validityNodes = card.find('[data-test="product-price-validity"] div');
+    const validFrom = parseDateWithWeekday(sanitizeWhitespace(validityNodes.eq(0).text()));
+    const validTo = parseDateWithWeekday(sanitizeWhitespace(validityNodes.eq(1).text()));
+    const currentPrice = parseNumericAmount(card.find('[data-test="product-price-type-value"]').first().text());
+    const unitPriceLabel = sanitizeWhitespace(card.find('[data-test="product-price-type-label"]').first().text());
+    const normalizedUnitPrice = buildUnitPriceFromLabel(unitPriceLabel, currentPrice);
+    const statusInfo = buildOfferStatus(validFrom, validTo);
+    const categoryPrimary = determineOfferCategory({
+      title,
+      contextText: [brand, quantityText, unitPriceLabel].filter(Boolean).join(' '),
+    });
+    const issues = [];
+
+    if (!title || !currentPrice) {
+      return;
+    }
+
+    if (!normalizedUnitPrice.comparable) {
+      issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+    }
+
+    if (!validFrom || !validTo) {
+      issues.push('Gueltigkeitszeitraum unvollstaendig');
+    }
+
+    offers.push({
+      crawlJobId,
+      sourceId: source._id,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      region,
+      title,
+      brand,
+      categoryPrimary,
+      categorySecondary: determineOfferSubcategory({
+        primaryCategory: categoryPrimary,
+        fallbackLabel: categoryPrimary,
+        title,
+        contextText: [brand, quantityText, unitPriceLabel].filter(Boolean).join(' '),
+      }),
+      comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
+      comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+      comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+      description: '',
+      sourceUrl: toAbsoluteUrl($(element).attr('href'), pageUrl) || pageUrl,
+      imageUrl: sanitizeWhitespace(card.find('img').first().attr('src') || ''),
+      supportingSources: [
+        buildSourceEvidence({
+          source,
+          observedUrl: toAbsoluteUrl($(element).attr('href'), pageUrl) || pageUrl,
+          matchType: 'primary',
+        }),
+      ],
+      validFrom,
+      validTo,
+      status: statusInfo.status,
+      isActiveNow: statusInfo.isActiveNow,
+      isActiveToday: statusInfo.isActiveToday,
+      benefitType: 'unknown',
+      conditionsText: '',
+      customerProgramRequired: false,
+      availabilityScope: region || 'Grossraum Graz',
+      priceCurrent: {
+        amount: currentPrice,
+        currency: 'EUR',
+        originalText: `${currentPrice.toFixed(2)} EUR`,
+      },
+      priceReference: {
+        amount: null,
+        currency: 'EUR',
+        originalText: '',
+      },
+      quantityText,
+      normalizedUnitPrice,
+      quality: {
+        completenessScore: [currentPrice, validFrom, validTo, categoryPrimary].filter(Boolean).length / 4,
+        parsingConfidence: normalizedUnitPrice.comparable ? 0.9 : 0.78,
+        comparisonSafe: normalizedUnitPrice.comparable,
+        issues,
+      },
+      rawFacts: {
+        sourceType: 'penny-official-html',
+        validityText: sanitizeWhitespace(card.find('[data-test="product-price-validity"]').text()),
+        infoText: unitPriceLabel,
+        snapshotCurrent: false,
+      },
+      adminReview: {
+        status: issues.length > 0 ? 'pending' : 'reviewed',
+        note: '',
+        feedbackDigest: '',
+      },
+      scope: buildInclusiveScopeDecision(),
+    });
+  });
+
+  return offers;
+}
+
+function parseBipaTilePriceInfo(card) {
+  const textNodes = card.find('p').map((index, element) => sanitizeWhitespace(card.find('p').eq(index).text())).get();
+  const priceText = textNodes.find((value) => value.startsWith('€'));
+  const unitPriceText = textNodes.find((value) => /\d+(?:[.,]\d+)?\s*(kg|l|Stk|waschgang|100 g|100 ml)/i.test(value));
+
+  return {
+    currentPrice: parseNumericAmount(priceText),
+    priceText,
+    unitPriceText: unitPriceText || '',
+  };
+}
+
+function extractBipaValidityDate(html) {
+  const dates = [...String(html || '').matchAll(/(?:Gueltig bis|Gültig bis)\s+(\d{2}\.\d{2}\.\d{4})/gi)]
+    .map((match) => parseDateWithWeekday(match[1]))
+    .filter(Boolean)
+    .sort((left, right) => left.getTime() - right.getTime());
+
+  return dates[0] || null;
+}
+
+function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, validToHint = null }) {
+  const $ = cheerio.load(html);
+  const offers = [];
+  const validFrom = new Date();
+  const validTo = validToHint || extractBipaValidityDate(html);
+  const statusInfo = buildOfferStatus(validFrom, validTo, true);
+
+  $('a[data-testid^="product-tile-"][href*="/p/"]').each((index, element) => {
+    const card = $(element);
+    const paragraphs = card.find('p').map((i, el) => sanitizeWhitespace($(el).text())).get().filter(Boolean);
+    const brand = paragraphs[0] || '';
+    const title = paragraphs[1] || sanitizeWhitespace(card.attr('title') || $(element).text());
+    const quantityText = paragraphs[2] || '';
+    const { currentPrice, priceText, unitPriceText } = parseBipaTilePriceInfo(card);
+    const normalizedUnitPrice = buildUnitPriceFromLabel(unitPriceText, currentPrice);
+    const categoryPrimary = determineOfferCategory({
+      title,
+      contextText: [brand, quantityText, unitPriceText].filter(Boolean).join(' '),
+    });
+    const issues = [];
+
+    if (!title || !currentPrice) {
+      return;
+    }
+
+    if (!normalizedUnitPrice.comparable) {
+      issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+    }
+
+    if (!validTo) {
+      issues.push('Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar');
+    }
+
+    offers.push({
+      crawlJobId,
+      sourceId: source._id,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      region,
+      title,
+      brand,
+      categoryPrimary,
+      categorySecondary: determineOfferSubcategory({
+        primaryCategory: categoryPrimary,
+        fallbackLabel: categoryPrimary,
+        title,
+        contextText: [brand, quantityText, unitPriceText].filter(Boolean).join(' '),
+      }),
+      comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
+      comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+      comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+      description: '',
+      sourceUrl: toAbsoluteUrl(card.attr('href'), pageUrl) || pageUrl,
+      imageUrl: sanitizeWhitespace(card.find('img').first().attr('src') || ''),
+      supportingSources: [
+        buildSourceEvidence({
+          source,
+          observedUrl: toAbsoluteUrl(card.attr('href'), pageUrl) || pageUrl,
+          matchType: pageUrl === source.sourceUrl ? 'primary' : 'official-related',
+        }),
+      ],
+      validFrom,
+      validTo,
+      status: statusInfo.status,
+      isActiveNow: statusInfo.isActiveNow,
+      isActiveToday: statusInfo.isActiveToday,
+      benefitType: /gratis/i.test([title, unitPriceText].join(' ')) ? 'multi-buy' : 'price-cut',
+      conditionsText: '',
+      customerProgramRequired: false,
+      availabilityScope: region || 'Grossraum Graz',
+      priceCurrent: {
+        amount: currentPrice,
+        currency: 'EUR',
+        originalText: priceText || `${currentPrice.toFixed(2)} EUR`,
+      },
+      priceReference: {
+        amount: null,
+        currency: 'EUR',
+        originalText: '',
+      },
+      quantityText,
+      normalizedUnitPrice,
+      quality: {
+        completenessScore: [currentPrice, title, categoryPrimary, quantityText].filter(Boolean).length / 4,
+        parsingConfidence: normalizedUnitPrice.comparable ? 0.88 : 0.76,
+        comparisonSafe: normalizedUnitPrice.comparable,
+        issues,
+      },
+      rawFacts: {
+        sourceType: 'bipa-official-html',
+        validityText: validTo ? `bis ${validTo.toISOString().slice(0, 10)}` : '',
+        infoText: unitPriceText,
+        snapshotCurrent: true,
+      },
+      adminReview: {
+        status: issues.length > 0 ? 'pending' : 'reviewed',
+        note: '',
+        feedbackDigest: '',
+      },
+      scope: buildInclusiveScopeDecision(),
+    });
+  });
+
+  return offers;
+}
+
+function collectBipaPromotionLinks(html, baseUrl) {
+  const $ = cheerio.load(html);
+  const seen = new Set();
+  const links = [];
+
+  $('a[href]').each((index, element) => {
+    const href = $(element).attr('href');
+    const text = sanitizeWhitespace($(element).text());
+    const absoluteUrl = toAbsoluteUrl(href, baseUrl);
+
+    if (!absoluteUrl || seen.has(absoluteUrl)) {
+      return;
+    }
+
+    if (!/bipa\.at/i.test(absoluteUrl)) {
+      return;
+    }
+
+    if (/\/cp\/aktionen|\/cp\/onlineonly|prefn0=pricebadges|\/c\//i.test(absoluteUrl)) {
+      seen.add(absoluteUrl);
+      links.push({
+        url: absoluteUrl,
+        label: text || absoluteUrl,
+      });
+    }
+  });
+
+  return links.slice(0, 10);
 }
 
 function parseHoferOffersFromPage({
@@ -757,6 +1087,95 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
   };
 }
 
+async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
+  await Offer.deleteMany({ sourceId: source._id });
+
+  const normalizedOffers = parsePennyOffersFromHtml({
+    html,
+    source,
+    crawlJobId,
+    region,
+    pageUrl: canonicalUrl || source.sourceUrl,
+  });
+  const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
+
+  if (offerDocuments.length > 0) {
+    await Offer.insertMany(offerDocuments, { ordered: false });
+  }
+
+  return {
+    offerDocuments,
+    rawDocuments: 0,
+  };
+}
+
+async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
+  const collectedOffers = [];
+  const validToHint = extractBipaValidityDate(html);
+  const pageCandidates = [
+    { url: canonicalUrl || source.sourceUrl, html },
+  ];
+  const additionalLinks = collectBipaPromotionLinks(html, canonicalUrl || source.sourceUrl);
+
+  for (const link of additionalLinks) {
+    if (pageCandidates.some((item) => item.url === link.url)) {
+      continue;
+    }
+
+    try {
+      const nested = await fetchHtml(link.url);
+      pageCandidates.push({
+        url: nested.canonicalUrl || link.url,
+        html: nested.html,
+      });
+    } catch (error) {
+      // Continue with the pages that were fetched successfully.
+    }
+  }
+
+  await Offer.deleteMany({ sourceId: source._id });
+
+  for (const page of pageCandidates) {
+    const pageOffers = parseBipaOffersFromHtml({
+      html: page.html,
+      source,
+      crawlJobId,
+      region,
+      pageUrl: page.url,
+      validToHint,
+    });
+
+    collectedOffers.push(...pageOffers);
+  }
+
+  const seen = new Set();
+  const offerDocuments = collectedOffers
+    .map(({ scope, ...offer }) => offer)
+    .filter((offer) => {
+      const key = [
+        normalizeTitleForMatch(`${offer.brand || ''} ${offer.title || ''}`),
+        String(offer.priceCurrent?.amount ?? ''),
+        String(offer.quantityText || ''),
+      ].join('::');
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+
+  if (offerDocuments.length > 0) {
+    await Offer.insertMany(offerDocuments, { ordered: false });
+  }
+
+  return {
+    offerDocuments,
+    rawDocuments: 0,
+  };
+}
+
 async function fetchNestedHtmlDocuments({ source, crawlJobId, region, links, limit = 4 }) {
   const baseHost = new URL(source.sourceUrl).host;
   const pageLinks = links
@@ -937,6 +1356,28 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += billaOfficialResult.offerDocuments.length;
       extraRawDocuments += billaOfficialResult.rawDocuments;
+    } else if (source.retailerKey === 'penny' && source.sourceUrl.includes('penny.at/angebote')) {
+      const pennyOfficialResult = await crawlPennyOfficialOffers({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        html,
+        canonicalUrl,
+      });
+
+      offersStored += pennyOfficialResult.offerDocuments.length;
+      extraRawDocuments += pennyOfficialResult.rawDocuments;
+    } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
+      const bipaOfficialResult = await crawlBipaOfficialOffers({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        html,
+        canonicalUrl,
+      });
+
+      offersStored += bipaOfficialResult.offerDocuments.length;
+      extraRawDocuments += bipaOfficialResult.rawDocuments;
     } else {
       const nestedDocuments = await fetchNestedHtmlDocuments({
         source,

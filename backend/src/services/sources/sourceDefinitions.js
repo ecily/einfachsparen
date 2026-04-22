@@ -211,9 +211,9 @@ const RETAILER_DEFINITIONS = [
     retailerName: 'PENNY',
     channel: 'official-site',
     label: 'PENNY Angebote',
-    sourceUrl: 'https://www.penny.at/',
+    sourceUrl: 'https://www.penny.at/angebote',
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
-    notes: 'Offizielle PENNY-Startseite mit aktuellen Angeboten als zusaetzliche Primaerquelle.',
+    notes: 'Offizielle PENNY-Angebotsseite mit serverseitig gerenderten Produktaktionen als Primaerquelle.',
   },
   {
     retailerKey: 'penny',
@@ -250,6 +250,15 @@ const RETAILER_DEFINITIONS = [
     sourceUrl: 'https://www.marktguru.at/r/pagro',
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
     notes: 'Oeffentliche Aggregator-Quelle fuer aktuelle PAGRO-Angebote.',
+  },
+  {
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    channel: 'official-site',
+    label: 'BIPA Aktionen',
+    sourceUrl: 'https://www.bipa.at/cp/aktionen',
+    capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
+    notes: 'Offizielle BIPA-Aktionsseite mit Produktkacheln und Aktionslisten als Primaerquelle.',
   },
   {
     retailerKey: 'bipa',

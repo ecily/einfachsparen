@@ -7,6 +7,7 @@ const {
   buildPayloadDigest,
   getScriptPushStrings,
   parseGroupRecord,
+  parseAllPromotionSections,
   parseSectionRecord,
 } = require('./aktionsfinderParser');
 const { normalizePromotionToOffer } = require('./offerNormalizer');
@@ -40,6 +41,21 @@ function extractSections(recordStrings, retailerName) {
   const grouped = recordStrings.map(parseGroupRecord).find(Boolean);
 
   return { popular, assortment, grouped };
+}
+
+function extractAllPromotions(recordStrings, fallbackSections) {
+  const parsed = parseAllPromotionSections(recordStrings);
+  const sectionPromotions = parsed.sectionRecords.flatMap((record) => record?.initialData?.content || []);
+  const groupedPromotions = parsed.groupRecords.flatMap(
+    (record) => record?.initialPromotionGroupList?.content?.flatMap((item) => item.items || []) || []
+  );
+  const fallbackPromotions = [
+    ...(fallbackSections.popular?.initialData?.content || []),
+    ...(fallbackSections.assortment?.initialData?.content || []),
+    ...(fallbackSections.grouped?.initialPromotionGroupList?.content?.flatMap((item) => item.items || []) || []),
+  ];
+
+  return uniquePromotions([...sectionPromotions, ...groupedPromotions, ...fallbackPromotions]);
 }
 
 function buildEssence({ retailerName, promotions, grouped }) {
@@ -106,10 +122,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     const html = String(response.data);
     const recordStrings = getScriptPushStrings(html);
     const sections = extractSections(recordStrings, source.retailerName);
-    const groupedPromotions = sections.grouped?.initialPromotionGroupList?.content.flatMap((item) => item.items || []) || [];
-    const popularPromotions = sections.popular?.initialData?.content || [];
-    const assortmentPromotions = sections.assortment?.initialData?.content || [];
-    const promotions = uniquePromotions([...popularPromotions, ...assortmentPromotions, ...groupedPromotions]);
+    const promotions = extractAllPromotions(recordStrings, sections);
     const digest = buildPayloadDigest(html);
     let fallbackOfficial = null;
 

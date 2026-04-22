@@ -1,4 +1,5 @@
 const Source = require('../../models/Source');
+const Offer = require('../../models/Offer');
 const { crawlAktionsfinderSource } = require('./aktionsfinderCrawler');
 const { crawlOfficialSource } = require('./officialSourceCrawler');
 const { crawlMarktguruSource } = require('./marketguruCrawler');
@@ -6,6 +7,25 @@ const { dedupeOffersAcrossSources } = require('./catalogDeduper');
 const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
 const { clearRankingResponseCache } = require('../offers/offerRankingService');
 const logger = require('../../lib/logger');
+
+const CHANNEL_PRIORITY = {
+  'official-site': 0,
+  'official-flyer': 1,
+  aggregator: 2,
+  other: 3,
+};
+
+const RETAILER_PRIORITY = {
+  spar: 0,
+  lidl: 1,
+  penny: 2,
+  dm: 3,
+  bipa: 4,
+  adeg: 5,
+  hofer: 6,
+  billa: 7,
+  'billa-plus': 8,
+};
 
 async function crawlSource({ source, region, trigger = 'manual' }) {
   if (source.channel === 'aggregator') {
@@ -28,10 +48,52 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
     ? { active: true, retailerKey: { $in: retailerKeys } }
     : { active: true };
 
-  const sources = await Source.find(filter).sort({ retailerName: 1, channel: 1 }).lean();
+  const [sources, activeOfferCounts] = await Promise.all([
+    Source.find(filter).lean(),
+    Offer.aggregate([
+      {
+        $match: retailerKeys.length > 0
+          ? { retailerKey: { $in: retailerKeys }, status: 'active', isActiveNow: true }
+          : { status: 'active', isActiveNow: true },
+      },
+      {
+        $group: {
+          _id: '$retailerKey',
+          activeOfferCount: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+  const activeOfferCountMap = new Map(
+    activeOfferCounts.map((item) => [String(item._id || ''), Number(item.activeOfferCount || 0)])
+  );
+  const prioritizedSources = [...sources].sort((left, right) => {
+    const leftRetailerPriority = RETAILER_PRIORITY[left.retailerKey] ?? 50;
+    const rightRetailerPriority = RETAILER_PRIORITY[right.retailerKey] ?? 50;
+
+    if (leftRetailerPriority !== rightRetailerPriority) {
+      return leftRetailerPriority - rightRetailerPriority;
+    }
+
+    const leftCoverage = activeOfferCountMap.get(left.retailerKey) ?? 0;
+    const rightCoverage = activeOfferCountMap.get(right.retailerKey) ?? 0;
+
+    if (leftCoverage !== rightCoverage) {
+      return leftCoverage - rightCoverage;
+    }
+
+    const leftChannelPriority = CHANNEL_PRIORITY[left.channel] ?? 99;
+    const rightChannelPriority = CHANNEL_PRIORITY[right.channel] ?? 99;
+
+    if (leftChannelPriority !== rightChannelPriority) {
+      return leftChannelPriority - rightChannelPriority;
+    }
+
+    return `${left.retailerName} ${left.label}`.localeCompare(`${right.retailerName} ${right.label}`, 'de');
+  });
   const results = [];
 
-  for (const source of sources) {
+  for (const source of prioritizedSources) {
     try {
       const result = await crawlSource({ source, region, trigger });
       results.push({

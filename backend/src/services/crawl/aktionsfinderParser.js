@@ -114,6 +114,56 @@ function parseGroupRecord(recordString) {
   return JSON.parse(objectText);
 }
 
+function collectJsonObjectsByMarker(recordString, marker) {
+  const objects = [];
+  let cursor = 0;
+
+  while (cursor < recordString.length) {
+    const sectionStart = recordString.indexOf(marker, cursor);
+
+    if (sectionStart < 0) {
+      break;
+    }
+
+    const objectText = extractJsonObject(recordString, sectionStart);
+
+    if (!objectText) {
+      break;
+    }
+
+    try {
+      objects.push(JSON.parse(objectText));
+    } catch (error) {
+      // Ignore individual malformed fragments and continue scanning.
+    }
+
+    cursor = sectionStart + marker.length;
+  }
+
+  return objects;
+}
+
+function parseAllPromotionSections(recordStrings = []) {
+  const sectionRecords = [];
+  const groupRecords = [];
+
+  for (const recordString of recordStrings) {
+    sectionRecords.push(
+      ...collectJsonObjectsByMarker(recordString, '{"title":"')
+        .filter((record) => Array.isArray(record?.initialData?.content))
+    );
+    groupRecords.push(
+      ...collectJsonObjectsByMarker(recordString, '{"vendor":')
+        .filter((record) => Array.isArray(record?.initialPromotionGroupList?.content))
+    );
+  }
+
+  return {
+    sectionRecords,
+    groupRecords,
+  };
+}
+
 function createContentHash(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
@@ -130,4 +180,5 @@ module.exports = {
   getScriptPushStrings,
   parseSectionRecord,
   parseGroupRecord,
+  parseAllPromotionSections,
 };
