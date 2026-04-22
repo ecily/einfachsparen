@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import './index.css'
 import {
-  fetchCurrentUserPreferences,
   fetchDashboardSnapshot,
   fetchEssence,
   fetchHealth,
   getOfferImageUrl,
-  saveCurrentUserPreferences,
   saveFeedback,
 } from './api'
 
@@ -128,9 +126,6 @@ function normalizeRetailerKey(value) {
     .replace(/^-+|-+$/g, '')
 }
 
-function buildRetailerSelectionKey(retailerKeys = []) {
-  return [...new Set((retailerKeys || []).filter(Boolean))].sort().join('|')
-}
 
 function getOfferCategoryLabel(offer) {
   return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
@@ -294,6 +289,74 @@ function getSavingsValue(offer) {
   return Number.isFinite(raw) ? raw : -1
 }
 
+function formatMoney(value, currency = 'EUR') {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return 'nicht erkannt'
+  return `${amount.toFixed(2)} ${currency}`
+}
+
+function formatUnitPrice(unitPrice) {
+  const amount = Number(unitPrice?.amount)
+  const unit = String(unitPrice?.unit || '').trim()
+  if (!Number.isFinite(amount) || !unit) return 'nicht sicher vergleichbar'
+  return `${amount.toFixed(2)} / ${unit}`
+}
+
+function isOfferActive(offer) {
+  if (offer?.isActiveNow === true) return true
+  if (offer?.status === 'active') return true
+  return false
+}
+
+function isSafelyComparable(offer) {
+  return Boolean(offer?.quality?.comparisonSafe && offer?.normalizedUnitPrice?.comparable !== false && offer?.comparisonGroup)
+}
+
+function getOfferStatusLabel(offer) {
+  if (isOfferActive(offer)) return 'jetzt aktiv'
+  if (offer?.isActiveToday) return 'heute aktiv'
+  if (offer?.status === 'upcoming') return 'kommt bald'
+  if (offer?.status === 'expired') return 'abgelaufen'
+  return 'Status unklar'
+}
+
+function getConditionSummary(offer) {
+  const parts = []
+
+  if (offer?.customerProgramRequired) parts.push('mit Kundenkarte/App')
+  if (offer?.isMultiBuy) parts.push('Mehrkauf-Angebot')
+
+  const minimumPurchaseQty = Number(offer?.minimumPurchaseQty)
+  if (Number.isFinite(minimumPurchaseQty) && minimumPurchaseQty > 1) {
+    parts.push(`ab ${minimumPurchaseQty} Stk.`)
+  }
+
+  if (offer?.hasConditions && offer?.conditionsText) {
+    parts.push(offer.conditionsText)
+  }
+
+  return parts
+}
+
+function getComparisonLabel(offer) {
+  if (!isSafelyComparable(offer)) return 'Aehnliches Angebot – kein sicherer Preisvergleich'
+  return 'Direkt vergleichbar'
+}
+
+function getOfferBadges(offer, isBestComparable = false) {
+  const badges = []
+
+  badges.push({ label: getOfferStatusLabel(offer), tone: isOfferActive(offer) ? 'success' : 'muted' })
+  badges.push({ label: getComparisonLabel(offer), tone: isSafelyComparable(offer) ? 'success' : 'warning' })
+
+  if (isBestComparable) badges.push({ label: 'Bester sicherer Preis', tone: 'success' })
+  if (offer?.customerProgramRequired) badges.push({ label: 'Mit Kundenkarte/App', tone: 'warning' })
+  if (offer?.isMultiBuy) badges.push({ label: 'Mehrkauf-Angebot', tone: 'warning' })
+  else if (offer?.hasConditions) badges.push({ label: 'Mit Bedingungen', tone: 'warning' })
+
+  return badges
+}
+
 function filterAndSortOffers(offers, filters, retailers, categories) {
   if (!filters.selectedRetailers.length) return []
 
@@ -328,16 +391,28 @@ function filterAndSortOffers(offers, filters, retailers, categories) {
   })
 
   return [...result].sort((left, right) => {
+    const activeDiff = Number(isOfferActive(right)) - Number(isOfferActive(left))
+    if (activeDiff !== 0) return activeDiff
+
+    const comparableDiff = Number(isSafelyComparable(right)) - Number(isSafelyComparable(left))
+    if (comparableDiff !== 0) return comparableDiff
+
+    const loyaltyDiff = Number(Boolean(left?.customerProgramRequired)) - Number(Boolean(right?.customerProgramRequired))
+    if (loyaltyDiff !== 0) return loyaltyDiff
+
+    const conditionsDiff = Number(Boolean(left?.hasConditions || left?.isMultiBuy)) - Number(Boolean(right?.hasConditions || right?.isMultiBuy))
+    if (conditionsDiff !== 0) return conditionsDiff
+
+    const leftUnit = Number(left?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+    const rightUnit = Number(right?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+    if (leftUnit !== rightUnit) return leftUnit - rightUnit
+
     const savingsDiff = getSavingsValue(right) - getSavingsValue(left)
     if (savingsDiff !== 0) return savingsDiff
 
     const leftPrice = Number(left?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
     const rightPrice = Number(right?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
-    if (leftPrice !== rightPrice) return leftPrice - rightPrice
-
-    const leftUnit = Number(left?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-    const rightUnit = Number(right?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-    return leftUnit - rightUnit
+    return leftPrice - rightPrice
   })
 }
 
@@ -799,12 +874,16 @@ function ActionBlock({
 }
 
 function ResultsBlock({ rankingLoading, hasAppliedRetailerScope, visibleOfferCount, offers }) {
+  const bestComparableOfferId = useMemo(() => {
+    return (offers || []).find((offer) => isOfferActive(offer) && isSafelyComparable(offer))?.id || null
+  }, [offers])
+
   return (
     <SectionCard>
       <div style={{ display: 'grid', gap: '1rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div className="panel__header" style={{ marginBottom: 0 }}>
           <h2>Ergebnisse</h2>
-          <p>Sortiert von der groessten Ersparnis zur kleinsten.</p>
+          <p>Aktive, gut vergleichbare und fuer normale Einkaeufe leicht nutzbare Angebote stehen oben.</p>
         </div>
 
         {!hasAppliedRetailerScope ? (
@@ -848,53 +927,86 @@ function ResultsBlock({ rankingLoading, hasAppliedRetailerScope, visibleOfferCou
             <p style={{ margin: 0, opacity: 0.82 }}>{visibleOfferCount} Angebote gefunden.</p>
 
             <div className="user-results" style={{ display: 'grid', gap: '0.85rem' }}>
-              {offers.map((offer, index) => (
-                <article className={`user-card ${index === 0 ? 'user-card--best' : ''}`} key={offer.id}>
-                  <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
+              {offers.map((offer, index) => {
+                const isBestComparable = offer.id === bestComparableOfferId
+                const badges = getOfferBadges(offer, isBestComparable)
+                const conditionSummary = getConditionSummary(offer)
+                const safeComparable = isSafelyComparable(offer)
 
-                  <div className="user-card__content">
-                    <div className="user-card__top">
-                      <div>
-                        <div className="user-card__eyebrow">
-                          <span>Rang {index + 1}</span>
-                          <span>{offer.retailerName}</span>
-                          <span>{getOfferCategoryLabel(offer)}</span>
-                          {offer.customerProgramRequired ? <span>nur mit Kundenkarte/App</span> : <span>ohne Kundenkarte/App</span>}
+                return (
+                  <article className={`user-card ${isBestComparable ? 'user-card--best' : ''}`} key={offer.id}>
+                    <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
+
+                    <div className="user-card__content">
+                      <div className="user-card__top">
+                        <div>
+                          <div className="user-card__eyebrow">
+                            <span>Rang {index + 1}</span>
+                            <span>{offer.retailerName}</span>
+                            <span>{getOfferCategoryLabel(offer)}</span>
+                          </div>
+                          <h3>{offer.title}</h3>
                         </div>
-                        <h3>{offer.title}</h3>
+
+                        <div className="user-card__price">
+                          <strong>{formatMoney(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</strong>
+                          <span>{formatUnitPrice(offer.normalizedUnitPrice)}</span>
+                        </div>
                       </div>
 
-                      <div className="user-card__price">
-                        {offer.conditionsText ? <span className="user-card__price-condition">{offer.conditionsText}</span> : null}
-                        <strong>{offer.priceCurrent?.amount} {offer.priceCurrent?.currency}</strong>
-                        <span>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</span>
+                      <div className="user-card__facts">
+                        <span>Menge: {offer.quantityText || 'nicht erkannt'}</span>
+                        <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {badges.map((badge) => (
+                          <span
+                            key={`${offer.id}-${badge.label}`}
+                            className={`pill ${badge.tone === 'success' ? 'pill--success' : badge.tone === 'warning' ? 'pill--pending' : 'pill--inactive'}`}
+                            style={{ textTransform: 'none' }}
+                          >
+                            {badge.label}
+                          </span>
+                        ))}
+                      </div>
+
+                      {conditionSummary.length > 0 ? (
+                        <div className="user-card__transparency">
+                          <strong>Wichtige Hinweise</strong>
+                          <p>{conditionSummary.join(' • ')}</p>
+                        </div>
+                      ) : null}
+
+                      {!safeComparable ? (
+                        <div className="user-card__transparency">
+                          <strong>Vergleichshinweis</strong>
+                          <p>
+                            Dieses Angebot wird gezeigt, aber nicht als sicherer Bestpreis behandelt, weil Menge oder Einheit nicht belastbar genug vergleichbar sind.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div className="user-card__highlights">
+                        <div className="highlight-pill highlight-pill--price">
+                          <span>Ersparnis</span>
+                          <strong>{getSavingsValue(offer) >= 0 ? formatMoney(getSavingsValue(offer), 'EUR') : 'nicht ableitbar'}</strong>
+                        </div>
+
+                        <div className="highlight-pill">
+                          <span>Vergleichspreis</span>
+                          <strong>{safeComparable ? formatUnitPrice(offer.normalizedUnitPrice) : 'nur aehnlich'}</strong>
+                        </div>
+
+                        <div className="highlight-pill">
+                          <span>Einordnung</span>
+                          <strong>{safeComparable ? 'direkt vergleichbar' : 'aehnliches Angebot'}</strong>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="user-card__facts">
-                      <span>Menge: {offer.quantityText || 'nicht erkannt'}</span>
-                      <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
-                    </div>
-
-                    <div className="user-card__highlights">
-                      <div className="highlight-pill highlight-pill--price">
-                        <span>Ersparnis</span>
-                        <strong>{getSavingsValue(offer) >= 0 ? `${getSavingsValue(offer)} EUR` : 'nicht ableitbar'}</strong>
-                      </div>
-
-                      <div className="highlight-pill">
-                        <span>Vergleichspreis</span>
-                        <strong>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</strong>
-                      </div>
-
-                      <div className="highlight-pill">
-                        <span>Kategorie</span>
-                        <strong>{getOfferCategoryLabel(offer)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                )
+              })}
             </div>
           </>
         )}
@@ -909,7 +1021,6 @@ function SearchPage({
   filtersLoading,
   ranking,
   rankingLoading,
-  preferencesLoading,
   draftRetailers,
   draftCategoryLabels,
   appliedRetailers,
@@ -923,7 +1034,7 @@ function SearchPage({
   onResetAll,
 }) {
   const [expandedMainKeys, setExpandedMainKeys] = useState([])
-  const isInitialBusy = preferencesLoading || filtersLoading
+  const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
 
   const allOffers = useMemo(() => flattenRankingOffers(ranking), [ranking])
@@ -952,7 +1063,7 @@ function SearchPage({
     <>
       <HeroLoaderModal
         open={isInitialBusy}
-        label="kaufklug.at laedt Supermaerkte, Kategorien und deine gespeicherten Einstellungen."
+        label="kaufklug.at laedt Supermaerkte und Kategorien."
       />
 
       <HeroBlock />
@@ -1103,32 +1214,10 @@ function App() {
   const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
   const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
   const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState([])
-  const [preferencesLoading, setPreferencesLoading] = useState(true)
   const [showAppPromoModal, setShowAppPromoModal] = useState(true)
-  const categoryCacheRef = useRef(new Map())
-  const rankingCacheRef = useRef(new Map())
 
   useEffect(() => {
     let active = true
-
-    async function loadPreferences() {
-      try {
-        setPreferencesLoading(true)
-        const preferenceResult = await fetchCurrentUserPreferences()
-
-        if (!active) return
-
-        const prefRetailers = preferenceResult.selectedRetailers || []
-
-        setDraftSelectedRetailers(prefRetailers)
-        setAppliedSelectedRetailers(prefRetailers)
-      } catch (preferenceError) {
-        if (!active) return
-        setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht geladen werden.')
-      } finally {
-        if (active) setPreferencesLoading(false)
-      }
-    }
 
     async function loadFilterMetadata() {
       try {
@@ -1137,18 +1226,24 @@ function App() {
 
         if (!active) return
 
-        setRetailers(retailerResult)
+        const nextRetailers = retailerResult || []
+        const initialRetailerKeys = nextRetailers.map((item) => item.retailerKey).filter(Boolean)
+
+        setRetailers(nextRetailers)
+        setDraftSelectedRetailers(initialRetailerKeys)
+        setAppliedSelectedRetailers(initialRetailerKeys)
         setError('')
       } catch (filterError) {
         if (!active) return
         setRetailers([])
+        setDraftSelectedRetailers([])
+        setAppliedSelectedRetailers([])
         setError(filterError.message || 'Filterdaten konnten nicht geladen werden.')
       } finally {
         if (active) setFiltersLoading(false)
       }
     }
 
-    loadPreferences()
     loadFilterMetadata()
 
     return () => {
@@ -1200,25 +1295,12 @@ function App() {
 
     async function loadScopedCategories() {
       try {
-        const cacheKey = buildRetailerSelectionKey(draftSelectedRetailers)
-        const cachedCategories = categoryCacheRef.current.get(cacheKey)
-
-        if (cachedCategories) {
-          if (!active) return
-          setCategories(cachedCategories)
-          setDraftSelectedCategoryLabels((current) => pruneSelectionTokens(current, cachedCategories))
-          setAppliedSelectedCategoryLabels((current) => pruneSelectionTokens(current, cachedCategories))
-          setError('')
-          return
-        }
-
         setFiltersLoading(true)
         const categoryResult = await fetchFilterCategories(draftSelectedRetailers)
 
         if (!active) return
 
         const nextCategories = normalizeCategoryDocuments(categoryResult)
-        categoryCacheRef.current.set(cacheKey, nextCategories)
         setCategories(nextCategories)
         setDraftSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
         setAppliedSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
@@ -1250,17 +1332,6 @@ function App() {
       }
 
       try {
-        const cacheKey = buildRetailerSelectionKey(appliedSelectedRetailers)
-        const cachedRanking = rankingCacheRef.current.get(cacheKey)
-
-        if (cachedRanking) {
-          if (!active) return
-          setRanking(cachedRanking)
-          setRankingLoading(false)
-          setError('')
-          return
-        }
-
         setRankingLoading(true)
 
         const rankingResult = await fetchOfferRankingDirect({
@@ -1274,7 +1345,6 @@ function App() {
 
         if (!active) return
 
-        rankingCacheRef.current.set(cacheKey, rankingResult)
         setRanking(rankingResult)
         setError('')
       } catch (rankingError) {
@@ -1305,24 +1375,12 @@ function App() {
     setEssence(essenceResult)
   }
 
-  async function persistUserPreferences(nextRetailers) {
-    try {
-      await saveCurrentUserPreferences({
-        selectedRetailers: nextRetailers,
-      })
-      setError('')
-    } catch (preferenceError) {
-      setError(preferenceError.message || 'Nutzerpraeferenzen konnten nicht gespeichert werden.')
-    }
-  }
-
   function handleToggleDraftRetailer(retailerKey) {
     setDraftSelectedRetailers((current) => {
       const nextRetailers = current.includes(retailerKey)
         ? current.filter((item) => item !== retailerKey)
         : [...current, retailerKey]
 
-      persistUserPreferences(nextRetailers)
       return nextRetailers
     })
   }
@@ -1364,12 +1422,12 @@ function App() {
   }
 
   function handleResetAll() {
-    setDraftSelectedRetailers([])
+    const allRetailerKeys = (retailers || []).map((item) => item.retailerKey).filter(Boolean)
+    setDraftSelectedRetailers(allRetailerKeys)
     setDraftSelectedCategoryLabels([])
-    setAppliedSelectedRetailers([])
+    setAppliedSelectedRetailers(allRetailerKeys)
     setAppliedSelectedCategoryLabels([])
     setRanking(null)
-    persistUserPreferences([])
   }
 
   async function handleSaveFeedback() {
@@ -1405,7 +1463,6 @@ function App() {
           filtersLoading={filtersLoading}
           ranking={ranking}
           rankingLoading={rankingLoading}
-          preferencesLoading={preferencesLoading}
           draftRetailers={draftSelectedRetailers}
           draftCategoryLabels={draftSelectedCategoryLabels}
           appliedRetailers={appliedSelectedRetailers}

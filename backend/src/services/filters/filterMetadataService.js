@@ -69,8 +69,22 @@ function isOfferActive(offer, now = new Date()) {
   return offer?.status === 'active';
 }
 
-function buildRetailerDocuments(offers, now) {
+function buildRetailerDocuments(existingRetailers, offers, now) {
   const retailers = new Map();
+
+  for (const retailer of existingRetailers) {
+    const retailerKey = normalizeRetailerKey(retailer);
+
+    retailers.set(retailerKey, {
+      retailerKey,
+      retailerName: cleanRetailerName(retailer.retailerName, retailerKey),
+      offerCount: 0,
+      activeOfferCount: 0,
+      lastSeenAt: retailer.lastSeenAt || null,
+      isActive: typeof retailer.isActive === 'boolean' ? retailer.isActive : false,
+      sortOrder: Number(retailer.sortOrder || 0),
+    });
+  }
 
   for (const offer of offers) {
     const retailerKey = normalizeRetailerKey(offer);
@@ -93,7 +107,6 @@ function buildRetailerDocuments(offers, now) {
     const current = retailers.get(retailerKey);
     current.offerCount += 1;
     current.activeOfferCount += isActive ? 1 : 0;
-    current.isActive = current.activeOfferCount > 0;
 
     if (!current.retailerName || lastSeenAt >= current.lastSeenAt) {
       current.retailerName = retailerName;
@@ -370,53 +383,58 @@ async function replaceCollection(Model, documents, session) {
 
 async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } = {}) {
   const now = new Date();
-  const offers = await Offer.find({})
-    .select(
-      [
-        'retailerKey',
-        'retailerName',
-        'offerKey',
-        'dedupeKey',
-        'title',
-        'brand',
-        'titleNormalized',
-        'categoryKey',
-        'categoryPrimary',
-        'categorySecondary',
-        'comparisonGroup',
-        'validFrom',
-        'validTo',
-        'status',
-        'isActiveNow',
-        'isActiveToday',
-        'quantityText',
-        'packCount',
-        'unitValue',
-        'unitType',
-        'totalComparableAmount',
-        'comparableUnit',
-        'packageType',
-        'conditionsText',
-        'customerProgramRequired',
-        'hasConditions',
-        'isMultiBuy',
-        'effectiveDiscountType',
-        'sortScoreDefault',
-        'normalizedUnitPrice',
-        'priceCurrent',
-        'priceReference',
-        'quality',
-        'imageUrl',
-        'benefitType',
-        'rawFacts',
-        'supportingSources',
-        'updatedAt',
-        'createdAt',
-      ].join(' ')
-    )
-    .lean();
+  const [offers, existingRetailers] = await Promise.all([
+    Offer.find({})
+      .select(
+        [
+          'retailerKey',
+          'retailerName',
+          'offerKey',
+          'dedupeKey',
+          'title',
+          'brand',
+          'titleNormalized',
+          'categoryKey',
+          'categoryPrimary',
+          'categorySecondary',
+          'comparisonGroup',
+          'validFrom',
+          'validTo',
+          'status',
+          'isActiveNow',
+          'isActiveToday',
+          'quantityText',
+          'packCount',
+          'unitValue',
+          'unitType',
+          'totalComparableAmount',
+          'comparableUnit',
+          'packageType',
+          'conditionsText',
+          'customerProgramRequired',
+          'hasConditions',
+          'isMultiBuy',
+          'effectiveDiscountType',
+          'sortScoreDefault',
+          'normalizedUnitPrice',
+          'priceCurrent',
+          'priceReference',
+          'quality',
+          'imageUrl',
+          'benefitType',
+          'rawFacts',
+          'supportingSources',
+          'updatedAt',
+          'createdAt',
+        ].join(' ')
+      )
+      .lean(),
+    Retailer.find({})
+      .select('retailerKey retailerName offerCount activeOfferCount lastSeenAt isActive sortOrder')
+      .lean(),
+  ]);
 
-  const retailerDocuments = buildRetailerDocuments(offers, now);
+  const retailerDocuments = buildRetailerDocuments(existingRetailers, offers, now);
   const categoryDocuments = buildCategoryDocuments(offers, now);
   const retailerCategoryStatDocuments = buildRetailerCategoryStatDocuments(offers, now);
   const offerCacheDocuments = buildOfferCacheDocuments(offers, now);
@@ -451,7 +469,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
 }
 
 async function getRetailerFilters() {
-  return Retailer.find({ isActive: true })
+  return Retailer.find({})
     .sort({ sortOrder: 1, retailerName: 1 })
     .lean();
 }
