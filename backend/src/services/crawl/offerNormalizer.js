@@ -265,6 +265,9 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     primaryCategory: categoryPrimary,
     sourceCategory: productGroups[0]?.title || '',
     fallbackLabel: categoryPrimary,
+    title: promotion.title,
+    contextText: promotion.description || '',
+    productGroups,
   });
   const brand = sanitizeWhitespace(product.brand?.name || '');
   const comparisonQuantityKey = buildComparisonQuantityKey(comparableBase);

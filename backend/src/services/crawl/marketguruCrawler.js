@@ -9,7 +9,11 @@ const {
   buildSourceEvidence,
 } = require('./sourceEvidence');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
-const { determineOfferCategory, buildInclusiveScopeDecision } = require('./categoryClassifier');
+const {
+  determineOfferCategory,
+  determineOfferSubcategory,
+  buildInclusiveScopeDecision,
+} = require('./categoryClassifier');
 
 function createHash(value) {
   return require('node:crypto').createHash('sha256').update(String(value || '')).digest('hex');
@@ -248,7 +252,13 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
       title,
       brand,
       categoryPrimary,
-      categorySecondary: categoryPrimary,
+      categorySecondary: determineOfferSubcategory({
+        primaryCategory: categoryPrimary,
+        sourceCategory: '',
+        fallbackLabel: '',
+        title,
+        contextText: infoText,
+      }),
       comparisonSignature: buildComparisonSignature({ title, brand }),
       comparisonQuantityKey: parsedInfo.quantityText
         ? normalizeTitleForMatch(parsedInfo.quantityText).replace(/[^a-z0-9]+/g, '-')

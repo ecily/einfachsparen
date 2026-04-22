@@ -299,6 +299,8 @@ function parseHoferOffersFromPage({
       categorySecondary: determineOfferSubcategory({
         primaryCategory: categoryPrimary,
         fallbackLabel: categoryPrimary,
+        title,
+        contextText: additionalInfo,
       }),
       comparisonSignature: normalizeTitleForMatch(title).split(' ').slice(0, 8).join('-'),
       comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
@@ -646,6 +648,8 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
       primaryCategory: categoryPrimary,
       sourceCategory: hit?.category || '',
       fallbackLabel: categoryPrimary,
+      title,
+      contextText: hit?.category || '',
     }),
     comparisonSignature: normalizeTitleForMatch(title).split(' ').slice(0, 8).join('-'),
     comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',

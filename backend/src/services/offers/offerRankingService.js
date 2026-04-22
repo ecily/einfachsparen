@@ -1,6 +1,7 @@
 const Offer = require('../../models/Offer');
 const Category = require('../../models/Category');
 const Retailer = require('../../models/Retailer');
+const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
 const { computeOfferSavings } = require('./promotionMath');
 
 const OFFER_RANKING_FIELDS = [
@@ -261,6 +262,14 @@ function applyProgramEligibility(offers, { programRetailers = [], onlyWithoutPro
   });
 }
 
+function applyUnitFilter(offers, unit) {
+  if (!unit || unit === 'all') {
+    return offers;
+  }
+
+  return offers.filter((offer) => String(offer?.normalizedUnitPrice?.unit || '') === String(unit));
+}
+
 function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }) {
   const filters = {
     'quality.comparisonSafe': true,
@@ -300,15 +309,16 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
 
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
   const savings = computeOfferSavings(offer);
+  const normalizedAmount = Number(offer?.normalizedUnitPrice?.amount ?? 0);
   const priceGapPercent = bestUnitPrice
-    ? Number((((offer.normalizedUnitPrice.amount - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
+    ? Number((((normalizedAmount - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
     : 0;
   const spread = worstUnitPrice && bestUnitPrice && worstUnitPrice !== bestUnitPrice
-    ? (offer.normalizedUnitPrice.amount - bestUnitPrice) / (worstUnitPrice - bestUnitPrice)
+    ? (normalizedAmount - bestUnitPrice) / (worstUnitPrice - bestUnitPrice)
     : 0;
 
   return {
-    id: offer._id,
+    id: offer.id || offer._id,
     retailerKey: offer.retailerKey,
     retailerName: offer.retailerName,
     title: offer.title,
@@ -342,13 +352,16 @@ function buildRetailerDistribution(offers) {
         retailerKey: offer.retailerKey,
         retailerName: offer.retailerName,
         offerCount: 0,
-        bestUnitPrice: offer.normalizedUnitPrice.amount,
+        bestUnitPrice: Number(offer?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER),
       });
     }
 
     const current = grouped.get(offer.retailerKey);
     current.offerCount += 1;
-    current.bestUnitPrice = Math.min(current.bestUnitPrice, offer.normalizedUnitPrice.amount);
+    current.bestUnitPrice = Math.min(
+      current.bestUnitPrice,
+      Number(offer?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+    );
   }
 
   return [...grouped.values()].sort((left, right) => {
@@ -498,6 +511,23 @@ function buildCategoryLabelsFromDocuments(items) {
       return left[0].localeCompare(right[0], 'de');
     })
     .map(([label]) => label);
+}
+
+function buildCacheMatch({ selectedRetailers = [], selectedCategories = [] }) {
+  const match = {};
+
+  if (selectedRetailers.length > 0) {
+    match.retailerKey = { $in: selectedRetailers };
+  }
+
+  if (selectedCategories.length > 0) {
+    match.$or = [
+      { mainCategoryLabel: { $in: selectedCategories } },
+      { subcategoryLabel: { $in: selectedCategories } },
+    ];
+  }
+
+  return match;
 }
 
 function parseShoppingItems(value) {
@@ -651,42 +681,37 @@ async function buildOfferRanking({
     return cachedResponse;
   }
 
-  const filters = buildFilters({
-    categories: selectedCategories,
-    query: '',
-    unit,
-    retailers: selectedRetailers,
-    onlyWithoutProgram: withoutProgram,
-  });
-
   const retailerMatch = selectedRetailers.length > 0
     ? { isActive: true, retailerKey: { $in: selectedRetailers } }
     : { isActive: true };
-  const [candidateOffers, categoryDocuments, units, retailerOptions] = await Promise.all([
-    Offer.find(filters)
-      .select(OFFER_RANKING_FIELDS)
-      .sort({ 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
+  const cacheMatch = buildCacheMatch({
+    selectedRetailers,
+    selectedCategories,
+  });
+  const [offerCacheDocuments, categoryDocuments, retailerOptions] = await Promise.all([
+    RetailerCategoryOfferCache.find(cacheMatch)
+      .select('offers')
       .lean(),
     Category.find({ isActive: true })
       .select('mainCategoryLabel offerCount subcategories')
       .lean(),
-    Offer.distinct('normalizedUnitPrice.unit', {
-      ...buildCurrentAvailabilityMatch(),
-      'quality.comparisonSafe': true,
-      'normalizedUnitPrice.amount': { $ne: null },
-    }),
     Retailer.find(retailerMatch)
       .select('retailerKey retailerName activeOfferCount')
       .sort({ sortOrder: 1, retailerName: 1 })
       .lean(),
   ]);
 
+  const candidateOffers = offerCacheDocuments.flatMap((document) => document.offers || []);
+
   const fullyFilteredOffers = dedupeOffers(
     applyQueryMatch(
-      applyProgramEligibility(candidateOffers, {
-        programRetailers: selectedProgramRetailers,
-        onlyWithoutProgram: withoutProgram,
-      }),
+      applyUnitFilter(
+        applyProgramEligibility(candidateOffers, {
+          programRetailers: selectedProgramRetailers,
+          onlyWithoutProgram: withoutProgram,
+        }),
+        unit
+      ),
       query
     )
   );
@@ -736,7 +761,7 @@ async function buildOfferRanking({
       retailerName: item.retailerName,
       offerCount: item.activeOfferCount || 0,
     })),
-    units: units.filter(Boolean).sort(),
+    units: [...new Set(candidateOffers.map((offer) => offer?.normalizedUnitPrice?.unit).filter(Boolean))].sort(),
     summary: {
       resultCount: fullyFilteredOffers.length,
       displayedCount: rankedOffers.length,

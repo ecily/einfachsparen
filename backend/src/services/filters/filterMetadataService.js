@@ -3,8 +3,10 @@ const Offer = require('../../models/Offer');
 const Retailer = require('../../models/Retailer');
 const Category = require('../../models/Category');
 const RetailerCategoryStat = require('../../models/RetailerCategoryStat');
+const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
 const logger = require('../../lib/logger');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('../crawl/sourceEvidence');
+const { computeOfferSavings } = require('../offers/promotionMath');
 
 function normalizeFilterKey(value, fallback = 'unknown') {
   const normalized = normalizeTitleForMatch(value).replace(/\s+/g, '-');
@@ -25,6 +27,17 @@ function cleanRetailerName(value, fallback) {
 
 function cleanCategoryLabel(value, fallback = 'Unkategorisiert') {
   return sanitizeWhitespace(value) || fallback;
+}
+
+function cleanSubcategoryLabel(mainCategoryLabel, subcategoryLabel) {
+  const main = normalizeCategoryKey(mainCategoryLabel, '');
+  const sub = normalizeCategoryKey(subcategoryLabel, '');
+
+  if (!sub || sub === main) {
+    return '';
+  }
+
+  return sanitizeWhitespace(subcategoryLabel);
 }
 
 function getOfferLastSeenAt(offer) {
@@ -86,7 +99,7 @@ function buildCategoryDocuments(offers, now) {
   for (const offer of offers) {
     const mainCategoryLabel = cleanCategoryLabel(offer.categoryPrimary);
     const mainCategoryKey = normalizeCategoryKey(mainCategoryLabel);
-    const subcategoryLabel = sanitizeWhitespace(offer.categorySecondary);
+    const subcategoryLabel = cleanSubcategoryLabel(mainCategoryLabel, offer.categorySecondary);
     const subcategoryKey = subcategoryLabel ? normalizeCategoryKey(subcategoryLabel) : '';
     const isActive = isOfferActive(offer, now);
     const lastSeenAt = getOfferLastSeenAt(offer);
@@ -165,7 +178,7 @@ function buildRetailerCategoryStatDocuments(offers, now) {
     const retailerKey = normalizeRetailerKey(offer);
     const mainCategoryLabel = cleanCategoryLabel(offer.categoryPrimary);
     const mainCategoryKey = normalizeCategoryKey(mainCategoryLabel);
-    const subcategoryLabel = sanitizeWhitespace(offer.categorySecondary);
+    const subcategoryLabel = cleanSubcategoryLabel(mainCategoryLabel, offer.categorySecondary);
     const subcategoryKey = subcategoryLabel ? normalizeCategoryKey(subcategoryLabel) : '';
     const lastSeenAt = getOfferLastSeenAt(offer);
     const isActive = isOfferActive(offer, now);
@@ -208,6 +221,107 @@ function buildRetailerCategoryStatDocuments(offers, now) {
   });
 }
 
+function buildOfferCacheDocuments(offers, now) {
+  const caches = new Map();
+
+  for (const offer of offers) {
+    if (!isOfferActive(offer, now)) {
+      continue;
+    }
+
+    const retailerKey = normalizeRetailerKey(offer);
+    const retailerName = cleanRetailerName(offer.retailerName, retailerKey);
+    const mainCategoryLabel = cleanCategoryLabel(offer.categoryPrimary);
+    const mainCategoryKey = normalizeCategoryKey(mainCategoryLabel);
+    const subcategoryLabel = cleanSubcategoryLabel(mainCategoryLabel, offer.categorySecondary);
+    const subcategoryKey = subcategoryLabel ? normalizeCategoryKey(subcategoryLabel) : '';
+    const lastSeenAt = getOfferLastSeenAt(offer);
+    const cacheKey = [retailerKey, mainCategoryKey, subcategoryKey].join('::');
+    const savings = computeOfferSavings(offer);
+
+    if (!caches.has(cacheKey)) {
+      caches.set(cacheKey, {
+        retailerKey,
+        retailerName,
+        mainCategoryKey,
+        mainCategoryLabel,
+        subcategoryKey,
+        subcategoryLabel,
+        offerCount: 0,
+        activeOfferCount: 0,
+        lastSeenAt,
+        offers: [],
+      });
+    }
+
+    const current = caches.get(cacheKey);
+    current.offerCount += 1;
+    current.activeOfferCount += 1;
+
+    if (lastSeenAt > current.lastSeenAt) {
+      current.lastSeenAt = lastSeenAt;
+    }
+
+    current.offers.push({
+      id: String(offer._id),
+      retailerKey,
+      retailerName,
+      title: offer.title,
+      brand: offer.brand || '',
+      categoryPrimary: mainCategoryLabel,
+      categorySecondary: subcategoryLabel || '',
+      quantityText: offer.quantityText || '',
+      conditionsText: offer.conditionsText || '',
+      customerProgramRequired: Boolean(offer.customerProgramRequired),
+      validFrom: offer.validFrom || null,
+      validTo: offer.validTo || null,
+      normalizedUnitPrice: offer.normalizedUnitPrice || {},
+      priceCurrent: offer.priceCurrent || {},
+      priceReference: offer.priceReference || {},
+      imageUrl: offer.imageUrl || '',
+      benefitType: offer.benefitType || 'unknown',
+      rawFacts: offer.rawFacts || {},
+      supportingSources: Array.isArray(offer.supportingSources) ? offer.supportingSources : [],
+      savingsAmount: savings.savingsAmount,
+      savingsPercent: savings.savingsPercent,
+      minimumPurchaseQuantity: savings.requiredQuantity,
+    });
+  }
+
+  return [...caches.values()]
+    .map((item) => ({
+      ...item,
+      offers: item.offers.sort((left, right) => {
+        const leftSavings = Number(left.savingsAmount ?? -1);
+        const rightSavings = Number(right.savingsAmount ?? -1);
+
+        if (rightSavings !== leftSavings) {
+          return rightSavings - leftSavings;
+        }
+
+        const leftUnit = Number(left.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER);
+        const rightUnit = Number(right.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER);
+
+        if (leftUnit !== rightUnit) {
+          return leftUnit - rightUnit;
+        }
+
+        return String(left.title || '').localeCompare(String(right.title || ''), 'de');
+      }),
+    }))
+    .sort((left, right) => {
+      if (left.retailerName !== right.retailerName) {
+        return left.retailerName.localeCompare(right.retailerName, 'de');
+      }
+
+      if (left.mainCategoryLabel !== right.mainCategoryLabel) {
+        return left.mainCategoryLabel.localeCompare(right.mainCategoryLabel, 'de');
+      }
+
+      return left.subcategoryLabel.localeCompare(right.subcategoryLabel, 'de');
+    });
+}
+
 async function replaceCollection(Model, documents, session) {
   await Model.deleteMany({}, { session });
 
@@ -220,13 +334,35 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
   const now = new Date();
   const offers = await Offer.find({})
     .select(
-      'retailerKey retailerName categoryPrimary categorySecondary validFrom validTo rawFacts updatedAt createdAt'
+      [
+        'retailerKey',
+        'retailerName',
+        'title',
+        'brand',
+        'categoryPrimary',
+        'categorySecondary',
+        'validFrom',
+        'validTo',
+        'quantityText',
+        'conditionsText',
+        'customerProgramRequired',
+        'normalizedUnitPrice',
+        'priceCurrent',
+        'priceReference',
+        'imageUrl',
+        'benefitType',
+        'rawFacts',
+        'supportingSources',
+        'updatedAt',
+        'createdAt',
+      ].join(' ')
     )
     .lean();
 
   const retailerDocuments = buildRetailerDocuments(offers, now);
   const categoryDocuments = buildCategoryDocuments(offers, now);
   const retailerCategoryStatDocuments = buildRetailerCategoryStatDocuments(offers, now);
+  const offerCacheDocuments = buildOfferCacheDocuments(offers, now);
   const session = await mongoose.startSession();
 
   try {
@@ -234,6 +370,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
       await replaceCollection(Retailer, retailerDocuments, session);
       await replaceCollection(Category, categoryDocuments, session);
       await replaceCollection(RetailerCategoryStat, retailerCategoryStatDocuments, session);
+      await replaceCollection(RetailerCategoryOfferCache, offerCacheDocuments, session);
     });
   } finally {
     await session.endSession();
@@ -244,6 +381,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
     retailers: retailerDocuments.length,
     categories: categoryDocuments.length,
     retailerCategoryStats: retailerCategoryStatDocuments.length,
+    offerCacheBuckets: offerCacheDocuments.length,
     activeRetailers: retailerDocuments.filter((item) => item.isActive).length,
     activeCategories: categoryDocuments.filter((item) => item.isActive).length,
     processedOffers: offers.length,
