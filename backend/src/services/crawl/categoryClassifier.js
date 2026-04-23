@@ -36,20 +36,21 @@ const CATEGORY_TAXONOMY = [
     patterns: [/(drogerie|hygiene|pflege|kosmetik|beauty)/],
     subcategories: [
       { label: 'Haarpflege', patterns: [/(shampoo|spulung|spuelung|haar|haarkur|styling)/] },
-      { label: 'Koerperpflege', patterns: [/(dusch|deo|deodorant|bodylotion|seife|creme|pflege)/] },
+      { label: 'Koerperpflege', patterns: [/(dusch|deo|deodorant|bodylotion|seife|creme|pflege|lotion|balsam)/] },
       { label: 'Mund- & Zahnpflege', patterns: [/(zahnpasta|zahnburste|zahnbuerste|mundspulung|mundspuelung|zahn)/] },
       { label: 'Rasur', patterns: [/(rasierer|rasur|klinge|aftershave)/] },
       { label: 'Kosmetik & Make-up', patterns: [/(kosmetik|make up|makeup|mascara|lippenstift|foundation|parfum)/] },
       { label: 'Damenhygiene', patterns: [/(binden|tampon|slipeinlage|einlagen|damenhygiene)/] },
       { label: 'Babyhygiene', patterns: [/(windel|feuchttucher|feuchttuecher|babycreme|babyshampoo)/] },
       { label: 'Haushaltspapier', patterns: [/(toilettenpapier|kuchenrolle|kuechenrolle|taschentucher|taschentuecher|haushaltspapier)/] },
+      { label: 'Gesundheit & Nahrungsergaenzung', patterns: [/(vitamin|magnesium|omega|zink|nahrungserganzung|nahrungsergaenzung|kapsel|kapseln|tablette|tabletten|pastille|pastillen|supplement)/] },
     ],
   },
   {
     main: 'Haushalt',
     patterns: [/(haushalt|wohnen|reinigen|putzen)/],
     subcategories: [
-      { label: 'Waschmittel & Reiniger', patterns: [/(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker)/] },
+      { label: 'Waschmittel & Reiniger', patterns: [/(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|geschirrspul|spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|waschcaps|tabs)/] },
       { label: 'Kuechenhelfer', patterns: [/(geschirr|pfanne|topf|besteck|messer|kochen|kueche|kuche)/] },
       { label: 'Aufbewahrung & Folien', patterns: [/(folie|frischhalte|alu|beutel|aufbewahrung|dose|box)/] },
       { label: 'Deko & Wohnen', patterns: [/(deko|kerze|vase|kissen|wohnen)/] },
@@ -140,6 +141,16 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(tv|smart tv|fernseher|oled|q led|qled|monitor|lautsprecher|soundbar)\b/],
     main: 'Technik / Elektronik',
     sub: 'Unterhaltungselektronik',
+  },
+  {
+    patterns: [/\b(vitamin|magnesium|omega|zink|nahrungserganzung|nahrungsergaenzung|kapsel|kapseln|tablette|tabletten|pastille|pastillen)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Gesundheit & Nahrungsergaenzung',
+  },
+  {
+    patterns: [/\b(spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|geschirrspueltabs|geschirrspultabs|waschcaps|reiniger tabs)\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
   },
 ];
 

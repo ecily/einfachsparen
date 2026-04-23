@@ -50,6 +50,23 @@ export async function fetchOfferRanking(params = {}) {
   return response.data
 }
 
+export async function fetchQualitySnapshot(params = {}) {
+  const response = await api.get('/quality/snapshot', {
+    params,
+  })
+  return response.data
+}
+
+export async function saveSubcategoryCategoryOverride(payload) {
+  const response = await api.post('/quality/subcategory-category', payload)
+  return response.data
+}
+
+export async function saveArticleSubcategoryOverride(payload) {
+  const response = await api.post('/quality/article-subcategory', payload)
+  return response.data
+}
+
 export async function fetchBasketSuggestions(params = {}) {
   const response = await api.get('/offers/basket', {
     params,

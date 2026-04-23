@@ -14,6 +14,7 @@ const {
   determineOfferSubcategory,
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
+const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 
 function createHash(value) {
   return require('node:crypto').createHash('sha256').update(String(value || '')).digest('hex');
@@ -315,7 +316,7 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
       issues.push('Angebot erfordert Kundenprogramm oder App');
     }
 
-    offers.push({
+    offers.push(applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -383,7 +384,7 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
         feedbackDigest: '',
       },
       scope: scopeDecision,
-    });
+    }).offer);
   }
 
   return offers;
@@ -442,7 +443,7 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
       issues.push('Angebot erfordert Kundenprogramm oder App');
     }
 
-    offers.push({
+    offers.push(applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -509,7 +510,7 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
         feedbackDigest: '',
       },
       scope: scopeDecision,
-    });
+    }).offer);
   });
 
   return offers;

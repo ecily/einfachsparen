@@ -5,8 +5,11 @@ import {
   fetchDashboardSnapshot,
   fetchEssence,
   fetchHealth,
+  fetchQualitySnapshot,
   getOfferImageUrl,
+  saveArticleSubcategoryOverride,
   saveFeedback,
+  saveSubcategoryCategoryOverride,
 } from './api'
 
 function getApiBase() {
@@ -169,13 +172,55 @@ function formatUnitPrice(normalizedUnitPrice) {
   return `${amount.toFixed(2)} / ${unit}`
 }
 
+function shouldDisplayUnitPrice(offer) {
+  const amount = Number(offer?.normalizedUnitPrice?.amount)
+  const unit = String(offer?.normalizedUnitPrice?.unit || offer?.comparableUnit || '')
+  const packageType = String(offer?.packageType || '').toLowerCase()
+  const packCount = Number(offer?.packCount || 0)
+  const unitType = String(offer?.unitType || '')
+
+  if (!Number.isFinite(amount) || !unit) {
+    return false
+  }
+
+  if (unit === 'Stk' && packCount > 1 && (packageType === 'pack' || packageType === 'box' || packageType === 'blister' || unitType === 'Stk')) {
+    return false
+  }
+
+  return true
+}
+
+function getConditionsSummary(offer) {
+  if (offer?.conditionsText) {
+    return offer.conditionsText
+  }
+
+  if (offer?.customerProgramRequired) {
+    return 'Mit Kundenkarte/App'
+  }
+
+  if (offer?.isMultiBuy) {
+    return 'Mehrkauf-Angebot'
+  }
+
+  const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1)
+  if (minimumPurchaseQty > 1) {
+    return `Mindestens ${minimumPurchaseQty} noetig`
+  }
+
+  if (offer?.hasConditions) {
+    return 'Bedingungen vorhanden'
+  }
+
+  return 'Keine besonderen Bedingungen'
+}
+
 function buildOfferBadges(offer) {
   const badges = [getOfferKindLabel(offer), getOfferStatusLabel(offer)]
 
   if (offer?.customerProgramRequired) badges.push('Mit Kundenkarte/App')
   if (offer?.isMultiBuy) badges.push('Mehrkauf-Angebot')
   if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge noetig')
-  if (offer?.hasConditions && offer?.conditionsText) badges.push('Bedingungen beachten')
 
   return badges
 }
@@ -915,7 +960,9 @@ function ResultsBlock({ rankingLoading, hasAppliedRetailerScope, visibleOfferCou
 function OfferCardConsumer({ offer, highlightLabel = '' }) {
   const badges = buildOfferBadges(offer)
   const directlyComparable = isOfferDirectlyComparable(offer)
-  const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1)
+  const savingsValue = getSavingsValue(offer)
+  const conditionsSummary = getConditionsSummary(offer)
+  const showUnitPrice = shouldDisplayUnitPrice(offer)
 
   return (
     <article className={`user-card ${directlyComparable ? 'user-card--best' : ''}`}>
@@ -934,7 +981,7 @@ function OfferCardConsumer({ offer, highlightLabel = '' }) {
 
           <div className="user-card__price">
             <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
-            <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span>
+            {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
           </div>
         </div>
 
@@ -953,28 +1000,18 @@ function OfferCardConsumer({ offer, highlightLabel = '' }) {
 
         <div className="user-card__highlights">
           <div className={`highlight-pill ${directlyComparable ? 'highlight-pill--price' : ''}`}>
-            <span>{directlyComparable ? 'Bester sicherer Preis' : 'Einordnung'}</span>
-            <strong>{directlyComparable ? formatUnitPrice(offer?.normalizedUnitPrice) : 'Nicht 1:1 vergleichbar'}</strong>
+            <span>Ersparnis heute</span>
+            <strong>{savingsValue >= 0 ? `${savingsValue.toFixed(2)} EUR` : 'nicht sicher erkannt'}</strong>
           </div>
 
           <div className="highlight-pill">
             <span>Bedingungen</span>
-            <strong>
-              {offer?.customerProgramRequired
-                ? 'Mit Kundenkarte/App'
-                : offer?.isMultiBuy
-                  ? 'Mehrkauf-Angebot'
-                  : minimumPurchaseQty > 1
-                    ? `Mindestens ${minimumPurchaseQty} noetig`
-                    : offer?.hasConditions
-                      ? 'Bedingungen beachten'
-                      : 'Einfaches Angebot'}
-            </strong>
+            <strong>{conditionsSummary}</strong>
           </div>
 
           <div className="highlight-pill">
-            <span>Preis heute</span>
-            <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
+            <span>{showUnitPrice ? 'Einheitspreis' : 'Vergleich'}</span>
+            <strong>{showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : getOfferKindLabel(offer)}</strong>
           </div>
         </div>
 
@@ -1258,14 +1295,346 @@ function DiagnosticsPage({
   )
 }
 
+function buildQualityCategoryOptions(snapshot) {
+  const options = new Set()
+
+  for (const item of snapshot?.categories || []) {
+    if (item?.categoryPrimary) {
+      options.add(item.categoryPrimary)
+    }
+  }
+
+  for (const item of snapshot?.subcategoryMappings || []) {
+    if (item?.categoryPrimary) {
+      options.add(item.categoryPrimary)
+    }
+  }
+
+  for (const item of snapshot?.articleMappings || []) {
+    if (item?.categoryPrimary) {
+      options.add(item.categoryPrimary)
+    }
+  }
+
+  return [...options].sort((left, right) => left.localeCompare(right, 'de'))
+}
+
+function buildQualitySubcategoryOptions(snapshot, selectedPrimary = '') {
+  const options = new Set()
+
+  for (const item of snapshot?.subcategoryMappings || []) {
+    if (!item?.subcategoryLabel) continue
+    if (!selectedPrimary || item.categoryPrimary === selectedPrimary) {
+      options.add(item.subcategoryLabel)
+    }
+  }
+
+  for (const item of snapshot?.manualOverrides?.articleSubcategory || []) {
+    if (!item?.targetCategorySecondary) continue
+    if (!selectedPrimary || item.targetCategoryPrimary === selectedPrimary) {
+      options.add(item.targetCategorySecondary)
+    }
+  }
+
+  return [...options].sort((left, right) => left.localeCompare(right, 'de'))
+}
+
+function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKey }) {
+  const [targetCategoryPrimary, setTargetCategoryPrimary] = useState(item.categoryPrimary || '')
+  const [note, setNote] = useState('')
+  const rowKey = `subcategory:${item.subcategoryKey}`
+
+  useEffect(() => {
+    setTargetCategoryPrimary(item.categoryPrimary || '')
+  }, [item.categoryPrimary])
+
+  return (
+    <div className="quality-row">
+      <div>
+        <strong>{item.subcategoryLabel}</strong>
+        <p className="offer-card__meta">Aktuell in {item.categoryPrimary || 'Unkategorisiert'}</p>
+      </div>
+      <div>
+        <span className="quality-row__label">Offers</span>
+        <strong>{item.offerCount || 0}</strong>
+        <p className="offer-card__meta">Aktiv: {item.activeOfferCount || 0}</p>
+      </div>
+      <div>
+        <span className="quality-row__label">Retailer</span>
+        <strong>{item.retailerCount || 0}</strong>
+        <p className="offer-card__meta">{(item.sampleTitles || []).join(' • ') || 'Keine Beispiele'}</p>
+      </div>
+      <div className="quality-row__editor">
+        <label className="quality-form__field">
+          <span>Ziel-Kategorie</span>
+          <select value={targetCategoryPrimary} onChange={(event) => setTargetCategoryPrimary(event.target.value)}>
+            <option value="">Kategorie waehlen</option>
+            {categoryOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="quality-form__field">
+          <span>Notiz</span>
+          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="optional" />
+        </label>
+        <button
+          className="crawl-button quality-row__action"
+          disabled={!targetCategoryPrimary || savingKey === rowKey}
+          onClick={() => onSave({ item, targetCategoryPrimary, note, rowKey })}
+        >
+          {savingKey === rowKey ? 'Speichert...' : 'Zuordnung speichern'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, savingKey }) {
+  const [targetCategoryPrimary, setTargetCategoryPrimary] = useState(item.categoryPrimary || '')
+  const [targetCategorySecondary, setTargetCategorySecondary] = useState(item.categorySecondary || '')
+  const [note, setNote] = useState('')
+  const rowKey = `article:${item.retailerKey}:${item.titleNormalized}`
+  const subcategoryOptions = useMemo(
+    () => buildQualitySubcategoryOptions(snapshot, targetCategoryPrimary),
+    [snapshot, targetCategoryPrimary]
+  )
+
+  useEffect(() => {
+    setTargetCategoryPrimary(item.categoryPrimary || '')
+    setTargetCategorySecondary(item.categorySecondary || '')
+  }, [item.categoryPrimary, item.categorySecondary])
+
+  useEffect(() => {
+    if (!targetCategoryPrimary) return
+    const stillValid = subcategoryOptions.includes(targetCategorySecondary)
+    if (!stillValid && subcategoryOptions.length > 0) {
+      setTargetCategorySecondary(subcategoryOptions[0])
+    }
+  }, [subcategoryOptions, targetCategoryPrimary, targetCategorySecondary])
+
+  return (
+    <div className="quality-row quality-row--article">
+      <div>
+        <strong>{item.titleDisplay || item.titleNormalized}</strong>
+        <p className="offer-card__meta">{item.retailerName || item.retailerKey || 'Retailer unbekannt'}</p>
+      </div>
+      <div>
+        <span className="quality-row__label">Aktuell</span>
+        <strong>{item.categorySecondary || 'ohne Subkategorie'}</strong>
+        <p className="offer-card__meta">{item.categoryPrimary || 'Unkategorisiert'}</p>
+      </div>
+      <div>
+        <span className="quality-row__label">Offers</span>
+        <strong>{item.offerCount || 0}</strong>
+        <p className="offer-card__meta">Aktiv: {item.activeOfferCount || 0}</p>
+      </div>
+      <div className="quality-row__editor">
+        <label className="quality-form__field">
+          <span>Ziel-Kategorie</span>
+          <select value={targetCategoryPrimary} onChange={(event) => setTargetCategoryPrimary(event.target.value)}>
+            <option value="">Kategorie waehlen</option>
+            {categoryOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="quality-form__field">
+          <span>Ziel-Subkategorie</span>
+          <input
+            list={`subcategory-options-${rowKey}`}
+            value={targetCategorySecondary}
+            onChange={(event) => setTargetCategorySecondary(event.target.value)}
+            placeholder="Subkategorie setzen"
+          />
+          <datalist id={`subcategory-options-${rowKey}`}>
+            {subcategoryOptions.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        </label>
+        <label className="quality-form__field">
+          <span>Notiz</span>
+          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="optional" />
+        </label>
+        <button
+          className="crawl-button quality-row__action"
+          disabled={!targetCategoryPrimary || !targetCategorySecondary || savingKey === rowKey}
+          onClick={() => onSave({ item, targetCategoryPrimary, targetCategorySecondary, note, rowKey })}
+        >
+          {savingKey === rowKey ? 'Speichert...' : 'Artikel-Zuordnung speichern'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function QualityPage({
+  snapshot,
+  loading,
+  error,
+  filters,
+  onFilterChange,
+  onReload,
+  onSaveSubcategoryOverride,
+  onSaveArticleOverride,
+  savingKey,
+}) {
+  const categoryOptions = useMemo(() => buildQualityCategoryOptions(snapshot), [snapshot])
+  const subcategoryMappings = snapshot?.subcategoryMappings || []
+  const articleMappings = snapshot?.articleMappings || []
+  const manualSubcategoryOverrides = snapshot?.manualOverrides?.subcategoryCategory || []
+  const manualArticleOverrides = snapshot?.manualOverrides?.articleSubcategory || []
+
+  return (
+    <>
+      <header className="hero">
+        <div>
+          <p className="eyebrow">kaufklug.at quality</p>
+          <h1>Zuordnungen pruefen und sofort korrigieren</h1>
+          <p className="subtitle">
+            Primaer pruefst du hier Subkategorie zu Kategorie. Darunter kannst du einzelne Artikel direkt auf die
+            richtige Subkategorie setzen. Manuelle Zuordnungen greifen sofort und haben Vorrang vor der Automatik.
+          </p>
+        </div>
+        <div className="hero__status">
+          <div>
+            <span>Snapshot</span>
+            <strong>{snapshot?.generatedAt ? dayjs(snapshot.generatedAt).format('DD.MM.YYYY HH:mm:ss') : '-'}</strong>
+          </div>
+          <div>
+            <span>Subkategorien</span>
+            <strong>{subcategoryMappings.length}</strong>
+          </div>
+          <div>
+            <span>Artikel</span>
+            <strong>{articleMappings.length}</strong>
+          </div>
+          <div>
+            <span>Overrides</span>
+            <strong>{manualSubcategoryOverrides.length + manualArticleOverrides.length}</strong>
+          </div>
+        </div>
+      </header>
+
+      {error ? <p className="status status--error">{error}</p> : null}
+
+      <section className="panel">
+        <div className="panel__header">
+          <h2>Suche und Filter</h2>
+          <p>Fuer Massenpruefung nach Retailer, Kategorie oder Freitext eingrenzen.</p>
+        </div>
+        <div className="quality-filters">
+          <label className="quality-form__field">
+            <span>Suche</span>
+            <input
+              value={filters.query}
+              onChange={(event) => onFilterChange('query', event.target.value)}
+              placeholder="Artikel, Subkategorie oder Kategorie suchen"
+            />
+          </label>
+          <label className="quality-form__field">
+            <span>Retailer</span>
+            <select value={filters.retailerKey} onChange={(event) => onFilterChange('retailerKey', event.target.value)}>
+              <option value="">Alle Retailer</option>
+              {(snapshot?.retailers || []).map((item) => (
+                <option key={item.retailerKey} value={item.retailerKey}>
+                  {item.retailerName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="quality-form__field">
+            <span>Kategorie</span>
+            <select value={filters.categoryPrimary} onChange={(event) => onFilterChange('categoryPrimary', event.target.value)}>
+              <option value="">Alle Kategorien</option>
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="quality-form__field">
+            <span>Limit</span>
+            <select value={String(filters.limit)} onChange={(event) => onFilterChange('limit', Number(event.target.value))}>
+              {[50, 100, 200, 300].map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="crawl-button quality-filters__action" onClick={onReload} disabled={loading}>
+            {loading ? 'Laedt...' : 'Ansicht aktualisieren'}
+          </button>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel__header">
+          <h2>Subkategorie zu Kategorie</h2>
+          <p>Das ist die primaere Qualitaetssicht fuer die grobe Fachlogik.</p>
+        </div>
+        {loading && !snapshot ? <p className="status">Lade Quality-Snapshot...</p> : null}
+        {!loading && subcategoryMappings.length === 0 ? (
+          <p className="status">Keine passenden Subkategorie-Zuordnungen gefunden.</p>
+        ) : null}
+        <div className="quality-list">
+          {subcategoryMappings.map((item) => (
+            <SubcategoryOverrideRow
+              key={item.subcategoryKey}
+              item={item}
+              categoryOptions={categoryOptions}
+              onSave={onSaveSubcategoryOverride}
+              savingKey={savingKey}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel__header">
+          <h2>Artikel zu Subkategorie</h2>
+          <p>Nutze diesen Bereich fuer gezielte Einzelkorrekturen bei falsch zugeordneten Artikeln.</p>
+        </div>
+        {!loading && articleMappings.length === 0 ? (
+          <p className="status">Keine passenden Artikel-Zuordnungen gefunden.</p>
+        ) : null}
+        <div className="quality-list">
+          {articleMappings.map((item) => (
+            <ArticleOverrideRow
+              key={`${item.retailerKey}-${item.titleNormalized}`}
+              item={item}
+              categoryOptions={categoryOptions}
+              snapshot={snapshot}
+              onSave={onSaveArticleOverride}
+              savingKey={savingKey}
+            />
+          ))}
+        </div>
+      </section>
+    </>
+  )
+}
+
 function App() {
   const pathname = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : ''
-  const initialPage = pathname.includes('diagnose') || pathname.includes('diagnostic') ? 'diagnostics' : 'search'
+  const initialPage = pathname.includes('quality')
+    ? 'quality'
+    : pathname.includes('diagnose') || pathname.includes('diagnostic')
+      ? 'diagnostics'
+      : 'search'
 
-  const [activePage] = useState(initialPage)
+  const [activePage, setActivePage] = useState(initialPage)
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
+  const [qualitySnapshot, setQualitySnapshot] = useState(null)
   const [ranking, setRanking] = useState(null)
   const [retailers, setRetailers] = useState([])
   const [categories, setCategories] = useState([])
@@ -1275,6 +1644,14 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [filtersLoading, setFiltersLoading] = useState(true)
   const [rankingLoading, setRankingLoading] = useState(false)
+  const [qualityLoading, setQualityLoading] = useState(false)
+  const [qualitySavingKey, setQualitySavingKey] = useState('')
+  const [qualityFilters, setQualityFilters] = useState({
+    query: '',
+    retailerKey: '',
+    categoryPrimary: '',
+    limit: 100,
+  })
   const [draftSelectedRetailers, setDraftSelectedRetailers] = useState([])
   const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
   const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
@@ -1355,6 +1732,42 @@ function App() {
       clearInterval(interval)
     }
   }, [activePage])
+
+  useEffect(() => {
+    if (activePage !== 'quality') {
+      return undefined
+    }
+
+    let active = true
+
+    async function loadQualitySnapshot() {
+      try {
+        setQualityLoading(true)
+        const nextSnapshot = await fetchQualitySnapshot({
+          q: qualityFilters.query,
+          retailerKey: qualityFilters.retailerKey,
+          categoryPrimary: qualityFilters.categoryPrimary,
+          limit: qualityFilters.limit,
+        })
+
+        if (!active) return
+
+        setQualitySnapshot(nextSnapshot)
+        setError('')
+      } catch (loadError) {
+        if (!active) return
+        setError(loadError.message || 'Quality-Snapshot konnte nicht geladen werden.')
+      } finally {
+        if (active) setQualityLoading(false)
+      }
+    }
+
+    loadQualitySnapshot()
+
+    return () => {
+      active = false
+    }
+  }, [activePage, qualityFilters])
 
   useEffect(() => {
     let active = true
@@ -1441,6 +1854,28 @@ function App() {
     setEssence(essenceResult)
   }
 
+  function handleNavigate(nextPage) {
+    setActivePage(nextPage)
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const nextPath = nextPage === 'quality' ? '/quality' : nextPage === 'diagnostics' ? '/diagnose' : '/'
+    window.history.replaceState({}, '', nextPath)
+  }
+
+  function handleQualityFilterChange(key, value) {
+    setQualityFilters((current) => ({
+      ...current,
+      [key]: value,
+    }))
+  }
+
+  async function refreshQualitySnapshot() {
+    setQualityFilters((current) => ({ ...current }))
+  }
+
 
   function handleToggleDraftRetailer(retailerKey) {
     setDraftSelectedRetailers((current) => {
@@ -1515,12 +1950,82 @@ function App() {
     }
   }
 
+  async function handleSaveSubcategoryOverride({ item, targetCategoryPrimary, note, rowKey }) {
+    try {
+      setQualitySavingKey(rowKey)
+      await saveSubcategoryCategoryOverride({
+        matchSubcategoryLabel: item.subcategoryLabel,
+        targetCategoryPrimary,
+        note,
+      })
+      const nextSnapshot = await fetchQualitySnapshot({
+        q: qualityFilters.query,
+        retailerKey: qualityFilters.retailerKey,
+        categoryPrimary: qualityFilters.categoryPrimary,
+        limit: qualityFilters.limit,
+      })
+      setQualitySnapshot(nextSnapshot)
+      setError('')
+    } catch (saveError) {
+      setError(saveError.message || 'Subkategorie-Korrektur konnte nicht gespeichert werden.')
+    } finally {
+      setQualitySavingKey('')
+    }
+  }
+
+  async function handleSaveArticleOverride({ item, targetCategoryPrimary, targetCategorySecondary, note, rowKey }) {
+    try {
+      setQualitySavingKey(rowKey)
+      await saveArticleSubcategoryOverride({
+        retailerKey: item.retailerKey,
+        titleNormalized: item.titleNormalized,
+        titleDisplay: item.titleDisplay,
+        targetCategoryPrimary,
+        targetCategorySecondary,
+        note,
+      })
+      const nextSnapshot = await fetchQualitySnapshot({
+        q: qualityFilters.query,
+        retailerKey: qualityFilters.retailerKey,
+        categoryPrimary: qualityFilters.categoryPrimary,
+        limit: qualityFilters.limit,
+      })
+      setQualitySnapshot(nextSnapshot)
+      setError('')
+    } catch (saveError) {
+      setError(saveError.message || 'Artikel-Korrektur konnte nicht gespeichert werden.')
+    } finally {
+      setQualitySavingKey('')
+    }
+  }
+
   const hasPendingChanges =
     !areStringSetsEqual(draftSelectedRetailers, appliedSelectedRetailers) ||
     !areStringSetsEqual(draftSelectedCategoryLabels, appliedSelectedCategoryLabels)
 
   return (
     <main className="shell">
+      <nav className="page-nav" aria-label="Seiten">
+        <button
+          className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
+          onClick={() => handleNavigate('search')}
+        >
+          Suche
+        </button>
+        <button
+          className={`page-nav__button${activePage === 'quality' ? ' page-nav__button--active' : ''}`}
+          onClick={() => handleNavigate('quality')}
+        >
+          Quality
+        </button>
+        <button
+          className={`page-nav__button${activePage === 'diagnostics' ? ' page-nav__button--active' : ''}`}
+          onClick={() => handleNavigate('diagnostics')}
+        >
+          Diagnose
+        </button>
+      </nav>
+
       {activePage === 'search' ? (
         <SearchPage
           retailers={retailers}
@@ -1539,6 +2044,18 @@ function App() {
           onToggleDraftSubcategory={handleToggleDraftSubcategory}
           onApplySearch={handleApplySearch}
           onResetAll={handleResetAll}
+        />
+      ) : activePage === 'quality' ? (
+        <QualityPage
+          snapshot={qualitySnapshot}
+          loading={qualityLoading}
+          error={error}
+          filters={qualityFilters}
+          onFilterChange={handleQualityFilterChange}
+          onReload={refreshQualitySnapshot}
+          onSaveSubcategoryOverride={handleSaveSubcategoryOverride}
+          onSaveArticleOverride={handleSaveArticleOverride}
+          savingKey={qualitySavingKey}
         />
       ) : (
         <>

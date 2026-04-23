@@ -5,6 +5,7 @@ const {
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
+const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 
 function parseNumericAmount(value) {
   if (value === null || value === undefined || value === '$undefined') {
@@ -633,7 +634,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   ].join('::');
   const benefitType = deriveBenefitType(promotion);
 
-  return {
+  return applyManualCategoryOverridesToOfferSync({
     crawlJobId,
     sourceId,
     retailerKey,
@@ -726,7 +727,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
       feedbackDigest: '',
     },
     scope: scopeDecision,
-  };
+  }).offer;
 }
 
 module.exports = {

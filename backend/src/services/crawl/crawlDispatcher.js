@@ -6,6 +6,7 @@ const { crawlMarktguruSource } = require('./marketguruCrawler');
 const { dedupeOffersAcrossSources } = require('./catalogDeduper');
 const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
 const { clearRankingResponseCache } = require('../offers/offerRankingService');
+const { ensureManualCategoryOverrideCacheLoaded } = require('../quality/manualCategoryOverrideService');
 const logger = require('../../lib/logger');
 
 const CHANNEL_PRIORITY = {
@@ -44,6 +45,7 @@ async function crawlSource({ source, region, trigger = 'manual' }) {
 }
 
 async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }) {
+  await ensureManualCategoryOverrideCacheLoaded();
   const filter = retailerKeys.length > 0
     ? { active: true, retailerKey: { $in: retailerKeys } }
     : { active: true };

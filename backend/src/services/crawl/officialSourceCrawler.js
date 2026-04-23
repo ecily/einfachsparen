@@ -15,6 +15,7 @@ const {
   determineOfferSubcategory,
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
+const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -401,7 +402,7 @@ function normalizeLidlProductToOffer({
     issues.push('Angebot erfordert Kundenprogramm oder App');
   }
 
-  return {
+  return applyManualCategoryOverridesToOfferSync({
     crawlJobId,
     sourceId: source._id,
     retailerKey: source.retailerKey,
@@ -470,7 +471,7 @@ function normalizeLidlProductToOffer({
       feedbackDigest: '',
     },
     scope: buildInclusiveScopeDecision(),
-  };
+  }).offer;
 }
 
 async function fetchLidlFlyerByIdentifier(identifier) {
@@ -528,7 +529,7 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       issues.push('Gueltigkeitszeitraum unvollstaendig');
     }
 
-    offers.push({
+    offers.push(applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -595,7 +596,7 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
         feedbackDigest: '',
       },
       scope: buildInclusiveScopeDecision(),
-    });
+    }).offer);
   });
 
   return offers;
@@ -655,7 +656,7 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
       issues.push('Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar');
     }
 
-    offers.push({
+    offers.push(applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -722,7 +723,7 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
         feedbackDigest: '',
       },
       scope: buildInclusiveScopeDecision(),
-    });
+    }).offer);
   });
 
   return offers;
@@ -805,7 +806,7 @@ function parseHoferOffersFromPage({
       issues.push('Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar');
     }
 
-    offers.push({
+    offers.push(applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -868,7 +869,7 @@ function parseHoferOffersFromPage({
         feedbackDigest: '',
       },
       scope: scopeDecision,
-    });
+    }).offer);
   });
 
   return offers;
@@ -1153,7 +1154,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
     issues.push('Angebot erfordert Kundenprogramm oder App');
   }
 
-  return {
+  return applyManualCategoryOverridesToOfferSync({
     crawlJobId,
     sourceId: source._id,
     retailerKey: source.retailerKey,
@@ -1221,7 +1222,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
       feedbackDigest: '',
     },
     scope: scopeDecision,
-  };
+  }).offer;
 }
 
 async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
