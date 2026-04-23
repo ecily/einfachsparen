@@ -4,7 +4,7 @@ const manualCategoryOverrideSchema = new mongoose.Schema(
   {
     scope: {
       type: String,
-      enum: ['subcategory-category', 'article-subcategory'],
+      enum: ['subcategory-category', 'article-subcategory', 'article-ignore'],
       required: true,
       index: true,
     },
@@ -14,7 +14,7 @@ const manualCategoryOverrideSchema = new mongoose.Schema(
     titleDisplay: { type: String, default: '' },
     matchSubcategoryLabel: { type: String, default: '' },
     matchSubcategoryKey: { type: String, default: '', index: true },
-    targetCategoryPrimary: { type: String, required: true },
+    targetCategoryPrimary: { type: String, default: '' },
     targetCategorySecondary: { type: String, default: '' },
     note: { type: String, default: '' },
     createdBy: { type: String, default: 'admin' },
@@ -27,7 +27,7 @@ manualCategoryOverrideSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      scope: 'article-subcategory',
+      scope: { $in: ['article-subcategory', 'article-ignore'] },
       titleNormalized: { $type: 'string' },
     },
   }

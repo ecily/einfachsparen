@@ -58,6 +58,17 @@ const CATEGORY_TAXONOMY = [
     ],
   },
   {
+    main: 'Buero / Schule',
+    patterns: [/(buero|buro|schule|schreibwaren|ordnen|etikett|drucker|scanner|papierwaren|kreativ|basteln)/],
+    subcategories: [
+      { label: 'Schreibwaren', patterns: [/(schreibwaren|stift|kugelschreiber|filzstift|marker|textmarker|bleistift|fineliner|heft|collegeblock|notizbuch|radierer|spitzer)/] },
+      { label: 'Papier & Ordnen', patterns: [/(papier|briefkorb|stehsammler|ordner|register|mappe|formular|geschaftsbuch|geschaeftsbuch|etikett|fotopapier|kuvert)/] },
+      { label: 'Drucker & Scanner', patterns: [/(drucker|scanner|toner|tinte|patrone|speichermedien|speicherkarte|festplatte|usb|pc zubehor|pc zubehoer|computerzubehor|computerzubehoer)/] },
+      { label: 'Schule & Lernen', patterns: [/(schule|schultasche|rucksack|federschachtel|lineal|zirkel|geodreieck|lernen)/] },
+      { label: 'Basteln & Kreativ', patterns: [/(basteln|kreativ|farben|pinsel|kleber|schere|buntpapier|malblock|knete|glitzer|sticker|party)/] },
+    ],
+  },
+  {
     main: 'Tierbedarf',
     patterns: [/(tier|haustier|hund|katze|tierbedarf)/],
     subcategories: [
@@ -90,9 +101,9 @@ const CATEGORY_TAXONOMY = [
     main: 'Technik / Elektronik',
     patterns: [/(technik|elektronik|geraet|gerat)/],
     subcategories: [
-      { label: 'Kuechengeraete', patterns: [/(mikrowelle|toaster|wasserkocher|kaffeemaschine|fritteuse)/] },
+      { label: 'Kuechengeraete', patterns: [/(mikrowelle|toaster|wasserkocher|kaffeemaschine|fritteuse|grill|kontaktgrill|standgrill|heissluftfritteuse|heisluftfritteuse)/] },
       { label: 'Unterhaltungselektronik', patterns: [/(tv|fernseher|lautsprecher|kopfhorer|kopfhoerer)/] },
-      { label: 'Computer & Mobile', patterns: [/(notebook|laptop|tablet|smartphone|monitor|drucker)/] },
+      { label: 'Computer & Mobile', patterns: [/(notebook|laptop|tablet|smartphone|monitor|drucker|scanner|speichermedien|festplatte|usb|computerzubehor|computerzubehoer|pc zubehor|pc zubehoer)/] },
       { label: 'Werkzeug & Akkus', patterns: [/(werkzeug|bohrer|akkuschrauber|akku|maschine)/] },
     ],
   },
@@ -100,9 +111,10 @@ const CATEGORY_TAXONOMY = [
     main: 'Freizeit / Sonstiges',
     patterns: [/(freizeit|hobby|camping|schule|spiel)/],
     subcategories: [
-      { label: 'Spielzeug', patterns: [/(spielzeug|lego|puppe|spiel)/] },
+      { label: 'Spielzeug', patterns: [/(spielzeug|lego|puppe|pluesch|plueschtier|hot wheels|barbie|spiel)/] },
+      { label: 'Games & Konsolen', patterns: [/(games|spielkonsole|nintendo switch|playstation|xbox|videospiel)/] },
       { label: 'Schreibwaren & Schule', patterns: [/(schule|schreibwaren|heft|stift|malblock)/] },
-      { label: 'Sport & Camping', patterns: [/(sport|camping|fahrrad|helm)/] },
+      { label: 'Sport & Camping', patterns: [/(sport|camping|fahrrad|helm|outdoor|grill|freizeit)/] },
       { label: 'Autozubehoer', patterns: [/(autozubehor|autozubehoer|motoroel|reifen)/] },
     ],
   },
@@ -151,6 +163,36 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|geschirrspueltabs|geschirrspultabs|waschcaps|reiniger tabs)\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
+  },
+  {
+    patterns: [/\b(formular|geschaftsbuch|geschaeftsbuch|briefkorb|stehsammler|etiketten|fotopapier|ordner|register|kuvert)\b/],
+    main: 'Buero / Schule',
+    sub: 'Papier & Ordnen',
+  },
+  {
+    patterns: [/\b(schreibwaren|kugelschreiber|filzstift|textmarker|bleistift|notizbuch|collegeblock|heft|fineliner)\b/],
+    main: 'Buero / Schule',
+    sub: 'Schreibwaren',
+  },
+  {
+    patterns: [/\b(drucker|scanner|toner|tinte|patrone|speichermedien|speicherkarte|festplatte|usb stick|usb-stick|computerzubehor|computerzubehoer|pc-zubehor|pc-zubehoer)\b/],
+    main: 'Buero / Schule',
+    sub: 'Drucker & Scanner',
+  },
+  {
+    patterns: [/\b(hot wheels|pluesch|plueschtier)\b/],
+    main: 'Freizeit / Sonstiges',
+    sub: 'Spielzeug',
+  },
+  {
+    patterns: [/\b(nintendo switch|videospiel|konsole|games)\b/],
+    main: 'Freizeit / Sonstiges',
+    sub: 'Games & Konsolen',
+  },
+  {
+    patterns: [/\b(kontaktgrill|standgrill|heissluftfritteuse|heisluftfritteuse)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Kuechengeraete',
   },
 ];
 
@@ -326,6 +368,7 @@ function buildInclusiveScopeDecision() {
 }
 
 module.exports = {
+  CATEGORY_TAXONOMY,
   classifyOfferCategory,
   determineOfferCategory,
   determineOfferSubcategory,

@@ -402,7 +402,7 @@ function normalizeLidlProductToOffer({
     issues.push('Angebot erfordert Kundenprogramm oder App');
   }
 
-  return applyManualCategoryOverridesToOfferSync({
+  const overrideResult = applyManualCategoryOverridesToOfferSync({
     crawlJobId,
     sourceId: source._id,
     retailerKey: source.retailerKey,
@@ -471,7 +471,9 @@ function normalizeLidlProductToOffer({
       feedbackDigest: '',
     },
     scope: buildInclusiveScopeDecision(),
-  }).offer;
+  });
+
+  return overrideResult.offer || null;
 }
 
 async function fetchLidlFlyerByIdentifier(identifier) {
@@ -529,7 +531,7 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       issues.push('Gueltigkeitszeitraum unvollstaendig');
     }
 
-    offers.push(applyManualCategoryOverridesToOfferSync({
+    const overrideResult = applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -596,7 +598,11 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
         feedbackDigest: '',
       },
       scope: buildInclusiveScopeDecision(),
-    }).offer);
+    });
+
+    if (overrideResult.offer) {
+      offers.push(overrideResult.offer);
+    }
   });
 
   return offers;
@@ -656,7 +662,7 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
       issues.push('Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar');
     }
 
-    offers.push(applyManualCategoryOverridesToOfferSync({
+    const overrideResult = applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -723,7 +729,11 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
         feedbackDigest: '',
       },
       scope: buildInclusiveScopeDecision(),
-    }).offer);
+    });
+
+    if (overrideResult.offer) {
+      offers.push(overrideResult.offer);
+    }
   });
 
   return offers;
@@ -806,7 +816,7 @@ function parseHoferOffersFromPage({
       issues.push('Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar');
     }
 
-    offers.push(applyManualCategoryOverridesToOfferSync({
+    const overrideResult = applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -869,7 +879,11 @@ function parseHoferOffersFromPage({
         feedbackDigest: '',
       },
       scope: scopeDecision,
-    }).offer);
+    });
+
+    if (overrideResult.offer) {
+      offers.push(overrideResult.offer);
+    }
   });
 
   return offers;
@@ -1154,7 +1168,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
     issues.push('Angebot erfordert Kundenprogramm oder App');
   }
 
-  return applyManualCategoryOverridesToOfferSync({
+  const overrideResult = applyManualCategoryOverridesToOfferSync({
     crawlJobId,
     sourceId: source._id,
     retailerKey: source.retailerKey,
@@ -1222,7 +1236,9 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
       feedbackDigest: '',
     },
     scope: scopeDecision,
-  }).offer;
+  });
+
+  return overrideResult.offer || null;
 }
 
 async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {

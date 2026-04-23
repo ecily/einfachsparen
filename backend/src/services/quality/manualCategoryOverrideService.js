@@ -8,6 +8,7 @@ let overrideCache = {
   loadedAt: 0,
   articleOverrides: [],
   subcategoryOverrides: [],
+  ignoredArticleOverrides: [],
 };
 
 function buildNormalizedKey(value, fallback = '') {
@@ -53,6 +54,7 @@ async function reloadManualCategoryOverrideCache() {
     loadedAt: Date.now(),
     articleOverrides: documents.filter((item) => item.scope === 'article-subcategory'),
     subcategoryOverrides: documents.filter((item) => item.scope === 'subcategory-category'),
+    ignoredArticleOverrides: documents.filter((item) => item.scope === 'article-ignore'),
   };
 
   return overrideCache;
@@ -83,6 +85,23 @@ function findMatchingArticleOverride(offer = {}) {
   }) || null;
 }
 
+function findMatchingIgnoredArticleOverride(offer = {}) {
+  const titleNormalized = sanitizeWhitespace(offer.titleNormalized || normalizeTitleForMatch(`${offer.brand || ''} ${offer.title || ''}`));
+  const retailerKey = normalizeOverrideRetailerKey(offer.retailerKey);
+
+  return overrideCache.ignoredArticleOverrides.find((item) => {
+    if (!item.titleNormalized || item.titleNormalized !== titleNormalized) {
+      return false;
+    }
+
+    if (item.retailerKey && normalizeOverrideRetailerKey(item.retailerKey) !== retailerKey) {
+      return false;
+    }
+
+    return true;
+  }) || null;
+}
+
 function findMatchingSubcategoryOverride(offer = {}) {
   const subcategoryKey = buildNormalizedKey(offer.categorySecondary || '');
 
@@ -94,6 +113,17 @@ function findMatchingSubcategoryOverride(offer = {}) {
 }
 
 function applyManualCategoryOverridesToOfferSync(offer = {}) {
+  const ignoredArticleOverride = findMatchingIgnoredArticleOverride(offer);
+
+  if (ignoredArticleOverride) {
+    return {
+      offer: null,
+      changed: true,
+      override: ignoredArticleOverride,
+      suppressed: true,
+    };
+  }
+
   const articleOverride = findMatchingArticleOverride(offer);
   const subcategoryOverride = articleOverride ? null : findMatchingSubcategoryOverride(offer);
   const override = articleOverride || subcategoryOverride;
@@ -103,6 +133,7 @@ function applyManualCategoryOverridesToOfferSync(offer = {}) {
       offer,
       changed: false,
       override: null,
+      suppressed: false,
     };
   }
 
@@ -129,6 +160,7 @@ function applyManualCategoryOverridesToOfferSync(offer = {}) {
       || nextOffer.categorySecondary !== offer.categorySecondary
       || nextOffer.categoryKey !== offer.categoryKey,
     override,
+    suppressed: false,
   };
 }
 
@@ -147,8 +179,35 @@ async function applyManualOverridesToExistingOffers({ scope, retailerKey = '', t
     }
   } else if (scope === 'subcategory-category') {
     filter.categorySecondary = new RegExp(`^${escapeRegex(matchSubcategoryLabel)}$`, 'i');
+  } else if (scope === 'article-ignore') {
+    filter.titleNormalized = titleNormalized;
+
+    if (retailerKey) {
+      filter.retailerKey = retailerKey;
+    }
   } else {
     return { matched: 0, modified: 0 };
+  }
+
+  if (scope === 'article-ignore') {
+    const deleteResult = await Offer.deleteMany(filter);
+
+    await rebuildFilterMetadata({
+      trigger: 'quality-override',
+      loggerContext: {
+        scope,
+        retailerKey,
+        titleNormalized,
+        matchSubcategoryLabel,
+      },
+    });
+    clearRankingResponseCache();
+
+    return {
+      matched: Number(deleteResult.deletedCount || 0),
+      modified: Number(deleteResult.deletedCount || 0),
+      deleted: Number(deleteResult.deletedCount || 0),
+    };
   }
 
   const offers = await Offer.find(filter)
@@ -296,10 +355,56 @@ async function upsertArticleSubcategoryOverride({
   };
 }
 
+async function ignoreArticleOffer({
+  retailerKey = '',
+  titleNormalized,
+  titleDisplay = '',
+  note = '',
+}) {
+  const cleanRetailerKey = normalizeOverrideRetailerKey(retailerKey);
+  const cleanTitleNormalized = sanitizeWhitespace(titleNormalized || normalizeTitleForMatch(titleDisplay));
+  const cleanTitleDisplay = sanitizeWhitespace(titleDisplay);
+
+  const document = await ManualCategoryOverride.findOneAndUpdate(
+    {
+      scope: 'article-ignore',
+      retailerKey: cleanRetailerKey,
+      titleNormalized: cleanTitleNormalized,
+    },
+    {
+      $set: {
+        active: true,
+        retailerKey: cleanRetailerKey,
+        titleNormalized: cleanTitleNormalized,
+        titleDisplay: cleanTitleDisplay,
+        note: sanitizeWhitespace(note),
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    }
+  ).lean();
+
+  await reloadManualCategoryOverrideCache();
+  const applyResult = await applyManualOverridesToExistingOffers({
+    scope: 'article-ignore',
+    retailerKey: cleanRetailerKey,
+    titleNormalized: cleanTitleNormalized,
+  });
+
+  return {
+    override: document,
+    applyResult,
+  };
+}
+
 module.exports = {
   ensureManualCategoryOverrideCacheLoaded,
   reloadManualCategoryOverrideCache,
   applyManualCategoryOverridesToOfferSync,
   upsertSubcategoryCategoryOverride,
   upsertArticleSubcategoryOverride,
+  ignoreArticleOffer,
 };

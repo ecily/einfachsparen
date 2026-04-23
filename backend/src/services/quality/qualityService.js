@@ -2,6 +2,7 @@ const Offer = require('../../models/Offer');
 const ManualCategoryOverride = require('../../models/ManualCategoryOverride');
 const Retailer = require('../../models/Retailer');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('../crawl/sourceEvidence');
+const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 
 function buildNormalizedKey(value, fallback = '') {
   return normalizeTitleForMatch(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
@@ -152,6 +153,22 @@ async function buildQualitySnapshot({
       note: item.note || '',
     }));
 
+  const articleIgnoreOverrides = overrides
+    .filter((item) => item.scope === 'article-ignore')
+    .map((item) => ({
+      id: String(item._id),
+      retailerKey: item.retailerKey || '',
+      titleNormalized: item.titleNormalized,
+      titleDisplay: item.titleDisplay || '',
+      updatedAt: item.updatedAt,
+      note: item.note || '',
+    }));
+
+  const subcategoryOptionsByCategory = CATEGORY_TAXONOMY.reduce((accumulator, category) => {
+    accumulator[category.main] = (category.subcategories || []).map((subcategory) => subcategory.label);
+    return accumulator;
+  }, {});
+
   return {
     generatedAt: new Date().toISOString(),
     filters: {
@@ -169,6 +186,7 @@ async function buildQualitySnapshot({
       categoryPrimary: item._id || 'Unkategorisiert',
       offerCount: item.count,
     })),
+    subcategoryOptionsByCategory,
     subcategoryMappings: [...subcategoryMap.values()]
       .map((item) => ({
         ...item,
@@ -190,6 +208,7 @@ async function buildQualitySnapshot({
     manualOverrides: {
       subcategoryCategory: subcategoryOverrides,
       articleSubcategory: articleOverrides,
+      articleIgnore: articleIgnoreOverrides,
     },
   };
 }

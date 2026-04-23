@@ -3,6 +3,7 @@ const { buildQualitySnapshot } = require('../services/quality/qualityService');
 const {
   upsertSubcategoryCategoryOverride,
   upsertArticleSubcategoryOverride,
+  ignoreArticleOffer,
 } = require('../services/quality/manualCategoryOverrideService');
 
 const router = express.Router();
@@ -48,6 +49,24 @@ router.post('/article-subcategory', async (req, res, next) => {
       titleDisplay: req.body?.titleDisplay || '',
       targetCategoryPrimary: req.body?.targetCategoryPrimary || '',
       targetCategorySecondary: req.body?.targetCategorySecondary || '',
+      note: req.body?.note || '',
+    });
+
+    res.json({
+      ok: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/article-ignore', async (req, res, next) => {
+  try {
+    const result = await ignoreArticleOffer({
+      retailerKey: req.body?.retailerKey || '',
+      titleNormalized: req.body?.titleNormalized || '',
+      titleDisplay: req.body?.titleDisplay || '',
       note: req.body?.note || '',
     });
 

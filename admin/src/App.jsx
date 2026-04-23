@@ -7,6 +7,7 @@ import {
   fetchHealth,
   fetchQualitySnapshot,
   getOfferImageUrl,
+  ignoreArticleQualityItem,
   saveArticleSubcategoryOverride,
   saveFeedback,
   saveSubcategoryCategoryOverride,
@@ -341,12 +342,16 @@ function buildSubSelectionToken(mainCategoryKey, subcategoryKey) {
 
 function getGroupSelectionState(group, selectionTokens = []) {
   const mainToken = buildMainSelectionToken(group.mainCategoryKey)
+  const allSubcategoryKeys = (group.subcategories || []).map((subcategory) => subcategory.subcategoryKey)
   const selectedSubcategoryKeys = (group.subcategories || [])
     .filter((subcategory) => selectionTokens.includes(buildSubSelectionToken(group.mainCategoryKey, subcategory.subcategoryKey)))
     .map((subcategory) => subcategory.subcategoryKey)
+  const allSubcategoriesSelected = allSubcategoryKeys.length > 0 && selectedSubcategoryKeys.length === allSubcategoryKeys.length
+  const partialSelected = selectedSubcategoryKeys.length > 0 && !allSubcategoriesSelected
 
   return {
-    mainSelected: selectionTokens.includes(mainToken),
+    mainSelected: selectionTokens.includes(mainToken) || allSubcategoriesSelected,
+    partialSelected,
     selectedSubcategoryKeys,
   }
 }
@@ -381,7 +386,7 @@ function buildSelectedCategoryQueryLabels(selectionTokens = [], categories = [])
       continue
     }
 
-    if (selectionState.mainSelected) {
+    if (selectionState.mainSelected && !(group.subcategories || []).length) {
       labels.push(group.mainCategoryLabel)
     }
   }
@@ -690,6 +695,7 @@ function CategorySelectorBlock({
             {(categories || []).map((group) => {
               const selectionState = getGroupSelectionState(group, selectedCategoryTokens)
               const isMainSelected = selectionState.mainSelected
+              const isPartiallySelected = selectionState.partialSelected
               const isExpanded = expandedMainKeys.includes(group.mainCategoryKey) || isMainSelected || selectionState.selectedSubcategoryKeys.length > 0
 
               return (
@@ -714,7 +720,7 @@ function CategorySelectorBlock({
                   >
                     <button
                       type="button"
-                      className={`chip ${isMainSelected ? 'chip--active' : ''}`}
+                      className={`chip ${isMainSelected ? 'chip--active' : isPartiallySelected ? 'chip--partial' : ''}`}
                       onClick={() => onToggleMainCategory(group)}
                       style={{ justifySelf: 'start' }}
                     >
@@ -1298,6 +1304,12 @@ function DiagnosticsPage({
 function buildQualityCategoryOptions(snapshot) {
   const options = new Set()
 
+  for (const categoryPrimary of Object.keys(snapshot?.subcategoryOptionsByCategory || {})) {
+    if (categoryPrimary) {
+      options.add(categoryPrimary)
+    }
+  }
+
   for (const item of snapshot?.categories || []) {
     if (item?.categoryPrimary) {
       options.add(item.categoryPrimary)
@@ -1321,6 +1333,12 @@ function buildQualityCategoryOptions(snapshot) {
 
 function buildQualitySubcategoryOptions(snapshot, selectedPrimary = '') {
   const options = new Set()
+
+  for (const option of snapshot?.subcategoryOptionsByCategory?.[selectedPrimary] || []) {
+    if (option) {
+      options.add(option)
+    }
+  }
 
   for (const item of snapshot?.subcategoryMappings || []) {
     if (!item?.subcategoryLabel) continue
@@ -1385,14 +1403,14 @@ function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKey }) {
           disabled={!targetCategoryPrimary || savingKey === rowKey}
           onClick={() => onSave({ item, targetCategoryPrimary, note, rowKey })}
         >
-          {savingKey === rowKey ? 'Speichert...' : 'Zuordnung speichern'}
+          {savingKey === rowKey ? 'Speichert...' : 'Bestaetigen'}
         </button>
       </div>
     </div>
   )
 }
 
-function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, savingKey }) {
+function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete, savingKey }) {
   const [targetCategoryPrimary, setTargetCategoryPrimary] = useState(item.categoryPrimary || '')
   const [targetCategorySecondary, setTargetCategorySecondary] = useState(item.categorySecondary || '')
   const [note, setNote] = useState('')
@@ -1466,7 +1484,14 @@ function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, savingKey
           disabled={!targetCategoryPrimary || !targetCategorySecondary || savingKey === rowKey}
           onClick={() => onSave({ item, targetCategoryPrimary, targetCategorySecondary, note, rowKey })}
         >
-          {savingKey === rowKey ? 'Speichert...' : 'Artikel-Zuordnung speichern'}
+          {savingKey === rowKey ? 'Speichert...' : 'Bestaetigen'}
+        </button>
+        <button
+          className="ghost-button"
+          disabled={savingKey === `${rowKey}:delete`}
+          onClick={() => onDelete({ item, note, rowKey: `${rowKey}:delete` })}
+        >
+          {savingKey === `${rowKey}:delete` ? 'Loescht...' : 'Loeschen'}
         </button>
       </div>
     </div>
@@ -1482,6 +1507,7 @@ function QualityPage({
   onReload,
   onSaveSubcategoryOverride,
   onSaveArticleOverride,
+  onDeleteArticle,
   savingKey,
 }) {
   const categoryOptions = useMemo(() => buildQualityCategoryOptions(snapshot), [snapshot])
@@ -1613,6 +1639,7 @@ function QualityPage({
               categoryOptions={categoryOptions}
               snapshot={snapshot}
               onSave={onSaveArticleOverride}
+              onDelete={onDeleteArticle}
               savingKey={savingKey}
             />
           ))}
@@ -1672,9 +1699,8 @@ function App() {
         if (!active) return
 
         setRetailers(retailerResult)
-        const defaultRetailers = retailerResult.map((item) => item.retailerKey).filter(Boolean)
-        setDraftSelectedRetailers(defaultRetailers)
-        setAppliedSelectedRetailers(defaultRetailers)
+        setDraftSelectedRetailers([])
+        setAppliedSelectedRetailers([])
         setError('')
       } catch (filterError) {
         if (!active) return
@@ -1892,11 +1918,15 @@ function App() {
     const subcategoryTokens = (group.subcategories || []).map((item) => buildSubSelectionToken(group.mainCategoryKey, item.subcategoryKey))
 
     setDraftSelectedCategoryLabels((current) => {
-      const next = current.filter((token) => token !== mainToken && !subcategoryTokens.includes(token))
       const selectionState = getGroupSelectionState(group, current)
+      const next = current.filter((token) => token !== mainToken && !subcategoryTokens.includes(token))
 
       if (selectionState.mainSelected) {
         return next
+      }
+
+      if (subcategoryTokens.length > 0) {
+        return [...next, ...subcategoryTokens]
       }
 
       return [...next, mainToken]
@@ -1924,10 +1954,9 @@ function App() {
   }
 
   function handleResetAll() {
-    const defaultRetailers = retailers.map((item) => item.retailerKey).filter(Boolean)
-    setDraftSelectedRetailers(defaultRetailers)
+    setDraftSelectedRetailers([])
     setDraftSelectedCategoryLabels([])
-    setAppliedSelectedRetailers(defaultRetailers)
+    setAppliedSelectedRetailers([])
     setAppliedSelectedCategoryLabels([])
     setRanking(null)
   }
@@ -1999,6 +2028,30 @@ function App() {
     }
   }
 
+  async function handleDeleteArticle({ item, note, rowKey }) {
+    try {
+      setQualitySavingKey(rowKey)
+      await ignoreArticleQualityItem({
+        retailerKey: item.retailerKey,
+        titleNormalized: item.titleNormalized,
+        titleDisplay: item.titleDisplay,
+        note,
+      })
+      const nextSnapshot = await fetchQualitySnapshot({
+        q: qualityFilters.query,
+        retailerKey: qualityFilters.retailerKey,
+        categoryPrimary: qualityFilters.categoryPrimary,
+        limit: qualityFilters.limit,
+      })
+      setQualitySnapshot(nextSnapshot)
+      setError('')
+    } catch (saveError) {
+      setError(saveError.message || 'Artikel konnte nicht geloescht werden.')
+    } finally {
+      setQualitySavingKey('')
+    }
+  }
+
   const hasPendingChanges =
     !areStringSetsEqual(draftSelectedRetailers, appliedSelectedRetailers) ||
     !areStringSetsEqual(draftSelectedCategoryLabels, appliedSelectedCategoryLabels)
@@ -2055,6 +2108,7 @@ function App() {
           onReload={refreshQualitySnapshot}
           onSaveSubcategoryOverride={handleSaveSubcategoryOverride}
           onSaveArticleOverride={handleSaveArticleOverride}
+          onDeleteArticle={handleDeleteArticle}
           savingKey={qualitySavingKey}
         />
       ) : (

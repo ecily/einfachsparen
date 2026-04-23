@@ -67,6 +67,11 @@ export async function saveArticleSubcategoryOverride(payload) {
   return response.data
 }
 
+export async function ignoreArticleQualityItem(payload) {
+  const response = await api.post('/quality/article-ignore', payload)
+  return response.data
+}
+
 export async function fetchBasketSuggestions(params = {}) {
   const response = await api.get('/offers/basket', {
     params,

@@ -634,7 +634,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   ].join('::');
   const benefitType = deriveBenefitType(promotion);
 
-  return applyManualCategoryOverridesToOfferSync({
+  const manualOverrideResult = applyManualCategoryOverridesToOfferSync({
     crawlJobId,
     sourceId,
     retailerKey,
@@ -727,7 +727,9 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
       feedbackDigest: '',
     },
     scope: scopeDecision,
-  }).offer;
+  });
+
+  return manualOverrideResult.offer || null;
 }
 
 module.exports = {

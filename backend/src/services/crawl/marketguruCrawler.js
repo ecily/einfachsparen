@@ -16,6 +16,8 @@ const {
 } = require('./categoryClassifier');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 
+let cachedClientKey = '';
+
 function createHash(value) {
   return require('node:crypto').createHash('sha256').update(String(value || '')).digest('hex');
 }
@@ -208,6 +210,101 @@ function extractEmbeddedPayload(html) {
   return scriptPayloads.find((payload) => payload?.data?.offers?.results) || null;
 }
 
+function extractMarktguruConfig(html) {
+  const $ = cheerio.load(html);
+  const payloads = $('script[type="application/json"]')
+    .map((index, element) => String($(element).html() || ''))
+    .get();
+
+  for (const payloadText of payloads) {
+    try {
+      const payload = JSON.parse(payloadText);
+
+      if (payload?.config?.apiHostAddress && payload?.config?.apiKey) {
+        return payload.config;
+      }
+    } catch (error) {
+      // Ignore unrelated JSON payloads.
+    }
+  }
+
+  return null;
+}
+
+function getRetailerSlugFromSourceUrl(sourceUrl) {
+  const match = String(sourceUrl || '').match(/\/r\/([^/?#]+)/i);
+  return sanitizeWhitespace(match?.[1] || '').toLowerCase();
+}
+
+async function fetchMarktguruClientKey(config) {
+  if (cachedClientKey) {
+    return cachedClientKey;
+  }
+
+  const response = await axios.get(`https://${config.apiHostAddress}/api/v1/configurations/web`, {
+    timeout: 30000,
+    headers: {
+      'X-ApiKey': config.apiKey,
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+    },
+  });
+
+  cachedClientKey = sanitizeWhitespace(response.headers['x-clientkey'] || '');
+  return cachedClientKey;
+}
+
+async function fetchMarktguruRetailerOffers({ config, retailerSlug }) {
+  if (!config?.apiHostAddress || !config?.apiKey || !retailerSlug) {
+    return [];
+  }
+
+  const clientKey = await fetchMarktguruClientKey(config);
+  const collected = [];
+  let offset = 0;
+  let totalResults = Infinity;
+  const limit = 100;
+
+  while (offset < totalResults) {
+    const response = await axios.get(
+      `https://${config.apiHostAddress}/api/v1/advertisers/retailer/${encodeURIComponent(retailerSlug)}/offers`,
+      {
+        timeout: 30000,
+        params: {
+          as: 'mobile',
+          limit,
+          offset,
+        },
+        headers: {
+          'X-ApiKey': config.apiKey,
+          'X-ClientKey': clientKey,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+        },
+      }
+    );
+
+    const payload = response.data || {};
+    const results = Array.isArray(payload.results) ? payload.results : [];
+    totalResults = Number(payload.totalResults || results.length || 0);
+
+    if (results.length === 0) {
+      break;
+    }
+
+    collected.push(...results);
+
+    if (results.length < limit) {
+      break;
+    }
+
+    offset += results.length;
+  }
+
+  return collected;
+}
+
 function buildStructuredValidityText(item) {
   const from = item?.validFrom ? new Date(item.validFrom) : null;
   const to = item?.validTo ? new Date(item.validTo) : null;
@@ -233,9 +330,38 @@ function buildStructuredInfoText(item) {
       item?.description || '',
       item?.quantity && item?.unit?.shortName ? `${item.quantity} ${item.unit.shortName}` : '',
       item?.referencePrice && item?.unit?.shortName ? `${item.referencePrice} / ${item.unit.shortName}` : '',
+      ...(Array.isArray(item?.crossLinks)
+        ? item.crossLinks.flatMap((entry) => [
+          entry?.title,
+          entry?.name,
+          entry?.label,
+          entry?.uniqueName,
+          entry?.type,
+        ])
+        : []),
     ]
       .filter(Boolean)
       .join(' - ')
+  );
+}
+
+function buildStructuredCategoryContext(item) {
+  return sanitizeWhitespace(
+    [
+      item?.product?.categoryName || '',
+      item?.retailer?.industry?.name || '',
+      ...(Array.isArray(item?.crossLinks)
+        ? item.crossLinks.flatMap((entry) => [
+          entry?.title,
+          entry?.name,
+          entry?.label,
+          entry?.uniqueName,
+          entry?.type,
+        ])
+        : []),
+    ]
+      .filter(Boolean)
+      .join(' / ')
   );
 }
 
@@ -276,6 +402,7 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
     const validTo = item?.validTo ? new Date(item.validTo) : null;
     const validityText = buildStructuredValidityText(item);
     const infoText = buildStructuredInfoText(item);
+    const sourceCategory = buildStructuredCategoryContext(item);
     const imageUrl = '';
     const observedUrl = source.sourceUrl;
 
@@ -294,7 +421,7 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
     const categoryPrimary = determineOfferCategory({
       title,
       contextText: infoText,
-      sourceCategory: item?.product?.categoryName || '',
+      sourceCategory,
     });
     const scopeDecision = buildInclusiveScopeDecision();
     const parsedInfo = parseNormalizedUnitPriceFromStructuredOffer(item);
@@ -316,7 +443,7 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
       issues.push('Angebot erfordert Kundenprogramm oder App');
     }
 
-    offers.push(applyManualCategoryOverridesToOfferSync({
+    const overrideResult = applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -327,7 +454,7 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
       categoryPrimary,
       categorySecondary: determineOfferSubcategory({
         primaryCategory: categoryPrimary,
-        sourceCategory: item?.product?.categoryName || '',
+        sourceCategory,
         fallbackLabel: '',
         title,
         contextText: infoText,
@@ -384,7 +511,11 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
         feedbackDigest: '',
       },
       scope: scopeDecision,
-    }).offer);
+    });
+
+    if (overrideResult.offer) {
+      offers.push(overrideResult.offer);
+    }
   }
 
   return offers;
@@ -443,7 +574,7 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
       issues.push('Angebot erfordert Kundenprogramm oder App');
     }
 
-    offers.push(applyManualCategoryOverridesToOfferSync({
+    const overrideResult = applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
       retailerKey: source.retailerKey,
@@ -510,7 +641,11 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
         feedbackDigest: '',
       },
       scope: scopeDecision,
-    }).offer);
+    });
+
+    if (overrideResult.offer) {
+      offers.push(overrideResult.offer);
+    }
   });
 
   return offers;
@@ -544,6 +679,19 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
     const $ = cheerio.load(html);
     const embeddedPayload = extractEmbeddedPayload(html);
     const embeddedOffers = embeddedPayload?.data?.offers?.results || [];
+    const config = extractMarktguruConfig(html);
+    const retailerSlug = getRetailerSlugFromSourceUrl(source.sourceUrl);
+    let apiOffers = [];
+
+    try {
+      apiOffers = await fetchMarktguruRetailerOffers({
+        config,
+        retailerSlug,
+      });
+    } catch (apiError) {
+      apiOffers = [];
+    }
+
     const title = sanitizeWhitespace($('title').text()) || source.label;
     const rootDocument = await createCompactRawDocument({
       sourceId: source._id,
@@ -571,24 +719,39 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
         offerPreviewCount: $('.offer-list-item').length,
         embeddedOfferPreviewCount: embeddedOffers.length,
         embeddedOfferTotalResults: Number(embeddedPayload?.data?.offers?.totalResults || 0),
+        apiOfferPreviewCount: apiOffers.length,
+        retailerSlug,
       },
     });
 
     await Offer.deleteMany({ sourceId: source._id });
 
-    const normalizedOffers = embeddedOffers.length > 0
+    const normalizedOffers = apiOffers.length > 0
       ? parseOffersFromEmbeddedPayload({
-        payload: embeddedPayload,
+        payload: {
+          data: {
+            offers: {
+              results: apiOffers,
+            },
+          },
+        },
         source,
         crawlJobId: crawlJob._id,
         region,
       })
-      : parseOffersFromHtml({
-        html,
-        source,
-        crawlJobId: crawlJob._id,
-        region,
-      });
+      : embeddedOffers.length > 0
+        ? parseOffersFromEmbeddedPayload({
+          payload: embeddedPayload,
+          source,
+          crawlJobId: crawlJob._id,
+          region,
+        })
+        : parseOffersFromHtml({
+          html,
+          source,
+          crawlJobId: crawlJob._id,
+          region,
+        });
     const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
 
     if (offerDocuments.length > 0) {
@@ -612,6 +775,8 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
         sourceLabel: source.label,
         sourceUrl: source.sourceUrl,
         rawDocumentId: rootDocument._id,
+        retailerSlug,
+        apiOfferCount: apiOffers.length,
       },
     });
 

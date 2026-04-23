@@ -21,11 +21,12 @@ const RETAILER_PRIORITY = {
   lidl: 1,
   penny: 2,
   dm: 3,
-  bipa: 4,
-  adeg: 5,
-  hofer: 6,
-  billa: 7,
-  'billa-plus': 8,
+  pagro: 4,
+  bipa: 5,
+  adeg: 6,
+  hofer: 7,
+  billa: 8,
+  'billa-plus': 9,
 };
 
 async function crawlSource({ source, region, trigger = 'manual' }) {
