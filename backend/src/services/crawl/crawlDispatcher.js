@@ -3,6 +3,7 @@ const Offer = require('../../models/Offer');
 const { crawlAktionsfinderSource } = require('./aktionsfinderCrawler');
 const { crawlOfficialSource } = require('./officialSourceCrawler');
 const { crawlMarktguruSource } = require('./marketguruCrawler');
+const { crawlWogibtswasSource } = require('./wogibtswasCrawler');
 const { dedupeOffersAcrossSources } = require('./catalogDeduper');
 const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
 const { clearRankingResponseCache } = require('../offers/offerRankingService');
@@ -33,6 +34,10 @@ async function crawlSource({ source, region, trigger = 'manual' }) {
   if (source.channel === 'aggregator') {
     if (String(source.sourceUrl || '').includes('marktguru.at/')) {
       return crawlMarktguruSource({ source, region, trigger });
+    }
+
+    if (String(source.sourceUrl || '').includes('wogibtswas.at/')) {
+      return crawlWogibtswasSource({ source, region, trigger });
     }
 
     return crawlAktionsfinderSource({ source, region, trigger });

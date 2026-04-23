@@ -189,6 +189,15 @@ const RETAILER_DEFINITIONS = [
     notes: 'Zweite oeffentliche Aggregator-Quelle fuer aktuelle ADEG-Angebote.',
   },
   {
+    retailerKey: 'adeg',
+    retailerName: 'ADEG',
+    channel: 'aggregator',
+    label: 'Marktguru ADEG Nahversorger Angebote',
+    sourceUrl: 'https://www.marktguru.at/r/adeg-nahversorger',
+    capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
+    notes: 'Zusaetzliche oeffentliche Aggregator-Quelle fuer aktuelle ADEG-Nahversorger-Angebote.',
+  },
+  {
     retailerKey: 'penny',
     retailerName: 'PENNY',
     channel: 'aggregator',
@@ -241,6 +250,15 @@ const RETAILER_DEFINITIONS = [
     sourceUrl: 'https://www.marktguru.at/r/dm',
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
     notes: 'Oeffentliche Aggregator-Quelle fuer aktuelle dm-Angebote.',
+  },
+  {
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    channel: 'aggregator',
+    label: 'wogibtswas dm Angebote',
+    sourceUrl: 'https://www.wogibtswas.at/h/73424-dm',
+    capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: true },
+    notes: 'Zusaetzliche oeffentliche Produkt- und Flugblattquelle fuer aktuelle dm-Angebote.',
   },
   {
     retailerKey: 'pagro',

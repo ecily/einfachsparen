@@ -50,6 +50,117 @@ function normalizeAmount(value) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function getReliableSavingsAmount(offer) {
+  const directSavings = Number(offer?.savingsAmount);
+
+  if (Number.isFinite(directSavings) && directSavings > 0) {
+    return Number(directSavings.toFixed(2));
+  }
+
+  const currentAmount = Number(offer?.priceCurrent?.amount);
+  const referenceAmount = Number(offer?.priceReference?.amount);
+
+  if (Number.isFinite(currentAmount) && Number.isFinite(referenceAmount) && referenceAmount > currentAmount) {
+    return Number((referenceAmount - currentAmount).toFixed(2));
+  }
+
+  return 0;
+}
+
+function normalizeRetailerKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function extractArrayPayload(payload, preferredKeys = []) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  for (const key of preferredKeys) {
+    if (Array.isArray(payload?.[key])) {
+      return payload[key];
+    }
+  }
+
+  for (const key of ['items', 'results', 'data', 'docs']) {
+    if (Array.isArray(payload?.[key])) {
+      return payload[key];
+    }
+  }
+
+  return [];
+}
+
+function isOfferDirectlyComparable(offer) {
+  return Boolean(offer?.quality?.comparisonSafe && offer?.comparisonGroup && offer?.normalizedUnitPrice?.amount);
+}
+
+function getOfferKindLabel(offer) {
+  return isOfferDirectlyComparable(offer) ? 'Direkt vergleichbar' : 'Aehnliches Angebot';
+}
+
+function getOfferStatusLabel(offer) {
+  if (offer?.status === 'active' && offer?.isActiveNow) return 'Aktuell gueltig';
+  if (offer?.status === 'upcoming') return 'Bald gueltig';
+  if (offer?.status === 'expired') return 'Nicht mehr gueltig';
+  if (offer?.isActiveToday) return 'Heute relevant';
+  return 'Status unklar';
+}
+
+function shouldDisplayUnitPrice(offer) {
+  const amount = Number(offer?.normalizedUnitPrice?.amount);
+  const unit = String(offer?.normalizedUnitPrice?.unit || offer?.comparableUnit || '');
+  const packageType = String(offer?.packageType || '').toLowerCase();
+  const packCount = Number(offer?.packCount || 0);
+  const unitType = String(offer?.unitType || '');
+
+  if (!Number.isFinite(amount) || !unit) {
+    return false;
+  }
+
+  if (unit === 'Stk' && packCount > 1 && (packageType === 'pack' || packageType === 'box' || packageType === 'blister' || unitType === 'Stk')) {
+    return false;
+  }
+
+  return true;
+}
+
+function getConditionsSummary(offer) {
+  if (offer?.conditionsText) {
+    return offer.conditionsText;
+  }
+
+  if (offer?.customerProgramRequired) {
+    return 'Mit Kundenkarte/App';
+  }
+
+  if (offer?.isMultiBuy) {
+    return 'Mehrkauf-Angebot';
+  }
+
+  const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1);
+  if (minimumPurchaseQty > 1) {
+    return `Mindestmenge: ${minimumPurchaseQty}`;
+  }
+
+  return '';
+}
+
+function buildOfferBadges(offer) {
+  const badges = [getOfferKindLabel(offer), getOfferStatusLabel(offer)];
+
+  if (offer?.customerProgramRequired) badges.push('Mit Kundenkarte/App');
+  if (offer?.isMultiBuy) badges.push('Mehrkauf-Angebot');
+  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge noetig');
+
+  return badges;
+}
+
 function formatValidityLabel(offer) {
   const hasValidFrom = Boolean(offer?.validFrom);
   const hasValidTo = Boolean(offer?.validTo);
@@ -174,7 +285,7 @@ function groupShoppingListEntries(entries) {
     .map((group) => ({
       ...group,
       offers: group.offers.sort((left, right) => left.title.localeCompare(right.title, 'de')),
-      savingsTotal: group.offers.reduce((sum, offer) => sum + normalizeAmount(offer.savingsAmount), 0),
+      savingsTotal: group.offers.reduce((sum, offer) => sum + getReliableSavingsAmount(offer), 0),
       currentTotal: group.offers.reduce((sum, offer) => sum + normalizeAmount(offer.priceCurrent?.amount), 0),
     }))
     .sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'));
@@ -248,11 +359,14 @@ function OfferImage({ offer, sizeStyle, placeholderStyle, placeholderTextStyle }
 }
 
 function OfferCard({ offer, rank, isSelected, onToggleShoppingList }) {
-  const savingsText = normalizeAmount(offer.savingsAmount) > 0
-    ? formatCurrency(offer.savingsAmount, offer.priceCurrent?.currency)
+  const reliableSavingsAmount = getReliableSavingsAmount(offer);
+  const savingsText = reliableSavingsAmount > 0
+    ? formatCurrency(reliableSavingsAmount, offer.priceCurrent?.currency)
     : '-';
   const retailerColor = getRetailerColor(offer.retailerKey);
   const retailerTextColor = getRetailerTextColor(offer.retailerKey);
+  const badges = buildOfferBadges(offer);
+  const conditionsSummary = getConditionsSummary(offer);
 
   return (
     <View style={[styles.offerCard, rank === 0 ? styles.offerCardBest : null]}>
@@ -271,18 +385,27 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList }) {
             <View style={[styles.retailerBadge, { backgroundColor: retailerColor }]}>
               <Text style={[styles.retailerBadgeLabel, { color: retailerTextColor }]}>{offer.retailerName}</Text>
             </View>
+            {badges.map((badge) => (
+              <View key={badge} style={styles.metaPill}>
+                <Text style={styles.metaPillLabel}>{badge}</Text>
+              </View>
+            ))}
           </View>
           <Text style={styles.offerCategory}>{getOfferCategoryLabel(offer)}</Text>
         </View>
         <Text style={styles.offerTitle}>{offer.title}</Text>
-        {offer.conditionsText ? <Text style={styles.offerCondition}>{offer.conditionsText}</Text> : null}
+        {conditionsSummary ? <Text style={styles.offerCondition}>{conditionsSummary}</Text> : null}
         <View style={styles.offerPriceRow}>
           <View style={styles.offerPriceBox}>
             <Text style={styles.offerPrice}>{formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</Text>
-            <Text style={styles.offerMeta}>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</Text>
+            {shouldDisplayUnitPrice(offer) ? (
+              <Text style={styles.offerMeta}>
+                {formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/{offer.normalizedUnitPrice?.unit}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.savingsBox}>
-            <Text style={styles.savingsLabel}>Ersparnis</Text>
+            <Text style={styles.savingsLabel}>Ersparnis heute</Text>
             <Text style={styles.savingsValue}>{savingsText}</Text>
           </View>
         </View>
@@ -292,11 +415,6 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList }) {
           </View>
           <View style={styles.metaPillWide}>
             <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
-          </View>
-          <View style={styles.metaPill}>
-            <Text style={styles.metaPillLabel}>
-              App/Karte: {offer.customerProgramRequired ? 'Ja' : 'Nein'}
-            </Text>
           </View>
         </View>
         <Pressable
@@ -321,6 +439,7 @@ function SearchResultsList({
   shoppingListMap,
   onToggleShoppingList,
   hero,
+  selectedRetailerCount,
 }) {
   const sections = useMemo(
     () => (ranking?.rankedGroups || []).map((group) => ({
@@ -352,7 +471,7 @@ function SearchResultsList({
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Noch keine Suche gestartet</Text>
             <Text style={styles.emptyText}>
-              Tippe auf "Los" oder bestaetige deine Auswahl mit "Fertig" in "Filter anpassen".
+              Waehle zuerst Haendler aus und bestaetige dann deine Auswahl mit "Fertig".
             </Text>
           </View>
         }
@@ -387,7 +506,11 @@ function SearchResultsList({
       ListEmptyComponent={
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>Keine passenden Angebote gefunden</Text>
-          <Text style={styles.emptyText}>Passe Suche, Anbieter oder Kategorien an, um mehr Ergebnisse zu sehen.</Text>
+          <Text style={styles.emptyText}>
+            {selectedRetailerCount === 0
+              ? 'Waehle zuerst mindestens einen Haendler aus.'
+              : 'Aktuell wurden keine passenden Angebote gefunden. Waehle andere Haendler oder erweitere die Kategorien.'}
+          </Text>
         </View>
       }
       contentContainerStyle={styles.content}
@@ -408,7 +531,7 @@ function ShoppingListPage({ shoppingListEntries, onRemove }) {
     [shoppingListEntries]
   );
   const totalSavings = useMemo(
-    () => shoppingListEntries.reduce((sum, offer) => sum + normalizeAmount(offer.savingsAmount), 0),
+    () => shoppingListEntries.reduce((sum, offer) => sum + getReliableSavingsAmount(offer), 0),
     [shoppingListEntries]
   );
   const totalCurrent = useMemo(
@@ -459,7 +582,7 @@ function ShoppingListPage({ shoppingListEntries, onRemove }) {
                 {offer.conditionsText ? <Text style={styles.offerCondition}>{offer.conditionsText}</Text> : null}
                 <Text style={styles.offerMeta}>{formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</Text>
                 <Text style={styles.offerMeta}>
-                  Ersparnis: {normalizeAmount(offer.savingsAmount) > 0 ? formatCurrency(offer.savingsAmount) : '-'}
+                  Ersparnis: {getReliableSavingsAmount(offer) > 0 ? formatCurrency(getReliableSavingsAmount(offer), offer.priceCurrent?.currency) : '-'}
                 </Text>
               </View>
               <Pressable style={styles.removeButton} onPress={() => onRemove(offer.id)}>
@@ -482,6 +605,8 @@ function ShoppingListPage({ shoppingListEntries, onRemove }) {
 export default function App() {
   const [activePage, setActivePage] = useState('search');
   const [health, setHealth] = useState({ ok: false, environment: '', region: '' });
+  const [retailers, setRetailers] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [ranking, setRanking] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -490,7 +615,6 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedRetailers, setSelectedRetailers] = useState([]);
-  const [retailerPrograms, setRetailerPrograms] = useState({});
   const [filterOpen, setFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [shoppingListMap, setShoppingListMap] = useState({});
@@ -501,28 +625,75 @@ export default function App() {
 
   async function fetchJson(path, options) {
     const response = await fetch(`${API_BASE_URL}${path}`, options);
-    if (!response.ok) {
-      throw new Error(`API-Fehler ${response.status}`);
+    let payload = null;
+
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = null;
     }
-    return response.json();
+
+    if (!response.ok) {
+      throw new Error(payload?.message || `API-Fehler ${response.status}`);
+    }
+
+    return payload;
   }
 
   async function loadBootstrap() {
     try {
-      const [healthData, prefData, rankingData] = await Promise.all([
+      const [healthData, retailerPayload] = await Promise.all([
         fetchJson('/health'),
-        fetchJson('/user-preferences/current'),
-        fetchJson('/offers/ranking?limit=5'),
+        fetchJson('/filters/retailers'),
       ]);
       setHealth({
         ok: Boolean(healthData?.ok),
         environment: healthData?.environment || '',
         region: healthData?.region || '',
       });
-      setRetailerPrograms(prefData?.retailerPrograms || {});
-      setRanking(rankingData);
+      setRetailers(extractArrayPayload(retailerPayload, ['retailers']));
+      setCategories([]);
+      setRanking(null);
+      setError('');
     } catch (loadError) {
       setError(loadError.message || 'App konnte nicht initialisiert werden.');
+    }
+  }
+
+  async function loadCategories(retailerKeys = []) {
+    try {
+      const params = new URLSearchParams();
+
+      if (retailerKeys.length > 0) {
+        params.set('retailers', retailerKeys.join(','));
+      }
+
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const categoryPayload = await fetchJson(`/filters/categories${suffix}`);
+      const nextCategories = extractArrayPayload(categoryPayload, ['categories']);
+
+      setCategories(nextCategories);
+      setSelectedCategories((current) => {
+        const validLabels = new Set();
+
+        for (const category of nextCategories) {
+          if ((category?.subcategories || []).length > 0) {
+            for (const subcategory of category.subcategories || []) {
+              if (subcategory?.subcategoryLabel) {
+                validLabels.add(subcategory.subcategoryLabel);
+              }
+            }
+          } else if (category?.mainCategoryLabel) {
+            validLabels.add(category.mainCategoryLabel);
+          }
+        }
+
+        return current.filter((label) => validLabels.has(label));
+      });
+      setError('');
+    } catch (loadError) {
+      setCategories([]);
+      setError(loadError.message || 'Kategorien konnten nicht geladen werden.');
     }
   }
 
@@ -537,12 +708,16 @@ export default function App() {
       const params = new URLSearchParams();
       if (selectedCategories.length > 0) params.set('categories', selectedCategories.join(','));
       if (selectedRetailers.length > 0) params.set('retailers', selectedRetailers.join(','));
-      const programRetailers = Object.entries(retailerPrograms).filter(([, value]) => value).map(([key]) => key);
-      if (programRetailers.length > 0) params.set('programRetailers', programRetailers.join(','));
       params.set('limit', prioritizeRelevantOffers ? '60' : 'all');
 
+      if (selectedRetailers.length === 0) {
+        setRanking(null);
+        setError('');
+        return;
+      }
+
       const rankingData = await fetchJson(`/offers/ranking?${params.toString()}`);
-      setRanking(rankingData);
+      setRanking(rankingData || null);
       setError('');
     } catch (loadError) {
       setError(loadError.message || 'Angebote konnten nicht geladen werden.');
@@ -557,28 +732,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    loadCategories(selectedRetailers);
+  }, [selectedRetailers]);
+
+  useEffect(() => {
     if (!hasTriggeredSearch) {
       return;
     }
     loadRanking(false);
-  }, [hasTriggeredSearch, selectedCategories, selectedRetailers, retailerPrograms, prioritizeRelevantOffers]);
+  }, [hasTriggeredSearch, selectedCategories, selectedRetailers, prioritizeRelevantOffers]);
 
-  const categoryGroups = useMemo(() => buildCategoryGroups(ranking?.categories || []), [ranking?.categories]);
+  const categoryGroups = useMemo(() => buildCategoryGroups(categories || []), [categories]);
   const visibleRanking = useMemo(() => applySearchToRanking(ranking, searchTerm), [ranking, searchTerm]);
   const summary = visibleRanking?.summary || ranking?.summary || {};
-
-  async function savePrograms(nextPrograms) {
-    setRetailerPrograms(nextPrograms);
-    try {
-      await fetchJson('/user-preferences/current', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ retailerPrograms: nextPrograms }),
-      });
-    } catch (saveError) {
-      setError(saveError.message || 'Kundenkarten-Einstellung konnte nicht gespeichert werden.');
-    }
-  }
 
   function submitSearch() {
     setHasTriggeredSearch(true);
@@ -601,7 +767,6 @@ export default function App() {
     setHasTriggeredSearch(false);
     setLoading(false);
     setRefreshing(false);
-    savePrograms({});
     loadBootstrap();
   }
 
@@ -623,6 +788,10 @@ export default function App() {
 
   function toggleMainCategory(subcategories) {
     setSelectedCategories((current) => {
+      if (subcategories.length === 0) {
+        return current;
+      }
+
       const allSelected = subcategories.every((subcategory) => current.includes(subcategory));
       if (allSelected) {
         return current.filter((item) => !subcategories.includes(item));
@@ -657,17 +826,14 @@ export default function App() {
   const shoppingListEntries = useMemo(() => Object.values(shoppingListMap), [shoppingListMap]);
   const strongestSaving = useMemo(() => {
     const offers = (visibleRanking?.rankedGroups || []).flatMap((group) => group.offers || []);
-    return offers.reduce((max, offer) => Math.max(max, normalizeAmount(offer.savingsAmount)), 0);
+    return offers.reduce((max, offer) => Math.max(max, getReliableSavingsAmount(offer)), 0);
   }, [visibleRanking]);
-  const activeProgramCount = Object.values(retailerPrograms).filter(Boolean).length;
-  const activeFilterCount = selectedRetailers.length + selectedCategories.length + activeProgramCount + (searchTerm ? 1 : 0);
   const resultCount = summary.resultCount || 0;
   const displayedCount = summary.displayedCount || 0;
   const allRelevantVisible = Boolean(summary.completeResultSetVisible) || displayedCount === resultCount;
   const quickFilterSummary = [
     selectedRetailers.length ? `${selectedRetailers.length} Anbieter` : null,
     selectedCategories.length ? `${selectedCategories.length} Kategorien` : null,
-    activeProgramCount ? `${activeProgramCount} Karten/App` : null,
     searchTerm ? `"${searchTerm}"` : null,
   ].filter(Boolean).join(' | ');
   const searchHeader = (
@@ -690,12 +856,12 @@ export default function App() {
       </View>
 
       <View style={styles.searchCard}>
-        <Text style={styles.searchSectionTitle}>Welche Maerkte moechtest du?</Text>
+        <Text style={styles.searchSectionTitle}>Welche Haendler moechtest du beruecksichtigen?</Text>
         <View style={styles.chipWrap}>
-          {(ranking?.retailers || []).map((retailer) => (
+          {(retailers || []).map((retailer) => (
             <FilterChip
               key={retailer.retailerKey}
-              label={retailer.retailerName}
+              label={`${retailer.retailerName}${Number(retailer.activeOfferCount || 0) > 0 ? ` (${retailer.activeOfferCount})` : ''}`}
               active={selectedRetailers.includes(retailer.retailerKey)}
               activeBackgroundColor={getRetailerColor(retailer.retailerKey)}
               activeTextColor={getRetailerTextColor(retailer.retailerKey)}
@@ -704,7 +870,7 @@ export default function App() {
           ))}
         </View>
 
-        <Text style={styles.searchCardTitle}>Wonach suchst du heute?</Text>
+        <Text style={styles.searchCardTitle}>Was moechtest du heute guenstiger einkaufen?</Text>
         <View style={styles.searchInputRow}>
           <TextInput
             style={styles.searchInput}
@@ -734,7 +900,7 @@ export default function App() {
           <Text style={styles.quickInfoText}>
             {hasTriggeredSearch
               ? `${resultCount} passende Angebote${allRelevantVisible ? ' | vollstaendig sichtbar' : ` | ${displayedCount} aktuell sichtbar`}`
-              : 'Noch keine Suche gestartet'}
+              : 'Noch keine Suche gestartet | standardmaessig sind keine Haendler aktiv'}
           </Text>
           {quickFilterSummary ? <Text style={styles.quickInfoText}>Aktive Filter: {quickFilterSummary}</Text> : null}
         </View>
@@ -782,6 +948,7 @@ export default function App() {
           shoppingListMap={shoppingListMap}
           onToggleShoppingList={toggleShoppingList}
           hero={searchHeader}
+          selectedRetailerCount={selectedRetailers.length}
         />
       ) : (
         <ScrollView
@@ -841,33 +1008,6 @@ export default function App() {
               </View>
             </View>
 
-            {selectedRetailers.length > 0 ? (
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionTop}>
-                  <Text style={styles.sectionTitle}>Kundenkarte / App</Text>
-                  <Pressable style={styles.resetButton} onPress={() => savePrograms({})}>
-                    <Text style={styles.resetButtonLabel}>Reset</Text>
-                  </Pressable>
-                </View>
-                {(ranking?.retailers || [])
-                  .filter((retailer) => selectedRetailers.includes(retailer.retailerKey))
-                  .map((retailer) => (
-                    <View key={retailer.retailerKey} style={styles.switchRow}>
-                      <View style={styles.switchTextBox}>
-                        <Text style={styles.switchTitle}>{retailer.retailerName}</Text>
-                        <Text style={styles.switchSubtitle}>Kundenkarte oder App vorhanden</Text>
-                      </View>
-                      <Switch
-                        value={Boolean(retailerPrograms[retailer.retailerKey])}
-                        onValueChange={(value) => savePrograms({ ...retailerPrograms, [retailer.retailerKey]: value })}
-                        trackColor={{ false: '#d8d0c3', true: '#96b767' }}
-                        thumbColor={Boolean(retailerPrograms[retailer.retailerKey]) ? '#244320' : '#f8f5ed'}
-                      />
-                    </View>
-                  ))}
-              </View>
-            ) : null}
-
             <View style={styles.sectionCard}>
               <View style={styles.sectionTop}>
                 <Text style={styles.sectionTitle}>Kategorien</Text>
@@ -886,9 +1026,13 @@ export default function App() {
                     <View style={styles.sectionTop}>
                       <FilterChip
                         label={`${group.mainCategory} (${group.subcategories.length})`}
-                        active={allSelected}
+                        active={allSelected || (group.subcategories.length === 0 && selectedCategories.includes(group.mainCategory))}
                         partial={partial}
-                        onPress={() => toggleMainCategory(group.subcategories)}
+                        onPress={() => (
+                          group.subcategories.length > 0
+                            ? toggleMainCategory(group.subcategories)
+                            : toggleCategory(group.mainCategory)
+                        )}
                       />
                       <Pressable
                         style={styles.linkButton}
@@ -971,6 +1115,7 @@ const styles = StyleSheet.create({
   livePillLabelActive: { color: '#173118' },
   heroHint: { color: '#c8d5c7', fontSize: 12, fontWeight: '600' },
   searchCard: { backgroundColor: '#fffaf2', borderRadius: 24, padding: 16, gap: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  searchSectionTitle: { color: '#31582c', fontSize: 16, fontWeight: '800' },
   searchCardTitle: { color: '#132014', fontSize: 18, fontWeight: '800' },
   searchInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchInput: { flex: 1, backgroundColor: '#f4eee2', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#1b241b' },

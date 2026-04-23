@@ -12,6 +12,221 @@ const {
 } = require('./aktionsfinderParser');
 const { normalizePromotionToOffer } = require('./offerNormalizer');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
+const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
+
+function toAbsoluteUrl(href, baseUrl) {
+  try {
+    return new URL(href, baseUrl).toString();
+  } catch (error) {
+    return '';
+  }
+}
+
+function parseNumericAmount(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const cleaned = String(value)
+    .replace(/[^\d,.-]+/g, '')
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+    .replace(',', '.');
+
+  if (!cleaned) {
+    return null;
+  }
+
+  const numeric = Number(cleaned);
+
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function humanizeSlug(value) {
+  return sanitizeWhitespace(String(value || '').replace(/-/g, ' '));
+}
+
+function normalizeProductUnitMatch(unitText) {
+  const normalized = normalizeTitleForMatch(unitText);
+
+  if (/^(kg|kilogramm)$/.test(normalized)) {
+    return { shortName: 'kg', type: 'PRODUCT' };
+  }
+
+  if (/^(g|gramm)$/.test(normalized)) {
+    return { shortName: 'g', type: 'PRODUCT' };
+  }
+
+  if (/^(l|liter)$/.test(normalized)) {
+    return { shortName: 'l', type: 'PRODUCT' };
+  }
+
+  if (/^(ml|milliliter)$/.test(normalized)) {
+    return { shortName: 'ml', type: 'PRODUCT' };
+  }
+
+  if (/^(cl|zentiliter)$/.test(normalized)) {
+    return { shortName: 'cl', type: 'PRODUCT' };
+  }
+
+  if (/^(stk|stueck|stuck)$/.test(normalized)) {
+    return { shortName: 'Stk', type: 'PRODUCT' };
+  }
+
+  if (/^(packung|pack|netz|becher|flasche|dose|glas|tube|rolle|karton|sack)$/.test(normalized)) {
+    return { shortName: humanizeSlug(normalized), type: 'PACKAGING' };
+  }
+
+  return null;
+}
+
+function buildProductFromCardTitle(title) {
+  const matches = [...sanitizeWhitespace(title).matchAll(
+    /(\d+(?:[.,]\d+)?)\s*(Kilogramm|kg|Gramm|g|Liter|l|Milliliter|ml|Zentiliter|cl|St(?:u|ü)?ck|Stk|Packung|Pack|Netz|Becher|Flasche|Dose|Glas|Tube|Rolle|Karton|Sack)\b/gi
+  )];
+  const product = {};
+
+  if (matches.length === 0) {
+    return product;
+  }
+
+  const [primaryAmount, primaryUnitText] = [parseNumericAmount(matches[0][1]), matches[0][2]];
+  const primaryUnit = normalizeProductUnitMatch(primaryUnitText);
+
+  if (primaryAmount && primaryUnit) {
+    product.productQuantity = primaryAmount;
+    product.productQuantityUnit = {
+      shortName: primaryUnit.shortName,
+      type: primaryUnit.type,
+    };
+  }
+
+  if (matches.length > 1) {
+    const secondaryAmount = parseNumericAmount(matches[1][1]);
+    const secondaryUnit = normalizeProductUnitMatch(matches[1][2]);
+
+    if (secondaryAmount && secondaryUnit) {
+      product.packageQuantity = secondaryAmount;
+      product.packageQuantityUnit = {
+        shortName: secondaryUnit.shortName,
+        type: secondaryUnit.type,
+      };
+    }
+  }
+
+  return product;
+}
+
+function parseDatesFromLeafletHref(href) {
+  const match = String(href || '').match(/-(\d{2})-(\d{2})-(\d{4})-(\d{2})-(\d{2})-(\d{4})\/?$/);
+
+  if (!match) {
+    return {
+      validFrom: null,
+      validTo: null,
+    };
+  }
+
+  const [, fromDay, fromMonth, fromYear, toDay, toMonth, toYear] = match.map(Number);
+
+  return {
+    validFrom: new Date(Date.UTC(fromYear, fromMonth - 1, fromDay, 12, 0, 0)),
+    validTo: new Date(Date.UTC(toYear, toMonth - 1, toDay, 12, 0, 0)),
+  };
+}
+
+function extractCategoryPageLinks(html, sourceUrl) {
+  const $ = cheerio.load(html);
+  const seen = new Set();
+  const links = [];
+
+  $('a[href^="/ppcv/"]').each((index, element) => {
+    const absoluteUrl = toAbsoluteUrl($(element).attr('href'), sourceUrl);
+
+    if (!absoluteUrl || seen.has(absoluteUrl)) {
+      return;
+    }
+
+    seen.add(absoluteUrl);
+    links.push(absoluteUrl);
+  });
+
+  return links;
+}
+
+function buildPromotionId({ source, title, currentPrice, leafletHref, categorySlug }) {
+  return [
+    source.retailerKey,
+    normalizeTitleForMatch(title),
+    categorySlug,
+    String(currentPrice ?? ''),
+    leafletHref,
+  ].join('::');
+}
+
+function parsePromotionsFromCategoryPage({ html, source, pageUrl }) {
+  const $ = cheerio.load(html);
+  const categorySlugMatch = String(pageUrl || '').match(/\/ppcv\/([^/]+)\//i);
+  const categorySlug = sanitizeWhitespace(categorySlugMatch?.[1] || '');
+  const categoryTitle = humanizeSlug(categorySlug);
+  const promotions = [];
+
+  $('article').each((index, element) => {
+    const article = $(element);
+    const linkElement = article.find('a[href^="/l/"]').first();
+    const leafletHref = sanitizeWhitespace(linkElement.attr('href'));
+    const observedUrl = toAbsoluteUrl(leafletHref, pageUrl);
+    const title = sanitizeWhitespace(
+      article.find('p.text-card-text-primary').first().text()
+      || article.find('img').first().attr('alt')
+      || ''
+    );
+    const currentPrice = parseNumericAmount(article.find('.text-card-text-accent').first().text());
+    const originalPrice = parseNumericAmount(article.find('.line-through').first().text());
+    const unitPriceText = article
+      .find('.text-card-text-secondary')
+      .map((innerIndex, innerElement) => sanitizeWhitespace($(innerElement).text()))
+      .get()
+      .find((value) => /\/\s*(kg|g|l|ml|cl|stk|stueck|stuck)/i.test(value))
+      || '';
+    const imageUrl = sanitizeWhitespace(article.find('img').first().attr('src'));
+    const { validFrom, validTo } = parseDatesFromLeafletHref(leafletHref);
+
+    if (!title || !currentPrice || !observedUrl) {
+      return;
+    }
+
+    promotions.push({
+      id: buildPromotionId({
+        source,
+        title,
+        currentPrice,
+        leafletHref,
+        categorySlug,
+      }),
+      title,
+      fullDisplayName: title,
+      description: sanitizeWhitespace([categoryTitle, unitPriceText].filter(Boolean).join(' / ')),
+      discountedPrice: currentPrice,
+      originalPrice,
+      validFrom: validFrom ? validFrom.toISOString() : null,
+      validTo: validTo ? validTo.toISOString() : null,
+      clickoutUrl: observedUrl,
+      currency: {
+        iso: 'EUR',
+        symbol: '€',
+      },
+      image: {
+        small: imageUrl,
+        medium: imageUrl,
+      },
+      tags: [`aktionsfinder-category:${categorySlug}`],
+      productGroups: categoryTitle ? [{ title: categoryTitle }] : [],
+      product: buildProductFromCardTitle(title),
+    });
+  });
+
+  return promotions;
+}
 
 function uniquePromotions(promotions) {
   const seen = new Map();
@@ -58,7 +273,7 @@ function extractAllPromotions(recordStrings, fallbackSections) {
   return uniquePromotions([...sectionPromotions, ...groupedPromotions, ...fallbackPromotions]);
 }
 
-function buildEssence({ retailerName, promotions, grouped }) {
+function buildEssence({ retailerName, promotions, grouped, categoryPageCount = 0, categoryPagePromotions = 0 }) {
   const groupNames = (grouped?.initialPromotionGroupList?.content || [])
     .slice(0, 5)
     .map((item) => item.group?.title)
@@ -66,8 +281,9 @@ function buildEssence({ retailerName, promotions, grouped }) {
 
   return [
     `${retailerName}: ${promotions.length} aktuelle Angebotsobjekte extrahiert.`,
+    categoryPageCount > 0 ? `${categoryPagePromotions} weitere Treffer aus ${categoryPageCount} Kategorie-Unterseiten.` : '',
     groupNames.length > 0 ? `Schwerpunktgruppen: ${groupNames.join(', ')}.` : 'Keine Produktgruppen erkannt.',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 async function fetchAdegFallbackSnapshot() {
@@ -122,9 +338,37 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     const html = String(response.data);
     const recordStrings = getScriptPushStrings(html);
     const sections = extractSections(recordStrings, source.retailerName);
-    const promotions = extractAllPromotions(recordStrings, sections);
+    const basePromotions = extractAllPromotions(recordStrings, sections);
+    const categoryPageLinks = extractCategoryPageLinks(html, source.sourceUrl)
+      .slice(0, source.retailerKey === 'pagro' ? 18 : 14);
+    const categoryPagePromotions = [];
     const digest = buildPayloadDigest(html);
     let fallbackOfficial = null;
+
+    for (const categoryPageUrl of categoryPageLinks) {
+      try {
+        const categoryResponse = await axios.get(categoryPageUrl, {
+          timeout: 30000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml',
+            'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+          },
+        });
+
+        categoryPagePromotions.push(
+          ...parsePromotionsFromCategoryPage({
+            html: String(categoryResponse.data),
+            source,
+            pageUrl: categoryPageUrl,
+          })
+        );
+      } catch (error) {
+        // Continue with the category pages that are publicly reachable.
+      }
+    }
+
+    const promotions = uniquePromotions([...basePromotions, ...categoryPagePromotions]);
 
     if (source.retailerKey === 'adeg' && promotions.length === 0) {
       try {
@@ -152,6 +396,8 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       extractedPreview: promotions.slice(0, 5).map((promotion) => promotion.title).filter(Boolean),
       payload: {
         promotionCount: promotions.length,
+        categoryPageCount: categoryPageLinks.length,
+        categoryPagePromotionCount: categoryPagePromotions.length,
         popularSectionTitle: sections.popular?.title || null,
         assortmentSectionTitle: sections.assortment?.title || null,
         groupedVendor: sections.grouped?.vendor?.name || null,
@@ -184,6 +430,8 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       retailerName: source.retailerName,
       promotions: offerDocuments,
       grouped: sections.grouped,
+      categoryPageCount: categoryPageLinks.length,
+      categoryPagePromotions: categoryPagePromotions.length,
     });
 
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
