@@ -29,7 +29,6 @@ function getOfferImageUrl(offerId) {
 }
 
 const RETAILER_COLORS = {
-  adeg: '#7d3e2f',
   bipa: '#ec4f86',
   billa: '#d63b2e',
   'billa-plus': '#a51417',

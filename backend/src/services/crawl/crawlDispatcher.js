@@ -24,10 +24,9 @@ const RETAILER_PRIORITY = {
   dm: 3,
   pagro: 4,
   bipa: 5,
-  adeg: 6,
-  hofer: 7,
-  billa: 8,
-  'billa-plus': 9,
+  hofer: 6,
+  billa: 7,
+  'billa-plus': 8,
 };
 
 async function crawlSource({ source, region, trigger = 'manual' }) {

@@ -77,7 +77,6 @@ const RETAILER_ACTIVE_COVERAGE_TARGETS = {
   spar: 80,
   billa: 90,
   'billa-plus': 90,
-  adeg: 20,
   penny: 40,
   dm: 35,
   bipa: 45,

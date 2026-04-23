@@ -409,17 +409,19 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
 
     await Offer.deleteMany({ sourceId: source._id });
 
-    const normalizedOffers = promotions.map((promotion) =>
-      normalizePromotionToOffer({
-        promotion,
-        retailerKey: source.retailerKey,
-        retailerName: source.retailerName,
-        sourceId: source._id,
-        crawlJobId: crawlJob._id,
-        region,
-        sourceUrl: source.sourceUrl,
-      })
-    );
+    const normalizedOffers = promotions
+      .map((promotion) =>
+        normalizePromotionToOffer({
+          promotion,
+          retailerKey: source.retailerKey,
+          retailerName: source.retailerName,
+          sourceId: source._id,
+          crawlJobId: crawlJob._id,
+          region,
+          sourceUrl: source.sourceUrl,
+        })
+      )
+      .filter(Boolean);
     const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
 
     if (offerDocuments.length > 0) {
