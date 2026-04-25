@@ -1,42 +1,42 @@
 export const CATEGORY_GROUP_RULES = [
-  { mainCategory: 'Wein', patterns: ['weisswein', 'weißwein', 'rotwein', 'rose', 'rosé', 'wein', 'schaumwein', 'perlwein', 'sekt', 'dessertwein', 'portwein'] },
+  { mainCategory: 'Wein', patterns: ['weisswein', 'rotwein', 'rose', 'wein', 'schaumwein', 'perlwein', 'sekt', 'dessertwein', 'portwein'] },
   { mainCategory: 'Bier', patterns: ['bier', 'flaschenbier', 'dosenbier', 'radler', 'weizenbier', 'helles'] },
-  { mainCategory: 'Spirituosen', patterns: ['aperitif', 'digestif', 'schnaps', 'vodka', 'gin', 'likor', 'likör', 'cognac', 'whiskey', 'alkohol'] },
-  { mainCategory: 'Kaffee', patterns: ['kaffee', 'ganze bohne', 'gemahlen', 'eiskaffee', 'loslich', 'löslich', 'kapseln', 'pads', 'espresso'] },
+  { mainCategory: 'Spirituosen', patterns: ['aperitif', 'digestif', 'schnaps', 'vodka', 'gin', 'likor', 'cognac', 'whiskey', 'alkohol'] },
+  { mainCategory: 'Kaffee', patterns: ['kaffee', 'ganze bohne', 'gemahlen', 'eiskaffee', 'loslich', 'kapseln', 'pads', 'espresso'] },
   { mainCategory: 'Mehl', patterns: ['weizenmehl', 'dinkelmehl', 'mehl'] },
-  { mainCategory: 'Oel', patterns: ['raps', 'olive', 'olivenol', 'olivenöl', 'oel', 'öl'] },
-  { mainCategory: 'Konserven', patterns: ['konserven', 'eingelegtes', 'in sose', 'in soße', 'in ol', 'in öl', 'im eigenen saft', 'geschalte tomaten', 'geschälte tomaten', 'gestuckelte tomaten', 'gestückelte tomaten'] },
+  { mainCategory: 'Öl', patterns: ['raps', 'olive', 'olivenol', 'olivenöl', 'oel', 'öl'] },
+  { mainCategory: 'Konserven', patterns: ['konserven', 'eingelegtes', 'in sose', 'in öl', 'in ol', 'im eigenen saft', 'geschalte tomaten', 'geschälte tomaten', 'gestuckelte tomaten', 'gestückelte tomaten'] },
   {
-    mainCategory: 'Wasser, Saefte & Softdrinks',
+    mainCategory: 'Wasser, Säfte & Softdrinks',
     patterns: ['limonaden', 'mineralwasser', 'wasser', 'sirupe', 'energydrinks', 'eistee', 'smoothies', 'fresh juice', 'safte', 'saefte', 'getranke', 'getraenke', 'milch joghurtgetranke', 'milch joghurtgetraenke', 'kindergetranke', 'kindergetraenke', 'alkoholfreie alternativen', 'still', 'prickelnd'],
   },
   {
-    mainCategory: 'Kaese & Feinkost',
-    patterns: ['kase', 'käse', 'hartkase', 'hartkäse', 'frischkase', 'frischkäse', 'huttenkase', 'hüttenkäse', 'feta', 'mozarella', 'mozzarella', 'weichkase', 'weichkäse', 'schmelzkase', 'schmelzkäse', 'grill brat', 'ofenkase', 'ofenkäse', 'feinkost'],
+    mainCategory: 'Käse & Feinkost',
+    patterns: ['kase', 'kaese', 'hartkase', 'hartkaese', 'frischkase', 'frischkaese', 'huttenkase', 'huettenkaese', 'feta', 'mozarella', 'mozzarella', 'weichkase', 'weichkaese', 'schmelzkase', 'schmelzkaese', 'grill brat', 'ofenkase', 'ofenkaese', 'feinkost'],
   },
   {
-    mainCategory: 'Milchprodukte & Fruehstueck',
-    patterns: ['fruchtjoghurt', 'milchalternativen', 'milchprodukte', 'cornflakes', 'cerealien', 'hafer', 'musli', 'müsli', 'aufstriche', 'susse aufstriche', 'süße aufstriche', 'schoko nussaufstriche', 'marmeladen', 'nussmuse', 'kakao'],
+    mainCategory: 'Milchprodukte & Frühstück',
+    patterns: ['fruchtjoghurt', 'milchalternativen', 'milchprodukte', 'cornflakes', 'cerealien', 'hafer', 'musli', 'müsli', 'muesli', 'aufstriche', 'susse aufstriche', 'süße aufstriche', 'schoko nussaufstriche', 'marmeladen', 'nussmuse', 'kakao'],
   },
   {
-    mainCategory: 'Brot, Gebaeck & Suesses Gebaeck',
-    patterns: ['brot', 'geback', 'gebäck', 'aufbackbrotchen', 'aufbackbrötchen', 'baguette', 'weissbrote', 'weißbrote', 'brioche', 'striezel', 'plunder', 'kuchen', 'muffins', 'konditorei', 'desserts', 'waffeln'],
+    mainCategory: 'Brot, Gebäck & Süßes Gebäck',
+    patterns: ['brot', 'geback', 'gebäck', 'gebaeck', 'aufbackbrotchen', 'aufbackbrötchen', 'baguette', 'weissbrote', 'brioche', 'striezel', 'plunder', 'kuchen', 'muffins', 'konditorei', 'desserts', 'waffeln'],
   },
   {
-    mainCategory: 'Suesses & Snacks',
-    patterns: ['tafelschokolade', 'schokolade', 'fruchtgummi', 'schnitten', 'schokoriegel', 'kekse', 'chips', 'knabberein', 'snacks', 'susswaren', 'suesswaren', 'sussigkeiten', 'süßigkeiten', 'susses', 'süßes', 'zuckerl', 'bonbons', 'traubenzucker', 'nachos', 'dips', 'kaugummi', 'proteinriegel', 'kleine snacks'],
+    mainCategory: 'Süßes & Snacks',
+    patterns: ['tafelschokolade', 'schokolade', 'fruchtgummi', 'schnitten', 'schokoriegel', 'kekse', 'chips', 'knabberein', 'snacks', 'susswaren', 'suesswaren', 'sussigkeiten', 'süßigkeiten', 'suessigkeiten', 'susses', 'süßes', 'suesses', 'zuckerl', 'bonbons', 'traubenzucker', 'nachos', 'dips', 'kaugummi', 'proteinriegel', 'kleine snacks'],
   },
   {
-    mainCategory: 'Tiefkuehlkost & Eis',
-    patterns: ['tiefkuhl', 'tiefkühl', 'pizza', 'pommes', 'eis', 'eiscreme', 'eis am stiel', 'stanizl', 'eis snacks', 'menuschalen', 'menüschalen', 'fertiggerichte'],
+    mainCategory: 'Tiefkühlkost & Eis',
+    patterns: ['tiefkuhl', 'tiefkühl', 'tiefkuehl', 'pizza', 'pommes', 'eis', 'eiscreme', 'eis am stiel', 'stanizl', 'eis snacks', 'menuschalen', 'menüschalen', 'fertiggerichte'],
   },
   {
     mainCategory: 'Kochen & Vorrat',
     patterns: ['asien', 'sugo', 'reis', 'pasta', 'beilagen', 'kochzutaten', 'dressings', 'wurzsauce', 'würzsauce', 'pasten', 'basis', 'fixprodukte', 'gewurz', 'gewürz', 'bohnen', 'mais', 'champions', 'pesto', 'ketchup', 'mayonaise', 'senf', 'kren', 'suppen', 'kapern', 'linsen', 'erbsen', 'hulsenfruchte', 'hülsenfrüchte', 'essig', 'tomatenprodukte', 'spaghetti', 'penne', 'fussili', 'fusilli'],
   },
   {
-    mainCategory: 'Obst & Gemuese',
-    patterns: ['gemuse', 'gemüse', 'obst', 'gurken', 'kartoffeln', 'salate', 'apfel', 'birnen', 'trauben', 'zitrusfruchte', 'zitrusfrüchte', 'steinobst', 'beeren', 'tomaten'],
+    mainCategory: 'Obst & Gemüse',
+    patterns: ['gemuse', 'gemüse', 'gemuese', 'obst', 'gurken', 'kartoffeln', 'salate', 'apfel', 'birnen', 'trauben', 'zitrusfruchte', 'zitrusfrüchte', 'steinobst', 'beeren', 'tomaten'],
   },
   {
     mainCategory: 'Fleisch, Wurst & Fisch',
@@ -67,7 +67,7 @@ export function resolveMainCategoryLabel(category) {
   const normalized = normalizeCategoryLabel(category);
 
   for (const group of CATEGORY_GROUP_RULES) {
-    if (group.patterns.some((pattern) => normalized.includes(pattern))) {
+    if (group.patterns.some((pattern) => normalized.includes(normalizeCategoryLabel(pattern)))) {
       return group.mainCategory;
     }
   }
@@ -77,7 +77,7 @@ export function resolveMainCategoryLabel(category) {
   }
 
   if (normalized === 'getraenke' || normalized === 'getranke') {
-    return 'Weitere Getraenke';
+    return 'Weitere Getränke';
   }
 
   return category || 'Weitere Kategorien';
