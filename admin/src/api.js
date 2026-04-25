@@ -3,9 +3,10 @@ import axios from 'axios'
 const localDevApiBaseUrl = 'http://localhost:4000/api'
 const hostedApiBaseUrl = 'https://whale-app-nmndr.ondigitalocean.app/api'
 const defaultApiBaseUrl = import.meta.env.DEV ? localDevApiBaseUrl : hostedApiBaseUrl
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl,
+  baseURL: API_BASE_URL,
   timeout: 15000,
 })
 

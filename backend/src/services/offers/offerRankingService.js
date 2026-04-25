@@ -5,21 +5,42 @@ const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCa
 const { computeOfferSavings } = require('./promotionMath');
 
 const OFFER_RANKING_FIELDS = [
+  '_id',
   'retailerKey',
   'retailerName',
   'title',
+  'titleNormalized',
   'brand',
+  'searchText',
+  'categoryKey',
   'categoryPrimary',
   'categorySecondary',
   'benefitType',
   'conditionsText',
   'customerProgramRequired',
+  'hasConditions',
+  'isMultiBuy',
+  'effectiveDiscountType',
+  'comparisonGroup',
+  'status',
+  'isActiveNow',
+  'isActiveToday',
   'quantityText',
   'validFrom',
   'validTo',
+  'packCount',
+  'unitValue',
+  'unitType',
+  'totalComparableAmount',
+  'comparableUnit',
+  'packageType',
   'normalizedUnitPrice',
   'priceCurrent',
   'priceReference',
+  'imageUrl',
+  'quality',
+  'sortScoreDefault',
+  'minimumPurchaseQty',
   'rawFacts',
   'supportingSources',
 ].join(' ');
@@ -576,6 +597,25 @@ function buildCacheMatch({ selectedRetailers = [], selectedCategories = [] }) {
   return match;
 }
 
+async function buildFallbackCandidateOffers({ selectedRetailers = [], selectedCategories = [] }) {
+  const match = buildCurrentAvailabilityMatch();
+  const selectedCategoryKeys = selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+
+  if (selectedRetailers.length > 0) {
+    match.retailerKey = { $in: selectedRetailers };
+  }
+
+  if (selectedCategoryKeys.length > 0) {
+    match.categoryKey = { $in: selectedCategoryKeys };
+  }
+
+  return Offer.find(match)
+    .select(OFFER_RANKING_FIELDS)
+    .sort({ sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
+    .limit(2000)
+    .lean();
+}
+
 function parseShoppingItems(value) {
   return String(value || '')
     .split(/\r?\n|,/)
@@ -750,9 +790,16 @@ async function buildOfferRanking({
   const selectedCategoryKeys = new Set(
     selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
   );
-  const candidateOffers = offerCacheDocuments
+  let candidateOffers = offerCacheDocuments
     .flatMap((document) => document.offers || [])
     .filter((offer) => selectedCategoryKeys.size === 0 || selectedCategoryKeys.has(String(offer.categoryKey || '')));
+
+  if (candidateOffers.length === 0) {
+    candidateOffers = await buildFallbackCandidateOffers({
+      selectedRetailers,
+      selectedCategories,
+    });
+  }
 
   const fullyFilteredOffers = dedupeOffers(
     applyQueryMatch(

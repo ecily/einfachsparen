@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import './index.css'
 import {
+  API_BASE_URL,
   fetchDashboardSnapshot,
   fetchEssence,
   fetchHealth,
@@ -23,7 +24,7 @@ function getApiBase() {
       ? window.__SM_API__
       : ''
 
-  const base = envBase || windowBase || '/api'
+  const base = envBase || windowBase || API_BASE_URL
   return String(base).replace(/\/+$/, '')
 }
 
@@ -407,53 +408,6 @@ function getSavingsValue(offer) {
   return Number.isFinite(raw) ? raw : -1
 }
 
-function filterAndSortOffers(offers, filters, retailers, categories) {
-  if (!filters.selectedRetailers.length) return []
-
-  const selectedRetailers = new Set(filters.selectedRetailers)
-  const categoryGroups = categories || []
-  const hasCategorySelection = filters.selectedCategoryTokens.length > 0
-
-  const result = (offers || []).filter((offer) => {
-    const retailerKey = getOfferRetailerKey(offer, retailers)
-    const mainCategoryKey = normalizeRetailerKey(offer?.categoryPrimary || '')
-    const subCategoryKey = normalizeRetailerKey(getOfferCategoryLabel(offer))
-
-    if (!selectedRetailers.has(retailerKey)) return false
-
-    if (!hasCategorySelection) {
-      return true
-    }
-
-    const matchingGroup = categoryGroups.find((group) => group.mainCategoryKey === mainCategoryKey)
-
-    if (!matchingGroup) {
-      return false
-    }
-
-    const selectionState = getGroupSelectionState(matchingGroup, filters.selectedCategoryTokens)
-
-    if (selectionState.selectedSubcategoryKeys.length > 0) {
-      return selectionState.selectedSubcategoryKeys.some((subcategoryKey) => subcategoryKey === subCategoryKey)
-    }
-
-    return selectionState.mainSelected
-  })
-
-  return [...result].sort((left, right) => {
-    const savingsDiff = getSavingsValue(right) - getSavingsValue(left)
-    if (savingsDiff !== 0) return savingsDiff
-
-    const leftPrice = Number(left?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
-    const rightPrice = Number(right?.priceCurrent?.amount ?? Number.MAX_SAFE_INTEGER)
-    if (leftPrice !== rightPrice) return leftPrice - rightPrice
-
-    const leftUnit = Number(left?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-    const rightUnit = Number(right?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
-    return leftUnit - rightUnit
-  })
-}
-
 function filterVisibleOffers(offers, filters, retailers, categories) {
   if (!filters.selectedRetailers.length) return []
 
@@ -559,13 +513,9 @@ function SectionCard({ children, style = {} }) {
 
 function ProductImage({ offerId, src, alt, compact = false }) {
   const primarySrc = offerId ? getOfferImageUrl(offerId) : src
-  const [currentSrc, setCurrentSrc] = useState(primarySrc || src || '')
-  const [fallbackTried, setFallbackTried] = useState(false)
-
-  useEffect(() => {
-    setCurrentSrc(primarySrc || src || '')
-    setFallbackTried(false)
-  }, [primarySrc, src])
+  const [failedSources, setFailedSources] = useState(() => new Set())
+  const imageSources = [primarySrc, src].filter((item, index, items) => item && items.indexOf(item) === index)
+  const currentSrc = imageSources.find((item) => !failedSources.has(item)) || ''
 
   if (!currentSrc) {
     return (
@@ -582,13 +532,7 @@ function ProductImage({ offerId, src, alt, compact = false }) {
         alt={alt}
         loading="lazy"
         onError={() => {
-          if (!fallbackTried && src && currentSrc !== src) {
-            setFallbackTried(true)
-            setCurrentSrc(src)
-            return
-          }
-
-          setCurrentSrc('')
+          setFailedSources((current) => new Set(current).add(currentSrc))
         }}
       />
     </div>
@@ -1362,10 +1306,6 @@ function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKey }) {
   const [note, setNote] = useState('')
   const rowKey = `subcategory:${item.subcategoryKey}`
 
-  useEffect(() => {
-    setTargetCategoryPrimary(item.categoryPrimary || '')
-  }, [item.categoryPrimary])
-
   return (
     <div className="quality-row">
       <div>
@@ -1419,19 +1359,10 @@ function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete,
     () => buildQualitySubcategoryOptions(snapshot, targetCategoryPrimary),
     [snapshot, targetCategoryPrimary]
   )
-
-  useEffect(() => {
-    setTargetCategoryPrimary(item.categoryPrimary || '')
-    setTargetCategorySecondary(item.categorySecondary || '')
-  }, [item.categoryPrimary, item.categorySecondary])
-
-  useEffect(() => {
-    if (!targetCategoryPrimary) return
-    const stillValid = subcategoryOptions.includes(targetCategorySecondary)
-    if (!stillValid && subcategoryOptions.length > 0) {
-      setTargetCategorySecondary(subcategoryOptions[0])
-    }
-  }, [subcategoryOptions, targetCategoryPrimary, targetCategorySecondary])
+  const selectedTargetCategorySecondary =
+    targetCategoryPrimary && subcategoryOptions.length > 0 && !subcategoryOptions.includes(targetCategorySecondary)
+      ? subcategoryOptions[0]
+      : targetCategorySecondary
 
   return (
     <div className="quality-row quality-row--article">
@@ -1465,7 +1396,7 @@ function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete,
           <span>Ziel-Subkategorie</span>
           <input
             list={`subcategory-options-${rowKey}`}
-            value={targetCategorySecondary}
+            value={selectedTargetCategorySecondary}
             onChange={(event) => setTargetCategorySecondary(event.target.value)}
             placeholder="Subkategorie setzen"
           />
@@ -1481,8 +1412,8 @@ function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete,
         </label>
         <button
           className="crawl-button quality-row__action"
-          disabled={!targetCategoryPrimary || !targetCategorySecondary || savingKey === rowKey}
-          onClick={() => onSave({ item, targetCategoryPrimary, targetCategorySecondary, note, rowKey })}
+          disabled={!targetCategoryPrimary || !selectedTargetCategorySecondary || savingKey === rowKey}
+          onClick={() => onSave({ item, targetCategoryPrimary, targetCategorySecondary: selectedTargetCategorySecondary, note, rowKey })}
         >
           {savingKey === rowKey ? 'Speichert...' : 'Bestaetigen'}
         </button>
@@ -1613,7 +1544,7 @@ function QualityPage({
         <div className="quality-list">
           {subcategoryMappings.map((item) => (
             <SubcategoryOverrideRow
-              key={item.subcategoryKey}
+              key={`${item.subcategoryKey}-${item.categoryPrimary}`}
               item={item}
               categoryOptions={categoryOptions}
               onSave={onSaveSubcategoryOverride}
@@ -1634,7 +1565,7 @@ function QualityPage({
         <div className="quality-list">
           {articleMappings.map((item) => (
             <ArticleOverrideRow
-              key={`${item.retailerKey}-${item.titleNormalized}`}
+              key={`${item.retailerKey}-${item.titleNormalized}-${item.categoryPrimary}-${item.categorySecondary}`}
               item={item}
               categoryOptions={categoryOptions}
               snapshot={snapshot}
@@ -1842,7 +1773,7 @@ function App() {
         const rankingResult = await fetchOfferRankingDirect({
           categories: appliedCategoryQueryLabels.join(','),
           retailers: appliedSelectedRetailers.join(','),
-          programRetailers: '',
+          programRetailers: appliedSelectedRetailers.join(','),
           unit: 'all',
           q: '',
           limit: 'all',
