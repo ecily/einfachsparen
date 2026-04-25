@@ -549,18 +549,18 @@ function HeroBlock() {
       <div
         style={{
           display: 'grid',
-          gap: '1.35rem',
-          padding: 'clamp(1.25rem, 4vw, 2.35rem)',
+          gap: '1rem',
+          padding: 'clamp(1rem, 4vw, 2.35rem)',
         }}
       >
-        <div style={{ display: 'grid', gap: '0.78rem', maxWidth: '850px' }}>
+        <div style={{ display: 'grid', gap: '0.72rem', maxWidth: '850px' }}>
           <p
             className="eyebrow"
             style={{
               margin: 0,
               color: '#315e2a',
               fontWeight: 900,
-              letterSpacing: '0.18em',
+              letterSpacing: '0.16em',
             }}
           >
             kaufklug.at
@@ -570,7 +570,7 @@ function HeroBlock() {
             style={{
               margin: 0,
               maxWidth: '760px',
-              fontSize: 'clamp(2.15rem, 6vw, 4.35rem)',
+              fontSize: 'clamp(2rem, 10vw, 4.35rem)',
               lineHeight: 0.98,
               letterSpacing: '-0.055em',
             }}
@@ -583,7 +583,7 @@ function HeroBlock() {
             style={{
               margin: 0,
               maxWidth: '760px',
-              fontSize: 'clamp(1rem, 1.35vw, 1.18rem)',
+              fontSize: 'clamp(1rem, 3.9vw, 1.18rem)',
               lineHeight: 1.55,
             }}
           >
@@ -593,6 +593,7 @@ function HeroBlock() {
         </div>
 
         <div
+          className="hero-benefit-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
@@ -607,6 +608,7 @@ function HeroBlock() {
           ].map(([title, text]) => (
             <div
               key={title}
+              className="hero-benefit-card"
               style={{
                 padding: '0.95rem 1rem',
                 borderRadius: '16px',
@@ -681,10 +683,8 @@ function RetailerSelectorBlock({ retailers, selectedRetailers, onToggleRetailer,
 function CategorySelectorBlock({
   categories,
   selectedCategoryTokens,
-  expandedMainKeys,
   onToggleMainCategory,
   onToggleSubcategory,
-  onToggleExpanded,
   loading,
   disabled,
 }) {
@@ -695,7 +695,7 @@ function CategorySelectorBlock({
           <p className="eyebrow" style={{ margin: 0 }}>2. Produkte eingrenzen</p>
           <h2 style={{ margin: 0 }}>Was möchtest du heute günstiger einkaufen?</h2>
           <p style={{ margin: 0, opacity: 0.82 }}>
-            Wähle grobe Bereiche oder öffne die Unterkategorien, wenn du genauer suchen möchtest.
+            Tippe auf eine Hauptkategorie oder direkt auf eine passende Unterkategorie.
           </p>
         </div>
 
@@ -704,77 +704,54 @@ function CategorySelectorBlock({
         ) : loading ? (
           <p className="status" style={{ marginBottom: 0 }}>Kategorien werden geladen …</p>
         ) : (
-          <div style={{ display: 'grid', gap: '0.8rem' }}>
+          <div style={{ display: 'grid', gap: '0.85rem' }}>
             {(categories || []).map((group) => {
               const selectionState = getGroupSelectionState(group, selectedCategoryTokens)
               const isMainSelected = selectionState.mainSelected
               const isPartiallySelected = selectionState.partialSelected
-              const isExpanded = expandedMainKeys.includes(group.mainCategoryKey) || isMainSelected || selectionState.selectedSubcategoryKeys.length > 0
+              const hasSubcategories = group.subcategories.length > 0
 
               return (
                 <div
                   key={group.mainCategoryKey}
+                  className="category-card"
                   style={{
                     border: '1px solid rgba(22,33,24,0.08)',
                     borderRadius: '18px',
                     padding: '0.9rem 0.95rem',
                     background: 'rgba(255,255,255,0.35)',
                     display: 'grid',
-                    gap: '0.8rem',
+                    gap: '0.72rem',
                   }}
                 >
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'minmax(0, 1fr) auto',
-                      gap: '0.65rem',
-                      alignItems: 'center',
-                    }}
+                  <button
+                    type="button"
+                    className={`chip category-main-chip ${isMainSelected ? 'chip--active' : isPartiallySelected ? 'chip--partial' : ''}`}
+                    onClick={() => onToggleMainCategory(group)}
+                    style={{ justifySelf: 'start' }}
                   >
-                    <button
-                      type="button"
-                      className={`chip ${isMainSelected ? 'chip--active' : isPartiallySelected ? 'chip--partial' : ''}`}
-                      onClick={() => onToggleMainCategory(group)}
-                      style={{ justifySelf: 'start' }}
-                    >
-                      {group.mainCategoryLabel} ({group.offerCount})
-                    </button>
+                    {group.mainCategoryLabel} ({group.offerCount})
+                  </button>
 
-                    <button
-                      type="button"
-                      className="ghost-button ghost-button--small"
-                      onClick={() => onToggleExpanded(group.mainCategoryKey)}
-                    >
-                      {isExpanded ? 'Unterkategorien verbergen' : `Unterkategorien zeigen (${group.subcategories.length})`}
-                    </button>
-                  </div>
-
-                  {isExpanded ? (
+                  {hasSubcategories ? (
                     <div
+                      className="chip-grid chip-grid--subcategories"
                       style={{
-                        display: 'grid',
-                        gap: '0.65rem',
+                        maxHeight: 'none',
+                        overflowY: 'visible',
+                        paddingRight: 0,
                       }}
                     >
-                      <div
-                        className="chip-grid chip-grid--subcategories"
-                        style={{
-                          maxHeight: '220px',
-                          overflowY: 'auto',
-                          paddingRight: '0.2rem',
-                        }}
-                      >
-                        {group.subcategories.map((subcategory) => (
-                          <button
-                            key={subcategory.subcategoryKey}
-                            type="button"
-                            className={`chip chip--subtle ${selectionState.selectedSubcategoryKeys.includes(subcategory.subcategoryKey) ? 'chip--active' : ''}`}
-                            onClick={() => onToggleSubcategory(group, subcategory)}
-                          >
-                            {subcategory.subcategoryLabel} {subcategory.offerCount ? `(${subcategory.offerCount})` : ''}
-                          </button>
-                        ))}
-                      </div>
+                      {group.subcategories.map((subcategory) => (
+                        <button
+                          key={subcategory.subcategoryKey}
+                          type="button"
+                          className={`chip chip--subtle ${selectionState.selectedSubcategoryKeys.includes(subcategory.subcategoryKey) ? 'chip--active' : ''}`}
+                          onClick={() => onToggleSubcategory(group, subcategory)}
+                        >
+                          {subcategory.subcategoryLabel} {subcategory.offerCount ? `(${subcategory.offerCount})` : ''}
+                        </button>
+                      ))}
                     </div>
                   ) : null}
                 </div>
@@ -808,6 +785,7 @@ function ActionBlock({
         </div>
 
         <div
+          className="selection-summary-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -851,7 +829,7 @@ function ActionBlock({
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div className="action-button-row" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button
             type="button"
             className="ghost-button chip--active"
@@ -1055,7 +1033,7 @@ function ResultsBlockConsumer({ rankingLoading, hasAppliedRetailerScope, safeOff
               Noch nichts Passendes gefunden.
             </p>
             <p style={{ margin: 0, opacity: 0.82 }}>
-              Tipp: Wähle mehr Händler, öffne eine breitere Kategorie oder entferne einzelne Unterkategorien.
+              Tipp: Wähle mehr Händler oder eine breitere Kategorie.
             </p>
           </div>
         ) : (
@@ -1102,7 +1080,6 @@ function SearchPage({
   onApplySearch,
   onResetAll,
 }) {
-  const [expandedMainKeys, setExpandedMainKeys] = useState([])
   const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
 
@@ -1119,14 +1096,6 @@ function SearchPage({
     )
   }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, categories])
   const { bestComparableOffers, similarOffers } = useMemo(() => splitRankingOffers(visibleOffers), [visibleOffers])
-
-  function handleToggleExpanded(mainCategoryKey) {
-    setExpandedMainKeys((current) =>
-      current.includes(mainCategoryKey)
-        ? current.filter((item) => item !== mainCategoryKey)
-        : [...current, mainCategoryKey]
-    )
-  }
 
   return (
     <>
@@ -1155,10 +1124,8 @@ function SearchPage({
       <CategorySelectorBlock
         categories={categories}
         selectedCategoryTokens={draftCategoryLabels}
-        expandedMainKeys={expandedMainKeys}
         onToggleMainCategory={onToggleDraftMainCategory}
         onToggleSubcategory={onToggleDraftSubcategory}
-        onToggleExpanded={handleToggleExpanded}
         loading={filtersLoading}
         disabled={!draftRetailers.length}
       />
