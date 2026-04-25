@@ -7,5 +7,12 @@ export default defineConfig({
   server: {
     host: true,
     port: 5174,
+    proxy: {
+      '/api': {
+        target: 'https://whale-app-nmndr.ondigitalocean.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
 })

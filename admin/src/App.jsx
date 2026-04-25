@@ -132,7 +132,6 @@ function normalizeRetailerKey(value) {
     .replace(/^-+|-+$/g, '')
 }
 
-
 function getOfferCategoryLabel(offer) {
   return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
 }
@@ -142,13 +141,13 @@ function isOfferDirectlyComparable(offer) {
 }
 
 function getOfferKindLabel(offer) {
-  return isOfferDirectlyComparable(offer) ? 'Direkt vergleichbar' : 'Aehnliches Angebot'
+  return isOfferDirectlyComparable(offer) ? 'Direkt vergleichbar' : 'Ähnliches Angebot'
 }
 
 function getOfferStatusLabel(offer) {
-  if (offer?.status === 'active' && offer?.isActiveNow) return 'Aktuell gueltig'
-  if (offer?.status === 'upcoming') return 'Bald gueltig'
-  if (offer?.status === 'expired') return 'Nicht mehr gueltig'
+  if (offer?.status === 'active' && offer?.isActiveNow) return 'Aktuell gültig'
+  if (offer?.status === 'upcoming') return 'Bald gültig'
+  if (offer?.status === 'expired') return 'Nicht mehr gültig'
   if (offer?.isActiveToday) return 'Heute relevant'
   return 'Status unklar'
 }
@@ -207,7 +206,7 @@ function getConditionsSummary(offer) {
 
   const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1)
   if (minimumPurchaseQty > 1) {
-    return `Mindestens ${minimumPurchaseQty} noetig`
+    return `Mindestens ${minimumPurchaseQty} nötig`
   }
 
   if (offer?.hasConditions) {
@@ -222,7 +221,7 @@ function buildOfferBadges(offer) {
 
   if (offer?.customerProgramRequired) badges.push('Mit Kundenkarte/App')
   if (offer?.isMultiBuy) badges.push('Mehrkauf-Angebot')
-  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge noetig')
+  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge nötig')
 
   return badges
 }
@@ -232,18 +231,18 @@ function formatValidityLabel(offer) {
   const hasValidTo = Boolean(offer?.validTo)
 
   if (hasValidFrom && hasValidTo) {
-    return `gueltig von ${dayjs(offer.validFrom).format('DD.MM.YYYY')} bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
+    return `gültig von ${dayjs(offer.validFrom).format('DD.MM.YYYY')} bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
   }
 
   if (hasValidFrom) {
-    return `gueltig ab ${dayjs(offer.validFrom).format('DD.MM.YYYY')}`
+    return `gültig ab ${dayjs(offer.validFrom).format('DD.MM.YYYY')}`
   }
 
   if (hasValidTo) {
-    return `gueltig bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
+    return `gültig bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
   }
 
-  return 'aktuell verfuegbar, Enddatum nicht erkannt'
+  return 'aktuell verfügbar, Enddatum nicht erkannt'
 }
 
 function getOfferRetailerKey(offer, retailers = []) {
@@ -455,8 +454,8 @@ function HeroLoaderModal({ open, label }) {
         zIndex: 3000,
         display: 'grid',
         placeItems: 'center',
-        background: 'rgba(12, 16, 26, 0.68)',
-        backdropFilter: 'blur(8px)',
+        background: 'rgba(12, 16, 26, 0.72)',
+        backdropFilter: 'blur(10px)',
       }}
     >
       <style>{`
@@ -469,21 +468,21 @@ function HeroLoaderModal({ open, label }) {
       <div
         className="panel"
         style={{
-          width: 'min(92vw, 520px)',
+          width: 'min(92vw, 540px)',
           textAlign: 'center',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.32)',
         }}
       >
         <div className="panel__header" style={{ alignItems: 'center' }}>
-          <h2>Einen Moment, wir laden gerade ...</h2>
-          <p>{label || 'kaufklug.at laedt Supermaerkte und Kategorien.'}</p>
+          <h2>Wir prüfen gerade die aktuellen Angebote …</h2>
+          <p>{label || 'kaufklug.at lädt Supermärkte, Kategorien und Vergleichsdaten.'}</p>
         </div>
 
         <div
           style={{
-            width: '48px',
-            height: '48px',
-            margin: '8px auto 0',
+            width: '52px',
+            height: '52px',
+            margin: '10px auto 0',
             borderRadius: '999px',
             border: '4px solid rgba(255,255,255,0.18)',
             borderTopColor: 'currentColor',
@@ -494,7 +493,6 @@ function HeroLoaderModal({ open, label }) {
     </div>
   )
 }
-
 
 function SectionCard({ children, style = {} }) {
   return (
@@ -544,29 +542,100 @@ function HeroBlock() {
     <SectionCard
       style={{
         marginBottom: '1rem',
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))',
+        background: 'linear-gradient(180deg, rgba(255,252,247,0.98), rgba(250,246,238,0.94))',
+        border: '1px solid rgba(22,33,24,0.08)',
       }}
     >
       <div
         style={{
           display: 'grid',
-          gap: '0.9rem',
-          padding: '1.25rem 1.25rem 1.35rem',
+          gap: '1.35rem',
+          padding: 'clamp(1.25rem, 4vw, 2.35rem)',
         }}
       >
-        <p className="eyebrow" style={{ margin: 0 }}>kaufklug.at</p>
-        <h1 style={{ margin: 0 }}>Die kluge Art, Geld bei jedem Einkauf zu sparen.</h1>
+        <div style={{ display: 'grid', gap: '0.78rem', maxWidth: '850px' }}>
+          <p
+            className="eyebrow"
+            style={{
+              margin: 0,
+              color: '#315e2a',
+              fontWeight: 900,
+              letterSpacing: '0.18em',
+            }}
+          >
+            kaufklug.at
+          </p>
 
-        <div style={{ display: 'grid', gap: '0.55rem', maxWidth: '960px' }}>
-          <p className="subtitle" style={{ margin: 0 }}>
-            kaufklug.at durchsucht fuer dich automatisch die vielen Angebote und Prospekte, die sonst taeglich im Postkasten landen.
+          <h1
+            style={{
+              margin: 0,
+              maxWidth: '760px',
+              fontSize: 'clamp(2.15rem, 6vw, 4.35rem)',
+              lineHeight: 0.98,
+              letterSpacing: '-0.055em',
+            }}
+          >
+            Einfach klug einkaufen.
+          </h1>
+
+          <p
+            className="subtitle"
+            style={{
+              margin: 0,
+              maxWidth: '760px',
+              fontSize: 'clamp(1rem, 1.35vw, 1.18rem)',
+              lineHeight: 1.55,
+            }}
+          >
+            kaufklug.at zeigt dir, welche Angebote sich bei Hofer, Lidl, Spar, Billa & Co. wirklich lohnen –
+            klar, vergleichbar und ohne Rabatt-Chaos.
           </p>
-          <p className="subtitle" style={{ margin: 0 }}>
-            Du musst nicht mehr selbst alles vergleichen. Die Seite zeigt dir uebersichtlich, welcher Supermarkt bei deinen gesuchten Produkten gerade am guenstigsten ist.
-          </p>
-          <p className="subtitle" style={{ margin: 0 }}>
-            So siehst du auf einen Blick, was sich wirklich lohnt – nach Supermarkt, Kategorie und Unterkategorie geordnet und leicht verstaendlich dargestellt.
-          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+            gap: '0.7rem',
+          }}
+        >
+          {[
+            ['Aktuelle Angebote', 'Nach Händler und Kategorie gefiltert.'],
+            ['Faire Vergleiche', 'Nur sichere Preise zählen als echter Vergleich.'],
+            ['Bedingungen sichtbar', 'Kundenkarte, Mehrkauf und Mindestmenge sofort erkennbar.'],
+            ['Schnell entschieden', 'Weniger suchen, besser einkaufen.'],
+          ].map(([title, text]) => (
+            <div
+              key={title}
+              style={{
+                padding: '0.95rem 1rem',
+                borderRadius: '16px',
+                background: 'rgba(255,255,255,0.68)',
+                border: '1px solid rgba(22,33,24,0.08)',
+                boxShadow: '0 8px 22px rgba(83,63,34,0.045)',
+              }}
+            >
+              <strong
+                style={{
+                  display: 'block',
+                  marginBottom: '0.25rem',
+                  fontSize: '0.98rem',
+                }}
+              >
+                {title}
+              </strong>
+              <span
+                style={{
+                  display: 'block',
+                  color: '#5c6658',
+                  fontSize: '0.94rem',
+                  lineHeight: 1.42,
+                }}
+              >
+                {text}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </SectionCard>
@@ -578,15 +647,15 @@ function RetailerSelectorBlock({ retailers, selectedRetailers, onToggleRetailer,
     <SectionCard style={{ marginBottom: '1rem' }}>
       <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div style={{ display: 'grid', gap: '0.2rem' }}>
-          <p className="eyebrow" style={{ margin: 0 }}>1. Supermaerkte waehlen</p>
-          <h2 style={{ margin: 0 }}>Welche Haendler moechtest du beruecksichtigen?</h2>
+          <p className="eyebrow" style={{ margin: 0 }}>1. Händler wählen</p>
+          <h2 style={{ margin: 0 }}>Wo kaufst du ein?</h2>
           <p style={{ margin: 0, opacity: 0.82 }}>
-            Alle gepflegten Haendler bleiben immer sichtbar. Die Zahl daneben ist nur eine kurze Orientierung.
+            Wähle die Supermärkte, die du berücksichtigen möchtest. Händler ohne aktuelle Treffer bleiben sichtbar.
           </p>
         </div>
 
         {loading ? (
-          <p className="status" style={{ marginBottom: 0 }}>Supermaerkte werden geladen...</p>
+          <p className="status" style={{ marginBottom: 0 }}>Supermärkte werden geladen …</p>
         ) : (
           <div className="chip-grid">
             {(retailers || []).map((retailer) => (
@@ -623,17 +692,17 @@ function CategorySelectorBlock({
     <SectionCard style={{ marginBottom: '1rem' }}>
       <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div style={{ display: 'grid', gap: '0.2rem' }}>
-          <p className="eyebrow" style={{ margin: 0 }}>2. Kategorien waehlen</p>
-          <h2 style={{ margin: 0 }}>Was moechtest du heute guenstiger einkaufen?</h2>
+          <p className="eyebrow" style={{ margin: 0 }}>2. Produkte eingrenzen</p>
+          <h2 style={{ margin: 0 }}>Was möchtest du heute günstiger einkaufen?</h2>
           <p style={{ margin: 0, opacity: 0.82 }}>
-            Waehle zuerst grobe Bereiche. Wenn du genauer suchen willst, oeffne die Unterkategorien.
+            Wähle grobe Bereiche oder öffne die Unterkategorien, wenn du genauer suchen möchtest.
           </p>
         </div>
 
         {disabled ? (
-          <p className="status" style={{ marginBottom: 0 }}>Waehle zuerst mindestens einen Supermarkt.</p>
+          <p className="status" style={{ marginBottom: 0 }}>Wähle zuerst mindestens einen Supermarkt.</p>
         ) : loading ? (
-          <p className="status" style={{ marginBottom: 0 }}>Kategorien werden geladen...</p>
+          <p className="status" style={{ marginBottom: 0 }}>Kategorien werden geladen …</p>
         ) : (
           <div style={{ display: 'grid', gap: '0.8rem' }}>
             {(categories || []).map((group) => {
@@ -646,10 +715,10 @@ function CategorySelectorBlock({
                 <div
                   key={group.mainCategoryKey}
                   style={{
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(22,33,24,0.08)',
                     borderRadius: '18px',
                     padding: '0.9rem 0.95rem',
-                    background: 'rgba(255,255,255,0.025)',
+                    background: 'rgba(255,255,255,0.35)',
                     display: 'grid',
                     gap: '0.8rem',
                   }}
@@ -731,10 +800,10 @@ function ActionBlock({
     <SectionCard style={{ marginBottom: '1rem' }}>
       <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div style={{ display: 'grid', gap: '0.2rem' }}>
-          <p className="eyebrow" style={{ margin: 0 }}>3. Suche starten</p>
-          <h2 style={{ margin: 0 }}>Jetzt Angebote laden</h2>
+          <p className="eyebrow" style={{ margin: 0 }}>3. Angebote anzeigen</p>
+          <h2 style={{ margin: 0 }}>Deine Auswahl ist bereit.</h2>
           <p style={{ margin: 0, opacity: 0.82 }}>
-            Mit Klick auf „Los“ werden die Angebote nach deiner Auswahl geladen. Mit „Reset“ loeschst du alle Filter und startest neu.
+            Wir laden passende Angebote erst nach deinem Klick. So bleibt die Auswahl ruhig, nachvollziehbar und schnell.
           </p>
         </div>
 
@@ -749,36 +818,36 @@ function ActionBlock({
             style={{
               padding: '0.85rem 0.95rem',
               borderRadius: '16px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              background: 'rgba(255,255,255,0.45)',
+              border: '1px solid rgba(22,33,24,0.08)',
             }}
           >
-            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Supermaerkte</strong>
-            <span style={{ opacity: 0.8 }}>{selectedRetailerCount > 0 ? `${selectedRetailerCount} ausgewaehlt` : 'Keine Auswahl'}</span>
+            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Supermärkte</strong>
+            <span style={{ opacity: 0.8 }}>{selectedRetailerCount > 0 ? `${selectedRetailerCount} ausgewählt` : 'Keine Auswahl'}</span>
           </div>
 
           <div
             style={{
               padding: '0.85rem 0.95rem',
               borderRadius: '16px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              background: 'rgba(255,255,255,0.45)',
+              border: '1px solid rgba(22,33,24,0.08)',
             }}
           >
-            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Kategorien / Unterkategorien</strong>
-            <span style={{ opacity: 0.8 }}>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewaehlt` : 'Keine Auswahl'}</span>
+            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Kategorien</strong>
+            <span style={{ opacity: 0.8 }}>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Keine Auswahl'}</span>
           </div>
 
           <div
             style={{
               padding: '0.85rem 0.95rem',
               borderRadius: '16px',
-              background: hasPendingChanges ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              background: hasPendingChanges ? 'rgba(235,247,226,0.78)' : 'rgba(255,255,255,0.45)',
+              border: '1px solid rgba(22,33,24,0.08)',
             }}
           >
             <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Status</strong>
-            <span style={{ opacity: 0.8 }}>{hasPendingChanges ? 'Neue Auswahl bereit zum Starten' : 'Aktuelle Auswahl bereits geladen'}</span>
+            <span style={{ opacity: 0.8 }}>{hasPendingChanges ? 'Neue Auswahl bereit' : 'Aktuelle Auswahl geladen'}</span>
           </div>
         </div>
 
@@ -790,118 +859,13 @@ function ActionBlock({
             disabled={!canSearch || searching}
             style={!canSearch || searching ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
-            {searching ? 'Wir suchen gerade ...' : 'Angebote zeigen'}
+            {searching ? 'Wir vergleichen gerade …' : 'Angebote anzeigen'}
           </button>
 
           <button type="button" className="ghost-button" onClick={onReset}>
-            Auswahl zuruecksetzen
+            Auswahl zurücksetzen
           </button>
         </div>
-      </div>
-    </SectionCard>
-  )
-}
-
-function ResultsBlock({ rankingLoading, hasAppliedRetailerScope, visibleOfferCount, offers }) {
-  return (
-    <SectionCard>
-      <div style={{ display: 'grid', gap: '1rem', padding: '1.1rem 1.1rem 1.15rem' }}>
-        <div className="panel__header" style={{ marginBottom: 0 }}>
-          <h2>Ergebnisse</h2>
-          <p>Sortiert von der groessten Ersparnis zur kleinsten.</p>
-        </div>
-
-        {!hasAppliedRetailerScope ? (
-          <p className="status" style={{ marginBottom: 0 }}>
-            Noch keine Suche gestartet. Waehle zuerst deine Filter und klicke dann auf „Los“.
-          </p>
-        ) : rankingLoading ? (
-          <div style={{ display: 'grid', gap: '0.8rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>Moment, wir suchen gerade die besten Angebote fuer dich ...</p>
-            <div
-              style={{
-                display: 'grid',
-                gap: '0.75rem',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-              }}
-            >
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  style={{
-                    minHeight: '140px',
-                    borderRadius: '18px',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    background: 'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))',
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        ) : visibleOfferCount === 0 ? (
-          <div style={{ display: 'grid', gap: '0.55rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>
-              Keine passenden Angebote gefunden.
-            </p>
-            <p style={{ margin: 0, opacity: 0.82 }}>
-              Aendere deine Supermaerkte oder Kategorien und starte die Suche erneut.
-            </p>
-          </div>
-        ) : (
-          <>
-            <p style={{ margin: 0, opacity: 0.82 }}>{visibleOfferCount} Angebote gefunden.</p>
-
-            <div className="user-results" style={{ display: 'grid', gap: '0.85rem' }}>
-              {offers.map((offer, index) => (
-                <article className={`user-card ${index === 0 ? 'user-card--best' : ''}`} key={offer.id}>
-                  <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
-
-                  <div className="user-card__content">
-                    <div className="user-card__top">
-                      <div>
-                        <div className="user-card__eyebrow">
-                          <span>Rang {index + 1}</span>
-                          <span>{offer.retailerName}</span>
-                          <span>{getOfferCategoryLabel(offer)}</span>
-                          {offer.customerProgramRequired ? <span>nur mit Kundenkarte/App</span> : <span>ohne Kundenkarte/App</span>}
-                        </div>
-                        <h3>{offer.title}</h3>
-                      </div>
-
-                      <div className="user-card__price">
-                        {offer.conditionsText ? <span className="user-card__price-condition">{offer.conditionsText}</span> : null}
-                        <strong>{offer.priceCurrent?.amount} {offer.priceCurrent?.currency}</strong>
-                        <span>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</span>
-                      </div>
-                    </div>
-
-                    <div className="user-card__facts">
-                      <span>Menge: {offer.quantityText || 'nicht erkannt'}</span>
-                      <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
-                    </div>
-
-                    <div className="user-card__highlights">
-                      <div className="highlight-pill highlight-pill--price">
-                        <span>Ersparnis</span>
-                        <strong>{getSavingsValue(offer) >= 0 ? `${getSavingsValue(offer)} EUR` : 'nicht ableitbar'}</strong>
-                      </div>
-
-                      <div className="highlight-pill">
-                        <span>Vergleichspreis</span>
-                        <strong>{offer.normalizedUnitPrice?.amount}/{offer.normalizedUnitPrice?.unit}</strong>
-                      </div>
-
-                      <div className="highlight-pill">
-                        <span>Kategorie</span>
-                        <strong>{getOfferCategoryLabel(offer)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </>
-        )}
       </div>
     </SectionCard>
   )
@@ -915,23 +879,74 @@ function OfferCardConsumer({ offer, highlightLabel = '' }) {
   const showUnitPrice = shouldDisplayUnitPrice(offer)
 
   return (
-    <article className={`user-card ${directlyComparable ? 'user-card--best' : ''}`}>
+    <article
+      className="user-card"
+      style={{
+        position: 'relative',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(112px, 170px) minmax(0, 1fr)',
+        gap: '1rem',
+        alignItems: 'start',
+        background: directlyComparable
+          ? 'linear-gradient(180deg, rgba(244,255,236,0.98), rgba(255,252,247,0.96))'
+          : 'rgba(255,252,247,0.96)',
+        borderColor: directlyComparable ? 'rgba(92,160,76,0.28)' : 'rgba(22,33,24,0.1)',
+      }}
+    >
       <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
 
-      <div className="user-card__content">
-        <div className="user-card__top">
-          <div>
-            <div className="user-card__eyebrow">
+      <div className="user-card__content" style={{ minWidth: 0, display: 'grid', gap: '0.8rem' }}>
+        <div
+          className="user-card__top"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr)',
+            gap: '0.65rem',
+            paddingRight: 0,
+            minWidth: 0,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div className="user-card__eyebrow" style={{ paddingRight: 0 }}>
               {highlightLabel ? <span>{highlightLabel}</span> : null}
               <span>{offer.retailerName}</span>
               <span>{getOfferCategoryLabel(offer)}</span>
+              {directlyComparable ? <span>geprüft vergleichbar</span> : null}
             </div>
-            <h3>{offer.title}</h3>
+
+            <h3
+              style={{
+                maxWidth: '100%',
+                overflowWrap: 'anywhere',
+                hyphens: 'auto',
+              }}
+            >
+              {offer.title}
+            </h3>
           </div>
 
-          <div className="user-card__price">
-            <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
-            {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
+          <div
+            className="user-card__price"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'baseline',
+              justifyContent: 'flex-start',
+              gap: '0.4rem 0.75rem',
+              textAlign: 'left',
+              minWidth: 0,
+              maxWidth: '100%',
+            }}
+          >
+            <strong
+              style={{
+                whiteSpace: 'nowrap',
+                lineHeight: 1,
+              }}
+            >
+              {formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}
+            </strong>
+            {showUnitPrice ? <span style={{ whiteSpace: 'nowrap' }}>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
           </div>
         </div>
 
@@ -944,7 +959,7 @@ function OfferCardConsumer({ offer, highlightLabel = '' }) {
         </div>
 
         <div className="user-card__facts">
-          <span>Gueltigkeit: {formatValidityLabel(offer)}</span>
+          <span>Gültigkeit: {formatValidityLabel(offer)}</span>
           <span>Menge: {offer.quantityText || 'nicht sicher erkannt'}</span>
         </div>
 
@@ -1001,17 +1016,19 @@ function ResultsBlockConsumer({ rankingLoading, hasAppliedRetailerScope, safeOff
     <SectionCard>
       <div style={{ display: 'grid', gap: '1rem', padding: '1.1rem 1.1rem 1.15rem' }}>
         <div className="panel__header" style={{ marginBottom: 0 }}>
-          <h2>Ergebnisse</h2>
-          <p>Direkt vergleichbare Angebote sind klar von aehnlichen Treffern getrennt.</p>
+          <h2>Deine besten Angebote</h2>
+          <p>Direkt vergleichbare Preise sind von ähnlichen Treffern getrennt. So bleibt die Empfehlung fair und nachvollziehbar.</p>
         </div>
 
         {!hasAppliedRetailerScope ? (
           <p className="status" style={{ marginBottom: 0 }}>
-            Noch keine Suche gestartet. Waehle Haendler und Kategorien und lade dann deine Angebote.
+            Noch keine Suche gestartet. Wähle Händler und Kategorien und lade dann deine Angebote.
           </p>
         ) : rankingLoading ? (
           <div style={{ display: 'grid', gap: '0.8rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>Moment, wir suchen gerade passende Angebote fuer dich ...</p>
+            <p className="status" style={{ marginBottom: 0 }}>
+              Wir prüfen gerade Preise, Mengen, Gültigkeit und Bedingungen …
+            </p>
             <div
               style={{
                 display: 'grid',
@@ -1025,8 +1042,8 @@ function ResultsBlockConsumer({ rankingLoading, hasAppliedRetailerScope, safeOff
                   style={{
                     minHeight: '140px',
                     borderRadius: '18px',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    background: 'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))',
+                    border: '1px solid rgba(22,33,24,0.06)',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.52), rgba(255,255,255,0.28))',
                   }}
                 />
               ))}
@@ -1035,10 +1052,10 @@ function ResultsBlockConsumer({ rankingLoading, hasAppliedRetailerScope, safeOff
         ) : visibleOfferCount === 0 ? (
           <div style={{ display: 'grid', gap: '0.55rem' }}>
             <p className="status" style={{ marginBottom: 0 }}>
-              Aktuell wurden keine passenden Angebote gefunden.
+              Noch nichts Passendes gefunden.
             </p>
             <p style={{ margin: 0, opacity: 0.82 }}>
-              Probiere andere Haendler, erweitere Kategorien oder nimm Unterkategorien wieder heraus.
+              Tipp: Wähle mehr Händler, öffne eine breitere Kategorie oder entferne einzelne Unterkategorien.
             </p>
           </div>
         ) : (
@@ -1049,16 +1066,16 @@ function ResultsBlockConsumer({ rankingLoading, hasAppliedRetailerScope, safeOff
 
             <ResultsSection
               title="Beste sichere Angebote"
-              subtitle="Nur hier behandeln wir Preise als echten Vergleich."
+              subtitle="Diese Treffer sind am besten für echte Preisvergleiche geeignet."
               offers={safeOffers}
               highlightPrefix="Sicherer Treffer"
             />
 
             <ResultsSection
-              title="Aehnliche interessante Angebote"
-              subtitle="Relevante Treffer fuer deinen Einkauf, aber nicht als exakter Bestpreis."
+              title="Ähnliche interessante Angebote"
+              subtitle="Relevante Treffer für deinen Einkauf, aber nicht als exakter Bestpreis gewertet."
               offers={similarOffers}
-              highlightPrefix="Aehnliches Angebot"
+              highlightPrefix="Ähnliches Angebot"
             />
           </>
         )}
@@ -1115,7 +1132,7 @@ function SearchPage({
     <>
       <HeroLoaderModal
         open={isInitialBusy}
-        label="kaufklug.at laedt Supermaerkte und Kategorien."
+        label="kaufklug.at lädt Supermärkte, Kategorien und aktuelle Vergleichsdaten."
       />
 
       <HeroBlock />
@@ -1183,9 +1200,9 @@ function DiagnosticsPage({
     <>
       <header className="hero">
         <div>
-          <p className="eyebrow">kaufklug.at admin diagnostik</p>
-          <h1>Aktuelle Crawl-Qualitaet fuer Graz-Umgebung</h1>
-          <p className="subtitle">Fruehe Qualitaetsansicht fuer Quellen, Jobs, Rohdaten, Normalisierung und Vergleichsgruppen.</p>
+          <p className="eyebrow">kaufklug.at Systemstatus</p>
+          <h1>Aktuelle Crawl-Qualität für Graz-Umgebung</h1>
+          <p className="subtitle">Interne Ansicht für Quellen, Jobs, Rohdaten, Normalisierung und Vergleichsgruppen.</p>
         </div>
         <div className="hero__status">
           <div>
@@ -1213,22 +1230,22 @@ function DiagnosticsPage({
         <article className="metric-card"><span className="metric-card__label">Quellen aktiv</span><strong className="metric-card__value">{summary.sourceCount || 0}</strong></article>
         <article className="metric-card"><span className="metric-card__label">Rohdokumente</span><strong className="metric-card__value">{summary.rawDocumentCount || 0}</strong></article>
         <article className="metric-card metric-card--accent"><span className="metric-card__label">Gespeichert gesamt</span><strong className="metric-card__value">{summary.storedOfferCount || 0}</strong></article>
-        <article className="metric-card"><span className="metric-card__label">Aktuell gueltig</span><strong className="metric-card__value">{summary.activeOfferCount || 0}</strong></article>
-        <article className="metric-card"><span className="metric-card__label">Pruefung offen</span><strong className="metric-card__value">{summary.offersPendingReview || 0}</strong></article>
+        <article className="metric-card"><span className="metric-card__label">Aktuell gültig</span><strong className="metric-card__value">{summary.activeOfferCount || 0}</strong></article>
+        <article className="metric-card"><span className="metric-card__label">Prüfung offen</span><strong className="metric-card__value">{summary.offersPendingReview || 0}</strong></article>
         <article className="metric-card"><span className="metric-card__label">Vergleichsbasis</span><strong className="metric-card__value">{comparisons.comparableOfferCount || 0}</strong></article>
       </section>
 
       <section className="panel">
         <div className="panel__header">
           <h2>Crawl-Essenz</h2>
-          <p>Kompakte Zusammenfassung fuer deine Rueckmeldung und spaetere Analyse.</p>
+          <p>Kompakte Zusammenfassung für Rückmeldung und spätere Analyse.</p>
         </div>
         <pre className="essence-box">{essence || 'Noch keine Essenz vorhanden.'}</pre>
         <div className="feedback-box">
           <textarea
             value={feedbackNote}
             onChange={(event) => setFeedbackNote(event.target.value)}
-            placeholder="Deine Rueckmeldung zur Crawl-Qualitaet, Luecken oder Auffaelligkeiten..."
+            placeholder="Rückmeldung zur Crawl-Qualität, zu Lücken oder Auffälligkeiten …"
           />
           <div className="feedback-box__actions">
             <button
@@ -1236,7 +1253,7 @@ function DiagnosticsPage({
               onClick={handleSaveFeedback}
               disabled={feedbackState === 'saving' || !feedbackNote.trim()}
             >
-              {feedbackState === 'saving' ? 'Feedback wird gespeichert...' : 'Feedback in Mongo speichern'}
+              {feedbackState === 'saving' ? 'Feedback wird gespeichert …' : 'Feedback in Mongo speichern'}
             </button>
           </div>
         </div>
@@ -1326,7 +1343,7 @@ function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKey }) {
         <label className="quality-form__field">
           <span>Ziel-Kategorie</span>
           <select value={targetCategoryPrimary} onChange={(event) => setTargetCategoryPrimary(event.target.value)}>
-            <option value="">Kategorie waehlen</option>
+            <option value="">Kategorie wählen</option>
             {categoryOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -1343,7 +1360,7 @@ function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKey }) {
           disabled={!targetCategoryPrimary || savingKey === rowKey}
           onClick={() => onSave({ item, targetCategoryPrimary, note, rowKey })}
         >
-          {savingKey === rowKey ? 'Speichert...' : 'Bestaetigen'}
+          {savingKey === rowKey ? 'Speichert …' : 'Bestätigen'}
         </button>
       </div>
     </div>
@@ -1384,7 +1401,7 @@ function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete,
         <label className="quality-form__field">
           <span>Ziel-Kategorie</span>
           <select value={targetCategoryPrimary} onChange={(event) => setTargetCategoryPrimary(event.target.value)}>
-            <option value="">Kategorie waehlen</option>
+            <option value="">Kategorie wählen</option>
             {categoryOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -1415,14 +1432,14 @@ function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete,
           disabled={!targetCategoryPrimary || !selectedTargetCategorySecondary || savingKey === rowKey}
           onClick={() => onSave({ item, targetCategoryPrimary, targetCategorySecondary: selectedTargetCategorySecondary, note, rowKey })}
         >
-          {savingKey === rowKey ? 'Speichert...' : 'Bestaetigen'}
+          {savingKey === rowKey ? 'Speichert …' : 'Bestätigen'}
         </button>
         <button
           className="ghost-button"
           disabled={savingKey === `${rowKey}:delete`}
           onClick={() => onDelete({ item, note, rowKey: `${rowKey}:delete` })}
         >
-          {savingKey === `${rowKey}:delete` ? 'Loescht...' : 'Loeschen'}
+          {savingKey === `${rowKey}:delete` ? 'Löscht …' : 'Löschen'}
         </button>
       </div>
     </div>
@@ -1451,11 +1468,11 @@ function QualityPage({
     <>
       <header className="hero">
         <div>
-          <p className="eyebrow">kaufklug.at quality</p>
-          <h1>Zuordnungen pruefen und sofort korrigieren</h1>
+          <p className="eyebrow">kaufklug.at Datenqualität</p>
+          <h1>Zuordnungen prüfen und sofort korrigieren</h1>
           <p className="subtitle">
-            Primaer pruefst du hier Subkategorie zu Kategorie. Darunter kannst du einzelne Artikel direkt auf die
-            richtige Subkategorie setzen. Manuelle Zuordnungen greifen sofort und haben Vorrang vor der Automatik.
+            Interne Qualitätsansicht für Kategorien, Subkategorien und manuelle Korrekturen. Manuelle Zuordnungen
+            greifen sofort und haben Vorrang vor der Automatik.
           </p>
         </div>
         <div className="hero__status">
@@ -1483,7 +1500,7 @@ function QualityPage({
       <section className="panel">
         <div className="panel__header">
           <h2>Suche und Filter</h2>
-          <p>Fuer Massenpruefung nach Retailer, Kategorie oder Freitext eingrenzen.</p>
+          <p>Für Massenprüfung nach Retailer, Kategorie oder Freitext eingrenzen.</p>
         </div>
         <div className="quality-filters">
           <label className="quality-form__field">
@@ -1527,7 +1544,7 @@ function QualityPage({
             </select>
           </label>
           <button className="crawl-button quality-filters__action" onClick={onReload} disabled={loading}>
-            {loading ? 'Laedt...' : 'Ansicht aktualisieren'}
+            {loading ? 'Lädt …' : 'Ansicht aktualisieren'}
           </button>
         </div>
       </section>
@@ -1535,9 +1552,9 @@ function QualityPage({
       <section className="panel">
         <div className="panel__header">
           <h2>Subkategorie zu Kategorie</h2>
-          <p>Das ist die primaere Qualitaetssicht fuer die grobe Fachlogik.</p>
+          <p>Primäre Qualitätssicht für die grobe Fachlogik.</p>
         </div>
-        {loading && !snapshot ? <p className="status">Lade Quality-Snapshot...</p> : null}
+        {loading && !snapshot ? <p className="status">Lade Quality-Snapshot …</p> : null}
         {!loading && subcategoryMappings.length === 0 ? (
           <p className="status">Keine passenden Subkategorie-Zuordnungen gefunden.</p>
         ) : null}
@@ -1557,7 +1574,7 @@ function QualityPage({
       <section className="panel">
         <div className="panel__header">
           <h2>Artikel zu Subkategorie</h2>
-          <p>Nutze diesen Bereich fuer gezielte Einzelkorrekturen bei falsch zugeordneten Artikeln.</p>
+          <p>Gezielte Einzelkorrekturen bei falsch zugeordneten Artikeln.</p>
         </div>
         {!loading && articleMappings.length === 0 ? (
           <p className="status">Keine passenden Artikel-Zuordnungen gefunden.</p>
@@ -1587,6 +1604,12 @@ function App() {
     : pathname.includes('diagnose') || pathname.includes('diagnostic')
       ? 'diagnostics'
       : 'search'
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = 'kaufklug | einfach klug einkaufen'
+    }
+  }, [])
 
   const [activePage, setActivePage] = useState(initialPage)
   const [snapshot, setSnapshot] = useState(null)
@@ -1675,7 +1698,7 @@ function App() {
         setError('')
       } catch (loadError) {
         if (!active) return
-        setError(loadError.message || 'Dashboard data could not be loaded.')
+        setError(loadError.message || 'Dashboard-Daten konnten nicht geladen werden.')
       } finally {
         if (active) setLoading(false)
       }
@@ -1786,7 +1809,7 @@ function App() {
       } catch (rankingError) {
         if (!active) return
         setRanking(null)
-        setError(rankingError.message || 'Ranking data could not be loaded.')
+        setError(rankingError.message || 'Ranking-Daten konnten nicht geladen werden.')
       } finally {
         if (active) setRankingLoading(false)
       }
@@ -1832,7 +1855,6 @@ function App() {
   async function refreshQualitySnapshot() {
     setQualityFilters((current) => ({ ...current }))
   }
-
 
   function handleToggleDraftRetailer(retailerKey) {
     setDraftSelectedRetailers((current) => {
@@ -1977,7 +1999,7 @@ function App() {
       setQualitySnapshot(nextSnapshot)
       setError('')
     } catch (saveError) {
-      setError(saveError.message || 'Artikel konnte nicht geloescht werden.')
+      setError(saveError.message || 'Artikel konnte nicht gelöscht werden.')
     } finally {
       setQualitySavingKey('')
     }
@@ -1989,25 +2011,69 @@ function App() {
 
   return (
     <main className="shell">
-      <nav className="page-nav" aria-label="Seiten">
+      <nav
+        className="page-nav"
+        aria-label="Seiten"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          maxWidth: '100%',
+        }}
+      >
         <button
           className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
           onClick={() => handleNavigate('search')}
         >
-          Suche
+          Angebote
         </button>
-        <button
-          className={`page-nav__button${activePage === 'quality' ? ' page-nav__button--active' : ''}`}
-          onClick={() => handleNavigate('quality')}
+
+        <div
+          aria-label="Admin-Bereich"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.35rem',
+            marginLeft: 'auto',
+            opacity: 0.72,
+          }}
         >
-          Quality
-        </button>
-        <button
-          className={`page-nav__button${activePage === 'diagnostics' ? ' page-nav__button--active' : ''}`}
-          onClick={() => handleNavigate('diagnostics')}
-        >
-          Diagnose
-        </button>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              color: '#6b7264',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              fontWeight: 800,
+              padding: '0 0.25rem',
+            }}
+          >
+            Admin
+          </span>
+
+          <button
+            className={`page-nav__button${activePage === 'quality' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('quality')}
+            style={{
+              padding: '0.48rem 0.72rem',
+              fontSize: '0.86rem',
+            }}
+          >
+            Qualität
+          </button>
+
+          <button
+            className={`page-nav__button${activePage === 'diagnostics' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('diagnostics')}
+            style={{
+              padding: '0.48rem 0.72rem',
+              fontSize: '0.86rem',
+            }}
+          >
+            Status
+          </button>
+        </div>
       </nav>
 
       {activePage === 'search' ? (
@@ -2044,7 +2110,7 @@ function App() {
         />
       ) : (
         <>
-          {loading && !snapshot ? <p className="status">Lade Ansicht...</p> : null}
+          {loading && !snapshot ? <p className="status">Lade Ansicht …</p> : null}
           {error && !snapshot ? <p className="status status--error">{error}</p> : null}
           {snapshot ? (
             <DiagnosticsPage
