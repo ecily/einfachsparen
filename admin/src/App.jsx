@@ -14,6 +14,8 @@ import {
   saveSubcategoryCategoryOverride,
 } from './api'
 
+const KAUFKLUG_APK_DOWNLOAD_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk'
+
 function getApiBase() {
   const envBase =
     (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE || import.meta.env?.VITE_API_BASE_URL)) ||
@@ -439,6 +441,139 @@ function filterVisibleOffers(offers, filters, retailers, categories) {
 
     return selectionState.mainSelected
   })
+}
+
+function AppDownloadModal({ open, onClose }) {
+  if (!open) return null
+
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(KAUFKLUG_APK_DOWNLOAD_URL)}`
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="apk-download-title"
+      aria-describedby="apk-download-description"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 5000,
+        display: 'grid',
+        placeItems: 'center',
+        padding: '1rem',
+        background: 'rgba(18, 24, 18, 0.58)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <div
+        className="panel"
+        style={{
+          width: 'min(94vw, 460px)',
+          padding: 'clamp(1rem, 4vw, 1.4rem)',
+          textAlign: 'center',
+          borderRadius: '24px',
+          background: 'linear-gradient(180deg, rgba(255,252,247,0.99), rgba(247,242,231,0.98))',
+          boxShadow: '0 28px 80px rgba(18, 24, 18, 0.32)',
+        }}
+      >
+        <div style={{ display: 'grid', gap: '0.7rem', justifyItems: 'center' }}>
+          <p
+            className="eyebrow"
+            style={{
+              margin: 0,
+              color: '#315e2a',
+              fontWeight: 900,
+              letterSpacing: '0.16em',
+            }}
+          >
+            kaufklug.at alpha
+          </p>
+
+          <h2
+            id="apk-download-title"
+            style={{
+              margin: 0,
+              maxWidth: '20rem',
+              fontFamily: 'Georgia, "Times New Roman", serif',
+              fontSize: 'clamp(1.85rem, 8vw, 2.65rem)',
+              lineHeight: 1,
+              letterSpacing: '-0.045em',
+              color: '#172217',
+            }}
+          >
+            kaufklug ist besser als APP!
+          </h2>
+
+          <p
+            id="apk-download-description"
+            style={{
+              margin: 0,
+              maxWidth: '20rem',
+              color: '#495246',
+              fontSize: '1rem',
+              lineHeight: 1.5,
+            }}
+          >
+            Einfach QR scannen und am Smartphone ausprobieren!
+          </p>
+
+          <div
+            style={{
+              width: 'min(74vw, 292px)',
+              padding: '0.75rem',
+              borderRadius: '22px',
+              background: '#ffffff',
+              border: '1px solid rgba(22,33,24,0.1)',
+              boxShadow: '0 14px 34px rgba(83,63,34,0.12)',
+            }}
+          >
+            <img
+              src={qrUrl}
+              alt="QR-Code zum Download der kaufklug.at Alpha APK"
+              width="280"
+              height="280"
+              style={{
+                display: 'block',
+                width: '100%',
+                height: 'auto',
+                borderRadius: '12px',
+              }}
+            />
+          </div>
+
+          <a
+            href={KAUFKLUG_APK_DOWNLOAD_URL}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              maxWidth: '100%',
+              color: '#315e2a',
+              fontSize: '0.86rem',
+              fontWeight: 700,
+              overflowWrap: 'anywhere',
+              textDecoration: 'none',
+            }}
+          >
+            APK direkt herunterladen
+          </a>
+
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={onClose}
+            style={{
+              marginTop: '0.25rem',
+              width: '100%',
+              justifyContent: 'center',
+              textAlign: 'center',
+            }}
+          >
+            Vielleicht später
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function HeroLoaderModal({ open, label }) {
@@ -1579,6 +1714,7 @@ function App() {
   }, [])
 
   const [activePage, setActivePage] = useState(initialPage)
+  const [showAppDownloadModal, setShowAppDownloadModal] = useState(true)
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
@@ -1978,6 +2114,11 @@ function App() {
 
   return (
     <main className="shell">
+      <AppDownloadModal
+        open={showAppDownloadModal}
+        onClose={() => setShowAppDownloadModal(false)}
+      />
+
       <nav
         className="page-nav"
         aria-label="Seiten"
