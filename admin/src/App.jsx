@@ -15,6 +15,7 @@ import {
 } from './api'
 
 const KAUFKLUG_APK_DOWNLOAD_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk'
+const SHOPPING_LIST_STORAGE_KEY = 'kaufklug.shoppingList.v1'
 
 function getApiBase() {
   const envBase =
@@ -134,6 +135,16 @@ function normalizeRetailerKey(value) {
     .replace(/^-+|-+$/g, '')
 }
 
+function getOfferStableId(offer) {
+  return String(
+    offer?.id ||
+    offer?._id ||
+    offer?.offerKey ||
+    offer?.dedupeKey ||
+    `${offer?.title || 'angebot'}-${offer?.retailerName || 'markt'}-${offer?.priceCurrent?.amount || 'preis'}-${offer?.validTo || ''}`
+  )
+}
+
 function getOfferCategoryLabel(offer) {
   return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
 }
@@ -143,7 +154,7 @@ function isOfferDirectlyComparable(offer) {
 }
 
 function getOfferKindLabel(offer) {
-  return isOfferDirectlyComparable(offer) ? 'Direkt vergleichbar' : 'Ähnliches Angebot'
+  return isOfferDirectlyComparable(offer) ? 'Mit Vergleichspreis' : 'Aktionspreis'
 }
 
 function getOfferStatusLabel(offer) {
@@ -151,7 +162,7 @@ function getOfferStatusLabel(offer) {
   if (offer?.status === 'upcoming') return 'Bald gültig'
   if (offer?.status === 'expired') return 'Nicht mehr gültig'
   if (offer?.isActiveToday) return 'Heute relevant'
-  return 'Status unklar'
+  return 'Aktuelle Aktion'
 }
 
 function formatCurrencyAmount(amount, currency = 'EUR') {
@@ -161,7 +172,10 @@ function formatCurrencyAmount(amount, currency = 'EUR') {
     return 'Preis nicht erkannt'
   }
 
-  return `${numericAmount.toFixed(2)} ${currency}`
+  return new Intl.NumberFormat('de-AT', {
+    style: 'currency',
+    currency: currency || 'EUR',
+  }).format(numericAmount)
 }
 
 function formatUnitPrice(normalizedUnitPrice) {
@@ -169,10 +183,10 @@ function formatUnitPrice(normalizedUnitPrice) {
   const unit = normalizedUnitPrice?.unit
 
   if (!Number.isFinite(amount) || !unit) {
-    return 'Einheitspreis nicht sicher'
+    return 'Einheitspreis nicht erkannt'
   }
 
-  return `${amount.toFixed(2)} / ${unit}`
+  return `${formatCurrencyAmount(amount)} / ${unit}`
 }
 
 function shouldDisplayUnitPrice(offer) {
@@ -208,11 +222,11 @@ function getConditionsSummary(offer) {
 
   const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1)
   if (minimumPurchaseQty > 1) {
-    return `Mindestens ${minimumPurchaseQty} nötig`
+    return `Mindestens ${minimumPurchaseQty} Stück`
   }
 
   if (offer?.hasConditions) {
-    return 'Bedingungen vorhanden'
+    return 'Bedingung beachten'
   }
 
   return 'Keine besonderen Bedingungen'
@@ -221,9 +235,9 @@ function getConditionsSummary(offer) {
 function buildOfferBadges(offer) {
   const badges = [getOfferKindLabel(offer), getOfferStatusLabel(offer)]
 
-  if (offer?.customerProgramRequired) badges.push('Mit Kundenkarte/App')
-  if (offer?.isMultiBuy) badges.push('Mehrkauf-Angebot')
-  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge nötig')
+  if (offer?.customerProgramRequired) badges.push('Kundenkarte/App')
+  if (offer?.isMultiBuy) badges.push('Mehrkauf')
+  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge')
 
   return badges
 }
@@ -244,7 +258,7 @@ function formatValidityLabel(offer) {
     return `gültig bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
   }
 
-  return 'aktuell verfügbar, Enddatum nicht erkannt'
+  return 'aktuell verfügbar'
 }
 
 function getOfferRetailerKey(offer, retailers = []) {
@@ -262,7 +276,7 @@ function flattenRankingOffers(ranking) {
       .filter((offer) => offer && typeof offer === 'object')
       .map((offer) => ({
         ...offer,
-        id: offer?.id || offer?._id || `${offer?.title}-${offer?.retailerName}-${offer?.priceCurrent?.amount}`,
+        id: getOfferStableId(offer),
       }))
   }
 
@@ -271,7 +285,7 @@ function flattenRankingOffers(ranking) {
 
   for (const group of ranking?.rankedGroups || []) {
     for (const offer of group.offers || []) {
-      const offerId = offer?.id || offer?._id || `${offer?.title}-${offer?.retailerName}-${offer?.priceCurrent?.amount}`
+      const offerId = getOfferStableId(offer)
 
       if (seen.has(offerId)) continue
 
@@ -288,7 +302,7 @@ function flattenRankingOffers(ranking) {
 
 function splitRankingOffers(offers = []) {
   const bestComparableOffers = []
-  const similarOffers = []
+  const actionOffers = []
 
   for (const offer of offers || []) {
     if (isOfferDirectlyComparable(offer)) {
@@ -296,12 +310,12 @@ function splitRankingOffers(offers = []) {
       continue
     }
 
-    similarOffers.push(offer)
+    actionOffers.push(offer)
   }
 
   return {
     bestComparableOffers,
-    similarOffers,
+    actionOffers,
   }
 }
 
@@ -405,8 +419,50 @@ function areStringSetsEqual(left = [], right = []) {
 }
 
 function getSavingsValue(offer) {
-  const raw = Number(offer?.savingsAmount)
-  return Number.isFinite(raw) ? raw : -1
+  const candidates = [
+    offer?.savingsAmount,
+    offer?.savings?.amount,
+    offer?.priceSavings?.amount,
+    offer?.discountAmount,
+  ]
+
+  for (const candidate of candidates) {
+    const numeric = Number(candidate)
+    if (Number.isFinite(numeric) && numeric > 0) return numeric
+  }
+
+  const oldPrice = Number(offer?.priceBefore?.amount || offer?.priceOriginal?.amount || offer?.priceRegular?.amount)
+  const currentPrice = Number(offer?.priceCurrent?.amount)
+
+  if (Number.isFinite(oldPrice) && Number.isFinite(currentPrice) && oldPrice > currentPrice) {
+    return oldPrice - currentPrice
+  }
+
+  return -1
+}
+
+function hasKnownSavings(offer) {
+  return getSavingsValue(offer) > 0
+}
+
+function getOfferSavingsInfo(offer) {
+  const savingsValue = getSavingsValue(offer)
+
+  if (savingsValue > 0) {
+    return {
+      type: 'known',
+      label: `Spart ca. ${formatCurrencyAmount(savingsValue)}`,
+      shortLabel: `ca. ${formatCurrencyAmount(savingsValue)}`,
+      description: 'Ersparnis mit angegebenem Normalpreis.',
+    }
+  }
+
+  return {
+    type: 'action',
+    label: 'Aktionspreis!',
+    shortLabel: 'Aktionspreis',
+    description: 'Im Prospekt ist kein Normalpreis angegeben. Das ist oft bei kurzen oder saisonalen Aktionen der Fall.',
+  }
 }
 
 function filterVisibleOffers(offers, filters, retailers, categories) {
@@ -443,6 +499,100 @@ function filterVisibleOffers(offers, filters, retailers, categories) {
   })
 }
 
+function loadStoredShoppingList() {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const raw = window.localStorage.getItem(SHOPPING_LIST_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.id) : []
+  } catch {
+    return []
+  }
+}
+
+function buildShoppingListItem(offer) {
+  const id = getOfferStableId(offer)
+
+  return {
+    id,
+    offerId: id,
+    title: offer?.title || 'Unbekanntes Angebot',
+    retailerKey: offer?.retailerKey || normalizeRetailerKey(offer?.retailerName),
+    retailerName: offer?.retailerName || 'Unbekannter Markt',
+    categoryLabel: getOfferCategoryLabel(offer),
+    priceCurrent: offer?.priceCurrent || null,
+    normalizedUnitPrice: offer?.normalizedUnitPrice || null,
+    imageUrl: offer?.imageUrl || '',
+    quantityText: offer?.quantityText || '',
+    conditionsText: offer?.conditionsText || '',
+    customerProgramRequired: Boolean(offer?.customerProgramRequired),
+    isMultiBuy: Boolean(offer?.isMultiBuy),
+    minimumPurchaseQty: offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1,
+    hasConditions: Boolean(offer?.hasConditions),
+    validFrom: offer?.validFrom || '',
+    validTo: offer?.validTo || '',
+    savingsAmount: getSavingsValue(offer) > 0 ? getSavingsValue(offer) : null,
+    hasKnownSavings: hasKnownSavings(offer),
+    addedAt: new Date().toISOString(),
+  }
+}
+
+function groupShoppingListByRetailer(items = []) {
+  const groups = new Map()
+
+  for (const item of items || []) {
+    const key = item.retailerKey || normalizeRetailerKey(item.retailerName)
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        retailerKey: key,
+        retailerName: item.retailerName || 'Unbekannter Markt',
+        items: [],
+      })
+    }
+
+    groups.get(key).items.push(item)
+  }
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort((left, right) => String(left.title).localeCompare(String(right.title), 'de')),
+    }))
+    .sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'))
+}
+
+function getShoppingListSummary(items = []) {
+  return (items || []).reduce(
+    (summary, item) => {
+      const currentPrice = Number(item?.priceCurrent?.amount)
+      const savingsValue = Number(item?.savingsAmount)
+
+      if (Number.isFinite(currentPrice)) {
+        summary.offerTotal += currentPrice
+      }
+
+      if (Number.isFinite(savingsValue) && savingsValue > 0) {
+        summary.knownSavings += savingsValue
+        summary.knownSavingsCount += 1
+      } else {
+        summary.actionWithoutNormalPriceCount += 1
+      }
+
+      summary.itemCount += 1
+      return summary
+    },
+    {
+      itemCount: 0,
+      offerTotal: 0,
+      knownSavings: 0,
+      knownSavingsCount: 0,
+      actionWithoutNormalPriceCount: 0,
+    }
+  )
+}
+
 function AppDownloadModal({ open, onClose }) {
   if (!open) return null
 
@@ -454,90 +604,24 @@ function AppDownloadModal({ open, onClose }) {
       aria-modal="true"
       aria-labelledby="apk-download-title"
       aria-describedby="apk-download-description"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 5000,
-        display: 'grid',
-        placeItems: 'center',
-        padding: '1rem',
-        background: 'rgba(18, 24, 18, 0.58)',
-        backdropFilter: 'blur(12px)',
-      }}
+      className="app-download-overlay"
     >
-      <div
-        className="panel"
-        style={{
-          width: 'min(94vw, 460px)',
-          padding: 'clamp(1rem, 4vw, 1.4rem)',
-          textAlign: 'center',
-          borderRadius: '24px',
-          background: 'linear-gradient(180deg, rgba(255,252,247,0.99), rgba(247,242,231,0.98))',
-          boxShadow: '0 28px 80px rgba(18, 24, 18, 0.32)',
-        }}
-      >
-        <div style={{ display: 'grid', gap: '0.7rem', justifyItems: 'center' }}>
-          <p
-            className="eyebrow"
-            style={{
-              margin: 0,
-              color: '#315e2a',
-              fontWeight: 900,
-              letterSpacing: '0.16em',
-            }}
-          >
-            kaufklug.at alpha
+      <div className="app-download-modal panel">
+        <div className="app-download-modal__content">
+          <p className="eyebrow app-download-modal__eyebrow">kaufklug.at alpha</p>
+
+          <h2 id="apk-download-title">kaufklug am Smartphone testen</h2>
+
+          <p id="apk-download-description">
+            Scanne den QR-Code und probiere die aktuelle Android-Testversion direkt am Handy aus.
           </p>
 
-          <h2
-            id="apk-download-title"
-            style={{
-              margin: 0,
-              maxWidth: '20rem',
-              fontFamily: 'Georgia, "Times New Roman", serif',
-              fontSize: 'clamp(1.85rem, 8vw, 2.65rem)',
-              lineHeight: 1,
-              letterSpacing: '-0.045em',
-              color: '#172217',
-            }}
-          >
-            kaufklug ist besser als APP!
-          </h2>
-
-          <p
-            id="apk-download-description"
-            style={{
-              margin: 0,
-              maxWidth: '20rem',
-              color: '#495246',
-              fontSize: '1rem',
-              lineHeight: 1.5,
-            }}
-          >
-            Einfach QR scannen und am Smartphone ausprobieren!
-          </p>
-
-          <div
-            style={{
-              width: 'min(74vw, 292px)',
-              padding: '0.75rem',
-              borderRadius: '22px',
-              background: '#ffffff',
-              border: '1px solid rgba(22,33,24,0.1)',
-              boxShadow: '0 14px 34px rgba(83,63,34,0.12)',
-            }}
-          >
+          <div className="app-download-modal__qr">
             <img
               src={qrUrl}
-              alt="QR-Code zum Download der kaufklug.at Alpha APK"
+              alt="QR-Code zum Download der kaufklug.at Android-Testversion"
               width="280"
               height="280"
-              style={{
-                display: 'block',
-                width: '100%',
-                height: 'auto',
-                borderRadius: '12px',
-              }}
             />
           </div>
 
@@ -545,29 +629,12 @@ function AppDownloadModal({ open, onClose }) {
             href={KAUFKLUG_APK_DOWNLOAD_URL}
             target="_blank"
             rel="noreferrer"
-            style={{
-              maxWidth: '100%',
-              color: '#315e2a',
-              fontSize: '0.86rem',
-              fontWeight: 700,
-              overflowWrap: 'anywhere',
-              textDecoration: 'none',
-            }}
+            className="app-download-modal__link"
           >
-            APK direkt herunterladen
+            Android-Testversion direkt herunterladen
           </a>
 
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={onClose}
-            style={{
-              marginTop: '0.25rem',
-              width: '100%',
-              justifyContent: 'center',
-              textAlign: 'center',
-            }}
-          >
+          <button type="button" className="ghost-button app-download-modal__dismiss" onClick={onClose}>
             Vielleicht später
           </button>
         </div>
@@ -580,50 +647,14 @@ function HeroLoaderModal({ open, label }) {
   if (!open) return null
 
   return (
-    <div
-      aria-live="polite"
-      aria-busy="true"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 3000,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(12, 16, 26, 0.72)',
-        backdropFilter: 'blur(10px)',
-      }}
-    >
-      <style>{`
-        @keyframes kkSpin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-
-      <div
-        className="panel"
-        style={{
-          width: 'min(92vw, 540px)',
-          textAlign: 'center',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.32)',
-        }}
-      >
-        <div className="panel__header" style={{ alignItems: 'center' }}>
-          <h2>Wir prüfen gerade die aktuellen Angebote …</h2>
-          <p>{label || 'kaufklug.at lädt Supermärkte, Kategorien und Vergleichsdaten.'}</p>
+    <div aria-live="polite" aria-busy="true" className="loader-overlay">
+      <div className="panel loader-panel">
+        <div className="panel__header loader-panel__header">
+          <h2>kaufklug prüft aktuelle Angebote …</h2>
+          <p>{label || 'Preise, Gültigkeit und Bedingungen werden geladen.'}</p>
         </div>
 
-        <div
-          style={{
-            width: '52px',
-            height: '52px',
-            margin: '10px auto 0',
-            borderRadius: '999px',
-            border: '4px solid rgba(255,255,255,0.18)',
-            borderTopColor: 'currentColor',
-            animation: 'kkSpin 0.9s linear infinite',
-          }}
-        />
+        <div className="loader-spinner" />
       </div>
     </div>
   )
@@ -672,6 +703,17 @@ function ProductImage({ offerId, src, alt, compact = false }) {
   )
 }
 
+function SavingsNotice() {
+  return (
+    <div className="savings-notice">
+      <strong>Hinweis:</strong>{' '}
+      kaufklug zeigt aktuelle Angebote aus Prospekten und Aktionen. Manche Prospekte nennen nur den Aktionspreis,
+      aber keinen Normalpreis. Das ist besonders bei kurzen oder saisonalen Aktionen üblich. In diesem Fall zeigen
+      wir den Aktionspreis, aber keine Euro-Ersparnis.
+    </div>
+  )
+}
+
 function HeroBlock() {
   return (
     <SectionCard
@@ -681,96 +723,28 @@ function HeroBlock() {
         border: '1px solid rgba(22,33,24,0.08)',
       }}
     >
-      <div
-        style={{
-          display: 'grid',
-          gap: '1rem',
-          padding: 'clamp(1rem, 4vw, 2.35rem)',
-        }}
-      >
-        <div style={{ display: 'grid', gap: '0.72rem', maxWidth: '850px' }}>
-          <p
-            className="eyebrow"
-            style={{
-              margin: 0,
-              color: '#315e2a',
-              fontWeight: 900,
-              letterSpacing: '0.16em',
-            }}
-          >
-            kaufklug.at
-          </p>
+      <div className="hero-consumer">
+        <div className="hero-consumer__copy">
+          <p className="eyebrow hero-consumer__eyebrow">kaufklug.at</p>
 
-          <h1
-            style={{
-              margin: 0,
-              maxWidth: '760px',
-              fontSize: 'clamp(2rem, 10vw, 4.35rem)',
-              lineHeight: 0.98,
-              letterSpacing: '-0.055em',
-            }}
-          >
-            Einfach klug einkaufen.
-          </h1>
+          <h1>Einfach klug einkaufen.</h1>
 
-          <p
-            className="subtitle"
-            style={{
-              margin: 0,
-              maxWidth: '760px',
-              fontSize: 'clamp(1rem, 3.9vw, 1.18rem)',
-              lineHeight: 1.55,
-            }}
-          >
-            kaufklug.at zeigt dir, welche Angebote sich bei Hofer, Lidl, Spar, Billa & Co. wirklich lohnen –
-            klar, vergleichbar und ohne Rabatt-Chaos.
+          <p className="subtitle">
+            Wähle deine Geschäfte und was du einkaufen möchtest. kaufklug zeigt dir aktuelle Angebote aus Prospekten
+            und Aktionen — einfach, verständlich und ohne Prospekt-Chaos.
           </p>
         </div>
 
-        <div
-          className="hero-benefit-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-            gap: '0.7rem',
-          }}
-        >
+        <div className="hero-benefit-grid">
           {[
-            ['Aktuelle Angebote', 'Nach Händler und Kategorie gefiltert.'],
-            ['Faire Vergleiche', 'Nur sichere Preise zählen als echter Vergleich.'],
-            ['Bedingungen sichtbar', 'Kundenkarte, Mehrkauf und Mindestmenge sofort erkennbar.'],
-            ['Schnell entschieden', 'Weniger suchen, besser einkaufen.'],
+            ['Aktuelle Aktionen', 'Angebote aus Prospekten und laufenden Aktionen.'],
+            ['Einfach auswählen', 'Geschäfte, Kategorien und Unterkategorien antippen.'],
+            ['Einkaufsliste', 'Angebote speichern und nach Markt sortiert einkaufen.'],
+            ['Ehrliche Ersparnis', 'Euro-Ersparnis nur dort, wo ein Normalpreis angegeben ist.'],
           ].map(([title, text]) => (
-            <div
-              key={title}
-              className="hero-benefit-card"
-              style={{
-                padding: '0.95rem 1rem',
-                borderRadius: '16px',
-                background: 'rgba(255,255,255,0.68)',
-                border: '1px solid rgba(22,33,24,0.08)',
-                boxShadow: '0 8px 22px rgba(83,63,34,0.045)',
-              }}
-            >
-              <strong
-                style={{
-                  display: 'block',
-                  marginBottom: '0.25rem',
-                  fontSize: '0.98rem',
-                }}
-              >
-                {title}
-              </strong>
-              <span
-                style={{
-                  display: 'block',
-                  color: '#5c6658',
-                  fontSize: '0.94rem',
-                  lineHeight: 1.42,
-                }}
-              >
-                {text}
-              </span>
+            <div key={title} className="hero-benefit-card">
+              <strong>{title}</strong>
+              <span>{text}</span>
             </div>
           ))}
         </div>
@@ -779,36 +753,52 @@ function HeroBlock() {
   )
 }
 
-function RetailerSelectorBlock({ retailers, selectedRetailers, onToggleRetailer, loading }) {
+function RetailerSelectorBlock({
+  retailers,
+  selectedRetailers,
+  onToggleRetailer,
+  onSelectAllRetailers,
+  onClearRetailers,
+  loading,
+}) {
   return (
     <SectionCard style={{ marginBottom: '1rem' }}>
-      <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
-        <div style={{ display: 'grid', gap: '0.2rem' }}>
-          <p className="eyebrow" style={{ margin: 0 }}>1. Händler wählen</p>
-          <h2 style={{ margin: 0 }}>Wo kaufst du ein?</h2>
-          <p style={{ margin: 0, opacity: 0.82 }}>
-            Wähle die Supermärkte, die du berücksichtigen möchtest. Händler ohne aktuelle Treffer bleiben sichtbar.
-          </p>
+      <div className="selection-block">
+        <div className="selection-block__header">
+          <p className="eyebrow">1. Geschäfte wählen</p>
+          <h2>Wo kaufst du ein?</h2>
+          <p>Wähle die Geschäfte aus, die für dich erreichbar sind.</p>
         </div>
 
         {loading ? (
-          <p className="status" style={{ marginBottom: 0 }}>Supermärkte werden geladen …</p>
+          <p className="status">Supermärkte werden geladen …</p>
         ) : (
-          <div className="chip-grid">
-            {(retailers || []).map((retailer) => (
-              <button
-                key={retailer.retailerKey}
-                type="button"
-                className={`chip ${selectedRetailers.includes(retailer.retailerKey) ? 'chip--active' : ''}`}
-                onClick={() => onToggleRetailer(retailer.retailerKey)}
-              >
-                <span>{retailer.retailerName}</span>{' '}
-                <span className="chip__meta">
-                  {retailer.activeOffers > 0 ? `(${retailer.activeOffers} aktuell)` : '(aktuell keine Treffer)'}
-                </span>
+          <>
+            <div className="quick-action-row">
+              <button type="button" className="ghost-button" onClick={onSelectAllRetailers}>
+                Alle auswählen
               </button>
-            ))}
-          </div>
+              <button type="button" className="ghost-button" onClick={onClearRetailers}>
+                Geschäfte zurücksetzen
+              </button>
+            </div>
+
+            <div className="chip-grid">
+              {(retailers || []).map((retailer) => (
+                <button
+                  key={retailer.retailerKey}
+                  type="button"
+                  className={`chip ${selectedRetailers.includes(retailer.retailerKey) ? 'chip--active' : ''}`}
+                  onClick={() => onToggleRetailer(retailer.retailerKey)}
+                >
+                  <span>{retailer.retailerName}</span>{' '}
+                  <span className="chip__meta">
+                    {retailer.activeOffers > 0 ? `(${retailer.activeOffers} Aktionen)` : '(derzeit keine Aktionen)'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </SectionCard>
@@ -820,26 +810,31 @@ function CategorySelectorBlock({
   selectedCategoryTokens,
   onToggleMainCategory,
   onToggleSubcategory,
+  onClearCategories,
   loading,
   disabled,
 }) {
   return (
     <SectionCard style={{ marginBottom: '1rem' }}>
-      <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
-        <div style={{ display: 'grid', gap: '0.2rem' }}>
-          <p className="eyebrow" style={{ margin: 0 }}>2. Produkte eingrenzen</p>
-          <h2 style={{ margin: 0 }}>Was möchtest du heute günstiger einkaufen?</h2>
-          <p style={{ margin: 0, opacity: 0.82 }}>
-            Tippe auf eine Hauptkategorie oder direkt auf eine passende Unterkategorie.
-          </p>
+      <div className="selection-block">
+        <div className="selection-block__header">
+          <p className="eyebrow">2. Produkte wählen</p>
+          <h2>Was brauchst du heute?</h2>
+          <p>Wähle eine Kategorie oder genauer eine Unterkategorie. Du kannst diesen Schritt auch überspringen.</p>
         </div>
 
         {disabled ? (
-          <p className="status" style={{ marginBottom: 0 }}>Wähle zuerst mindestens einen Supermarkt.</p>
+          <p className="status">Wähle zuerst mindestens ein Geschäft aus.</p>
         ) : loading ? (
-          <p className="status" style={{ marginBottom: 0 }}>Kategorien werden geladen …</p>
+          <p className="status">Kategorien werden geladen …</p>
         ) : (
-          <div style={{ display: 'grid', gap: '0.85rem' }}>
+          <div className="category-list">
+            <div className="quick-action-row">
+              <button type="button" className="ghost-button" onClick={onClearCategories}>
+                Alle Kategorien anzeigen
+              </button>
+            </div>
+
             {(categories || []).map((group) => {
               const selectionState = getGroupSelectionState(group, selectedCategoryTokens)
               const isMainSelected = selectionState.mainSelected
@@ -847,36 +842,21 @@ function CategorySelectorBlock({
               const hasSubcategories = group.subcategories.length > 0
 
               return (
-                <div
-                  key={group.mainCategoryKey}
-                  className="category-card"
-                  style={{
-                    border: '1px solid rgba(22,33,24,0.08)',
-                    borderRadius: '18px',
-                    padding: '0.9rem 0.95rem',
-                    background: 'rgba(255,255,255,0.35)',
-                    display: 'grid',
-                    gap: '0.72rem',
-                  }}
-                >
+                <div key={group.mainCategoryKey} className="category-card">
                   <button
                     type="button"
                     className={`chip category-main-chip ${isMainSelected ? 'chip--active' : isPartiallySelected ? 'chip--partial' : ''}`}
                     onClick={() => onToggleMainCategory(group)}
-                    style={{ justifySelf: 'start' }}
                   >
                     {group.mainCategoryLabel} ({group.offerCount})
                   </button>
 
                   {hasSubcategories ? (
-                    <div
-                      className="chip-grid chip-grid--subcategories"
-                      style={{
-                        maxHeight: 'none',
-                        overflowY: 'visible',
-                        paddingRight: 0,
-                      }}
-                    >
+                    <div className="category-card__subheader">Genauer auswählen</div>
+                  ) : null}
+
+                  {hasSubcategories ? (
+                    <div className="chip-grid chip-grid--subcategories">
                       {group.subcategories.map((subcategory) => (
                         <button
                           key={subcategory.subcategoryKey}
@@ -910,69 +890,38 @@ function ActionBlock({
 }) {
   return (
     <SectionCard style={{ marginBottom: '1rem' }}>
-      <div style={{ display: 'grid', gap: '0.95rem', padding: '1.1rem 1.1rem 1.15rem' }}>
-        <div style={{ display: 'grid', gap: '0.2rem' }}>
-          <p className="eyebrow" style={{ margin: 0 }}>3. Angebote anzeigen</p>
-          <h2 style={{ margin: 0 }}>Deine Auswahl ist bereit.</h2>
-          <p style={{ margin: 0, opacity: 0.82 }}>
-            Wir laden passende Angebote erst nach deinem Klick. So bleibt die Auswahl ruhig, nachvollziehbar und schnell.
-          </p>
+      <div className="selection-block">
+        <div className="selection-block__header">
+          <p className="eyebrow">3. Angebote ansehen</p>
+          <h2>Deine Auswahl ist bereit.</h2>
+          <p>Tippe auf „Angebote anzeigen“. Danach kannst du passende Produkte auf deine Einkaufsliste setzen.</p>
         </div>
 
-        <div
-          className="selection-summary-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '0.7rem',
-          }}
-        >
-          <div
-            style={{
-              padding: '0.85rem 0.95rem',
-              borderRadius: '16px',
-              background: 'rgba(255,255,255,0.45)',
-              border: '1px solid rgba(22,33,24,0.08)',
-            }}
-          >
-            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Supermärkte</strong>
-            <span style={{ opacity: 0.8 }}>{selectedRetailerCount > 0 ? `${selectedRetailerCount} ausgewählt` : 'Keine Auswahl'}</span>
+        <div className="selection-summary-grid">
+          <div className="selection-summary-card">
+            <strong>Geschäfte</strong>
+            <span>{selectedRetailerCount > 0 ? `${selectedRetailerCount} ausgewählt` : 'Keine Auswahl'}</span>
           </div>
 
-          <div
-            style={{
-              padding: '0.85rem 0.95rem',
-              borderRadius: '16px',
-              background: 'rgba(255,255,255,0.45)',
-              border: '1px solid rgba(22,33,24,0.08)',
-            }}
-          >
-            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Kategorien</strong>
-            <span style={{ opacity: 0.8 }}>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Keine Auswahl'}</span>
+          <div className="selection-summary-card">
+            <strong>Kategorien</strong>
+            <span>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Alle anzeigen'}</span>
           </div>
 
-          <div
-            style={{
-              padding: '0.85rem 0.95rem',
-              borderRadius: '16px',
-              background: hasPendingChanges ? 'rgba(235,247,226,0.78)' : 'rgba(255,255,255,0.45)',
-              border: '1px solid rgba(22,33,24,0.08)',
-            }}
-          >
-            <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Status</strong>
-            <span style={{ opacity: 0.8 }}>{hasPendingChanges ? 'Neue Auswahl bereit' : 'Aktuelle Auswahl geladen'}</span>
+          <div className={`selection-summary-card ${hasPendingChanges ? 'selection-summary-card--ready' : ''}`}>
+            <strong>Status</strong>
+            <span>{hasPendingChanges ? 'Neue Auswahl bereit' : 'Aktuelle Auswahl geladen'}</span>
           </div>
         </div>
 
-        <div className="action-button-row" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div className="action-button-row">
           <button
             type="button"
-            className="ghost-button chip--active"
+            className="primary-action-button"
             onClick={onApplySearch}
             disabled={!canSearch || searching}
-            style={!canSearch || searching ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
-            {searching ? 'Wir vergleichen gerade …' : 'Angebote anzeigen'}
+            {searching ? 'Angebote werden geladen …' : 'Angebote anzeigen'}
           </button>
 
           <button type="button" className="ghost-button" onClick={onReset}>
@@ -984,82 +933,32 @@ function ActionBlock({
   )
 }
 
-function OfferCardConsumer({ offer, highlightLabel = '' }) {
+function OfferCardConsumer({ offer, highlightLabel = '', onAddToShoppingList, isInShoppingList = false }) {
   const badges = buildOfferBadges(offer)
   const directlyComparable = isOfferDirectlyComparable(offer)
-  const savingsValue = getSavingsValue(offer)
+  const savingsInfo = getOfferSavingsInfo(offer)
   const conditionsSummary = getConditionsSummary(offer)
   const showUnitPrice = shouldDisplayUnitPrice(offer)
 
   return (
-    <article
-      className="user-card"
-      style={{
-        position: 'relative',
-        display: 'grid',
-        gridTemplateColumns: 'minmax(112px, 170px) minmax(0, 1fr)',
-        gap: '1rem',
-        alignItems: 'start',
-        background: directlyComparable
-          ? 'linear-gradient(180deg, rgba(244,255,236,0.98), rgba(255,252,247,0.96))'
-          : 'rgba(255,252,247,0.96)',
-        borderColor: directlyComparable ? 'rgba(92,160,76,0.28)' : 'rgba(22,33,24,0.1)',
-      }}
-    >
+    <article className={`user-card ${directlyComparable ? 'user-card--known-savings' : 'user-card--action-price'}`}>
       <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
 
-      <div className="user-card__content" style={{ minWidth: 0, display: 'grid', gap: '0.8rem' }}>
-        <div
-          className="user-card__top"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr)',
-            gap: '0.65rem',
-            paddingRight: 0,
-            minWidth: 0,
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div className="user-card__eyebrow" style={{ paddingRight: 0 }}>
+      <div className="user-card__content">
+        <div className="user-card__top">
+          <div>
+            <div className="user-card__eyebrow">
               {highlightLabel ? <span>{highlightLabel}</span> : null}
               <span>{offer.retailerName}</span>
               <span>{getOfferCategoryLabel(offer)}</span>
-              {directlyComparable ? <span>geprüft vergleichbar</span> : null}
             </div>
 
-            <h3
-              style={{
-                maxWidth: '100%',
-                overflowWrap: 'anywhere',
-                hyphens: 'auto',
-              }}
-            >
-              {offer.title}
-            </h3>
+            <h3>{offer.title}</h3>
           </div>
 
-          <div
-            className="user-card__price"
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'baseline',
-              justifyContent: 'flex-start',
-              gap: '0.4rem 0.75rem',
-              textAlign: 'left',
-              minWidth: 0,
-              maxWidth: '100%',
-            }}
-          >
-            <strong
-              style={{
-                whiteSpace: 'nowrap',
-                lineHeight: 1,
-              }}
-            >
-              {formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}
-            </strong>
-            {showUnitPrice ? <span style={{ whiteSpace: 'nowrap' }}>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
+          <div className="user-card__price">
+            <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
+            {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
           </div>
         </div>
 
@@ -1071,15 +970,20 @@ function OfferCardConsumer({ offer, highlightLabel = '' }) {
           ))}
         </div>
 
+        <div className={`offer-savings-box offer-savings-box--${savingsInfo.type}`}>
+          <strong>{savingsInfo.label}</strong>
+          <span>{savingsInfo.description}</span>
+        </div>
+
         <div className="user-card__facts">
-          <span>Gültigkeit: {formatValidityLabel(offer)}</span>
-          <span>Menge: {offer.quantityText || 'nicht sicher erkannt'}</span>
+          <span>{formatValidityLabel(offer)}</span>
+          <span>{offer.quantityText || 'Menge im Angebot beachten'}</span>
         </div>
 
         <div className="user-card__highlights">
           <div className={`highlight-pill ${directlyComparable ? 'highlight-pill--price' : ''}`}>
-            <span>Ersparnis heute</span>
-            <strong>{savingsValue >= 0 ? `${savingsValue.toFixed(2)} EUR` : 'nicht sicher erkannt'}</strong>
+            <span>{savingsInfo.type === 'known' ? 'Euro-Ersparnis' : 'Preisart'}</span>
+            <strong>{savingsInfo.shortLabel}</strong>
           </div>
 
           <div className="highlight-pill">
@@ -1088,33 +992,44 @@ function OfferCardConsumer({ offer, highlightLabel = '' }) {
           </div>
 
           <div className="highlight-pill">
-            <span>{showUnitPrice ? 'Einheitspreis' : 'Vergleich'}</span>
-            <strong>{showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : getOfferKindLabel(offer)}</strong>
+            <span>{showUnitPrice ? 'Einheitspreis' : 'Hinweis'}</span>
+            <strong>{showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : 'Normalpreis nicht angegeben'}</strong>
           </div>
         </div>
 
         {offer?.conditionsText ? <p className="user-card__condition">{offer.conditionsText}</p> : null}
+
+        <button
+          type="button"
+          className={`shopping-list-button ${isInShoppingList ? 'shopping-list-button--added' : ''}`}
+          onClick={() => onAddToShoppingList?.(offer)}
+          disabled={isInShoppingList}
+        >
+          {isInShoppingList ? 'Bereits auf Liste' : 'Auf die Einkaufsliste'}
+        </button>
       </div>
     </article>
   )
 }
 
-function ResultsSection({ title, subtitle, offers, highlightPrefix }) {
+function ResultsSection({ title, subtitle, offers, highlightPrefix, onAddToShoppingList, shoppingListIds }) {
   if (!offers.length) return null
 
   return (
-    <div style={{ display: 'grid', gap: '0.85rem' }}>
-      <div className="panel__header" style={{ marginBottom: 0 }}>
-        <h3 style={{ margin: 0 }}>{title}</h3>
+    <div className="results-section">
+      <div className="panel__header">
+        <h3>{title}</h3>
         <p>{subtitle}</p>
       </div>
 
-      <div className="user-results" style={{ display: 'grid', gap: '0.85rem' }}>
+      <div className="user-results">
         {offers.map((offer, index) => (
           <OfferCardConsumer
             key={offer.id}
             offer={offer}
             highlightLabel={`${highlightPrefix} ${index + 1}`}
+            onAddToShoppingList={onAddToShoppingList}
+            isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
           />
         ))}
       </div>
@@ -1122,73 +1037,71 @@ function ResultsSection({ title, subtitle, offers, highlightPrefix }) {
   )
 }
 
-function ResultsBlockConsumer({ rankingLoading, hasAppliedRetailerScope, safeOffers, similarOffers }) {
-  const visibleOfferCount = safeOffers.length + similarOffers.length
+function ResultsBlockConsumer({
+  rankingLoading,
+  hasAppliedRetailerScope,
+  safeOffers,
+  actionOffers,
+  onAddToShoppingList,
+  shoppingListIds,
+}) {
+  const visibleOfferCount = safeOffers.length + actionOffers.length
 
   return (
     <SectionCard>
-      <div style={{ display: 'grid', gap: '1rem', padding: '1.1rem 1.1rem 1.15rem' }}>
-        <div className="panel__header" style={{ marginBottom: 0 }}>
-          <h2>Deine besten Angebote</h2>
-          <p>Direkt vergleichbare Preise sind von ähnlichen Treffern getrennt. So bleibt die Empfehlung fair und nachvollziehbar.</p>
+      <div className="results-block">
+        <div className="panel__header">
+          <h2>Deine Angebote</h2>
+          <p>Alle Treffer sind aktuelle Angebote. Euro-Ersparnis zeigen wir nur dort, wo im Prospekt ein Normalpreis angegeben ist.</p>
         </div>
 
         {!hasAppliedRetailerScope ? (
-          <p className="status" style={{ marginBottom: 0 }}>
-            Noch keine Suche gestartet. Wähle Händler und Kategorien und lade dann deine Angebote.
+          <p className="status">
+            Noch keine Suche gestartet. Wähle zuerst deine Geschäfte und tippe dann auf „Angebote anzeigen“.
           </p>
         ) : rankingLoading ? (
-          <div style={{ display: 'grid', gap: '0.8rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>
-              Wir prüfen gerade Preise, Mengen, Gültigkeit und Bedingungen …
+          <div className="results-loading">
+            <p className="status">
+              kaufklug prüft gerade Preise, Gültigkeit und Bedingungen …
             </p>
-            <div
-              style={{
-                display: 'grid',
-                gap: '0.75rem',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-              }}
-            >
+            <div className="skeleton-grid">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  style={{
-                    minHeight: '140px',
-                    borderRadius: '18px',
-                    border: '1px solid rgba(22,33,24,0.06)',
-                    background: 'linear-gradient(180deg, rgba(255,255,255,0.52), rgba(255,255,255,0.28))',
-                  }}
-                />
+                <div key={index} className="skeleton-card" />
               ))}
             </div>
           </div>
         ) : visibleOfferCount === 0 ? (
-          <div style={{ display: 'grid', gap: '0.55rem' }}>
-            <p className="status" style={{ marginBottom: 0 }}>
-              Noch nichts Passendes gefunden.
-            </p>
-            <p style={{ margin: 0, opacity: 0.82 }}>
-              Tipp: Wähle mehr Händler oder eine breitere Kategorie.
-            </p>
+          <div className="empty-state">
+            <h3>Keine passenden Angebote gefunden.</h3>
+            <p>Versuche mehr Geschäfte auszuwählen oder alle Kategorien anzuzeigen.</p>
           </div>
         ) : (
           <>
-            <p style={{ margin: 0, opacity: 0.82 }}>
-              {visibleOfferCount} Angebote sichtbar. {safeOffers.length} davon sind direkt vergleichbar.
-            </p>
+            <div className="results-count-box">
+              <strong>{visibleOfferCount} aktuelle Angebote gefunden.</strong>
+              <span>
+                {safeOffers.length} mit angegebener Euro-Ersparnis, {actionOffers.length} weitere Aktionspreise.
+              </span>
+            </div>
+
+            <SavingsNotice />
 
             <ResultsSection
-              title="Beste sichere Angebote"
-              subtitle="Diese Treffer sind am besten für echte Preisvergleiche geeignet."
+              title="Angebote mit Euro-Ersparnis"
+              subtitle="Bei diesen Angeboten ist im Prospekt ein Normalpreis angegeben."
               offers={safeOffers}
-              highlightPrefix="Sicherer Treffer"
+              highlightPrefix="Angebot"
+              onAddToShoppingList={onAddToShoppingList}
+              shoppingListIds={shoppingListIds}
             />
 
             <ResultsSection
-              title="Ähnliche interessante Angebote"
-              subtitle="Relevante Treffer für deinen Einkauf, aber nicht als exakter Bestpreis gewertet."
-              offers={similarOffers}
-              highlightPrefix="Ähnliches Angebot"
+              title="Weitere aktuelle Aktionen"
+              subtitle="Diese Produkte sind aktuelle Aktionen. Der Normalpreis ist im Prospekt nicht angegeben."
+              offers={actionOffers}
+              highlightPrefix="Aktion"
+              onAddToShoppingList={onAddToShoppingList}
+              shoppingListIds={shoppingListIds}
             />
           </>
         )}
@@ -1209,11 +1122,16 @@ function SearchPage({
   appliedCategoryLabels,
   error,
   hasPendingChanges,
+  shoppingListIds,
   onToggleDraftRetailer,
+  onSelectAllRetailers,
+  onClearRetailers,
   onToggleDraftMainCategory,
   onToggleDraftSubcategory,
+  onClearDraftCategories,
   onApplySearch,
   onResetAll,
+  onAddToShoppingList,
 }) {
   const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
@@ -1230,21 +1148,21 @@ function SearchPage({
       categories || []
     )
   }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, categories])
-  const { bestComparableOffers, similarOffers } = useMemo(() => splitRankingOffers(visibleOffers), [visibleOffers])
+  const { bestComparableOffers, actionOffers } = useMemo(() => splitRankingOffers(visibleOffers), [visibleOffers])
 
   return (
     <>
       <HeroLoaderModal
         open={isInitialBusy}
-        label="kaufklug.at lädt Supermärkte, Kategorien und aktuelle Vergleichsdaten."
+        label="kaufklug lädt Geschäfte, Kategorien und aktuelle Angebote."
       />
 
       <HeroBlock />
 
       {error ? (
         <SectionCard style={{ marginBottom: '1rem' }}>
-          <div style={{ padding: '1rem 1.1rem' }}>
-            <p className="status status--error" style={{ marginBottom: 0 }}>{error}</p>
+          <div className="error-box">
+            <p className="status status--error">{error}</p>
           </div>
         </SectionCard>
       ) : null}
@@ -1253,6 +1171,8 @@ function SearchPage({
         retailers={retailers}
         selectedRetailers={draftRetailers}
         onToggleRetailer={onToggleDraftRetailer}
+        onSelectAllRetailers={onSelectAllRetailers}
+        onClearRetailers={onClearRetailers}
         loading={filtersLoading}
       />
 
@@ -1261,6 +1181,7 @@ function SearchPage({
         selectedCategoryTokens={draftCategoryLabels}
         onToggleMainCategory={onToggleDraftMainCategory}
         onToggleSubcategory={onToggleDraftSubcategory}
+        onClearCategories={onClearDraftCategories}
         loading={filtersLoading}
         disabled={!draftRetailers.length}
       />
@@ -1279,8 +1200,133 @@ function SearchPage({
         rankingLoading={rankingLoading}
         hasAppliedRetailerScope={hasAppliedRetailerScope}
         safeOffers={bestComparableOffers}
-        similarOffers={similarOffers}
+        actionOffers={actionOffers}
+        onAddToShoppingList={onAddToShoppingList}
+        shoppingListIds={shoppingListIds}
       />
+    </>
+  )
+}
+
+function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers }) {
+  const groupedItems = useMemo(() => groupShoppingListByRetailer(shoppingListItems), [shoppingListItems])
+  const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
+
+  if (!shoppingListItems.length) {
+    return (
+      <>
+        <SectionCard style={{ marginBottom: '1rem' }}>
+          <div className="shopping-list-hero">
+            <p className="eyebrow">Einkaufsliste</p>
+            <h1>Deine Einkaufsliste ist noch leer.</h1>
+            <p>Füge Angebote hinzu, die du beim Einkauf nutzen möchtest. Sie werden lokal auf diesem Gerät gespeichert.</p>
+            <button type="button" className="primary-action-button" onClick={onGoToOffers}>
+              Angebote ansehen
+            </button>
+          </div>
+        </SectionCard>
+
+        <SavingsNotice />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <SectionCard style={{ marginBottom: '1rem' }}>
+        <div className="shopping-list-hero">
+          <p className="eyebrow">Einkaufsliste</p>
+          <h1>Deine Einkaufsliste</h1>
+          <p>Deine gespeicherten Angebote sind nach Geschäft sortiert. So kannst du deinen Einkauf einfacher planen.</p>
+        </div>
+      </SectionCard>
+
+      <section className="shopping-summary">
+        <article className="shopping-summary__card">
+          <span>Du bezahlst laut Angebot</span>
+          <strong>{formatCurrencyAmount(summary.offerTotal)}</strong>
+        </article>
+
+        <article className="shopping-summary__card shopping-summary__card--saving">
+          <span>Ersparnis mit angegebenem Normalpreis</span>
+          <strong>{formatCurrencyAmount(summary.knownSavings)}</strong>
+        </article>
+
+        <article className="shopping-summary__card">
+          <span>Aktionspreise ohne Normalpreis</span>
+          <strong>{summary.actionWithoutNormalPriceCount}</strong>
+        </article>
+      </section>
+
+      {summary.actionWithoutNormalPriceCount > 0 ? (
+        <div className="shopping-list-note">
+          {summary.actionWithoutNormalPriceCount} weitere Angebote sind aktuelle Aktionen ohne angegebenen Normalpreis.
+        </div>
+      ) : null}
+
+      <SavingsNotice />
+
+      <div className="shopping-list-actions">
+        <button type="button" className="ghost-button" onClick={onGoToOffers}>
+          Weitere Angebote suchen
+        </button>
+        <button type="button" className="ghost-button ghost-button--danger" onClick={onClearList}>
+          Liste leeren
+        </button>
+      </div>
+
+      <div className="shopping-market-groups">
+        {groupedItems.map((group) => (
+          <section key={group.retailerKey} className="shopping-market-group">
+            <div className="shopping-market-group__header">
+              <h2>{group.retailerName}</h2>
+              <span>{group.items.length} Angebot{group.items.length === 1 ? '' : 'e'}</span>
+            </div>
+
+            <div className="shopping-list-items">
+              {group.items.map((item) => {
+                const savingsInfo = getOfferSavingsInfo(item)
+                const showUnitPrice = shouldDisplayUnitPrice(item)
+
+                return (
+                  <article key={item.id} className="shopping-list-item">
+                    <ProductImage offerId={item.offerId} src={item.imageUrl} alt={item.title} compact />
+
+                    <div className="shopping-list-item__content">
+                      <div className="shopping-list-item__main">
+                        <div>
+                          <p className="shopping-list-item__category">{item.categoryLabel}</p>
+                          <h3>{item.title}</h3>
+                        </div>
+
+                        <strong className="shopping-list-item__price">
+                          {formatCurrencyAmount(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
+                        </strong>
+                      </div>
+
+                      <div className={`offer-savings-box offer-savings-box--${savingsInfo.type}`}>
+                        <strong>{savingsInfo.label}</strong>
+                        <span>{savingsInfo.description}</span>
+                      </div>
+
+                      <div className="shopping-list-item__facts">
+                        <span>{formatValidityLabel(item)}</span>
+                        <span>{item.quantityText || 'Menge im Geschäft beachten'}</span>
+                        <span>{getConditionsSummary(item)}</span>
+                        {showUnitPrice ? <span>{formatUnitPrice(item.normalizedUnitPrice)}</span> : null}
+                      </div>
+
+                      <button type="button" className="ghost-button shopping-list-item__remove" onClick={() => onRemoveItem(item.id)}>
+                        Entfernen
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
     </>
   )
 }
@@ -1705,7 +1751,9 @@ function App() {
     ? 'quality'
     : pathname.includes('diagnose') || pathname.includes('diagnostic')
       ? 'diagnostics'
-      : 'search'
+      : pathname.includes('einkaufsliste') || pathname.includes('shopping')
+        ? 'shopping-list'
+        : 'search'
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -1715,6 +1763,7 @@ function App() {
 
   const [activePage, setActivePage] = useState(initialPage)
   const [showAppDownloadModal, setShowAppDownloadModal] = useState(true)
+  const [shoppingListItems, setShoppingListItems] = useState(() => loadStoredShoppingList())
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
@@ -1740,10 +1789,26 @@ function App() {
   const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
   const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
   const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState([])
+
+  const shoppingListIds = useMemo(
+    () => new Set(shoppingListItems.map((item) => item.id)),
+    [shoppingListItems]
+  )
+
   const appliedCategoryQueryLabels = useMemo(
     () => buildSelectedCategoryQueryLabels(appliedSelectedCategoryLabels, categories),
     [appliedSelectedCategoryLabels, categories]
   )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    try {
+      window.localStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(shoppingListItems))
+    } catch {
+      // localStorage kann im Browser blockiert sein. Die App bleibt trotzdem nutzbar.
+    }
+  }, [shoppingListItems])
 
   useEffect(() => {
     let active = true
@@ -1944,7 +2009,15 @@ function App() {
       return
     }
 
-    const nextPath = nextPage === 'quality' ? '/quality' : nextPage === 'diagnostics' ? '/diagnose' : '/'
+    const nextPath =
+      nextPage === 'quality'
+        ? '/quality'
+        : nextPage === 'diagnostics'
+          ? '/diagnose'
+          : nextPage === 'shopping-list'
+            ? '/einkaufsliste'
+            : '/'
+
     window.history.replaceState({}, '', nextPath)
   }
 
@@ -1967,6 +2040,19 @@ function App() {
 
       return nextRetailers
     })
+  }
+
+  function handleSelectAllRetailers() {
+    setDraftSelectedRetailers((retailers || []).map((retailer) => retailer.retailerKey).filter(Boolean))
+  }
+
+  function handleClearRetailers() {
+    setDraftSelectedRetailers([])
+    setDraftSelectedCategoryLabels([])
+  }
+
+  function handleClearDraftCategories() {
+    setDraftSelectedCategoryLabels([])
   }
 
   function handleToggleDraftMainCategory(group) {
@@ -2015,6 +2101,23 @@ function App() {
     setAppliedSelectedRetailers([])
     setAppliedSelectedCategoryLabels([])
     setRanking(null)
+  }
+
+  function handleAddToShoppingList(offer) {
+    const item = buildShoppingListItem(offer)
+
+    setShoppingListItems((current) => {
+      if (current.some((existingItem) => existingItem.id === item.id)) return current
+      return [item, ...current]
+    })
+  }
+
+  function handleRemoveShoppingListItem(itemId) {
+    setShoppingListItems((current) => current.filter((item) => item.id !== itemId))
+  }
+
+  function handleClearShoppingList() {
+    setShoppingListItems([])
   }
 
   async function handleSaveFeedback() {
@@ -2119,65 +2222,37 @@ function App() {
         onClose={() => setShowAppDownloadModal(false)}
       />
 
-      <nav
-        className="page-nav"
-        aria-label="Seiten"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          maxWidth: '100%',
-        }}
-      >
-        <button
-          className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
-          onClick={() => handleNavigate('search')}
-        >
-          Angebote
-        </button>
-
-        <div
-          aria-label="Admin-Bereich"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.35rem',
-            marginLeft: 'auto',
-            opacity: 0.72,
-          }}
-        >
-          <span
-            style={{
-              fontSize: '0.72rem',
-              color: '#6b7264',
-              textTransform: 'uppercase',
-              letterSpacing: '0.12em',
-              fontWeight: 800,
-              padding: '0 0.25rem',
-            }}
+      <nav className="page-nav" aria-label="Seiten">
+        <div className="page-nav__main">
+          <button
+            className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('search')}
           >
-            Admin
-          </span>
+            Angebote
+          </button>
 
           <button
-            className={`page-nav__button${activePage === 'quality' ? ' page-nav__button--active' : ''}`}
+            className={`page-nav__button${activePage === 'shopping-list' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('shopping-list')}
+          >
+            Einkaufsliste
+            {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
+          </button>
+        </div>
+
+        <div aria-label="Admin-Bereich" className="page-nav__admin">
+          <span>Admin</span>
+
+          <button
+            className={`page-nav__button page-nav__button--small${activePage === 'quality' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('quality')}
-            style={{
-              padding: '0.48rem 0.72rem',
-              fontSize: '0.86rem',
-            }}
           >
             Qualität
           </button>
 
           <button
-            className={`page-nav__button${activePage === 'diagnostics' ? ' page-nav__button--active' : ''}`}
+            className={`page-nav__button page-nav__button--small${activePage === 'diagnostics' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('diagnostics')}
-            style={{
-              padding: '0.48rem 0.72rem',
-              fontSize: '0.86rem',
-            }}
           >
             Status
           </button>
@@ -2197,11 +2272,23 @@ function App() {
           appliedCategoryLabels={appliedSelectedCategoryLabels}
           error={error}
           hasPendingChanges={hasPendingChanges}
+          shoppingListIds={shoppingListIds}
           onToggleDraftRetailer={handleToggleDraftRetailer}
+          onSelectAllRetailers={handleSelectAllRetailers}
+          onClearRetailers={handleClearRetailers}
           onToggleDraftMainCategory={handleToggleDraftMainCategory}
           onToggleDraftSubcategory={handleToggleDraftSubcategory}
+          onClearDraftCategories={handleClearDraftCategories}
           onApplySearch={handleApplySearch}
           onResetAll={handleResetAll}
+          onAddToShoppingList={handleAddToShoppingList}
+        />
+      ) : activePage === 'shopping-list' ? (
+        <ShoppingListPage
+          shoppingListItems={shoppingListItems}
+          onRemoveItem={handleRemoveShoppingListItem}
+          onClearList={handleClearShoppingList}
+          onGoToOffers={() => handleNavigate('search')}
         />
       ) : activePage === 'quality' ? (
         <QualityPage
