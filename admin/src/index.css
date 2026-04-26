@@ -4,13 +4,14 @@
     radial-gradient(circle at 8% 0%, rgba(184, 232, 167, 0.48), transparent 23rem),
     radial-gradient(circle at 92% 6%, rgba(255, 225, 154, 0.3), transparent 22rem),
     linear-gradient(180deg, #f7f2e7 0%, #efe8da 48%, #e8dfcf 100%);
-  font-family: "Segoe UI", "Trebuchet MS", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
+  --kk-font: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --kk-ink: #172217;
   --kk-muted: #5c6658;
   --kk-muted-2: #6b7264;
@@ -214,10 +215,11 @@ a {
 .panel h1,
 .shopping-list-hero h1 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--kk-font);
+  font-weight: 850;
   font-size: clamp(2.15rem, 5.6vw, 4.15rem);
   line-height: 0.98;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.055em;
 }
 
 .subtitle {
@@ -418,10 +420,11 @@ a {
 .app-download-modal h2 {
   margin: 0;
   max-width: 22rem;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--kk-font);
+  font-weight: 850;
   font-size: clamp(1.85rem, 8vw, 2.65rem);
   line-height: 1;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.055em;
   color: #172217;
 }
 
@@ -1756,7 +1759,7 @@ textarea:focus {
   .shopping-list-hero h1 {
     font-size: clamp(1.9rem, 12vw, 2.55rem);
     line-height: 1.02;
-    letter-spacing: -0.048em;
+    letter-spacing: -0.055em;
   }
 
   .eyebrow {
