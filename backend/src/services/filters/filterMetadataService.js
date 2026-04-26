@@ -233,6 +233,7 @@ function buildRetailerCoverageReasons(retailer, recentJobs) {
 function finalizeRetailerCoverage(retailer, recentJobs) {
   retailer.offerCount = retailer.totalOffers;
   retailer.activeOfferCount = retailer.activeOffers;
+  retailer.isActive = retailer.activeOffers > 0;
   retailer.sourceDiversity = retailer.sourceIds.size;
   retailer.channelDiversity = retailer.channels.size;
   retailer.parsingConfidenceAverage = retailer.parsingConfidenceCount > 0
@@ -736,6 +737,8 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
         [
           'retailerKey',
           'retailerName',
+          'sourceId',
+          'sourceUrl',
           'offerKey',
           'dedupeKey',
           'title',
