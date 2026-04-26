@@ -24,9 +24,10 @@ const RETAILER_PRIORITY = {
   dm: 3,
   pagro: 4,
   bipa: 5,
-  hofer: 6,
-  billa: 7,
-  'billa-plus': 8,
+  adeg: 6,
+  hofer: 7,
+  billa: 8,
+  'billa-plus': 9,
 };
 
 async function crawlSource({ source, region, trigger = 'manual' }) {
@@ -52,8 +53,8 @@ async function crawlSource({ source, region, trigger = 'manual' }) {
 async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }) {
   await ensureManualCategoryOverrideCacheLoaded();
   const filter = retailerKeys.length > 0
-    ? { active: true, retailerKey: { $in: retailerKeys } }
-    : { active: true };
+    ? { active: true, enabled: { $ne: false }, retailerKey: { $in: retailerKeys } }
+    : { active: true, enabled: { $ne: false } };
 
   const [sources, activeOfferCounts] = await Promise.all([
     Source.find(filter).lean(),
@@ -94,6 +95,13 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
 
     if (leftChannelPriority !== rightChannelPriority) {
       return leftChannelPriority - rightChannelPriority;
+    }
+
+    const leftSourcePriority = Number(left.priority ?? 50);
+    const rightSourcePriority = Number(right.priority ?? 50);
+
+    if (leftSourcePriority !== rightSourcePriority) {
+      return leftSourcePriority - rightSourcePriority;
     }
 
     return `${left.retailerName} ${left.label}`.localeCompare(`${right.retailerName} ${right.label}`, 'de');

@@ -154,6 +154,12 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
           'validTo',
           'createdAt',
           'supportingSources',
+          'sourceUrls',
+          'evidenceUrls',
+          'sourceTypes',
+          'seenInSources',
+          'firstSeenAt',
+          'lastSeenAt',
           'dedupeKey',
           'isActiveNow',
           'quality',
@@ -193,6 +199,18 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
     const mergedSupportingSources = dedupeSourceEvidence(
       sorted.flatMap((offer) => offer.supportingSources || [])
     );
+    const mergedSourceUrls = [...new Set(sorted.flatMap((offer) => offer.sourceUrls || []).filter(Boolean))];
+    const mergedEvidenceUrls = [...new Set(sorted.flatMap((offer) => offer.evidenceUrls || []).filter(Boolean))];
+    const mergedSourceTypes = [...new Set(sorted.flatMap((offer) => offer.sourceTypes || []).filter(Boolean))];
+    const mergedSeenInSources = sorted.flatMap((offer) => offer.seenInSources || []);
+    const firstSeenAt = sorted
+      .map((offer) => offer.firstSeenAt || offer.createdAt)
+      .filter(Boolean)
+      .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0];
+    const lastSeenAt = sorted
+      .map((offer) => offer.lastSeenAt || offer.updatedAt)
+      .filter(Boolean)
+      .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0];
 
     updates.push({
       updateOne: {
@@ -200,6 +218,12 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
         update: {
           $set: {
             supportingSources: mergedSupportingSources,
+            sourceUrls: mergedSourceUrls,
+            evidenceUrls: mergedEvidenceUrls,
+            sourceTypes: mergedSourceTypes,
+            seenInSources: mergedSeenInSources,
+            firstSeenAt: firstSeenAt || canonical.firstSeenAt || canonical.createdAt,
+            lastSeenAt: lastSeenAt || canonical.lastSeenAt || canonical.updatedAt,
           },
         },
       },

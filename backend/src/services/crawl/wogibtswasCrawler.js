@@ -7,6 +7,10 @@ const { buildPayloadDigest } = require('./aktionsfinderParser');
 const { normalizePromotionToOffer } = require('./offerNormalizer');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
+const { enrichOffersForStorage } = require('./offerAuditEnrichment');
+const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+
+const PARSER_VERSION = 'wogibtswas-v2-coverage';
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -208,6 +212,7 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
     });
 
     const html = String(response.data);
+    const httpLog = buildHttpLogFromResponse(response, html);
     const digest = buildPayloadDigest(html);
     const validTo = extractBrochureValidTo(html);
     const promotions = parseProductLinks({
@@ -222,12 +227,19 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
       retailerKey: source.retailerKey,
       region,
       documentType: 'html',
+      sourceType: source.sourceType || source.channel,
       url: source.sourceUrl,
       canonicalUrl: response.request?.res?.responseUrl || source.sourceUrl,
+      finalUrl: response.request?.res?.responseUrl || source.sourceUrl,
       title: source.label,
+      httpStatus: response.status,
+      contentType: response.headers?.['content-type'] || '',
+      downloadBytes: httpLog.downloadBytes,
       contentHash: digest.contentHash,
       contentSnippet: digest.contentSnippet,
       extractedPreview: promotions.slice(0, 8).map((promotion) => promotion.title),
+      foundRawItems: promotions.length,
+      parserVersion: PARSER_VERSION,
       payload: {
         promotionCount: promotions.length,
         validTo,
@@ -258,7 +270,12 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
           snapshotCurrent: true,
         },
       }));
-    const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
+    const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+      source,
+      sourceType: 'wogibtswas-html',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    });
 
     if (offerDocuments.length > 0) {
       await Offer.insertMany(offerDocuments, { ordered: false });
@@ -266,17 +283,17 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
 
     const status = offerDocuments.length > 0 ? 'success' : 'partial';
 
-    await CrawlJob.findByIdAndUpdate(crawlJob._id, {
+    await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
       status,
-      finishedAt: new Date(),
-      stats: {
-        discoveredPages: 1,
-        rawDocuments: 1,
-        offersExtracted: promotions.length,
-        offersStored: offerDocuments.length,
-        warnings: offerDocuments.filter((offer) => offer.quality.issues.length > 0).length,
-        errors: 0,
-      },
+      discoveredPages: 1,
+      rawDocuments: 1,
+      rawCandidateCount: promotions.length,
+      offers: offerDocuments,
+      source,
+      sourceType: 'aggregator',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+      httpLog,
       warningMessages: [],
       errorMessages: [],
       metadata: {
@@ -284,7 +301,7 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
         sourceUrl: source.sourceUrl,
         validTo,
       },
-    });
+    }));
 
     await Source.findByIdAndUpdate(source._id, {
       latestRunAt: new Date(),
@@ -304,7 +321,15 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
       status: 'failed',
       finishedAt: new Date(),
+      sourceType: source.sourceType || source.channel || '',
+      sourceUrl: source.sourceUrl,
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
       stats: {
+        foundRawItems: 0,
+        parsedOffers: 0,
+        productiveOffers: 0,
+        rejectedOffers: 0,
         discoveredPages: 1,
         rawDocuments: 0,
         offersExtracted: 0,

@@ -1,9 +1,10 @@
-import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo, useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -17,16 +18,16 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { API_BASE_URL, APP_NAME } from './src/config/api';
+import { API_BASE_URL } from './src/config/api';
 import {
   buildCategoryGroups,
   formatCurrency,
   getOfferCategoryLabel,
 } from './src/searchHelpers';
 
-function getOfferImageUrl(offerId) {
-  return `${API_BASE_URL.replace(/\/api$/, '')}/api/offers/${offerId}/image`;
-}
+const BRAND_NAME = 'kaufklug.at';
+const ECILY_URL = 'https://www.ecily.com';
+const SHOPPING_LIST_STORAGE_KEY = 'einfachsparen.mobile.shoppingList.v1';
 
 const RETAILER_COLORS = {
   bipa: '#ec4f86',
@@ -44,38 +45,13 @@ const RETAILER_TEXT_COLORS = {
   lidl: '#173118',
 };
 
-const SHOPPING_LIST_STORAGE_KEY = 'einfachsparen.mobile.shoppingList.v1';
-const RETAILER_PROGRAMS_STORAGE_KEY = 'einfachsparen.mobile.retailerPrograms.v1';
+function getOfferImageUrl(offerId) {
+  return `${API_BASE_URL.replace(/\/api$/, '')}/api/offers/${offerId}/image`;
+}
 
 function normalizeAmount(value) {
   const amount = Number(value);
   return Number.isFinite(amount) ? amount : 0;
-}
-
-function getReliableSavingsAmount(offer) {
-  const directSavings = Number(offer?.savingsAmount);
-
-  if (Number.isFinite(directSavings) && directSavings > 0) {
-    return Number(directSavings.toFixed(2));
-  }
-
-  const currentAmount = Number(offer?.priceCurrent?.amount);
-  const referenceAmount = Number(offer?.priceReference?.amount);
-
-  if (Number.isFinite(currentAmount) && Number.isFinite(referenceAmount) && referenceAmount > currentAmount) {
-    return Number((referenceAmount - currentAmount).toFixed(2));
-  }
-
-  return 0;
-}
-
-function normalizeRetailerKey(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
 }
 
 function extractArrayPayload(payload, preferredKeys = []) {
@@ -98,12 +74,25 @@ function extractArrayPayload(payload, preferredKeys = []) {
   return [];
 }
 
-function isOfferDirectlyComparable(offer) {
-  return Boolean(offer?.quality?.comparisonSafe && offer?.comparisonGroup && offer?.normalizedUnitPrice?.amount);
+function getReliableSavingsAmount(offer) {
+  const directSavings = Number(offer?.savingsAmount);
+
+  if (Number.isFinite(directSavings) && directSavings > 0) {
+    return Number(directSavings.toFixed(2));
+  }
+
+  const currentAmount = Number(offer?.priceCurrent?.amount);
+  const referenceAmount = Number(offer?.priceReference?.amount);
+
+  if (Number.isFinite(currentAmount) && Number.isFinite(referenceAmount) && referenceAmount > currentAmount) {
+    return Number((referenceAmount - currentAmount).toFixed(2));
+  }
+
+  return 0;
 }
 
-function getOfferKindLabel(offer) {
-  return isOfferDirectlyComparable(offer) ? 'Direkt vergleichbar' : 'Ähnliches Angebot';
+function hasReliableSavings(offer) {
+  return getReliableSavingsAmount(offer) > 0;
 }
 
 function getOfferStatusLabel(offer) {
@@ -111,7 +100,7 @@ function getOfferStatusLabel(offer) {
   if (offer?.status === 'upcoming') return 'Bald gültig';
   if (offer?.status === 'expired') return 'Nicht mehr gültig';
   if (offer?.isActiveToday) return 'Heute relevant';
-  return 'Status unklar';
+  return 'Aktuelles Angebot';
 }
 
 function shouldDisplayUnitPrice(offer) {
@@ -153,12 +142,13 @@ function getConditionsSummary(offer) {
   return '';
 }
 
-function buildOfferBadges(offer) {
-  const badges = [getOfferKindLabel(offer), getOfferStatusLabel(offer)];
+function buildConditionBadges(offer) {
+  const badges = [];
 
   if (offer?.customerProgramRequired) badges.push('Mit Kundenkarte/App');
   if (offer?.isMultiBuy) badges.push('Mehrkauf-Angebot');
   if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge nötig');
+  if (offer?.conditionsText && !badges.includes(offer.conditionsText)) badges.push(offer.conditionsText);
 
   return badges;
 }
@@ -192,6 +182,36 @@ function getRetailerTextColor(retailerKey) {
   return RETAILER_TEXT_COLORS[normalizedKey] || '#ffffff';
 }
 
+function flattenRankingOffers(ranking) {
+  return (ranking?.rankedGroups || []).flatMap((group) => group.offers || []);
+}
+
+function buildOfferSections(offers) {
+  const withSavings = offers.filter(hasReliableSavings);
+  const actionPrices = offers.filter((offer) => !hasReliableSavings(offer));
+  const sections = [];
+
+  if (withSavings.length > 0) {
+    sections.push({
+      key: 'with-savings',
+      title: 'Angebote mit Euro-Ersparnis',
+      subtitle: 'Bei diesen Angeboten ist im Prospekt ein Normalpreis angegeben.',
+      data: withSavings,
+    });
+  }
+
+  if (actionPrices.length > 0) {
+    sections.push({
+      key: 'action-prices',
+      title: 'Weitere aktuelle Aktionen',
+      subtitle: 'Diese Produkte sind aktuelle Aktionen. Der Normalpreis ist im Prospekt nicht angegeben.',
+      data: actionPrices,
+    });
+  }
+
+  return sections;
+}
+
 function groupShoppingListEntries(entries) {
   const grouped = new Map();
 
@@ -213,39 +233,9 @@ function groupShoppingListEntries(entries) {
       offers: group.offers.sort((left, right) => left.title.localeCompare(right.title, 'de')),
       savingsTotal: group.offers.reduce((sum, offer) => sum + getReliableSavingsAmount(offer), 0),
       currentTotal: group.offers.reduce((sum, offer) => sum + normalizeAmount(offer.priceCurrent?.amount), 0),
+      actionPriceCount: group.offers.filter((offer) => !hasReliableSavings(offer)).length,
     }))
     .sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'));
-}
-
-function applyCustomerProgramFilter(baseRanking, retailerProgramMap) {
-  if (!baseRanking) {
-    return null;
-  }
-
-  const rankedGroups = (baseRanking.rankedGroups || [])
-    .map((group) => ({
-      ...group,
-      offers: (group.offers || []).filter((offer) => (
-        !offer?.customerProgramRequired || Boolean(retailerProgramMap?.[offer.retailerKey])
-      )),
-    }))
-    .filter((group) => group.offers.length > 0);
-  const filteredOffers = rankedGroups.flatMap((group) => group.offers || []);
-  const firstBestOffer = rankedGroups[0]?.offers?.[0];
-
-  return {
-    ...baseRanking,
-    rankedGroups,
-    summary: {
-      ...(baseRanking.summary || {}),
-      resultCount: filteredOffers.length,
-      displayedCount: filteredOffers.length,
-      completeResultSetVisible: true,
-      bestUnitPrice: firstBestOffer?.normalizedUnitPrice
-        ? `${firstBestOffer.normalizedUnitPrice.amount}/${firstBestOffer.normalizedUnitPrice.unit}`
-        : '-',
-    },
-  };
 }
 
 function FilterChip({ label, active, partial, onPress, activeBackgroundColor, activeTextColor }) {
@@ -266,11 +256,58 @@ function FilterChip({ label, active, partial, onPress, activeBackgroundColor, ac
   );
 }
 
-function SummaryCard({ label, value, accent = false }) {
+function SummaryCard({ label, value, hint, accent = false }) {
   return (
     <View style={[styles.summaryCard, accent ? styles.summaryCardAccent : null]}>
       <Text style={styles.summaryLabel}>{label}</Text>
       <Text style={styles.summaryValue}>{value}</Text>
+      {hint ? <Text style={styles.summaryHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+function StepHeader({ step, title, text }) {
+  return (
+    <View style={styles.stepHeader}>
+      <Text style={styles.stepNumber}>{step}</Text>
+      <View style={styles.stepTextBox}>
+        <Text style={styles.stepTitle}>{title}</Text>
+        <Text style={styles.stepText}>{text}</Text>
+      </View>
+    </View>
+  );
+}
+
+function PriceTrustNote({ compact = false }) {
+  return (
+    <View style={[styles.noteBox, compact ? styles.noteBoxCompact : null]}>
+      <Text style={styles.noteTitle}>Hinweis zu Prospekten und Normalpreisen</Text>
+      <Text style={styles.noteText}>
+        kaufklug zeigt aktuelle Angebote aus Prospekten und Aktionen. Manche Prospekte nennen nur den Aktionspreis,
+        aber keinen Normalpreis. In diesem Fall zeigen wir den Aktionspreis, aber keine Euro-Ersparnis.
+      </Text>
+    </View>
+  );
+}
+
+function SavingsMessage({ offer, compact = false }) {
+  const savingsAmount = getReliableSavingsAmount(offer);
+
+  if (savingsAmount > 0) {
+    return (
+      <View style={[styles.savingsBox, compact ? styles.savingsBoxCompact : null]}>
+        <Text style={styles.savingsValue}>Spart ca. {formatCurrency(savingsAmount, offer.priceCurrent?.currency)}</Text>
+        <Text style={styles.savingsDescription}>Ersparnis mit angegebenem Normalpreis.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.actionPriceBox, compact ? styles.savingsBoxCompact : null]}>
+      <Text style={styles.actionPriceTitle}>Aktionspreis!</Text>
+      <Text style={styles.actionPriceText}>
+        Im Prospekt ist kein Normalpreis angegeben. Das ist oft bei kurzen oder saisonalen Aktionen der Fall.
+      </Text>
     </View>
   );
 }
@@ -334,8 +371,6 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
   }
 
   const reliableSavingsAmount = getReliableSavingsAmount(offer);
-  const conditionsSummary = getConditionsSummary(offer);
-  const comparisonSafe = Boolean(offer?.quality?.comparisonSafe);
   const normalizedUnitPrice = shouldDisplayUnitPrice(offer)
     ? `${formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/${offer.normalizedUnitPrice?.unit}`
     : '';
@@ -343,10 +378,6 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
   const referencePrice = Number.isFinite(referenceAmount)
     ? formatCurrency(referenceAmount, offer.priceCurrent?.currency)
     : '';
-
-  function handleShoppingListPress() {
-    onToggleShoppingList(offer);
-  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -365,34 +396,30 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
                 <View style={[styles.retailerBadge, { backgroundColor: getRetailerColor(offer.retailerKey) }]}>
                   <Text style={[styles.retailerBadgeLabel, { color: getRetailerTextColor(offer.retailerKey) }]}>{offer.retailerName}</Text>
                 </View>
-                <View style={styles.metaPill}>
-                  <Text style={styles.metaPillLabel}>{getOfferStatusLabel(offer)}</Text>
+                <View style={styles.softBadge}>
+                  <Text style={styles.softBadgeLabel}>{getOfferStatusLabel(offer)}</Text>
                 </View>
               </View>
               <Text style={styles.detailTitle}>{offer.title}</Text>
               <Text style={styles.offerCategory}>{getOfferCategoryLabel(offer)}</Text>
             </View>
 
-            {conditionsSummary ? (
-              <View style={styles.detailNotice}>
-                <Text style={styles.detailNoticeText}>{conditionsSummary}</Text>
-              </View>
-            ) : null}
+            <SavingsMessage offer={offer} />
 
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>Preis</Text>
               <DetailRow label="Aktionspreis" value={formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)} strong />
-              <DetailRow label="Vergleichspreis" value={referencePrice} />
+              <DetailRow label="Normalpreis im Prospekt" value={referencePrice} />
               <DetailRow
-                label="Ersparnis"
-                value={reliableSavingsAmount > 0 ? formatCurrency(reliableSavingsAmount, offer.priceCurrent?.currency) : '-'}
+                label="Euro-Ersparnis"
+                value={reliableSavingsAmount > 0 ? formatCurrency(reliableSavingsAmount, offer.priceCurrent?.currency) : 'nicht angegeben'}
               />
               <DetailRow label="Einheitspreis" value={normalizedUnitPrice} />
               <DetailRow label="Menge" value={offer.quantityText || 'nicht erkannt'} />
             </View>
 
             <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>Gültigkeit & Bedingungen</Text>
+              <Text style={styles.detailSectionTitle}>Bedingungen</Text>
               <DetailRow label="Zeitraum" value={formatValidityLabel(offer)} />
               <DetailRow label="Kundenkarte/App" value={offer.customerProgramRequired ? 'erforderlich' : 'nicht erforderlich'} />
               <DetailRow label="Mehrkauf" value={offer.isMultiBuy ? 'ja' : 'nein'} />
@@ -402,20 +429,14 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
                   ? String(offer.minimumPurchaseQty || offer.minimumPurchaseQuantity)
                   : 'keine'}
               />
-            </View>
-
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>Vergleichbarkeit</Text>
-              <DetailRow label="Einordnung" value={getOfferKindLabel(offer)} />
-              <DetailRow label="Sicher vergleichbar" value={comparisonSafe ? 'ja' : 'nein'} />
-              <DetailRow label="Vergleichsgruppe" value={offer.comparisonGroup || ''} />
+              <DetailRow label="Weitere Hinweise" value={offer.conditionsText || ''} />
             </View>
           </ScrollView>
 
           <View style={[styles.detailFooter, { paddingBottom: Math.max(18, bottomInset + 14) }]}>
             <Pressable
-              style={[styles.detailPrimaryButton, isSelected ? styles.detailDangerButton : null]}
-              onPress={handleShoppingListPress}
+              style={[styles.detailPrimaryButton, isSelected ? styles.detailMutedButton : null]}
+              onPress={() => onToggleShoppingList(offer)}
             >
               <Text style={styles.detailPrimaryButtonLabel}>
                 {isSelected ? 'Von Einkaufsliste entfernen' : 'Auf die Einkaufsliste'}
@@ -434,18 +455,11 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
 function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
-  const reliableSavingsAmount = getReliableSavingsAmount(offer);
-  const savingsText = reliableSavingsAmount > 0
-    ? formatCurrency(reliableSavingsAmount, offer.priceCurrent?.currency)
-    : '-';
-  const retailerColor = getRetailerColor(offer.retailerKey);
-  const retailerTextColor = getRetailerTextColor(offer.retailerKey);
-  const badges = buildOfferBadges(offer);
-  const conditionsSummary = getConditionsSummary(offer);
+  const conditionBadges = buildConditionBadges(offer);
 
   return (
     <Pressable
-      style={[styles.offerCard, isCompact ? styles.offerCardCompact : null, rank === 0 ? styles.offerCardBest : null]}
+      style={[styles.offerCard, isCompact ? styles.offerCardCompact : null]}
       onPress={() => onOpenDetail(offer)}
     >
       <OfferImage
@@ -460,33 +474,33 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
             <View style={styles.rankBadge}>
               <Text style={styles.rankBadgeLabel}>#{rank + 1}</Text>
             </View>
-            <View style={[styles.retailerBadge, { backgroundColor: retailerColor }]}>
-              <Text style={[styles.retailerBadgeLabel, { color: retailerTextColor }]}>{offer.retailerName}</Text>
+            <View style={[styles.retailerBadge, { backgroundColor: getRetailerColor(offer.retailerKey) }]}>
+              <Text style={[styles.retailerBadgeLabel, { color: getRetailerTextColor(offer.retailerKey) }]}>{offer.retailerName}</Text>
             </View>
-            {badges.map((badge) => (
-              <View key={badge} style={styles.metaPill}>
-                <Text style={styles.metaPillLabel}>{badge}</Text>
+            {hasReliableSavings(offer) ? (
+              <View style={styles.softBadge}>
+                <Text style={styles.softBadgeLabel}>Mit Vergleichspreis</Text>
               </View>
-            ))}
+            ) : null}
           </View>
           <Text style={styles.offerCategory}>{getOfferCategoryLabel(offer)}</Text>
         </View>
+
         <Text style={styles.offerTitle}>{offer.title}</Text>
-        {conditionsSummary ? <Text style={styles.offerCondition}>{conditionsSummary}</Text> : null}
+
         <View style={[styles.offerPriceRow, isCompact ? styles.offerPriceRowCompact : null]}>
           <View style={styles.offerPriceBox}>
             <Text style={styles.offerPrice}>{formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</Text>
+            <Text style={styles.offerMeta}>Aktionspreis</Text>
             {shouldDisplayUnitPrice(offer) ? (
               <Text style={styles.offerMeta}>
                 {formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/{offer.normalizedUnitPrice?.unit}
               </Text>
             ) : null}
           </View>
-          <View style={[styles.savingsBox, isCompact ? styles.savingsBoxCompact : null]}>
-            <Text style={styles.savingsLabel}>Ersparnis heute</Text>
-            <Text style={styles.savingsValue}>{savingsText}</Text>
-          </View>
+          <SavingsMessage offer={offer} compact={isCompact} />
         </View>
+
         <View style={styles.metaWrap}>
           <View style={styles.metaPill}>
             <Text style={styles.metaPillLabel}>Menge: {offer.quantityText || 'nicht erkannt'}</Text>
@@ -494,13 +508,19 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
           <View style={styles.metaPillWide}>
             <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
           </View>
+          {conditionBadges.map((badge) => (
+            <View key={badge} style={styles.conditionPill}>
+              <Text style={styles.conditionPillLabel}>{badge}</Text>
+            </View>
+          ))}
         </View>
+
         <Pressable
           style={[styles.shoppingToggle, isSelected ? styles.shoppingToggleActive : null]}
           onPress={() => onToggleShoppingList(offer)}
         >
           <Text style={[styles.shoppingToggleLabel, isSelected ? styles.shoppingToggleLabelActive : null]}>
-            {isSelected ? 'Auf der Einkaufsliste' : 'Auf die Einkaufsliste'}
+            {isSelected ? 'Bereits auf Liste' : 'Auf die Einkaufsliste'}
           </Text>
         </Pressable>
       </View>
@@ -517,31 +537,62 @@ function SearchResultsList({
   shoppingListMap,
   onToggleShoppingList,
   onOpenOfferDetail,
+  scrollToResultsKey,
   hero,
   selectedRetailerCount,
 }) {
-  const sections = useMemo(
-    () => (ranking?.rankedGroups || []).map((group) => ({
-      title: `${group.unit} direkt vergleichbar`,
-      subtitle: 'Faire Vergleiche innerhalb derselben Einheit.',
-      data: group.offers || [],
-      unit: group.unit,
-    })),
-    [ranking]
-  );
+  const listRef = useRef(null);
+  const offers = useMemo(() => flattenRankingOffers(ranking), [ranking]);
+  const sections = useMemo(() => buildOfferSections(offers), [offers]);
+  const offersWithSavingsCount = offers.filter(hasReliableSavings).length;
+  const actionPriceCount = offers.length - offersWithSavingsCount;
+
+  useEffect(() => {
+    if (!scrollToResultsKey || !hasSearched) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      if (sections.length > 0) {
+        listRef.current?.scrollToLocation({
+          sectionIndex: 0,
+          itemIndex: 0,
+          animated: true,
+          viewOffset: 16,
+        });
+        return;
+      }
+
+      listRef.current?.scrollToEnd({ animated: true });
+    }, 180);
+
+    return () => clearTimeout(timeout);
+  }, [hasSearched, scrollToResultsKey, sections.length]);
 
   if (loading) {
     return (
-      <View style={styles.loadingBox}>
-        <ActivityIndicator color="#31582c" />
-        <Text style={styles.loadingText}>Angebote werden geladen...</Text>
-      </View>
+      <SectionList
+        ref={listRef}
+        sections={[]}
+        keyExtractor={(item) => item.id}
+        renderItem={null}
+        ListHeaderComponent={hero}
+        ListEmptyComponent={
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color="#31582c" />
+            <Text style={styles.loadingText}>Angebote werden geladen …</Text>
+          </View>
+        }
+        contentContainerStyle={styles.content}
+        stickySectionHeadersEnabled={false}
+      />
     );
   }
 
   if (!hasSearched) {
     return (
       <SectionList
+        ref={listRef}
         sections={[]}
         keyExtractor={(item) => item.id}
         renderItem={null}
@@ -550,7 +601,7 @@ function SearchResultsList({
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Noch keine Suche gestartet</Text>
             <Text style={styles.emptyText}>
-              Wähle zuerst Händler aus und starte dann deine Suche mit "Los".
+              Wähle zuerst mindestens ein Geschäft aus. Danach kannst du passende Angebote anzeigen.
             </Text>
           </View>
         }
@@ -562,6 +613,7 @@ function SearchResultsList({
 
   return (
     <SectionList
+      ref={listRef}
       sections={sections}
       keyExtractor={(item) => item.id}
       renderItem={({ item, index }) => (
@@ -574,22 +626,36 @@ function SearchResultsList({
         />
       )}
       renderSectionHeader={({ section }) => (
-        <View style={styles.groupHeader}>
-          <View style={styles.groupHeaderText}>
-            <Text style={styles.groupTitle}>{section.title}</Text>
-            <Text style={styles.groupSubtitle}>{section.subtitle}</Text>
-          </View>
-          <Text style={styles.groupCount}>{section.data.length}</Text>
+        <View style={styles.resultSectionHeader}>
+          <Text style={styles.resultSectionTitle}>{section.title}</Text>
+          <Text style={styles.resultSectionSubtitle}>{section.subtitle}</Text>
         </View>
       )}
-      ListHeaderComponent={hero}
+      ListHeaderComponent={
+        <>
+          {hero}
+          <View style={styles.resultsIntro}>
+            <Text style={styles.resultsTitle}>Deine Angebote</Text>
+            <Text style={styles.resultsText}>
+              Alle Treffer sind aktuelle Angebote. Euro-Ersparnis zeigen wir nur dort, wo im Prospekt ein Normalpreis angegeben ist.
+            </Text>
+            <View style={styles.resultSummaryBox}>
+              <Text style={styles.resultSummaryText}>{offers.length} aktuelle Angebote gefunden.</Text>
+              <Text style={styles.resultSummaryText}>
+                {offersWithSavingsCount} mit angegebener Euro-Ersparnis, {actionPriceCount} weitere Aktionspreise.
+              </Text>
+            </View>
+            <PriceTrustNote compact />
+          </View>
+        </>
+      }
       ListEmptyComponent={
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>Keine passenden Angebote gefunden</Text>
           <Text style={styles.emptyText}>
             {selectedRetailerCount === 0
-              ? 'Wähle zuerst mindestens einen Händler aus.'
-              : 'Aktuell wurden keine passenden Angebote gefunden. Wähle andere Händler oder erweitere die Kategorien.'}
+              ? 'Wähle zuerst mindestens ein Geschäft aus.'
+              : 'Aktuell wurden keine passenden Angebote gefunden. Wähle andere Geschäfte oder Kategorien.'}
           </Text>
         </View>
       }
@@ -605,7 +671,7 @@ function SearchResultsList({
   );
 }
 
-function ShoppingListPage({ shoppingListEntries, onRemove }) {
+function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
   const groupedEntries = useMemo(
@@ -620,24 +686,44 @@ function ShoppingListPage({ shoppingListEntries, onRemove }) {
     () => shoppingListEntries.reduce((sum, offer) => sum + normalizeAmount(offer.priceCurrent?.amount), 0),
     [shoppingListEntries]
   );
+  const actionPriceCount = shoppingListEntries.filter((offer) => !hasReliableSavings(offer)).length;
 
   if (groupedEntries.length === 0) {
     return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>Deine Einkaufsliste ist noch leer</Text>
-        <Text style={styles.emptyText}>Markiere Angebote in der Suche mit "Auf die Einkaufsliste".</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Deine Einkaufsliste ist noch leer.</Text>
+          <Text style={styles.emptyText}>
+            Füge Angebote hinzu, die du beim Einkauf nutzen möchtest. Sie werden lokal auf diesem Gerät gespeichert.
+          </Text>
+          <Pressable style={styles.fullWidthSearchButton} onPress={onBrowse}>
+            <Text style={styles.fullWidthSearchButtonLabel}>Angebote ansehen</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     );
   }
 
   return (
-    <View style={styles.resultGroupList}>
+    <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.shoppingHero}>
         <Text style={styles.shoppingHeroTitle}>Deine Einkaufsliste</Text>
         <Text style={styles.shoppingHeroText}>
-          Die Produkte sind nach Anbieter gruppiert, damit du deine Einkäufe schnell nacheinander erledigen kannst.
+          Deine gespeicherten Angebote sind nach Geschäft sortiert. So kannst du deinen Einkauf einfacher planen.
         </Text>
       </View>
+
+      <View style={styles.summaryRow}>
+        <SummaryCard label="Du bezahlst laut Angebot" value={formatCurrency(totalCurrent)} accent />
+        <SummaryCard label="Ersparnis mit angegebenem Normalpreis" value={formatCurrency(totalSavings)} />
+        <SummaryCard label="Aktionspreise ohne Normalpreis" value={actionPriceCount} />
+      </View>
+
+      {actionPriceCount > 0 ? (
+        <Text style={styles.shoppingHint}>{actionPriceCount} weitere Angebote sind aktuelle Aktionen ohne angegebenen Normalpreis.</Text>
+      ) : null}
+
+      <PriceTrustNote compact />
 
       {groupedEntries.map((group) => (
         <View key={group.retailerKey} style={styles.groupCard}>
@@ -645,7 +731,7 @@ function ShoppingListPage({ shoppingListEntries, onRemove }) {
             <View style={styles.groupHeaderText}>
               <Text style={styles.groupTitle}>{group.retailerName}</Text>
               <Text style={styles.groupSubtitle}>
-                {group.offers.length} Produkt{group.offers.length === 1 ? '' : 'e'} | Ersparnis {formatCurrency(group.savingsTotal)}
+                {group.offers.length} Produkt{group.offers.length === 1 ? '' : 'e'} · Angebotspreis {formatCurrency(group.currentTotal)}
               </Text>
             </View>
             <Text style={styles.groupCount}>{group.offers.length}</Text>
@@ -660,12 +746,23 @@ function ShoppingListPage({ shoppingListEntries, onRemove }) {
                 placeholderTextStyle={styles.listItemImageFallbackText}
               />
               <View style={styles.listItemBody}>
+                <Text style={styles.offerCategory}>{getOfferCategoryLabel(offer)}</Text>
                 <Text style={styles.listItemTitle}>{offer.title}</Text>
-                {offer.conditionsText ? <Text style={styles.offerCondition}>{offer.conditionsText}</Text> : null}
-                <Text style={styles.offerMeta}>{formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</Text>
-                <Text style={styles.offerMeta}>
-                  Ersparnis: {getReliableSavingsAmount(offer) > 0 ? formatCurrency(getReliableSavingsAmount(offer), offer.priceCurrent?.currency) : '-'}
-                </Text>
+                <Text style={styles.offerPriceSmall}>{formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</Text>
+                <SavingsMessage offer={offer} compact />
+                <View style={styles.metaWrap}>
+                  <View style={styles.metaPill}>
+                    <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
+                  </View>
+                  <View style={styles.metaPill}>
+                    <Text style={styles.metaPillLabel}>Menge: {offer.quantityText || 'nicht erkannt'}</Text>
+                  </View>
+                  {buildConditionBadges(offer).map((badge) => (
+                    <View key={badge} style={styles.conditionPill}>
+                      <Text style={styles.conditionPillLabel}>{badge}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
               <Pressable style={styles.removeButton} onPress={() => onRemove(offer.id)}>
                 <Text style={styles.removeButtonLabel}>Entfernen</Text>
@@ -675,17 +772,33 @@ function ShoppingListPage({ shoppingListEntries, onRemove }) {
         </View>
       ))}
 
-      <View style={styles.totalSavingsCard}>
-        <Text style={styles.totalSavingsLabel}>Gesamte Ersparnis</Text>
-        <Text style={styles.totalSavingsValue}>{formatCurrency(totalSavings)}</Text>
-        <Text style={styles.totalSavingsHint}>Aktueller Einkaufswert: {formatCurrency(totalCurrent)}</Text>
+      <View style={styles.shoppingActions}>
+        <Pressable style={styles.fullWidthSearchButton} onPress={onBrowse}>
+          <Text style={styles.fullWidthSearchButtonLabel}>Weitere Angebote suchen</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryWideButton} onPress={onClearList}>
+          <Text style={styles.secondaryWideButtonLabel}>Liste leeren</Text>
+        </Pressable>
       </View>
-    </View>
+    </ScrollView>
+  );
+}
+
+function FooterLink({ bottomInset }) {
+  const safeBottom = Math.max(34, bottomInset + 18);
+
+  return (
+    <Pressable
+      style={[styles.footerLine, { paddingBottom: safeBottom }]}
+      onPress={() => Linking.openURL(ECILY_URL)}
+    >
+      <Text style={styles.footerLink}>© 2026 ecily/webdevelopment</Text>
+    </Pressable>
   );
 }
 
 export default function App() {
-  const [activePage, setActivePage] = useState('search');
+  const [activePage, setActivePage] = useState('offers');
   const [health, setHealth] = useState({ ok: false, environment: '', region: '' });
   const [retailers, setRetailers] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -695,15 +808,13 @@ export default function App() {
   const [error, setError] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedRetailers, setSelectedRetailers] = useState([]);
-  const [expandedGroups, setExpandedGroups] = useState({});
   const [shoppingListMap, setShoppingListMap] = useState({});
   const [shoppingListHydrated, setShoppingListHydrated] = useState(false);
-  const [retailerProgramMap, setRetailerProgramMap] = useState({});
-  const [retailerProgramsHydrated, setRetailerProgramsHydrated] = useState(false);
   const [hasTriggeredSearch, setHasTriggeredSearch] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
+  const [scrollToResultsKey, setScrollToResultsKey] = useState(0);
   const androidTopInset = Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 0) : 0;
-  const androidBottomInset = Platform.OS === 'android' ? 18 : 0;
+  const androidBottomInset = Platform.OS === 'android' ? 48 : 0;
 
   async function fetchJson(path, options) {
     const response = await fetch(`${API_BASE_URL}${path}`, options);
@@ -711,7 +822,7 @@ export default function App() {
 
     try {
       payload = await response.json();
-    } catch (error) {
+    } catch (parseError) {
       payload = null;
     }
 
@@ -781,6 +892,12 @@ export default function App() {
 
   async function loadRanking(isRefresh = false) {
     try {
+      if (selectedRetailers.length === 0) {
+        setRanking(null);
+        setError('Wähle zuerst mindestens ein Geschäft aus.');
+        return;
+      }
+
       if (isRefresh) {
         setRefreshing(true);
       } else {
@@ -789,17 +906,15 @@ export default function App() {
 
       const params = new URLSearchParams();
       if (selectedCategories.length > 0) params.set('categories', selectedCategories.join(','));
-      if (selectedRetailers.length > 0) params.set('retailers', selectedRetailers.join(','));
+      params.set('retailers', selectedRetailers.join(','));
       params.set('limit', 'all');
-
-      if (selectedRetailers.length === 0) {
-        setRanking(null);
-        setError('');
-        return;
-      }
 
       const rankingData = await fetchJson(`/offers/ranking?${params.toString()}`);
       setRanking(rankingData || null);
+      setHasTriggeredSearch(true);
+      if (!isRefresh) {
+        setScrollToResultsKey((current) => current + 1);
+      }
       setError('');
     } catch (loadError) {
       setError(loadError.message || 'Angebote konnten nicht geladen werden.');
@@ -864,82 +979,21 @@ export default function App() {
   }, [shoppingListHydrated, shoppingListMap]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadStoredRetailerPrograms() {
-      try {
-        const storedValue = await AsyncStorage.getItem(RETAILER_PROGRAMS_STORAGE_KEY);
-        if (!storedValue || cancelled) {
-          return;
-        }
-
-        const parsed = JSON.parse(storedValue);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          setRetailerProgramMap(parsed);
-        }
-      } catch (storageError) {
-        console.warn('Kundenkarten-Auswahl konnte nicht geladen werden.', storageError);
-      } finally {
-        if (!cancelled) {
-          setRetailerProgramsHydrated(true);
-        }
-      }
-    }
-
-    loadStoredRetailerPrograms();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!retailerProgramsHydrated) {
-      return;
-    }
-
-    AsyncStorage.setItem(
-      RETAILER_PROGRAMS_STORAGE_KEY,
-      JSON.stringify(retailerProgramMap)
-    ).catch((storageError) => {
-      console.warn('Kundenkarten-Auswahl konnte nicht gespeichert werden.', storageError);
-    });
-  }, [retailerProgramsHydrated, retailerProgramMap]);
-
-  useEffect(() => {
     loadCategories(selectedRetailers);
   }, [selectedRetailers]);
 
   const categoryGroups = useMemo(() => buildCategoryGroups(categories || []), [categories]);
-  const visibleRanking = useMemo(
-    () => applyCustomerProgramFilter(ranking, retailerProgramMap),
-    [ranking, retailerProgramMap]
+  const shoppingListEntries = useMemo(() => Object.values(shoppingListMap), [shoppingListMap]);
+  const selectedRetailerCount = selectedRetailers.length;
+  const selectedCategoryCount = selectedCategories.length;
+  const offers = useMemo(() => flattenRankingOffers(ranking), [ranking]);
+  const resultCount = offers.length;
+  const offersWithSavingsCount = offers.filter(hasReliableSavings).length;
+  const actionPriceCount = resultCount - offersWithSavingsCount;
+  const strongestSaving = useMemo(
+    () => offers.reduce((max, offer) => Math.max(max, getReliableSavingsAmount(offer)), 0),
+    [offers]
   );
-  const summary = visibleRanking?.summary || ranking?.summary || {};
-  const selectedRetailerDetails = useMemo(
-    () => selectedRetailers
-      .map((retailerKey) => (
-        retailers.find((retailer) => retailer.retailerKey === retailerKey)
-        || { retailerKey, retailerName: retailerKey }
-      )),
-    [retailers, selectedRetailers]
-  );
-
-  function startSearch() {
-    setHasTriggeredSearch(true);
-    loadRanking(false);
-  }
-
-  function clearFilters() {
-    setSelectedRetailers([]);
-    setSelectedCategories([]);
-    setExpandedGroups({});
-    setHasTriggeredSearch(false);
-    setRanking(null);
-    setError('');
-    setLoading(false);
-    setRefreshing(false);
-  }
 
   function toggleRetailer(retailerKey) {
     setSelectedRetailers((current) => (
@@ -949,11 +1003,16 @@ export default function App() {
     ));
   }
 
-  function toggleRetailerProgram(retailerKey) {
-    setRetailerProgramMap((current) => ({
-      ...current,
-      [retailerKey]: !current[retailerKey],
-    }));
+  function selectAllRetailers() {
+    setSelectedRetailers((retailers || []).map((retailer) => retailer.retailerKey).filter(Boolean));
+  }
+
+  function resetRetailers() {
+    setSelectedRetailers([]);
+    setSelectedCategories([]);
+    setRanking(null);
+    setHasTriggeredSearch(false);
+    setError('');
   }
 
   function toggleCategory(category) {
@@ -964,18 +1023,31 @@ export default function App() {
     ));
   }
 
-  function toggleMainCategory(subcategories) {
-    setSelectedCategories((current) => {
-      if (subcategories.length === 0) {
-        return current;
-      }
+  function toggleMainCategory(subcategories, fallbackCategory) {
+    if (!subcategories.length) {
+      toggleCategory(fallbackCategory);
+      return;
+    }
 
+    setSelectedCategories((current) => {
       const allSelected = subcategories.every((subcategory) => current.includes(subcategory));
       if (allSelected) {
         return current.filter((item) => !subcategories.includes(item));
       }
       return [...new Set([...current, ...subcategories])];
     });
+  }
+
+  function resetCategories() {
+    setSelectedCategories([]);
+  }
+
+  function resetSelection() {
+    setSelectedRetailers([]);
+    setSelectedCategories([]);
+    setRanking(null);
+    setHasTriggeredSearch(false);
+    setError('');
   }
 
   function toggleShoppingList(offer) {
@@ -1001,40 +1073,38 @@ export default function App() {
     });
   }
 
-  const shoppingListEntries = useMemo(() => Object.values(shoppingListMap), [shoppingListMap]);
-  const strongestSaving = useMemo(() => {
-    const offers = (visibleRanking?.rankedGroups || []).flatMap((group) => group.offers || []);
-    return offers.reduce((max, offer) => Math.max(max, getReliableSavingsAmount(offer)), 0);
-  }, [visibleRanking]);
-  const resultCount = summary.resultCount || 0;
-  const displayedCount = summary.displayedCount || 0;
-  const activeProgramCount = selectedRetailerDetails.filter((retailer) => retailerProgramMap[retailer.retailerKey]).length;
-  const quickFilterSummary = [
-    selectedRetailers.length ? `${selectedRetailers.length} Anbieter` : null,
-    selectedCategories.length ? `${selectedCategories.length} Kategorien` : null,
-    activeProgramCount ? `${activeProgramCount} App/Karte` : null,
-  ].filter(Boolean).join(' | ');
+  function clearShoppingList() {
+    setShoppingListMap({});
+  }
+
+  function showOffersTab() {
+    setActivePage('offers');
+  }
+
   const searchHeader = (
     <>
       <View style={styles.heroCard}>
-        <Text style={styles.eyebrow}>kaufgut.at app</Text>
-        <Text style={styles.title}>{APP_NAME}</Text>
+        <Text style={styles.eyebrow}>{BRAND_NAME}</Text>
+        <Text style={styles.title}>Einfach klug einkaufen.</Text>
         <Text style={styles.subtitle}>
-          Finde die besten aktuellen Angebote schneller, vergleiche fair und sammle Produkte direkt für deinen Einkauf.
+          Wähle deine Geschäfte und was du einkaufen möchtest. kaufklug zeigt dir aktuelle Angebote aus Prospekten
+          und Aktionen - einfach, verständlich und ohne Prospekt-Chaos.
         </Text>
-
-        <View style={styles.heroFooter}>
-          <View style={[styles.livePill, health.ok ? styles.livePillActive : null]}>
-            <Text style={[styles.livePillLabel, health.ok ? styles.livePillLabelActive : null]}>
-              {health.ok ? `Live | ${health.region || 'Region aktiv'}` : 'Verbindung prüfen'}
-            </Text>
-          </View>
-          <Text style={styles.heroHint}>Stand: {health.environment || 'mobile preview'}</Text>
+        <View style={styles.benefitGrid}>
+          {['Aktuelle Aktionen', 'Einfach auswählen', 'Einkaufsliste', 'Ehrliche Ersparnis'].map((item) => (
+            <View key={item} style={styles.benefitPill}>
+              <Text style={styles.benefitPillText}>{item}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
-      <View style={styles.searchCard}>
-        <Text style={styles.searchSectionTitle}>Welche Händler möchtest du berücksichtigen?</Text>
+      <View style={styles.flowCard}>
+        <StepHeader
+          step="1. Geschäfte wählen"
+          title="Wo kaufst du ein?"
+          text="Wähle die Geschäfte aus, die für dich erreichbar sind."
+        />
         <View style={styles.chipWrap}>
           {(retailers || []).map((retailer) => (
             <FilterChip
@@ -1047,83 +1117,42 @@ export default function App() {
             />
           ))}
         </View>
-
         <View style={styles.actionRow}>
-          <Pressable style={styles.primaryButton} onPress={clearFilters}>
-            <Text style={styles.primaryButtonLabel}>Filter löschen</Text>
+          <Pressable style={styles.secondaryButton} onPress={selectAllRetailers}>
+            <Text style={styles.secondaryButtonLabel}>Alle auswählen</Text>
           </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={startSearch}>
-            <Text style={styles.secondaryButtonLabel}>Los</Text>
+          <Pressable style={styles.secondaryButton} onPress={resetRetailers}>
+            <Text style={styles.secondaryButtonLabel}>Geschäfte zurücksetzen</Text>
           </Pressable>
         </View>
+      </View>
 
-        {selectedRetailerDetails.length > 0 ? (
-          <View style={styles.programPanel}>
-            <Text style={styles.programTitle}>Kundenkarte/App je Anbieter</Text>
-            <Text style={styles.programHint}>
-              Angebote mit App- oder Kartenvorteil zeigen wir nur, wenn du den Vorteil beim Anbieter aktiviert hast.
-            </Text>
-            <View style={styles.programList}>
-              {selectedRetailerDetails.map((retailer) => {
-                const active = Boolean(retailerProgramMap[retailer.retailerKey]);
-
-                return (
-                  <View key={retailer.retailerKey} style={styles.programRow}>
-                    <View style={[styles.retailerBadge, { backgroundColor: getRetailerColor(retailer.retailerKey) }]}>
-                      <Text style={[styles.retailerBadgeLabel, { color: getRetailerTextColor(retailer.retailerKey) }]}>
-                        {retailer.retailerName}
-                      </Text>
-                    </View>
-                    <Pressable
-                      style={[styles.programToggle, active ? styles.programToggleActive : null]}
-                      onPress={() => toggleRetailerProgram(retailer.retailerKey)}
-                    >
-                      <Text style={[styles.programToggleLabel, active ? styles.programToggleLabelActive : null]}>
-                        {active ? 'App/Karte vorhanden' : 'Keine App/Karte'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.inlineFilterSection}>
-          <View style={styles.sectionTop}>
-            <Text style={styles.sectionTitle}>Kategorien</Text>
-            <Pressable style={styles.resetButton} onPress={() => setSelectedCategories([])}>
-              <Text style={styles.resetButtonLabel}>Reset</Text>
-            </Pressable>
-          </View>
+      <View style={styles.flowCard}>
+        <StepHeader
+          step="2. Produkte wählen"
+          title="Was brauchst du heute?"
+          text="Wähle eine Kategorie oder genauer eine Unterkategorie. Du kannst diesen Schritt auch überspringen."
+        />
+        <Pressable style={styles.secondaryWideButton} onPress={resetCategories}>
+          <Text style={styles.secondaryWideButtonLabel}>Alle Kategorien anzeigen</Text>
+        </Pressable>
+        <View style={styles.categoryList}>
           {categoryGroups.map((group) => {
             const selectedCount = group.subcategories.filter((item) => selectedCategories.includes(item)).length;
             const allSelected = selectedCount === group.subcategories.length && group.subcategories.length > 0;
             const partial = selectedCount > 0 && !allSelected;
-            const expanded = Boolean(expandedGroups[group.mainCategory]) || selectedCount > 0;
+            const fallbackSelected = selectedCategories.includes(group.mainCategory);
 
             return (
               <View key={group.mainCategory} style={styles.categoryCard}>
-                <View style={styles.sectionTop}>
-                  <FilterChip
-                    label={`${group.mainCategory} (${group.subcategories.length})`}
-                    active={allSelected || (group.subcategories.length === 0 && selectedCategories.includes(group.mainCategory))}
-                    partial={partial}
-                    onPress={() => (
-                      group.subcategories.length > 0
-                        ? toggleMainCategory(group.subcategories)
-                        : toggleCategory(group.mainCategory)
-                    )}
-                  />
-                  <Pressable
-                    style={styles.linkButton}
-                    onPress={() => setExpandedGroups((current) => ({ ...current, [group.mainCategory]: !current[group.mainCategory] }))}
-                  >
-                    <Text style={styles.linkButtonLabel}>{expanded ? 'Weniger' : 'Mehr'}</Text>
-                  </Pressable>
-                </View>
-                {expanded ? (
-                  <View style={styles.chipWrap}>
+                <FilterChip
+                  label={`${group.mainCategory}${group.subcategories.length ? ` (${group.subcategories.length})` : ''}`}
+                  active={allSelected || fallbackSelected}
+                  partial={partial}
+                  onPress={() => toggleMainCategory(group.subcategories, group.mainCategory)}
+                />
+                {group.subcategories.length > 0 ? (
+                  <View style={styles.subcategoryWrap}>
                     {group.subcategories.map((subcategory) => (
                       <FilterChip
                         key={subcategory}
@@ -1137,43 +1166,61 @@ export default function App() {
               </View>
             );
           })}
-          <Pressable style={styles.fullWidthSearchButton} onPress={startSearch}>
-            <Text style={styles.fullWidthSearchButtonLabel}>Los</Text>
-          </Pressable>
         </View>
+      </View>
 
-        <View style={styles.quickInfoCard}>
-          <Text style={styles.quickInfoTitle}>Suchstatus</Text>
-          <Text style={styles.quickInfoText}>
-            {hasTriggeredSearch
-              ? `${resultCount} passende Angebote | ${displayedCount} aktuell sichtbar`
-              : 'Noch keine Suche gestartet | standardmäßig sind keine Händler aktiv'}
+      <View style={styles.flowCard}>
+        <StepHeader
+          step="3. Angebote ansehen"
+          title="Deine Auswahl ist bereit."
+          text="Tippe auf „Angebote anzeigen“. Danach kannst du passende Produkte auf deine Einkaufsliste setzen."
+        />
+        <Pressable
+          style={[styles.fullWidthSearchButton, selectedRetailerCount === 0 || loading ? styles.disabledButton : null]}
+          onPress={() => loadRanking(false)}
+          disabled={selectedRetailerCount === 0 || loading}
+        >
+          <Text style={styles.fullWidthSearchButtonLabel}>
+            {loading ? 'Angebote werden geladen …' : 'Angebote anzeigen'}
           </Text>
-          {quickFilterSummary ? <Text style={styles.quickInfoText}>Aktive Filter: {quickFilterSummary}</Text> : null}
+        </Pressable>
+        <Pressable style={styles.secondaryWideButton} onPress={resetSelection}>
+          <Text style={styles.secondaryWideButtonLabel}>Auswahl zurücksetzen</Text>
+        </Pressable>
+        <View style={styles.quickInfoCard}>
+          <Text style={styles.quickInfoTitle}>Deine Auswahl</Text>
+          <Text style={styles.quickInfoText}>
+            {selectedRetailerCount > 0
+              ? `${selectedRetailerCount} Geschäft${selectedRetailerCount === 1 ? '' : 'e'} ausgewählt`
+              : 'Noch kein Geschäft ausgewählt'}
+            {selectedCategoryCount > 0 ? ` · ${selectedCategoryCount} Kategorie${selectedCategoryCount === 1 ? '' : 'n'}` : ''}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.summaryRow}>
-        <SummaryCard label="Passende Angebote" value={hasTriggeredSearch ? resultCount : '-'} accent />
-        <SummaryCard label="Aktuell sichtbar" value={hasTriggeredSearch ? displayedCount : '-'} />
-        <SummaryCard label="Größte Ersparnis" value={hasTriggeredSearch ? formatCurrency(strongestSaving) : '-'} />
-        <SummaryCard label="Merkliste" value={shoppingListEntries.length} />
-      </View>
+      {hasTriggeredSearch ? (
+        <View style={styles.summaryRow}>
+          <SummaryCard label="Aktuelle Angebote" value={resultCount} accent />
+          <SummaryCard label="Mit Euro-Ersparnis" value={offersWithSavingsCount} />
+          <SummaryCard label="Weitere Aktionspreise" value={actionPriceCount} />
+          <SummaryCard label="Größte Ersparnis" value={formatCurrency(strongestSaving)} />
+        </View>
+      ) : null}
 
       {error ? <Text style={styles.errorBox}>{error}</Text> : null}
     </>
   );
 
   return (
-    <SafeAreaView style={[styles.screen, { paddingTop: androidTopInset, paddingBottom: androidBottomInset }]}>
+    <SafeAreaView style={[styles.screen, { paddingTop: androidTopInset }]}>
       <StatusBar style="dark" />
       <View style={styles.topMenu}>
         <Pressable
-          style={[styles.topMenuButton, activePage === 'search' ? styles.topMenuButtonActive : null]}
-          onPress={() => setActivePage('search')}
+          style={[styles.topMenuButton, activePage === 'offers' ? styles.topMenuButtonActive : null]}
+          onPress={() => setActivePage('offers')}
         >
-          <Text style={[styles.topMenuLabel, activePage === 'search' ? styles.topMenuLabelActive : null]}>
-            Suche
+          <Text style={[styles.topMenuLabel, activePage === 'offers' ? styles.topMenuLabelActive : null]}>
+            Angebote
           </Text>
         </Pressable>
         <Pressable
@@ -1181,41 +1228,37 @@ export default function App() {
           onPress={() => setActivePage('shopping')}
         >
           <Text style={[styles.topMenuLabel, activePage === 'shopping' ? styles.topMenuLabelActive : null]}>
-            Einkaufsliste
+            Einkaufsliste{shoppingListEntries.length > 0 ? ` (${shoppingListEntries.length})` : ''}
           </Text>
         </Pressable>
       </View>
-      {activePage === 'search' ? (
-        <SearchResultsList
-          ranking={visibleRanking}
-          loading={loading}
-          hasSearched={hasTriggeredSearch}
-          refreshing={refreshing}
-          onRefresh={() => hasTriggeredSearch ? loadRanking(true) : null}
-          shoppingListMap={shoppingListMap}
-          onToggleShoppingList={toggleShoppingList}
-          onOpenOfferDetail={setSelectedOffer}
-          hero={searchHeader}
-          selectedRetailerCount={selectedRetailers.length}
-        />
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadRanking(true)} tintColor="#31582c" />}
-        >
-          <View style={styles.heroCard}>
-            <Text style={styles.eyebrow}>kaufgut.at app</Text>
-            <Text style={styles.title}>{APP_NAME}</Text>
-            <Text style={styles.subtitle}>
-              Finde die besten aktuellen Angebote schneller, vergleiche fair und sammle Produkte direkt für deinen Einkauf.
-            </Text>
-          </View>
+
+      <View style={styles.mainArea}>
+        {activePage === 'offers' ? (
+          <SearchResultsList
+            ranking={ranking}
+            loading={loading}
+            hasSearched={hasTriggeredSearch}
+            refreshing={refreshing}
+            onRefresh={() => hasTriggeredSearch ? loadRanking(true) : null}
+            shoppingListMap={shoppingListMap}
+            onToggleShoppingList={toggleShoppingList}
+            onOpenOfferDetail={setSelectedOffer}
+            scrollToResultsKey={scrollToResultsKey}
+            hero={searchHeader}
+            selectedRetailerCount={selectedRetailerCount}
+          />
+        ) : (
           <ShoppingListPage
             shoppingListEntries={shoppingListEntries}
             onRemove={removeFromShoppingList}
+            onBrowse={showOffersTab}
+            onClearList={clearShoppingList}
           />
-        </ScrollView>
-      )}
+        )}
+      </View>
+
+      <FooterLink bottomInset={androidBottomInset} />
 
       <OfferDetailModal
         offer={selectedOffer}
@@ -1231,6 +1274,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f4efe5' },
+  mainArea: { flex: 1 },
   topMenu: {
     flexDirection: 'row',
     gap: 10,
@@ -1250,99 +1294,116 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   topMenuButtonActive: { backgroundColor: '#31582c' },
-  topMenuLabel: { color: '#425040', fontWeight: '700', fontSize: 14 },
+  topMenuLabel: { color: '#425040', fontWeight: '800', fontSize: 14, textAlign: 'center' },
   topMenuLabelActive: { color: '#f8f5ed' },
-  content: { padding: 18, gap: 16, paddingBottom: 40 },
+  content: { padding: 18, gap: 16, paddingBottom: 32 },
   heroCard: {
     backgroundColor: '#12361e',
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 18,
-    gap: 10,
+    gap: 12,
     shadowColor: '#12361e',
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
-  eyebrow: { color: '#a7c88f', textTransform: 'uppercase', letterSpacing: 2, fontSize: 12, fontWeight: '700' },
-  title: { color: '#f8f5ed', fontSize: 32, fontWeight: '800' },
+  eyebrow: { color: '#a7c88f', textTransform: 'uppercase', letterSpacing: 1.5, fontSize: 12, fontWeight: '800' },
+  title: { color: '#f8f5ed', fontSize: 30, lineHeight: 36, fontWeight: '900' },
   subtitle: { color: '#d7e5d6', fontSize: 15, lineHeight: 22 },
-  heroFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  livePill: { backgroundColor: 'rgba(248, 245, 237, 0.14)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
-  livePillActive: { backgroundColor: '#d7efb2' },
-  livePillLabel: { color: '#f8f5ed', fontSize: 12, fontWeight: '700' },
-  livePillLabelActive: { color: '#173118' },
-  heroHint: { color: '#c8d5c7', fontSize: 12, fontWeight: '600' },
-  searchCard: { backgroundColor: '#fffaf2', borderRadius: 24, padding: 16, gap: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
-  searchSectionTitle: { color: '#31582c', fontSize: 16, fontWeight: '800' },
-  actionRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  primaryButton: { flexGrow: 1, backgroundColor: '#31582c', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' },
-  primaryButtonLabel: { color: '#f8f5ed', fontWeight: '700', textAlign: 'center' },
-  secondaryButton: { flexGrow: 1, backgroundColor: '#ece4d7', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center' },
-  secondaryButtonLabel: { color: '#304230', fontWeight: '700', textAlign: 'center' },
-  programPanel: { backgroundColor: '#f3eddc', borderRadius: 16, padding: 12, gap: 8 },
-  programTitle: { color: '#31582c', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
-  programHint: { color: '#566253', fontSize: 12, lineHeight: 17 },
-  programList: { gap: 8 },
-  programRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' },
-  programToggle: { flexGrow: 1, alignItems: 'center', backgroundColor: '#efe8da', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  programToggleActive: { backgroundColor: '#31582c' },
-  programToggleLabel: { color: '#4b5849', fontSize: 12, fontWeight: '800' },
-  programToggleLabelActive: { color: '#f8f5ed' },
-  inlineFilterSection: { gap: 10 },
-  fullWidthSearchButton: { backgroundColor: '#12361e', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
-  fullWidthSearchButtonLabel: { color: '#f8f5ed', fontWeight: '800', fontSize: 15 },
+  benefitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  benefitPill: { backgroundColor: 'rgba(248, 245, 237, 0.14)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+  benefitPillText: { color: '#f8f5ed', fontSize: 12, fontWeight: '800' },
+  flowCard: { backgroundColor: '#fffaf2', borderRadius: 22, padding: 16, gap: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  stepHeader: { gap: 6 },
+  stepNumber: { color: '#31582c', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  stepTextBox: { gap: 4 },
+  stepTitle: { color: '#132014', fontSize: 20, lineHeight: 25, fontWeight: '900' },
+  stepText: { color: '#5d695a', fontSize: 14, lineHeight: 20 },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 999, backgroundColor: '#efe9dc', minHeight: 42, justifyContent: 'center' },
+  chipActive: { backgroundColor: '#31582c' },
+  chipPartial: { backgroundColor: '#dce9ca' },
+  chipLabel: { color: '#475246', fontSize: 13, fontWeight: '800' },
+  chipLabelActive: { color: '#f8f5ed' },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
+  secondaryButton: { flexGrow: 1, backgroundColor: '#ece4d7', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
+  secondaryButtonLabel: { color: '#304230', fontWeight: '800', textAlign: 'center' },
+  secondaryWideButton: { backgroundColor: '#ece4d7', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
+  secondaryWideButtonLabel: { color: '#304230', fontWeight: '800', textAlign: 'center' },
+  fullWidthSearchButton: { backgroundColor: '#12361e', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 15, alignItems: 'center' },
+  fullWidthSearchButtonLabel: { color: '#f8f5ed', fontWeight: '900', fontSize: 15, textAlign: 'center' },
+  disabledButton: { opacity: 0.45 },
+  categoryList: { gap: 10 },
+  categoryCard: { backgroundColor: '#f8f3e8', borderRadius: 18, padding: 10, gap: 8 },
+  subcategoryWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   quickInfoCard: { backgroundColor: '#f3eddc', borderRadius: 16, padding: 12, gap: 4 },
-  quickInfoTitle: { color: '#31582c', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  quickInfoTitle: { color: '#31582c', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   quickInfoText: { color: '#4f594e', fontSize: 13, lineHeight: 18 },
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  summaryCard: { minWidth: 100, flexGrow: 1, backgroundColor: '#fffaf2', borderRadius: 18, padding: 14, gap: 4, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  summaryCard: { minWidth: 132, flexGrow: 1, backgroundColor: '#fffaf2', borderRadius: 18, padding: 14, gap: 4, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
   summaryCardAccent: { backgroundColor: '#e9f6db' },
-  summaryLabel: { color: '#61705f', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
-  summaryValue: { color: '#19301a', fontSize: 20, fontWeight: '800' },
+  summaryLabel: { color: '#61705f', fontSize: 11, lineHeight: 15, fontWeight: '800', textTransform: 'uppercase' },
+  summaryValue: { color: '#19301a', fontSize: 20, fontWeight: '900' },
+  summaryHint: { color: '#667064', fontSize: 12, lineHeight: 16 },
   errorBox: { color: '#8b2424', backgroundColor: '#fdeeee', borderRadius: 16, padding: 14, fontSize: 14 },
   loadingBox: { alignItems: 'center', gap: 10, paddingVertical: 32 },
   loadingText: { color: '#5e685d' },
-  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  groupHeaderText: { flex: 1, gap: 2 },
-  groupTitle: { color: '#132014', fontSize: 18, fontWeight: '800' },
-  groupSubtitle: { color: '#5e685d', fontSize: 13, marginTop: 3 },
-  groupCount: { minWidth: 36, textAlign: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: '#e1edd3', color: '#244320', fontWeight: '800' },
+  emptyState: { backgroundColor: '#fffaf2', borderRadius: 22, padding: 20, gap: 10, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  emptyTitle: { color: '#152315', fontSize: 19, lineHeight: 24, fontWeight: '900' },
+  emptyText: { color: '#59635a', fontSize: 14, lineHeight: 20 },
+  resultsIntro: { gap: 12 },
+  resultsTitle: { color: '#132014', fontSize: 24, lineHeight: 30, fontWeight: '900' },
+  resultsText: { color: '#5d695a', fontSize: 14, lineHeight: 20 },
+  resultSummaryBox: { backgroundColor: '#e9f6db', borderRadius: 16, padding: 12, gap: 4 },
+  resultSummaryText: { color: '#244320', fontSize: 14, lineHeight: 20, fontWeight: '800' },
+  noteBox: { backgroundColor: '#fff6dd', borderRadius: 16, padding: 13, gap: 5, borderWidth: 1, borderColor: '#ead49a' },
+  noteBoxCompact: { padding: 12 },
+  noteTitle: { color: '#7c520c', fontSize: 13, fontWeight: '900' },
+  noteText: { color: '#7c520c', fontSize: 13, lineHeight: 19 },
+  resultSectionHeader: { backgroundColor: '#f4efe5', paddingTop: 6, paddingBottom: 4, gap: 3 },
+  resultSectionTitle: { color: '#132014', fontSize: 18, lineHeight: 24, fontWeight: '900' },
+  resultSectionSubtitle: { color: '#5e685d', fontSize: 13, lineHeight: 18 },
   offerCard: { flexDirection: 'row', gap: 10, backgroundColor: '#fffaf2', borderRadius: 20, padding: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
   offerCardCompact: { flexDirection: 'column' },
-  offerCardBest: { backgroundColor: '#edf7df' },
-  offerImage: { width: 80, height: 80, borderRadius: 14, backgroundColor: '#fff' },
-  offerImageCompact: { width: '100%', height: 132 },
-  offerImageFallback: { width: 80, height: 80, borderRadius: 14, backgroundColor: '#dfe9d5', alignItems: 'center', justifyContent: 'center', padding: 8 },
-  offerImageFallbackCompact: { width: '100%', height: 132 },
-  offerImageFallbackText: { color: '#31582c', fontSize: 12, fontWeight: '800', textAlign: 'center' },
-  offerBody: { flex: 1, gap: 6 },
-  offerTopRow: { gap: 3 },
+  offerImage: { width: 82, height: 82, borderRadius: 14, backgroundColor: '#fff' },
+  offerImageCompact: { width: '100%', height: 136 },
+  offerImageFallback: { width: 82, height: 82, borderRadius: 14, backgroundColor: '#dfe9d5', alignItems: 'center', justifyContent: 'center', padding: 8 },
+  offerImageFallbackCompact: { width: '100%', height: 136 },
+  offerImageFallbackText: { color: '#31582c', fontSize: 12, fontWeight: '900', textAlign: 'center' },
+  offerBody: { flex: 1, gap: 7 },
+  offerTopRow: { gap: 4 },
   offerBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   rankBadge: { backgroundColor: '#e3dccd', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
-  rankBadgeLabel: { color: '#425040', fontSize: 11, fontWeight: '800' },
-  retailerBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  retailerBadgeLabel: { color: '#ffffff', fontSize: 11, fontWeight: '800' },
-  offerEyebrow: { color: '#5d695a', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  offerCategory: { color: '#31582c', fontSize: 12, fontWeight: '700' },
-  offerTitle: { color: '#152315', fontSize: 16, lineHeight: 22, fontWeight: '700' },
-  offerCondition: { color: '#98620a', fontSize: 13, fontWeight: '700' },
-  offerPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  offerPriceRowCompact: { alignItems: 'stretch', flexWrap: 'wrap' },
-  offerPriceBox: { gap: 2 },
-  offerPrice: { color: '#173118', fontSize: 20, fontWeight: '800' },
+  rankBadgeLabel: { color: '#425040', fontSize: 11, fontWeight: '900' },
+  retailerBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  retailerBadgeLabel: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
+  softBadge: { backgroundColor: '#e7f0da', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  softBadgeLabel: { color: '#31582c', fontSize: 11, fontWeight: '900' },
+  offerCategory: { color: '#31582c', fontSize: 12, fontWeight: '800' },
+  offerTitle: { color: '#152315', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  offerPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  offerPriceRowCompact: { flexWrap: 'wrap' },
+  offerPriceBox: { gap: 2, flexShrink: 1 },
+  offerPrice: { color: '#173118', fontSize: 22, fontWeight: '900' },
+  offerPriceSmall: { color: '#173118', fontSize: 18, fontWeight: '900' },
   offerMeta: { color: '#59635a', fontSize: 13 },
   metaWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   metaPill: { backgroundColor: '#efe8da', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   metaPillWide: { backgroundColor: '#e7f0da', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  metaPillLabel: { color: '#59635a', fontSize: 12, fontWeight: '600' },
-  savingsBox: { alignItems: 'flex-end', backgroundColor: '#fffaf2', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, minWidth: 94 },
-  savingsBoxCompact: { alignItems: 'flex-start', minWidth: 140 },
-  savingsLabel: { color: '#5d695a', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  savingsValue: { color: '#173118', fontSize: 15, fontWeight: '800' },
+  metaPillLabel: { color: '#59635a', fontSize: 12, fontWeight: '700' },
+  conditionPill: { backgroundColor: '#fff0cf', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  conditionPillLabel: { color: '#80520a', fontSize: 12, fontWeight: '800' },
+  savingsBox: { alignItems: 'flex-start', backgroundColor: '#e9f6db', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, maxWidth: 190, gap: 2 },
+  savingsBoxCompact: { maxWidth: '100%', alignSelf: 'stretch' },
+  savingsValue: { color: '#173118', fontSize: 14, fontWeight: '900' },
+  savingsDescription: { color: '#4d5a4b', fontSize: 11, lineHeight: 15 },
+  actionPriceBox: { alignItems: 'flex-start', backgroundColor: '#fff6dd', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, maxWidth: 210, gap: 2, borderWidth: 1, borderColor: '#ead49a' },
+  actionPriceTitle: { color: '#80520a', fontSize: 14, fontWeight: '900' },
+  actionPriceText: { color: '#80520a', fontSize: 11, lineHeight: 15 },
   shoppingToggle: { marginTop: 4, alignSelf: 'flex-start', backgroundColor: '#ece4d7', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 999 },
   shoppingToggleActive: { backgroundColor: '#31582c' },
-  shoppingToggleLabel: { color: '#304230', fontSize: 13, fontWeight: '700' },
+  shoppingToggleLabel: { color: '#304230', fontSize: 13, fontWeight: '800' },
   shoppingToggleLabelActive: { color: '#f8f5ed' },
   detailOverlay: { flex: 1, backgroundColor: 'rgba(18, 28, 18, 0.45)', justifyContent: 'flex-end' },
   detailSheet: { maxHeight: '88%', backgroundColor: '#f4efe5', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
@@ -1350,55 +1411,54 @@ const styles = StyleSheet.create({
   detailImage: { width: '100%', height: 180, borderRadius: 18, backgroundColor: '#fff' },
   detailImageFallback: { width: '100%', height: 180, borderRadius: 18, backgroundColor: '#dfe9d5', alignItems: 'center', justifyContent: 'center', padding: 12 },
   detailHeader: { gap: 8 },
-  detailTitle: { color: '#132014', fontSize: 22, lineHeight: 28, fontWeight: '800' },
-  detailNotice: { backgroundColor: '#fff6dd', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#ead49a' },
-  detailNoticeText: { color: '#80520a', fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  detailTitle: { color: '#132014', fontSize: 22, lineHeight: 28, fontWeight: '900' },
   detailSection: { backgroundColor: '#fffaf2', borderRadius: 18, padding: 14, gap: 10, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
-  detailSectionTitle: { color: '#31582c', fontSize: 15, fontWeight: '800' },
+  detailSectionTitle: { color: '#31582c', fontSize: 15, fontWeight: '900' },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start' },
-  detailLabel: { flex: 1, color: '#657063', fontSize: 13, fontWeight: '700' },
+  detailLabel: { flex: 1, color: '#657063', fontSize: 13, fontWeight: '800' },
   detailValue: { flex: 1.35, color: '#182518', fontSize: 14, lineHeight: 20, textAlign: 'right' },
-  detailValueStrong: { fontSize: 18, lineHeight: 24, fontWeight: '800', color: '#173118' },
+  detailValueStrong: { fontSize: 18, lineHeight: 24, fontWeight: '900', color: '#173118' },
   detailFooter: { flexDirection: 'row', gap: 10, padding: 18, paddingTop: 12, backgroundColor: '#f4efe5', borderTopWidth: 1, borderTopColor: 'rgba(19, 32, 20, 0.08)' },
   detailPrimaryButton: { flex: 1.5, backgroundColor: '#31582c', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, alignItems: 'center' },
-  detailDangerButton: { backgroundColor: '#7b3535' },
-  detailPrimaryButtonLabel: { color: '#f8f5ed', fontWeight: '800', textAlign: 'center' },
+  detailMutedButton: { backgroundColor: '#7b3535' },
+  detailPrimaryButtonLabel: { color: '#f8f5ed', fontWeight: '900', textAlign: 'center' },
   detailSecondaryButton: { flex: 1, backgroundColor: '#ece4d7', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, alignItems: 'center' },
-  detailSecondaryButtonLabel: { color: '#304230', fontWeight: '800', textAlign: 'center' },
-  shoppingHero: { backgroundColor: '#fffaf2', borderRadius: 24, padding: 16, gap: 6, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
-  shoppingHeroTitle: { color: '#132014', fontSize: 20, fontWeight: '800' },
+  detailSecondaryButtonLabel: { color: '#304230', fontWeight: '900', textAlign: 'center' },
+  shoppingHero: { backgroundColor: '#fffaf2', borderRadius: 22, padding: 16, gap: 6, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  shoppingHeroTitle: { color: '#132014', fontSize: 22, lineHeight: 28, fontWeight: '900' },
   shoppingHeroText: { color: '#5f685e', fontSize: 14, lineHeight: 20 },
-  sectionTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'center' },
-  sectionTitle: { color: '#142214', fontSize: 18, fontWeight: '800' },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, backgroundColor: '#efe9dc' },
-  chipActive: { backgroundColor: '#31582c' },
-  chipPartial: { backgroundColor: '#dce9ca' },
-  chipLabel: { color: '#475246', fontSize: 13, fontWeight: '700' },
-  chipLabelActive: { color: '#f8f5ed' },
-  resetButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: '#f1ebdf' },
-  resetButtonLabel: { color: '#31582c', fontSize: 13, fontWeight: '700' },
-  categoryCard: { backgroundColor: '#f8f3e8', borderRadius: 18, padding: 10, gap: 8 },
-  linkButton: { paddingHorizontal: 6, paddingVertical: 4 },
-  linkButtonLabel: { color: '#31582c', fontSize: 13, fontWeight: '700' },
-  listItemCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8f3e8', borderRadius: 18, padding: 12 },
-  listItemCardCompact: { flexWrap: 'wrap', alignItems: 'flex-start' },
+  shoppingHint: { color: '#7c520c', backgroundColor: '#fff6dd', borderRadius: 14, padding: 12, fontSize: 13, lineHeight: 18, fontWeight: '800' },
+  groupCard: { backgroundColor: '#fffaf2', borderRadius: 20, padding: 14, gap: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  groupHeaderText: { flex: 1, gap: 2 },
+  groupTitle: { color: '#132014', fontSize: 18, fontWeight: '900' },
+  groupSubtitle: { color: '#5e685d', fontSize: 13, marginTop: 3 },
+  groupCount: { minWidth: 36, textAlign: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: '#e1edd3', color: '#244320', fontWeight: '900' },
+  listItemCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#f8f3e8', borderRadius: 18, padding: 12 },
+  listItemCardCompact: { flexWrap: 'wrap' },
   listItemImage: { width: 72, height: 72, borderRadius: 12, backgroundColor: '#fff' },
   listItemImageCompact: { width: 64, height: 64 },
   listItemImageFallback: { width: 72, height: 72, borderRadius: 12, backgroundColor: '#dfe9d5', alignItems: 'center', justifyContent: 'center', padding: 8 },
   listItemImageFallbackCompact: { width: 64, height: 64 },
-  listItemImageFallbackText: { color: '#31582c', fontSize: 11, fontWeight: '800', textAlign: 'center' },
-  listItemBody: { flex: 1, gap: 4 },
-  listItemTitle: { color: '#152315', fontSize: 15, lineHeight: 20, fontWeight: '700' },
+  listItemImageFallbackText: { color: '#31582c', fontSize: 11, fontWeight: '900', textAlign: 'center' },
+  listItemBody: { flex: 1, gap: 5 },
+  listItemTitle: { color: '#152315', fontSize: 15, lineHeight: 20, fontWeight: '800' },
   removeButton: { backgroundColor: '#efe5da', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, alignSelf: 'flex-start' },
-  removeButtonLabel: { color: '#7b3535', fontSize: 12, fontWeight: '700', textAlign: 'center' },
-  totalSavingsCard: { backgroundColor: '#12361e', borderRadius: 24, padding: 18, gap: 6 },
-  totalSavingsLabel: { color: '#c1dfaf', textTransform: 'uppercase', letterSpacing: 1.5, fontSize: 12, fontWeight: '700' },
-  totalSavingsValue: { color: '#f8f5ed', fontSize: 30, fontWeight: '800' },
-  totalSavingsHint: { color: '#d7e5d6', fontSize: 14 },
+  removeButtonLabel: { color: '#7b3535', fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  shoppingActions: { gap: 10 },
   resultGroupList: { gap: 16 },
   sectionSpacer: { height: 16 },
-  emptyState: { backgroundColor: '#fffaf2', borderRadius: 24, padding: 22, gap: 8, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
-  emptyTitle: { color: '#152315', fontSize: 18, fontWeight: '800' },
-  emptyText: { color: '#59635a', fontSize: 14, lineHeight: 20 },
+  footerLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fffaf2',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(19, 32, 20, 0.08)',
+    paddingTop: 8,
+    paddingHorizontal: 12,
+  },
+  footerText: { color: '#6a7467', fontSize: 11, lineHeight: 16 },
+  footerLink: { color: '#31582c', fontSize: 11, lineHeight: 16, fontWeight: '900', textDecorationLine: 'underline' },
 });

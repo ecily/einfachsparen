@@ -9,7 +9,7 @@ const CATEGORY_TAXONOMY = [
       { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast)/] },
       { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|rind|schwein)/] },
       { label: 'Milchprodukte', patterns: [/(milch|butter|joghurt|topfen|sahne|rahm|quark)/] },
-      { label: 'Kaese', patterns: [/(kase|kaese|mozzarella|emmentaler|gouda|camembert|parmesan)/] },
+      { label: 'Kaese', patterns: [/(kase|kaese|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|frischkaese|schnittkaese)/] },
       { label: 'Tiefkuehl- & Fertigprodukte', patterns: [/(tiefkuhl|tiefkuehl|pizza|fertig|mikrowelle|tk|frost|lasagne|pommes)/] },
       { label: 'Suesswaren & Knabbereien', patterns: [/(schokolade|susswaren|suesswaren|knabberei|chips|kekse|bonbon|praline|snack|nusse|nuesse)/] },
       { label: 'Pasta, Reis & Konserven', patterns: [/(nudel|pasta|reis|konserve|dose|dosen|bohnen|linsen|kichererbse|passata)/] },
@@ -27,7 +27,7 @@ const CATEGORY_TAXONOMY = [
       { label: 'Bier', patterns: [/(bier|pils|weizen|radler)/] },
       { label: 'Wein & Sekt', patterns: [/(wein|rotwein|weisswein|rose|sekt|prosecco|champagner)/] },
       { label: 'Spirituosen', patterns: [/(whisky|rum|gin|vodka|likor|likoer|spirituose|schnaps)/] },
-      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha)/] },
+      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha|bohne|kaffeekapsel|kapseln)/] },
       { label: 'Milchgetraenke', patterns: [/(kakao|milchdrink|milchgetrank|joghurtdrink|proteindrink)/] },
     ],
   },
@@ -50,11 +50,12 @@ const CATEGORY_TAXONOMY = [
     main: 'Haushalt',
     patterns: [/(haushalt|wohnen|reinigen|putzen)/],
     subcategories: [
-      { label: 'Waschmittel & Reiniger', patterns: [/(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|geschirrspul|spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|waschcaps|tabs)/] },
+      { label: 'Waschmittel & Reiniger', patterns: [/(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|geschirrspul|spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|waschcaps|tabs|vollwaschmittel|colorwaschmittel)/] },
       { label: 'Kuechenhelfer', patterns: [/(geschirr|pfanne|topf|besteck|messer|kochen|kueche|kuche)/] },
       { label: 'Aufbewahrung & Folien', patterns: [/(folie|frischhalte|alu|beutel|aufbewahrung|dose|box)/] },
       { label: 'Deko & Wohnen', patterns: [/(deko|kerze|vase|kissen|wohnen)/] },
       { label: 'Papier & Buero', patterns: [/(papier|buero|buro|ordner|heft|stift|druckerpapier)/] },
+      { label: 'Papierwaren', patterns: [/(toilettenpapier|kuechenrolle|kuchenrolle|serviette|taschentuecher|taschentucher)/] },
     ],
   },
   {
@@ -360,6 +361,39 @@ function determineOfferSubcategory({ primaryCategory = '', sourceCategory = '', 
   return '';
 }
 
+function determineCategoryDecision({ title = '', contextText = '', sourceCategory = '', productGroups = [] }) {
+  const classified = classifyOfferCategory({
+    title,
+    contextText,
+    sourceCategory,
+    productGroups,
+  });
+  const secondaryCategory = determineOfferSubcategory({
+    primaryCategory: classified.primaryCategory,
+    sourceCategory,
+    fallbackLabel: classified.secondaryCategory,
+    title,
+    contextText,
+    productGroups,
+  });
+  const hasSubcategory = Boolean(secondaryCategory);
+  const secondaryConfidence = hasSubcategory
+    ? Math.max(0.45, Math.min(0.95, classified.confidence - 0.04))
+    : Math.min(0.35, classified.confidence);
+
+  return {
+    primaryCategory: classified.primaryCategory,
+    secondaryCategory,
+    categoryConfidence: classified.confidence,
+    subcategoryConfidence: secondaryConfidence,
+    needsReview: classified.confidence < 0.5 || !hasSubcategory,
+    reviewReasons: [
+      classified.confidence < 0.5 ? 'category-low-confidence' : '',
+      !hasSubcategory ? 'subcategory-low-confidence' : '',
+    ].filter(Boolean),
+  };
+}
+
 function buildInclusiveScopeDecision() {
   return {
     included: true,
@@ -370,6 +404,7 @@ function buildInclusiveScopeDecision() {
 module.exports = {
   CATEGORY_TAXONOMY,
   classifyOfferCategory,
+  determineCategoryDecision,
   determineOfferCategory,
   determineOfferSubcategory,
   buildInclusiveScopeDecision,

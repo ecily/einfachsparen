@@ -32,6 +32,19 @@ const sourceEvidenceSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const seenInSourceSchema = new mongoose.Schema(
+  {
+    sourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Source', default: null },
+    sourceType: { type: String, default: '' },
+    channel: { type: String, default: '' },
+    sourceUrl: { type: String, default: '' },
+    observedUrl: { type: String, default: '' },
+    firstSeenAt: { type: Date, default: Date.now },
+    lastSeenAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const offerSchema = new mongoose.Schema(
   {
     crawlJobId: { type: mongoose.Schema.Types.ObjectId, ref: 'CrawlJob', required: true, index: true },
@@ -48,12 +61,22 @@ const offerSchema = new mongoose.Schema(
     categoryPrimary: { type: String, default: 'Unkategorisiert', index: true },
     categorySecondary: { type: String, default: '' },
     categoryKey: { type: String, default: 'unkategorisiert', index: true },
+    subcategoryKey: { type: String, default: '', index: true },
+    categoryConfidence: { type: Number, default: 0 },
+    subcategoryConfidence: { type: Number, default: 0 },
     comparisonSignature: { type: String, default: '', index: true },
     comparisonQuantityKey: { type: String, default: '', index: true },
     comparisonCategoryKey: { type: String, default: '', index: true },
     comparisonGroup: { type: String, default: '', index: true },
     description: { type: String, default: '' },
     sourceUrl: { type: String, required: true },
+    sourceType: { type: String, default: '', index: true },
+    sourceUrls: { type: [String], default: [] },
+    evidenceUrls: { type: [String], default: [] },
+    sourceTypes: { type: [String], default: [] },
+    seenInSources: { type: [seenInSourceSchema], default: [] },
+    sourceConfidence: { type: Number, default: 0 },
+    extractionConfidence: { type: Number, default: 0 },
     imageUrl: { type: String, default: '' },
     supportingSources: { type: [sourceEvidenceSchema], default: [] },
     validFrom: { type: Date, default: null, index: true },
@@ -68,7 +91,7 @@ const offerSchema = new mongoose.Schema(
     isActiveToday: { type: Boolean, default: false, index: true },
     benefitType: {
       type: String,
-      enum: ['price-cut', 'multi-buy', 'card-required', 'sticker', 'unknown'],
+      enum: ['price-cut', 'multi-buy', 'card-required', 'conditional-price', 'sticker', 'unknown'],
       default: 'unknown',
     },
     effectiveDiscountType: {
@@ -85,6 +108,19 @@ const offerSchema = new mongoose.Schema(
     availabilityScope: { type: String, default: 'Steiermark / Graz Umgebung' },
     priceCurrent: { type: priceSchema, default: () => ({}) },
     priceReference: { type: priceSchema, default: () => ({}) },
+    priceReferenceSource: { type: String, default: '' },
+    priceReferenceConfidence: { type: Number, default: 0 },
+    savingsDisplayType: {
+      type: String,
+      enum: ['prospect-saving', 'estimated-reference-price', 'action-price-only', 'unknown'],
+      default: 'unknown',
+      index: true,
+    },
+    savingsConfidence: { type: Number, default: 0 },
+    hasReferencePrice: { type: Boolean, default: false, index: true },
+    hasProspectNormalPrice: { type: Boolean, default: false, index: true },
+    hasEstimatedReferencePrice: { type: Boolean, default: false },
+    isActionPriceOnly: { type: Boolean, default: false, index: true },
     quantityText: { type: String, default: '' },
     packCount: { type: Number, default: null },
     unitValue: { type: Number, default: null },
@@ -103,6 +139,10 @@ const offerSchema = new mongoose.Schema(
       issues: [{ type: String }],
     },
     rawFacts: { type: mongoose.Schema.Types.Mixed, default: {} },
+    firstSeenAt: { type: Date, default: Date.now, index: true },
+    lastSeenAt: { type: Date, default: Date.now, index: true },
+    needsReview: { type: Boolean, default: false, index: true },
+    reviewReasons: [{ type: String }],
     adminReview: {
       status: {
         type: String,

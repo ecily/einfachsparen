@@ -102,7 +102,13 @@ function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts
 
 function computeOfferSavings(offer = {}) {
   const priceCurrentAmount = parseNumericAmount(offer?.priceCurrent?.amount);
-  const explicitReferenceAmount = parseNumericAmount(offer?.priceReference?.amount);
+  const referenceLooksEstimated =
+    offer?.savingsDisplayType === 'estimated-reference-price'
+    || offer?.hasEstimatedReferencePrice === true
+    || /estimated|history|historisch|product-search|produktseite|reference/i.test(String(offer?.priceReferenceSource || ''));
+  const explicitReferenceAmount = referenceLooksEstimated
+    ? null
+    : parseNumericAmount(offer?.priceReference?.amount);
   const discountPercentage =
     parseNumericAmount(offer?.rawFacts?.discountPercentage)
     || parseNumericAmount(offer?.discountPercentage);

@@ -1,7 +1,7 @@
 const { buildSourceEvidence, sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
 const {
-  determineOfferCategory,
   determineOfferSubcategory,
+  determineCategoryDecision,
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
@@ -498,12 +498,13 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   const comparableBase = buildComparableBase(product);
   const priceReferenceAmount = parseNumericAmount(promotion.originalPrice ?? promotion.oldPrice);
   const normalizedUnitPrice = buildNormalizedUnitPrice(promotion);
-  const categoryPrimary = determineOfferCategory({
+  const categoryDecision = determineCategoryDecision({
     title: promotion.title,
     contextText: promotion.description || '',
     sourceCategory: productGroups[0]?.title || '',
     productGroups,
   });
+  const categoryPrimary = categoryDecision.primaryCategory;
   const scopeDecision = buildInclusiveScopeDecision();
   const quantityText = buildQuantityText(product);
   const conditionsText = buildConditionsText(promotion);
@@ -514,7 +515,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     brand: product.brand?.name || '',
   });
   const issues = [];
-  const comparisonCategory = determineOfferSubcategory({
+  const comparisonCategory = categoryDecision.secondaryCategory || determineOfferSubcategory({
     primaryCategory: categoryPrimary,
     sourceCategory: productGroups[0]?.title || '',
     fallbackLabel: categoryPrimary,
@@ -573,6 +574,10 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     issues.push('Angebot erfordert Kundenprogramm oder App');
   }
 
+  if (categoryDecision.needsReview) {
+    issues.push(...categoryDecision.reviewReasons);
+  }
+
   const completenessBase = [
     priceCurrentAmount,
     promotion.validFrom,
@@ -608,6 +613,8 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     categoryPrimary,
     categorySecondary: comparisonCategory,
     categoryKey,
+    categoryConfidence: categoryDecision.categoryConfidence,
+    subcategoryConfidence: categoryDecision.subcategoryConfidence,
     quantityText,
     conditionsText,
   });
@@ -693,6 +700,8 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
       currency: promotion.currency?.iso || 'EUR',
       originalText: priceReferenceAmount ? `${priceReferenceAmount} ${promotion.currency?.symbol || 'EUR'}` : '',
     },
+    priceReferenceSource: priceReferenceAmount ? 'prospect' : '',
+    priceReferenceConfidence: priceReferenceAmount ? 0.95 : 0,
     quantityText,
     packCount: structuredQuantityFields.packCount,
     unitValue: structuredQuantityFields.unitValue,
@@ -719,8 +728,12 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
         validityText,
         conditionsText,
       }),
+      categoryConfidence: categoryDecision.categoryConfidence,
+      subcategoryConfidence: categoryDecision.subcategoryConfidence,
       snapshotCurrent: false,
     },
+    needsReview: issues.length > 0,
+    reviewReasons: issues,
     adminReview: {
       status: issues.length > 0 ? 'pending' : 'reviewed',
       note: '',

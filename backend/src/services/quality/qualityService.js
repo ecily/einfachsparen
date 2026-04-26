@@ -1,6 +1,7 @@
 const Offer = require('../../models/Offer');
 const ManualCategoryOverride = require('../../models/ManualCategoryOverride');
 const Retailer = require('../../models/Retailer');
+const CrawlJob = require('../../models/CrawlJob');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 
@@ -45,9 +46,9 @@ async function buildQualitySnapshot({
     ];
   }
 
-  const [offers, retailers, categoryList, overrides] = await Promise.all([
+  const [offers, retailers, categoryList, overrides, crawlCoverage, rejectionReasons, sourceTypeCounts, normalPriceStats] = await Promise.all([
     Offer.find(match)
-      .select('retailerKey retailerName title titleNormalized categoryPrimary categorySecondary status isActiveNow validFrom validTo quality updatedAt createdAt')
+      .select('retailerKey retailerName title titleNormalized categoryPrimary categorySecondary categoryConfidence subcategoryConfidence status isActiveNow validFrom validTo quality savingsDisplayType hasProspectNormalPrice hasEstimatedReferencePrice isActionPriceOnly needsReview reviewReasons sourceType updatedAt createdAt')
       .sort({ updatedAt: -1 })
       .limit(Math.max(safeLimit * 4, 400))
       .lean(),
@@ -68,6 +69,59 @@ async function buildQualitySnapshot({
     ManualCategoryOverride.find({ active: true })
       .sort({ updatedAt: -1 })
       .lean(),
+    CrawlJob.aggregate([
+      { $sort: { startedAt: -1 } },
+      { $limit: 250 },
+      {
+        $group: {
+          _id: {
+            retailerKey: '$retailerKey',
+            sourceType: '$sourceType',
+            status: '$status',
+          },
+          runs: { $sum: 1 },
+          foundRawItems: { $sum: '$stats.foundRawItems' },
+          parsedOffers: { $sum: '$stats.parsedOffers' },
+          productiveOffers: { $sum: '$stats.productiveOffers' },
+          rejectedOffers: { $sum: '$stats.rejectedOffers' },
+          lastRunAt: { $max: '$startedAt' },
+        },
+      },
+      { $sort: { '_id.retailerKey': 1, productiveOffers: -1 } },
+    ]),
+    CrawlJob.aggregate([
+      { $sort: { startedAt: -1 } },
+      { $limit: 250 },
+      { $unwind: '$rejectionReasons' },
+      {
+        $group: {
+          _id: '$rejectionReasons.reason',
+          count: { $sum: '$rejectionReasons.count' },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 25 },
+    ]),
+    Offer.aggregate([
+      {
+        $group: {
+          _id: '$sourceType',
+          offerCount: { $sum: 1 },
+          activeOfferCount: { $sum: { $cond: ['$isActiveNow', 1, 0] } },
+        },
+      },
+      { $sort: { activeOfferCount: -1 } },
+    ]),
+    Offer.aggregate([
+      {
+        $group: {
+          _id: '$savingsDisplayType',
+          offerCount: { $sum: 1 },
+          activeOfferCount: { $sum: { $cond: ['$isActiveNow', 1, 0] } },
+        },
+      },
+      { $sort: { activeOfferCount: -1 } },
+    ]),
   ]);
 
   const subcategoryMap = new Map();
@@ -210,6 +264,31 @@ async function buildQualitySnapshot({
       articleSubcategory: articleOverrides,
       articleIgnore: articleIgnoreOverrides,
     },
+    crawlCoverage: crawlCoverage.map((item) => ({
+      retailerKey: item._id?.retailerKey || '',
+      sourceType: item._id?.sourceType || '',
+      status: item._id?.status || '',
+      runs: item.runs || 0,
+      foundRawItems: item.foundRawItems || 0,
+      parsedOffers: item.parsedOffers || 0,
+      productiveOffers: item.productiveOffers || 0,
+      rejectedOffers: item.rejectedOffers || 0,
+      lastRunAt: item.lastRunAt || null,
+    })),
+    rejectionReasons: rejectionReasons.map((item) => ({
+      reason: item._id || '',
+      count: item.count || 0,
+    })),
+    sourceTypeCounts: sourceTypeCounts.map((item) => ({
+      sourceType: item._id || '',
+      offerCount: item.offerCount || 0,
+      activeOfferCount: item.activeOfferCount || 0,
+    })),
+    normalPriceStats: normalPriceStats.map((item) => ({
+      savingsDisplayType: item._id || 'unknown',
+      offerCount: item.offerCount || 0,
+      activeOfferCount: item.activeOfferCount || 0,
+    })),
   };
 }
 

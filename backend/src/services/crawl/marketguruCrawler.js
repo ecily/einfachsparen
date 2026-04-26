@@ -15,8 +15,11 @@ const {
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
+const { enrichOffersForStorage } = require('./offerAuditEnrichment');
+const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
 
 let cachedClientKey = '';
+const PARSER_VERSION = 'marktguru-v3-coverage';
 
 function createHash(value) {
   return require('node:crypto').createHash('sha256').update(String(value || '')).digest('hex');
@@ -676,6 +679,7 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
     });
 
     const html = String(response.data);
+    const httpLog = buildHttpLogFromResponse(response, html);
     const $ = cheerio.load(html);
     const embeddedPayload = extractEmbeddedPayload(html);
     const embeddedOffers = embeddedPayload?.data?.offers?.results || [];
@@ -699,9 +703,14 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
       retailerKey: source.retailerKey,
       region,
       documentType: 'html',
+      sourceType: source.sourceType || source.channel,
       url: source.sourceUrl,
       canonicalUrl: response.request?.res?.responseUrl || source.sourceUrl,
+      finalUrl: response.request?.res?.responseUrl || source.sourceUrl,
       title,
+      httpStatus: response.status,
+      contentType: response.headers?.['content-type'] || '',
+      downloadBytes: httpLog.downloadBytes,
       contentHash: createHash(html),
       contentSnippet: sanitizeWhitespace($('body').text()).slice(0, 500),
       extractedPreview: embeddedOffers.length > 0
@@ -714,6 +723,8 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
           .map((index, element) => sanitizeWhitespace($(element).text()))
           .get()
           .filter(Boolean),
+      foundRawItems: apiOffers.length || embeddedOffers.length || $('.offer-list-item').length,
+      parserVersion: PARSER_VERSION,
       payload: {
         retailerName: source.retailerName,
         offerPreviewCount: $('.offer-list-item').length,
@@ -752,23 +763,29 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
           crawlJobId: crawlJob._id,
           region,
         });
-    const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
+    const rawCandidateCount = apiOffers.length || embeddedOffers.length || $('.offer-list-item').length;
+    const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+      source,
+      sourceType: apiOffers.length > 0 ? 'marketguru-json-api' : embeddedOffers.length > 0 ? 'marketguru-embedded-json' : 'marketguru-html',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    });
 
     if (offerDocuments.length > 0) {
       await Offer.insertMany(offerDocuments, { ordered: false });
     }
 
-    await CrawlJob.findByIdAndUpdate(crawlJob._id, {
+    await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
       status: offerDocuments.length > 0 ? 'success' : 'partial',
-      finishedAt: new Date(),
-      stats: {
-        discoveredPages: 1,
-        rawDocuments: 1,
-        offersExtracted: normalizedOffers.length,
-        offersStored: offerDocuments.length,
-        warnings: offerDocuments.filter((offer) => offer.quality.issues.length > 0).length,
-        errors: 0,
-      },
+      discoveredPages: 1,
+      rawDocuments: 1,
+      rawCandidateCount,
+      offers: offerDocuments,
+      source,
+      sourceType: 'aggregator',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+      httpLog,
       warningMessages: [],
       errorMessages: [],
       metadata: {
@@ -778,7 +795,7 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
         retailerSlug,
         apiOfferCount: apiOffers.length,
       },
-    });
+    }));
 
     await Source.findByIdAndUpdate(source._id, {
       latestRunAt: new Date(),
@@ -798,7 +815,15 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
       status: 'failed',
       finishedAt: new Date(),
+      sourceType: source.sourceType || source.channel || '',
+      sourceUrl: source.sourceUrl,
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
       stats: {
+        foundRawItems: 0,
+        parsedOffers: 0,
+        productiveOffers: 0,
+        rejectedOffers: 0,
         discoveredPages: 1,
         rawDocuments: 0,
         offersExtracted: 0,

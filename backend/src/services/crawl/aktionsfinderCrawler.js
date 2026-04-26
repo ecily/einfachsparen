@@ -13,6 +13,10 @@ const {
 const { normalizePromotionToOffer } = require('./offerNormalizer');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
+const { enrichOffersForStorage } = require('./offerAuditEnrichment');
+const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+
+const PARSER_VERSION = 'aktionsfinder-v3-coverage';
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -336,6 +340,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     });
 
     const html = String(response.data);
+    const httpLog = buildHttpLogFromResponse(response, html);
     const recordStrings = getScriptPushStrings(html);
     const sections = extractSections(recordStrings, source.retailerName);
     const basePromotions = extractAllPromotions(recordStrings, sections);
@@ -388,12 +393,19 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       retailerKey: source.retailerKey,
       region,
       documentType: 'html',
+      sourceType: source.sourceType || source.channel,
       url: source.sourceUrl,
       canonicalUrl: response.request?.res?.responseUrl || source.sourceUrl,
+      finalUrl: response.request?.res?.responseUrl || source.sourceUrl,
       title: sections.popular?.title || source.label,
+      httpStatus: response.status,
+      contentType: response.headers?.['content-type'] || '',
+      downloadBytes: httpLog.downloadBytes,
       contentHash: digest.contentHash,
       contentSnippet: digest.contentSnippet,
       extractedPreview: promotions.slice(0, 5).map((promotion) => promotion.title).filter(Boolean),
+      foundRawItems: promotions.length,
+      parserVersion: PARSER_VERSION,
       payload: {
         promotionCount: promotions.length,
         categoryPageCount: categoryPageLinks.length,
@@ -422,7 +434,12 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         })
       )
       .filter(Boolean);
-    const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
+    const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+      source,
+      sourceType: 'aktionsfinder-json',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    });
 
     if (offerDocuments.length > 0) {
       await Offer.insertMany(offerDocuments, { ordered: false });
@@ -436,17 +453,17 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       categoryPagePromotions: categoryPagePromotions.length,
     });
 
-    await CrawlJob.findByIdAndUpdate(crawlJob._id, {
+    await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
       status: offerDocuments.length > 0 ? 'success' : 'partial',
-      finishedAt: new Date(),
-      stats: {
-        discoveredPages: 1,
-        rawDocuments: 1,
-        offersExtracted: promotions.length,
-        offersStored: offerDocuments.length,
-        warnings: offerDocuments.filter((offer) => offer.quality.issues.length > 0).length,
-        errors: 0,
-      },
+      discoveredPages: 1 + categoryPageLinks.length,
+      rawDocuments: 1,
+      rawCandidateCount: promotions.length,
+      offers: offerDocuments,
+      source,
+      sourceType: 'aggregator',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+      httpLog,
       warningMessages: [
         ...(fallbackOfficial ? ['ADEG liefert aktuell nur einen offiziellen Flugblatt-Hinweis, aber keine extrahierbaren Einzelangebote.'] : []),
       ],
@@ -458,7 +475,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         essence,
         fallbackOfficial,
       },
-    });
+    }));
 
     await Source.findByIdAndUpdate(source._id, {
       latestRunAt: new Date(),
@@ -475,7 +492,15 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
       status: 'failed',
       finishedAt: new Date(),
+      sourceType: source.sourceType || source.channel || '',
+      sourceUrl: source.sourceUrl,
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
       stats: {
+        foundRawItems: 0,
+        parsedOffers: 0,
+        productiveOffers: 0,
+        rejectedOffers: 0,
         discoveredPages: 1,
         rawDocuments: 0,
         offersExtracted: 0,

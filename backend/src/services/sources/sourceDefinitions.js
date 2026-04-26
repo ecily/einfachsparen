@@ -260,6 +260,28 @@ const RETAILER_DEFINITIONS = [
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
     notes: 'Zweite oeffentliche Aggregator-Quelle fuer aktuelle BIPA-Angebote.',
   },
+  {
+    retailerKey: 'adeg',
+    retailerName: 'Adeg',
+    channel: 'aggregator',
+    label: 'Aktionsfinder ADEG Aktionen',
+    sourceUrl: 'https://www.aktionsfinder.at/pv/adeg/',
+    sourceType: 'aggregator',
+    priority: 35,
+    capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: true },
+    notes: 'Aggregator-Quelle fuer ADEG, damit Phase-1-Abdeckung nicht an der offiziellen Flugblattseite haengen bleibt.',
+  },
+  {
+    retailerKey: 'adeg',
+    retailerName: 'Adeg',
+    channel: 'official-flyer',
+    label: 'ADEG Flugblatt und Aktionen',
+    sourceUrl: 'https://www.adeg.at/flugblatt-aktionen/adeg-flugblatt',
+    sourceType: 'flyer',
+    priority: 20,
+    capabilities: { discoverOffers: true, parseOfferPages: false, parseFlyers: true },
+    notes: 'Offizielle ADEG-Flugblattseite als Primaerquelle; Einzelangebote werden nur gespeichert, wenn sie oeffentlich extrahierbar sind.',
+  },
 ];
 
 module.exports = {

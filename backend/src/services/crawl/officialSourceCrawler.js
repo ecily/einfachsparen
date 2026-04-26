@@ -16,6 +16,10 @@ const {
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
+const { enrichOffersForStorage } = require('./offerAuditEnrichment');
+const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+
+const PARSER_VERSION = 'official-v3-coverage';
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -1018,12 +1022,16 @@ async function attachBillaOfficialEvidence({ source, crawlJobId, region }) {
     retailerKey: source.retailerKey,
     region,
     documentType: 'json',
+    sourceType: 'json',
     url: source.sourceUrl,
     canonicalUrl: source.sourceUrl,
+    finalUrl: source.sourceUrl,
     title: `${source.label} Algolia Promotions`,
     contentHash: createHash(JSON.stringify(payload)),
     contentSnippet: `Official BILLA promotion hits: ${hits.length}`,
     extractedPreview: hits.slice(0, 10).map((hit) => hit.name).filter(Boolean),
+    foundRawItems: hits.length,
+    parserVersion: PARSER_VERSION,
     payload: {
       retailerKey: source.retailerKey,
       hitCount: hits.length,
@@ -1279,7 +1287,12 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
       observedUrl: source.sourceUrl,
     })
   );
-  const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
+  const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+    source,
+    sourceType: 'billa-official-algolia',
+    parserVersion: PARSER_VERSION,
+    normalizationVersion: NORMALIZATION_VERSION,
+  });
 
   if (offerDocuments.length > 0) {
     await Offer.insertMany(offerDocuments, { ordered: false });
@@ -1302,7 +1315,12 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
     region,
     pageUrl: canonicalUrl || source.sourceUrl,
   });
-  const offerDocuments = normalizedOffers.map(({ scope, ...offer }) => offer);
+  const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+    source,
+    sourceType: 'penny-official-html',
+    parserVersion: PARSER_VERSION,
+    normalizationVersion: NORMALIZATION_VERSION,
+  });
 
   if (offerDocuments.length > 0) {
     await Offer.insertMany(offerDocuments, { ordered: false });
@@ -1311,6 +1329,7 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
   return {
     offerDocuments,
     rawDocuments: 0,
+    rawCandidateCount: normalizedOffers.length,
   };
 }
 
@@ -1361,7 +1380,13 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
 
   const seen = new Set();
   const offerDocuments = collectedOffers
-    .map(({ scope, ...offer }) => offer)
+    .map((offer) => enrichOffersForStorage([offer], {
+      source,
+      sourceType: 'lidl-official-flyer-api',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    })[0])
+    .filter(Boolean)
     .filter((offer) => {
       const key = [
         sanitizeWhitespace(offer.rawFacts?.productId || ''),
@@ -1388,12 +1413,18 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     retailerKey: source.retailerKey,
     region,
     documentType: 'json',
+    sourceType: 'flyer',
     url: source.sourceUrl,
     canonicalUrl: source.sourceUrl,
+    finalUrl: source.sourceUrl,
     title: `${source.label} Flyer Snapshot`,
     contentHash: createHash(JSON.stringify(seenFlyers)),
     contentSnippet: `Lidl official flyer API: ${seenFlyers.length} produktfaehige Flyer, ${offerDocuments.length} Offers.`,
     extractedPreview: seenFlyers.slice(0, 5).map((item) => `${item.name} (${item.productCount})`),
+    foundRawItems: collectedOffers.length,
+    parsedOffers: offerDocuments.length,
+    rejectedOffers: Math.max(0, collectedOffers.length - offerDocuments.length),
+    parserVersion: PARSER_VERSION,
     payload: {
       flyerCount: seenFlyers.length,
       offerCount: offerDocuments.length,
@@ -1404,6 +1435,7 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
   return {
     offerDocuments,
     rawDocuments: 1,
+    rawCandidateCount: collectedOffers.length,
   };
 }
 
@@ -1448,7 +1480,13 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
 
   const seen = new Set();
   const offerDocuments = collectedOffers
-    .map(({ scope, ...offer }) => offer)
+    .map((offer) => enrichOffersForStorage([offer], {
+      source,
+      sourceType: 'bipa-official-html',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    })[0])
+    .filter(Boolean)
     .filter((offer) => {
       const key = [
         normalizeTitleForMatch(`${offer.brand || ''} ${offer.title || ''}`),
@@ -1471,6 +1509,7 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
   return {
     offerDocuments,
     rawDocuments: 0,
+    rawCandidateCount: collectedOffers.length,
   };
 }
 
@@ -1500,12 +1539,15 @@ async function fetchNestedHtmlDocuments({ source, crawlJobId, region, links, lim
           retailerKey: source.retailerKey,
           region,
           documentType: 'html',
+          sourceType: source.sourceType || source.channel,
           url: link.url,
           canonicalUrl,
+          finalUrl: canonicalUrl,
           title,
           contentHash: createHash(html),
           contentSnippet: sanitizeWhitespace(cheerio.load(html)('body').text()).slice(0, 500),
           extractedPreview: [],
+          parserVersion: PARSER_VERSION,
           payload: {
             parentSourceUrl: source.sourceUrl,
             discoveredFrom: source.label,
@@ -1549,12 +1591,15 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
       retailerKey: source.retailerKey,
       region,
       documentType: 'html',
+      sourceType: source.sourceType || source.channel,
       url: current.url,
       canonicalUrl,
+      finalUrl: canonicalUrl,
       title,
       contentHash: createHash(html),
       contentSnippet: sanitizeWhitespace(cheerio.load(html)('body').text()).slice(0, 500),
       extractedPreview: [],
+      parserVersion: PARSER_VERSION,
       payload: {
         parentSourceUrl: source.sourceUrl,
         pageDate: current.pageDate,
@@ -1576,7 +1621,12 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
     allOffers.push(...pageOffers);
   }
 
-  const offerDocuments = allOffers.map(({ scope, ...offer }) => offer);
+  const offerDocuments = enrichOffersForStorage(allOffers, {
+    source,
+    sourceType: 'hofer-official-html',
+    parserVersion: PARSER_VERSION,
+    normalizationVersion: NORMALIZATION_VERSION,
+  });
 
   if (offerDocuments.length > 0) {
     await Offer.insertMany(offerDocuments, { ordered: false });
@@ -1585,6 +1635,7 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
   return {
     offerDocuments,
     rawDocumentCount,
+    rawCandidateCount: allOffers.length,
   };
 }
 
@@ -1603,7 +1654,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
   try {
     await clearRawDocumentsForSource(source._id);
 
-    const { html, canonicalUrl } = await fetchHtml(source.sourceUrl);
+    const { response, html, canonicalUrl } = await fetchHtml(source.sourceUrl);
+    const httpLog = buildHttpLogFromResponse(response, html);
     const links = extractRelevantLinks({
       html,
       baseUrl: canonicalUrl,
@@ -1617,12 +1669,19 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       retailerKey: source.retailerKey,
       region,
       documentType: 'html',
+      sourceType: source.sourceType || source.channel,
       url: source.sourceUrl,
       canonicalUrl,
+      finalUrl: canonicalUrl,
       title: pageTitle,
+      httpStatus: response.status,
+      contentType: response.headers?.['content-type'] || '',
+      downloadBytes: httpLog.downloadBytes,
       contentHash: createHash(html),
       contentSnippet: sanitizeWhitespace(cheerio.load(html)('body').text()).slice(0, 500),
       extractedPreview: links.slice(0, 10).map((item) => `${item.type.toUpperCase()}: ${item.label}`),
+      foundRawItems: links.length,
+      parserVersion: PARSER_VERSION,
       payload: {
         linkCount: links.length,
         pageLinkCount: links.filter((item) => item.type === 'page').length,
@@ -1634,6 +1693,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     let evidenceMatched = 0;
     let extraRawDocuments = 0;
     let warningMessages = [];
+    let rawCandidateCount = links.length;
+    const allStoredOffers = [];
 
     if (source.retailerKey === 'hofer' && source.channel === 'official-flyer') {
       const hoferResult = await crawlHoferOfficialPages({
@@ -1645,6 +1706,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += hoferResult.offerDocuments.length;
       extraRawDocuments += hoferResult.rawDocumentCount;
+      rawCandidateCount += hoferResult.rawCandidateCount || 0;
+      allStoredOffers.push(...hoferResult.offerDocuments);
     } else if (source.sourceUrl.includes('billa.at/unsere-aktionen/aktionen')) {
       const billaOfficialResult = await crawlBillaOfficialPromotions({
         source,
@@ -1654,6 +1717,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += billaOfficialResult.offerDocuments.length;
       extraRawDocuments += billaOfficialResult.rawDocuments;
+      rawCandidateCount += billaOfficialResult.hitCount || billaOfficialResult.offerDocuments.length;
+      allStoredOffers.push(...billaOfficialResult.offerDocuments);
     } else if (source.retailerKey === 'penny' && source.sourceUrl.includes('penny.at/angebote')) {
       const pennyOfficialResult = await crawlPennyOfficialOffers({
         source,
@@ -1665,6 +1730,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += pennyOfficialResult.offerDocuments.length;
       extraRawDocuments += pennyOfficialResult.rawDocuments;
+      rawCandidateCount += pennyOfficialResult.rawCandidateCount || 0;
+      allStoredOffers.push(...pennyOfficialResult.offerDocuments);
     } else if (source.retailerKey === 'lidl' && source.sourceUrl.includes('lidl.at/c/flugblatt')) {
       const lidlOfficialResult = await crawlLidlOfficialFlyers({
         source,
@@ -1675,6 +1742,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += lidlOfficialResult.offerDocuments.length;
       extraRawDocuments += lidlOfficialResult.rawDocuments;
+      rawCandidateCount += lidlOfficialResult.rawCandidateCount || 0;
+      allStoredOffers.push(...lidlOfficialResult.offerDocuments);
     } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
         source,
@@ -1686,6 +1755,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
       offersStored += bipaOfficialResult.offerDocuments.length;
       extraRawDocuments += bipaOfficialResult.rawDocuments;
+      rawCandidateCount += bipaOfficialResult.rawCandidateCount || 0;
+      allStoredOffers.push(...bipaOfficialResult.offerDocuments);
     } else {
       const nestedDocuments = await fetchNestedHtmlDocuments({
         source,
@@ -1699,17 +1770,17 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
     const status = offersStored > 0 || evidenceMatched > 0 || links.length > 0 ? 'success' : 'partial';
 
-    await CrawlJob.findByIdAndUpdate(crawlJob._id, {
+    await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
       status,
-      finishedAt: new Date(),
-      stats: {
-        discoveredPages: Math.max(links.length, 1),
-        rawDocuments: 1 + extraRawDocuments,
-        offersExtracted: offersStored,
-        offersStored,
-        warnings: warningMessages.length,
-        errors: 0,
-      },
+      discoveredPages: Math.max(links.length, 1),
+      rawDocuments: 1 + extraRawDocuments,
+      rawCandidateCount: Math.max(rawCandidateCount, offersStored),
+      offers: allStoredOffers,
+      source,
+      sourceType: source.sourceType || source.channel || 'offers-page',
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+      httpLog,
       warningMessages,
       errorMessages: [],
       metadata: {
@@ -1719,7 +1790,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         extractedLinkCount: links.length,
         evidenceMatched,
       },
-    });
+    }));
 
     await Source.findByIdAndUpdate(source._id, {
       latestRunAt: new Date(),
@@ -1739,7 +1810,15 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
       status: 'failed',
       finishedAt: new Date(),
+      sourceType: source.sourceType || source.channel || '',
+      sourceUrl: source.sourceUrl,
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
       stats: {
+        foundRawItems: 0,
+        parsedOffers: 0,
+        productiveOffers: 0,
+        rejectedOffers: 0,
         discoveredPages: 1,
         rawDocuments: 0,
         offersExtracted: 0,
