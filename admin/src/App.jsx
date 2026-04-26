@@ -714,6 +714,52 @@ function SavingsNotice() {
   )
 }
 
+function StickyBottomLine() {
+  return (
+    <div
+      aria-label="Copyright und Projektlink"
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 60,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '2.55rem',
+        padding: '0.48rem 1rem calc(0.48rem + env(safe-area-inset-bottom))',
+        color: '#485344',
+        fontSize: '0.84rem',
+        fontWeight: 650,
+        lineHeight: 1.35,
+        textAlign: 'center',
+        background: 'rgba(255, 252, 247, 0.94)',
+        borderTop: '1px solid rgba(22, 33, 24, 0.1)',
+        boxShadow: '0 -10px 26px rgba(83, 63, 34, 0.09)',
+        backdropFilter: 'blur(14px)',
+      }}
+    >
+      <span>
+        © 2026 - Ein Projekt von{' '}
+        <a
+          href="https://www.ecily.com"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            color: '#315e2a',
+            fontWeight: 850,
+            textDecoration: 'none',
+          }}
+        >
+          ecily/webentwicklung
+        </a>
+        .
+      </span>
+    </div>
+  )
+}
+
 function HeroBlock() {
   return (
     <SectionCard
@@ -2216,7 +2262,7 @@ function App() {
     !areStringSetsEqual(draftSelectedCategoryLabels, appliedSelectedCategoryLabels)
 
   return (
-    <main className="shell">
+    <main className="shell" style={{ paddingBottom: '5.5rem' }}>
       <AppDownloadModal
         open={showAppDownloadModal}
         onClose={() => setShowAppDownloadModal(false)}
@@ -2321,6 +2367,8 @@ function App() {
           ) : null}
         </>
       )}
+
+      <StickyBottomLine />
     </main>
   )
 }
