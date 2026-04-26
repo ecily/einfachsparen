@@ -1164,6 +1164,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
   );
   const conditionsText = buildBillaConditionsText(hit);
   const customerProgramRequired = Boolean(hit?.price?.loyalty);
+  const statusInfo = buildOfferStatus(new Date(), null, true);
   const issues = [];
 
   if (!normalizedUnitPrice.comparable) {
@@ -1207,6 +1208,9 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
     ],
     validFrom: new Date(),
     validTo: null,
+    status: statusInfo.status,
+    isActiveNow: statusInfo.isActiveNow,
+    isActiveToday: statusInfo.isActiveToday,
     benefitType: determineBillaBenefitType(hit),
     conditionsText,
     customerProgramRequired,

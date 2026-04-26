@@ -342,7 +342,7 @@ function determineEffectiveDiscountType({ benefitType, customerProgramRequired, 
   return 'unknown';
 }
 
-function buildOfferStatus(validFrom, validTo) {
+function buildOfferStatus(validFrom, validTo, snapshotCurrent = false) {
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
@@ -356,7 +356,9 @@ function buildOfferStatus(validFrom, validTo) {
 
   let status = 'unknown';
 
-  if (validFrom && validFrom > now) {
+  if (snapshotCurrent) {
+    status = 'active';
+  } else if (validFrom && validFrom > now) {
     status = 'upcoming';
   } else if (validTo && validTo < now) {
     status = 'expired';
@@ -558,8 +560,8 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
       ? promotion.clickoutUrl
       : sourceUrl;
 
-  if (!priceCurrentAmount) {
-    issues.push('Kein aktueller Preis erkannt');
+  if (!title || !priceCurrentAmount) {
+    return null;
   }
 
   if (!promotion.validFrom || !promotion.validTo) {
@@ -586,7 +588,8 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   ].filter(Boolean).length;
   const statusInfo = buildOfferStatus(
     promotion.validFrom ? new Date(promotion.validFrom) : null,
-    promotion.validTo ? new Date(promotion.validTo) : null
+    promotion.validTo ? new Date(promotion.validTo) : null,
+    Boolean(promotion.snapshotCurrent)
   );
   const hasConditions = Boolean(conditionsText || customerProgramRequired || (requirement?.requiredQuantity || 1) > 1);
   const isMultiBuy = ['x-plus-y', 'x-for-y', 'multi-buy'].includes(requirement?.mechanic);
@@ -730,7 +733,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
       }),
       categoryConfidence: categoryDecision.categoryConfidence,
       subcategoryConfidence: categoryDecision.subcategoryConfidence,
-      snapshotCurrent: false,
+      snapshotCurrent: Boolean(promotion.snapshotCurrent),
     },
     needsReview: issues.length > 0,
     reviewReasons: issues,

@@ -226,6 +226,7 @@ function parsePromotionsFromCategoryPage({ html, source, pageUrl }) {
       tags: [`aktionsfinder-category:${categorySlug}`],
       productGroups: categoryTitle ? [{ title: categoryTitle }] : [],
       product: buildProductFromCardTitle(title),
+      snapshotCurrent: !validFrom && !validTo,
     });
   });
 

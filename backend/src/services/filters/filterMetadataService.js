@@ -845,7 +845,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
 }
 
 async function getRetailerFilters() {
-  return Retailer.find({})
+  return Retailer.find({ isActive: true, activeOfferCount: { $gt: 0 } })
     .sort({ coveragePriorityScore: -1, sortOrder: 1, retailerName: 1 })
     .lean();
 }
