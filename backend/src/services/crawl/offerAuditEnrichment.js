@@ -9,6 +9,25 @@ function uniqueStrings(values = []) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
+function isCurrentlyRelevantOffer(offer, now = new Date()) {
+  if (offer?.status === 'expired' || offer?.status === 'upcoming') {
+    return false;
+  }
+
+  const validFrom = offer?.validFrom ? new Date(offer.validFrom) : null;
+  const validTo = offer?.validTo ? new Date(offer.validTo) : null;
+
+  if (validFrom && !Number.isNaN(validFrom.getTime()) && validFrom > now) {
+    return false;
+  }
+
+  if (validTo && !Number.isNaN(validTo.getTime()) && validTo < now) {
+    return false;
+  }
+
+  return true;
+}
+
 function inferSourceType({ offer, source, sourceType }) {
   return (
     sourceType
@@ -112,6 +131,11 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
 
   const { scope, ...document } = offer;
   const now = new Date();
+
+  if (!isCurrentlyRelevantOffer(document, now)) {
+    return null;
+  }
+
   const resolvedSourceType = inferSourceType({ offer: document, source, sourceType });
   const supportingSources = dedupeSourceEvidence(document.supportingSources || []);
   const sourceUrls = uniqueStrings([

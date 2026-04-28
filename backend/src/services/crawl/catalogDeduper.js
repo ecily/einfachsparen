@@ -27,7 +27,6 @@ function buildDedupeKey(offer) {
 
   return [
     offer.retailerKey,
-    offer.categoryKey || '',
     offer.comparisonSignature || '',
     offer.titleNormalized || normalizeKey(offer.title),
     offer.comparisonGroup || '',
@@ -73,6 +72,73 @@ function getStructuredFieldScore(offer) {
   ];
 
   return candidates.filter((value) => value !== null && value !== undefined && value !== '').length;
+}
+
+function getCategoryScore(offer) {
+  const primary = String(offer?.categoryPrimary || '');
+  const secondary = String(offer?.categorySecondary || '');
+  const secondaryKey = normalizeKey(secondary);
+  const primaryKey = normalizeKey(primary);
+  const sourceHint = normalizeTitle(`${offer?.rawFacts?.infoText || ''} ${offer?.rawFacts?.validityText || ''}`);
+  let score = 0;
+
+  if (primary && !/unkategorisiert/i.test(primary)) {
+    score += 20;
+  }
+
+  if (secondary && secondaryKey !== primaryKey) {
+    score += 70;
+  }
+
+  score += Math.round(Number(offer?.categoryConfidence || 0) * 40);
+  score += Math.round(Number(offer?.subcategoryConfidence || 0) * 60);
+
+  if (/^(lebensmittel|getraenke|drogerie hygiene|haushalt|haus garten|garten freizeit)$/.test(sourceHint)) {
+    score -= 25;
+  }
+
+  if (/^(bier|wein-sekt|spirituosen|suesswaren-knabbereien|tiefkuehl-fertigprodukte|babyhygiene|waschmittel-reiniger)$/.test(secondaryKey)) {
+    score += 20;
+  }
+
+  return score;
+}
+
+function pickBestCategoryOffer(offers) {
+  return [...offers].sort((left, right) => {
+    const categoryDelta = getCategoryScore(right) - getCategoryScore(left);
+
+    if (categoryDelta !== 0) {
+      return categoryDelta;
+    }
+
+    return getStructuredFieldScore(right) - getStructuredFieldScore(left);
+  })[0];
+}
+
+function pickBestStructuredOffer(offers) {
+  return [...offers].sort((left, right) => getStructuredFieldScore(right) - getStructuredFieldScore(left))[0];
+}
+
+function hasComparableUnitPrice(offer) {
+  return Boolean(Number(offer?.normalizedUnitPrice?.amount) > 0 && offer?.normalizedUnitPrice?.unit);
+}
+
+function buildMergedReviewState({ canonical, bestCategoryOffer }) {
+  const reasons = new Set(Array.isArray(canonical?.reviewReasons) ? canonical.reviewReasons : []);
+  const issues = new Set(Array.isArray(canonical?.quality?.issues) ? canonical.quality.issues : []);
+
+  if (bestCategoryOffer?.categorySecondary) {
+    reasons.delete('category-low-confidence');
+    reasons.delete('subcategory-low-confidence');
+    issues.delete('category-low-confidence');
+    issues.delete('subcategory-low-confidence');
+  }
+
+  return {
+    reviewReasons: [...reasons],
+    qualityIssues: [...issues],
+  };
 }
 
 function compareOffersForCanonical(left, right, sourceMap) {
@@ -135,9 +201,15 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
           'normalizedUnitPrice',
           'quantityText',
           'titleNormalized',
+          'categoryPrimary',
+          'categorySecondary',
           'categoryKey',
+          'subcategoryKey',
+          'categoryConfidence',
+          'subcategoryConfidence',
           'comparisonSignature',
           'comparisonGroup',
+          'comparisonCategoryKey',
           'comparableUnit',
           'totalComparableAmount',
           'effectiveDiscountType',
@@ -163,6 +235,8 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
           'dedupeKey',
           'isActiveNow',
           'quality',
+          'rawFacts',
+          'reviewReasons',
         ].join(' ')
       )
       .lean(),
@@ -196,6 +270,10 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
     const sorted = [...groupOffers].sort((left, right) => compareOffersForCanonical(left, right, sourceMap));
 
     const canonical = sorted[0];
+    const bestCategoryOffer = pickBestCategoryOffer(sorted);
+    const bestStructuredOffer = pickBestStructuredOffer(sorted);
+    const bestUnitPriceOffer = sorted.find(hasComparableUnitPrice) || canonical;
+    const mergedReviewState = buildMergedReviewState({ canonical, bestCategoryOffer });
     const mergedSupportingSources = dedupeSourceEvidence(
       sorted.flatMap((offer) => offer.supportingSources || [])
     );
@@ -217,6 +295,43 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
         filter: { _id: canonical._id },
         update: {
           $set: {
+            categoryPrimary: bestCategoryOffer.categoryPrimary || canonical.categoryPrimary,
+            categorySecondary: bestCategoryOffer.categorySecondary || canonical.categorySecondary || '',
+            categoryKey: bestCategoryOffer.categoryKey || canonical.categoryKey,
+            subcategoryKey: bestCategoryOffer.subcategoryKey || normalizeKey(bestCategoryOffer.categorySecondary || ''),
+            categoryConfidence: Math.max(
+              Number(bestCategoryOffer.categoryConfidence || 0),
+              Number(canonical.categoryConfidence || 0)
+            ),
+            subcategoryConfidence: Math.max(
+              Number(bestCategoryOffer.subcategoryConfidence || 0),
+              Number(canonical.subcategoryConfidence || 0)
+            ),
+            comparisonCategoryKey: bestCategoryOffer.comparisonCategoryKey || canonical.comparisonCategoryKey || '',
+            quantityText: bestStructuredOffer.quantityText || canonical.quantityText || '',
+            packCount: bestStructuredOffer.packCount ?? canonical.packCount ?? null,
+            unitValue: bestStructuredOffer.unitValue ?? canonical.unitValue ?? null,
+            unitType: bestStructuredOffer.unitType || canonical.unitType || '',
+            totalComparableAmount: bestStructuredOffer.totalComparableAmount ?? canonical.totalComparableAmount ?? null,
+            comparableUnit: bestStructuredOffer.comparableUnit || canonical.comparableUnit || '',
+            packageType: bestStructuredOffer.packageType || canonical.packageType || '',
+            normalizedUnitPrice: hasComparableUnitPrice(bestUnitPriceOffer)
+              ? bestUnitPriceOffer.normalizedUnitPrice
+              : canonical.normalizedUnitPrice,
+            quality: {
+              ...(canonical.quality || {}),
+              issues: mergedReviewState.qualityIssues,
+              comparisonSafe: Boolean(canonical.quality?.comparisonSafe || bestUnitPriceOffer.quality?.comparisonSafe),
+            },
+            reviewReasons: mergedReviewState.reviewReasons,
+            needsReview: mergedReviewState.reviewReasons.some((reason) => reason !== 'action-price-only'),
+            rawFacts: {
+              ...(canonical.rawFacts || {}),
+              mergedDuplicateCount: sorted.length,
+              mergedCategoryCandidates: [...new Set(sorted
+                .map((offer) => [offer.categoryPrimary, offer.categorySecondary].filter(Boolean).join(' > '))
+                .filter(Boolean))].slice(0, 8),
+            },
             supportingSources: mergedSupportingSources,
             sourceUrls: mergedSourceUrls,
             evidenceUrls: mergedEvidenceUrls,

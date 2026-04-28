@@ -634,7 +634,6 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   ].join('::');
   const dedupeKey = [
     retailerKey,
-    categoryKey,
     comparisonSignature || titleNormalized,
     buildComparisonAmountKey(comparableBase) || quantityText || 'na',
     effectiveDiscountType,

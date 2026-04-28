@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "kaufgut.at",
-    "slug": "kaufgut-at",
+    "name": "kaufklug.at",
+    "slug": "kaufklug-at",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#023b25"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.kaufgutat"

@@ -112,7 +112,7 @@ function buildProductFromCardTitle(title) {
       product.packageQuantity = secondaryAmount;
       product.packageQuantityUnit = {
         shortName: secondaryUnit.shortName,
-        type: secondaryUnit.type,
+        type: secondaryUnit.shortName === 'Stk' ? 'PACKAGING' : secondaryUnit.type,
       };
     }
   }

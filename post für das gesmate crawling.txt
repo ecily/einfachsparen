@@ -1,0 +1,3 @@
+curl -X POST https://whale-app-nmndr.ondigitalocean.app/api/crawl/run \
+  -H "Content-Type: application/json" \
+  -d "{}"

@@ -27,7 +27,11 @@ import {
 
 const BRAND_NAME = 'kaufklug.at';
 const ECILY_URL = 'https://www.ecily.com';
+const ALPHA_APK_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk';
+const ALPHA_VERSION_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha_version.json';
+const ALPHA_BUILD_NUMBER = 2026042802;
 const SHOPPING_LIST_STORAGE_KEY = 'einfachsparen.mobile.shoppingList.v1';
+const UPDATE_CHECK_TIMEOUT_MS = 8000;
 
 const RETAILER_COLORS = {
   bipa: '#ec4f86',
@@ -74,6 +78,33 @@ function extractArrayPayload(payload, preferredKeys = []) {
   return [];
 }
 
+async function fetchAlphaVersionInfo() {
+  let timeoutHandle;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error('Update-Pruefung hat zu lange gedauert.')), UPDATE_CHECK_TIMEOUT_MS);
+  });
+
+  try {
+    const response = await Promise.race([
+      fetch(ALPHA_VERSION_URL, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      }),
+      timeoutPromise,
+    ]);
+
+    if (!response?.ok) {
+      return null;
+    }
+
+    return response.json();
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
 function getReliableSavingsAmount(offer) {
   const directSavings = Number(offer?.savingsAmount);
 
@@ -93,6 +124,19 @@ function getReliableSavingsAmount(offer) {
 
 function hasReliableSavings(offer) {
   return getReliableSavingsAmount(offer) > 0;
+}
+
+function getShoppingQuantity(offer) {
+  const quantity = Number(offer?.shoppingQuantity);
+  return Number.isFinite(quantity) && quantity > 0 ? Math.max(1, Math.round(quantity)) : 1;
+}
+
+function getShoppingCurrentTotal(offer) {
+  return normalizeAmount(offer?.priceCurrent?.amount) * getShoppingQuantity(offer);
+}
+
+function getShoppingSavingsTotal(offer) {
+  return getReliableSavingsAmount(offer) * getShoppingQuantity(offer);
 }
 
 function getOfferStatusLabel(offer) {
@@ -212,6 +256,12 @@ function buildOfferSections(offers) {
   return sections;
 }
 
+function getCategoryFilterLabels(categoryGroups) {
+  return categoryGroups.flatMap((group) => (
+    group.subcategories.length > 0 ? group.subcategories : [group.mainCategory]
+  ));
+}
+
 function groupShoppingListEntries(entries) {
   const grouped = new Map();
 
@@ -231,8 +281,8 @@ function groupShoppingListEntries(entries) {
     .map((group) => ({
       ...group,
       offers: group.offers.sort((left, right) => left.title.localeCompare(right.title, 'de')),
-      savingsTotal: group.offers.reduce((sum, offer) => sum + getReliableSavingsAmount(offer), 0),
-      currentTotal: group.offers.reduce((sum, offer) => sum + normalizeAmount(offer.priceCurrent?.amount), 0),
+      savingsTotal: group.offers.reduce((sum, offer) => sum + getShoppingSavingsTotal(offer), 0),
+      currentTotal: group.offers.reduce((sum, offer) => sum + getShoppingCurrentTotal(offer), 0),
       actionPriceCount: group.offers.filter((offer) => !hasReliableSavings(offer)).length,
     }))
     .sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'));
@@ -306,8 +356,29 @@ function SavingsMessage({ offer, compact = false }) {
     <View style={[styles.actionPriceBox, compact ? styles.savingsBoxCompact : null]}>
       <Text style={styles.actionPriceTitle}>Aktionspreis!</Text>
       <Text style={styles.actionPriceText}>
-        Im Prospekt ist kein Normalpreis angegeben. Das ist oft bei kurzen oder saisonalen Aktionen der Fall.
+        Kein Normalpreis im Prospekt angegeben. Wir zeigen deshalb nur den Aktionspreis.
       </Text>
+    </View>
+  );
+}
+
+function QuantityControl({ quantity, onDecrease, onIncrease }) {
+  return (
+    <View style={styles.quantityControl}>
+      <Text style={styles.quantityLabel}>Menge</Text>
+      <View style={styles.quantityStepper}>
+        <Pressable
+          style={[styles.quantityButton, quantity <= 1 ? styles.quantityButtonDisabled : null]}
+          onPress={onDecrease}
+          disabled={quantity <= 1}
+        >
+          <Text style={styles.quantityButtonLabel}>-</Text>
+        </Pressable>
+        <Text style={styles.quantityValue}>{quantity}</Text>
+        <Pressable style={styles.quantityButton} onPress={onIncrease}>
+          <Text style={styles.quantityButtonLabel}>+</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -488,17 +559,26 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
 
         <Text style={styles.offerTitle}>{offer.title}</Text>
 
-        <View style={[styles.offerPriceRow, isCompact ? styles.offerPriceRowCompact : null]}>
+        <View style={styles.offerPriceStack}>
+          <SavingsMessage offer={offer} compact />
           <View style={styles.offerPriceBox}>
-            <Text style={styles.offerPrice}>{formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</Text>
-            <Text style={styles.offerMeta}>Aktionspreis</Text>
-            {shouldDisplayUnitPrice(offer) ? (
-              <Text style={styles.offerMeta}>
-                {formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/{offer.normalizedUnitPrice?.unit}
-              </Text>
-            ) : null}
+            <Text
+              style={styles.offerPrice}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+            >
+              {formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}
+            </Text>
+            <View style={styles.offerPriceMetaRow}>
+              <Text style={styles.offerMeta}>Aktionspreis</Text>
+              {shouldDisplayUnitPrice(offer) ? (
+                <Text style={styles.offerMeta} numberOfLines={1}>
+                  {formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/{offer.normalizedUnitPrice?.unit}
+                </Text>
+              ) : null}
+            </View>
           </View>
-          <SavingsMessage offer={offer} compact={isCompact} />
         </View>
 
         <View style={styles.metaWrap}>
@@ -671,7 +751,7 @@ function SearchResultsList({
   );
 }
 
-function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList }) {
+function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList, onQuantityChange }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
   const groupedEntries = useMemo(
@@ -679,11 +759,11 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
     [shoppingListEntries]
   );
   const totalSavings = useMemo(
-    () => shoppingListEntries.reduce((sum, offer) => sum + getReliableSavingsAmount(offer), 0),
+    () => shoppingListEntries.reduce((sum, offer) => sum + getShoppingSavingsTotal(offer), 0),
     [shoppingListEntries]
   );
   const totalCurrent = useMemo(
-    () => shoppingListEntries.reduce((sum, offer) => sum + normalizeAmount(offer.priceCurrent?.amount), 0),
+    () => shoppingListEntries.reduce((sum, offer) => sum + getShoppingCurrentTotal(offer), 0),
     [shoppingListEntries]
   );
   const actionPriceCount = shoppingListEntries.filter((offer) => !hasReliableSavings(offer)).length;
@@ -739,34 +819,46 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
 
           {group.offers.map((offer) => (
             <View key={offer.id} style={[styles.listItemCard, isCompact ? styles.listItemCardCompact : null]}>
-              <OfferImage
-                offer={offer}
-                sizeStyle={[styles.listItemImage, isCompact ? styles.listItemImageCompact : null]}
-                placeholderStyle={[styles.listItemImageFallback, isCompact ? styles.listItemImageFallbackCompact : null]}
-                placeholderTextStyle={styles.listItemImageFallbackText}
-              />
-              <View style={styles.listItemBody}>
-                <Text style={styles.offerCategory}>{getOfferCategoryLabel(offer)}</Text>
-                <Text style={styles.listItemTitle}>{offer.title}</Text>
-                <Text style={styles.offerPriceSmall}>{formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}</Text>
-                <SavingsMessage offer={offer} compact />
-                <View style={styles.metaWrap}>
-                  <View style={styles.metaPill}>
-                    <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
-                  </View>
-                  <View style={styles.metaPill}>
-                    <Text style={styles.metaPillLabel}>Menge: {offer.quantityText || 'nicht erkannt'}</Text>
-                  </View>
-                  {buildConditionBadges(offer).map((badge) => (
-                    <View key={badge} style={styles.conditionPill}>
-                      <Text style={styles.conditionPillLabel}>{badge}</Text>
+              <View style={styles.listItemMain}>
+                <OfferImage
+                  offer={offer}
+                  sizeStyle={[styles.listItemImage, isCompact ? styles.listItemImageCompact : null]}
+                  placeholderStyle={[styles.listItemImageFallback, isCompact ? styles.listItemImageFallbackCompact : null]}
+                  placeholderTextStyle={styles.listItemImageFallbackText}
+                />
+                <View style={styles.listItemBody}>
+                  <Text style={styles.offerCategory}>{getOfferCategoryLabel(offer)}</Text>
+                  <Text style={styles.listItemTitle}>{offer.title}</Text>
+                  <Text style={styles.offerPriceSmall}>
+                    {formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}
+                    {getShoppingQuantity(offer) > 1 ? ` x ${getShoppingQuantity(offer)} = ${formatCurrency(getShoppingCurrentTotal(offer), offer.priceCurrent?.currency)}` : ''}
+                  </Text>
+                  <SavingsMessage offer={{ ...offer, savingsAmount: getShoppingSavingsTotal(offer) }} compact />
+                  <View style={styles.metaWrap}>
+                    <View style={styles.metaPill}>
+                      <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
                     </View>
-                  ))}
+                    <View style={styles.metaPill}>
+                      <Text style={styles.metaPillLabel}>Packung: {offer.quantityText || 'nicht erkannt'}</Text>
+                    </View>
+                    {buildConditionBadges(offer).map((badge) => (
+                      <View key={badge} style={styles.conditionPill}>
+                        <Text style={styles.conditionPillLabel}>{badge}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               </View>
-              <Pressable style={styles.removeButton} onPress={() => onRemove(offer.id)}>
-                <Text style={styles.removeButtonLabel}>Entfernen</Text>
-              </Pressable>
+              <View style={[styles.listItemActions, isCompact ? styles.listItemActionsCompact : null]}>
+                <Pressable style={styles.removeButton} onPress={() => onRemove(offer.id)}>
+                  <Text style={styles.removeButtonLabel}>Entfernen</Text>
+                </Pressable>
+                <QuantityControl
+                  quantity={getShoppingQuantity(offer)}
+                  onDecrease={() => onQuantityChange(offer.id, -1)}
+                  onIncrease={() => onQuantityChange(offer.id, 1)}
+                />
+              </View>
             </View>
           ))}
         </View>
@@ -781,6 +873,35 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
         </Pressable>
       </View>
     </ScrollView>
+  );
+}
+
+function UpdateModal({ visible, updateInfo, onUpdate, onLater }) {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onLater}>
+      <View style={styles.updateOverlay}>
+        <View style={styles.updateCard}>
+          <Text style={styles.updateEyebrow}>kaufklug.at Alpha</Text>
+          <Text style={styles.updateTitle}>Neue Version verfuegbar</Text>
+          <Text style={styles.updateText}>
+            Es gibt eine neue APK-Version. Tippe auf Aktualisieren, lade die Datei herunter und bestaetige danach die Installation auf deinem Smartphone.
+          </Text>
+          {updateInfo?.latestVersion ? (
+            <Text style={styles.updateMeta}>Version: {updateInfo.latestVersion}</Text>
+          ) : null}
+          <Pressable style={styles.updatePrimaryButton} onPress={onUpdate}>
+            <Text style={styles.updatePrimaryButtonLabel}>Aktualisieren</Text>
+          </Pressable>
+          <Pressable style={styles.updateSecondaryButton} onPress={onLater}>
+            <Text style={styles.updateSecondaryButtonLabel}>Spaeter</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -813,6 +934,8 @@ export default function App() {
   const [hasTriggeredSearch, setHasTriggeredSearch] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [scrollToResultsKey, setScrollToResultsKey] = useState(0);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [expandedCategoryGroups, setExpandedCategoryGroups] = useState({});
   const androidTopInset = Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 0) : 0;
   const androidBottomInset = Platform.OS === 'android' ? 48 : 0;
 
@@ -853,6 +976,34 @@ export default function App() {
     }
   }
 
+  async function checkForAlphaUpdate() {
+    try {
+      const versionInfo = await fetchAlphaVersionInfo();
+      const latestBuildNumber = Number(versionInfo?.latestBuildNumber || versionInfo?.latestBuild || 0);
+
+      if (!Number.isFinite(latestBuildNumber) || latestBuildNumber <= ALPHA_BUILD_NUMBER) {
+        setUpdateInfo(null);
+        return;
+      }
+
+      setUpdateInfo({
+        ...versionInfo,
+        latestBuildNumber,
+        apkUrl: versionInfo?.apkUrl || ALPHA_APK_URL,
+      });
+    } catch (updateError) {
+      console.warn('Update-Pruefung konnte nicht abgeschlossen werden.', updateError);
+    }
+  }
+
+  async function openAlphaUpdate() {
+    try {
+      await Linking.openURL(updateInfo?.apkUrl || ALPHA_APK_URL);
+    } catch (linkError) {
+      setError('Der Download konnte nicht geoeffnet werden. Bitte pruefe die Internetverbindung.');
+    }
+  }
+
   async function loadCategories(retailerKeys = []) {
     try {
       const params = new URLSearchParams();
@@ -864,24 +1015,24 @@ export default function App() {
       const suffix = params.toString() ? `?${params.toString()}` : '';
       const categoryPayload = await fetchJson(`/filters/categories${suffix}`);
       const nextCategories = extractArrayPayload(categoryPayload, ['categories']);
+      const nextCategoryGroups = buildCategoryGroups(nextCategories);
+      const validLabels = new Set(getCategoryFilterLabels(nextCategoryGroups));
 
       setCategories(nextCategories);
       setSelectedCategories((current) => {
-        const validLabels = new Set();
+        const filtered = current.filter((label) => validLabels.has(label));
+        return current.length === 0 ? [...validLabels] : filtered;
+      });
+      setExpandedCategoryGroups((current) => {
+        const nextExpanded = {};
 
-        for (const category of nextCategories) {
-          if ((category?.subcategories || []).length > 0) {
-            for (const subcategory of category.subcategories || []) {
-              if (subcategory?.subcategoryLabel) {
-                validLabels.add(subcategory.subcategoryLabel);
-              }
-            }
-          } else if (category?.mainCategoryLabel) {
-            validLabels.add(category.mainCategoryLabel);
+        for (const group of nextCategoryGroups) {
+          if (current[group.mainCategory]) {
+            nextExpanded[group.mainCategory] = true;
           }
         }
 
-        return current.filter((label) => validLabels.has(label));
+        return nextExpanded;
       });
       setError('');
     } catch (loadError) {
@@ -898,6 +1049,12 @@ export default function App() {
         return;
       }
 
+      if (hasNoActiveCategories) {
+        setRanking(null);
+        setError('Aktiviere mindestens eine Unterkategorie, damit Angebote gesucht werden kÃ¶nnen.');
+        return;
+      }
+
       if (isRefresh) {
         setRefreshing(true);
       } else {
@@ -905,7 +1062,7 @@ export default function App() {
       }
 
       const params = new URLSearchParams();
-      if (selectedCategories.length > 0) params.set('categories', selectedCategories.join(','));
+      if (selectedCategories.length > 0 && !hasAllCategoriesSelected) params.set('categories', selectedCategories.join(','));
       params.set('retailers', selectedRetailers.join(','));
       params.set('limit', 'all');
 
@@ -926,6 +1083,7 @@ export default function App() {
 
   useEffect(() => {
     loadBootstrap();
+    checkForAlphaUpdate();
   }, []);
 
   useEffect(() => {
@@ -983,9 +1141,13 @@ export default function App() {
   }, [selectedRetailers]);
 
   const categoryGroups = useMemo(() => buildCategoryGroups(categories || []), [categories]);
+  const allCategoryLabels = useMemo(() => getCategoryFilterLabels(categoryGroups), [categoryGroups]);
   const shoppingListEntries = useMemo(() => Object.values(shoppingListMap), [shoppingListMap]);
   const selectedRetailerCount = selectedRetailers.length;
   const selectedCategoryCount = selectedCategories.length;
+  const hasCategoryFilterOptions = allCategoryLabels.length > 0;
+  const hasNoActiveCategories = hasCategoryFilterOptions && selectedCategoryCount === 0;
+  const hasAllCategoriesSelected = hasCategoryFilterOptions && selectedCategoryCount === allCategoryLabels.length;
   const offers = useMemo(() => flattenRankingOffers(ranking), [ranking]);
   const resultCount = offers.length;
   const offersWithSavingsCount = offers.filter(hasReliableSavings).length;
@@ -1029,17 +1191,31 @@ export default function App() {
       return;
     }
 
+    setExpandedCategoryGroups((current) => ({
+      ...current,
+      [fallbackCategory]: !current[fallbackCategory],
+    }));
+  }
+
+  function toggleCategoryGroupSelection(subcategories, fallbackCategory) {
+    if (!subcategories.length) {
+      toggleCategory(fallbackCategory);
+      return;
+    }
+
     setSelectedCategories((current) => {
       const allSelected = subcategories.every((subcategory) => current.includes(subcategory));
+
       if (allSelected) {
         return current.filter((item) => !subcategories.includes(item));
       }
+
       return [...new Set([...current, ...subcategories])];
     });
   }
 
-  function resetCategories() {
-    setSelectedCategories([]);
+  function toggleAllCategories() {
+    setSelectedCategories(hasAllCategoriesSelected ? [] : allCategoryLabels);
   }
 
   function resetSelection() {
@@ -1060,7 +1236,10 @@ export default function App() {
 
       return {
         ...current,
-        [offer.id]: offer,
+        [offer.id]: {
+          ...offer,
+          shoppingQuantity: getShoppingQuantity(offer),
+        },
       };
     });
   }
@@ -1075,6 +1254,24 @@ export default function App() {
 
   function clearShoppingList() {
     setShoppingListMap({});
+  }
+
+  function updateShoppingListQuantity(offerId, delta) {
+    setShoppingListMap((current) => {
+      const offer = current[offerId];
+
+      if (!offer) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [offerId]: {
+          ...offer,
+          shoppingQuantity: Math.max(1, getShoppingQuantity(offer) + delta),
+        },
+      };
+    });
   }
 
   function showOffersTab() {
@@ -1131,10 +1328,12 @@ export default function App() {
         <StepHeader
           step="2. Produkte wählen"
           title="Was brauchst du heute?"
-          text="Wähle eine Kategorie oder genauer eine Unterkategorie. Du kannst diesen Schritt auch überspringen."
+          text="Tippe eine Kategorie zum Öffnen an. Mit Alle oder Keine steuerst du die ganze Gruppe."
         />
-        <Pressable style={styles.secondaryWideButton} onPress={resetCategories}>
-          <Text style={styles.secondaryWideButtonLabel}>Alle Kategorien anzeigen</Text>
+        <Pressable style={styles.secondaryWideButton} onPress={toggleAllCategories}>
+          <Text style={styles.secondaryWideButtonLabel}>
+            {hasAllCategoriesSelected ? 'Alles deaktivieren' : 'Alles aktivieren'}
+          </Text>
         </Pressable>
         <View style={styles.categoryList}>
           {categoryGroups.map((group) => {
@@ -1142,16 +1341,45 @@ export default function App() {
             const allSelected = selectedCount === group.subcategories.length && group.subcategories.length > 0;
             const partial = selectedCount > 0 && !allSelected;
             const fallbackSelected = selectedCategories.includes(group.mainCategory);
+            const expanded = Boolean(expandedCategoryGroups[group.mainCategory]);
 
             return (
               <View key={group.mainCategory} style={styles.categoryCard}>
-                <FilterChip
-                  label={`${group.mainCategory}${group.subcategories.length ? ` (${group.subcategories.length})` : ''}`}
-                  active={allSelected || fallbackSelected}
-                  partial={partial}
-                  onPress={() => toggleMainCategory(group.subcategories, group.mainCategory)}
-                />
-                {group.subcategories.length > 0 ? (
+                <View
+                  style={[
+                    styles.mainCategoryButton,
+                    allSelected || fallbackSelected ? styles.mainCategoryButtonActive : null,
+                    partial ? styles.mainCategoryButtonPartial : null,
+                  ]}
+                >
+                  <Pressable
+                    style={styles.mainCategoryOpenArea}
+                    onPress={() => toggleMainCategory(group.subcategories, group.mainCategory)}
+                  >
+                    <View style={styles.mainCategoryTextBox}>
+                      <Text style={[styles.mainCategoryLabel, allSelected || fallbackSelected || partial ? styles.mainCategoryLabelActive : null]}>
+                        {group.mainCategory}
+                      </Text>
+                      <Text style={[styles.mainCategoryMeta, allSelected || fallbackSelected || partial ? styles.mainCategoryMetaActive : null]}>
+                        {group.subcategories.length > 0
+                          ? `${selectedCount}/${group.subcategories.length} aktiv`
+                          : fallbackSelected ? 'aktiv' : 'inaktiv'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.mainCategoryChevron, allSelected || fallbackSelected || partial ? styles.mainCategoryChevronActive : null]}>
+                      {group.subcategories.length > 0 ? (expanded ? '-' : '+') : fallbackSelected ? '✓' : '+'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.mainCategoryBulkButton, allSelected || fallbackSelected ? styles.mainCategoryBulkButtonActive : null]}
+                    onPress={() => toggleCategoryGroupSelection(group.subcategories, group.mainCategory)}
+                  >
+                    <Text style={[styles.mainCategoryBulkLabel, allSelected || fallbackSelected ? styles.mainCategoryBulkLabelActive : null]}>
+                      {allSelected || fallbackSelected ? 'Keine' : 'Alle'}
+                    </Text>
+                  </Pressable>
+                </View>
+                {group.subcategories.length > 0 && expanded ? (
                   <View style={styles.subcategoryWrap}>
                     {group.subcategories.map((subcategory) => (
                       <FilterChip
@@ -1176,9 +1404,9 @@ export default function App() {
           text="Tippe auf „Angebote anzeigen“. Danach kannst du passende Produkte auf deine Einkaufsliste setzen."
         />
         <Pressable
-          style={[styles.fullWidthSearchButton, selectedRetailerCount === 0 || loading ? styles.disabledButton : null]}
+          style={[styles.fullWidthSearchButton, selectedRetailerCount === 0 || hasNoActiveCategories || loading ? styles.disabledButton : null]}
           onPress={() => loadRanking(false)}
-          disabled={selectedRetailerCount === 0 || loading}
+          disabled={selectedRetailerCount === 0 || hasNoActiveCategories || loading}
         >
           <Text style={styles.fullWidthSearchButtonLabel}>
             {loading ? 'Angebote werden geladen …' : 'Angebote anzeigen'}
@@ -1193,7 +1421,11 @@ export default function App() {
             {selectedRetailerCount > 0
               ? `${selectedRetailerCount} Geschäft${selectedRetailerCount === 1 ? '' : 'e'} ausgewählt`
               : 'Noch kein Geschäft ausgewählt'}
-            {selectedCategoryCount > 0 ? ` · ${selectedCategoryCount} Kategorie${selectedCategoryCount === 1 ? '' : 'n'}` : ''}
+            {hasAllCategoriesSelected
+              ? ' · alle Kategorien aktiv'
+              : selectedCategoryCount > 0
+                ? ` · ${selectedCategoryCount} Kategorie${selectedCategoryCount === 1 ? '' : 'n'} aktiv`
+                : hasCategoryFilterOptions ? ' · keine Kategorie aktiv' : ''}
           </Text>
         </View>
       </View>
@@ -1254,11 +1486,19 @@ export default function App() {
             onRemove={removeFromShoppingList}
             onBrowse={showOffersTab}
             onClearList={clearShoppingList}
+            onQuantityChange={updateShoppingListQuantity}
           />
         )}
       </View>
 
       <FooterLink bottomInset={androidBottomInset} />
+
+      <UpdateModal
+        visible={Boolean(updateInfo)}
+        updateInfo={updateInfo}
+        onUpdate={openAlphaUpdate}
+        onLater={() => setUpdateInfo(null)}
+      />
 
       <OfferDetailModal
         offer={selectedOffer}
@@ -1335,8 +1575,35 @@ const styles = StyleSheet.create({
   fullWidthSearchButtonLabel: { color: '#f8f5ed', fontWeight: '900', fontSize: 15, textAlign: 'center' },
   disabledButton: { opacity: 0.45 },
   categoryList: { gap: 10 },
-  categoryCard: { backgroundColor: '#f8f3e8', borderRadius: 18, padding: 10, gap: 8 },
-  subcategoryWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  categoryCard: { backgroundColor: '#f8f3e8', borderRadius: 18, padding: 10, gap: 9, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.06)' },
+  mainCategoryButton: {
+    minHeight: 56,
+    borderRadius: 16,
+    backgroundColor: '#efe6d7',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(49, 88, 44, 0.12)',
+  },
+  mainCategoryButtonActive: { backgroundColor: '#31582c', borderColor: '#31582c' },
+  mainCategoryButtonPartial: { backgroundColor: '#dce9ca', borderColor: '#9fbd81' },
+  mainCategoryOpenArea: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  mainCategoryTextBox: { flex: 1, minWidth: 0, gap: 2 },
+  mainCategoryLabel: { color: '#253425', fontSize: 15, lineHeight: 20, fontWeight: '900' },
+  mainCategoryLabelActive: { color: '#f8f5ed' },
+  mainCategoryMeta: { color: '#62705f', fontSize: 11, lineHeight: 15, fontWeight: '800', textTransform: 'uppercase' },
+  mainCategoryMetaActive: { color: '#e8f2df' },
+  mainCategoryChevron: { color: '#31582c', fontSize: 22, lineHeight: 24, fontWeight: '900', minWidth: 24, textAlign: 'center' },
+  mainCategoryChevronActive: { color: '#f8f5ed' },
+  mainCategoryBulkButton: { minWidth: 62, borderRadius: 12, backgroundColor: '#fffaf2', paddingHorizontal: 10, paddingVertical: 9, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(49, 88, 44, 0.18)' },
+  mainCategoryBulkButtonActive: { backgroundColor: 'rgba(248, 245, 237, 0.18)', borderColor: 'rgba(248, 245, 237, 0.34)' },
+  mainCategoryBulkLabel: { color: '#31582c', fontSize: 12, lineHeight: 16, fontWeight: '900' },
+  mainCategoryBulkLabelActive: { color: '#f8f5ed' },
+  subcategoryWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, paddingTop: 2 },
   quickInfoCard: { backgroundColor: '#f3eddc', borderRadius: 16, padding: 12, gap: 4 },
   quickInfoTitle: { color: '#31582c', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   quickInfoText: { color: '#4f594e', fontSize: 13, lineHeight: 18 },
@@ -1371,7 +1638,7 @@ const styles = StyleSheet.create({
   offerImageFallback: { width: 82, height: 82, borderRadius: 14, backgroundColor: '#dfe9d5', alignItems: 'center', justifyContent: 'center', padding: 8 },
   offerImageFallbackCompact: { width: '100%', height: 136 },
   offerImageFallbackText: { color: '#31582c', fontSize: 12, fontWeight: '900', textAlign: 'center' },
-  offerBody: { flex: 1, gap: 7 },
+  offerBody: { flex: 1, minWidth: 0, gap: 7 },
   offerTopRow: { gap: 4 },
   offerBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   rankBadge: { backgroundColor: '#e3dccd', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
@@ -1382,26 +1649,26 @@ const styles = StyleSheet.create({
   softBadgeLabel: { color: '#31582c', fontSize: 11, fontWeight: '900' },
   offerCategory: { color: '#31582c', fontSize: 12, fontWeight: '800' },
   offerTitle: { color: '#152315', fontSize: 16, lineHeight: 22, fontWeight: '800' },
-  offerPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  offerPriceRowCompact: { flexWrap: 'wrap' },
-  offerPriceBox: { gap: 2, flexShrink: 1 },
-  offerPrice: { color: '#173118', fontSize: 22, fontWeight: '900' },
+  offerPriceStack: { alignSelf: 'stretch', gap: 8 },
+  offerPriceBox: { alignSelf: 'stretch', minWidth: 0, gap: 3 },
+  offerPriceMetaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  offerPrice: { color: '#173118', fontSize: 24, lineHeight: 30, fontWeight: '900' },
   offerPriceSmall: { color: '#173118', fontSize: 18, fontWeight: '900' },
   offerMeta: { color: '#59635a', fontSize: 13 },
   metaWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   metaPill: { backgroundColor: '#efe8da', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  metaPillWide: { backgroundColor: '#e7f0da', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  metaPillLabel: { color: '#59635a', fontSize: 12, fontWeight: '700' },
+  metaPillWide: { maxWidth: '100%', backgroundColor: '#e7f0da', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  metaPillLabel: { color: '#59635a', fontSize: 12, lineHeight: 16, fontWeight: '700' },
   conditionPill: { backgroundColor: '#fff0cf', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   conditionPillLabel: { color: '#80520a', fontSize: 12, fontWeight: '800' },
-  savingsBox: { alignItems: 'flex-start', backgroundColor: '#e9f6db', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, maxWidth: 190, gap: 2 },
+  savingsBox: { alignSelf: 'stretch', alignItems: 'flex-start', backgroundColor: '#e9f6db', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, maxWidth: '100%', gap: 2 },
   savingsBoxCompact: { maxWidth: '100%', alignSelf: 'stretch' },
   savingsValue: { color: '#173118', fontSize: 14, fontWeight: '900' },
   savingsDescription: { color: '#4d5a4b', fontSize: 11, lineHeight: 15 },
-  actionPriceBox: { alignItems: 'flex-start', backgroundColor: '#fff6dd', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, maxWidth: 210, gap: 2, borderWidth: 1, borderColor: '#ead49a' },
+  actionPriceBox: { alignSelf: 'stretch', alignItems: 'flex-start', backgroundColor: '#fff6dd', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, maxWidth: '100%', gap: 2, borderWidth: 1, borderColor: '#ead49a' },
   actionPriceTitle: { color: '#80520a', fontSize: 14, fontWeight: '900' },
   actionPriceText: { color: '#80520a', fontSize: 11, lineHeight: 15 },
-  shoppingToggle: { marginTop: 4, alignSelf: 'flex-start', backgroundColor: '#ece4d7', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 999 },
+  shoppingToggle: { marginTop: 4, alignSelf: 'stretch', alignItems: 'center', backgroundColor: '#ece4d7', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 999 },
   shoppingToggleActive: { backgroundColor: '#31582c' },
   shoppingToggleLabel: { color: '#304230', fontSize: 13, fontWeight: '800' },
   shoppingToggleLabelActive: { color: '#f8f5ed' },
@@ -1435,7 +1702,8 @@ const styles = StyleSheet.create({
   groupSubtitle: { color: '#5e685d', fontSize: 13, marginTop: 3 },
   groupCount: { minWidth: 36, textAlign: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: '#e1edd3', color: '#244320', fontWeight: '900' },
   listItemCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#f8f3e8', borderRadius: 18, padding: 12 },
-  listItemCardCompact: { flexWrap: 'wrap' },
+  listItemCardCompact: { flexDirection: 'column' },
+  listItemMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   listItemImage: { width: 72, height: 72, borderRadius: 12, backgroundColor: '#fff' },
   listItemImageCompact: { width: 64, height: 64 },
   listItemImageFallback: { width: 72, height: 72, borderRadius: 12, backgroundColor: '#dfe9d5', alignItems: 'center', justifyContent: 'center', padding: 8 },
@@ -1443,11 +1711,42 @@ const styles = StyleSheet.create({
   listItemImageFallbackText: { color: '#31582c', fontSize: 11, fontWeight: '900', textAlign: 'center' },
   listItemBody: { flex: 1, gap: 5 },
   listItemTitle: { color: '#152315', fontSize: 15, lineHeight: 20, fontWeight: '800' },
-  removeButton: { backgroundColor: '#efe5da', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, alignSelf: 'flex-start' },
+  listItemActions: { width: 98, gap: 8, alignSelf: 'stretch' },
+  listItemActionsCompact: { width: '100%', flexDirection: 'row' },
+  removeButton: { flex: 1, backgroundColor: '#efe5da', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   removeButtonLabel: { color: '#7b3535', fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  quantityControl: { flex: 1, backgroundColor: '#fffaf2', borderRadius: 12, padding: 8, gap: 6, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  quantityLabel: { color: '#31582c', fontSize: 11, lineHeight: 14, fontWeight: '900', textAlign: 'center', textTransform: 'uppercase' },
+  quantityStepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  quantityButton: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#31582c' },
+  quantityButtonDisabled: { opacity: 0.35 },
+  quantityButtonLabel: { color: '#f8f5ed', fontSize: 18, lineHeight: 22, fontWeight: '900' },
+  quantityValue: { minWidth: 20, color: '#132014', fontSize: 15, lineHeight: 20, fontWeight: '900', textAlign: 'center' },
   shoppingActions: { gap: 10 },
   resultGroupList: { gap: 16 },
   sectionSpacer: { height: 16 },
+  updateOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 28, 18, 0.48)',
+    justifyContent: 'center',
+    padding: 22,
+  },
+  updateCard: {
+    backgroundColor: '#fffaf2',
+    borderRadius: 22,
+    padding: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(19, 32, 20, 0.1)',
+  },
+  updateEyebrow: { color: '#31582c', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  updateTitle: { color: '#132014', fontSize: 22, lineHeight: 28, fontWeight: '900' },
+  updateText: { color: '#4f594e', fontSize: 14, lineHeight: 21 },
+  updateMeta: { color: '#6a7467', fontSize: 12, lineHeight: 17 },
+  updatePrimaryButton: { backgroundColor: '#31582c', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
+  updatePrimaryButtonLabel: { color: '#f8f5ed', fontSize: 15, fontWeight: '900' },
+  updateSecondaryButton: { backgroundColor: '#ece4d7', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 13, alignItems: 'center' },
+  updateSecondaryButtonLabel: { color: '#304230', fontSize: 14, fontWeight: '900' },
   footerLine: {
     flexDirection: 'row',
     flexWrap: 'wrap',
