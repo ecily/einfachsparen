@@ -638,9 +638,9 @@ function getPageMeta(activePage) {
       path: '/quality',
     },
     diagnostics: {
-      title: 'Systemstatus – kaufklug.at',
-      description: 'Interner Systemstatus für kaufklug.at.',
-      path: '/diagnose',
+      title: 'Admin – kaufklug.at',
+      description: 'Interner Administrationsbereich für kaufklug.at.',
+      path: '/admin',
     },
   }
 
@@ -848,59 +848,6 @@ function updateSeoMetadata(activePage) {
   } else {
     removeJsonLd('kaufklug-jsonld-faq')
   }
-}
-
-function AppDownloadBlock() {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(KAUFKLUG_APK_DOWNLOAD_URL)}`
-
-  return (
-    <SectionCard
-      style={{
-        marginBottom: '1rem',
-        background: 'linear-gradient(180deg, rgba(255,252,247,0.98), rgba(250,246,238,0.94))',
-        border: '1px solid rgba(22,33,24,0.08)',
-      }}
-    >
-      <div className="hero-consumer">
-        <div className="hero-consumer__copy">
-          <p className="eyebrow hero-consumer__eyebrow">kaufklug.at am Smartphone</p>
-
-          <h2>Am Handy ausprobieren.</h2>
-
-          <p className="subtitle">
-            kaufklug.at ist am Smartphone am nützlichsten. Scanne den QR-Code oder lade die aktuelle Android-Testversion
-            direkt herunter und nutze Angebote dort, wo du einkaufst.
-          </p>
-
-          <a
-            href={KAUFKLUG_APK_DOWNLOAD_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="primary-action-button"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 'fit-content',
-              textDecoration: 'none',
-            }}
-          >
-            Android-Testversion herunterladen
-          </a>
-        </div>
-
-        <div className="app-download-modal__qr" style={{ margin: '0 auto' }}>
-          <img
-            src={qrUrl}
-            alt="QR-Code zum Download der kaufklug.at Android-Testversion"
-            width="280"
-            height="280"
-            loading="lazy"
-          />
-        </div>
-      </div>
-    </SectionCard>
-  )
 }
 
 function HeroLoaderModal({ open, label }) {
@@ -1157,6 +1104,8 @@ function StickyBottomLine({ onNavigate }) {
 }
 
 function HeroBlock() {
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(KAUFKLUG_APK_DOWNLOAD_URL)}`
+
   return (
     <SectionCard
       style={{
@@ -1165,31 +1114,90 @@ function HeroBlock() {
         border: '1px solid rgba(22,33,24,0.08)',
       }}
     >
-      <div className="hero-consumer">
+      <div
+        className="hero-consumer"
+        style={{
+          gridTemplateColumns: 'minmax(0, 1.25fr) minmax(250px, 0.75fr)',
+          alignItems: 'center',
+        }}
+      >
         <div className="hero-consumer__copy">
           <p className="eyebrow hero-consumer__eyebrow">kaufklug.at</p>
 
-          <h1>Supermarkt-Angebote in Österreich einfacher finden.</h1>
+          <h1>Supermarkt-Angebote finden. Einkaufsliste am Handy nutzen.</h1>
 
           <p className="subtitle">
-            kaufklug.at hilft dir kostenlos, aktuelle Angebote, Prospekte und Aktionen übersichtlich zu nutzen.
-            Für alle, die beim täglichen Einkauf sparen müssen oder in Zeiten hoher Lebensmittelpreise bessere
-            Orientierung suchen.
+            Wähle deine Geschäfte und Kategorien. kaufklug zeigt dir aktuelle Aktionen und merkt interessante Angebote
+            auf deiner Einkaufsliste.
           </p>
+
+          <div className="hero-benefit-grid">
+            {[
+              ['Kostenlos', 'Derzeit kostenlos nutzbar.'],
+              ['Einfach', 'Geschäfte und Produkte auswählen.'],
+              ['Praktisch', 'Angebote direkt am Smartphone mitnehmen.'],
+            ].map(([title, text]) => (
+              <div key={title} className="hero-benefit-card">
+                <strong>{title}</strong>
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="hero-benefit-grid">
-          {[
-            ['Kostenlos nutzen', 'kaufklug.at wird derzeit als unabhängiges Projekt aufgebaut.'],
-            ['Weniger Prospekt-Chaos', 'Prospekte, Aktionen und Angebotsinformationen einfacher überblicken.'],
-            ['Einfach auswählen', 'Geschäfte, Kategorien und Unterkategorien antippen.'],
-            ['Einkaufsliste', 'Angebote speichern und nach Markt sortiert einkaufen.'],
-          ].map(([title, text]) => (
-            <div key={title} className="hero-benefit-card">
-              <strong>{title}</strong>
-              <span>{text}</span>
-            </div>
-          ))}
+        <div
+          style={{
+            display: 'grid',
+            gap: '0.75rem',
+            justifyItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <p className="eyebrow hero-consumer__eyebrow" style={{ margin: 0 }}>
+            Als App gedacht
+          </p>
+
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 'clamp(1.35rem, 3vw, 2rem)',
+              lineHeight: 1.05,
+              letterSpacing: '-0.04em',
+            }}
+          >
+            Am Smartphone ausprobieren.
+          </h2>
+
+          <div className="app-download-modal__qr" style={{ margin: '0 auto' }}>
+            <img
+              src={qrUrl}
+              alt="QR-Code zum Download der kaufklug.at Android-Testversion"
+              width="280"
+              height="280"
+              loading="eager"
+            />
+          </div>
+
+          <a
+            href={KAUFKLUG_APK_DOWNLOAD_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="primary-action-button"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              maxWidth: '280px',
+              textDecoration: 'none',
+            }}
+          >
+            Android-Testversion laden
+          </a>
+
+          <p style={{ margin: 0, color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4 }}>
+            QR-Code scannen und beim Einkaufen direkt am Handy nutzen.
+          </p>
         </div>
       </div>
     </SectionCard>
@@ -1198,64 +1206,31 @@ function HeroBlock() {
 
 function SeoIntroSections() {
   return (
-    <>
-      <SectionCard style={{ marginBottom: '1rem' }}>
-        <div className="selection-block">
-          <div className="selection-block__header">
-            <p className="eyebrow">Warum kaufklug.at?</p>
-            <h2>Kostenlose Alltagshilfe gegen Prospekt-Chaos.</h2>
-            <p>
-              Viele Menschen wollen beim täglichen Einkauf sparen, haben aber keine Zeit, Prospekte, Aktionen und
-              Bedingungen mühsam zu vergleichen. kaufklug.at soll dabei helfen, öffentlich verfügbare
-              Angebotsinformationen übersichtlich darzustellen und interessante Aktionen schneller zu finden.
-            </p>
+    <SectionCard style={{ marginBottom: '1rem' }}>
+      <div className="selection-block">
+        <div className="selection-block__header">
+          <p className="eyebrow">So funktioniert kaufklug.at</p>
+          <h2>In drei Schritten zu passenden Angeboten.</h2>
+        </div>
+
+        <div className="selection-summary-grid">
+          <div className="selection-summary-card">
+            <strong>1. Geschäfte auswählen</strong>
+            <span>Wähle die Supermärkte, die für dich erreichbar sind.</span>
           </div>
 
-          <div className="selection-summary-grid">
-            <div className="selection-summary-card">
-              <strong>Für Österreich</strong>
-              <span>Ausgerichtet auf Supermarkt-Angebote, Prospekte und Aktionen in Österreich.</span>
-            </div>
+          <div className="selection-summary-card">
+            <strong>2. Produkte wählen</strong>
+            <span>Filtere nach Kategorien oder Unterkategorien, die du heute brauchst.</span>
+          </div>
 
-            <div className="selection-summary-card">
-              <strong>Für den Alltag</strong>
-              <span>Gedacht für Familien, Pensionisten, Studenten, Alleinerziehende und preisbewusste Haushalte.</span>
-            </div>
-
-            <div className="selection-summary-card">
-              <strong>Für Reichweite</strong>
-              <span>Derzeit kostenlos nutzbar, weil kaufklug.at als unabhängiges Projekt aufgebaut wird.</span>
-            </div>
+          <div className="selection-summary-card">
+            <strong>3. Einkaufsliste nutzen</strong>
+            <span>Merke interessante Aktionen und nimm sie am Smartphone mit.</span>
           </div>
         </div>
-      </SectionCard>
-
-      <SectionCard style={{ marginBottom: '1rem' }}>
-        <div className="selection-block">
-          <div className="selection-block__header">
-            <p className="eyebrow">So funktioniert kaufklug.at</p>
-            <h2>In drei einfachen Schritten zu besseren Angebots-Überblicken.</h2>
-          </div>
-
-          <div className="selection-summary-grid">
-            <div className="selection-summary-card">
-              <strong>1. Geschäfte auswählen</strong>
-              <span>Wähle die aktuell unterstützten Händler, die für dich erreichbar sind.</span>
-            </div>
-
-            <div className="selection-summary-card">
-              <strong>2. Produkte wählen</strong>
-              <span>Filtere nach Kategorien oder Unterkategorien, die du heute brauchst.</span>
-            </div>
-
-            <div className="selection-summary-card">
-              <strong>3. Einkaufsliste nutzen</strong>
-              <span>Merke interessante Aktionen und sortiere deinen Einkauf nach Geschäft.</span>
-            </div>
-          </div>
-        </div>
-      </SectionCard>
-    </>
+      </div>
+    </SectionCard>
   )
 }
 
@@ -1726,7 +1701,6 @@ function SearchPage({
       />
 
       <HeroBlock />
-      <AppDownloadBlock />
       <SeoIntroSections />
 
       {error ? (
@@ -2198,8 +2172,8 @@ function DiagnosticsPage({
     <>
       <header className="hero">
         <div>
-          <p className="eyebrow">kaufklug.at Systemstatus</p>
-          <h1>Aktuelle Crawl-Qualität für Graz-Umgebung</h1>
+          <p className="eyebrow">kaufklug.at Admin</p>
+          <h1>Interner Systemstatus</h1>
           <p className="subtitle">Interne Ansicht für Quellen, Jobs, Rohdaten, Normalisierung und Vergleichsgruppen.</p>
         </div>
         <div className="hero__status">
@@ -2221,6 +2195,23 @@ function DiagnosticsPage({
           </div>
         </div>
       </header>
+
+      <SectionCard style={{ marginBottom: '1rem' }}>
+        <div className="selection-block">
+          <div className="selection-block__header">
+            <p className="eyebrow">Admin-Navigation</p>
+            <h2>Interne Werkzeuge</h2>
+          </div>
+          <div className="quick-action-row">
+            <button type="button" className="ghost-button" onClick={() => window.history.replaceState({}, '', '/admin')}>
+              Status
+            </button>
+            <button type="button" className="ghost-button" onClick={() => window.location.assign('/quality')}>
+              Qualität öffnen
+            </button>
+          </div>
+        </div>
+      </SectionCard>
 
       {error ? <p className="status status--error">{error}</p> : null}
 
@@ -2596,6 +2587,7 @@ function QualityPage({
 }
 
 function getInitialPageFromPathname(pathname) {
+  if (pathname.includes('admin')) return 'diagnostics'
   if (pathname.includes('impressum')) return 'impressum'
   if (pathname.includes('datenschutz') || pathname.includes('privacy')) return 'privacy'
   if (pathname.includes('nutzung') || pathname.includes('haftung') || pathname.includes('legal')) return 'liability'
@@ -2609,7 +2601,7 @@ function getInitialPageFromPathname(pathname) {
 
 function getPathForPage(nextPage) {
   if (nextPage === 'quality') return '/quality'
-  if (nextPage === 'diagnostics') return '/diagnose'
+  if (nextPage === 'diagnostics') return '/admin'
   if (nextPage === 'shopping-list') return '/einkaufsliste'
   if (nextPage === 'impressum') return '/impressum'
   if (nextPage === 'privacy') return '/datenschutz'
@@ -3089,24 +3081,6 @@ function App() {
           >
             Einkaufsliste
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
-          </button>
-        </div>
-
-        <div aria-label="Admin-Bereich" className="page-nav__admin">
-          <span>Admin</span>
-
-          <button
-            className={`page-nav__button page-nav__button--small${activePage === 'quality' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('quality')}
-          >
-            Qualität
-          </button>
-
-          <button
-            className={`page-nav__button page-nav__button--small${activePage === 'diagnostics' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('diagnostics')}
-          >
-            Status
           </button>
         </div>
       </nav>
