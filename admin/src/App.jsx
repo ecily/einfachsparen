@@ -16,6 +16,9 @@ import {
 
 const KAUFKLUG_APK_DOWNLOAD_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk'
 const SHOPPING_LIST_STORAGE_KEY = 'kaufklug.shoppingList.v1'
+const COOKIE_NOTICE_STORAGE_KEY = 'kaufklug.storageNotice.accepted.v1'
+const SITE_URL = 'https://kaufklug.at'
+const CONTACT_EMAIL = 'andreas.franz@ecily.com'
 
 function getApiBase() {
   const envBase =
@@ -593,53 +596,310 @@ function getShoppingListSummary(items = []) {
   )
 }
 
-function AppDownloadModal({ open, onClose }) {
-  if (!open) return null
+function getPageMeta(activePage) {
+  const baseTitle = 'kaufklug.at – Supermarkt-Angebote & Prospekte in Österreich einfacher finden'
+  const baseDescription =
+    'kaufklug.at hilft dir kostenlos, aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich leichter zu finden, nach Geschäften und Kategorien zu filtern und als Einkaufsliste zu speichern.'
 
+  const pages = {
+    search: {
+      title: baseTitle,
+      description: baseDescription,
+      path: '/',
+    },
+    'shopping-list': {
+      title: 'Einkaufsliste – kaufklug.at',
+      description: 'Speichere interessante Angebote lokal auf deiner Einkaufsliste und sortiere deinen Einkauf nach Geschäft.',
+      path: '/einkaufsliste',
+    },
+    impressum: {
+      title: 'Impressum – kaufklug.at',
+      description: 'Impressum und Betreiberinformationen zu kaufklug.at.',
+      path: '/impressum',
+    },
+    privacy: {
+      title: 'Datenschutz – kaufklug.at',
+      description: 'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung, Serverkommunikation und externem QR-Code-Dienst.',
+      path: '/datenschutz',
+    },
+    liability: {
+      title: 'Nutzungs- und Haftungshinweise – kaufklug.at',
+      description: 'Hinweise zur unverbindlichen Nutzung von kaufklug.at, Angebotsinformationen, Marken, Händlern und Korrekturmeldungen.',
+      path: '/nutzungshinweise',
+    },
+    cookies: {
+      title: 'Cookie- und Speicherhinweis – kaufklug.at',
+      description: 'Informationen zu Cookies, lokaler Speicherung und technischen Verbindungen bei kaufklug.at.',
+      path: '/cookies',
+    },
+    quality: {
+      title: 'Datenqualität – kaufklug.at',
+      description: 'Interne Qualitätsansicht für kaufklug.at.',
+      path: '/quality',
+    },
+    diagnostics: {
+      title: 'Systemstatus – kaufklug.at',
+      description: 'Interner Systemstatus für kaufklug.at.',
+      path: '/diagnose',
+    },
+  }
+
+  return pages[activePage] || pages.search
+}
+
+function setOrCreateMeta(attribute, key, content) {
+  if (typeof document === 'undefined') return
+
+  let element = document.head.querySelector(`meta[${attribute}="${key}"]`)
+
+  if (!element) {
+    element = document.createElement('meta')
+    element.setAttribute(attribute, key)
+    document.head.appendChild(element)
+  }
+
+  element.setAttribute('content', content)
+}
+
+function setOrCreateLink(rel, href) {
+  if (typeof document === 'undefined') return
+
+  let element = document.head.querySelector(`link[rel="${rel}"]`)
+
+  if (!element) {
+    element = document.createElement('link')
+    element.setAttribute('rel', rel)
+    document.head.appendChild(element)
+  }
+
+  element.setAttribute('href', href)
+}
+
+function setOrCreateJsonLd(id, data) {
+  if (typeof document === 'undefined') return
+
+  let element = document.getElementById(id)
+
+  if (!element) {
+    element = document.createElement('script')
+    element.id = id
+    element.type = 'application/ld+json'
+    document.head.appendChild(element)
+  }
+
+  element.textContent = JSON.stringify(data)
+}
+
+function removeJsonLd(id) {
+  if (typeof document === 'undefined') return
+
+  const element = document.getElementById(id)
+
+  if (element) {
+    element.remove()
+  }
+}
+
+function updateSeoMetadata(activePage) {
+  if (typeof document === 'undefined') return
+
+  const meta = getPageMeta(activePage)
+  const canonicalUrl = `${SITE_URL}${meta.path}`
+
+  document.title = meta.title
+
+  setOrCreateMeta('name', 'description', meta.description)
+  setOrCreateMeta('name', 'robots', activePage === 'quality' || activePage === 'diagnostics' ? 'noindex,nofollow' : 'index,follow')
+  setOrCreateMeta('name', 'theme-color', '#f7f1e6')
+
+  setOrCreateMeta('property', 'og:type', 'website')
+  setOrCreateMeta('property', 'og:site_name', 'kaufklug.at')
+  setOrCreateMeta('property', 'og:title', meta.title)
+  setOrCreateMeta('property', 'og:description', meta.description)
+  setOrCreateMeta('property', 'og:url', canonicalUrl)
+  setOrCreateMeta('property', 'og:locale', 'de_AT')
+
+  setOrCreateMeta('name', 'twitter:card', 'summary')
+  setOrCreateMeta('name', 'twitter:title', meta.title)
+  setOrCreateMeta('name', 'twitter:description', meta.description)
+
+  setOrCreateLink('canonical', canonicalUrl)
+
+  setOrCreateJsonLd('kaufklug-jsonld-website', {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'kaufklug.at',
+    url: SITE_URL,
+    inLanguage: 'de-AT',
+    description:
+      'Kostenlose Orientierungshilfe für Supermarkt-Angebote, Prospekte und Aktionen in Österreich.',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${SITE_URL}/?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
+  })
+
+  setOrCreateJsonLd('kaufklug-jsonld-webapp', {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'kaufklug.at',
+    url: SITE_URL,
+    applicationCategory: 'LifestyleApplication',
+    operatingSystem: 'Web, Android',
+    inLanguage: 'de-AT',
+    isAccessibleForFree: true,
+    description:
+      'kaufklug.at hilft kostenlos dabei, öffentlich verfügbare Angebotsinformationen in Österreich übersichtlich darzustellen, nach Geschäften und Kategorien zu filtern und auf einer Einkaufsliste zu merken.',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'EUR',
+    },
+    creator: {
+      '@type': 'Person',
+      name: 'Mag. Andreas Franz MA',
+      email: CONTACT_EMAIL,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Brunnenweg 16',
+        postalCode: '8111',
+        addressLocality: 'Gratwein-Straßengel',
+        addressCountry: 'AT',
+      },
+    },
+  })
+
+  setOrCreateJsonLd('kaufklug-jsonld-person', {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: 'Mag. Andreas Franz MA',
+    email: CONTACT_EMAIL,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: 'Brunnenweg 16',
+      postalCode: '8111',
+      addressLocality: 'Gratwein-Straßengel',
+      addressCountry: 'AT',
+    },
+  })
+
+  if (activePage === 'search') {
+    setOrCreateJsonLd('kaufklug-jsonld-faq', {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'Was ist kaufklug.at?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text:
+              'kaufklug.at ist eine kostenlose Orientierungshilfe für aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich. Die Seite hilft dabei, Angebote einfacher zu finden, nach Geschäften und Kategorien zu filtern und interessante Aktionen auf eine Einkaufsliste zu setzen.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Ist kaufklug.at kostenlos?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text:
+              'Ja. kaufklug.at ist derzeit kostenlos nutzbar, weil das Projekt unabhängig aufgebaut wird.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Für wen ist kaufklug.at gedacht?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text:
+              'kaufklug.at ist für alle gedacht, die beim täglichen Einkauf sparen möchten oder sparen müssen: Familien, Pensionisten, Studenten, Alleinerziehende und alle preisbewussten Haushalte in Österreich.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Sind die angezeigten Angebote garantiert richtig?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text:
+              'Nein. kaufklug.at zeigt Angebotsinformationen als unverbindliche Orientierungshilfe. Preise, Verfügbarkeit, Bedingungen und regionale Gültigkeit können abweichen. Vor dem Kauf sollten immer die aktuellen Angaben des jeweiligen Händlers geprüft werden.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Warum sehe ich manchmal keine genaue Ersparnis?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text:
+              'Manche Prospekte nennen nur den Aktionspreis, aber keinen Normalpreis. In solchen Fällen zeigt kaufklug.at den Aktionspreis, aber keine konkrete Euro-Ersparnis.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Funktioniert kaufklug.at besser am Smartphone?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text:
+              'Ja. Die Website bleibt nutzbar, aber kaufklug.at ist vor allem für das Smartphone gedacht. So können Angebote direkt beim Einkaufen genutzt und interessante Aktionen auf der Einkaufsliste gespeichert werden.',
+          },
+        },
+      ],
+    })
+  } else {
+    removeJsonLd('kaufklug-jsonld-faq')
+  }
+}
+
+function AppDownloadBlock() {
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(KAUFKLUG_APK_DOWNLOAD_URL)}`
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="apk-download-title"
-      aria-describedby="apk-download-description"
-      className="app-download-overlay"
+    <SectionCard
+      style={{
+        marginBottom: '1rem',
+        background: 'linear-gradient(180deg, rgba(255,252,247,0.98), rgba(250,246,238,0.94))',
+        border: '1px solid rgba(22,33,24,0.08)',
+      }}
     >
-      <div className="app-download-modal panel">
-        <div className="app-download-modal__content">
-          <p className="eyebrow app-download-modal__eyebrow">kaufklug.at alpha</p>
+      <div className="hero-consumer">
+        <div className="hero-consumer__copy">
+          <p className="eyebrow hero-consumer__eyebrow">kaufklug.at am Smartphone</p>
 
-          <h2 id="apk-download-title">kaufklug am Smartphone testen</h2>
+          <h2>Am Handy ausprobieren.</h2>
 
-          <p id="apk-download-description">
-            Scanne den QR-Code und probiere die aktuelle Android-Testversion direkt am Handy aus.
+          <p className="subtitle">
+            kaufklug.at ist am Smartphone am nützlichsten. Scanne den QR-Code oder lade die aktuelle Android-Testversion
+            direkt herunter und nutze Angebote dort, wo du einkaufst.
           </p>
-
-          <div className="app-download-modal__qr">
-            <img
-              src={qrUrl}
-              alt="QR-Code zum Download der kaufklug.at Android-Testversion"
-              width="280"
-              height="280"
-            />
-          </div>
 
           <a
             href={KAUFKLUG_APK_DOWNLOAD_URL}
             target="_blank"
             rel="noreferrer"
-            className="app-download-modal__link"
+            className="primary-action-button"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 'fit-content',
+              textDecoration: 'none',
+            }}
           >
-            Android-Testversion direkt herunterladen
+            Android-Testversion herunterladen
           </a>
+        </div>
 
-          <button type="button" className="ghost-button app-download-modal__dismiss" onClick={onClose}>
-            Vielleicht später
-          </button>
+        <div className="app-download-modal__qr" style={{ margin: '0 auto' }}>
+          <img
+            src={qrUrl}
+            alt="QR-Code zum Download der kaufklug.at Android-Testversion"
+            width="280"
+            height="280"
+            loading="lazy"
+          />
         </div>
       </div>
-    </div>
+    </SectionCard>
   )
 }
 
@@ -703,21 +963,142 @@ function ProductImage({ offerId, src, alt, compact = false }) {
   )
 }
 
-function SavingsNotice() {
+function LegalInlineNotice({ onNavigate, compact = false }) {
   return (
-    <div className="savings-notice">
-      <strong>Hinweis:</strong>{' '}
-      kaufklug zeigt aktuelle Angebote aus Prospekten und Aktionen. Manche Prospekte nennen nur den Aktionspreis,
-      aber keinen Normalpreis. Das ist besonders bei kurzen oder saisonalen Aktionen üblich. In diesem Fall zeigen
-      wir den Aktionspreis, aber keine Euro-Ersparnis.
+    <div className="savings-notice" style={compact ? { marginTop: '0.75rem' } : {}}>
+      <strong>Unverbindlicher Hinweis:</strong>{' '}
+      Preise, Verfügbarkeit, Bedingungen und regionale Gültigkeit können abweichen. Maßgeblich sind die aktuellen Angaben
+      des jeweiligen Händlers im Geschäft, Online-Shop oder offiziellen Prospekt.{' '}
+      {onNavigate ? (
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => onNavigate('liability')}
+          style={{
+            display: 'inline',
+            padding: 0,
+            border: 0,
+            background: 'transparent',
+            boxShadow: 'none',
+            font: 'inherit',
+            fontWeight: 800,
+            textDecoration: 'underline',
+          }}
+        >
+          Nutzungs- und Haftungshinweise
+        </button>
+      ) : null}
     </div>
   )
 }
 
-function StickyBottomLine() {
+function SavingsNotice({ onNavigate }) {
+  return (
+    <div className="savings-notice">
+      <strong>Hinweis:</strong>{' '}
+      kaufklug zeigt aktuelle Angebote aus Prospekten, Aktionen und Angebotsinformationen als unverbindliche
+      Orientierungshilfe. Manche Prospekte nennen nur den Aktionspreis, aber keinen Normalpreis. In diesem Fall zeigen
+      wir den Aktionspreis, aber keine Euro-Ersparnis.{' '}
+      {onNavigate ? (
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => onNavigate('liability')}
+          style={{
+            display: 'inline',
+            padding: 0,
+            border: 0,
+            background: 'transparent',
+            boxShadow: 'none',
+            font: 'inherit',
+            fontWeight: 800,
+            textDecoration: 'underline',
+          }}
+        >
+          Mehr dazu
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function CookieStorageNotice({ onNavigate }) {
+  const [visible, setVisible] = useState(() => {
+    if (typeof window === 'undefined') return false
+
+    try {
+      return window.localStorage.getItem(COOKIE_NOTICE_STORAGE_KEY) !== 'true'
+    } catch {
+      return true
+    }
+  })
+
+  function handleAccept() {
+    try {
+      window.localStorage.setItem(COOKIE_NOTICE_STORAGE_KEY, 'true')
+    } catch {
+      // Speicherung kann im Browser blockiert sein. Der Hinweis wird dann nur für diese Sitzung geschlossen.
+    }
+
+    setVisible(false)
+  }
+
+  if (!visible) return null
+
   return (
     <div
-      aria-label="Copyright und Projektlink"
+      role="region"
+      aria-label="Cookie- und Speicherhinweis"
+      style={{
+        position: 'fixed',
+        left: '1rem',
+        right: '1rem',
+        bottom: '4.25rem',
+        zIndex: 70,
+        maxWidth: '980px',
+        margin: '0 auto',
+      }}
+    >
+      <div className="panel" style={{ padding: '1rem' }}>
+        <div className="panel__header" style={{ marginBottom: '0.75rem' }}>
+          <h2 style={{ fontSize: '1rem', margin: 0 }}>Cookie- und Speicherhinweis</h2>
+          <p style={{ margin: 0 }}>
+            kaufklug.at verwendet derzeit keine Marketing- oder Analyse-Cookies. Für die Einkaufsliste und diesen
+            Hinweis speichern wir Daten lokal auf deinem Gerät. Beim Anzeigen des QR-Codes kann eine technische
+            Verbindung zu einem externen QR-Code-Dienst entstehen.
+          </p>
+        </div>
+
+        <div className="quick-action-row">
+          <button type="button" className="primary-action-button" onClick={handleAccept}>
+            Verstanden
+          </button>
+          <button type="button" className="ghost-button" onClick={() => onNavigate?.('cookies')}>
+            Details
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StickyBottomLine({ onNavigate }) {
+  const footerButtonStyle = {
+    display: 'inline',
+    margin: '0 0 0 0.45rem',
+    padding: 0,
+    border: 0,
+    color: '#315e2a',
+    font: 'inherit',
+    fontWeight: 850,
+    textDecoration: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+  }
+
+  return (
+    <div
+      aria-label="Copyright, Projektlink und Rechtliches"
       style={{
         position: 'fixed',
         left: 0,
@@ -755,6 +1136,21 @@ function StickyBottomLine() {
           ecily/webentwicklung
         </a>
         .
+        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('impressum')}>
+          Impressum
+        </button>
+        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('privacy')}>
+          Datenschutz
+        </button>
+        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('liability')}>
+          Haftung
+        </button>
+        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('cookies')}>
+          Cookies
+        </button>
+        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('liability')}>
+          Fehler melden
+        </button>
       </span>
     </div>
   )
@@ -773,25 +1169,145 @@ function HeroBlock() {
         <div className="hero-consumer__copy">
           <p className="eyebrow hero-consumer__eyebrow">kaufklug.at</p>
 
-          <h1>Einfach klug einkaufen.</h1>
+          <h1>Supermarkt-Angebote in Österreich einfacher finden.</h1>
 
           <p className="subtitle">
-            Wähle deine Geschäfte und was du einkaufen möchtest. kaufklug zeigt dir aktuelle Angebote aus Prospekten
-            und Aktionen — einfach, verständlich und ohne Prospekt-Chaos.
+            kaufklug.at hilft dir kostenlos, aktuelle Angebote, Prospekte und Aktionen übersichtlich zu nutzen.
+            Für alle, die beim täglichen Einkauf sparen müssen oder in Zeiten hoher Lebensmittelpreise bessere
+            Orientierung suchen.
           </p>
         </div>
 
         <div className="hero-benefit-grid">
           {[
-            ['Aktuelle Aktionen', 'Angebote aus Prospekten und laufenden Aktionen.'],
+            ['Kostenlos nutzen', 'kaufklug.at wird derzeit als unabhängiges Projekt aufgebaut.'],
+            ['Weniger Prospekt-Chaos', 'Prospekte, Aktionen und Angebotsinformationen einfacher überblicken.'],
             ['Einfach auswählen', 'Geschäfte, Kategorien und Unterkategorien antippen.'],
             ['Einkaufsliste', 'Angebote speichern und nach Markt sortiert einkaufen.'],
-            ['Ehrliche Ersparnis', 'Euro-Ersparnis nur dort, wo ein Normalpreis angegeben ist.'],
           ].map(([title, text]) => (
             <div key={title} className="hero-benefit-card">
               <strong>{title}</strong>
               <span>{text}</span>
             </div>
+          ))}
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function SeoIntroSections() {
+  return (
+    <>
+      <SectionCard style={{ marginBottom: '1rem' }}>
+        <div className="selection-block">
+          <div className="selection-block__header">
+            <p className="eyebrow">Warum kaufklug.at?</p>
+            <h2>Kostenlose Alltagshilfe gegen Prospekt-Chaos.</h2>
+            <p>
+              Viele Menschen wollen beim täglichen Einkauf sparen, haben aber keine Zeit, Prospekte, Aktionen und
+              Bedingungen mühsam zu vergleichen. kaufklug.at soll dabei helfen, öffentlich verfügbare
+              Angebotsinformationen übersichtlich darzustellen und interessante Aktionen schneller zu finden.
+            </p>
+          </div>
+
+          <div className="selection-summary-grid">
+            <div className="selection-summary-card">
+              <strong>Für Österreich</strong>
+              <span>Ausgerichtet auf Supermarkt-Angebote, Prospekte und Aktionen in Österreich.</span>
+            </div>
+
+            <div className="selection-summary-card">
+              <strong>Für den Alltag</strong>
+              <span>Gedacht für Familien, Pensionisten, Studenten, Alleinerziehende und preisbewusste Haushalte.</span>
+            </div>
+
+            <div className="selection-summary-card">
+              <strong>Für Reichweite</strong>
+              <span>Derzeit kostenlos nutzbar, weil kaufklug.at als unabhängiges Projekt aufgebaut wird.</span>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard style={{ marginBottom: '1rem' }}>
+        <div className="selection-block">
+          <div className="selection-block__header">
+            <p className="eyebrow">So funktioniert kaufklug.at</p>
+            <h2>In drei einfachen Schritten zu besseren Angebots-Überblicken.</h2>
+          </div>
+
+          <div className="selection-summary-grid">
+            <div className="selection-summary-card">
+              <strong>1. Geschäfte auswählen</strong>
+              <span>Wähle die aktuell unterstützten Händler, die für dich erreichbar sind.</span>
+            </div>
+
+            <div className="selection-summary-card">
+              <strong>2. Produkte wählen</strong>
+              <span>Filtere nach Kategorien oder Unterkategorien, die du heute brauchst.</span>
+            </div>
+
+            <div className="selection-summary-card">
+              <strong>3. Einkaufsliste nutzen</strong>
+              <span>Merke interessante Aktionen und sortiere deinen Einkauf nach Geschäft.</span>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+    </>
+  )
+}
+
+function FaqSection() {
+  const faqs = [
+    {
+      question: 'Was ist kaufklug.at?',
+      answer:
+        'kaufklug.at ist eine kostenlose Orientierungshilfe für aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich. Die Seite hilft dir, Angebote einfacher zu finden, nach Geschäften und Kategorien zu filtern und interessante Aktionen auf deine Einkaufsliste zu setzen.',
+    },
+    {
+      question: 'Ist kaufklug.at kostenlos?',
+      answer:
+        'Ja. kaufklug.at ist derzeit kostenlos nutzbar, weil das Projekt unabhängig aufgebaut wird.',
+    },
+    {
+      question: 'Für wen ist kaufklug.at gedacht?',
+      answer:
+        'Für alle, die beim täglichen Einkauf sparen möchten oder sparen müssen: Familien, Pensionisten, Studenten, Alleinerziehende und alle preisbewussten Haushalte in Österreich.',
+    },
+    {
+      question: 'Sind die angezeigten Angebote garantiert richtig?',
+      answer:
+        'Nein. kaufklug.at zeigt Angebotsinformationen als unverbindliche Orientierungshilfe. Preise, Verfügbarkeit, Bedingungen und regionale Gültigkeit können abweichen. Bitte prüfe vor dem Kauf immer die aktuellen Angaben des jeweiligen Händlers.',
+    },
+    {
+      question: 'Warum sehe ich manchmal keine genaue Ersparnis?',
+      answer:
+        'Manche Prospekte nennen nur den Aktionspreis, aber keinen Normalpreis. In solchen Fällen zeigt kaufklug.at den Aktionspreis, aber keine konkrete Euro-Ersparnis.',
+    },
+    {
+      question: 'Funktioniert kaufklug.at besser am Smartphone?',
+      answer:
+        'Ja. Die Website bleibt nutzbar, aber kaufklug.at ist vor allem für das Smartphone gedacht. So kannst du Angebote direkt beim Einkaufen nutzen und interessante Aktionen auf deiner Einkaufsliste speichern.',
+    },
+  ]
+
+  return (
+    <SectionCard style={{ marginTop: '1rem' }}>
+      <div className="selection-block">
+        <div className="selection-block__header">
+          <p className="eyebrow">Häufige Fragen</p>
+          <h2>Kurz erklärt.</h2>
+          <p>Die wichtigsten Antworten zu kaufklug.at, Angeboten, Kosten und Nutzung.</p>
+        </div>
+
+        <div style={{ display: 'grid', gap: '0.85rem' }}>
+          {faqs.map((item) => (
+            <article key={item.question} className="selection-summary-card">
+              <strong>{item.question}</strong>
+              <span>{item.answer}</span>
+            </article>
           ))}
         </div>
       </div>
@@ -1090,6 +1606,7 @@ function ResultsBlockConsumer({
   actionOffers,
   onAddToShoppingList,
   shoppingListIds,
+  onNavigate,
 }) {
   const visibleOfferCount = safeOffers.length + actionOffers.length
 
@@ -1098,7 +1615,10 @@ function ResultsBlockConsumer({
       <div className="results-block">
         <div className="panel__header">
           <h2>Deine Angebote</h2>
-          <p>Alle Treffer sind aktuelle Angebote. Euro-Ersparnis zeigen wir nur dort, wo im Prospekt ein Normalpreis angegeben ist.</p>
+          <p>
+            Alle Treffer sind aktuelle Angebote. Euro-Ersparnis zeigen wir nur dort, wo im Prospekt ein Normalpreis
+            angegeben ist.
+          </p>
         </div>
 
         {!hasAppliedRetailerScope ? (
@@ -1130,7 +1650,8 @@ function ResultsBlockConsumer({
               </span>
             </div>
 
-            <SavingsNotice />
+            <SavingsNotice onNavigate={onNavigate} />
+            <LegalInlineNotice onNavigate={onNavigate} compact />
 
             <ResultsSection
               title="Angebote mit Euro-Ersparnis"
@@ -1178,6 +1699,7 @@ function SearchPage({
   onApplySearch,
   onResetAll,
   onAddToShoppingList,
+  onNavigate,
 }) {
   const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
@@ -1204,6 +1726,8 @@ function SearchPage({
       />
 
       <HeroBlock />
+      <AppDownloadBlock />
+      <SeoIntroSections />
 
       {error ? (
         <SectionCard style={{ marginBottom: '1rem' }}>
@@ -1249,12 +1773,15 @@ function SearchPage({
         actionOffers={actionOffers}
         onAddToShoppingList={onAddToShoppingList}
         shoppingListIds={shoppingListIds}
+        onNavigate={onNavigate}
       />
+
+      <FaqSection />
     </>
   )
 }
 
-function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers }) {
+function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers, onNavigate }) {
   const groupedItems = useMemo(() => groupShoppingListByRetailer(shoppingListItems), [shoppingListItems])
   const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
 
@@ -1272,7 +1799,8 @@ function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoTo
           </div>
         </SectionCard>
 
-        <SavingsNotice />
+        <SavingsNotice onNavigate={onNavigate} />
+        <LegalInlineNotice onNavigate={onNavigate} compact />
       </>
     )
   }
@@ -1310,7 +1838,8 @@ function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoTo
         </div>
       ) : null}
 
-      <SavingsNotice />
+      <SavingsNotice onNavigate={onNavigate} />
+      <LegalInlineNotice onNavigate={onNavigate} compact />
 
       <div className="shopping-list-actions">
         <button type="button" className="ghost-button" onClick={onGoToOffers}>
@@ -1374,6 +1903,281 @@ function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoTo
         ))}
       </div>
     </>
+  )
+}
+
+function LegalPageShell({ eyebrow, title, subtitle, children }) {
+  return (
+    <SectionCard>
+      <div className="selection-block">
+        <div className="selection-block__header">
+          <p className="eyebrow">{eyebrow}</p>
+          <h1>{title}</h1>
+          {subtitle ? <p>{subtitle}</p> : null}
+        </div>
+
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          {children}
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function LegalSection({ title, children }) {
+  return (
+    <section>
+      <h2>{title}</h2>
+      <div style={{ display: 'grid', gap: '0.6rem' }}>
+        {children}
+      </div>
+    </section>
+  )
+}
+
+function ImpressumPage() {
+  return (
+    <LegalPageShell
+      eyebrow="Rechtliches"
+      title="Impressum"
+      subtitle="Betreiber- und Medieninhaberangaben zu kaufklug.at."
+    >
+      <LegalSection title="Medieninhaber und Betreiber">
+        <p>
+          <strong>Mag. Andreas Franz MA</strong>
+          <br />
+          Brunnenweg 16
+          <br />
+          8111 Gratwein-Straßengel
+          <br />
+          Österreich
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Kontakt">
+        <p>
+          E-Mail:{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`}>
+            {CONTACT_EMAIL}
+          </a>
+          <br />
+          Telefon:{' '}
+          <a href="tel:+436642437638">
+            +43 664 2437638
+          </a>
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Projektstatus">
+        <p>
+          kaufklug.at ist derzeit ein privates, kostenlos nutzbares Projekt. Über diese Website werden derzeit keine
+          Waren oder Dienstleistungen verkauft. Die Website dient der unverbindlichen Orientierung über öffentlich
+          verfügbare Angebotsinformationen.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Gewerbe-, Firmenbuch- und UID-Angaben">
+        <p>
+          Es wird derzeit kein über diese Website aktiv ausgeübtes Gewerbe angegeben. Eine Firmenbuchnummer besteht
+          nicht. Eine UID-Nummer wird derzeit nicht verwendet.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Grundlegende Richtung">
+        <p>
+          kaufklug.at stellt Informationen rund um Supermarkt-Angebote, Prospekte, Aktionen, Einkauf und Sparen in
+          Österreich bereit. Ziel ist eine einfache, kostenlose Orientierungshilfe für den Alltag.
+        </p>
+      </LegalSection>
+    </LegalPageShell>
+  )
+}
+
+function PrivacyPage() {
+  return (
+    <LegalPageShell
+      eyebrow="Rechtliches"
+      title="Datenschutz"
+      subtitle="Hinweise zur Verarbeitung personenbezogener Daten bei der Nutzung von kaufklug.at."
+    >
+      <LegalSection title="Verantwortlicher">
+        <p>
+          Mag. Andreas Franz MA
+          <br />
+          Brunnenweg 16
+          <br />
+          8111 Gratwein-Straßengel
+          <br />
+          Österreich
+          <br />
+          E-Mail:{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`}>
+            {CONTACT_EMAIL}
+          </a>
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Zweck der Website">
+        <p>
+          kaufklug.at hilft dabei, öffentlich verfügbare Angebotsinformationen übersichtlich darzustellen. Die Nutzung
+          ist derzeit kostenlos und ohne Nutzerkonto möglich.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Technische Zugriffsdaten">
+        <p>
+          Beim Aufruf der Website können technisch notwendige Zugriffsdaten verarbeitet werden, etwa IP-Adresse,
+          Zeitpunkt des Zugriffs, abgerufene Inhalte, Browserinformationen und technische Statusmeldungen. Diese Daten
+          sind für Bereitstellung, Sicherheit, Fehleranalyse und stabilen Betrieb der Website erforderlich.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="API-Kommunikation">
+        <p>
+          Die Webanwendung ruft Angebots-, Filter-, Qualitäts- und Statusdaten von einem Backend ab. Dabei können
+          technische Zugriffsdaten an den Server übertragen werden. Es werden derzeit keine Nutzerkonten über diese
+          Frontend-Ansicht geführt.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Lokale Speicherung">
+        <p>
+          Die Einkaufsliste wird lokal im Browser des jeweiligen Geräts gespeichert. Diese Daten werden nicht benötigt,
+          um die Website grundsätzlich aufzurufen, erleichtern aber die Nutzung der Einkaufsliste. Nutzerinnen und Nutzer
+          können die Einkaufsliste jederzeit in der Anwendung löschen oder lokale Browserdaten entfernen.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Externer QR-Code-Dienst">
+        <p>
+          Für den Download-Hinweis zur Android-Testversion wird ein QR-Code über einen externen QR-Code-Dienst geladen.
+          Beim Anzeigen dieses QR-Codes kann eine technische Verbindung zu diesem Anbieter entstehen. Dabei können
+          technische Zugriffsdaten wie IP-Adresse und Browserinformationen übertragen werden.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Kontaktaufnahme">
+        <p>
+          Wenn du per E-Mail Kontakt aufnimmst, werden die von dir übermittelten Daten zur Bearbeitung der Anfrage
+          verarbeitet. Eine Weitergabe erfolgt nicht ohne Anlass, außer sie ist zur Bearbeitung, Rechtsverfolgung oder
+          Erfüllung gesetzlicher Pflichten erforderlich.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Rechte betroffener Personen">
+        <p>
+          Betroffene Personen können nach Maßgabe der DSGVO insbesondere Auskunft, Berichtigung, Löschung,
+          Einschränkung, Datenübertragbarkeit und Widerspruch geltend machen. Zudem besteht das Recht auf Beschwerde bei
+          der österreichischen Datenschutzbehörde.
+        </p>
+      </LegalSection>
+    </LegalPageShell>
+  )
+}
+
+function LiabilityPage() {
+  return (
+    <LegalPageShell
+      eyebrow="Rechtliches"
+      title="Nutzungs- und Haftungshinweise"
+      subtitle="Wichtige Hinweise zur unverbindlichen Nutzung von kaufklug.at und zu Angebotsinformationen."
+    >
+      <LegalSection title="Unverbindliche Orientierungshilfe">
+        <p>
+          kaufklug.at stellt Angebots-, Preis-, Rabatt-, Produkt-, Verfügbarkeits- und Gültigkeitsinformationen
+          ausschließlich als unverbindliche Orientierungshilfe bereit. Die dargestellten Informationen können aus
+          öffentlich zugänglichen Quellen, Prospekten, Online-Angeboten oder automatisierten Auswertungen abgeleitet sein
+          und können unvollständig, veraltet, fehlerhaft oder regional unterschiedlich sein.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Keine Händlerstellung und keine verbindliche Preiszusage">
+        <p>
+          kaufklug.at ist kein Händler, verkauft keine Waren und gibt keine verbindlichen Preis-, Rabatt-,
+          Verfügbarkeits- oder Produkteigenschaftszusagen ab. Maßgeblich sind ausschließlich die jeweils aktuellen
+          Angaben, Preise, Bedingungen und Verfügbarkeiten des jeweiligen Händlers am Verkaufsort, im Online-Shop oder im
+          offiziellen Prospekt des Händlers.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Keine Gewähr für Angebotsinformationen">
+        <p>
+          Eine Gewähr für Richtigkeit, Vollständigkeit, Aktualität, Vergleichbarkeit, Verfügbarkeit oder regionale
+          Gültigkeit der dargestellten Angebote wird nicht übernommen. Nutzerinnen und Nutzer sind verpflichtet, Preise,
+          Bedingungen, Gültigkeit, Mengenbeschränkungen, Kundenkarten-/App-Erfordernisse und Verfügbarkeit vor dem Kauf
+          selbst beim jeweiligen Händler zu prüfen.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Haftungsbeschränkung">
+        <p>
+          Soweit gesetzlich zulässig, ist eine Haftung von kaufklug.at für Schäden, Nachteile, Mehrkosten, entgangene
+          Ersparnisse oder Kaufentscheidungen, die aufgrund angezeigter Angebotsinformationen entstehen, ausgeschlossen.
+          Die Haftung für vorsätzlich oder grob fahrlässig verursachte Schäden bleibt unberührt.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Marken, Händler und Rechteinhaber">
+        <p>
+          Alle genannten Marken, Produktnamen, Händlerbezeichnungen und sonstigen Kennzeichen sind Eigentum der
+          jeweiligen Rechteinhaber. Die Nennung dient ausschließlich der sachlichen Zuordnung öffentlich zugänglicher
+          Angebotsinformationen. kaufklug.at ist ein unabhängiges Projekt und steht in keiner offiziellen Verbindung zu
+          den angezeigten Händlern, Marken oder Rechteinhabern, sofern nicht ausdrücklich anders angegeben.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Fehler melden und Korrekturen">
+        <p>
+          Sollten Rechteinhaber, Händler, Nutzerinnen oder Nutzer der Ansicht sein, dass Inhalte fehlerhaft,
+          unzutreffend, veraltet oder rechtsverletzend sind, wird um Mitteilung an{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`}>
+            {CONTACT_EMAIL}
+          </a>{' '}
+          ersucht. Beanstandete Inhalte werden nach nachvollziehbarer Prüfung korrigiert, ergänzt oder entfernt.
+        </p>
+      </LegalSection>
+    </LegalPageShell>
+  )
+}
+
+function CookiesPage() {
+  return (
+    <LegalPageShell
+      eyebrow="Rechtliches"
+      title="Cookie- und Speicherhinweis"
+      subtitle="Informationen zu Cookies, lokaler Speicherung und technischen Verbindungen."
+    >
+      <LegalSection title="Keine Marketing- oder Analyse-Cookies">
+        <p>
+          kaufklug.at verwendet derzeit keine Marketing- oder Analyse-Cookies in der sichtbaren Webanwendung. Es werden
+          derzeit keine Werbeprofile erstellt und keine sichtbaren Tracking-Pixel wie Google Analytics, Meta Pixel oder
+          vergleichbare Dienste eingesetzt.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Lokale Speicherung im Browser">
+        <p>
+          Für die Einkaufsliste und den Speicherhinweis verwendet kaufklug.at lokale Speicherung im Browser
+          beziehungsweise auf dem Gerät. Diese Speicherung dient dazu, die Einkaufsliste lokal zu erhalten und den
+          Cookie-/Speicherhinweis nicht bei jedem Besuch erneut anzuzeigen.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Externer QR-Code">
+        <p>
+          Beim Anzeigen des QR-Codes zum Download der Android-Testversion kann eine technische Verbindung zu einem
+          externen QR-Code-Dienst entstehen. Wer dies vermeiden möchte, kann den direkten Download-Link verwenden, ohne
+          den QR-Code zu scannen.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Browserdaten löschen">
+        <p>
+          Lokale Daten können über die Funktionen des Browsers gelöscht werden. Zusätzlich kann die Einkaufsliste direkt
+          in der Anwendung geleert werden.
+        </p>
+      </LegalSection>
+    </LegalPageShell>
   )
 }
 
@@ -1791,24 +2595,35 @@ function QualityPage({
   )
 }
 
+function getInitialPageFromPathname(pathname) {
+  if (pathname.includes('impressum')) return 'impressum'
+  if (pathname.includes('datenschutz') || pathname.includes('privacy')) return 'privacy'
+  if (pathname.includes('nutzung') || pathname.includes('haftung') || pathname.includes('legal')) return 'liability'
+  if (pathname.includes('cookies') || pathname.includes('cookie')) return 'cookies'
+  if (pathname.includes('quality')) return 'quality'
+  if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
+  if (pathname.includes('einkaufsliste') || pathname.includes('shopping')) return 'shopping-list'
+
+  return 'search'
+}
+
+function getPathForPage(nextPage) {
+  if (nextPage === 'quality') return '/quality'
+  if (nextPage === 'diagnostics') return '/diagnose'
+  if (nextPage === 'shopping-list') return '/einkaufsliste'
+  if (nextPage === 'impressum') return '/impressum'
+  if (nextPage === 'privacy') return '/datenschutz'
+  if (nextPage === 'liability') return '/nutzungshinweise'
+  if (nextPage === 'cookies') return '/cookies'
+
+  return '/'
+}
+
 function App() {
   const pathname = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : ''
-  const initialPage = pathname.includes('quality')
-    ? 'quality'
-    : pathname.includes('diagnose') || pathname.includes('diagnostic')
-      ? 'diagnostics'
-      : pathname.includes('einkaufsliste') || pathname.includes('shopping')
-        ? 'shopping-list'
-        : 'search'
-
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.title = 'kaufklug | einfach klug einkaufen'
-    }
-  }, [])
+  const initialPage = getInitialPageFromPathname(pathname)
 
   const [activePage, setActivePage] = useState(initialPage)
-  const [showAppDownloadModal, setShowAppDownloadModal] = useState(true)
   const [shoppingListItems, setShoppingListItems] = useState(() => loadStoredShoppingList())
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
@@ -1845,6 +2660,10 @@ function App() {
     () => buildSelectedCategoryQueryLabels(appliedSelectedCategoryLabels, categories),
     [appliedSelectedCategoryLabels, categories]
   )
+
+  useEffect(() => {
+    updateSeoMetadata(activePage)
+  }, [activePage])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -2055,16 +2874,8 @@ function App() {
       return
     }
 
-    const nextPath =
-      nextPage === 'quality'
-        ? '/quality'
-        : nextPage === 'diagnostics'
-          ? '/diagnose'
-          : nextPage === 'shopping-list'
-            ? '/einkaufsliste'
-            : '/'
-
-    window.history.replaceState({}, '', nextPath)
+    window.history.replaceState({}, '', getPathForPage(nextPage))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleQualityFilterChange(key, value) {
@@ -2263,11 +3074,6 @@ function App() {
 
   return (
     <main className="shell" style={{ paddingBottom: '5.5rem' }}>
-      <AppDownloadModal
-        open={showAppDownloadModal}
-        onClose={() => setShowAppDownloadModal(false)}
-      />
-
       <nav className="page-nav" aria-label="Seiten">
         <div className="page-nav__main">
           <button
@@ -2328,6 +3134,7 @@ function App() {
           onApplySearch={handleApplySearch}
           onResetAll={handleResetAll}
           onAddToShoppingList={handleAddToShoppingList}
+          onNavigate={handleNavigate}
         />
       ) : activePage === 'shopping-list' ? (
         <ShoppingListPage
@@ -2335,7 +3142,16 @@ function App() {
           onRemoveItem={handleRemoveShoppingListItem}
           onClearList={handleClearShoppingList}
           onGoToOffers={() => handleNavigate('search')}
+          onNavigate={handleNavigate}
         />
+      ) : activePage === 'impressum' ? (
+        <ImpressumPage />
+      ) : activePage === 'privacy' ? (
+        <PrivacyPage />
+      ) : activePage === 'liability' ? (
+        <LiabilityPage />
+      ) : activePage === 'cookies' ? (
+        <CookiesPage />
       ) : activePage === 'quality' ? (
         <QualityPage
           snapshot={qualitySnapshot}
@@ -2368,7 +3184,8 @@ function App() {
         </>
       )}
 
-      <StickyBottomLine />
+      <CookieStorageNotice onNavigate={handleNavigate} />
+      <StickyBottomLine onNavigate={handleNavigate} />
     </main>
   )
 }
