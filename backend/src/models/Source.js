@@ -10,6 +10,11 @@ const sourceSchema = new mongoose.Schema(
       required: true,
     },
     label: { type: String, required: true },
+    sourceRetailerName: { type: String, default: '' },
+    sourceRetailerFormat: { type: String, default: '' },
+    appliesToRetailerFormats: { type: [String], default: [] },
+    retailerFormatLabel: { type: String, default: '' },
+    disabledReason: { type: String, default: '' },
     regionScope: { type: String, default: 'Austria' },
     sourceUrl: { type: String, required: true },
     sourceType: {

@@ -17,6 +17,7 @@ router.post('/run', async (req, res, next) => {
       ok: true,
       region: env.CRAWL_REGION,
       results: crawlResult.sources,
+      disabledSources: crawlResult.disabledSources || [],
       dedupe: crawlResult.dedupe,
       filterMetadata: crawlResult.filterMetadata,
     });

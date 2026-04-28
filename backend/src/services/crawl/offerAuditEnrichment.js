@@ -9,6 +9,66 @@ function uniqueStrings(values = []) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
+function normalizeRetailerFormat(value) {
+  const normalized = normalizeTitleForMatch(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  if (normalized === 'interspar') return 'interspar';
+  if (normalized === 'eurospar') return 'eurospar';
+  if (normalized === 'spar') return 'spar';
+
+  return normalized;
+}
+
+function uniqueFormats(values = []) {
+  return uniqueStrings(values.map(normalizeRetailerFormat)).filter(Boolean);
+}
+
+function inferRetailerFormatMetadata({ offer = {}, source = {} }) {
+  const retailerKey = normalizeKey(offer.retailerKey || source.retailerKey || '', '');
+  const sourceRetailerFormat = normalizeRetailerFormat(
+    offer.sourceRetailerFormat
+    || source.sourceRetailerFormat
+    || ''
+  );
+  const appliesToRetailerFormats = uniqueFormats(
+    offer.appliesToRetailerFormats?.length
+      ? offer.appliesToRetailerFormats
+      : source.appliesToRetailerFormats?.length
+        ? source.appliesToRetailerFormats
+        : sourceRetailerFormat
+          ? [sourceRetailerFormat]
+          : []
+  );
+  const retailerFormats = retailerKey === 'spar'
+    ? uniqueFormats(['spar', 'interspar', 'eurospar'])
+    : uniqueFormats(offer.retailerFormats || []);
+  const sourceRetailerName = (
+    offer.sourceRetailerName
+    || source.sourceRetailerName
+    || (sourceRetailerFormat ? source.retailerName : '')
+    || ''
+  );
+  const retailerFormatLabel = (
+    offer.retailerFormatLabel
+    || source.retailerFormatLabel
+    || (appliesToRetailerFormats.length > 0
+      ? appliesToRetailerFormats.map((item) => item.toUpperCase()).join(' + ')
+      : '')
+  );
+
+  return {
+    sourceRetailerName,
+    sourceRetailerFormat,
+    retailerFormats,
+    appliesToRetailerFormats,
+    retailerFormatLabel,
+  };
+}
+
+function buildRetailerFormatScopeKey(formats = []) {
+  return uniqueFormats(formats).sort().join('+');
+}
+
 function isCurrentlyRelevantOffer(offer, now = new Date()) {
   if (offer?.status === 'expired' || offer?.status === 'upcoming') {
     return false;
@@ -137,6 +197,11 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
   }
 
   const resolvedSourceType = inferSourceType({ offer: document, source, sourceType });
+  const formatMetadata = inferRetailerFormatMetadata({ offer: document, source });
+  const formatScopeKey = buildRetailerFormatScopeKey(formatMetadata.appliesToRetailerFormats);
+  const dedupeKey = document.dedupeKey && formatScopeKey
+    ? `${document.dedupeKey}::formats:${formatScopeKey}`
+    : document.dedupeKey;
   const supportingSources = dedupeSourceEvidence(document.supportingSources || []);
   const sourceUrls = uniqueStrings([
     document.sourceUrl,
@@ -166,6 +231,8 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
 
   return {
     ...document,
+    ...formatMetadata,
+    dedupeKey,
     sourceType: resolvedSourceType,
     sourceUrls,
     evidenceUrls,
@@ -204,6 +271,10 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
       hasProspectNormalPrice: savingsFields.hasProspectNormalPrice,
       hasEstimatedReferencePrice: savingsFields.hasEstimatedReferencePrice,
       isActionPriceOnly: savingsFields.isActionPriceOnly,
+      sourceRetailerName: formatMetadata.sourceRetailerName,
+      sourceRetailerFormat: formatMetadata.sourceRetailerFormat,
+      retailerFormatLabel: formatMetadata.retailerFormatLabel,
+      appliesToRetailerFormats: formatMetadata.appliesToRetailerFormats,
     },
   };
 }
@@ -215,4 +286,7 @@ function enrichOffersForStorage(offers = [], options = {}) {
 module.exports = {
   enrichOfferForStorage,
   enrichOffersForStorage,
+  inferRetailerFormatMetadata,
+  buildRetailerFormatScopeKey,
+  isCurrentlyRelevantOffer,
 };

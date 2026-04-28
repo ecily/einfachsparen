@@ -55,9 +55,16 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
   const filter = retailerKeys.length > 0
     ? { active: true, enabled: { $ne: false }, retailerKey: { $in: retailerKeys } }
     : { active: true, enabled: { $ne: false } };
+  const disabledFilter = retailerKeys.length > 0
+    ? { active: true, enabled: false, retailerKey: { $in: retailerKeys } }
+    : { active: true, enabled: false };
 
-  const [sources, activeOfferCounts] = await Promise.all([
+  const [sources, disabledSources, activeOfferCounts] = await Promise.all([
     Source.find(filter).lean(),
+    Source.find(disabledFilter)
+      .select('retailerKey retailerName channel label sourceUrl disabledReason notes latestStatus')
+      .sort({ retailerName: 1, label: 1 })
+      .lean(),
     Offer.aggregate([
       {
         $match: retailerKeys.length > 0
@@ -168,6 +175,16 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
 
   return {
     sources: results,
+    disabledSources: disabledSources.map((source) => ({
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      channel: source.channel,
+      label: source.label,
+      sourceUrl: source.sourceUrl,
+      disabledReason: source.disabledReason || 'disabled',
+      notes: source.notes || '',
+      status: 'disabled',
+    })),
     dedupe: dedupeResult,
     filterMetadata,
   };

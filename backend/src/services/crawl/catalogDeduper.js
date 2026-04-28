@@ -1,6 +1,7 @@
 const Offer = require('../../models/Offer');
 const Source = require('../../models/Source');
 const { dedupeSourceEvidence } = require('./sourceEvidence');
+const { buildRetailerFormatScopeKey } = require('./offerAuditEnrichment');
 
 const CHANNEL_PRIORITY = {
   'official-flyer': 0,
@@ -27,6 +28,7 @@ function buildDedupeKey(offer) {
 
   return [
     offer.retailerKey,
+    buildRetailerFormatScopeKey(offer.appliesToRetailerFormats || []),
     offer.comparisonSignature || '',
     offer.titleNormalized || normalizeKey(offer.title),
     offer.comparisonGroup || '',
@@ -195,6 +197,11 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
         [
           '_id',
           'retailerKey',
+          'sourceRetailerName',
+          'sourceRetailerFormat',
+          'retailerFormats',
+          'appliesToRetailerFormats',
+          'retailerFormatLabel',
           'sourceId',
           'title',
           'priceCurrent',
@@ -296,6 +303,11 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
         update: {
           $set: {
             categoryPrimary: bestCategoryOffer.categoryPrimary || canonical.categoryPrimary,
+            sourceRetailerName: canonical.sourceRetailerName || '',
+            sourceRetailerFormat: canonical.sourceRetailerFormat || '',
+            retailerFormats: canonical.retailerFormats || [],
+            appliesToRetailerFormats: canonical.appliesToRetailerFormats || [],
+            retailerFormatLabel: canonical.retailerFormatLabel || '',
             categorySecondary: bestCategoryOffer.categorySecondary || canonical.categorySecondary || '',
             categoryKey: bestCategoryOffer.categoryKey || canonical.categoryKey,
             subcategoryKey: bestCategoryOffer.subcategoryKey || normalizeKey(bestCategoryOffer.categorySecondary || ''),

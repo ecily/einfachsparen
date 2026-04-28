@@ -2,6 +2,7 @@ const Offer = require('../../models/Offer');
 const ManualCategoryOverride = require('../../models/ManualCategoryOverride');
 const Retailer = require('../../models/Retailer');
 const CrawlJob = require('../../models/CrawlJob');
+const Source = require('../../models/Source');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 
@@ -46,7 +47,7 @@ async function buildQualitySnapshot({
     ];
   }
 
-  const [offers, retailers, categoryList, overrides, crawlCoverage, rejectionReasons, sourceTypeCounts, normalPriceStats] = await Promise.all([
+  const [offers, retailers, categoryList, overrides, crawlCoverage, rejectionReasons, sourceTypeCounts, normalPriceStats, disabledSources] = await Promise.all([
     Offer.find(match)
       .select('retailerKey retailerName title titleNormalized categoryPrimary categorySecondary categoryConfidence subcategoryConfidence status isActiveNow validFrom validTo quality savingsDisplayType hasProspectNormalPrice hasEstimatedReferencePrice isActionPriceOnly needsReview reviewReasons sourceType updatedAt createdAt')
       .sort({ updatedAt: -1 })
@@ -122,6 +123,10 @@ async function buildQualitySnapshot({
       },
       { $sort: { activeOfferCount: -1 } },
     ]),
+    Source.find({ active: true, enabled: false })
+      .select('retailerKey retailerName channel label sourceUrl disabledReason notes latestStatus')
+      .sort({ retailerName: 1, label: 1 })
+      .lean(),
   ]);
 
   const subcategoryMap = new Map();
@@ -288,6 +293,16 @@ async function buildQualitySnapshot({
       savingsDisplayType: item._id || 'unknown',
       offerCount: item.offerCount || 0,
       activeOfferCount: item.activeOfferCount || 0,
+    })),
+    disabledSources: disabledSources.map((source) => ({
+      retailerKey: source.retailerKey || '',
+      retailerName: source.retailerName || '',
+      channel: source.channel || '',
+      label: source.label || '',
+      sourceUrl: source.sourceUrl || '',
+      disabledReason: source.disabledReason || 'disabled',
+      notes: source.notes || '',
+      latestStatus: source.latestStatus || '',
     })),
   };
 }

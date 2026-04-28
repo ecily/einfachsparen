@@ -62,6 +62,10 @@ function buildCacheRawFacts(rawFacts = {}) {
     isActionPriceOnly: rawFacts?.isActionPriceOnly ?? null,
     categoryConfidence: rawFacts?.categoryConfidence ?? null,
     subcategoryConfidence: rawFacts?.subcategoryConfidence ?? null,
+    sourceRetailerName: rawFacts?.sourceRetailerName || '',
+    sourceRetailerFormat: rawFacts?.sourceRetailerFormat || '',
+    retailerFormatLabel: rawFacts?.retailerFormatLabel || '',
+    appliesToRetailerFormats: rawFacts?.appliesToRetailerFormats || [],
   };
 
   return Object.fromEntries(
@@ -627,6 +631,11 @@ function buildOfferCacheDocuments(offers, now) {
       dedupeKey: offer.dedupeKey || '',
       retailerKey,
       retailerName,
+      sourceRetailerName: offer.sourceRetailerName || '',
+      sourceRetailerFormat: offer.sourceRetailerFormat || '',
+      retailerFormats: offer.retailerFormats || [],
+      appliesToRetailerFormats: offer.appliesToRetailerFormats || [],
+      retailerFormatLabel: offer.retailerFormatLabel || '',
       title: offer.title,
       titleNormalized: offer.titleNormalized || '',
       brand: offer.brand || '',
@@ -737,6 +746,11 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
         [
           'retailerKey',
           'retailerName',
+          'sourceRetailerName',
+          'sourceRetailerFormat',
+          'retailerFormats',
+          'appliesToRetailerFormats',
+          'retailerFormatLabel',
           'sourceId',
           'sourceUrl',
           'offerKey',
@@ -799,7 +813,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
       .select('retailerKey retailerName offerCount activeOfferCount firstSeenAt lastSeenAt lastSuccessfulCrawlAt isActive sortOrder')
       .lean(),
     Source.find({})
-      .select('_id retailerKey retailerName label channel sourceUrl active latestRunAt latestStatus')
+      .select('_id retailerKey retailerName sourceRetailerName sourceRetailerFormat appliesToRetailerFormats retailerFormatLabel label channel sourceUrl active enabled disabledReason notes latestRunAt latestStatus')
       .lean(),
     CrawlJob.find({})
       .select('retailerKey status startedAt finishedAt stats')
