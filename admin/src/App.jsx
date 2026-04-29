@@ -545,7 +545,7 @@ function getOfferSavingsInfo(offer) {
 
   return {
     type: 'action',
-    label: 'Aktionspreis!',
+    label: 'Aktionspreis',
     shortLabel: 'Aktionspreis',
     description: 'Im Prospekt ist kein Normalpreis angegeben. Das ist oft bei kurzen oder saisonalen Aktionen der Fall.',
   }
@@ -1241,15 +1241,15 @@ function HeroBlock() {
               hyphens: 'none',
             }}
           >
-            Wähle deine Geschäfte und Kategorien. kaufklug zeigt dir aktuelle Aktionen und merkt interessante Angebote
-            auf deiner Einkaufsliste.
+            Wähle deine Geschäfte, zeige aktuelle Angebote an und merke interessante Aktionen direkt auf deiner
+            Einkaufsliste fürs Smartphone.
           </p>
 
           <div className="hero-benefit-grid">
             {[
               ['Kostenlos', 'Derzeit kostenlos nutzbar.'],
-              ['Einfach', 'Geschäfte und Produkte auswählen.'],
-              ['Praktisch', 'Angebote direkt am Smartphone mitnehmen.'],
+              ['Einfach', 'Geschäfte wählen, Angebote anzeigen.'],
+              ['Mobil', 'Einkaufsliste direkt am Smartphone nutzen.'],
             ].map(([title, text]) => (
               <div key={title} className="hero-benefit-card">
                 <strong>{title}</strong>
@@ -1270,7 +1270,7 @@ function HeroBlock() {
           }}
         >
           <p className="eyebrow hero-consumer__eyebrow" style={{ margin: 0 }}>
-            Als App gedacht
+            Smartphone zuerst
           </p>
 
           <h2
@@ -1282,7 +1282,7 @@ function HeroBlock() {
               letterSpacing: '-0.04em',
             }}
           >
-            Am Smartphone ausprobieren.
+            Am Handy ist kaufklug am stärksten.
           </h2>
 
           <div
@@ -1319,7 +1319,7 @@ function HeroBlock() {
           </a>
 
           <p style={{ maxWidth: '280px', margin: 0, color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4 }}>
-            QR-Code scannen und beim Einkaufen direkt am Handy nutzen.
+            QR-Code scannen und Angebote beim Einkaufen direkt am Handy nutzen.
           </p>
         </div>
       </div>
@@ -1333,23 +1333,28 @@ function SeoIntroSections() {
       <div className="selection-block">
         <div className="selection-block__header">
           <p className="eyebrow">So funktioniert kaufklug.at</p>
-          <h2>In drei Schritten zu passenden Angeboten.</h2>
+          <h2>Schnell von der Auswahl zur Einkaufsliste.</h2>
         </div>
 
         <div className="selection-summary-grid">
           <div className="selection-summary-card">
-            <strong>1. Geschäfte auswählen</strong>
+            <strong>1. Geschäfte wählen</strong>
             <span>Wähle die Supermärkte, die für dich erreichbar sind.</span>
           </div>
 
           <div className="selection-summary-card">
-            <strong>2. Produkte wählen</strong>
-            <span>Filtere nach Kategorien oder Unterkategorien, die du heute brauchst.</span>
+            <strong>2. Angebote anzeigen</strong>
+            <span>Geschäfte reichen aus. Du kannst sofort aktuelle Aktionen laden.</span>
           </div>
 
           <div className="selection-summary-card">
-            <strong>3. Einkaufsliste nutzen</strong>
-            <span>Merke interessante Aktionen und nimm sie am Smartphone mit.</span>
+            <strong>3. Optional eingrenzen</strong>
+            <span>Filtere nur dann nach Produkten, wenn du genauer suchen möchtest.</span>
+          </div>
+
+          <div className="selection-summary-card">
+            <strong>4. Merken</strong>
+            <span>Speichere interessante Angebote auf deiner Einkaufsliste fürs Handy.</span>
           </div>
         </div>
       </div>
@@ -1427,7 +1432,7 @@ function RetailerSelectorBlock({
         <div className="selection-block__header">
           <p className="eyebrow">1. Geschäfte wählen</p>
           <h2>Wo kaufst du ein?</h2>
-          <p>Wähle die Geschäfte aus, die für dich erreichbar sind.</p>
+          <p>Wähle die Geschäfte aus, die für dich erreichbar sind. Danach kannst du sofort Angebote anzeigen.</p>
         </div>
 
         {loading ? (
@@ -1478,9 +1483,9 @@ function CategorySelectorBlock({
     <SectionCard style={{ marginBottom: '1rem' }}>
       <div className="selection-block">
         <div className="selection-block__header">
-          <p className="eyebrow">2. Produkte wählen</p>
-          <h2>Was brauchst du heute?</h2>
-          <p>Wähle eine Kategorie oder genauer eine Unterkategorie. Du kannst diesen Schritt auch überspringen.</p>
+          <p className="eyebrow">Optional: Produkte eingrenzen</p>
+          <h2>Nur bestimmte Produkte anzeigen?</h2>
+          <p>Dieser Schritt ist freiwillig. Ohne Auswahl zeigt kaufklug alle aktuellen Angebote deiner Geschäfte.</p>
         </div>
 
         {disabled ? (
@@ -1491,7 +1496,7 @@ function CategorySelectorBlock({
           <div className="category-list">
             <div className="quick-action-row">
               <button type="button" className="ghost-button" onClick={onClearCategories}>
-                Alle Kategorien anzeigen
+                Alle Produkte anzeigen
               </button>
             </div>
 
@@ -1552,9 +1557,9 @@ function ActionBlock({
     <SectionCard style={{ marginBottom: '1rem' }}>
       <div className="selection-block">
         <div className="selection-block__header">
-          <p className="eyebrow">3. Angebote ansehen</p>
+          <p className="eyebrow">2. Angebote anzeigen</p>
           <h2>Deine Auswahl ist bereit.</h2>
-          <p>Tippe auf „Angebote anzeigen“. Danach kannst du passende Produkte auf deine Einkaufsliste setzen.</p>
+          <p>Geschäfte reichen aus. Produktfilter sind optional und können die Ergebnisse danach weiter eingrenzen.</p>
         </div>
 
         <div className="selection-summary-grid">
@@ -1564,8 +1569,8 @@ function ActionBlock({
           </div>
 
           <div className="selection-summary-card">
-            <strong>Kategorien</strong>
-            <span>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Alle anzeigen'}</span>
+            <strong>Produktfilter</strong>
+            <span>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Optional: alle anzeigen'}</span>
           </div>
 
           <div className={`selection-summary-card ${hasPendingChanges ? 'selection-summary-card--ready' : ''}`}>
@@ -1642,7 +1647,7 @@ function OfferCardConsumer({ offer, highlightLabel = '', onAddToShoppingList, is
 
         <div className="user-card__highlights">
           <div className={`highlight-pill ${directlyComparable ? 'highlight-pill--price' : ''}`}>
-            <span>{savingsInfo.type === 'known' ? 'Euro-Ersparnis' : 'Preisart'}</span>
+            <span>{savingsInfo.type === 'known' ? 'Bekannte Ersparnis' : 'Preisart'}</span>
             <strong>{savingsInfo.shortLabel}</strong>
           </div>
 
@@ -1665,7 +1670,7 @@ function OfferCardConsumer({ offer, highlightLabel = '', onAddToShoppingList, is
           onClick={() => onAddToShoppingList?.(offer)}
           disabled={isInShoppingList}
         >
-          {isInShoppingList ? 'Bereits auf Liste' : 'Auf die Einkaufsliste'}
+          {isInShoppingList ? 'Bereits gemerkt' : 'Merken'}
         </button>
       </div>
     </article>
@@ -1714,7 +1719,7 @@ function ResultsBlockConsumer({
         <div className="panel__header">
           <h2>Deine Angebote</h2>
           <p>
-            Alle Treffer sind aktuelle Angebote. Euro-Ersparnis zeigen wir nur dort, wo im Prospekt ein Normalpreis
+            Alle Treffer sind aktuelle Angebote. Eine konkrete Ersparnis zeigen wir nur dort, wo ein Normalpreis
             angegeben ist.
           </p>
         </div>
@@ -1737,14 +1742,14 @@ function ResultsBlockConsumer({
         ) : visibleOfferCount === 0 ? (
           <div className="empty-state">
             <h3>Keine passenden Angebote gefunden.</h3>
-            <p>Versuche mehr Geschäfte auszuwählen oder alle Kategorien anzuzeigen.</p>
+            <p>Versuche mehr Geschäfte auszuwählen oder alle Produkte anzuzeigen.</p>
           </div>
         ) : (
           <>
             <div className="results-count-box">
               <strong>{visibleOfferCount} aktuelle Angebote gefunden.</strong>
               <span>
-                {safeOffers.length} mit angegebener Euro-Ersparnis, {actionOffers.length} weitere Aktionspreise.
+                {safeOffers.length} mit bekannter Ersparnis, {actionOffers.length} weitere aktuelle Aktionen.
               </span>
             </div>
 
@@ -1752,8 +1757,8 @@ function ResultsBlockConsumer({
             <LegalInlineNotice onNavigate={onNavigate} compact />
 
             <ResultsSection
-              title="Angebote mit Euro-Ersparnis"
-              subtitle="Bei diesen Angeboten ist im Prospekt ein Normalpreis angegeben."
+              title="Angebote mit bekannter Ersparnis"
+              subtitle="Bei diesen Angeboten ist ein Normalpreis angegeben."
               offers={safeOffers}
               highlightPrefix="Angebot"
               onAddToShoppingList={onAddToShoppingList}
@@ -1762,7 +1767,7 @@ function ResultsBlockConsumer({
 
             <ResultsSection
               title="Weitere aktuelle Aktionen"
-              subtitle="Diese Produkte sind aktuelle Aktionen. Der Normalpreis ist im Prospekt nicht angegeben."
+              subtitle="Diese Produkte sind aktuelle Aktionen. Der Normalpreis ist nicht angegeben."
               offers={actionOffers}
               highlightPrefix="Aktion"
               onAddToShoppingList={onAddToShoppingList}
@@ -1843,16 +1848,6 @@ function SearchPage({
         loading={filtersLoading}
       />
 
-      <CategorySelectorBlock
-        categories={categories}
-        selectedCategoryTokens={draftCategoryLabels}
-        onToggleMainCategory={onToggleDraftMainCategory}
-        onToggleSubcategory={onToggleDraftSubcategory}
-        onClearCategories={onClearDraftCategories}
-        loading={filtersLoading}
-        disabled={!draftRetailers.length}
-      />
-
       <ActionBlock
         canSearch={draftRetailers.length > 0}
         selectedRetailerCount={draftRetailers.length}
@@ -1861,6 +1856,16 @@ function SearchPage({
         onReset={onResetAll}
         hasPendingChanges={hasPendingChanges}
         searching={rankingLoading}
+      />
+
+      <CategorySelectorBlock
+        categories={categories}
+        selectedCategoryTokens={draftCategoryLabels}
+        onToggleMainCategory={onToggleDraftMainCategory}
+        onToggleSubcategory={onToggleDraftSubcategory}
+        onClearCategories={onClearDraftCategories}
+        loading={filtersLoading}
+        disabled={!draftRetailers.length}
       />
 
       <ResultsBlockConsumer
@@ -1919,7 +1924,7 @@ function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoTo
         </article>
 
         <article className="shopping-summary__card shopping-summary__card--saving">
-          <span>Ersparnis mit angegebenem Normalpreis</span>
+          <span>Bekannte Ersparnis</span>
           <strong>{formatCurrencyAmount(summary.knownSavings)}</strong>
         </article>
 

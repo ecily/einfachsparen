@@ -1,24 +1,48 @@
 :root {
   color: #172217;
   background:
-    radial-gradient(circle at 8% 0%, rgba(184, 232, 167, 0.48), transparent 23rem),
-    radial-gradient(circle at 92% 6%, rgba(255, 225, 154, 0.3), transparent 22rem),
-    linear-gradient(180deg, #f7f2e7 0%, #efe8da 48%, #e8dfcf 100%);
-  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    radial-gradient(circle at 8% 0%, rgba(184, 232, 167, 0.38), transparent 23rem),
+    radial-gradient(circle at 92% 6%, rgba(255, 225, 154, 0.24), transparent 22rem),
+    linear-gradient(180deg, #f8f3ea 0%, #f1eadc 48%, #e9dfcf 100%);
+  font-family:
+    "Inter var",
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
-  --kk-font: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --kk-font:
+    "Inter var",
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
   --kk-ink: #172217;
+  --kk-ink-soft: #293627;
   --kk-muted: #5c6658;
   --kk-muted-2: #6b7264;
   --kk-soft: #fffdf7;
-  --kk-bg-soft: #f7f2e7;
+  --kk-bg-soft: #f8f3ea;
   --kk-card: rgba(255, 252, 247, 0.9);
-  --kk-card-strong: rgba(255, 252, 247, 0.97);
+  --kk-card-strong: rgba(255, 252, 247, 0.98);
   --kk-border: rgba(22, 33, 24, 0.1);
   --kk-border-strong: rgba(22, 33, 24, 0.16);
   --kk-green: #315e2a;
@@ -30,11 +54,12 @@
   --kk-red: #922d2d;
   --kk-red-soft: #fff0ec;
   --kk-shadow: 0 18px 48px rgba(83, 63, 34, 0.12);
-  --kk-shadow-soft: 0 10px 28px rgba(83, 63, 34, 0.08);
+  --kk-shadow-soft: 0 10px 28px rgba(83, 63, 34, 0.075);
+  --kk-shadow-card: 0 12px 30px rgba(83, 63, 34, 0.08);
   --kk-radius-xl: 1.65rem;
   --kk-radius-lg: 1.2rem;
   --kk-radius-md: 0.95rem;
-  --kk-touch: 44px;
+  --kk-touch: 48px;
 }
 
 * {
@@ -54,6 +79,7 @@ body {
   min-height: 100vh;
   color: var(--kk-ink);
   background: transparent;
+  overflow-x: hidden;
 }
 
 body::before {
@@ -62,10 +88,10 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 42px 42px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 72%);
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 72%);
   z-index: -1;
 }
 
@@ -205,8 +231,8 @@ a {
 .eyebrow {
   margin: 0 0 0.5rem;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  font-size: 0.74rem;
   color: #5b6a54;
   font-weight: 850;
 }
@@ -218,8 +244,9 @@ a {
   font-family: var(--kk-font);
   font-weight: 850;
   font-size: clamp(2.15rem, 5.6vw, 4.15rem);
-  line-height: 0.98;
+  line-height: 0.99;
   letter-spacing: -0.055em;
+  color: var(--kk-ink);
 }
 
 .subtitle {
@@ -267,11 +294,13 @@ a {
   margin: 0 0 0.25rem;
   font-size: 1.38rem;
   letter-spacing: -0.025em;
+  line-height: 1.12;
 }
 
 .panel__header h3 {
   margin: 0 0 0.25rem;
   letter-spacing: -0.02em;
+  line-height: 1.18;
 }
 
 .panel__header p,
@@ -310,10 +339,10 @@ a {
   background: linear-gradient(135deg, #315e2a, #7ca452);
   color: #fffdf7;
   font: inherit;
-  font-weight: 800;
+  font-weight: 850;
   padding: 1rem 1.15rem;
   text-align: center;
-  box-shadow: 0 16px 34px rgba(49, 94, 42, 0.26);
+  box-shadow: 0 16px 34px rgba(49, 94, 42, 0.24);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
@@ -323,14 +352,14 @@ a {
 
 .primary-action-button {
   border-radius: 999px;
-  padding: 0.95rem 1.3rem;
+  padding: 0.98rem 1.35rem;
 }
 
 .crawl-button:hover:not(:disabled),
 .primary-action-button:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: saturate(1.06);
-  box-shadow: 0 20px 42px rgba(49, 94, 42, 0.32);
+  box-shadow: 0 20px 42px rgba(49, 94, 42, 0.3);
 }
 
 .crawl-button:disabled,
@@ -351,8 +380,8 @@ a {
   background: rgba(255, 252, 247, 0.9);
   color: #315e2a;
   font: inherit;
-  font-weight: 750;
-  padding: 0.68rem 0.95rem;
+  font-weight: 780;
+  padding: 0.72rem 1rem;
   cursor: pointer;
   transition:
     transform 150ms ease,
@@ -577,6 +606,7 @@ a {
 .selection-block__header h2 {
   margin: 0;
   letter-spacing: -0.025em;
+  line-height: 1.14;
 }
 
 .selection-block__header p {
@@ -601,7 +631,7 @@ a {
 .selection-summary-card {
   padding: 0.85rem 0.95rem;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.48);
   border: 1px solid rgba(22, 33, 24, 0.08);
 }
 
@@ -670,8 +700,8 @@ a {
   background: rgba(255, 252, 247, 0.9);
   color: #495246;
   font: inherit;
-  font-weight: 700;
-  padding: 0.68rem 0.92rem;
+  font-weight: 730;
+  padding: 0.7rem 0.96rem;
   cursor: pointer;
   box-shadow: 0 6px 16px rgba(83, 63, 34, 0.04);
   transition:
@@ -691,7 +721,7 @@ a {
 .chip__meta {
   opacity: 0.72;
   font-size: 0.88em;
-  font-weight: 500;
+  font-weight: 520;
 }
 
 .chip--active {
@@ -752,7 +782,7 @@ a {
 
 .user-card:hover .product-image img,
 .shopping-list-item:hover .product-image img {
-  transform: scale(1.035);
+  transform: scale(1.025);
 }
 
 .product-image--compact {
@@ -849,11 +879,11 @@ a {
   align-items: start;
   padding: 1rem;
   border-radius: 1.35rem;
-  border: 1px solid rgba(22, 33, 24, 0.1);
+  border: 1px solid rgba(22, 33, 24, 0.09);
   background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.8), transparent 14rem),
-    rgba(255, 252, 247, 0.94);
-  box-shadow: 0 14px 34px rgba(83, 63, 34, 0.09);
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.72), transparent 14rem),
+    rgba(255, 252, 247, 0.95);
+  box-shadow: var(--kk-shadow-card);
   content-visibility: auto;
   contain-intrinsic-size: 280px;
   overflow: hidden;
@@ -865,20 +895,20 @@ a {
 
 .user-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 22px 50px rgba(83, 63, 34, 0.14);
-  border-color: rgba(49, 94, 42, 0.18);
+  box-shadow: 0 20px 44px rgba(83, 63, 34, 0.12);
+  border-color: rgba(49, 94, 42, 0.16);
 }
 
 .user-card--known-savings {
   background:
-    radial-gradient(circle at top right, rgba(146, 201, 101, 0.2), transparent 15rem),
-    linear-gradient(180deg, rgba(242, 255, 233, 0.98), rgba(255, 252, 247, 0.94));
-  border-color: rgba(92, 160, 76, 0.32);
+    radial-gradient(circle at top right, rgba(146, 201, 101, 0.16), transparent 15rem),
+    linear-gradient(180deg, rgba(246, 255, 239, 0.96), rgba(255, 252, 247, 0.96));
+  border-color: rgba(92, 160, 76, 0.26);
 }
 
 .user-card--action-price {
   background:
-    radial-gradient(circle at top right, rgba(255, 230, 172, 0.28), transparent 15rem),
+    radial-gradient(circle at top right, rgba(255, 230, 172, 0.22), transparent 15rem),
     rgba(255, 252, 247, 0.96);
 }
 
@@ -904,7 +934,7 @@ a {
   color: var(--kk-muted-2);
   font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.055em;
   font-weight: 800;
 }
 
@@ -976,7 +1006,7 @@ a {
 
 .highlight-pill--price {
   background:
-    radial-gradient(circle at top right, rgba(123, 164, 82, 0.22), transparent 80%),
+    radial-gradient(circle at top right, rgba(123, 164, 82, 0.2), transparent 80%),
     rgba(237, 248, 226, 0.97);
 }
 
@@ -1038,7 +1068,7 @@ a {
   background: linear-gradient(135deg, #315e2a, #7ca452);
   color: #fffdf7;
   font-weight: 850;
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1rem;
   cursor: pointer;
   box-shadow: 0 14px 28px rgba(49, 94, 42, 0.22);
   transition:
@@ -1206,7 +1236,7 @@ a {
   color: var(--kk-muted-2);
   font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.055em;
   font-weight: 800;
 }
 
@@ -1308,6 +1338,7 @@ a {
 .field select,
 textarea {
   width: 100%;
+  min-height: var(--kk-touch);
   border: 1px solid rgba(22, 33, 24, 0.16);
   border-radius: 0.95rem;
   padding: 0.82rem 0.95rem;
@@ -1517,18 +1548,18 @@ textarea:focus {
 @media (max-width: 760px) {
   :root {
     background:
-      radial-gradient(circle at 0% 0%, rgba(184, 232, 167, 0.32), transparent 18rem),
-      linear-gradient(180deg, #f7f2e7 0%, #eee5d7 100%);
+      radial-gradient(circle at 0% 0%, rgba(184, 232, 167, 0.26), transparent 18rem),
+      linear-gradient(180deg, #f8f3ea 0%, #eee5d7 100%);
   }
 
   body::before {
-    opacity: 0.45;
+    opacity: 0.38;
   }
 
   .shell {
     width: min(100% - 0.8rem, 1240px);
     padding-top: 0.75rem;
-    padding-bottom: 2rem;
+    padding-bottom: 7.2rem !important;
   }
 
   .page-nav {
@@ -1536,6 +1567,7 @@ textarea:focus {
     gap: 0.3rem;
     align-items: stretch;
     border-radius: 1.25rem;
+    box-shadow: 0 12px 28px rgba(83, 63, 34, 0.12);
   }
 
   .page-nav__main {
@@ -1557,6 +1589,11 @@ textarea:focus {
 
   .panel {
     border-radius: 20px !important;
+    box-shadow: 0 8px 20px rgba(83, 63, 34, 0.07);
+  }
+
+  .panel:hover {
+    box-shadow: 0 8px 20px rgba(83, 63, 34, 0.07);
   }
 
   .panel__header h2 {
@@ -1616,8 +1653,8 @@ textarea:focus {
     width: 100%;
     justify-content: flex-start;
     text-align: left;
-    padding: 0.62rem 0.78rem;
-    font-size: 0.92rem;
+    padding: 0.68rem 0.82rem;
+    font-size: 0.93rem;
     line-height: 1.25;
     border-radius: 0.95rem;
   }
@@ -1627,12 +1664,23 @@ textarea:focus {
     padding: 0.9rem !important;
     gap: 0.85rem !important;
     border-radius: 1.15rem;
+    transform: none !important;
+  }
+
+  .user-card:hover {
+    transform: none;
+    box-shadow: var(--kk-shadow-card);
   }
 
   .product-image {
     width: 100%;
     max-height: 220px;
     border-radius: 1rem;
+  }
+
+  .user-card:hover .product-image img,
+  .shopping-list-item:hover .product-image img {
+    transform: none;
   }
 
   .user-card__eyebrow {
@@ -1689,7 +1737,7 @@ textarea:focus {
     max-width: 100%;
     white-space: normal;
     text-align: left;
-    padding: 0.58rem 0.78rem;
+    padding: 0.66rem 0.82rem;
     font-size: 0.94rem;
     line-height: 1.25;
   }
@@ -1711,6 +1759,12 @@ textarea:focus {
 
   .shopping-list-item {
     padding: 0.82rem;
+    transform: none !important;
+  }
+
+  .shopping-list-item:hover {
+    transform: none;
+    box-shadow: none;
   }
 
   .shopping-list-item__main {
@@ -1725,6 +1779,30 @@ textarea:focus {
   .shopping-list-item__facts {
     display: grid;
     gap: 0.35rem;
+  }
+
+  [aria-label="Cookie- und Speicherhinweis"] {
+    left: 0.6rem !important;
+    right: 0.6rem !important;
+    bottom: 5.45rem !important;
+  }
+
+  [aria-label="Cookie- und Speicherhinweis"] .panel {
+    max-height: min(52vh, 420px);
+    overflow: auto;
+  }
+
+  [aria-label="Copyright, Projektlink und Rechtliches"] {
+    display: block !important;
+    min-height: auto !important;
+    padding: 0.48rem 0.6rem calc(0.48rem + env(safe-area-inset-bottom)) !important;
+    font-size: 0.76rem !important;
+    line-height: 1.35 !important;
+  }
+
+  [aria-label="Copyright, Projektlink und Rechtliches"] span {
+    display: block;
+    max-width: 100%;
   }
 }
 
@@ -1754,17 +1832,21 @@ textarea:focus {
     padding: 0.78rem;
   }
 
+  .hero-consumer {
+    padding: 0.9rem;
+  }
+
   .hero h1,
   .panel h1,
   .shopping-list-hero h1 {
     font-size: clamp(1.9rem, 12vw, 2.55rem);
-    line-height: 1.02;
+    line-height: 1.03;
     letter-spacing: -0.055em;
   }
 
   .eyebrow {
     font-size: 0.68rem;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.13em;
   }
 
   .subtitle {
@@ -1829,6 +1911,11 @@ textarea:focus {
     width: 100%;
     border-radius: 1.15rem;
   }
+
+  .app-download-modal__qr {
+    width: min(100%, 252px) !important;
+    padding: 0.62rem;
+  }
 }
 
 @media (max-width: 380px) {
@@ -1853,7 +1940,7 @@ textarea:focus {
 
   .chip {
     font-size: 0.9rem;
-    padding: 0.56rem 0.7rem;
+    padding: 0.62rem 0.74rem;
   }
 
   .user-card h3 {
