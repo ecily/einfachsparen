@@ -1117,16 +1117,44 @@ function HeroBlock() {
       <div
         className="hero-consumer"
         style={{
-          gridTemplateColumns: 'minmax(0, 1.25fr) minmax(250px, 0.75fr)',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
           alignItems: 'center',
+          gap: 'clamp(1rem, 4vw, 2rem)',
         }}
       >
-        <div className="hero-consumer__copy">
+        <div
+          className="hero-consumer__copy"
+          style={{
+            minWidth: 0,
+            overflowWrap: 'normal',
+            wordBreak: 'normal',
+            hyphens: 'none',
+          }}
+        >
           <p className="eyebrow hero-consumer__eyebrow">kaufklug.at</p>
 
-          <h1>Supermarkt-Angebote finden. Einkaufsliste am Handy nutzen.</h1>
+          <h1
+            style={{
+              maxWidth: '820px',
+              overflowWrap: 'normal',
+              wordBreak: 'normal',
+              hyphens: 'none',
+              fontSize: 'clamp(2.05rem, 8vw, 4.15rem)',
+            }}
+          >
+            Supermarkt-Angebote finden. Einkaufsliste am Handy nutzen.
+          </h1>
 
-          <p className="subtitle">
+          <p
+            className="subtitle"
+            style={{
+              maxWidth: '720px',
+              overflowWrap: 'normal',
+              wordBreak: 'normal',
+              hyphens: 'none',
+            }}
+          >
             Wähle deine Geschäfte und Kategorien. kaufklug zeigt dir aktuelle Aktionen und merkt interessante Angebote
             auf deiner Einkaufsliste.
           </p>
@@ -1151,6 +1179,8 @@ function HeroBlock() {
             gap: '0.75rem',
             justifyItems: 'center',
             textAlign: 'center',
+            minWidth: 0,
+            width: '100%',
           }}
         >
           <p className="eyebrow hero-consumer__eyebrow" style={{ margin: 0 }}>
@@ -1160,7 +1190,8 @@ function HeroBlock() {
           <h2
             style={{
               margin: 0,
-              fontSize: 'clamp(1.35rem, 3vw, 2rem)',
+              maxWidth: '20rem',
+              fontSize: 'clamp(1.35rem, 6vw, 2rem)',
               lineHeight: 1.05,
               letterSpacing: '-0.04em',
             }}
@@ -1168,7 +1199,13 @@ function HeroBlock() {
             Am Smartphone ausprobieren.
           </h2>
 
-          <div className="app-download-modal__qr" style={{ margin: '0 auto' }}>
+          <div
+            className="app-download-modal__qr"
+            style={{
+              width: 'min(100%, 280px)',
+              margin: '0 auto',
+            }}
+          >
             <img
               src={qrUrl}
               alt="QR-Code zum Download der kaufklug.at Android-Testversion"
@@ -1195,7 +1232,7 @@ function HeroBlock() {
             Android-Testversion laden
           </a>
 
-          <p style={{ margin: 0, color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4 }}>
+          <p style={{ maxWidth: '280px', margin: 0, color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4 }}>
             QR-Code scannen und beim Einkaufen direkt am Handy nutzen.
           </p>
         </div>
