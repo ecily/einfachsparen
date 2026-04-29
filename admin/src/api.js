@@ -1,16 +1,30 @@
 import axios from 'axios'
 
 const localDevApiBaseUrl = 'http://localhost:4000/api'
-const hostedApiBaseUrl = 'https://whale-app-nmndr.ondigitalocean.app/api'
+const hostedApiBaseUrl = '/api'
 const defaultApiBaseUrl = import.meta.env.DEV ? localDevApiBaseUrl : hostedApiBaseUrl
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl
+
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_BASE ||
+  defaultApiBaseUrl
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
 })
 
-const apiRoot = api.defaults.baseURL.replace(/\/api$/, '')
+function getApiRoot() {
+  const baseUrl = String(api.defaults.baseURL || '').replace(/\/+$/, '')
+
+  if (!baseUrl || baseUrl === '/api') {
+    return ''
+  }
+
+  return baseUrl.replace(/\/api$/, '')
+}
+
+const apiRoot = getApiRoot()
 
 export async function fetchDashboardSnapshot() {
   const response = await api.get('/dashboard/snapshot')
@@ -33,9 +47,13 @@ export async function fetchEssence() {
 }
 
 export async function runCrawl() {
-  const response = await api.post('/crawl/run', {}, {
-    timeout: 180000,
-  })
+  const response = await api.post(
+    '/crawl/run',
+    {},
+    {
+      timeout: 180000,
+    }
+  )
   return response.data
 }
 
@@ -77,6 +95,11 @@ export async function fetchBasketSuggestions(params = {}) {
   const response = await api.get('/offers/basket', {
     params,
   })
+  return response.data
+}
+
+export async function fetchAnalyticsSummary() {
+  const response = await api.get('/analytics/summary')
   return response.data
 }
 

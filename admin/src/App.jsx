@@ -3,6 +3,7 @@ import dayjs from 'dayjs'
 import './index.css'
 import {
   API_BASE_URL,
+  fetchAnalyticsSummary,
   fetchDashboardSnapshot,
   fetchEssence,
   fetchHealth,
@@ -720,9 +721,9 @@ function getPageMeta(activePage) {
       path: '/quality',
     },
     diagnostics: {
-      title: 'Admin – kaufklug.at',
-      description: 'Interner Administrationsbereich für kaufklug.at.',
-      path: '/admin',
+      title: 'Interne KPI – kaufklug.at',
+      description: 'Interner KPI- und Administrationsbereich für kaufklug.at.',
+      path: '/ecily_web',
     },
   }
 
@@ -2301,15 +2302,222 @@ function CookiesPage() {
   )
 }
 
+function formatInteger(value) {
+  const numericValue = Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return '0'
+  }
+
+  return new Intl.NumberFormat('de-AT').format(numericValue)
+}
+
+function formatPercent(value) {
+  const numericValue = Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return '0 %'
+  }
+
+  return new Intl.NumberFormat('de-AT', {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  }).format(numericValue)
+}
+
+function getAnalyticsCounts(analyticsSummary, rangeKey = 'last30Days') {
+  return analyticsSummary?.totals?.[rangeKey]?.byEventName || {}
+}
+
+function getAnalyticsTotal(analyticsSummary, rangeKey = 'last30Days') {
+  return Number(analyticsSummary?.totals?.[rangeKey]?.total || 0)
+}
+
+function getAnalyticsCount(analyticsSummary, eventName, rangeKey = 'last30Days') {
+  return Number(getAnalyticsCounts(analyticsSummary, rangeKey)?.[eventName] || 0)
+}
+
+function getConversionRate(numerator, denominator) {
+  const top = Number(numerator)
+  const bottom = Number(denominator)
+
+  if (!Number.isFinite(top) || !Number.isFinite(bottom) || bottom <= 0) {
+    return 0
+  }
+
+  return top / bottom
+}
+
+function AnalyticsMetricCard({ label, value, note, accent = false }) {
+  return (
+    <article className={`metric-card ${accent ? 'metric-card--accent' : ''}`}>
+      <span className="metric-card__label">{label}</span>
+      <strong className="metric-card__value">{value}</strong>
+      {note ? <p className="offer-card__meta">{note}</p> : null}
+    </article>
+  )
+}
+
+function AnalyticsDashboard({ analyticsSummary, analyticsLoading, onReloadAnalytics }) {
+  const rangeKey = 'last30Days'
+  const totalEvents = getAnalyticsTotal(analyticsSummary, rangeKey)
+  const pageViews = getAnalyticsCount(analyticsSummary, 'landing_page_view', rangeKey)
+  const searchesStarted = getAnalyticsCount(analyticsSummary, 'offer_search_started', rangeKey)
+  const searchResults = getAnalyticsCount(analyticsSummary, 'offer_search_result', rangeKey)
+  const addedToList = getAnalyticsCount(analyticsSummary, 'offer_added_to_list', rangeKey)
+  const shoppingListOpened = getAnalyticsCount(analyticsSummary, 'shopping_list_opened', rangeKey)
+  const apkDownloads = getAnalyticsCount(analyticsSummary, 'apk_download_click', rangeKey)
+  const appOpens = getAnalyticsCount(analyticsSummary, 'app_open', rangeKey)
+  const legalViews = getAnalyticsCount(analyticsSummary, 'legal_page_opened', rangeKey)
+
+  const searchToResultRate = getConversionRate(searchResults, searchesStarted)
+  const searchToListRate = getConversionRate(addedToList, searchesStarted)
+  const pageToDownloadRate = getConversionRate(apkDownloads, pageViews)
+  const downloadToAppOpenRate = getConversionRate(appOpens, apkDownloads)
+
+  return (
+    <SectionCard style={{ marginBottom: '1rem' }}>
+      <div className="selection-block">
+        <div className="selection-block__header">
+          <p className="eyebrow">Pitch-KPI</p>
+          <h2>Nutzung der letzten 30 Tage</h2>
+          <p>
+            Pseudonyme Produktkennzahlen ohne Login: Seitenaufrufe, Suche, Einkaufsliste, APK-Downloads,
+            App-Starts, Funnel und Geräteverteilung.
+          </p>
+        </div>
+
+        <div className="quick-action-row">
+          <button type="button" className="ghost-button" onClick={onReloadAnalytics} disabled={analyticsLoading}>
+            {analyticsLoading ? 'Aktualisiert …' : 'KPI aktualisieren'}
+          </button>
+          <a
+            href="/api/analytics/summary"
+            target="_blank"
+            rel="noreferrer"
+            className="ghost-button"
+            style={{ textDecoration: 'none' }}
+          >
+            JSON öffnen
+          </a>
+        </div>
+
+        <section className="metrics" style={{ marginTop: '1rem' }}>
+          <AnalyticsMetricCard
+            label="Gesamte Events"
+            value={formatInteger(totalEvents)}
+            note="Alle gemessenen Nutzungsereignisse"
+          />
+          <AnalyticsMetricCard
+            label="Landingpage-Aufrufe"
+            value={formatInteger(pageViews)}
+            note="landing_page_view"
+            accent
+          />
+          <AnalyticsMetricCard
+            label="Angebotssuchen"
+            value={formatInteger(searchesStarted)}
+            note="offer_search_started"
+          />
+          <AnalyticsMetricCard
+            label="Suchergebnisse"
+            value={formatInteger(searchResults)}
+            note={`${formatPercent(searchToResultRate)} der gestarteten Suchen`}
+          />
+          <AnalyticsMetricCard
+            label="Zur Liste hinzugefügt"
+            value={formatInteger(addedToList)}
+            note={`${formatPercent(searchToListRate)} der gestarteten Suchen`}
+          />
+          <AnalyticsMetricCard
+            label="Einkaufsliste geöffnet"
+            value={formatInteger(shoppingListOpened)}
+            note="shopping_list_opened"
+          />
+          <AnalyticsMetricCard
+            label="APK-Downloads"
+            value={formatInteger(apkDownloads)}
+            note={`${formatPercent(pageToDownloadRate)} von Landingpage-Aufrufen`}
+            accent
+          />
+          <AnalyticsMetricCard
+            label="App-Starts"
+            value={formatInteger(appOpens)}
+            note={`${formatPercent(downloadToAppOpenRate)} von APK-Downloads`}
+          />
+          <AnalyticsMetricCard
+            label="Legal-Seiten"
+            value={formatInteger(legalViews)}
+            note="Datenschutz, Impressum, Haftung, Cookies"
+          />
+        </section>
+
+        <div className="selection-summary-grid" style={{ marginTop: '1rem' }}>
+          <article className="selection-summary-card">
+            <strong>Funnel</strong>
+            <span>
+              {formatInteger(pageViews)} Aufrufe → {formatInteger(searchesStarted)} Suchen →{' '}
+              {formatInteger(addedToList)} gespeicherte Angebote → {formatInteger(apkDownloads)} Downloads →{' '}
+              {formatInteger(appOpens)} App-Starts
+            </span>
+          </article>
+
+          <article className="selection-summary-card">
+            <strong>Pitch-lesbare Aussage</strong>
+            <span>
+              kaufklug misst aktuell anonymisierte Nutzungssignale über die gesamte Kernstrecke:
+              Besuch, Suche, Ergebnis, Merkliste, Download und App-Start.
+            </span>
+          </article>
+        </div>
+
+        <div className="selection-summary-grid" style={{ marginTop: '1rem' }}>
+          <article className="selection-summary-card">
+            <strong>Top-Referrer</strong>
+            <span>
+              {(analyticsSummary?.topReferrerHosts || []).length
+                ? analyticsSummary.topReferrerHosts
+                    .slice(0, 5)
+                    .map((item) => `${item.referrerHost || 'direkt'}: ${item.count}`)
+                    .join(' · ')
+                : 'Noch keine Referrer-Daten'}
+            </span>
+          </article>
+
+          <article className="selection-summary-card">
+            <strong>Geräte</strong>
+            <span>
+              {(analyticsSummary?.deviceTypes || []).length
+                ? analyticsSummary.deviceTypes
+                    .slice(0, 5)
+                    .map((item) => `${item.deviceType || 'unknown'}: ${item.count}`)
+                    .join(' · ')
+                : 'Noch keine Geräte-Daten'}
+            </span>
+          </article>
+        </div>
+
+        <p className="savings-notice" style={{ marginTop: '1rem' }}>
+          <strong>Hinweis:</strong> Diese Zahlen sind interne Produkt-KPI für Pitching und Entwicklung. Sie sind keine
+          personenbezogene Nutzeranalyse und ersetzen keine spätere professionelle Analytics-/Datenschutzprüfung.
+        </p>
+      </div>
+    </SectionCard>
+  )
+}
+
 function DiagnosticsPage({
   health,
   snapshot,
   essence,
+  analyticsSummary,
+  analyticsLoading,
   error,
   feedbackState,
   feedbackNote,
   setFeedbackNote,
   handleSaveFeedback,
+  onReloadAnalytics,
 }) {
   const summary = snapshot?.qualitySummary || {}
   const comparisons = snapshot?.comparisonSnapshot || {}
@@ -2318,9 +2526,9 @@ function DiagnosticsPage({
     <>
       <header className="hero">
         <div>
-          <p className="eyebrow">kaufklug.at Admin</p>
+          <p className="eyebrow">kaufklug.at intern</p>
           <h1>Interner Systemstatus</h1>
-          <p className="subtitle">Interne Ansicht für Quellen, Jobs, Rohdaten, Normalisierung und Vergleichsgruppen.</p>
+          <p className="subtitle">Interne Ansicht für Quellen, Jobs, Rohdaten, Normalisierung, Vergleichsgruppen und Pitch-KPI.</p>
         </div>
         <div className="hero__status">
           <div>
@@ -2345,11 +2553,12 @@ function DiagnosticsPage({
       <SectionCard style={{ marginBottom: '1rem' }}>
         <div className="selection-block">
           <div className="selection-block__header">
-            <p className="eyebrow">Admin-Navigation</p>
-            <h2>Interne Werkzeuge</h2>
+            <p className="eyebrow">Interne Navigation</p>
+            <h2>Werkzeuge</h2>
+            <p>/ecily_web ist nicht in der öffentlichen Landingpage-Navigation verlinkt und ist auf noindex gesetzt.</p>
           </div>
           <div className="quick-action-row">
-            <button type="button" className="ghost-button" onClick={() => window.history.replaceState({}, '', '/admin')}>
+            <button type="button" className="ghost-button" onClick={() => window.history.replaceState({}, '', '/ecily_web')}>
               Status
             </button>
             <button type="button" className="ghost-button" onClick={() => window.location.assign('/quality')}>
@@ -2360,6 +2569,12 @@ function DiagnosticsPage({
       </SectionCard>
 
       {error ? <p className="status status--error">{error}</p> : null}
+
+      <AnalyticsDashboard
+        analyticsSummary={analyticsSummary}
+        analyticsLoading={analyticsLoading}
+        onReloadAnalytics={onReloadAnalytics}
+      />
 
       <section className="metrics">
         <article className="metric-card"><span className="metric-card__label">Quellen aktiv</span><strong className="metric-card__value">{summary.sourceCount || 0}</strong></article>
@@ -2733,7 +2948,7 @@ function QualityPage({
 }
 
 function getInitialPageFromPathname(pathname) {
-  if (pathname.includes('admin')) return 'diagnostics'
+  if (pathname.includes('ecily_web')) return 'diagnostics'
   if (pathname.includes('impressum')) return 'impressum'
   if (pathname.includes('datenschutz') || pathname.includes('privacy')) return 'privacy'
   if (pathname.includes('nutzung') || pathname.includes('haftung') || pathname.includes('legal')) return 'liability'
@@ -2747,7 +2962,7 @@ function getInitialPageFromPathname(pathname) {
 
 function getPathForPage(nextPage) {
   if (nextPage === 'quality') return '/quality'
-  if (nextPage === 'diagnostics') return '/admin'
+  if (nextPage === 'diagnostics') return '/ecily_web'
   if (nextPage === 'shopping-list') return '/einkaufsliste'
   if (nextPage === 'impressum') return '/impressum'
   if (nextPage === 'privacy') return '/datenschutz'
@@ -2767,6 +2982,7 @@ function App() {
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
   const [qualitySnapshot, setQualitySnapshot] = useState(null)
+  const [analyticsSummary, setAnalyticsSummary] = useState(null)
   const [ranking, setRanking] = useState(null)
   const [retailers, setRetailers] = useState([])
   const [categories, setCategories] = useState([])
@@ -2777,6 +2993,7 @@ function App() {
   const [filtersLoading, setFiltersLoading] = useState(true)
   const [rankingLoading, setRankingLoading] = useState(false)
   const [qualityLoading, setQualityLoading] = useState(false)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [qualitySavingKey, setQualitySavingKey] = useState('')
   const [qualityFilters, setQualityFilters] = useState({
     query: '',
@@ -2877,10 +3094,13 @@ function App() {
     async function loadDiagnostics() {
       try {
         setLoading(true)
-        const [healthResult, snapshotResult, essenceResult] = await Promise.all([
+        setAnalyticsLoading(true)
+
+        const [healthResult, snapshotResult, essenceResult, analyticsResult] = await Promise.all([
           fetchHealth(),
           fetchDashboardSnapshot(),
           fetchEssence(),
+          fetchAnalyticsSummary(),
         ])
 
         if (!active) return
@@ -2888,12 +3108,16 @@ function App() {
         setHealth(healthResult)
         setSnapshot(snapshotResult)
         setEssence(essenceResult)
+        setAnalyticsSummary(analyticsResult)
         setError('')
       } catch (loadError) {
         if (!active) return
         setError(loadError.message || 'Dashboard-Daten konnten nicht geladen werden.')
       } finally {
-        if (active) setLoading(false)
+        if (active) {
+          setLoading(false)
+          setAnalyticsLoading(false)
+        }
       }
     }
 
@@ -3024,15 +3248,30 @@ function App() {
   }, [appliedSelectedRetailers, appliedCategoryQueryLabels, appliedSelectedCategoryLabels.length])
 
   async function reloadAll() {
-    const [healthResult, snapshotResult, essenceResult] = await Promise.all([
+    const [healthResult, snapshotResult, essenceResult, analyticsResult] = await Promise.all([
       fetchHealth(),
       fetchDashboardSnapshot(),
       fetchEssence(),
+      fetchAnalyticsSummary(),
     ])
 
     setHealth(healthResult)
     setSnapshot(snapshotResult)
     setEssence(essenceResult)
+    setAnalyticsSummary(analyticsResult)
+  }
+
+  async function reloadAnalyticsSummary() {
+    try {
+      setAnalyticsLoading(true)
+      const analyticsResult = await fetchAnalyticsSummary()
+      setAnalyticsSummary(analyticsResult)
+      setError('')
+    } catch (analyticsError) {
+      setError(analyticsError.message || 'Analytics-KPI konnten nicht geladen werden.')
+    } finally {
+      setAnalyticsLoading(false)
+    }
   }
 
   function handleNavigate(nextPage) {
@@ -3337,11 +3576,14 @@ function App() {
               health={health}
               snapshot={snapshot}
               essence={essence}
+              analyticsSummary={analyticsSummary}
+              analyticsLoading={analyticsLoading}
               error={error}
               feedbackState={feedbackState}
               feedbackNote={feedbackNote}
               setFeedbackNote={setFeedbackNote}
               handleSaveFeedback={handleSaveFeedback}
+              onReloadAnalytics={reloadAnalyticsSummary}
             />
           ) : null}
         </>
