@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /quality
+Disallow: /diagnose
+
+Sitemap: https://www.kaufklug.at/sitemap.xml
