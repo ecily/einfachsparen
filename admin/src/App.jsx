@@ -17,7 +17,8 @@ import {
 const KAUFKLUG_APK_DOWNLOAD_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk'
 const SHOPPING_LIST_STORAGE_KEY = 'kaufklug.shoppingList.v1'
 const COOKIE_NOTICE_STORAGE_KEY = 'kaufklug.storageNotice.accepted.v1'
-const SITE_URL = 'https://kaufklug.at'
+const ANALYTICS_SESSION_STORAGE_KEY = 'kaufklug.analyticsSession.v1'
+const SITE_URL = 'https://www.kaufklug.at'
 const CONTACT_EMAIL = 'andreas.franz@ecily.com'
 
 function getApiBase() {
@@ -37,6 +38,87 @@ function getApiBase() {
 function buildApiUrl(path) {
   const normalizedPath = `/${String(path || '').replace(/^\/+/, '')}`
   return `${getApiBase()}${normalizedPath}`
+}
+
+function buildAbsoluteUrl(pathOrUrl) {
+  const value = String(pathOrUrl || '')
+
+  if (/^https?:\/\//i.test(value)) {
+    return value
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return new URL(value, window.location.origin).href
+  }
+
+  return new URL(value, SITE_URL).href
+}
+
+function buildTrackedApkDownloadUrl(source = 'hero') {
+  const safeSource = String(source || 'hero')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'hero'
+
+  return buildAbsoluteUrl(buildApiUrl(`/download/kaufklug-alpha?source=${encodeURIComponent(safeSource)}`))
+}
+
+function createClientSessionId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `kk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+}
+
+function getClientSessionId() {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    const existing = window.localStorage.getItem(ANALYTICS_SESSION_STORAGE_KEY)
+
+    if (existing) {
+      return existing
+    }
+
+    const nextSessionId = createClientSessionId()
+    window.localStorage.setItem(ANALYTICS_SESSION_STORAGE_KEY, nextSessionId)
+    return nextSessionId
+  } catch {
+    return createClientSessionId()
+  }
+}
+
+function trackAnalyticsEvent(eventName, metadata = {}) {
+  if (typeof window === 'undefined') return
+
+  const payload = {
+    eventName,
+    path: window.location?.pathname || '/',
+    sessionId: getClientSessionId(),
+    metadata: {
+      ...metadata,
+      pageUrl: window.location?.pathname || '/',
+    },
+  }
+
+  try {
+    fetch(buildApiUrl('/analytics/event'), {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      // Analytics darf die App nie stören.
+    })
+  } catch {
+    // Analytics darf die App nie stören.
+  }
 }
 
 function extractArrayPayload(payload, preferredKeys = []) {
@@ -619,7 +701,7 @@ function getPageMeta(activePage) {
     },
     privacy: {
       title: 'Datenschutz – kaufklug.at',
-      description: 'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung, Serverkommunikation und externem QR-Code-Dienst.',
+      description: 'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung, Serverkommunikation, pseudonymer Nutzungsmessung und externem QR-Code-Dienst.',
       path: '/datenschutz',
     },
     liability: {
@@ -629,7 +711,7 @@ function getPageMeta(activePage) {
     },
     cookies: {
       title: 'Cookie- und Speicherhinweis – kaufklug.at',
-      description: 'Informationen zu Cookies, lokaler Speicherung und technischen Verbindungen bei kaufklug.at.',
+      description: 'Informationen zu Cookies, lokaler Speicherung, pseudonymer Nutzungsmessung und technischen Verbindungen bei kaufklug.at.',
       path: '/cookies',
     },
     quality: {
@@ -1010,9 +1092,10 @@ function CookieStorageNotice({ onNavigate }) {
         <div className="panel__header" style={{ marginBottom: '0.75rem' }}>
           <h2 style={{ fontSize: '1rem', margin: 0 }}>Cookie- und Speicherhinweis</h2>
           <p style={{ margin: 0 }}>
-            kaufklug.at verwendet derzeit keine Marketing- oder Analyse-Cookies. Für die Einkaufsliste und diesen
-            Hinweis speichern wir Daten lokal auf deinem Gerät. Beim Anzeigen des QR-Codes kann eine technische
-            Verbindung zu einem externen QR-Code-Dienst entstehen.
+            kaufklug.at verwendet derzeit keine Marketing-Cookies. Für die Einkaufsliste, diesen Hinweis und eine
+            pseudonyme Nutzungsmessung speichern wir technische Daten lokal auf deinem Gerät. So können wir zählen, wie
+            oft die Seite genutzt, gesucht oder die Test-App heruntergeladen wird, ohne Namen, E-Mail-Adressen oder
+            genaue Standortdaten zu speichern.
           </p>
         </div>
 
@@ -1104,7 +1187,9 @@ function StickyBottomLine({ onNavigate }) {
 }
 
 function HeroBlock() {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(KAUFKLUG_APK_DOWNLOAD_URL)}`
+  const trackedDownloadUrl = buildTrackedApkDownloadUrl('hero_button')
+  const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('hero_qr')
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(trackedQrDownloadUrl)}`
 
   return (
     <SectionCard
@@ -1216,7 +1301,7 @@ function HeroBlock() {
           </div>
 
           <a
-            href={KAUFKLUG_APK_DOWNLOAD_URL}
+            href={trackedDownloadUrl}
             target="_blank"
             rel="noreferrer"
             className="primary-action-button"
@@ -2043,19 +2128,34 @@ function PrivacyPage() {
         </p>
       </LegalSection>
 
+      <LegalSection title="Pseudonyme Nutzungsmessung">
+        <p>
+          kaufklug.at erfasst einfache, pseudonyme Nutzungsereignisse, damit das Projekt sachlich bewertet und verbessert
+          werden kann. Dazu zählen zum Beispiel Seitenaufrufe, geöffnete Einkaufsliste, gestartete Angebotssuchen,
+          Suchergebnisse, hinzugefügte Angebote und Downloads der Android-Testversion. Es werden dabei keine Namen,
+          E-Mail-Adressen, vollständigen IP-Adressen, exakten Standortdaten oder Nutzerkonten gespeichert.
+        </p>
+        <p>
+          Zur groben Wiedererkennung einer Sitzung kann lokal im Browser eine zufällig erzeugte Sitzungskennung
+          gespeichert werden. Am Server wird daraus nur ein gehashter Wert verarbeitet. Die Auswertung dient
+          insbesondere der Produktverbesserung, Stabilitätsprüfung und späteren anonymen KPI-Auswertung.
+        </p>
+      </LegalSection>
+
       <LegalSection title="API-Kommunikation">
         <p>
-          Die Webanwendung ruft Angebots-, Filter-, Qualitäts- und Statusdaten von einem Backend ab. Dabei können
-          technische Zugriffsdaten an den Server übertragen werden. Es werden derzeit keine Nutzerkonten über diese
-          Frontend-Ansicht geführt.
+          Die Webanwendung ruft Angebots-, Filter-, Qualitäts-, Status- und Nutzungsdaten von einem Backend ab. Dabei
+          können technische Zugriffsdaten an den Server übertragen werden. Es werden derzeit keine Nutzerkonten über
+          diese Frontend-Ansicht geführt.
         </p>
       </LegalSection>
 
       <LegalSection title="Lokale Speicherung">
         <p>
-          Die Einkaufsliste wird lokal im Browser des jeweiligen Geräts gespeichert. Diese Daten werden nicht benötigt,
-          um die Website grundsätzlich aufzurufen, erleichtern aber die Nutzung der Einkaufsliste. Nutzerinnen und Nutzer
-          können die Einkaufsliste jederzeit in der Anwendung löschen oder lokale Browserdaten entfernen.
+          Die Einkaufsliste, der Speicherhinweis und eine pseudonyme Sitzungskennung für die Nutzungsmessung werden lokal
+          im Browser des jeweiligen Geräts gespeichert. Diese Daten werden nicht benötigt, um die Website grundsätzlich
+          aufzurufen, erleichtern aber die Nutzung und die Verbesserung des Projekts. Nutzerinnen und Nutzer können die
+          Einkaufsliste jederzeit in der Anwendung löschen oder lokale Browserdaten entfernen.
         </p>
       </LegalSection>
 
@@ -2158,19 +2258,28 @@ function CookiesPage() {
       title="Cookie- und Speicherhinweis"
       subtitle="Informationen zu Cookies, lokaler Speicherung und technischen Verbindungen."
     >
-      <LegalSection title="Keine Marketing- oder Analyse-Cookies">
+      <LegalSection title="Keine Marketing-Cookies">
         <p>
-          kaufklug.at verwendet derzeit keine Marketing- oder Analyse-Cookies in der sichtbaren Webanwendung. Es werden
-          derzeit keine Werbeprofile erstellt und keine sichtbaren Tracking-Pixel wie Google Analytics, Meta Pixel oder
-          vergleichbare Dienste eingesetzt.
+          kaufklug.at verwendet derzeit keine Marketing-Cookies in der sichtbaren Webanwendung. Es werden derzeit keine
+          Werbeprofile erstellt und keine sichtbaren Tracking-Pixel wie Google Analytics, Meta Pixel oder vergleichbare
+          Dienste eingesetzt.
         </p>
       </LegalSection>
 
       <LegalSection title="Lokale Speicherung im Browser">
         <p>
-          Für die Einkaufsliste und den Speicherhinweis verwendet kaufklug.at lokale Speicherung im Browser
-          beziehungsweise auf dem Gerät. Diese Speicherung dient dazu, die Einkaufsliste lokal zu erhalten und den
-          Cookie-/Speicherhinweis nicht bei jedem Besuch erneut anzuzeigen.
+          Für die Einkaufsliste, den Speicherhinweis und eine pseudonyme Sitzungskennung verwendet kaufklug.at lokale
+          Speicherung im Browser beziehungsweise auf dem Gerät. Diese Speicherung dient dazu, die Einkaufsliste lokal zu
+          erhalten, den Cookie-/Speicherhinweis nicht bei jedem Besuch erneut anzuzeigen und einfache Nutzungskennzahlen
+          ohne Nutzerkonto zu erfassen.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Pseudonyme Nutzungsmessung">
+        <p>
+          kaufklug.at zählt grundlegende Nutzungsereignisse wie Seitenaufrufe, Angebotssuchen, gespeicherte Angebote und
+          Downloads der Android-Testversion. Diese Messung erfolgt ohne Marketing-Cookies, ohne Login und ohne Speicherung
+          von Namen, E-Mail-Adressen, vollständigen IP-Adressen oder exakten Standortdaten.
         </p>
       </LegalSection>
 
@@ -2695,6 +2804,28 @@ function App() {
   }, [activePage])
 
   useEffect(() => {
+    if (activePage === 'quality' || activePage === 'diagnostics') return
+
+    if (activePage === 'search') {
+      trackAnalyticsEvent('landing_page_view', {
+        page: 'search',
+      })
+      return
+    }
+
+    if (activePage === 'shopping-list') {
+      trackAnalyticsEvent('shopping_list_opened', {
+        itemCount: shoppingListItems.length,
+      })
+      return
+    }
+
+    trackAnalyticsEvent('legal_page_opened', {
+      page: activePage,
+    })
+  }, [activePage, shoppingListItems.length])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
 
     try {
@@ -2866,8 +2997,16 @@ function App() {
 
         if (!active) return
 
+        const resultCount = flattenRankingOffers(rankingResult).length
+
         setRanking(rankingResult)
         setError('')
+
+        trackAnalyticsEvent('offer_search_result', {
+          selectedRetailerCount: appliedSelectedRetailers.length,
+          selectedCategoryCount: appliedSelectedCategoryLabels.length,
+          resultCount,
+        })
       } catch (rankingError) {
         if (!active) return
         setRanking(null)
@@ -2882,7 +3021,7 @@ function App() {
     return () => {
       active = false
     }
-  }, [appliedSelectedRetailers, appliedCategoryQueryLabels])
+  }, [appliedSelectedRetailers, appliedCategoryQueryLabels, appliedSelectedCategoryLabels.length])
 
   async function reloadAll() {
     const [healthResult, snapshotResult, essenceResult] = await Promise.all([
@@ -2977,6 +3116,11 @@ function App() {
   }
 
   function handleApplySearch() {
+    trackAnalyticsEvent('offer_search_started', {
+      selectedRetailerCount: draftSelectedRetailers.length,
+      selectedCategoryCount: draftSelectedCategoryLabels.length,
+    })
+
     setAppliedSelectedRetailers([...draftSelectedRetailers])
     setAppliedSelectedCategoryLabels([...draftSelectedCategoryLabels])
   }
@@ -2995,6 +3139,14 @@ function App() {
     setShoppingListItems((current) => {
       if (current.some((existingItem) => existingItem.id === item.id)) return current
       return [item, ...current]
+    })
+
+    trackAnalyticsEvent('offer_added_to_list', {
+      retailerKey: item.retailerKey,
+      hasKnownSavings: item.hasKnownSavings,
+      hasConditions: item.hasConditions,
+      customerProgramRequired: item.customerProgramRequired,
+      isMultiBuy: item.isMultiBuy,
     })
   }
 
