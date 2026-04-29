@@ -11,23 +11,30 @@ const offerRoutes = require('./routes/offer.routes');
 const filterRoutes = require('./routes/filter.routes');
 const userPreferencesRoutes = require('./routes/userPreferences.routes');
 const qualityRoutes = require('./routes/quality.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
+const downloadRoutes = require('./routes/download.routes');
 
 const app = express();
-const allowedOrigins = new Set([env.ADMIN_ORIGIN]);
+const allowedOrigins = new Set([env.ADMIN_ORIGIN, env.KAUFKLUG_PUBLIC_ORIGIN]);
 
-try {
-  const adminUrl = new URL(env.ADMIN_ORIGIN);
+function addLocalhostVariant(origin) {
+  try {
+    const originUrl = new URL(origin);
 
-  if (adminUrl.hostname === 'localhost') {
-    allowedOrigins.add(`${adminUrl.protocol}//127.0.0.1:${adminUrl.port}`);
+    if (originUrl.hostname === 'localhost') {
+      allowedOrigins.add(`${originUrl.protocol}//127.0.0.1:${originUrl.port}`);
+    }
+
+    if (originUrl.hostname === '127.0.0.1') {
+      allowedOrigins.add(`${originUrl.protocol}//localhost:${originUrl.port}`);
+    }
+  } catch (error) {
+    // Ignore URL expansion and fall back to the configured origin only.
   }
-
-  if (adminUrl.hostname === '127.0.0.1') {
-    allowedOrigins.add(`${adminUrl.protocol}//localhost:${adminUrl.port}`);
-  }
-} catch (error) {
-  // Ignore URL expansion and fall back to the configured origin only.
 }
+
+addLocalhostVariant(env.ADMIN_ORIGIN);
+addLocalhostVariant(env.KAUFKLUG_PUBLIC_ORIGIN);
 
 app.use(
   cors({
@@ -59,6 +66,8 @@ app.use('/api/offers', offerRoutes);
 app.use('/api/filters', filterRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/quality', qualityRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/download', downloadRoutes);
 
 app.use((error, req, res, next) => {
   res.status(500).json({
