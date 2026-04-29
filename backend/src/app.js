@@ -15,31 +15,83 @@ const analyticsRoutes = require('./routes/analytics.routes');
 const downloadRoutes = require('./routes/download.routes');
 
 const app = express();
-const allowedOrigins = new Set([env.ADMIN_ORIGIN, env.KAUFKLUG_PUBLIC_ORIGIN]);
 
-function addLocalhostVariant(origin) {
+const allowedOrigins = new Set([
+  env.ADMIN_ORIGIN,
+  env.KAUFKLUG_PUBLIC_ORIGIN,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'https://kaufklug.at',
+  'https://www.kaufklug.at',
+]);
+
+function addOrigin(origin) {
+  if (typeof origin !== 'string' || !origin.trim()) {
+    return;
+  }
+
+  allowedOrigins.add(origin.trim().replace(/\/+$/, ''));
+}
+
+function addWwwVariant(origin) {
   try {
     const originUrl = new URL(origin);
+    const normalizedOrigin = originUrl.origin;
 
-    if (originUrl.hostname === 'localhost') {
-      allowedOrigins.add(`${originUrl.protocol}//127.0.0.1:${originUrl.port}`);
+    addOrigin(normalizedOrigin);
+
+    if (originUrl.hostname === 'kaufklug.at') {
+      originUrl.hostname = 'www.kaufklug.at';
+      addOrigin(originUrl.origin);
+      return;
     }
 
-    if (originUrl.hostname === '127.0.0.1') {
-      allowedOrigins.add(`${originUrl.protocol}//localhost:${originUrl.port}`);
+    if (originUrl.hostname === 'www.kaufklug.at') {
+      originUrl.hostname = 'kaufklug.at';
+      addOrigin(originUrl.origin);
     }
   } catch (error) {
     // Ignore URL expansion and fall back to the configured origin only.
   }
 }
 
+function addLocalhostVariant(origin) {
+  try {
+    const originUrl = new URL(origin);
+    const normalizedOrigin = originUrl.origin;
+
+    addOrigin(normalizedOrigin);
+
+    if (originUrl.hostname === 'localhost') {
+      addOrigin(`${originUrl.protocol}//127.0.0.1:${originUrl.port}`);
+    }
+
+    if (originUrl.hostname === '127.0.0.1') {
+      addOrigin(`${originUrl.protocol}//localhost:${originUrl.port}`);
+    }
+  } catch (error) {
+    // Ignore URL expansion and fall back to the configured origin only.
+  }
+}
+
+addOrigin(env.ADMIN_ORIGIN);
+addOrigin(env.KAUFKLUG_PUBLIC_ORIGIN);
 addLocalhostVariant(env.ADMIN_ORIGIN);
 addLocalhostVariant(env.KAUFKLUG_PUBLIC_ORIGIN);
+addWwwVariant(env.KAUFKLUG_PUBLIC_ORIGIN);
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = String(origin).replace(/\/+$/, '');
+
+      if (allowedOrigins.has(normalizedOrigin)) {
         return callback(null, true);
       }
 
@@ -47,6 +99,7 @@ app.use(
     },
   })
 );
+
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => {
