@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { API_BASE_URL } from './src/config/api';
+import ProductSearchScreen from './src/ProductSearchScreen';
 import {
   buildCategoryGroups,
   formatCurrency,
@@ -1451,17 +1452,47 @@ export default function App() {
           style={[styles.topMenuButton, activePage === 'offers' ? styles.topMenuButtonActive : null]}
           onPress={() => setActivePage('offers')}
         >
-          <Text style={[styles.topMenuLabel, activePage === 'offers' ? styles.topMenuLabelActive : null]}>
+          <Text
+            style={[styles.topMenuLabel, activePage === 'offers' ? styles.topMenuLabelActive : null]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.86}
+          >
             Angebote
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.topMenuButton, activePage === 'product-search' ? styles.topMenuButtonActive : null]}
+          onPress={() => setActivePage('product-search')}
+        >
+          <Text
+            style={[styles.topMenuLabel, activePage === 'product-search' ? styles.topMenuLabelActive : null]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.86}
+          >
+            Suche
           </Text>
         </Pressable>
         <Pressable
           style={[styles.topMenuButton, activePage === 'shopping' ? styles.topMenuButtonActive : null]}
           onPress={() => setActivePage('shopping')}
         >
-          <Text style={[styles.topMenuLabel, activePage === 'shopping' ? styles.topMenuLabelActive : null]}>
-            Einkaufsliste{shoppingListEntries.length > 0 ? ` (${shoppingListEntries.length})` : ''}
+          <Text
+            style={[styles.topMenuLabel, activePage === 'shopping' ? styles.topMenuLabelActive : null]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+          >
+            Einkaufsliste
           </Text>
+          {shoppingListEntries.length > 0 ? (
+            <View style={[styles.topMenuBadge, activePage === 'shopping' ? styles.topMenuBadgeActive : null]}>
+              <Text style={[styles.topMenuBadgeLabel, activePage === 'shopping' ? styles.topMenuBadgeLabelActive : null]}>
+                {shoppingListEntries.length}
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -1479,6 +1510,15 @@ export default function App() {
             scrollToResultsKey={scrollToResultsKey}
             hero={searchHeader}
             selectedRetailerCount={selectedRetailerCount}
+          />
+        ) : activePage === 'product-search' ? (
+          <ProductSearchScreen
+            fetchJson={fetchJson}
+            flattenRankingOffers={flattenRankingOffers}
+            OfferCardComponent={OfferCard}
+            shoppingListMap={shoppingListMap}
+            onToggleShoppingList={toggleShoppingList}
+            onOpenOfferDetail={setSelectedOffer}
           />
         ) : (
           <ShoppingListPage
@@ -1517,8 +1557,8 @@ const styles = StyleSheet.create({
   mainArea: { flex: 1 },
   topMenu: {
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 18,
+    gap: 6,
+    paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 8,
     backgroundColor: '#f4efe5',
@@ -1529,13 +1569,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#eae2d4',
     paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    position: 'relative',
   },
   topMenuButtonActive: { backgroundColor: '#31582c' },
-  topMenuLabel: { color: '#425040', fontWeight: '800', fontSize: 14, textAlign: 'center' },
+  topMenuLabel: { color: '#425040', fontWeight: '800', fontSize: 13, textAlign: 'center' },
   topMenuLabelActive: { color: '#f8f5ed' },
+  topMenuBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#31582c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  topMenuBadgeActive: { backgroundColor: '#f8f5ed' },
+  topMenuBadgeLabel: { color: '#f8f5ed', fontSize: 11, fontWeight: '900', lineHeight: 14 },
+  topMenuBadgeLabelActive: { color: '#31582c' },
   content: { padding: 18, gap: 16, paddingBottom: 32 },
   heroCard: {
     backgroundColor: '#12361e',
