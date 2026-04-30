@@ -178,12 +178,12 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Bier',
   },
   {
-    patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister|batida|averna|amaro|kokoslikoer|kokoslikor)\b/],
+    patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister|batida|averna|amaro|kokoslikoer|kokoslikor|gurktaler|alpenkrauter|alpenkraeuter|aperitivo|spritz|bourbon)\b/],
     main: 'Getraenke',
     sub: 'Spirituosen',
   },
   {
-    patterns: [/\b(rotwein|weisswein|rosewein|wein|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|veltliner|hugo)\b/],
+    patterns: [/\b(rotwein|weisswein|rosewein|wein|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|welschriesling|veltliner|hugo|gluhwein|gluehwein|cuvée|cuvee)\b/],
     main: 'Getraenke',
     sub: 'Wein & Sekt',
   },
@@ -193,7 +193,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Wasser',
   },
   {
-    patterns: [/\b(cola|limonade|limo|softdrink|energy|energydrink|eistee|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink)\b/],
+    patterns: [/\b(cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
     main: 'Getraenke',
     sub: 'Softdrinks & Energy',
   },
@@ -203,12 +203,12 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Tiefkuehl- & Fertigprodukte',
   },
   {
-    patterns: [/\b(schokolade|fruchtgummi|gummibaer|gummibaeren|haribo|milka|ferrero|raffaello|rocher|praline|pralinen|nougat|bonbon|zuckerl|kaugummi|orbit|smarties|zuckerlfrei|keks|kekse|butterkeks|waffel|waffelrollchen|waffelroellchen|chips|flips|nachos|doritos|brotchips|popcorn|snack|soletti|merci|manner|mikado|niemetz|schwedenbomben|amicelli|celebrations|lorenz|xoxo|kelly|mozartkugeln|ildefonso|tony chocolonely|chocolonely|lindt|storck|nestle|riegel|proteinriegel|erdnusse|erdnuesse)\b/],
+    patterns: [/\b(schokolade|fruchtgummi|gummibaer|gummibaeren|haribo|milka|ferrero|raffaello|rocher|praline|pralinen|nougat|bonbon|zuckerl|kaugummi|orbit|smarties|zuckerlfrei|keks|kekse|butterkeks|waffel|waffelrollchen|waffelroellchen|chips|flips|nachos|doritos|bruschette|knabbermix|brotchips|popcorn|snack|soletti|merci|manner|mikado|niemetz|schwedenbomben|amicelli|celebrations|lorenz|xoxo|kelly|mozartkugeln|ildefonso|tony chocolonely|chocolonely|lindt|storck|nestle|mrbeast|feastables|riegel|proteinriegel|erdnusse|erdnuesse)\b/],
     main: 'Lebensmittel',
     sub: 'Suesswaren & Knabbereien',
   },
   {
-    patterns: [/\b(knorr|felix|kotanyi|bouillon|suppe|suppen|bruehe|bruhe|krauter|kraeuter|kronenoel|rapsoel|olivenoel|olivenol|sonnenblumenoel)\b/],
+    patterns: [/\b(knorr|felix|kotanyi|thomy|bechamel|bechamelsauce|sauce|sauces|bouillon|suppe|suppen|bruehe|bruhe|krauter|kraeuter|kronenol|kronenoel|rapsol|rapsoel|olivenoel|olivenol|sonnenblumenoel)\b/],
     main: 'Lebensmittel',
     sub: 'Saucen, Oele & Gewuerze',
   },
@@ -301,6 +301,11 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(perfect fit|gourmet perle|katzenfutter|katzensnack)\b/],
     main: 'Tierbedarf',
     sub: 'Katzenfutter',
+  },
+  {
+    patterns: [/\b(zooroyal|moon ranger|hundefutter|hundesnack|katzenfutter|katzensnack)\b/],
+    main: 'Tierbedarf',
+    sub: 'Tierzubehoer',
   },
   {
     patterns: [/\b(spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|geschirrspueltabs|geschirrspultabs|waschcaps|reiniger tabs)\b/],
