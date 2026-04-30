@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -30,9 +31,11 @@ const BRAND_NAME = 'kaufklug.at';
 const ECILY_URL = 'https://www.ecily.com';
 const ALPHA_APK_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk';
 const ALPHA_VERSION_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha_version.json';
-const ALPHA_BUILD_NUMBER = 2026042802;
 const SHOPPING_LIST_STORAGE_KEY = 'einfachsparen.mobile.shoppingList.v1';
+const DISMISSED_UPDATE_BUILD_STORAGE_KEY = 'einfachsparen.mobile.dismissedUpdateBuildNumber.v1';
+const DISMISSED_UPDATE_AT_STORAGE_KEY = 'einfachsparen.mobile.dismissedUpdateAt.v1';
 const UPDATE_CHECK_TIMEOUT_MS = 8000;
+const UPDATE_REMINDER_PAUSE_MS = 24 * 60 * 60 * 1000;
 
 const RETAILER_COLORS = {
   bipa: '#ec4f86',
@@ -104,6 +107,70 @@ async function fetchAlphaVersionInfo() {
   } finally {
     clearTimeout(timeoutHandle);
   }
+}
+
+function toBuildNumber(value) {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmedValue = value.trim();
+    if (!/^\d+$/.test(trimmedValue)) {
+      return null;
+    }
+
+    const buildNumber = Number(trimmedValue);
+    return Number.isSafeInteger(buildNumber) && buildNumber > 0 ? buildNumber : null;
+  }
+
+  return null;
+}
+
+function getInstalledBuildNumber() {
+  return toBuildNumber(Application.nativeBuildVersion);
+}
+
+async function getDismissedUpdateReminder() {
+  const storedEntries = await AsyncStorage.multiGet([
+    DISMISSED_UPDATE_BUILD_STORAGE_KEY,
+    DISMISSED_UPDATE_AT_STORAGE_KEY,
+  ]);
+  const storedMap = Object.fromEntries(storedEntries);
+
+  return {
+    dismissedBuildNumber: toBuildNumber(storedMap[DISMISSED_UPDATE_BUILD_STORAGE_KEY]),
+    dismissedAt: toBuildNumber(storedMap[DISMISSED_UPDATE_AT_STORAGE_KEY]) || 0,
+  };
+}
+
+async function storeDismissedUpdateReminder(buildNumber) {
+  const normalizedBuildNumber = toBuildNumber(buildNumber);
+
+  if (!normalizedBuildNumber) {
+    return;
+  }
+
+  await AsyncStorage.multiSet([
+    [DISMISSED_UPDATE_BUILD_STORAGE_KEY, String(normalizedBuildNumber)],
+    [DISMISSED_UPDATE_AT_STORAGE_KEY, String(Date.now())],
+  ]);
+}
+
+async function clearDismissedUpdateReminder() {
+  await AsyncStorage.multiRemove([
+    DISMISSED_UPDATE_BUILD_STORAGE_KEY,
+    DISMISSED_UPDATE_AT_STORAGE_KEY,
+  ]);
+}
+
+function isUpdateReminderPaused(latestBuildNumber, dismissedReminder) {
+  if (latestBuildNumber !== dismissedReminder.dismissedBuildNumber) {
+    return false;
+  }
+
+  const dismissedAgeMs = Date.now() - dismissedReminder.dismissedAt;
+  return dismissedAgeMs >= 0 && dismissedAgeMs < UPDATE_REMINDER_PAUSE_MS;
 }
 
 function getReliableSavingsAmount(offer) {
@@ -980,9 +1047,23 @@ export default function App() {
   async function checkForAlphaUpdate() {
     try {
       const versionInfo = await fetchAlphaVersionInfo();
-      const latestBuildNumber = Number(versionInfo?.latestBuildNumber || versionInfo?.latestBuild || 0);
+      const latestBuildNumber = toBuildNumber(versionInfo?.latestBuildNumber || versionInfo?.latestBuild);
+      const installedBuildNumber = getInstalledBuildNumber();
 
-      if (!Number.isFinite(latestBuildNumber) || latestBuildNumber <= ALPHA_BUILD_NUMBER) {
+      if (!latestBuildNumber || !installedBuildNumber) {
+        setUpdateInfo(null);
+        return;
+      }
+
+      if (latestBuildNumber <= installedBuildNumber) {
+        setUpdateInfo(null);
+        clearDismissedUpdateReminder().catch(() => {});
+        return;
+      }
+
+      const dismissedReminder = await getDismissedUpdateReminder();
+
+      if (isUpdateReminderPaused(latestBuildNumber, dismissedReminder)) {
         setUpdateInfo(null);
         return;
       }
@@ -993,7 +1074,22 @@ export default function App() {
         apkUrl: versionInfo?.apkUrl || ALPHA_APK_URL,
       });
     } catch (updateError) {
+      setUpdateInfo(null);
       console.warn('Update-Pruefung konnte nicht abgeschlossen werden.', updateError);
+    }
+  }
+
+  async function dismissAlphaUpdateReminder() {
+    const latestBuildNumber = toBuildNumber(updateInfo?.latestBuildNumber);
+    const installedBuildNumber = getInstalledBuildNumber();
+    setUpdateInfo(null);
+
+    try {
+      if (latestBuildNumber && installedBuildNumber && latestBuildNumber > installedBuildNumber) {
+        await storeDismissedUpdateReminder(latestBuildNumber);
+      }
+    } catch (storageError) {
+      console.warn('Update-Erinnerung konnte nicht gespeichert werden.', storageError);
     }
   }
 
@@ -1537,7 +1633,7 @@ export default function App() {
         visible={Boolean(updateInfo)}
         updateInfo={updateInfo}
         onUpdate={openAlphaUpdate}
-        onLater={() => setUpdateInfo(null)}
+        onLater={dismissAlphaUpdateReminder}
       />
 
       <OfferDetailModal

@@ -2,7 +2,7 @@
   "expo": {
     "name": "kaufklug.at",
     "slug": "kaufklug-at",
-    "version": "1.0.0",
+    "version": "2026.04.30-1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,7 +21,8 @@
         "backgroundColor": "#023b25"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.kaufgutat"
+      "package": "com.anonymous.kaufgutat",
+      "versionCode": 2026043001
     },
     "web": {
       "favicon": "./assets/favicon.png"
