@@ -1,0 +1,206 @@
+import { formatCurrencyAmount } from './formatting'
+
+export function normalizeRetailerKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+export function getOfferStableId(offer) {
+  return String(
+    offer?.id ||
+    offer?._id ||
+    offer?.offerKey ||
+    offer?.dedupeKey ||
+    `${offer?.title || 'angebot'}-${offer?.retailerName || 'markt'}-${offer?.priceCurrent?.amount || 'preis'}-${offer?.validTo || ''}`
+  )
+}
+
+export function getOfferCategoryLabel(offer) {
+  return offer?.displayCategory || offer?.categorySecondary || offer?.categoryPrimary || 'ohne Kategorie'
+}
+
+export function isOfferDirectlyComparable(offer) {
+  return Boolean(offer?.quality?.comparisonSafe && offer?.comparisonGroup && offer?.normalizedUnitPrice?.amount)
+}
+
+export function getOfferKindLabel(offer) {
+  return isOfferDirectlyComparable(offer) ? 'Mit Vergleichspreis' : 'Aktionspreis'
+}
+
+export function getOfferStatusLabel(offer) {
+  if (offer?.status === 'active' && offer?.isActiveNow) return 'Aktuell gültig'
+  if (offer?.status === 'upcoming') return 'Bald gültig'
+  if (offer?.status === 'expired') return 'Nicht mehr gültig'
+  if (offer?.isActiveToday) return 'Heute relevant'
+  return 'Aktuelle Aktion'
+}
+
+export function shouldDisplayUnitPrice(offer) {
+  const amount = Number(offer?.normalizedUnitPrice?.amount)
+  const unit = String(offer?.normalizedUnitPrice?.unit || offer?.comparableUnit || '')
+  const packageType = String(offer?.packageType || '').toLowerCase()
+  const packCount = Number(offer?.packCount || 0)
+  const unitType = String(offer?.unitType || '')
+
+  if (!Number.isFinite(amount) || !unit) {
+    return false
+  }
+
+  if (unit === 'Stk' && packCount > 1 && (packageType === 'pack' || packageType === 'box' || packageType === 'blister' || unitType === 'Stk')) {
+    return false
+  }
+
+  return true
+}
+
+export function getConditionsSummary(offer) {
+  if (offer?.conditionsText) {
+    return offer.conditionsText
+  }
+
+  if (offer?.customerProgramRequired) {
+    return 'Mit Kundenkarte/App'
+  }
+
+  if (offer?.isMultiBuy) {
+    return 'Mehrkauf-Angebot'
+  }
+
+  const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1)
+  if (minimumPurchaseQty > 1) {
+    return `Mindestens ${minimumPurchaseQty} Stück`
+  }
+
+  if (offer?.hasConditions) {
+    return 'Bedingung beachten'
+  }
+
+  return 'Keine besonderen Bedingungen'
+}
+
+export function buildOfferBadges(offer) {
+  const badges = [getOfferKindLabel(offer), getOfferStatusLabel(offer)]
+
+  if (offer?.customerProgramRequired) badges.push('Kundenkarte/App')
+  if (offer?.isMultiBuy) badges.push('Mehrkauf')
+  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge')
+
+  return badges
+}
+
+export function getOfferRetailerKey(offer, retailers = []) {
+  if (offer?.retailerKey) return offer.retailerKey
+
+  const fromLookup = (retailers || []).find((item) => item.retailerName === offer?.retailerName)
+  if (fromLookup?.retailerKey) return fromLookup.retailerKey
+
+  return normalizeRetailerKey(offer?.retailerName)
+}
+
+export function flattenRankingOffers(ranking) {
+  if (Array.isArray(ranking?.rankedOffers)) {
+    return ranking.rankedOffers
+      .filter((offer) => offer && typeof offer === 'object')
+      .map((offer) => ({
+        ...offer,
+        id: getOfferStableId(offer),
+      }))
+  }
+
+  const seen = new Set()
+  const offers = []
+
+  for (const group of ranking?.rankedGroups || []) {
+    for (const offer of group.offers || []) {
+      const offerId = getOfferStableId(offer)
+
+      if (seen.has(offerId)) continue
+
+      seen.add(offerId)
+      offers.push({
+        ...offer,
+        id: offerId,
+      })
+    }
+  }
+
+  return offers
+}
+
+export function splitRankingOffers(offers = []) {
+  const bestComparableOffers = []
+  const actionOffers = []
+
+  for (const offer of offers || []) {
+    if (isOfferDirectlyComparable(offer)) {
+      bestComparableOffers.push(offer)
+      continue
+    }
+
+    actionOffers.push(offer)
+  }
+
+  return {
+    bestComparableOffers,
+    actionOffers,
+  }
+}
+
+export function areStringSetsEqual(left = [], right = []) {
+  if (left.length !== right.length) return false
+
+  const leftSorted = [...left].sort()
+  const rightSorted = [...right].sort()
+  return leftSorted.every((value, index) => value === rightSorted[index])
+}
+
+export function getSavingsValue(offer) {
+  const candidates = [
+    offer?.savingsAmount,
+    offer?.savings?.amount,
+    offer?.priceSavings?.amount,
+    offer?.discountAmount,
+  ]
+
+  for (const candidate of candidates) {
+    const numeric = Number(candidate)
+    if (Number.isFinite(numeric) && numeric > 0) return numeric
+  }
+
+  const oldPrice = Number(offer?.priceBefore?.amount || offer?.priceOriginal?.amount || offer?.priceRegular?.amount)
+  const currentPrice = Number(offer?.priceCurrent?.amount)
+
+  if (Number.isFinite(oldPrice) && Number.isFinite(currentPrice) && oldPrice > currentPrice) {
+    return oldPrice - currentPrice
+  }
+
+  return -1
+}
+
+export function hasKnownSavings(offer) {
+  return getSavingsValue(offer) > 0
+}
+
+export function getOfferSavingsInfo(offer) {
+  const savingsValue = getSavingsValue(offer)
+
+  if (savingsValue > 0) {
+    return {
+      type: 'known',
+      label: `Spart ca. ${formatCurrencyAmount(savingsValue)}`,
+      shortLabel: `ca. ${formatCurrencyAmount(savingsValue)}`,
+      description: 'Ersparnis mit angegebenem Normalpreis.',
+    }
+  }
+
+  return {
+    type: 'action',
+    label: 'Aktionspreis',
+    shortLabel: 'Aktionspreis',
+    description: 'Im Prospekt ist kein Normalpreis angegeben. Das ist oft bei kurzen oder saisonalen Aktionen der Fall.',
+  }
+}

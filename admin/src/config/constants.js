@@ -1,0 +1,6 @@
+export const KAUFKLUG_APK_DOWNLOAD_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk'
+export const SHOPPING_LIST_STORAGE_KEY = 'kaufklug.shoppingList.v1'
+export const COOKIE_NOTICE_STORAGE_KEY = 'kaufklug.storageNotice.accepted.v1'
+export const ANALYTICS_SESSION_STORAGE_KEY = 'kaufklug.analyticsSession.v1'
+export const SITE_URL = 'https://www.kaufklug.at'
+export const CONTACT_EMAIL = 'andreas.franz@ecily.com'
