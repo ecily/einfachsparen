@@ -775,6 +775,236 @@ function dedupeByQuery(offers) {
   return unique;
 }
 
+function getOfferIdentity(offer) {
+  return String(offer?._id || offer?.id || '').trim();
+}
+
+function getOfferPriceKey(offer) {
+  const currentAmount = offer?.priceCurrent?.amount;
+  const unitAmount = offer?.normalizedUnitPrice?.amount;
+
+  if (currentAmount !== undefined && currentAmount !== null) {
+    return `current:${Number(currentAmount).toFixed(2)}`;
+  }
+
+  if (unitAmount !== undefined && unitAmount !== null) {
+    return `unit:${Number(unitAmount).toFixed(2)}:${offer?.normalizedUnitPrice?.unit || offer?.comparableUnit || ''}`;
+  }
+
+  return 'price:unknown';
+}
+
+function getOfferQuantityKey(offer) {
+  const quantityText = normalizeSearchText(offer?.quantityText);
+
+  if (quantityText) {
+    return quantityText;
+  }
+
+  return [
+    offer?.packCount ?? '',
+    offer?.unitValue ?? '',
+    offer?.unitType || '',
+    offer?.totalComparableAmount ?? '',
+    offer?.comparableUnit || offer?.normalizedUnitPrice?.unit || '',
+  ].join(':');
+}
+
+function getOfferTitleKey(offer) {
+  return normalizeSearchText(offer?.titleNormalized || offer?.title);
+}
+
+function findRawFactValue(value, keys) {
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+
+  const matches = [];
+
+  for (const [rawKey, rawValue] of Object.entries(value)) {
+    const normalizedKey = normalizeSearchText(rawKey);
+
+    if (keys.some((key) => normalizedKey === key || normalizedKey.includes(key))) {
+      if (rawValue === null || rawValue === undefined || typeof rawValue === 'object') {
+        matches.push(normalizeSearchText(JSON.stringify(rawValue || '')));
+      } else {
+        matches.push(normalizeSearchText(rawValue));
+      }
+    }
+  }
+
+  return matches.filter(Boolean).join(':');
+}
+
+function getOfferVariantKey(offer) {
+  const rawVariantKeys = [
+    'abmessung',
+    'akku',
+    'breite',
+    'color',
+    'durchmesser',
+    'farbe',
+    'groesse',
+    'grosse',
+    'hoehe',
+    'hohe',
+    'laenge',
+    'lange',
+    'leistung',
+    'material',
+    'model',
+    'modell',
+    'spannung',
+    'staerke',
+    'starke',
+    'tiefe',
+    'voltage',
+    'watt',
+  ];
+
+  return [
+    normalizeSearchText(offer?.brand),
+    normalizeSearchText(offer?.packageType),
+    findRawFactValue(offer?.rawFacts, rawVariantKeys),
+  ].filter(Boolean).join(':');
+}
+
+function getStrictQueryDedupeKeys(offer) {
+  const keys = [];
+  const identity = getOfferIdentity(offer);
+
+  if (identity) {
+    keys.push(`id:${identity}`);
+  }
+
+  if (offer?.dedupeKey) {
+    keys.push(`dedupe:${offer.dedupeKey}`);
+  }
+
+  if (offer?.offerKey) {
+    keys.push(`offer:${offer.offerKey}`);
+  }
+
+  const titleKey = getOfferTitleKey(offer);
+  if (titleKey) {
+    keys.push([
+      'fallback',
+      offer?.retailerKey || offer?.retailerName || '',
+      titleKey,
+      getOfferPriceKey(offer),
+      getOfferQuantityKey(offer),
+      getOfferVariantKey(offer),
+    ].join(':'));
+  }
+
+  return keys;
+}
+
+function hasRicherOfferData(left, right) {
+  const leftScore = [
+    Boolean(left?.imageUrl),
+    Boolean(left?.comparisonGroup),
+    Boolean(left?.brand),
+    Boolean(left?.quantityText),
+    Boolean(left?.priceCurrent?.amount),
+    Boolean(left?.normalizedUnitPrice?.amount),
+    Boolean(left?.validTo),
+  ].filter(Boolean).length;
+  const rightScore = [
+    Boolean(right?.imageUrl),
+    Boolean(right?.comparisonGroup),
+    Boolean(right?.brand),
+    Boolean(right?.quantityText),
+    Boolean(right?.priceCurrent?.amount),
+    Boolean(right?.normalizedUnitPrice?.amount),
+    Boolean(right?.validTo),
+  ].filter(Boolean).length;
+
+  return leftScore > rightScore;
+}
+
+function choosePreferredQueryDuplicate(left, right, query) {
+  const rankingComparison = compareOffersByRanking(left, right, { query });
+
+  if (rankingComparison < 0) {
+    return left;
+  }
+
+  if (rankingComparison > 0) {
+    return right;
+  }
+
+  if (hasRicherOfferData(right, left)) {
+    return right;
+  }
+
+  return left;
+}
+
+function dedupeQueryOffers(offers, query) {
+  if (tokenizeSearchText(query).length === 0) {
+    return offers;
+  }
+
+  const unique = [];
+  const keyToIndex = new Map();
+
+  for (const offer of offers) {
+    const keys = getStrictQueryDedupeKeys(offer);
+    const duplicateIndex = keys
+      .map((key) => keyToIndex.get(key))
+      .find((index) => index !== undefined);
+
+    if (duplicateIndex === undefined) {
+      const newIndex = unique.length;
+      unique.push(offer);
+      keys.forEach((key) => keyToIndex.set(key, newIndex));
+      continue;
+    }
+
+    const preferred = choosePreferredQueryDuplicate(unique[duplicateIndex], offer, query);
+
+    if (preferred !== unique[duplicateIndex]) {
+      unique[duplicateIndex] = preferred;
+      keys.forEach((key) => keyToIndex.set(key, duplicateIndex));
+    }
+  }
+
+  return unique;
+}
+
+function reduceAdjacentQueryDuplicates(offers, query) {
+  if (tokenizeSearchText(query).length === 0 || offers.length < 2) {
+    return offers;
+  }
+
+  const remaining = [...offers];
+  const ordered = [];
+  let previousTitleKey = '';
+
+  while (remaining.length > 0) {
+    let selectedIndex = 0;
+
+    if (previousTitleKey && getOfferTitleKey(remaining[0]) === previousTitleKey) {
+      const alternativeIndex = remaining.findIndex((offer) => getOfferTitleKey(offer) !== previousTitleKey);
+
+      if (alternativeIndex > 0) {
+        selectedIndex = alternativeIndex;
+      }
+    }
+
+    const [selected] = remaining.splice(selectedIndex, 1);
+    ordered.push(selected);
+    previousTitleKey = getOfferTitleKey(selected);
+  }
+
+  return ordered;
+}
+
+function prepareQueryOffersForResponse(offers, query) {
+  return reduceAdjacentQueryDuplicates(dedupeQueryOffers(offers, query), query);
+}
+
 function compareOffersByRanking(left, right, { query = '' } = {}) {
   const queryTokens = tokenizeSearchText(query);
 
@@ -802,6 +1032,28 @@ function compareOffersByRanking(left, right, { query = '' } = {}) {
 }
 
 function buildGroupedRankings(offers, { query = '' } = {}) {
+  const hasQuery = tokenizeSearchText(query).length > 0;
+
+  if (hasQuery) {
+    const orderedGroups = [];
+
+    for (const offer of offers) {
+      const unit = offer.normalizedUnitPrice?.unit || 'unbekannt';
+      const currentGroup = orderedGroups[orderedGroups.length - 1];
+
+      if (currentGroup && currentGroup.unit === unit) {
+        currentGroup.offers.push(offer);
+      } else {
+        orderedGroups.push({
+          unit,
+          offers: [offer],
+        });
+      }
+    }
+
+    return orderedGroups;
+  }
+
   const groups = new Map();
 
   for (const offer of offers) {
@@ -820,15 +1072,6 @@ function buildGroupedRankings(offers, { query = '' } = {}) {
       offers: unitOffers.sort((left, right) => compareOffersByRanking(left, right, { query })),
     }))
     .sort((left, right) => {
-      if (query) {
-        const leftQueryScore = left.offers[0] ? scoreOfferAgainstQuery(left.offers[0], query) : -1;
-        const rightQueryScore = right.offers[0] ? scoreOfferAgainstQuery(right.offers[0], query) : -1;
-
-        if (rightQueryScore !== leftQueryScore) {
-          return rightQueryScore - leftQueryScore;
-        }
-      }
-
       const leftTopConsumerScore = left.offers[0] ? buildConsumerScore(left.offers[0]) : -1;
       const rightTopConsumerScore = right.offers[0] ? buildConsumerScore(right.offers[0]) : -1;
 
@@ -1132,7 +1375,7 @@ async function buildOfferRanking({
     }
   }
 
-  const offers = fullyFilteredOffers
+  const sortedOffers = fullyFilteredOffers
     .sort((left, right) => {
       if (queryScores) {
         const leftQueryScore = queryScores.get(left) || 0;
@@ -1162,7 +1405,9 @@ async function buildOfferRanking({
       }
 
       return String(left.title).localeCompare(String(right.title), 'de');
-    })
+    });
+  const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query);
+  const offers = responseCandidateOffers
     .slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit);
 
   const bestUnitPrice = offers[0]?.normalizedUnitPrice?.amount || null;
@@ -1216,6 +1461,9 @@ module.exports = {
   scoreOfferAgainstQuery,
   applyQueryMatch,
   buildGroupedRankings,
+  dedupeQueryOffers,
+  reduceAdjacentQueryDuplicates,
+  prepareQueryOffersForResponse,
   normalizeSearchText,
   tokenizeSearchText,
 };

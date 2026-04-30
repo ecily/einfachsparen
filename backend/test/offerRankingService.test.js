@@ -4,7 +4,9 @@ const test = require('node:test');
 const {
   applyQueryMatch,
   buildGroupedRankings,
+  dedupeQueryOffers,
   normalizeSearchText,
+  prepareQueryOffersForResponse,
   scoreOfferAgainstQuery,
   tokenizeSearchText,
 } = require('../src/services/offers/offerRankingService');
@@ -174,7 +176,10 @@ test('keeps grouped butter response query-sorted for live response order', () =>
     }),
   ];
 
-  const firstGroupTitles = buildGroupedRankings(offers, { query: 'butter' })[0].offers.map((item) => item.title);
+  const firstGroupTitles = buildGroupedRankings(
+    prepareQueryOffersForResponse(applyQueryMatch(offers, 'butter'), 'butter'),
+    { query: 'butter' }
+  ).flatMap((group) => group.offers).map((item) => item.title);
 
   assert.deepEqual(new Set(firstGroupTitles.slice(0, 2)), new Set([
     'Milsani Irische Butter HOFER 250 Gramm',
@@ -358,11 +363,249 @@ test('keeps grouped detergent response query-sorted for live response order', ()
     }),
   ];
 
-  const firstGroupTitles = buildGroupedRankings(offers, { query: 'waschmittel' })[0].offers.map((item) => item.title);
+  const firstGroupTitles = buildGroupedRankings(
+    prepareQueryOffersForResponse(applyQueryMatch(offers, 'waschmittel'), 'waschmittel'),
+    { query: 'waschmittel' }
+  ).flatMap((group) => group.offers).map((item) => item.title);
 
   assert.deepEqual(new Set(firstGroupTitles.slice(0, 3)), new Set([
     'Ariel Waschmittel',
     'Weisser Riese Waschmittel',
     'Persil Waschmittel',
   ]));
+});
+
+test('dedupes exact offer identities and dedupe keys for query responses', () => {
+  const offers = [
+    offer({
+      _id: 'same-id',
+      dedupeKey: 'same-key',
+      title: 'Milka Hauchzarte Herzen Alpenmilch',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 2.99 },
+      quantityText: '130 g',
+    }),
+    offer({
+      _id: 'same-id',
+      dedupeKey: 'same-key',
+      title: 'Milka Hauchzarte Herzen Alpenmilch',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 2.99 },
+      quantityText: '130 g',
+    }),
+  ];
+
+  assert.equal(dedupeQueryOffers(offers, 'milka').length, 1);
+});
+
+test('dedupes same retailer title price and quantity fallback for query responses', () => {
+  const offers = [
+    offer({
+      _id: 'first',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+    }),
+    offer({
+      _id: 'second',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+    }),
+  ];
+
+  assert.equal(dedupeQueryOffers(offers, 'kaffee').length, 1);
+});
+
+test('keeps same title for different retailers and distinct variants', () => {
+  const offers = [
+    offer({
+      _id: 'billa',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+    }),
+    offer({
+      _id: 'billa-plus',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa-plus',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+    }),
+    offer({
+      _id: 'billa-large',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 2.49 },
+      quantityText: '500 ml',
+    }),
+  ];
+
+  assert.equal(dedupeQueryOffers(offers, 'kaffee').length, 3);
+});
+
+test('keeps hardware variants with material power model or color differences', () => {
+  const offers = [
+    offer({
+      _id: 'bohrer-hss',
+      title: 'Bohrer Set',
+      brand: 'Bosch',
+      retailerKey: 'baumarkt',
+      priceCurrent: { amount: 12.99 },
+      quantityText: '10 Stk',
+      rawFacts: { material: 'HSS', modell: 'X-Line' },
+    }),
+    offer({
+      _id: 'bohrer-stein',
+      title: 'Bohrer Set',
+      brand: 'Bosch',
+      retailerKey: 'baumarkt',
+      priceCurrent: { amount: 12.99 },
+      quantityText: '10 Stk',
+      rawFacts: { material: 'Stein', modell: 'CYL-3' },
+    }),
+    offer({
+      _id: 'farbe-weiss',
+      title: 'Wandfarbe',
+      retailerKey: 'baumarkt',
+      priceCurrent: { amount: 24.99 },
+      quantityText: '10 l',
+      rawFacts: { farbe: 'weiss matt' },
+    }),
+    offer({
+      _id: 'farbe-grau',
+      title: 'Wandfarbe',
+      retailerKey: 'baumarkt',
+      priceCurrent: { amount: 24.99 },
+      quantityText: '10 l',
+      rawFacts: { farbe: 'grau matt' },
+    }),
+    offer({
+      _id: 'akku-2ah',
+      title: 'Akku',
+      retailerKey: 'baumarkt',
+      priceCurrent: { amount: 39.99 },
+      quantityText: '1 Stk',
+      rawFacts: { spannung: '18 V', leistung: '2 Ah', modell: 'PBA 18V 2.0Ah' },
+    }),
+    offer({
+      _id: 'akku-4ah',
+      title: 'Akku',
+      retailerKey: 'baumarkt',
+      priceCurrent: { amount: 39.99 },
+      quantityText: '1 Stk',
+      rawFacts: { spannung: '18 V', leistung: '4 Ah', modell: 'PBA 18V 4.0Ah' },
+    }),
+  ];
+
+  assert.equal(dedupeQueryOffers(offers, 'bohrer').length, 6);
+});
+
+test('reduces adjacent visible duplicate titles without dropping different retailers', () => {
+  const offers = [
+    offer({
+      _id: 'emmi-billa',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+      normalizedUnitPrice: { amount: 5.74, unit: 'l' },
+    }),
+    offer({
+      _id: 'emmi-billa-plus',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa-plus',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+      normalizedUnitPrice: { amount: 5.74, unit: 'l' },
+    }),
+    offer({
+      _id: 'eduscho-billa',
+      title: 'Eduscho Caffe Crema Brasilien Ganze Bohne',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 17.24 },
+      quantityText: '1 kg',
+      normalizedUnitPrice: { amount: 17.24, unit: 'kg' },
+    }),
+    offer({
+      _id: 'eduscho-billa-plus',
+      title: 'Eduscho Caffe Crema Brasilien Ganze Bohne',
+      retailerKey: 'billa-plus',
+      priceCurrent: { amount: 17.24 },
+      quantityText: '1 kg',
+      normalizedUnitPrice: { amount: 17.24, unit: 'kg' },
+    }),
+  ];
+
+  const prepared = prepareQueryOffersForResponse(offers, 'kaffee');
+  const titles = prepared.map((item) => item.title);
+
+  assert.equal(prepared.length, 4);
+  assert.notEqual(titles[0], titles[1]);
+  assert.notEqual(titles[1], titles[2]);
+});
+
+test('keeps milka and coffee response groups visibly de-clustered', () => {
+  const milkaOffers = prepareQueryOffersForResponse([
+    offer({
+      _id: 'hauch-billa',
+      title: 'Milka Hauchzarte Herzen Alpenmilch',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 2.99 },
+      quantityText: '130 g',
+      normalizedUnitPrice: { amount: 23, unit: 'kg' },
+    }),
+    offer({
+      _id: 'hauch-billa-plus',
+      title: 'Milka Hauchzarte Herzen Alpenmilch',
+      retailerKey: 'billa-plus',
+      priceCurrent: { amount: 2.99 },
+      quantityText: '130 g',
+      normalizedUnitPrice: { amount: 23, unit: 'kg' },
+    }),
+    offer({
+      _id: 'alles-gute-billa',
+      title: 'Milka Alles Gute a la Dessert au Chocolat',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 2.99 },
+      quantityText: '110 g',
+      normalizedUnitPrice: { amount: 27.18, unit: 'kg' },
+    }),
+  ], 'milka');
+  const milkaGroupedTitles = buildGroupedRankings(milkaOffers, { query: 'milka' })[0].offers.map((item) => item.title);
+
+  assert.notEqual(milkaGroupedTitles[0], milkaGroupedTitles[1]);
+
+  const coffeeOffers = prepareQueryOffersForResponse([
+    offer({
+      _id: 'emmi-billa',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+      normalizedUnitPrice: { amount: 5.74, unit: 'l' },
+    }),
+    offer({
+      _id: 'emmi-billa-plus',
+      title: 'Emmi Caffe Latte Cappuccino',
+      retailerKey: 'billa-plus',
+      priceCurrent: { amount: 1.32 },
+      quantityText: '230 ml',
+      normalizedUnitPrice: { amount: 5.74, unit: 'l' },
+    }),
+    offer({
+      _id: 'eduscho-billa',
+      title: 'Eduscho Caffe Crema Brasilien Ganze Bohne',
+      retailerKey: 'billa',
+      priceCurrent: { amount: 17.24 },
+      quantityText: '1 kg',
+      normalizedUnitPrice: { amount: 17.24, unit: 'kg' },
+    }),
+  ], 'kaffee');
+  const coffeeGroupedTitles = buildGroupedRankings(coffeeOffers, { query: 'kaffee' })[0].offers.map((item) => item.title);
+
+  assert.notEqual(coffeeGroupedTitles[0], coffeeGroupedTitles[1]);
 });
