@@ -3,6 +3,7 @@ const test = require('node:test');
 
 const {
   applyQueryMatch,
+  buildGroupedRankings,
   normalizeSearchText,
   scoreOfferAgainstQuery,
   tokenizeSearchText,
@@ -103,6 +104,84 @@ test('ranks dairy butter intent ahead of butter side meanings', () => {
   }
 });
 
+test('keeps grouped butter response query-sorted for live response order', () => {
+  const offers = [
+    offer({
+      title: 'Butter Topfengolatsche Lidl 1 Stueck',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'butter-topfengolatsche::1-Stk',
+      normalizedUnitPrice: { amount: 0.89, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Schinken-Kaese-Buttercroissant BILLA 1 Stueck',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'schinken-kaese-buttercroissant::1-Stk',
+      normalizedUnitPrice: { amount: 0.99, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'MANHATTAN High Shine Butter Me Up Lippenbalsam dm',
+      brand: 'MANHATTAN',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      comparisonGroup: 'manhattan-butter-lippenbalsam::1-Stk',
+      normalizedUnitPrice: { amount: 1.95, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Nyx Buttermelt Highlighter dm',
+      brand: 'Nyx',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      comparisonGroup: 'nyx-buttermelt-highlighter::1-Stk',
+      normalizedUnitPrice: { amount: 6.95, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Kotanyi Kraeuterbutter Gewuerzzubereitung',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Gewuerze & Saucen',
+      comparisonGroup: 'kotanyi-kraeuterbutter-gewuerzzubereitung::1-Stk',
+      normalizedUnitPrice: { amount: 1.49, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Gourmet Finest Cuisine Butterbriochestriezel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'gourmet-finest-cuisine-butterbriochestriezel::0.63-kg',
+      normalizedUnitPrice: { amount: 4.29, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Schaerdinger Oesterreichische Teebutter Penny 250 Gramm',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'schaerdinger-oesterreichische-teebutter::0.25-kg',
+      normalizedUnitPrice: { amount: 2.49, unit: 'Stk' },
+      sortScoreDefault: 1,
+    }),
+    offer({
+      title: 'Milsani Irische Butter HOFER 250 Gramm',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'milsani-irische-butter::0.25-kg',
+      normalizedUnitPrice: { amount: 2.19, unit: 'Stk' },
+      sortScoreDefault: 1,
+    }),
+  ];
+
+  const firstGroupTitles = buildGroupedRankings(offers, { query: 'butter' })[0].offers.map((item) => item.title);
+
+  assert.deepEqual(new Set(firstGroupTitles.slice(0, 2)), new Set([
+    'Milsani Irische Butter HOFER 250 Gramm',
+    'Schaerdinger Oesterreichische Teebutter Penny 250 Gramm',
+  ]));
+});
+
 test('scores coffee products ahead of plant assortment side hits', () => {
   const coffee = offer({
     title: 'Nescafe Eiskaffee div. Sorten',
@@ -201,4 +280,89 @@ test('ranks concrete laundry detergent ahead of generic cleaning side hits', () 
     'Persil Waschmittel Discs',
     'Weisser Riese Waschmittel Pulver',
   ]);
+});
+
+test('keeps grouped detergent response query-sorted for live response order', () => {
+  const offers = [
+    offer({
+      title: 'BI HOME Desinfektionstuecher',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'home-desinfektionstuecher::40-Stk',
+      normalizedUnitPrice: { amount: 0.05, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Clever Geschirr Reiniger Schwaemme',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'clever-geschirr-reiniger-schwaemme::10-Stk',
+      normalizedUnitPrice: { amount: 0.12, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Denkmit Multi-Power Geschirr Reiniger',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'denkmit-multi-power-geschirr-reiniger::40-Stk',
+      normalizedUnitPrice: { amount: 0.13, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Dr. Beckmann WC-Reinigungs-Blaetter',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'beckmann-wc-reinigungs-blaetter::20-Stk',
+      normalizedUnitPrice: { amount: 0.15, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Profissimo Allzwecktuecher',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'profissimo-allzwecktuecher::6-Stk',
+      normalizedUnitPrice: { amount: 0.17, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Somat Geschirrspuel-Tabs',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'somat-geschirrspuel-tabs::55-Stk',
+      normalizedUnitPrice: { amount: 0.18, unit: 'Stk' },
+      sortScoreDefault: 9999,
+    }),
+    offer({
+      title: 'Ariel Waschmittel',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'ariel-waschmittel::1-Stk',
+      normalizedUnitPrice: { amount: 8.99, unit: 'Stk' },
+      sortScoreDefault: 1,
+    }),
+    offer({
+      title: 'Weisser Riese Waschmittel',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'weisser-riese-waschmittel::1-Stk',
+      normalizedUnitPrice: { amount: 9.99, unit: 'Stk' },
+      sortScoreDefault: 1,
+    }),
+    offer({
+      title: 'Persil Waschmittel',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'persil-waschmittel::1-Stk',
+      normalizedUnitPrice: { amount: 10.99, unit: 'Stk' },
+      sortScoreDefault: 1,
+    }),
+  ];
+
+  const firstGroupTitles = buildGroupedRankings(offers, { query: 'waschmittel' })[0].offers.map((item) => item.title);
+
+  assert.deepEqual(new Set(firstGroupTitles.slice(0, 3)), new Set([
+    'Ariel Waschmittel',
+    'Weisser Riese Waschmittel',
+    'Persil Waschmittel',
+  ]));
 });

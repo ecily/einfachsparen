@@ -775,7 +775,33 @@ function dedupeByQuery(offers) {
   return unique;
 }
 
-function buildGroupedRankings(offers) {
+function compareOffersByRanking(left, right, { query = '' } = {}) {
+  const queryTokens = tokenizeSearchText(query);
+
+  if (queryTokens.length > 0) {
+    const leftQueryScore = scoreOfferAgainstQuery(left, query);
+    const rightQueryScore = scoreOfferAgainstQuery(right, query);
+
+    if (rightQueryScore !== leftQueryScore) {
+      return rightQueryScore - leftQueryScore;
+    }
+  }
+
+  const leftConsumerScore = buildConsumerScore(left);
+  const rightConsumerScore = buildConsumerScore(right);
+
+  if (rightConsumerScore !== leftConsumerScore) {
+    return rightConsumerScore - leftConsumerScore;
+  }
+
+  if (left.normalizedUnitPrice.amount !== right.normalizedUnitPrice.amount) {
+    return left.normalizedUnitPrice.amount - right.normalizedUnitPrice.amount;
+  }
+
+  return String(left.title).localeCompare(String(right.title), 'de');
+}
+
+function buildGroupedRankings(offers, { query = '' } = {}) {
   const groups = new Map();
 
   for (const offer of offers) {
@@ -791,27 +817,23 @@ function buildGroupedRankings(offers) {
   return [...groups.entries()]
     .map(([unit, unitOffers]) => ({
       unit,
-      offers: unitOffers.sort((left, right) => {
-        const leftScore = buildConsumerScore(left);
-        const rightScore = buildConsumerScore(right);
-
-        if (rightScore !== leftScore) {
-          return rightScore - leftScore;
-        }
-
-        if (left.normalizedUnitPrice.amount !== right.normalizedUnitPrice.amount) {
-          return left.normalizedUnitPrice.amount - right.normalizedUnitPrice.amount;
-        }
-
-        return String(left.title).localeCompare(String(right.title), 'de');
-      }),
+      offers: unitOffers.sort((left, right) => compareOffersByRanking(left, right, { query })),
     }))
     .sort((left, right) => {
-      const leftTopScore = left.offers[0] ? buildConsumerScore(left.offers[0]) : -1;
-      const rightTopScore = right.offers[0] ? buildConsumerScore(right.offers[0]) : -1;
+      if (query) {
+        const leftQueryScore = left.offers[0] ? scoreOfferAgainstQuery(left.offers[0], query) : -1;
+        const rightQueryScore = right.offers[0] ? scoreOfferAgainstQuery(right.offers[0], query) : -1;
 
-      if (rightTopScore !== leftTopScore) {
-        return rightTopScore - leftTopScore;
+        if (rightQueryScore !== leftQueryScore) {
+          return rightQueryScore - leftQueryScore;
+        }
+      }
+
+      const leftTopConsumerScore = left.offers[0] ? buildConsumerScore(left.offers[0]) : -1;
+      const rightTopConsumerScore = right.offers[0] ? buildConsumerScore(right.offers[0]) : -1;
+
+      if (rightTopConsumerScore !== leftTopConsumerScore) {
+        return rightTopConsumerScore - leftTopConsumerScore;
       }
 
       return left.unit.localeCompare(right.unit, 'de');
@@ -1179,7 +1201,7 @@ async function buildOfferRanking({
           : 0,
     },
     retailerDistribution: buildRetailerDistribution(rankedOffers),
-    rankedGroups: buildGroupedRankings(rankedOffers),
+    rankedGroups: buildGroupedRankings(rankedOffers, { query }),
     rankedOffers,
   };
 
@@ -1193,6 +1215,7 @@ module.exports = {
   clearRankingResponseCache,
   scoreOfferAgainstQuery,
   applyQueryMatch,
+  buildGroupedRankings,
   normalizeSearchText,
   tokenizeSearchText,
 };
