@@ -1,9 +1,62 @@
 import { CONTACT_EMAIL, SITE_URL } from '../config/constants'
 
+const FAQ_ITEMS = [
+  {
+    question: 'Was ist kaufklug.at?',
+    answer:
+      'kaufklug.at ist eine kostenlose Orientierungshilfe für aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich. Die Seite hilft dir, Angebote einfacher zu finden, Geschäfte zu vergleichen, Produkte zu suchen und interessante Aktionen auf deine Einkaufsliste zu setzen.',
+  },
+  {
+    question: 'Wie funktioniert die Produktsuche?',
+    answer:
+      'Mit der Produktsuche kannst du nach Produkten, Marken oder Kategorien suchen, zum Beispiel nach Butter, Kaffee, Waschmittel oder Milka. kaufklug.at durchsucht die aktuell gefundenen Angebote über alle Händler hinweg und zeigt passende Treffer gesammelt an.',
+  },
+  {
+    question: 'Muss ich zuerst ein Geschäft auswählen?',
+    answer:
+      'Nein. Die Produktsuche funktioniert unabhängig von deiner Händler- oder Kategorieauswahl. Wenn du gezielt Angebote bestimmter Geschäfte ansehen möchtest, kannst du weiterhin den normalen Angebotsbereich verwenden.',
+  },
+  {
+    question: 'Was bringt mir die Einkaufsliste?',
+    answer:
+      'Du kannst interessante Angebote mit „Merken“ auf deine Einkaufsliste setzen. So sammelst du Aktionen, die du beim nächsten Einkauf schnell wiederfindest – besonders praktisch am Smartphone.',
+  },
+  {
+    question: 'Ist kaufklug.at kostenlos?',
+    answer:
+      'Ja. kaufklug.at ist derzeit kostenlos nutzbar, weil das Projekt unabhängig aufgebaut wird.',
+  },
+  {
+    question: 'Für wen ist kaufklug.at gedacht?',
+    answer:
+      'Für alle, die beim täglichen Einkauf sparen möchten oder sparen müssen: Familien, Pensionisten, Studenten, Alleinerziehende und alle preisbewussten Haushalte in Österreich.',
+  },
+  {
+    question: 'Sind die angezeigten Angebote garantiert richtig?',
+    answer:
+      'Nein. kaufklug.at zeigt Angebotsinformationen als unverbindliche Orientierungshilfe. Preise, Verfügbarkeit, Bedingungen und regionale Gültigkeit können abweichen. Bitte prüfe vor dem Kauf immer die aktuellen Angaben des jeweiligen Händlers.',
+  },
+  {
+    question: 'Warum sehe ich manchmal keine genaue Ersparnis?',
+    answer:
+      'Manche Prospekte nennen nur den Aktionspreis, aber keinen Normalpreis. In solchen Fällen zeigt kaufklug.at den Aktionspreis, aber keine konkrete Euro-Ersparnis.',
+  },
+  {
+    question: 'Was bedeuten Kundenkarte, App oder Bedingungen?',
+    answer:
+      'Manche Angebote gelten nur mit Kundenkarte, Händler-App, Rabattmarkerl, Mehrkauf oder anderen Bedingungen. kaufklug.at zeigt solche Hinweise, soweit sie aus den Angebotsdaten erkannt wurden. Bitte prüfe die Details zusätzlich beim jeweiligen Händler.',
+  },
+  {
+    question: 'Funktioniert kaufklug.at besser am Smartphone?',
+    answer:
+      'Ja. Die Website bleibt auch am Desktop nutzbar, aber kaufklug.at ist besonders für das Smartphone gedacht. So kannst du Angebote direkt beim Einkaufen suchen, prüfen und auf deiner Einkaufsliste speichern.',
+  },
+]
+
 export function getPageMeta(activePage) {
   const baseTitle = 'kaufklug.at – Supermarkt-Angebote & Prospekte in Österreich einfacher finden'
   const baseDescription =
-    'kaufklug.at hilft dir kostenlos, aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich leichter zu finden, nach Geschäften und Kategorien zu filtern und als Einkaufsliste zu speichern.'
+    'kaufklug.at hilft dir kostenlos, aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich leichter zu finden, nach Geschäften und Kategorien zu filtern, Produkte zu suchen und Angebote als Einkaufsliste zu speichern.'
 
   const pages = {
     search: {
@@ -13,7 +66,8 @@ export function getPageMeta(activePage) {
     },
     'product-search': {
       title: 'Produktsuche – kaufklug.at',
-      description: 'Suche aktuelle Angebote nach Produkten, Marken oder Kategorien und merke passende Aktionen direkt auf deiner Einkaufsliste.',
+      description:
+        'Suche aktuelle Angebote nach Produkten, Marken oder Kategorien über alle Händler hinweg und merke passende Aktionen direkt auf deiner Einkaufsliste.',
       path: '/suche',
     },
     'shopping-list': {
@@ -28,7 +82,8 @@ export function getPageMeta(activePage) {
     },
     privacy: {
       title: 'Datenschutz – kaufklug.at',
-      description: 'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung, Serverkommunikation, pseudonymer Nutzungsmessung und externem QR-Code-Dienst.',
+      description:
+        'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung, Serverkommunikation, pseudonymer Nutzungsmessung und externem QR-Code-Dienst.',
       path: '/datenschutz',
     },
     liability: {
@@ -114,11 +169,12 @@ export function updateSeoMetadata(activePage) {
 
   const meta = getPageMeta(activePage)
   const canonicalUrl = `${SITE_URL}${meta.path}`
+  const isInternalPage = activePage === 'quality' || activePage === 'diagnostics'
 
   document.title = meta.title
 
   setOrCreateMeta('name', 'description', meta.description)
-  setOrCreateMeta('name', 'robots', activePage === 'quality' || activePage === 'diagnostics' ? 'noindex,nofollow' : 'index,follow')
+  setOrCreateMeta('name', 'robots', isInternalPage ? 'noindex,nofollow' : 'index,follow')
   setOrCreateMeta('name', 'theme-color', '#f7f1e6')
 
   setOrCreateMeta('property', 'og:type', 'website')
@@ -140,8 +196,7 @@ export function updateSeoMetadata(activePage) {
     name: 'kaufklug.at',
     url: SITE_URL,
     inLanguage: 'de-AT',
-    description:
-      'Kostenlose Orientierungshilfe für Supermarkt-Angebote, Prospekte und Aktionen in Österreich.',
+    description: 'Kostenlose Orientierungshilfe für Supermarkt-Angebote, Prospekte und Aktionen in Österreich.',
     potentialAction: {
       '@type': 'SearchAction',
       target: `${SITE_URL}/suche?q={search_term_string}`,
@@ -159,7 +214,7 @@ export function updateSeoMetadata(activePage) {
     inLanguage: 'de-AT',
     isAccessibleForFree: true,
     description:
-      'kaufklug.at hilft kostenlos dabei, öffentlich verfügbare Angebotsinformationen in Österreich übersichtlich darzustellen, nach Geschäften und Kategorien zu filtern und auf einer Einkaufsliste zu merken.',
+      'kaufklug.at hilft kostenlos dabei, öffentlich verfügbare Angebotsinformationen in Österreich übersichtlich darzustellen, Produkte und Aktionen zu suchen, nach Geschäften und Kategorien zu filtern und interessante Angebote auf einer Einkaufsliste zu merken.',
     offers: {
       '@type': 'Offer',
       price: '0',
@@ -197,62 +252,14 @@ export function updateSeoMetadata(activePage) {
     setOrCreateJsonLd('kaufklug-jsonld-faq', {
       '@context': 'https://schema.org',
       '@type': 'FAQPage',
-      mainEntity: [
-        {
-          '@type': 'Question',
-          name: 'Was ist kaufklug.at?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text:
-              'kaufklug.at ist eine kostenlose Orientierungshilfe für aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich. Die Seite hilft dabei, Angebote einfacher zu finden, nach Geschäften und Kategorien zu filtern und interessante Aktionen auf eine Einkaufsliste zu setzen.',
-          },
+      mainEntity: FAQ_ITEMS.map((item) => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: item.answer,
         },
-        {
-          '@type': 'Question',
-          name: 'Ist kaufklug.at kostenlos?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text:
-              'Ja. kaufklug.at ist derzeit kostenlos nutzbar, weil das Projekt unabhängig aufgebaut wird.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'Für wen ist kaufklug.at gedacht?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text:
-              'kaufklug.at ist für alle gedacht, die beim täglichen Einkauf sparen möchten oder sparen müssen: Familien, Pensionisten, Studenten, Alleinerziehende und alle preisbewussten Haushalte in Österreich.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'Sind die angezeigten Angebote garantiert richtig?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text:
-              'Nein. kaufklug.at zeigt Angebotsinformationen als unverbindliche Orientierungshilfe. Preise, Verfügbarkeit, Bedingungen und regionale Gültigkeit können abweichen. Vor dem Kauf sollten immer die aktuellen Angaben des jeweiligen Händlers geprüft werden.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'Warum sehe ich manchmal keine genaue Ersparnis?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text:
-              'Manche Prospekte nennen nur den Aktionspreis, aber keinen Normalpreis. In solchen Fällen zeigt kaufklug.at den Aktionspreis, aber keine konkrete Euro-Ersparnis.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'Funktioniert kaufklug.at besser am Smartphone?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text:
-              'Ja. Die Website bleibt nutzbar, aber kaufklug.at ist vor allem für das Smartphone gedacht. So können Angebote direkt beim Einkaufen genutzt und interessante Aktionen auf der Einkaufsliste gespeichert werden.',
-          },
-        },
-      ],
+      })),
     })
   } else {
     removeJsonLd('kaufklug-jsonld-faq')
