@@ -15,6 +15,7 @@ import { SHOPPING_LIST_STORAGE_KEY } from './config/constants'
 import { CookieStorageNotice } from './components/layout/CookieStorageNotice'
 import { StickyBottomLine } from './components/layout/StickyBottomLine'
 import { SearchPage } from './components/search/SearchPage'
+import { KeywordSearchPage } from './components/search/KeywordSearchPage'
 import { ShoppingListPage } from './components/shopping/ShoppingListPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
@@ -45,6 +46,8 @@ function App() {
   const [qualitySnapshot, setQualitySnapshot] = useState(null)
   const [analyticsSummary, setAnalyticsSummary] = useState(null)
   const [ranking, setRanking] = useState(null)
+  const [navSearchQuery, setNavSearchQuery] = useState('')
+  const [keywordSearchRequest, setKeywordSearchRequest] = useState({ query: '', nonce: 0 })
   const [retailers, setRetailers] = useState([])
   const [categories, setCategories] = useState([])
   const [error, setError] = useState('')
@@ -88,6 +91,10 @@ function App() {
       trackAnalyticsEvent('landing_page_view', {
         page: 'search',
       })
+      return
+    }
+
+    if (activePage === 'product-search') {
       return
     }
 
@@ -346,6 +353,22 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  function handleNavSearchSubmit(event) {
+    event.preventDefault()
+
+    const nextQuery = navSearchQuery.trim()
+    setActivePage('product-search')
+    setKeywordSearchRequest((current) => ({ query: nextQuery, nonce: current.nonce + 1 }))
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const nextPath = nextQuery ? `/suche?q=${encodeURIComponent(nextQuery)}` : '/suche'
+    window.history.replaceState({}, '', nextPath)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   function handleQualityFilterChange(key, value) {
     setQualityFilters((current) => ({
       ...current,
@@ -565,6 +588,13 @@ function App() {
           </button>
 
           <button
+            className={`page-nav__button${activePage === 'product-search' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('product-search')}
+          >
+            Suche
+          </button>
+
+          <button
             className={`page-nav__button${activePage === 'shopping-list' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('shopping-list')}
           >
@@ -572,6 +602,19 @@ function App() {
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
           </button>
         </div>
+
+        <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
+          <input
+            type="search"
+            value={navSearchQuery}
+            placeholder="Produkt suchen..."
+            aria-label="Produkt suchen"
+            onChange={(event) => setNavSearchQuery(event.target.value)}
+          />
+          <button type="submit" className="page-nav__search-button">
+            Suchen
+          </button>
+        </form>
       </nav>
 
       {activePage === 'search' ? (
@@ -598,6 +641,12 @@ function App() {
           onResetAll={handleResetAll}
           onAddToShoppingList={handleAddToShoppingList}
           onNavigate={handleNavigate}
+        />
+      ) : activePage === 'product-search' ? (
+        <KeywordSearchPage
+          searchRequest={keywordSearchRequest}
+          shoppingListIds={shoppingListIds}
+          onAddToShoppingList={handleAddToShoppingList}
         />
       ) : activePage === 'shopping-list' ? (
         <ShoppingListPage

@@ -133,3 +133,11 @@ export async function fetchOfferRankingDirect(params = {}) {
   const suffix = searchParams.toString() ? `?${searchParams.toString()}` : ''
   return fetchJson(`/offers/ranking${suffix}`)
 }
+
+export async function fetchKeywordOfferSearch(query, limit = 60) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('q', String(query || '').trim())
+  searchParams.set('limit', String(limit))
+
+  return fetchJson(`/offers/ranking?${searchParams.toString()}`)
+}

@@ -11,6 +11,11 @@ export function getPageMeta(activePage) {
       description: baseDescription,
       path: '/',
     },
+    'product-search': {
+      title: 'Produktsuche – kaufklug.at',
+      description: 'Suche aktuelle Angebote nach Produkten, Marken oder Kategorien und merke passende Aktionen direkt auf deiner Einkaufsliste.',
+      path: '/suche',
+    },
     'shopping-list': {
       title: 'Einkaufsliste – kaufklug.at',
       description: 'Speichere interessante Angebote lokal auf deiner Einkaufsliste und sortiere deinen Einkauf nach Geschäft.',
@@ -139,7 +144,7 @@ export function updateSeoMetadata(activePage) {
       'Kostenlose Orientierungshilfe für Supermarkt-Angebote, Prospekte und Aktionen in Österreich.',
     potentialAction: {
       '@type': 'SearchAction',
-      target: `${SITE_URL}/?q={search_term_string}`,
+      target: `${SITE_URL}/suche?q={search_term_string}`,
       'query-input': 'required name=search_term_string',
     },
   })
@@ -262,6 +267,7 @@ export function getInitialPageFromPathname(pathname) {
   if (pathname.includes('cookies') || pathname.includes('cookie')) return 'cookies'
   if (pathname.includes('quality')) return 'quality'
   if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
+  if (pathname.includes('suche')) return 'product-search'
   if (pathname.includes('einkaufsliste') || pathname.includes('shopping')) return 'shopping-list'
 
   return 'search'
@@ -270,6 +276,7 @@ export function getInitialPageFromPathname(pathname) {
 export function getPathForPage(nextPage) {
   if (nextPage === 'quality') return '/quality'
   if (nextPage === 'diagnostics') return '/ecily_web'
+  if (nextPage === 'product-search') return '/suche'
   if (nextPage === 'shopping-list') return '/einkaufsliste'
   if (nextPage === 'impressum') return '/impressum'
   if (nextPage === 'privacy') return '/datenschutz'
