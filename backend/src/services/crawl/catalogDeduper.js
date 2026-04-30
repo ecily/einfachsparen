@@ -1,6 +1,7 @@
 const Offer = require('../../models/Offer');
 const Source = require('../../models/Source');
 const { dedupeSourceEvidence } = require('./sourceEvidence');
+const { determineCategoryDecision } = require('./categoryClassifier');
 const { buildRetailerFormatScopeKey } = require('./offerAuditEnrichment');
 
 const CHANNEL_PRIORITY = {
@@ -19,6 +20,61 @@ function normalizeTitle(value) {
 
 function normalizeKey(value) {
   return normalizeTitle(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function isWeakCategory(offer) {
+  const primary = String(offer?.categoryPrimary || '');
+  const secondary = String(offer?.categorySecondary || '');
+
+  return (
+    !primary
+    || primary === 'Unkategorisiert'
+    || !secondary
+    || secondary === 'Sonstiges'
+    || Number(offer?.subcategoryConfidence || 0) < 0.7
+  );
+}
+
+function buildCategoryContext(offer) {
+  return [
+    offer?.description,
+    offer?.rawFacts?.infoText,
+    offer?.rawFacts?.category,
+    offer?.rawFacts?.sourceCategory,
+    offer?.rawFacts?.validityText,
+  ].filter(Boolean).join(' ');
+}
+
+function reclassifyWeakCategory(offer) {
+  if (!isWeakCategory(offer)) {
+    return offer;
+  }
+
+  const decision = determineCategoryDecision({
+    title: offer?.title || '',
+    contextText: buildCategoryContext(offer),
+    sourceCategory: offer?.rawFacts?.category || offer?.rawFacts?.sourceCategory || '',
+  });
+
+  if (!decision.primaryCategory || decision.primaryCategory === 'Unkategorisiert') {
+    return offer;
+  }
+
+  const currentScore = getCategoryScore(offer);
+  const categorySecondary = decision.secondaryCategory || '';
+  const categoryKey = normalizeKey(categorySecondary || decision.primaryCategory);
+  const candidate = {
+    ...offer,
+    categoryPrimary: decision.primaryCategory,
+    categorySecondary,
+    categoryKey,
+    subcategoryKey: normalizeKey(categorySecondary),
+    categoryConfidence: decision.categoryConfidence,
+    subcategoryConfidence: decision.subcategoryConfidence,
+    comparisonCategoryKey: categoryKey,
+  };
+
+  return getCategoryScore(candidate) > currentScore ? candidate : offer;
 }
 
 function buildDedupeKey(offer) {
@@ -204,6 +260,7 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
           'retailerFormatLabel',
           'sourceId',
           'title',
+          'description',
           'priceCurrent',
           'normalizedUnitPrice',
           'quantityText',
@@ -275,9 +332,10 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
     duplicateGroups += 1;
 
     const sorted = [...groupOffers].sort((left, right) => compareOffersForCanonical(left, right, sourceMap));
+    const categoryCandidates = sorted.map(reclassifyWeakCategory);
 
     const canonical = sorted[0];
-    const bestCategoryOffer = pickBestCategoryOffer(sorted);
+    const bestCategoryOffer = pickBestCategoryOffer(categoryCandidates);
     const bestStructuredOffer = pickBestStructuredOffer(sorted);
     const bestUnitPriceOffer = sorted.find(hasComparableUnitPrice) || canonical;
     const mergedReviewState = buildMergedReviewState({ canonical, bestCategoryOffer });
