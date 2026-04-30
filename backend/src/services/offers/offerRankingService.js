@@ -203,7 +203,46 @@ const QUERY_CONTEXTS = [
     tokens: ['butter'],
     preferred: ['butter', 'milchprodukte', 'molkerei', 'milch', 'backen', 'lebensmittel'],
     strongPreferred: ['butter', 'milchprodukte', 'molkerei'],
-    weakContexts: ['kosmetik', 'make', 'lippenbalsam', 'nahrungsergaenzung', 'nahrungserganzung'],
+    productIntent: ['butter', 'teebutter'],
+    exactProductIntent: ['teebutter'],
+    productContext: ['milchprodukte', 'molkerei'],
+    severeWeakContexts: ['lippenbalsam', 'kosmetik', 'make'],
+    weakContexts: [
+      'backbox',
+      'brot',
+      'gebaeck',
+      'geback',
+      'croissant',
+      'topfengolatsche',
+      'buttercroissant',
+      'butterkaese',
+      'butterkase',
+      'briochestriezel',
+      'buttergemuese',
+      'buttergemuse',
+      'butterkeks',
+      'cookie',
+      'cookies',
+      'cups',
+      'kraeuterbutter',
+      'krauterbutter',
+      'gewuerz',
+      'gewurz',
+      'gewuerzzubereitung',
+      'gewurzzubereitung',
+      'gemuese',
+      'gemuse',
+      'kaese',
+      'kase',
+      'peanut',
+      'protein',
+      'buttermilch',
+      'kosmetik',
+      'make',
+      'lippenbalsam',
+      'nahrungsergaenzung',
+      'nahrungserganzung',
+    ],
   },
   {
     tokens: ['kaffee', 'cafe', 'caffe'],
@@ -215,7 +254,24 @@ const QUERY_CONTEXTS = [
     tokens: ['waschmittel'],
     preferred: ['waschmittel', 'waschen', 'waesche', 'wasche', 'reiniger', 'reinigung', 'haushalt'],
     strongPreferred: ['waschmittel', 'waschen', 'waesche', 'wasche'],
-    weakContexts: ['geschirr', 'spuel', 'spul', 'wc', 'allzweck'],
+    productIntent: ['waschmittel'],
+    productContext: ['waschmittel', 'waschen', 'waesche', 'wasche'],
+    weakContexts: [
+      'aufhelltuecher',
+      'aufhelltucher',
+      'desinfektionstuecher',
+      'desinfektionstucher',
+      'geschirr',
+      'radierer',
+      'reiniger',
+      'schmutzradierer',
+      'spuel',
+      'spul',
+      'tuecher',
+      'tucher',
+      'wc',
+      'allzweck',
+    ],
   },
   {
     tokens: ['zahnpasta'],
@@ -260,6 +316,16 @@ function countAnyTokenMatches(fieldTokens, expectedTokens = []) {
   return expectedTokens.filter((expectedToken) =>
     fieldTokens.some((fieldToken) => fieldToken === expectedToken || fieldToken.startsWith(expectedToken))
   ).length;
+}
+
+function hasAnyTokenMatch(fieldTokens, expectedTokens = [], { exact = false, suffix = false } = {}) {
+  return expectedTokens.some((expectedToken) =>
+    fieldTokens.some((fieldToken) =>
+      fieldToken === expectedToken ||
+      (!exact && fieldToken.startsWith(expectedToken)) ||
+      (suffix && fieldToken.endsWith(expectedToken))
+    )
+  );
 }
 
 function scoreFieldAgainstQuery(value, queryTokens, weights) {
@@ -380,25 +446,60 @@ function scoreOfferAgainstQuery(offer, query) {
 
   const matchedStructuredTokens = countTokenMatches(structuredTokens, queryTokens, { allowPrefix: true });
   const matchedAggregateTokens = countTokenMatches(aggregateTokens, queryTokens, { allowSubstring: true });
+  const productIntentMatched = context
+    ? hasAnyTokenMatch(titleTokens.concat(comparisonTokens), context.productIntent, {
+        exact: true,
+        suffix: true,
+      })
+    : false;
+  const productContextMatched = context
+    ? hasAnyTokenMatch(categoryTokens.concat(comparisonTokens), context.productContext, {
+        exact: false,
+        suffix: true,
+      })
+    : false;
+
   if (queryTokens.length > 1 && matchedStructuredTokens > 1) {
     score += matchedStructuredTokens * 32;
   }
 
-  if (context && (matchedStructuredTokens > 0 || matchedAggregateTokens > 0)) {
+  if (context && (matchedStructuredTokens > 0 || matchedAggregateTokens > 0 || productIntentMatched)) {
     const strongContextMatches = countAnyTokenMatches(categoryTokens.concat(comparisonTokens), context.strongPreferred);
     const preferredContextMatches = countAnyTokenMatches(structuredTokens, context.preferred);
     const weakContextMatches = countAnyTokenMatches(titleTokens.concat(categoryTokens, comparisonTokens), context.weakContexts);
+    const severeWeakContextMatches = countAnyTokenMatches(
+      titleTokens.concat(categoryTokens, comparisonTokens),
+      context.severeWeakContexts
+    );
+    const exactProductIntentMatched = hasAnyTokenMatch(titleTokens.concat(comparisonTokens), context.exactProductIntent, {
+      exact: true,
+    });
 
     score += strongContextMatches * 80;
     score += preferredContextMatches * 20;
+    if (exactProductIntentMatched) {
+      score += 900;
+    }
+
+    if (productIntentMatched && productContextMatched) {
+      score += 700;
+    } else if (productIntentMatched && weakContextMatches === 0) {
+      score += 650;
+    } else if (productIntentMatched) {
+      score += 260;
+    }
 
     if (weakContextMatches > 0) {
-      score -= weakContextMatches * 130;
+      score -= weakContextMatches * (productIntentMatched && productContextMatched ? 300 : 500);
+    }
+
+    if (severeWeakContextMatches > 0) {
+      score -= severeWeakContextMatches * 1600;
     }
   }
 
-  if (score === 0 && matchedAggregateTokens > 0) {
-    score += 1;
+  if (score <= 0 && (matchedAggregateTokens > 0 || matchedStructuredTokens > 0 || productIntentMatched)) {
+    score = 1;
   }
 
   return score;

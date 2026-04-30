@@ -46,6 +46,63 @@ test('scores real butter offers ahead of cosmetic side meanings', () => {
   assert.ok(scoreOfferAgainstQuery(dairyButter, 'butter') > scoreOfferAgainstQuery(lipBalm, 'butter'));
 });
 
+test('ranks dairy butter intent ahead of butter side meanings', () => {
+  const offers = [
+    offer({
+      title: 'Butter Topfengolatsche Lidl 1 Stueck',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'butter-topfengolatsche::1-Stk',
+    }),
+    offer({
+      title: 'Schinken-Kaese-Buttercroissant BILLA 1 Stueck',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'schinken-kaese-buttercroissant::1-Stk',
+    }),
+    offer({
+      title: 'MANHATTAN Butter Me Up Lippenbalsam dm',
+      brand: 'MANHATTAN',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      comparisonGroup: 'manhattan-butter-lippenbalsam::1-Stk',
+    }),
+    offer({
+      title: 'Milbona Butterkaese oder Gouda',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'milbona-butterkaese-gouda::0.25-kg',
+    }),
+    offer({
+      title: 'Schaerdinger Oesterreichische Teebutter',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'schaerdinger-oesterreichische-teebutter::0.25-kg',
+    }),
+    offer({
+      title: 'Milsani Irische Butter',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'milsani-irische-butter::0.25-kg',
+    }),
+  ];
+
+  const sortedTitles = applyQueryMatch(offers, 'butter').map((item) => item.title);
+
+  assert.deepEqual(new Set(sortedTitles.slice(0, 2)), new Set([
+    'Milsani Irische Butter',
+    'Schaerdinger Oesterreichische Teebutter',
+  ]));
+  for (const sideMeaning of [
+    'Butter Topfengolatsche Lidl 1 Stueck',
+    'Schinken-Kaese-Buttercroissant BILLA 1 Stueck',
+    'MANHATTAN Butter Me Up Lippenbalsam dm',
+    'Milbona Butterkaese oder Gouda',
+  ]) {
+    assert.ok(sortedTitles.indexOf(sideMeaning) > 1, sideMeaning);
+  }
+});
+
 test('scores coffee products ahead of plant assortment side hits', () => {
   const coffee = offer({
     title: 'Nescafe Eiskaffee div. Sorten',
@@ -95,4 +152,53 @@ test('keeps drogerie queries relevant instead of broadly matching the whole cate
 
   assert.ok(scoreOfferAgainstQuery(shampoo, 'shampoo') > 0);
   assert.equal(scoreOfferAgainstQuery(genericCare, 'shampoo'), 0);
+});
+
+test('ranks concrete laundry detergent ahead of generic cleaning side hits', () => {
+  const offers = [
+    offer({
+      title: 'BI HOME Desinfektionstuecher',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'home-desinfektionstuecher::40-Stk',
+    }),
+    offer({
+      title: 'Dr. Beckmann Aufhelltuecher',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'beckmann-aufhelltuecher::15-Stk',
+    }),
+    offer({
+      title: 'Profissimo Schmutzradierer',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'profissimo-schmutzradierer::6-Stk',
+    }),
+    offer({
+      title: 'Ariel Waschmittel Fluessig',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'ariel-waschmittel-fluessig::1-Stk',
+    }),
+    offer({
+      title: 'Weisser Riese Waschmittel Pulver',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'weisser-riese-waschmittel-pulver::1-Stk',
+    }),
+    offer({
+      title: 'Persil Waschmittel Discs',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'persil-waschmittel-discs::1-Stk',
+    }),
+  ];
+
+  const sortedTitles = applyQueryMatch(offers, 'waschmittel').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles.slice(0, 3), [
+    'Ariel Waschmittel Fluessig',
+    'Persil Waschmittel Discs',
+    'Weisser Riese Waschmittel Pulver',
+  ]);
 });
