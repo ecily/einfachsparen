@@ -198,6 +198,102 @@ function hasPhrase(wordString, queryTokens) {
   return wordString.includes(` ${queryTokens.join(' ')} `);
 }
 
+const QUERY_CONTEXTS = [
+  {
+    tokens: ['butter'],
+    preferred: ['butter', 'milchprodukte', 'molkerei', 'milch', 'backen', 'lebensmittel'],
+    strongPreferred: ['butter', 'milchprodukte', 'molkerei'],
+    weakContexts: ['kosmetik', 'make', 'lippenbalsam', 'nahrungsergaenzung', 'nahrungserganzung'],
+  },
+  {
+    tokens: ['kaffee', 'cafe', 'caffe'],
+    preferred: ['kaffee', 'tee', 'getraenke', 'getranke', 'fruehstueck', 'fruhstuck', 'eiskaffee', 'caffe'],
+    strongPreferred: ['kaffee', 'tee', 'eiskaffee', 'caffe'],
+    weakContexts: ['pflanze', 'zierpflanze', 'duftgeranie', 'tomate', 'erdbeere', 'banane'],
+  },
+  {
+    tokens: ['waschmittel'],
+    preferred: ['waschmittel', 'waschen', 'waesche', 'wasche', 'reiniger', 'reinigung', 'haushalt'],
+    strongPreferred: ['waschmittel', 'waschen', 'waesche', 'wasche'],
+    weakContexts: ['geschirr', 'spuel', 'spul', 'wc', 'allzweck'],
+  },
+  {
+    tokens: ['zahnpasta'],
+    preferred: ['zahnpasta', 'zahnpflege', 'mundpflege', 'drogerie', 'hygiene', 'koerperpflege', 'korperpflege'],
+    strongPreferred: ['zahnpasta', 'zahnpflege', 'mundpflege'],
+  },
+  {
+    tokens: ['shampoo'],
+    preferred: ['shampoo', 'haarpflege', 'drogerie', 'hygiene', 'koerperpflege', 'korperpflege'],
+    strongPreferred: ['shampoo', 'haarpflege'],
+  },
+  {
+    tokens: ['windeln'],
+    preferred: ['windeln', 'baby', 'babyhygiene', 'drogerie', 'hygiene'],
+    strongPreferred: ['windeln', 'babyhygiene', 'baby'],
+  },
+];
+
+function getQueryContext(queryTokens) {
+  return QUERY_CONTEXTS.find((context) => context.tokens.some((token) => queryTokens.includes(token))) || null;
+}
+
+function countTokenMatches(fieldTokens, queryTokens, { allowPrefix = false, allowSubstring = false } = {}) {
+  let matches = 0;
+
+  for (const queryToken of queryTokens) {
+    if (
+      fieldTokens.some((fieldToken) =>
+        fieldToken === queryToken ||
+        (allowPrefix && fieldToken.startsWith(queryToken)) ||
+        (allowSubstring && fieldToken.includes(queryToken))
+      )
+    ) {
+      matches += 1;
+    }
+  }
+
+  return matches;
+}
+
+function countAnyTokenMatches(fieldTokens, expectedTokens = []) {
+  return expectedTokens.filter((expectedToken) =>
+    fieldTokens.some((fieldToken) => fieldToken === expectedToken || fieldToken.startsWith(expectedToken))
+  ).length;
+}
+
+function scoreFieldAgainstQuery(value, queryTokens, weights) {
+  const fieldTokens = tokenizeSearchText(value);
+
+  if (fieldTokens.length === 0) {
+    return 0;
+  }
+
+  let score = 0;
+  const wordString = ` ${fieldTokens.join(' ')} `;
+  const exactMatches = countTokenMatches(fieldTokens, queryTokens);
+  const prefixMatches = countTokenMatches(fieldTokens, queryTokens, { allowPrefix: true }) - exactMatches;
+  const substringMatches = countTokenMatches(fieldTokens, queryTokens, { allowSubstring: true }) - exactMatches - prefixMatches;
+
+  if (hasPhrase(wordString, queryTokens)) {
+    score += weights.phrase || 0;
+  }
+
+  score += exactMatches * (weights.exact || 0);
+  score += Math.max(0, prefixMatches) * (weights.prefix || 0);
+  score += Math.max(0, substringMatches) * (weights.substring || 0);
+
+  if (queryTokens.length > 1 && exactMatches === queryTokens.length) {
+    score += weights.allTokens || 0;
+  }
+
+  if (fieldTokens[0] && queryTokens.includes(fieldTokens[0])) {
+    score += weights.firstToken || 0;
+  }
+
+  return score;
+}
+
 function scoreOfferAgainstQuery(offer, query) {
   const queryTokens = tokenizeSearchText(query);
 
@@ -205,54 +301,104 @@ function scoreOfferAgainstQuery(offer, query) {
     return 1;
   }
 
-  const titleWords = buildWordString(offer.title);
-  const brandWords = buildWordString(offer.brand);
-  const primaryWords = buildWordString(offer.categoryPrimary);
-  const secondaryWords = buildWordString(offer.categorySecondary);
-  const retailerWords = buildWordString(offer.retailerName);
-  const aggregateWords = buildWordString(offer.searchText);
+  const context = getQueryContext(queryTokens);
+  const structuredText = [
+    offer.title,
+    offer.brand,
+    offer.categoryPrimary,
+    offer.categorySecondary,
+    offer.subcategoryKey,
+    offer.comparisonGroup,
+  ].join(' ');
+  const structuredTokens = tokenizeSearchText(structuredText);
+  const titleTokens = tokenizeSearchText(offer.title);
+  const categoryTokens = tokenizeSearchText([
+    offer.categoryPrimary,
+    offer.categorySecondary,
+    offer.subcategoryKey,
+  ].join(' '));
+  const comparisonTokens = tokenizeSearchText(offer.comparisonGroup);
+  const aggregateTokens = tokenizeSearchText(offer.searchText);
   let score = 0;
 
-  if (hasPhrase(titleWords, queryTokens)) {
-    score += 120;
+  score += scoreFieldAgainstQuery(offer.title, queryTokens, {
+    phrase: 260,
+    exact: 70,
+    prefix: 38,
+    substring: 8,
+    allTokens: 100,
+    firstToken: 28,
+  });
+  score += scoreFieldAgainstQuery(offer.brand, queryTokens, {
+    phrase: 220,
+    exact: 64,
+    prefix: 34,
+    substring: 6,
+    allTokens: 90,
+    firstToken: 20,
+  });
+  score += scoreFieldAgainstQuery(offer.categorySecondary || offer.subcategoryKey, queryTokens, {
+    phrase: 180,
+    exact: 56,
+    prefix: 30,
+    substring: 5,
+    allTokens: 70,
+  });
+  score += scoreFieldAgainstQuery(offer.categoryPrimary, queryTokens, {
+    phrase: 95,
+    exact: 34,
+    prefix: 16,
+    substring: 3,
+    allTokens: 30,
+  });
+  score += scoreFieldAgainstQuery(offer.comparisonGroup, queryTokens, {
+    phrase: 130,
+    exact: 38,
+    prefix: 20,
+    substring: 4,
+    allTokens: 55,
+  });
+  score += scoreFieldAgainstQuery(offer.searchText, queryTokens, {
+    phrase: 35,
+    exact: 9,
+    prefix: 5,
+    substring: 1,
+    allTokens: 12,
+  });
+  score += scoreFieldAgainstQuery(offer.conditionsText, queryTokens, {
+    phrase: 10,
+    exact: 3,
+    prefix: 1,
+    substring: 0,
+  });
+  score += scoreFieldAgainstQuery(offer.retailerName, queryTokens, {
+    phrase: 4,
+    exact: 2,
+    prefix: 1,
+    substring: 0,
+  });
+
+  const matchedStructuredTokens = countTokenMatches(structuredTokens, queryTokens, { allowPrefix: true });
+  const matchedAggregateTokens = countTokenMatches(aggregateTokens, queryTokens, { allowSubstring: true });
+  if (queryTokens.length > 1 && matchedStructuredTokens > 1) {
+    score += matchedStructuredTokens * 32;
   }
 
-  if (hasPhrase(brandWords, queryTokens)) {
-    score += 90;
-  }
+  if (context && (matchedStructuredTokens > 0 || matchedAggregateTokens > 0)) {
+    const strongContextMatches = countAnyTokenMatches(categoryTokens.concat(comparisonTokens), context.strongPreferred);
+    const preferredContextMatches = countAnyTokenMatches(structuredTokens, context.preferred);
+    const weakContextMatches = countAnyTokenMatches(titleTokens.concat(categoryTokens, comparisonTokens), context.weakContexts);
 
-  if (hasPhrase(secondaryWords, queryTokens)) {
-    score += 95;
-  }
+    score += strongContextMatches * 80;
+    score += preferredContextMatches * 20;
 
-  if (hasPhrase(primaryWords, queryTokens)) {
-    score += 75;
-  }
-
-  if (hasPhrase(retailerWords, queryTokens)) {
-    score += 25;
-  }
-
-  if (hasPhrase(aggregateWords, queryTokens)) {
-    score += 15;
-  }
-
-  for (const token of queryTokens) {
-    if (titleWords.includes(` ${token} `)) {
-      score += 24;
+    if (weakContextMatches > 0) {
+      score -= weakContextMatches * 130;
     }
+  }
 
-    if (brandWords.includes(` ${token} `)) {
-      score += 16;
-    }
-
-    if (secondaryWords.includes(` ${token} `)) {
-      score += 18;
-    }
-
-    if (primaryWords.includes(` ${token} `)) {
-      score += 12;
-    }
+  if (score === 0 && matchedAggregateTokens > 0) {
+    score += 1;
   }
 
   return score;
@@ -854,8 +1000,26 @@ async function buildOfferRanking({
       query
     )
   );
+  const queryTokens = tokenizeSearchText(query);
+  const queryScores = queryTokens.length > 0 ? new WeakMap() : null;
+
+  if (queryScores) {
+    for (const offer of fullyFilteredOffers) {
+      queryScores.set(offer, scoreOfferAgainstQuery(offer, query));
+    }
+  }
+
   const offers = fullyFilteredOffers
     .sort((left, right) => {
+      if (queryScores) {
+        const leftQueryScore = queryScores.get(left) || 0;
+        const rightQueryScore = queryScores.get(right) || 0;
+
+        if (rightQueryScore !== leftQueryScore) {
+          return rightQueryScore - leftQueryScore;
+        }
+      }
+
       const leftConsumerScore = buildConsumerScore(left);
       const rightConsumerScore = buildConsumerScore(right);
 
@@ -926,4 +1090,8 @@ module.exports = {
   buildOfferRanking,
   buildBasketSuggestions,
   clearRankingResponseCache,
+  scoreOfferAgainstQuery,
+  applyQueryMatch,
+  normalizeSearchText,
+  tokenizeSearchText,
 };
