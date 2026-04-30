@@ -3,32 +3,33 @@ const { normalizeTitleForMatch, sanitizeWhitespace } = require('./sourceEvidence
 const CATEGORY_TAXONOMY = [
   {
     main: 'Lebensmittel',
-    patterns: [/(lebensmittel|essen|nahrung|bio|genuss)/],
+    patterns: [/(lebensmittel|essen|nahrung|bio|genuss|feinkost|frisch|vegetarisch|vegan|backshop|kuehlregal|kuhlregal)/],
     subcategories: [
-      { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|zwiebel|tomate|apfel|banane|zitrone|beere)/] },
-      { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast)/] },
-      { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|rind|schwein)/] },
-      { label: 'Milchprodukte', patterns: [/\b(milch|butter|joghurt|topfen|sahne|rahm|quark)\b/] },
-      { label: 'Kaese', patterns: [/\b(kase|kaese|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|frischkaese|schnittkaese)\b/] },
-      { label: 'Tiefkuehl- & Fertigprodukte', patterns: [/\b(tiefkuhl|tiefkuehl|pizza|fertig|mikrowelle|tk|frost|lasagne|pommes|eis|eiscreme)\b/] },
-      { label: 'Suesswaren & Knabbereien', patterns: [/\b(schokolade|susswaren|suesswaren|fruchtgummi|gummibaer|gummibaeren|knabberei|chips|brotchips|kekse|butterkeks|bonbon|praline|snack|nusse|nuesse|waffel|popcorn)\b/] },
-      { label: 'Pasta, Reis & Konserven', patterns: [/\b(nudel|nudeln|pasta|spaghetti|fusilli|penne|reis|risotto|konserve|bohnen|linsen|kichererbse|passata)\b/] },
-      { label: 'Saucen, Oele & Gewuerze', patterns: [/\b(sauce|saucen|oel|olivenoel|rapsoel|sonnenblumenoel|gewurz|gewuerz|gewuerze|essig|ketchup|mayonnaise|mayo|senf|pesto)\b/] },
-      { label: 'Fruehstueck & Aufstriche', patterns: [/(marmelade|honig|musli|muesli|cornflakes|aufstrich|nougatcreme|brotaufstrich)/] },
+      { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz)/] },
+      { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast|baguette|kornspitz|weizenweckerl|striezel|brioche|tortilla|wrap)/] },
+      { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
+      { label: 'Milchprodukte', patterns: [/\b(milch|heumilch|vollmilch|buttermilch|butter|joghurt|jogurt|topfen|sahne|rahm|quark|skyr|kefir|sauerrahm|schlagobers|obers|pudding|dessertcreme|milchreis)\b/] },
+      { label: 'Kaese', patterns: [/\b(kase|kaese|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|bergkase|frischkaese|frischkase|schnittkaese|schnittkase|feta|ricotta|mascarpone|grana|cheddar|brie)\b/] },
+      { label: 'Tiefkuehl- & Fertigprodukte', patterns: [/\b(tiefkuhl|tiefkuehl|pizza|fertig|mikrowelle|tk|frost|lasagne|pommes|eis|eiscreme|fischstaebchen|fischstabchen|fertiggericht|convenience|tiefgekuhlt|tiefgekuehlt)\b/] },
+      { label: 'Suesswaren & Knabbereien', patterns: [/\b(schokolade|susswaren|suesswaren|fruchtgummi|gummibaer|gummibaeren|knabberei|chips|flips|brotchips|kekse|butterkeks|bonbon|zuckerl|praline|pralinen|nougat|snack|nusse|nuesse|erdnuss|erdnusse|erdnuesse|mandel|cashew|waffel|popcorn|soletti|cracker|riegel|muesliriegel|muesli riegel|proteinriegel)\b/] },
+      { label: 'Pasta, Reis & Konserven', patterns: [/\b(nudel|nudeln|pasta|spaghetti|fusilli|penne|reis|risotto|konserve|bohnen|linsen|kichererbse|passata|polpa|sugo|dosentomaten|mais|erbsen|thunfischdose|ravioli|gnocchi|couscous|bulgur)\b/] },
+      { label: 'Saucen, Oele & Gewuerze', patterns: [/\b(sauce|saucen|basis|bouillon|suppe|suppen|bruehe|bruhe|oel|olivenoel|rapsoel|sonnenblumenoel|gewurz|gewuerz|gewuerze|krauter|kraeuter|essig|ketchup|mayonnaise|mayo|senf|pesto)\b/] },
+      { label: 'Backen & Grundnahrungsmittel', patterns: [/\b(mehl|zucker|staubzucker|kristallzucker|backzucker|backpulver|vanillezucker|hefe|germ|staerke|starke|paniermehl|eier|ei|freilandeier|bodenhaltung|salz|gries|griess|haferflocken)\b/] },
+      { label: 'Fruehstueck & Aufstriche', patterns: [/(marmelade|konfituere|konfiture|honig|musli|muesli|cornflakes|cerealien|porridge|aufstrich|nougatcreme|brotaufstrich|erdnussbutter)/] },
     ],
   },
   {
     main: 'Getraenke',
-    patterns: [/(getrank|getraenk|trinken|durst)/],
+    patterns: [/(getrank|getraenk|trinken|durst|pfandflasche|mehrweg|einweg)/],
     subcategories: [
       { label: 'Wasser', patterns: [/(wasser|mineralwasser|sprudel)/] },
       { label: 'Softdrinks & Energy', patterns: [/\b(cola|limonade|softdrink|energy|energydrink|eistee|isodrink|fanta|sprite|mezzo|almdudler|red bull)\b/] },
-      { label: 'Saefte & Sirupe', patterns: [/\b(saft|nektar|sirup|smoothie)\b/] },
+      { label: 'Saefte & Sirupe', patterns: [/\b(saft|nektar|sirup|smoothie|orangensaft|apfelsaft|multivitamin)\b/] },
       { label: 'Bier', patterns: [/\b(bier|pils|weizen|radler|lager|helles|alkoholfrei|flaschenbier|dosenbier|ottakringer|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/] },
-      { label: 'Wein & Sekt', patterns: [/\b(wein|rotwein|weisswein|rosewein|rose|sekt|prosecco|champagner|frizzante)\b/] },
+      { label: 'Wein & Sekt', patterns: [/\b(wein|rotwein|weisswein|rosewein|rose|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|gruener veltliner|veltliner|hugo)\b/] },
       { label: 'Spirituosen', patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister)\b/] },
-      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha|bohne|kaffeekapsel|kapseln)/] },
-      { label: 'Milchgetraenke', patterns: [/(kakao|milchdrink|milchgetrank|joghurtdrink|proteindrink)/] },
+      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha|bohne|kaffeekapsel|kapseln|nespresso|dolce gusto)/] },
+      { label: 'Milchgetraenke', patterns: [/(kakao|milchdrink|milchgetrank|milchgetraenk|joghurtdrink|proteindrink|eiskaffee)/] },
     ],
   },
   {
@@ -36,24 +37,25 @@ const CATEGORY_TAXONOMY = [
     patterns: [/(drogerie|hygiene|pflege|kosmetik|beauty)/],
     subcategories: [
       { label: 'Haarpflege', patterns: [/(shampoo|spulung|spuelung|haar|haarkur|styling)/] },
-      { label: 'Koerperpflege', patterns: [/(dusch|deo|deodorant|bodylotion|seife|creme|pflege|lotion|balsam)/] },
+      { label: 'Koerperpflege', patterns: [/(dusch|deo|deodorant|bodylotion|seife|creme|pflege|lotion|balsam|handcreme|sonnencreme|sonnenschutz|gesichtscreme|duschgel)/] },
       { label: 'Mund- & Zahnpflege', patterns: [/(zahnpasta|zahnburste|zahnbuerste|mundspulung|mundspuelung|zahn)/] },
       { label: 'Rasur', patterns: [/(rasierer|rasur|klinge|aftershave)/] },
       { label: 'Kosmetik & Make-up', patterns: [/(kosmetik|make up|makeup|mascara|lippenstift|foundation|parfum)/] },
       { label: 'Damenhygiene', patterns: [/(binden|tampon|slipeinlage|einlagen|damenhygiene)/] },
-      { label: 'Babyhygiene', patterns: [/(windel|feuchttucher|feuchttuecher|babycreme|babyshampoo)/] },
+      { label: 'Babyhygiene', patterns: [/(windel|windeln|feuchttucher|feuchttuecher|babycreme|babyshampoo|pampers|babytuch)/] },
       { label: 'Haushaltspapier', patterns: [/(toilettenpapier|kuchenrolle|kuechenrolle|taschentucher|taschentuecher|haushaltspapier)/] },
-      { label: 'Gesundheit & Nahrungsergaenzung', patterns: [/(vitamin|magnesium|omega|zink|nahrungserganzung|nahrungsergaenzung|kapsel|kapseln|tablette|tabletten|pastille|pastillen|supplement)/] },
+      { label: 'Gesundheit & Nahrungsergaenzung', patterns: [/(vitamin|magnesium|omega|zink|nahrungserganzung|nahrungsergaenzung|kapsel|kapseln|tablette|tabletten|pastille|pastillen|supplement|pflaster|verband|kontaktlinsen|linsenloesung|linsenlosung|elektrolyt|dragee|dragees)/] },
     ],
   },
   {
     main: 'Haushalt',
     patterns: [/(haushalt|wohnen|reinigen|putzen)/],
     subcategories: [
-      { label: 'Waschmittel & Reiniger', patterns: [/(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|geschirrspul|spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|waschcaps|tabs|vollwaschmittel|colorwaschmittel)/] },
+      { label: 'Waschmittel & Reiniger', patterns: [/(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|geschirrspul|spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|waschcaps|tabs|vollwaschmittel|colorwaschmittel|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|maschinenreiniger|duftspueler|duftspuler)/] },
       { label: 'Kuechenhelfer', patterns: [/(geschirr|pfanne|topf|besteck|messer|kochen|kueche|kuche)/] },
       { label: 'Aufbewahrung & Folien', patterns: [/(folie|frischhalte|alu|beutel|aufbewahrung|dose|box)/] },
       { label: 'Deko & Wohnen', patterns: [/(deko|kerze|vase|kissen|wohnen)/] },
+      { label: 'Lufterfrischer & Raumduft', patterns: [/(lufterfrischer|raumduft|duftspray|duftstecker|nachfuller|nachfueller|glade|airwick|air wick)/] },
       { label: 'Papier & Buero', patterns: [/(papier|buero|buro|ordner|heft|stift|druckerpapier)/] },
       { label: 'Papierwaren', patterns: [/(toilettenpapier|kuechenrolle|kuchenrolle|serviette|taschentuecher|taschentucher)/] },
     ],
@@ -131,22 +133,57 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
+    patterns: [/\b(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|duftspueler|duftspuler)\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
+  },
+  {
+    patterns: [/\b(glade|airwick|air wick|duftspray|lufterfrischer|raumduft|duftstecker|nachfuller|nachfueller|minispray)\b/],
+    main: 'Haushalt',
+    sub: 'Lufterfrischer & Raumduft',
+  },
+  {
+    patterns: [/\b(brot|gebaeck|geback|semmel|weckerl|toast|baguette|croissant|kornspitz|brioche|wrap|tortilla)\b/],
+    main: 'Lebensmittel',
+    sub: 'Brot & Gebaeck',
+  },
+  {
+    patterns: [/\b(milch|heumilch|vollmilch|buttermilch|joghurt|jogurt|topfen|skyr|kefir|sauerrahm|schlagobers|obers|pudding|milchreis)\b/],
+    main: 'Lebensmittel',
+    sub: 'Milchprodukte',
+  },
+  {
+    patterns: [/\b(kase|kaese|mozzarella|feta|emmentaler|gouda|camembert|parmesan|bergkaese|bergkase|frischkaese|frischkase|schnittkaese|schnittkase|ricotta|mascarpone|cheddar|brie|philadelphia)\b/],
+    main: 'Lebensmittel',
+    sub: 'Kaese',
+  },
+  {
+    patterns: [/\b(mehl|zucker|backpulver|vanillezucker|hefe|germ|staerke|starke|eier|ei|haferflocken|gries|griess|salz)\b/],
+    main: 'Lebensmittel',
+    sub: 'Backen & Grundnahrungsmittel',
+  },
+  {
+    patterns: [/\b(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|garnelen|shrimp)\b/],
+    main: 'Lebensmittel',
+    sub: 'Fleisch, Wurst & Fisch',
+  },
+  {
     patterns: [/\b(bier|pils|weizen|radler|lager|helles|flaschenbier|dosenbier|ottakringer|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/],
     main: 'Getraenke',
     sub: 'Bier',
   },
   {
-    patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister)\b/],
+    patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister|batida|averna|amaro|kokoslikoer|kokoslikor)\b/],
     main: 'Getraenke',
     sub: 'Spirituosen',
   },
   {
-    patterns: [/\b(rotwein|weisswein|rosewein|wein|sekt|prosecco|champagner|frizzante)\b/],
+    patterns: [/\b(rotwein|weisswein|rosewein|wein|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|veltliner|hugo)\b/],
     main: 'Getraenke',
     sub: 'Wein & Sekt',
   },
   {
-    patterns: [/\b(mineralwasser|wasser|sprudel)\b/],
+    patterns: [/\b(mineralwasser|wasser|sprudel|voslauer|voeslauer|soda|sparkling)\b/],
     main: 'Getraenke',
     sub: 'Wasser',
   },
@@ -161,14 +198,34 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Tiefkuehl- & Fertigprodukte',
   },
   {
-    patterns: [/\b(schokolade|fruchtgummi|gummibaer|gummibaeren|haribo|milka|ferrero|raffaello|rocher|praline|bonbon|zuckerl|keks|kekse|butterkeks|waffel|chips|brotchips|popcorn|snack|soletti)\b/],
+    patterns: [/\b(schokolade|fruchtgummi|gummibaer|gummibaeren|haribo|milka|ferrero|raffaello|rocher|praline|pralinen|nougat|bonbon|zuckerl|keks|kekse|butterkeks|waffel|waffelrollchen|waffelroellchen|chips|flips|brotchips|popcorn|snack|soletti|merci|manner|mikado|niemetz|schwedenbomben|amicelli|celebrations|lorenz|xoxo|kelly|mozartkugeln|ildefonso|tony chocolonely|chocolonely|lindt|storck|nestle|riegel|proteinriegel|erdnusse|erdnuesse)\b/],
     main: 'Lebensmittel',
     sub: 'Suesswaren & Knabbereien',
   },
   {
-    patterns: [/\b(fusilli|spaghetti|penne|nudel|nudeln|pasta|reis|risotto|passata)\b/],
+    patterns: [/\b(knorr|felix|kotanyi|basis|bouillon|suppe|suppen|bruehe|bruhe|krauter|kraeuter)\b/],
+    main: 'Lebensmittel',
+    sub: 'Saucen, Oele & Gewuerze',
+  },
+  {
+    patterns: [/\b(fusilli|spaghetti|penne|nudel|nudeln|pasta|reis|risotto|passata|polpa|sugo|gnocchi|couscous|bulgur|bohnen|linsen|kichererbse|mais|ravioli)\b/],
     main: 'Lebensmittel',
     sub: 'Pasta, Reis & Konserven',
+  },
+  {
+    patterns: [/\b(kaffee|espresso|cappuccino|tee|matcha|kaffeekapsel|nespresso|dolce gusto|nescafe|jacobs)\b/],
+    main: 'Getraenke',
+    sub: 'Kaffee & Tee',
+  },
+  {
+    patterns: [/\b(saft|nektar|sirup|smoothie|smoothies|orangensaft|apfelsaft|multivitamin|rauch|true fruits|juice)\b/],
+    main: 'Getraenke',
+    sub: 'Saefte & Sirupe',
+  },
+  {
+    patterns: [/\b(kakao|milchdrink|milchgetrank|milchgetraenk|joghurtdrink|proteindrink|eiskaffee)\b/],
+    main: 'Getraenke',
+    sub: 'Milchgetraenke',
   },
   {
     patterns: [/\b(paradeiser|tomate|tomaten|gurke|paprika|salat|kartoffel|erdapfel|zwiebel|apfel|banane|zitrone|beere|erdbeere|erdbeeren)\b/],
@@ -179,6 +236,21 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(windel|windeln|pampers|feuchttucher|feuchttuecher|babycreme|babyshampoo)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Babyhygiene',
+  },
+  {
+    patterns: [/\b(shampoo|spulung|spuelung|haarkur|haarspray|haarfarbe)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Haarpflege',
+  },
+  {
+    patterns: [/\b(duschgel|dusch|deo|deodorant|bodylotion|seife|handcreme|sonnencreme|sonnenschutz|gesichtscreme|creme|lotion)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Koerperpflege',
+  },
+  {
+    patterns: [/\b(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|duftspueler|duftspuler)\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
   },
   {
     patterns: [/\b(verlaengerungskabel|verlangerungskabel|kabeltrommel|steckdosenleiste|steckdose)\b/],
@@ -211,7 +283,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Unterhaltungselektronik',
   },
   {
-    patterns: [/\b(vitamin|magnesium|omega|zink|nahrungserganzung|nahrungsergaenzung|kapsel|kapseln|tablette|tabletten|pastille|pastillen)\b/],
+    patterns: [/\b(vitamin|magnesium|omega|zink|nahrungserganzung|nahrungsergaenzung|kapsel|kapseln|tablette|tabletten|pastille|pastillen|pflaster|hansaplast|kontaktlinsen|linsenloesung|linsenlosung|elektrolyt|dragee|dragees|abtei)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Gesundheit & Nahrungsergaenzung',
   },
@@ -292,6 +364,10 @@ function findTaxonomyCategory(mainCategory) {
   return CATEGORY_TAXONOMY.find((category) => getNormalizedLabel(category.main) === normalizedMain) || null;
 }
 
+function getFallbackSubcategoryLabel(mainCategory) {
+  return findTaxonomyCategory(mainCategory) ? 'Sonstiges' : '';
+}
+
 function findBestSubcategoryMatch({ texts = [], mainCategory = '' }) {
   const candidateCategories = mainCategory ? [findTaxonomyCategory(mainCategory)].filter(Boolean) : CATEGORY_TAXONOMY;
   let bestMatch = null;
@@ -366,7 +442,7 @@ function classifyOfferCategory({ title = '', contextText = '', sourceCategory = 
   if (bestMain && bestMainScore >= 2) {
     return {
       primaryCategory: bestMain.main,
-      secondaryCategory: sanitizeWhitespace(sourceCategory) || bestMain.main,
+      secondaryCategory: getFallbackSubcategoryLabel(bestMain.main),
       confidence: Math.min(1, 0.52 + bestMainScore * 0.06),
     };
   }
