@@ -76,17 +76,24 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
 
   async function handleShareAgain() {
     try {
+      const shareText = `Hier ist die geteilte kaufklug Einkaufsliste:\n${shareUrl}`
+
+      try {
+        await navigator.clipboard.writeText(shareUrl)
+      } catch {
+        // Clipboard ist nur Komfort. Der Link steht zusätzlich im Share-Text.
+      }
+
       if (navigator.share) {
         await navigator.share({
           title: 'Geteilte kaufklug Einkaufsliste',
-          text: 'Geteilte kaufklug Einkaufsliste',
+          text: shareText,
           url: shareUrl,
         })
-        setShareMessage('Link zur Einkaufsliste bereitgestellt.')
+        setShareMessage('Link zur Einkaufsliste geteilt und kopiert.')
         return
       }
 
-      await navigator.clipboard.writeText(shareUrl)
       setShareMessage('Link zur Einkaufsliste kopiert.')
     } catch {
       setShareMessage('Der Link konnte gerade nicht geteilt werden.')
