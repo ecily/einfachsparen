@@ -676,6 +676,7 @@ function App() {
       ) : activePage === 'product-search' ? (
         <KeywordSearchPage
           searchRequest={keywordSearchRequest}
+          retailers={retailers}
           shoppingListIds={shoppingListIds}
           onAddToShoppingList={handleAddToShoppingList}
         />
