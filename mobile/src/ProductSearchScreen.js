@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -42,6 +43,9 @@ export default function ProductSearchScreen({
     if (loading) {
       return;
     }
+
+    Keyboard.dismiss();
+    inputRef.current?.blur();
 
     const trimmedQuery = query.trim();
 
@@ -120,7 +124,7 @@ export default function ProductSearchScreen({
             autoCapitalize="none"
             clearButtonMode="while-editing"
             onSubmitEditing={runSearch}
-            blurOnSubmit={false}
+            blurOnSubmit
             style={styles.input}
           />
           <Pressable
@@ -177,7 +181,7 @@ export default function ProductSearchScreen({
         ListEmptyComponent={
           !loading && !error && submittedQuery && offers.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Keine aktuellen Angebote gefunden.</Text>
+              <Text style={styles.emptyTitle}>Keine Treffer für „{submittedQuery}“.</Text>
               <Text style={styles.emptyText}>
                 Tipp: Suche allgemeiner, z. B. „Kaffee“ statt „Jacobs Crema“.
               </Text>
@@ -230,13 +234,14 @@ const styles = StyleSheet.create({
   searchButton: {
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: '#31582c',
+    backgroundColor: '#12361e',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,
   },
   searchButtonDisabled: {
     opacity: 0.65,
+    backgroundColor: '#8a9285',
   },
   searchButtonLabel: {
     color: '#f8f5ed',

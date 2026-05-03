@@ -246,9 +246,9 @@ function getConditionsSummary(offer) {
     return 'Mehrkauf-Angebot';
   }
 
-  const minimumPurchaseQty = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1);
-  if (minimumPurchaseQty > 1) {
-    return `Mindestmenge: ${minimumPurchaseQty}`;
+  const minimumQuantityHint = getMinimumQuantityHint(offer);
+  if (minimumQuantityHint) {
+    return minimumQuantityHint;
   }
 
   return '';
@@ -328,6 +328,73 @@ function getCategoryFilterLabels(categoryGroups) {
   return categoryGroups.flatMap((group) => (
     group.subcategories.length > 0 ? group.subcategories : [group.mainCategory]
   ));
+}
+
+function getCategorySelectionKey(mainCategory, subcategory) {
+  return `${String(mainCategory || '').trim()}::${String(subcategory || mainCategory || '').trim()}`;
+}
+
+function getCategoryFilterOptions(categoryGroups) {
+  return categoryGroups.flatMap((group) => {
+    if (group.subcategories.length === 0) {
+      return [{
+        key: getCategorySelectionKey(group.mainCategory, group.mainCategory),
+        label: group.mainCategory,
+        mainCategory: group.mainCategory,
+      }];
+    }
+
+    return group.subcategories.map((subcategory) => ({
+      key: getCategorySelectionKey(group.mainCategory, subcategory),
+      label: subcategory,
+      mainCategory: group.mainCategory,
+    }));
+  });
+}
+
+function getMinimumQuantityHint(offer) {
+  const directQuantity = Number(
+    offer?.minimumPurchaseQty ||
+      offer?.minimumPurchaseQuantity ||
+      offer?.minQuantity ||
+      offer?.minimumQuantity ||
+      offer?.minimumOrderQuantity ||
+      offer?.minimumPurchase?.quantity ||
+      offer?.discount?.minimumQuantity
+  );
+
+  if (Number.isFinite(directQuantity) && directQuantity > 1) {
+    return `Mindestmenge: ${Math.round(directQuantity)} Stück`;
+  }
+
+  const conditionText = [
+    offer?.conditionsText,
+    offer?.conditionLabel,
+    offer?.effectiveDiscountType,
+    offer?.discountMechanic,
+    offer?.discountType,
+    offer?.rawFacts,
+  ]
+    .filter(Boolean)
+    .map((value) => Array.isArray(value) ? value.join(' ') : String(value))
+    .join(' ')
+    .toLowerCase();
+
+  const quantityMatch = conditionText.match(/\bab\s*(\d+)\s*(?:st[üu]ck|stk|packungen?|flaschen?|dosen?|artikel|produkte)?\b/);
+  if (quantityMatch) {
+    return `Mindestmenge: ${quantityMatch[1]} Stück`;
+  }
+
+  const multiBuyMatch = conditionText.match(/\b(\d+)\s*(?:\+|f[üu]r)\s*(\d+)\b/);
+  if (multiBuyMatch && Number(multiBuyMatch[1]) > 1) {
+    return `Mindestmenge: ${multiBuyMatch[1]} Stück`;
+  }
+
+  if (offer?.isMultiBuy || /mehrkauf|mehrst[üu]ck|mindestmenge/.test(conditionText)) {
+    return 'Mindestmenge nötig';
+  }
+
+  return '';
 }
 
 function groupShoppingListEntries(entries) {
@@ -517,6 +584,7 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
   const referencePrice = Number.isFinite(referenceAmount)
     ? formatCurrency(referenceAmount, offer.priceCurrent?.currency)
     : '';
+  const minimumQuantityHint = getMinimumQuantityHint(offer);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -547,6 +615,11 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
 
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>Preis</Text>
+              {minimumQuantityHint ? (
+                <View style={styles.minimumQuantityChip}>
+                  <Text style={styles.minimumQuantityChipLabel}>{minimumQuantityHint}</Text>
+                </View>
+              ) : null}
               <DetailRow label="Aktionspreis" value={formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)} strong />
               <DetailRow label="Normalpreis im Prospekt" value={referencePrice} />
               <DetailRow
@@ -595,6 +668,7 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
   const conditionBadges = buildConditionBadges(offer);
+  const minimumQuantityHint = getMinimumQuantityHint(offer);
 
   return (
     <Pressable
@@ -630,6 +704,11 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
         <View style={styles.offerPriceStack}>
           <SavingsMessage offer={offer} compact />
           <View style={styles.offerPriceBox}>
+            {minimumQuantityHint ? (
+              <View style={styles.minimumQuantityChip}>
+                <Text style={styles.minimumQuantityChipLabel}>{minimumQuantityHint}</Text>
+              </View>
+            ) : null}
             <Text
               style={styles.offerPrice}
               numberOfLines={1}
@@ -668,7 +747,7 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
           onPress={() => onToggleShoppingList(offer)}
         >
           <Text style={[styles.shoppingToggleLabel, isSelected ? styles.shoppingToggleLabelActive : null]}>
-            {isSelected ? 'Bereits auf Liste' : 'Auf die Einkaufsliste'}
+            {isSelected ? 'Gemerkt' : 'Merken'}
           </Text>
         </Pressable>
       </View>
@@ -688,6 +767,8 @@ function SearchResultsList({
   scrollToResultsKey,
   hero,
   selectedRetailerCount,
+  hasActiveFilters,
+  onResetFilters,
 }) {
   const listRef = useRef(null);
   const offers = useMemo(() => flattenRankingOffers(ranking), [ranking]);
@@ -749,7 +830,7 @@ function SearchResultsList({
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Noch keine Suche gestartet</Text>
             <Text style={styles.emptyText}>
-              Wähle zuerst mindestens ein Geschäft aus. Danach kannst du passende Angebote anzeigen.
+              Tippe auf Angebote anzeigen. Märkte und Kategorien kannst du optional eingrenzen.
             </Text>
           </View>
         }
@@ -802,9 +883,14 @@ function SearchResultsList({
           <Text style={styles.emptyTitle}>Keine passenden Angebote gefunden</Text>
           <Text style={styles.emptyText}>
             {selectedRetailerCount === 0
-              ? 'Wähle zuerst mindestens ein Geschäft aus.'
+              ? 'Keine passenden Angebote gefunden.'
               : 'Aktuell wurden keine passenden Angebote gefunden. Wähle andere Geschäfte oder Kategorien.'}
           </Text>
+          {hasActiveFilters ? (
+            <Pressable style={styles.secondaryWideButton} onPress={onResetFilters}>
+              <Text style={styles.secondaryWideButtonLabel}>Filter zurücksetzen</Text>
+            </Pressable>
+          ) : null}
         </View>
       }
       contentContainerStyle={styles.content}
@@ -1113,12 +1199,11 @@ export default function App() {
       const categoryPayload = await fetchJson(`/filters/categories${suffix}`);
       const nextCategories = extractArrayPayload(categoryPayload, ['categories']);
       const nextCategoryGroups = buildCategoryGroups(nextCategories);
-      const validLabels = new Set(getCategoryFilterLabels(nextCategoryGroups));
+      const validKeys = new Set(getCategoryFilterOptions(nextCategoryGroups).map((option) => option.key));
 
       setCategories(nextCategories);
       setSelectedCategories((current) => {
-        const filtered = current.filter((label) => validLabels.has(label));
-        return current.length === 0 ? [...validLabels] : filtered;
+        return current.filter((key) => validKeys.has(key));
       });
       setExpandedCategoryGroups((current) => {
         const nextExpanded = {};
@@ -1140,13 +1225,13 @@ export default function App() {
 
   async function loadRanking(isRefresh = false) {
     try {
-      if (selectedRetailers.length === 0) {
+      if (false && selectedRetailers.length === 0) {
         setRanking(null);
         setError('Wähle zuerst mindestens ein Geschäft aus.');
         return;
       }
 
-      if (hasNoActiveCategories) {
+      if (false && hasNoActiveCategories) {
         setRanking(null);
         setError('Aktiviere mindestens eine Unterkategorie, damit Angebote gesucht werden kÃ¶nnen.');
         return;
@@ -1159,8 +1244,8 @@ export default function App() {
       }
 
       const params = new URLSearchParams();
-      if (selectedCategories.length > 0 && !hasAllCategoriesSelected) params.set('categories', selectedCategories.join(','));
-      params.set('retailers', selectedRetailers.join(','));
+      if (selectedCategoryLabelsForApi.length > 0 && !hasAllCategoriesSelected) params.set('categories', selectedCategoryLabelsForApi.join(','));
+      if (selectedRetailers.length > 0) params.set('retailers', selectedRetailers.join(','));
       params.set('limit', 'all');
 
       const rankingData = await fetchJson(`/offers/ranking?${params.toString()}`);
@@ -1238,13 +1323,37 @@ export default function App() {
   }, [selectedRetailers]);
 
   const categoryGroups = useMemo(() => buildCategoryGroups(categories || []), [categories]);
-  const allCategoryLabels = useMemo(() => getCategoryFilterLabels(categoryGroups), [categoryGroups]);
+  const allCategoryOptions = useMemo(() => getCategoryFilterOptions(categoryGroups), [categoryGroups]);
+  const categoryLabelByKey = useMemo(() => {
+    const nextMap = new Map();
+
+    for (const option of allCategoryOptions) {
+      nextMap.set(option.key, option.label);
+    }
+
+    return nextMap;
+  }, [allCategoryOptions]);
   const shoppingListEntries = useMemo(() => Object.values(shoppingListMap), [shoppingListMap]);
   const selectedRetailerCount = selectedRetailers.length;
   const selectedCategoryCount = selectedCategories.length;
-  const hasCategoryFilterOptions = allCategoryLabels.length > 0;
-  const hasNoActiveCategories = hasCategoryFilterOptions && selectedCategoryCount === 0;
-  const hasAllCategoriesSelected = hasCategoryFilterOptions && selectedCategoryCount === allCategoryLabels.length;
+  const hasCategoryFilterOptions = allCategoryOptions.length > 0;
+  const hasNoActiveCategories = false;
+  const hasAllCategoriesSelected = hasCategoryFilterOptions && selectedCategoryCount === allCategoryOptions.length;
+  const hasActiveFilters = selectedRetailerCount > 0 || selectedCategoryCount > 0;
+  const selectedCategoryLabelsForApi = useMemo(
+    () => selectedCategories.map((key) => categoryLabelByKey.get(key)).filter(Boolean),
+    [categoryLabelByKey, selectedCategories]
+  );
+  const filterStatusLabel = useMemo(() => {
+    const retailerPart = selectedRetailerCount > 0
+      ? `${selectedRetailerCount} Markt${selectedRetailerCount === 1 ? '' : 'e'}`
+      : 'Alle Märkte';
+    const categoryPart = selectedCategoryCount > 0
+      ? `${selectedCategoryCount} Kategorie${selectedCategoryCount === 1 ? '' : 'n'} ausgewählt`
+      : 'Alle Kategorien';
+
+    return `${retailerPart} · ${categoryPart}`;
+  }, [selectedCategoryCount, selectedRetailerCount]);
   const offers = useMemo(() => flattenRankingOffers(ranking), [ranking]);
   const resultCount = offers.length;
   const offersWithSavingsCount = offers.filter(hasReliableSavings).length;
@@ -1274,17 +1383,17 @@ export default function App() {
     setError('');
   }
 
-  function toggleCategory(category) {
+  function toggleCategory(categoryKey) {
     setSelectedCategories((current) => (
-      current.includes(category)
-        ? current.filter((item) => item !== category)
-        : [...current, category]
+      current.includes(categoryKey)
+        ? current.filter((item) => item !== categoryKey)
+        : [...current, categoryKey]
     ));
   }
 
   function toggleMainCategory(subcategories, fallbackCategory) {
     if (!subcategories.length) {
-      toggleCategory(fallbackCategory);
+      toggleCategory(getCategorySelectionKey(fallbackCategory, fallbackCategory));
       return;
     }
 
@@ -1296,23 +1405,24 @@ export default function App() {
 
   function toggleCategoryGroupSelection(subcategories, fallbackCategory) {
     if (!subcategories.length) {
-      toggleCategory(fallbackCategory);
+      toggleCategory(getCategorySelectionKey(fallbackCategory, fallbackCategory));
       return;
     }
 
     setSelectedCategories((current) => {
-      const allSelected = subcategories.every((subcategory) => current.includes(subcategory));
+      const subcategoryKeys = subcategories.map((subcategory) => getCategorySelectionKey(fallbackCategory, subcategory));
+      const allSelected = subcategoryKeys.every((subcategoryKey) => current.includes(subcategoryKey));
 
       if (allSelected) {
-        return current.filter((item) => !subcategories.includes(item));
+        return current.filter((item) => !subcategoryKeys.includes(item));
       }
 
-      return [...new Set([...current, ...subcategories])];
+      return [...new Set([...current, ...subcategoryKeys])];
     });
   }
 
   function toggleAllCategories() {
-    setSelectedCategories(hasAllCategoriesSelected ? [] : allCategoryLabels);
+    setSelectedCategories(hasAllCategoriesSelected ? [] : allCategoryOptions.map((option) => option.key));
   }
 
   function resetSelection() {
@@ -1396,7 +1506,7 @@ export default function App() {
       <View style={styles.flowCard}>
         <StepHeader
           step="1. Geschäfte wählen"
-          title="Wo kaufst du ein?"
+          title="Märkte eingrenzen"
           text="Wähle die Geschäfte aus, die für dich erreichbar sind."
         />
         <View style={styles.chipWrap}>
@@ -1413,18 +1523,20 @@ export default function App() {
         </View>
         <View style={styles.actionRow}>
           <Pressable style={styles.secondaryButton} onPress={selectAllRetailers}>
-            <Text style={styles.secondaryButtonLabel}>Alle auswählen</Text>
+            <Text style={styles.secondaryButtonLabel}>Alle Märkte auswählen</Text>
           </Pressable>
+          {selectedRetailerCount > 0 ? (
           <Pressable style={styles.secondaryButton} onPress={resetRetailers}>
             <Text style={styles.secondaryButtonLabel}>Geschäfte zurücksetzen</Text>
           </Pressable>
+          ) : null}
         </View>
       </View>
 
       <View style={styles.flowCard}>
         <StepHeader
           step="2. Produkte wählen"
-          title="Was brauchst du heute?"
+          title="Produkte eingrenzen"
           text="Tippe eine Kategorie zum Öffnen an. Mit Alle oder Keine steuerst du die ganze Gruppe."
         />
         <Pressable style={styles.secondaryWideButton} onPress={toggleAllCategories}>
@@ -1434,10 +1546,11 @@ export default function App() {
         </Pressable>
         <View style={styles.categoryList}>
           {categoryGroups.map((group) => {
-            const selectedCount = group.subcategories.filter((item) => selectedCategories.includes(item)).length;
+            const selectedCount = group.subcategories.filter((item) => selectedCategories.includes(getCategorySelectionKey(group.mainCategory, item))).length;
             const allSelected = selectedCount === group.subcategories.length && group.subcategories.length > 0;
             const partial = selectedCount > 0 && !allSelected;
-            const fallbackSelected = selectedCategories.includes(group.mainCategory);
+            const fallbackKey = getCategorySelectionKey(group.mainCategory, group.mainCategory);
+            const fallbackSelected = selectedCategories.includes(fallbackKey);
             const expanded = Boolean(expandedCategoryGroups[group.mainCategory]);
 
             return (
@@ -1480,10 +1593,10 @@ export default function App() {
                   <View style={styles.subcategoryWrap}>
                     {group.subcategories.map((subcategory) => (
                       <FilterChip
-                        key={subcategory}
+                        key={getCategorySelectionKey(group.mainCategory, subcategory)}
                         label={subcategory}
-                        active={selectedCategories.includes(subcategory)}
-                        onPress={() => toggleCategory(subcategory)}
+                        active={selectedCategories.includes(getCategorySelectionKey(group.mainCategory, subcategory))}
+                        onPress={() => toggleCategory(getCategorySelectionKey(group.mainCategory, subcategory))}
                       />
                     ))}
                   </View>
@@ -1500,29 +1613,34 @@ export default function App() {
           title="Deine Auswahl ist bereit."
           text="Tippe auf „Angebote anzeigen“. Danach kannst du passende Produkte auf deine Einkaufsliste setzen."
         />
+        <View style={styles.filterStatusCard}>
+          <Text style={styles.filterStatusText}>{filterStatusLabel}</Text>
+        </View>
         <Pressable
-          style={[styles.fullWidthSearchButton, selectedRetailerCount === 0 || hasNoActiveCategories || loading ? styles.disabledButton : null]}
+          style={[styles.fullWidthSearchButton, loading ? styles.disabledButton : null]}
           onPress={() => loadRanking(false)}
-          disabled={selectedRetailerCount === 0 || hasNoActiveCategories || loading}
+          disabled={loading}
         >
           <Text style={styles.fullWidthSearchButtonLabel}>
             {loading ? 'Angebote werden geladen …' : 'Angebote anzeigen'}
           </Text>
         </Pressable>
+        {hasActiveFilters ? (
         <Pressable style={styles.secondaryWideButton} onPress={resetSelection}>
-          <Text style={styles.secondaryWideButtonLabel}>Auswahl zurücksetzen</Text>
+          <Text style={styles.secondaryWideButtonLabel}>Filter zurücksetzen</Text>
         </Pressable>
+        ) : null}
         <View style={styles.quickInfoCard}>
           <Text style={styles.quickInfoTitle}>Deine Auswahl</Text>
           <Text style={styles.quickInfoText}>
             {selectedRetailerCount > 0
               ? `${selectedRetailerCount} Geschäft${selectedRetailerCount === 1 ? '' : 'e'} ausgewählt`
-              : 'Noch kein Geschäft ausgewählt'}
+              : 'Alle Märkte'}
             {hasAllCategoriesSelected
               ? ' · alle Kategorien aktiv'
               : selectedCategoryCount > 0
                 ? ` · ${selectedCategoryCount} Kategorie${selectedCategoryCount === 1 ? '' : 'n'} aktiv`
-                : hasCategoryFilterOptions ? ' · keine Kategorie aktiv' : ''}
+                : hasCategoryFilterOptions ? ' · alle Kategorien' : ''}
           </Text>
         </View>
       </View>
@@ -1606,6 +1724,8 @@ export default function App() {
             scrollToResultsKey={scrollToResultsKey}
             hero={searchHeader}
             selectedRetailerCount={selectedRetailerCount}
+            hasActiveFilters={hasActiveFilters}
+            onResetFilters={resetSelection}
           />
         ) : activePage === 'product-search' ? (
           <ProductSearchScreen
@@ -1725,9 +1845,9 @@ const styles = StyleSheet.create({
   secondaryButtonLabel: { color: '#304230', fontWeight: '800', textAlign: 'center' },
   secondaryWideButton: { backgroundColor: '#ece4d7', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
   secondaryWideButtonLabel: { color: '#304230', fontWeight: '800', textAlign: 'center' },
-  fullWidthSearchButton: { backgroundColor: '#12361e', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 15, alignItems: 'center' },
-  fullWidthSearchButtonLabel: { color: '#f8f5ed', fontWeight: '900', fontSize: 15, textAlign: 'center' },
-  disabledButton: { opacity: 0.45 },
+  fullWidthSearchButton: { backgroundColor: '#12361e', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 16, alignItems: 'center', minHeight: 54, justifyContent: 'center' },
+  fullWidthSearchButtonLabel: { color: '#f8f5ed', fontWeight: '900', fontSize: 16, textAlign: 'center' },
+  disabledButton: { opacity: 0.45, backgroundColor: '#8a9285' },
   categoryList: { gap: 10 },
   categoryCard: { backgroundColor: '#f8f3e8', borderRadius: 18, padding: 10, gap: 9, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.06)' },
   mainCategoryButton: {
@@ -1761,6 +1881,8 @@ const styles = StyleSheet.create({
   quickInfoCard: { backgroundColor: '#f3eddc', borderRadius: 16, padding: 12, gap: 4 },
   quickInfoTitle: { color: '#31582c', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   quickInfoText: { color: '#4f594e', fontSize: 13, lineHeight: 18 },
+  filterStatusCard: { backgroundColor: '#e9f6db', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
+  filterStatusText: { color: '#244320', fontSize: 13, lineHeight: 18, fontWeight: '900', textAlign: 'center' },
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   summaryCard: { minWidth: 132, flexGrow: 1, backgroundColor: '#fffaf2', borderRadius: 18, padding: 14, gap: 4, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
   summaryCardAccent: { backgroundColor: '#e9f6db' },
@@ -1805,6 +1927,8 @@ const styles = StyleSheet.create({
   offerTitle: { color: '#152315', fontSize: 16, lineHeight: 22, fontWeight: '800' },
   offerPriceStack: { alignSelf: 'stretch', gap: 8 },
   offerPriceBox: { alignSelf: 'stretch', minWidth: 0, gap: 3 },
+  minimumQuantityChip: { alignSelf: 'flex-start', backgroundColor: '#fff0cf', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 2 },
+  minimumQuantityChipLabel: { color: '#80520a', fontSize: 12, lineHeight: 16, fontWeight: '900' },
   offerPriceMetaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   offerPrice: { color: '#173118', fontSize: 24, lineHeight: 30, fontWeight: '900' },
   offerPriceSmall: { color: '#173118', fontSize: 18, fontWeight: '900' },
@@ -1822,10 +1946,10 @@ const styles = StyleSheet.create({
   actionPriceBox: { alignSelf: 'stretch', alignItems: 'flex-start', backgroundColor: '#fff6dd', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, maxWidth: '100%', gap: 2, borderWidth: 1, borderColor: '#ead49a' },
   actionPriceTitle: { color: '#80520a', fontSize: 14, fontWeight: '900' },
   actionPriceText: { color: '#80520a', fontSize: 11, lineHeight: 15 },
-  shoppingToggle: { marginTop: 4, alignSelf: 'stretch', alignItems: 'center', backgroundColor: '#ece4d7', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 999 },
-  shoppingToggleActive: { backgroundColor: '#31582c' },
-  shoppingToggleLabel: { color: '#304230', fontSize: 13, fontWeight: '800' },
-  shoppingToggleLabelActive: { color: '#f8f5ed' },
+  shoppingToggle: { marginTop: 4, alignSelf: 'stretch', alignItems: 'center', backgroundColor: '#31582c', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 999, minHeight: 46, justifyContent: 'center' },
+  shoppingToggleActive: { backgroundColor: '#e7f0da', borderWidth: 1, borderColor: '#31582c' },
+  shoppingToggleLabel: { color: '#f8f5ed', fontSize: 14, fontWeight: '900' },
+  shoppingToggleLabelActive: { color: '#31582c' },
   detailOverlay: { flex: 1, backgroundColor: 'rgba(18, 28, 18, 0.45)', justifyContent: 'flex-end' },
   detailSheet: { maxHeight: '88%', backgroundColor: '#f4efe5', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   detailContent: { padding: 18, gap: 14, paddingBottom: 18 },
