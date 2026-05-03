@@ -134,15 +134,6 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
         </article>
       </section>
 
-      {summary.actionWithoutNormalPriceCount > 0 ? (
-        <div className="shopping-list-note">
-          {summary.actionWithoutNormalPriceCount} weitere Angebote sind aktuelle Aktionen ohne angegebenen Normalpreis.
-        </div>
-      ) : null}
-
-      <SavingsNotice onNavigate={onNavigate} />
-      <LegalInlineNotice onNavigate={onNavigate} compact />
-
       <div className="shopping-list-actions">
         <button type="button" className="ghost-button" onClick={onGoToOffers}>
           Weitere Angebote suchen
@@ -239,6 +230,15 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
           )
         })}
       </div>
+
+      {summary.actionWithoutNormalPriceCount > 0 ? (
+        <div className="shopping-list-note shopping-list-note--after-items">
+          {summary.actionWithoutNormalPriceCount} weitere Angebote sind aktuelle Aktionen ohne angegebenen Normalpreis.
+        </div>
+      ) : null}
+
+      <SavingsNotice onNavigate={onNavigate} />
+      <LegalInlineNotice onNavigate={onNavigate} compact />
     </>
   )
 }

@@ -1394,6 +1394,10 @@ a {
   font-weight: 750;
 }
 
+.shopping-list-note--after-items {
+  margin-top: 1rem;
+}
+
 .shopping-list-actions {
   margin: 1rem 0;
 }
