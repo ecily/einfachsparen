@@ -103,6 +103,16 @@ export async function fetchAnalyticsSummary() {
   return response.data
 }
 
+export async function createSharedShoppingList(payload) {
+  const response = await api.post('/shopping-lists/share', payload)
+  return response.data
+}
+
+export async function fetchSharedShoppingList(shareId) {
+  const response = await api.get(`/shopping-lists/share/${encodeURIComponent(shareId)}`)
+  return response.data
+}
+
 export function getOfferImageUrl(offerId) {
   return `${apiRoot}/api/offers/${offerId}/image`
 }

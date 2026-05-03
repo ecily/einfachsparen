@@ -75,6 +75,11 @@ export function getPageMeta(activePage) {
       description: 'Speichere interessante Angebote lokal auf deiner Einkaufsliste und sortiere deinen Einkauf nach Geschäft.',
       path: '/einkaufsliste',
     },
+    'shared-shopping-list': {
+      title: 'Geteilte Einkaufsliste – kaufklug.at',
+      description: 'Geteilte kaufklug Einkaufsliste als temporärer Snapshot.',
+      path: '/liste',
+    },
     impressum: {
       title: 'Impressum – kaufklug.at',
       description: 'Impressum und Betreiberinformationen zu kaufklug.at.',
@@ -169,12 +174,12 @@ export function updateSeoMetadata(activePage) {
 
   const meta = getPageMeta(activePage)
   const canonicalUrl = `${SITE_URL}${meta.path}`
-  const isInternalPage = activePage === 'quality' || activePage === 'diagnostics'
+  const isInternalPage = activePage === 'quality' || activePage === 'diagnostics' || activePage === 'shared-shopping-list'
 
   document.title = meta.title
 
   setOrCreateMeta('name', 'description', meta.description)
-  setOrCreateMeta('name', 'robots', isInternalPage ? 'noindex,nofollow' : 'index,follow')
+  setOrCreateMeta('name', 'robots', activePage === 'shared-shopping-list' ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
   setOrCreateMeta('name', 'theme-color', '#f7f1e6')
 
   setOrCreateMeta('property', 'og:type', 'website')
@@ -267,6 +272,7 @@ export function updateSeoMetadata(activePage) {
 }
 
 export function getInitialPageFromPathname(pathname) {
+  if (pathname.includes('/liste/')) return 'shared-shopping-list'
   if (pathname.includes('ecily_web')) return 'diagnostics'
   if (pathname.includes('impressum')) return 'impressum'
   if (pathname.includes('datenschutz') || pathname.includes('privacy')) return 'privacy'
@@ -278,6 +284,11 @@ export function getInitialPageFromPathname(pathname) {
   if (pathname.includes('einkaufsliste') || pathname.includes('shopping')) return 'shopping-list'
 
   return 'search'
+}
+
+export function getSharedListIdFromPathname(pathname) {
+  const match = String(pathname || '').match(/\/liste\/([^/?#]+)/i)
+  return match ? decodeURIComponent(match[1]) : ''
 }
 
 export function getPathForPage(nextPage) {

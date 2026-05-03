@@ -26,7 +26,7 @@ const envSchema = z.object({
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
   MONGODB_DB_NAME: z.string().min(1, 'MONGODB_DB_NAME is required'),
   ADMIN_ORIGIN: z.string().url().default('http://localhost:5174'),
-  KAUFKLUG_PUBLIC_ORIGIN: z.string().url().default('https://kaufklug.at'),
+  KAUFKLUG_PUBLIC_ORIGIN: z.string().url().default('https://www.kaufklug.at'),
   KAUFKLUG_APK_URL: z.string().url().default('https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk'),
   ANALYTICS_SESSION_SECRET: z.string().min(16).default('change-this-analytics-session-secret'),
   CRAWL_REGION: z.string().default('Grossraum Graz'),

@@ -17,6 +17,7 @@ import { StickyBottomLine } from './components/layout/StickyBottomLine'
 import { SearchPage } from './components/search/SearchPage'
 import { KeywordSearchPage } from './components/search/KeywordSearchPage'
 import { ShoppingListPage } from './components/shopping/ShoppingListPage'
+import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
 import { QualityPage } from './components/admin/QualityPage'
@@ -31,14 +32,17 @@ import {
   pruneSelectionTokens,
 } from './utils/categories'
 import { areStringSetsEqual, flattenRankingOffers } from './utils/offers'
-import { buildShoppingListItem, loadStoredShoppingList } from './utils/shoppingList'
-import { getInitialPageFromPathname, getPathForPage, updateSeoMetadata } from './utils/seo'
+import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
+import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 
 function App() {
-  const pathname = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : ''
+  const rawPathname = typeof window !== 'undefined' ? window.location.pathname : ''
+  const pathname = rawPathname.toLowerCase()
   const initialPage = getInitialPageFromPathname(pathname)
+  const initialSharedListId = getSharedListIdFromPathname(rawPathname)
 
   const [activePage, setActivePage] = useState(initialPage)
+  const [sharedListId, setSharedListId] = useState(initialSharedListId)
   const [shoppingListItems, setShoppingListItems] = useState(() => loadStoredShoppingList())
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
@@ -344,6 +348,7 @@ function App() {
 
   function handleNavigate(nextPage) {
     setActivePage(nextPage)
+    setSharedListId('')
 
     if (typeof window === 'undefined') {
       return
@@ -479,6 +484,26 @@ function App() {
 
   function handleClearShoppingList() {
     setShoppingListItems([])
+  }
+
+  function handleAdoptSharedShoppingList(items) {
+    setShoppingListItems((current) => {
+      const existingIds = new Set(current.map(getShoppingListItemId))
+      const nextItems = [...current]
+
+      for (const item of items || []) {
+        const itemId = getShoppingListItemId(item)
+
+        if (!existingIds.has(itemId)) {
+          existingIds.add(itemId)
+          nextItems.unshift(item)
+        }
+      }
+
+      return nextItems
+    })
+
+    handleNavigate('shopping-list')
   }
 
   async function handleSaveFeedback() {
@@ -617,7 +642,13 @@ function App() {
         </form>
       </nav>
 
-      {activePage === 'search' ? (
+      {activePage === 'shared-shopping-list' ? (
+        <SharedShoppingListPage
+          shareId={sharedListId}
+          onNavigate={handleNavigate}
+          onAdoptItems={handleAdoptSharedShoppingList}
+        />
+      ) : activePage === 'search' ? (
         <SearchPage
           retailers={retailers}
           categories={categories}

@@ -13,6 +13,7 @@ const userPreferencesRoutes = require('./routes/userPreferences.routes');
 const qualityRoutes = require('./routes/quality.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const downloadRoutes = require('./routes/download.routes');
+const shoppingListRoutes = require('./routes/shoppingList.routes');
 
 const app = express();
 
@@ -121,6 +122,7 @@ app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/quality', qualityRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/download', downloadRoutes);
+app.use('/api/shopping-lists', shoppingListRoutes);
 
 app.use((error, req, res, next) => {
   res.status(500).json({

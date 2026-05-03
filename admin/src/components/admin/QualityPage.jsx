@@ -1,6 +1,7 @@
+import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
 
-export function buildQualityCategoryOptions(snapshot) {
+function buildQualityCategoryOptions(snapshot) {
   const options = new Set()
 
   for (const categoryPrimary of Object.keys(snapshot?.subcategoryOptionsByCategory || {})) {
@@ -30,7 +31,7 @@ export function buildQualityCategoryOptions(snapshot) {
   return [...options].sort((left, right) => left.localeCompare(right, 'de'))
 }
 
-export function buildQualitySubcategoryOptions(snapshot, selectedPrimary = '') {
+function buildQualitySubcategoryOptions(snapshot, selectedPrimary = '') {
   const options = new Set()
 
   for (const option of snapshot?.subcategoryOptionsByCategory?.[selectedPrimary] || []) {
@@ -56,7 +57,7 @@ export function buildQualitySubcategoryOptions(snapshot, selectedPrimary = '') {
   return [...options].sort((left, right) => left.localeCompare(right, 'de'))
 }
 
-export function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKey }) {
+function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKey }) {
   const [targetCategoryPrimary, setTargetCategoryPrimary] = useState(item.categoryPrimary || '')
   const [note, setNote] = useState('')
   const rowKey = `subcategory:${item.subcategoryKey}`
@@ -105,7 +106,7 @@ export function SubcategoryOverrideRow({ item, categoryOptions, onSave, savingKe
   )
 }
 
-export function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete, savingKey }) {
+function ArticleOverrideRow({ item, categoryOptions, snapshot, onSave, onDelete, savingKey }) {
   const [targetCategoryPrimary, setTargetCategoryPrimary] = useState(item.categoryPrimary || '')
   const [targetCategorySecondary, setTargetCategorySecondary] = useState(item.categorySecondary || '')
   const [note, setNote] = useState('')
