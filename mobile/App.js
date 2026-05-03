@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
+import * as Clipboard from 'expo-clipboard';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -13,6 +14,7 @@ import {
   SafeAreaView,
   ScrollView,
   SectionList,
+  Share,
   StyleSheet,
   StatusBar as NativeStatusBar,
   Text,
@@ -259,8 +261,9 @@ function buildConditionBadges(offer) {
 
   if (offer?.customerProgramRequired) badges.push('Mit Kundenkarte/App');
   if (offer?.isMultiBuy) badges.push('Mehrkauf-Angebot');
-  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge nötig');
-  if (offer?.conditionsText && !badges.includes(offer.conditionsText)) badges.push(offer.conditionsText);
+  if (offer?.conditionsText && !badges.includes(offer.conditionsText) && !isDuplicateMinimumCondition(offer.conditionsText, offer)) {
+    badges.push(offer.conditionsText);
+  }
 
   return badges;
 }
@@ -390,11 +393,55 @@ function getMinimumQuantityHint(offer) {
     return `Mindestmenge: ${multiBuyMatch[1]} Stück`;
   }
 
-  if (offer?.isMultiBuy || /mehrkauf|mehrst[üu]ck|mindestmenge/.test(conditionText)) {
-    return 'Mindestmenge nötig';
+  return '';
+}
+
+function isDuplicateMinimumCondition(value, offer) {
+  const text = String(value || '').trim().toLowerCase();
+  const minimumQuantityHint = getMinimumQuantityHint(offer);
+  const minimumQuantity = minimumQuantityHint.match(/\d+/)?.[0];
+
+  if (!text || !minimumQuantity) {
+    return false;
   }
 
-  return '';
+  const compactText = text.replace(/\s+/g, ' ');
+  const onlyMinimum =
+    new RegExp(`^(?:ab|mindestens|min\\.?|mindestmenge:?|mindestkauf:?)\\s*${minimumQuantity}\\s*(?:st[üu]ck|stk|artikel|produkte|packungen?)\\.?$`).test(compactText) ||
+    new RegExp(`^${minimumQuantity}\\s*(?:st[üu]ck|stk|artikel|produkte|packungen?)\\s*(?:n[öo]tig|erforderlich)$`).test(compactText);
+
+  return onlyMinimum;
+}
+
+function getReadableQuantityText(offer) {
+  const rawValue = String(offer?.quantityText || '').trim();
+
+  if (!rawValue) {
+    return '';
+  }
+
+  const value = rawValue.replace(/^menge:\s*/i, '').trim();
+
+  if (!value || /\bta\./i.test(value)) {
+    return '';
+  }
+
+  const normalizedValue = value
+    .replace(/\s+/g, ' ')
+    .replace(/\s*x\s*/gi, ' x ')
+    .trim();
+  const unitPattern = '(?:kg|g|dag|l|ml|cl|stk|st\\.?|stueck|stuecke|stück|stücke|packung|packungen|flasche|flaschen|dose|dosen|tafel|tafeln)';
+  const simpleQuantity = new RegExp(`^\\d+(?:[,.]\\d+)?\\s*${unitPattern}$`, 'i');
+  const multiPackQuantity = new RegExp(`^\\d+\\s*(?:x|×)\\s*\\d+(?:[,.]\\d+)?\\s*${unitPattern}$`, 'i');
+
+  if (!simpleQuantity.test(normalizedValue) && !multiPackQuantity.test(normalizedValue)) {
+    return '';
+  }
+
+  return normalizedValue
+    .replace(/\bx\b/g, '×')
+    .replace(/\bst\.?$/i, 'Stück')
+    .replace(/\bstueck(e)?\b/gi, 'Stück');
 }
 
 function groupShoppingListEntries(entries) {
@@ -421,6 +468,55 @@ function groupShoppingListEntries(entries) {
       actionPriceCount: group.offers.filter((offer) => !hasReliableSavings(offer)).length,
     }))
     .sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'));
+}
+
+function buildShareQuantityText(offer) {
+  const quantity = getShoppingQuantity(offer);
+  const baseText = String(offer?.quantityText || '').trim();
+  const quantityText = `Menge: ${quantity}`;
+
+  return baseText ? `${baseText} · ${quantityText}` : quantityText;
+}
+
+function buildShoppingListShareSnapshot(items = []) {
+  return {
+    items: (items || []).map((item) => ({
+      offerId: item?.offerId || item?.id || '',
+      retailerKey: item?.retailerKey || '',
+      retailerName: item?.retailerName || '',
+      title: item?.title || '',
+      categoryLabel: getOfferCategoryLabel(item),
+      priceCurrent: item?.priceCurrent || null,
+      unit: item?.normalizedUnitPrice?.unit || '',
+      quantityText: buildShareQuantityText(item),
+      validUntil: item?.validTo || item?.validUntil || '',
+      imageUrl: item?.imageUrl || '',
+    })),
+  };
+}
+
+async function createSharedShoppingList(payload) {
+  const response = await fetch(`${API_BASE_URL}/shopping-lists/share`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let result = null;
+
+  try {
+    result = await response.json();
+  } catch (parseError) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(result?.message || 'Die Einkaufsliste konnte gerade nicht geteilt werden.');
+  }
+
+  return result;
 }
 
 function FilterChip({ label, active, partial, onPress, activeBackgroundColor, activeTextColor }) {
@@ -669,6 +765,7 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
   const isCompact = width < 390;
   const conditionBadges = buildConditionBadges(offer);
   const minimumQuantityHint = getMinimumQuantityHint(offer);
+  const readableQuantityText = getReadableQuantityText(offer);
 
   return (
     <Pressable
@@ -690,19 +787,14 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
             <View style={[styles.retailerBadge, { backgroundColor: getRetailerColor(offer.retailerKey) }]}>
               <Text style={[styles.retailerBadgeLabel, { color: getRetailerTextColor(offer.retailerKey) }]}>{offer.retailerName}</Text>
             </View>
-            {hasReliableSavings(offer) ? (
-              <View style={styles.softBadge}>
-                <Text style={styles.softBadgeLabel}>Mit Vergleichspreis</Text>
-              </View>
-            ) : null}
           </View>
           <Text style={styles.offerCategory}>{getOfferCategoryLabel(offer)}</Text>
+          <Text style={styles.offerValidity}>{formatValidityLabel(offer)}</Text>
         </View>
 
         <Text style={styles.offerTitle}>{offer.title}</Text>
 
         <View style={styles.offerPriceStack}>
-          <SavingsMessage offer={offer} compact />
           <View style={styles.offerPriceBox}>
             {minimumQuantityHint ? (
               <View style={styles.minimumQuantityChip}>
@@ -726,15 +818,15 @@ function OfferCard({ offer, rank, isSelected, onToggleShoppingList, onOpenDetail
               ) : null}
             </View>
           </View>
+          <SavingsMessage offer={offer} compact />
         </View>
 
         <View style={styles.metaWrap}>
-          <View style={styles.metaPill}>
-            <Text style={styles.metaPillLabel}>Menge: {offer.quantityText || 'nicht erkannt'}</Text>
-          </View>
-          <View style={styles.metaPillWide}>
-            <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
-          </View>
+          {readableQuantityText ? (
+            <View style={styles.metaPill}>
+              <Text style={styles.metaPillLabel}>{readableQuantityText}</Text>
+            </View>
+          ) : null}
           {conditionBadges.map((badge) => (
             <View key={badge} style={styles.conditionPill}>
               <Text style={styles.conditionPillLabel}>{badge}</Text>
@@ -908,6 +1000,7 @@ function SearchResultsList({
 function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList, onQuantityChange }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
+  const [shareState, setShareState] = useState({ status: 'idle', message: '' });
   const groupedEntries = useMemo(
     () => groupShoppingListEntries(shoppingListEntries),
     [shoppingListEntries]
@@ -921,6 +1014,43 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
     [shoppingListEntries]
   );
   const actionPriceCount = shoppingListEntries.filter((offer) => !hasReliableSavings(offer)).length;
+
+  async function handleShareList() {
+    try {
+      setShareState({ status: 'loading', message: '' });
+      const result = await createSharedShoppingList(buildShoppingListShareSnapshot(shoppingListEntries));
+      const shareUrl = result?.url || `https://www.kaufklug.at/liste/${result?.shareId || ''}`;
+
+      if (!result?.shareId || !shareUrl) {
+        throw new Error('Die Einkaufsliste konnte gerade nicht geteilt werden.');
+      }
+
+      const shareMessage = `Hier ist meine kaufklug Einkaufsliste:\n${shareUrl}`;
+
+      try {
+        await Clipboard.setStringAsync(shareUrl);
+      } catch (clipboardError) {
+        // Clipboard ist Komfort. Das Share Sheet bekommt den Link direkt.
+      }
+
+      try {
+        await Share.share({
+          title: 'kaufklug Einkaufsliste',
+          message: shareMessage,
+          url: shareUrl,
+        });
+        setShareState({ status: 'done', message: 'Link zur Einkaufsliste geteilt.' });
+      } catch (shareError) {
+        await Clipboard.setStringAsync(shareUrl);
+        setShareState({ status: 'done', message: 'Link zur Einkaufsliste kopiert.' });
+      }
+    } catch (shareError) {
+      setShareState({
+        status: 'error',
+        message: 'Die Einkaufsliste konnte gerade nicht geteilt werden.',
+      });
+    }
+  }
 
   if (groupedEntries.length === 0) {
     return (
@@ -958,6 +1088,23 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
       ) : null}
 
       <PriceTrustNote compact />
+
+      <View style={styles.shoppingActions}>
+        <Pressable
+          style={[styles.fullWidthSearchButton, shareState.status === 'loading' ? styles.disabledButton : null]}
+          onPress={handleShareList}
+          disabled={shareState.status === 'loading'}
+        >
+          <Text style={styles.fullWidthSearchButtonLabel}>
+            {shareState.status === 'loading' ? 'Teile Liste ...' : 'Liste teilen'}
+          </Text>
+        </Pressable>
+        {shareState.message ? (
+          <Text style={[styles.shareFeedback, shareState.status === 'error' ? styles.shareFeedbackError : null]}>
+            {shareState.message}
+          </Text>
+        ) : null}
+      </View>
 
       {groupedEntries.map((group) => (
         <View key={group.retailerKey} style={styles.groupCard}>
@@ -1732,6 +1879,7 @@ export default function App() {
             fetchJson={fetchJson}
             flattenRankingOffers={flattenRankingOffers}
             OfferCardComponent={OfferCard}
+            retailers={retailers}
             shoppingListMap={shoppingListMap}
             onToggleShoppingList={toggleShoppingList}
             onOpenOfferDetail={setSelectedOffer}
@@ -1924,6 +2072,7 @@ const styles = StyleSheet.create({
   softBadge: { backgroundColor: '#e7f0da', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   softBadgeLabel: { color: '#31582c', fontSize: 11, fontWeight: '900' },
   offerCategory: { color: '#31582c', fontSize: 12, fontWeight: '800' },
+  offerValidity: { color: '#5f6a5d', fontSize: 12, lineHeight: 17, fontWeight: '700' },
   offerTitle: { color: '#152315', fontSize: 16, lineHeight: 22, fontWeight: '800' },
   offerPriceStack: { alignSelf: 'stretch', gap: 8 },
   offerPriceBox: { alignSelf: 'stretch', minWidth: 0, gap: 3 },
@@ -2001,6 +2150,8 @@ const styles = StyleSheet.create({
   quantityButtonLabel: { color: '#f8f5ed', fontSize: 18, lineHeight: 22, fontWeight: '900' },
   quantityValue: { minWidth: 20, color: '#132014', fontSize: 15, lineHeight: 20, fontWeight: '900', textAlign: 'center' },
   shoppingActions: { gap: 10 },
+  shareFeedback: { color: '#244320', backgroundColor: '#e9f6db', borderRadius: 14, padding: 12, fontSize: 13, lineHeight: 18, fontWeight: '800', textAlign: 'center' },
+  shareFeedbackError: { color: '#8b2424', backgroundColor: '#fdeeee' },
   resultGroupList: { gap: 16 },
   sectionSpacer: { height: 16 },
   updateOverlay: {

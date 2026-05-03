@@ -29,18 +29,18 @@ export function formatValidityLabel(offer) {
   const hasValidTo = Boolean(offer?.validTo)
 
   if (hasValidFrom && hasValidTo) {
-    return `gültig von ${dayjs(offer.validFrom).format('DD.MM.YYYY')} bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
+    return `Gültig ${dayjs(offer.validFrom).format('D.M.YYYY')} bis ${dayjs(offer.validTo).format('D.M.YYYY')}`
   }
 
   if (hasValidFrom) {
-    return `gültig ab ${dayjs(offer.validFrom).format('DD.MM.YYYY')}`
+    return `Gültig ab ${dayjs(offer.validFrom).format('D.M.YYYY')}`
   }
 
   if (hasValidTo) {
-    return `gültig bis ${dayjs(offer.validTo).format('DD.MM.YYYY')}`
+    return `Gültig bis ${dayjs(offer.validTo).format('D.M.YYYY')}`
   }
 
-  return 'aktuell verfügbar'
+  return 'Aktuell verfügbar'
 }
 
 export function formatInteger(value) {

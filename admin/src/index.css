@@ -1099,30 +1099,51 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.35rem;
   color: var(--kk-muted-2);
   font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.055em;
+  letter-spacing: 0;
   font-weight: 800;
+}
+
+.user-card__category,
+.user-card__validity {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.user-card__category {
+  color: #315e2a;
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.user-card__validity {
+  color: #5d665a;
+  font-size: 0.88rem;
+  font-weight: 720;
 }
 
 .user-card h3 {
   max-width: 100%;
-  margin: 0;
+  margin: 0.35rem 0 0;
   font-size: 1.18rem;
   line-height: 1.22;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
   hyphens: auto;
 }
 
+.user-card__decision {
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
+}
+
 .user-card__price {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: flex-start;
-  gap: 0.35rem 0.75rem;
+  display: grid;
+  gap: 0.22rem;
   min-width: 0;
   max-width: 100%;
   text-align: left;
@@ -1134,15 +1155,29 @@ a {
   white-space: nowrap;
   font-size: clamp(1.55rem, 3vw, 2.15rem);
   line-height: 1;
-  letter-spacing: -0.055em;
+  letter-spacing: 0;
   color: #24451f;
 }
 
 .user-card__price span {
   display: block;
-  white-space: nowrap;
+  white-space: normal;
   color: var(--kk-muted);
   font-weight: 700;
+}
+
+.minimum-quantity-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 139, 25, 0.18);
+  background: rgba(255, 244, 217, 0.92);
+  color: #7b530f;
+  font-size: 0.86rem;
+  font-weight: 850;
+  line-height: 1.25;
+  padding: 0.42rem 0.68rem;
 }
 
 .user-card__facts {

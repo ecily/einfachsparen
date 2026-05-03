@@ -1,13 +1,14 @@
 import { ProductImage } from '../layout/ProductImage'
-import { buildOfferBadges, getConditionsSummary, getOfferCategoryLabel, getOfferSavingsInfo, isOfferDirectlyComparable, shouldDisplayUnitPrice } from '../../utils/offers'
+import { getDisplayConditionInfo, getMinimumQuantityLabel, getOfferCategoryLabel, getOfferSavingsInfo, getReadableQuantityText, isOfferDirectlyComparable, shouldDisplayUnitPrice } from '../../utils/offers'
 import { formatCurrencyAmount, formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
 
 export function OfferCardConsumer({ offer, highlightLabel = '', onAddToShoppingList, isInShoppingList = false }) {
-  const badges = buildOfferBadges(offer)
   const directlyComparable = isOfferDirectlyComparable(offer)
   const savingsInfo = getOfferSavingsInfo(offer)
-  const conditionsSummary = getConditionsSummary(offer)
   const showUnitPrice = shouldDisplayUnitPrice(offer)
+  const minimumQuantityLabel = getMinimumQuantityLabel(offer)
+  const conditionInfo = getDisplayConditionInfo(offer)
+  const readableQuantityText = getReadableQuantityText(offer)
 
   return (
     <article className={`user-card ${directlyComparable ? 'user-card--known-savings' : 'user-card--action-price'}`}>
@@ -19,24 +20,21 @@ export function OfferCardConsumer({ offer, highlightLabel = '', onAddToShoppingL
             <div className="user-card__eyebrow">
               {highlightLabel ? <span>{highlightLabel}</span> : null}
               <span>{offer.retailerName}</span>
-              <span>{getOfferCategoryLabel(offer)}</span>
             </div>
 
+            <p className="user-card__category">{getOfferCategoryLabel(offer)}</p>
+            <p className="user-card__validity">{formatValidityLabel(offer)}</p>
             <h3>{offer.title}</h3>
-          </div>
-
-          <div className="user-card__price">
-            <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
-            {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
           </div>
         </div>
 
-        <div className="chip-grid">
-          {badges.map((badge) => (
-            <span key={`${offer.id}-${badge}`} className="chip chip--static chip--subtle">
-              {badge}
-            </span>
-          ))}
+        <div className="user-card__decision">
+          {minimumQuantityLabel ? <span className="minimum-quantity-badge">{minimumQuantityLabel}</span> : null}
+          <div className="user-card__price">
+            <strong>{formatCurrencyAmount(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
+            <span>Aktionspreis</span>
+            {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
+          </div>
         </div>
 
         <div className={`offer-savings-box offer-savings-box--${savingsInfo.type}`}>
@@ -44,29 +42,12 @@ export function OfferCardConsumer({ offer, highlightLabel = '', onAddToShoppingL
           <span>{savingsInfo.description}</span>
         </div>
 
-        <div className="user-card__facts">
-          <span>{formatValidityLabel(offer)}</span>
-          <span>{offer.quantityText || 'Menge im Angebot beachten'}</span>
-        </div>
-
-        <div className="user-card__highlights">
-          <div className={`highlight-pill ${directlyComparable ? 'highlight-pill--price' : ''}`}>
-            <span>{savingsInfo.type === 'known' ? 'Bekannte Ersparnis' : 'Preisart'}</span>
-            <strong>{savingsInfo.shortLabel}</strong>
+        {readableQuantityText || conditionInfo ? (
+          <div className="user-card__facts">
+            {readableQuantityText ? <span>{readableQuantityText}</span> : null}
+            {conditionInfo ? <span>{conditionInfo}</span> : null}
           </div>
-
-          <div className="highlight-pill">
-            <span>Bedingungen</span>
-            <strong>{conditionsSummary}</strong>
-          </div>
-
-          <div className="highlight-pill">
-            <span>{showUnitPrice ? 'Einheitspreis' : 'Hinweis'}</span>
-            <strong>{showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : 'Normalpreis nicht angegeben'}</strong>
-          </div>
-        </div>
-
-        {offer?.conditionsText ? <p className="user-card__condition">{offer.conditionsText}</p> : null}
+        ) : null}
 
         <button
           type="button"

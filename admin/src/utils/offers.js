@@ -82,12 +82,101 @@ export function getConditionsSummary(offer) {
   return 'Keine besonderen Bedingungen'
 }
 
+export function getMinimumQuantityLabel(offer) {
+  const minimumPurchaseQty = Number(
+    offer?.minimumPurchaseQty ||
+      offer?.minimumPurchaseQuantity ||
+      offer?.minQuantity ||
+      offer?.minimumQuantity ||
+      offer?.minimumOrderQuantity ||
+      offer?.minimumPurchase?.quantity ||
+      offer?.discount?.minimumQuantity ||
+      1
+  )
+
+  if (Number.isFinite(minimumPurchaseQty) && minimumPurchaseQty > 1) {
+    return `Mindestmenge: ${Math.round(minimumPurchaseQty)} Stück`
+  }
+
+  const conditionText = [
+    offer?.conditionsText,
+    offer?.conditionLabel,
+    offer?.effectiveDiscountType,
+    offer?.discountMechanic,
+    offer?.discountType,
+    offer?.rawFacts,
+  ]
+    .filter(Boolean)
+    .map((value) => Array.isArray(value) ? value.join(' ') : String(value))
+    .join(' ')
+    .toLowerCase()
+
+  const quantityMatch = conditionText.match(/\bab\s*(\d+)\s*(?:st[üu]ck|stk|packungen?|flaschen?|dosen?|artikel|produkte)?\b/)
+  if (quantityMatch) {
+    return `Mindestmenge: ${quantityMatch[1]} Stück`
+  }
+
+  const multiBuyMatch = conditionText.match(/\b(\d+)\s*(?:\+|f[üu]r)\s*(\d+)\b/)
+  if (multiBuyMatch && Number(multiBuyMatch[1]) > 1) {
+    return `Mindestmenge: ${multiBuyMatch[1]} Stück`
+  }
+
+  return ''
+}
+
+export function isDuplicateMinimumCondition(value, offer) {
+  const text = String(value || '').trim().toLowerCase()
+  const minimumQuantity = getMinimumQuantityLabel(offer).match(/\d+/)?.[0]
+
+  if (!text || !minimumQuantity) return false
+
+  const compactText = text.replace(/\s+/g, ' ')
+  return (
+    new RegExp(`^(?:ab|mindestens|min\\.?|mindestmenge:?|mindestkauf:?)\\s*${minimumQuantity}\\s*(?:st[üu]ck|stk|artikel|produkte|packungen?)\\.?$`).test(compactText) ||
+    new RegExp(`^${minimumQuantity}\\s*(?:st[üu]ck|stk|artikel|produkte|packungen?)\\s*(?:n[öo]tig|erforderlich)$`).test(compactText)
+  )
+}
+
+export function getDisplayConditionInfo(offer) {
+  const items = []
+
+  if (offer?.customerProgramRequired) items.push('Mit Kundenkarte/App')
+  if (offer?.isMultiBuy) items.push('Mehrkauf-Angebot')
+  if (offer?.conditionsText && !isDuplicateMinimumCondition(offer.conditionsText, offer)) items.push(offer.conditionsText)
+
+  return [...new Set(items)].join(' / ')
+}
+
+export function getReadableQuantityText(offer) {
+  const rawValue = String(offer?.quantityText || '').trim()
+
+  if (!rawValue) return ''
+
+  const value = rawValue.replace(/^menge:\s*/i, '').trim()
+
+  if (!value || /\bta\./i.test(value)) return ''
+
+  const normalizedValue = value
+    .replace(/\s+/g, ' ')
+    .replace(/\s*x\s*/gi, ' x ')
+    .trim()
+  const unitPattern = '(?:kg|g|dag|l|ml|cl|stk|st\\.?|stueck|stuecke|stück|stücke|packung|packungen|flasche|flaschen|dose|dosen|tafel|tafeln)'
+  const simpleQuantity = new RegExp(`^\\d+(?:[,.]\\d+)?\\s*${unitPattern}$`, 'i')
+  const multiPackQuantity = new RegExp(`^\\d+\\s*(?:x|×)\\s*\\d+(?:[,.]\\d+)?\\s*${unitPattern}$`, 'i')
+
+  if (!simpleQuantity.test(normalizedValue) && !multiPackQuantity.test(normalizedValue)) return ''
+
+  return normalizedValue
+    .replace(/\bx\b/g, '×')
+    .replace(/\bst\.?$/i, 'Stück')
+    .replace(/\bstueck(e)?\b/gi, 'Stück')
+}
+
 export function buildOfferBadges(offer) {
-  const badges = [getOfferKindLabel(offer), getOfferStatusLabel(offer)]
+  const badges = []
 
   if (offer?.customerProgramRequired) badges.push('Kundenkarte/App')
   if (offer?.isMultiBuy) badges.push('Mehrkauf')
-  if (Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1) > 1) badges.push('Mindestmenge')
 
   return badges
 }
