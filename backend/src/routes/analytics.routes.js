@@ -1,4 +1,5 @@
 const express = require('express');
+const { requireAdminApiKey } = require('../middleware/adminAuth');
 const { buildAnalyticsSummary, trackAnalyticsEvent } = require('../services/analytics/analyticsService');
 
 const router = express.Router();
@@ -25,7 +26,7 @@ router.post('/event', async (req, res, next) => {
   }
 });
 
-router.get('/summary', async (req, res, next) => {
+router.get('/summary', requireAdminApiKey, async (req, res, next) => {
   try {
     const summary = await buildAnalyticsSummary();
     res.json(summary);

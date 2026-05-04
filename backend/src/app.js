@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const env = require('./config/env');
+const logger = require('./lib/logger');
+const { requireAdminApiKey } = require('./middleware/adminAuth');
+const { globalRateLimit } = require('./middleware/rateLimits');
 const healthRoutes = require('./routes/health.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const sourceRoutes = require('./routes/source.routes');
@@ -16,6 +19,10 @@ const downloadRoutes = require('./routes/download.routes');
 const shoppingListRoutes = require('./routes/shoppingList.routes');
 
 const app = express();
+
+if (env.NODE_ENV === 'production') {
+  app.set('trust proxy', env.TRUST_PROXY_HOPS);
+}
 
 const allowedOrigins = new Set([
   env.ADMIN_ORIGIN,
@@ -101,6 +108,7 @@ app.use(
   })
 );
 
+app.use(globalRateLimit);
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => {
@@ -111,23 +119,38 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/health', healthRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/essence', essenceRoutes);
-app.use('/api/sources', sourceRoutes);
-app.use('/api/crawl', crawlRoutes);
+app.use('/api/dashboard', requireAdminApiKey, dashboardRoutes);
+app.use('/api/essence', requireAdminApiKey, essenceRoutes);
+app.use('/api/sources', requireAdminApiKey, sourceRoutes);
+app.use('/api/crawl', requireAdminApiKey, crawlRoutes);
+app.get('/api/feedback', requireAdminApiKey);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/filters', filterRoutes);
 app.use('/api/user-preferences', userPreferencesRoutes);
-app.use('/api/quality', qualityRoutes);
+app.use('/api/quality', requireAdminApiKey, qualityRoutes);
+app.get('/api/analytics/summary', requireAdminApiKey);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/shopping-lists', shoppingListRoutes);
 
 app.use((error, req, res, next) => {
-  res.status(500).json({
+  const statusCode = Number(error.statusCode || error.status || 500);
+  const safeStatusCode = statusCode >= 400 && statusCode < 600 ? statusCode : 500;
+  const isServerError = safeStatusCode >= 500;
+  const exposeMessage = !isServerError || env.NODE_ENV !== 'production';
+
+  logger.error('Request failed', {
+    method: req.method,
+    path: req.originalUrl,
+    statusCode: safeStatusCode,
+    message: error.message,
+    stack: env.NODE_ENV === 'production' ? undefined : error.stack,
+  });
+
+  res.status(safeStatusCode).json({
     ok: false,
-    message: error.message || 'Unexpected server error',
+    message: exposeMessage ? error.message || 'Unerwarteter Serverfehler.' : 'Unerwarteter Serverfehler.',
   });
 });
 

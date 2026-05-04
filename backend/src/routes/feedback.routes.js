@@ -1,10 +1,11 @@
 const express = require('express');
 const env = require('../config/env');
+const { requireAdminApiKey } = require('../middleware/adminAuth');
 const AdminFeedback = require('../models/AdminFeedback');
 
 const router = express.Router();
 
-router.get('/', async (req, res, next) => {
+router.get('/', requireAdminApiKey, async (req, res, next) => {
   try {
     const items = await AdminFeedback.find().sort({ createdAt: -1 }).limit(20).lean();
     res.json({ items });
