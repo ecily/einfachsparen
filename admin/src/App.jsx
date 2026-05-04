@@ -506,7 +506,7 @@ function App() {
           programRetailers: appliedSelectedRetailers.join(','),
           unit: 'all',
           q: '',
-          limit: 'all',
+          limit: 60,
         })
 
         if (!active) return

@@ -1578,7 +1578,7 @@ export default function App() {
       const params = new URLSearchParams();
       if (selectedCategoryLabelsForApi.length > 0 && !hasAllCategoriesSelected) params.set('categories', selectedCategoryLabelsForApi.join(','));
       if (selectedRetailers.length > 0) params.set('retailers', selectedRetailers.join(','));
-      params.set('limit', 'all');
+      params.set('limit', '60');
 
       const rankingData = await fetchJson(`/offers/ranking?${params.toString()}`);
       setRanking(rankingData || null);
