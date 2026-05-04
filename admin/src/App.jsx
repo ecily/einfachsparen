@@ -86,7 +86,8 @@ function SearchLandingHero({ onNavigate }) {
               ['Ohne Konto', 'Direkt suchen.'],
               ['Angebote merken', 'Treffer für später sichern.'],
               ['Einkaufsliste nutzen', 'Geplanten Einkauf im Blick behalten.'],
-              ['Am Handy besonders praktisch', 'Im Geschäft schnell nachsehen.'],
+              ['Liste teilen', 'Einkauf einfach abstimmen.'],
+              ['Am Handy praktisch', 'Im Geschäft schnell nachsehen.'],
             ].map(([title, text]) => (
               <div key={title} className="hero-benefit-card">
                 <strong>{title}</strong>
@@ -167,6 +168,59 @@ function SearchLandingHero({ onNavigate }) {
         </button>
       </section>
     </>
+  )
+}
+
+function TrustAndFaqSection() {
+  const faqItems = [
+    {
+      question: 'Was ist kaufklug.at?',
+      answer: 'kaufklug.at hilft dir, aktuelle Angebote zu suchen, zu merken und für deinen Einkauf zu organisieren.',
+    },
+    {
+      question: 'Brauche ich ein Konto?',
+      answer: 'Nein. Du kannst Angebote suchen, merken und deine Einkaufsliste teilen, ohne dich anzumelden.',
+    },
+    {
+      question: 'Sind die Preise verbindlich?',
+      answer: 'Nein. kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.',
+    },
+    {
+      question: 'Funktioniert kaufklug auch ohne App?',
+      answer: 'Ja. Du kannst kaufklug direkt im Browser nutzen. Für den Einkauf im Geschäft ist die App am bequemsten.',
+    },
+    {
+      question: 'Kann ich meine Einkaufsliste teilen?',
+      answer: 'Ja. Du kannst einen Link zu deiner Liste erstellen und ihn zum Beispiel per WhatsApp oder SMS teilen.',
+    },
+    {
+      question: 'Warum sehe ich manchmal Bedingungen?',
+      answer:
+        'Manche Angebote gelten nur mit Kundenkarte, App oder ab einer bestimmten Menge. kaufklug zeigt solche Hinweise möglichst verständlich an.',
+    },
+  ]
+
+  return (
+    <section className="panel faq-section" style={{ display: 'grid', gap: '1rem', marginTop: '1rem', padding: '1rem' }}>
+      <div style={{ display: 'grid', gap: '0.45rem' }}>
+        <p className="eyebrow" style={{ margin: 0 }}>
+          Gut zu wissen
+        </p>
+        <h2 style={{ margin: 0 }}>Kurz erklärt</h2>
+        <p style={{ color: '#5c6658', margin: 0, maxWidth: '48rem' }}>
+          kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gap: '0.65rem' }}>
+        {faqItems.map((item) => (
+          <details key={item.question} style={{ borderTop: '1px solid rgba(22,33,24,0.1)', paddingTop: '0.65rem' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 800 }}>{item.question}</summary>
+            <p style={{ color: '#5c6658', lineHeight: 1.5, margin: '0.45rem 0 0' }}>{item.answer}</p>
+          </details>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -854,6 +908,7 @@ function App() {
             shoppingListIds={shoppingListIds}
             onAddToShoppingList={handleAddToShoppingList}
           />
+          <TrustAndFaqSection />
         </div>
       ) : activePage === 'shopping-list' ? (
         <ShoppingListPage

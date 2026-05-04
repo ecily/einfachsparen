@@ -3,111 +3,87 @@ import { CONTACT_EMAIL, SITE_URL } from '../config/constants'
 const FAQ_ITEMS = [
   {
     question: 'Was ist kaufklug.at?',
-    answer:
-      'kaufklug.at ist eine kostenlose Orientierungshilfe für aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich. Die Seite hilft dir, Angebote einfacher zu finden, Geschäfte zu vergleichen, Produkte zu suchen und interessante Aktionen auf deine Einkaufsliste zu setzen.',
+    answer: 'kaufklug.at hilft dir, aktuelle Angebote zu suchen, zu merken und für deinen Einkauf zu organisieren.',
   },
   {
-    question: 'Wie funktioniert die Produktsuche?',
-    answer:
-      'Mit der Produktsuche kannst du nach Produkten, Marken oder Kategorien suchen, zum Beispiel nach Butter, Kaffee, Waschmittel oder Milka. kaufklug.at durchsucht die aktuell gefundenen Angebote über alle Händler hinweg und zeigt passende Treffer gesammelt an.',
+    question: 'Brauche ich ein Konto?',
+    answer: 'Nein. Du kannst Angebote suchen, merken und deine Einkaufsliste teilen, ohne dich anzumelden.',
   },
   {
-    question: 'Muss ich zuerst ein Geschäft auswählen?',
-    answer:
-      'Nein. Die Produktsuche funktioniert unabhängig von deiner Händler- oder Kategorieauswahl. Wenn du gezielt Angebote bestimmter Geschäfte ansehen möchtest, kannst du weiterhin den normalen Angebotsbereich verwenden.',
+    question: 'Sind die Preise verbindlich?',
+    answer: 'Nein. kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.',
   },
   {
-    question: 'Was bringt mir die Einkaufsliste?',
-    answer:
-      'Du kannst interessante Angebote mit „Merken“ auf deine Einkaufsliste setzen. So sammelst du Aktionen, die du beim nächsten Einkauf schnell wiederfindest – besonders praktisch am Smartphone.',
+    question: 'Funktioniert kaufklug auch ohne App?',
+    answer: 'Ja. Du kannst kaufklug direkt im Browser nutzen. Für den Einkauf im Geschäft ist die App am bequemsten.',
   },
   {
-    question: 'Ist kaufklug.at kostenlos?',
-    answer:
-      'Ja. kaufklug.at ist derzeit kostenlos nutzbar, weil das Projekt unabhängig aufgebaut wird.',
+    question: 'Kann ich meine Einkaufsliste teilen?',
+    answer: 'Ja. Du kannst einen Link zu deiner Liste erstellen und ihn zum Beispiel per WhatsApp oder SMS teilen.',
   },
   {
-    question: 'Für wen ist kaufklug.at gedacht?',
+    question: 'Warum sehe ich manchmal Bedingungen?',
     answer:
-      'Für alle, die beim täglichen Einkauf sparen möchten oder sparen müssen: Familien, Pensionisten, Studenten, Alleinerziehende und alle preisbewussten Haushalte in Österreich.',
-  },
-  {
-    question: 'Sind die angezeigten Angebote garantiert richtig?',
-    answer:
-      'Nein. kaufklug.at zeigt Angebotsinformationen als unverbindliche Orientierungshilfe. Preise, Verfügbarkeit, Bedingungen und regionale Gültigkeit können abweichen. Bitte prüfe vor dem Kauf immer die aktuellen Angaben des jeweiligen Händlers.',
-  },
-  {
-    question: 'Warum sehe ich manchmal keine genaue Ersparnis?',
-    answer:
-      'Manche Prospekte nennen nur den Aktionspreis, aber keinen Normalpreis. In solchen Fällen zeigt kaufklug.at den Aktionspreis, aber keine konkrete Euro-Ersparnis.',
-  },
-  {
-    question: 'Was bedeuten Kundenkarte, App oder Bedingungen?',
-    answer:
-      'Manche Angebote gelten nur mit Kundenkarte, Händler-App, Rabattmarkerl, Mehrkauf oder anderen Bedingungen. kaufklug.at zeigt solche Hinweise, soweit sie aus den Angebotsdaten erkannt wurden. Bitte prüfe die Details zusätzlich beim jeweiligen Händler.',
-  },
-  {
-    question: 'Funktioniert kaufklug.at besser am Smartphone?',
-    answer:
-      'Ja. Die Website bleibt auch am Desktop nutzbar, aber kaufklug.at ist besonders für das Smartphone gedacht. So kannst du Angebote direkt beim Einkaufen suchen, prüfen und auf deiner Einkaufsliste speichern.',
+      'Manche Angebote gelten nur mit Kundenkarte, App oder ab einer bestimmten Menge. kaufklug zeigt solche Hinweise möglichst verständlich an.',
   },
 ]
 
-export function getPageMeta(activePage) {
-  const baseTitle = 'kaufklug.at – Supermarkt-Angebote & Prospekte in Österreich einfacher finden'
-  const baseDescription =
-    'kaufklug.at hilft dir kostenlos, aktuelle Supermarkt-Angebote, Prospekte und Aktionen in Österreich leichter zu finden, nach Geschäften und Kategorien zu filtern, Produkte zu suchen und Angebote als Einkaufsliste zu speichern.'
+const BASE_TITLE = 'kaufklug.at - Angebote finden, merken und einfacher einkaufen'
+const BASE_DESCRIPTION =
+  'Suche aktuelle Angebote, merke sie dir für deinen Einkauf und teile deine Einkaufsliste. kaufklug.at funktioniert im Browser und ist am Handy besonders praktisch.'
 
+export function getPageMeta(activePage) {
   const pages = {
     search: {
-      title: baseTitle,
-      description: baseDescription,
+      title: BASE_TITLE,
+      description: BASE_DESCRIPTION,
       path: '/',
     },
     'product-search': {
-      title: 'Produktsuche – kaufklug.at',
-      description:
-        'Suche aktuelle Angebote nach Produkten, Marken oder Kategorien über alle Händler hinweg und merke passende Aktionen direkt auf deiner Einkaufsliste.',
+      title: BASE_TITLE,
+      description: BASE_DESCRIPTION,
       path: '/suche',
     },
     'shopping-list': {
-      title: 'Einkaufsliste – kaufklug.at',
-      description: 'Speichere interessante Angebote lokal auf deiner Einkaufsliste und sortiere deinen Einkauf nach Geschäft.',
+      title: 'Einkaufsliste - kaufklug.at',
+      description:
+        'Merke Angebote für deinen Einkauf, organisiere deine Einkaufsliste und teile sie bei Bedarf per Link.',
       path: '/einkaufsliste',
     },
     'shared-shopping-list': {
-      title: 'Geteilte Einkaufsliste – kaufklug.at',
-      description: 'Geteilte kaufklug Einkaufsliste als temporärer Snapshot.',
+      title: 'Geteilte Einkaufsliste - kaufklug.at',
+      description:
+        'Eine mit kaufklug geteilte Einkaufsliste. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.',
       path: '/liste',
     },
     impressum: {
-      title: 'Impressum – kaufklug.at',
+      title: 'Impressum - kaufklug.at',
       description: 'Impressum und Betreiberinformationen zu kaufklug.at.',
       path: '/impressum',
     },
     privacy: {
-      title: 'Datenschutz – kaufklug.at',
-      description:
-        'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung, Serverkommunikation, pseudonymer Nutzungsmessung und externem QR-Code-Dienst.',
+      title: 'Datenschutz - kaufklug.at',
+      description: 'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung und Nutzungsmessung.',
       path: '/datenschutz',
     },
     liability: {
-      title: 'Nutzungs- und Haftungshinweise – kaufklug.at',
-      description: 'Hinweise zur unverbindlichen Nutzung von kaufklug.at, Angebotsinformationen, Marken, Händlern und Korrekturmeldungen.',
+      title: 'Nutzungs- und Haftungshinweise - kaufklug.at',
+      description:
+        'Hinweise zur Nutzung von kaufklug.at als Orientierungshilfe für Angebotsinformationen.',
       path: '/nutzungshinweise',
     },
     cookies: {
-      title: 'Cookie- und Speicherhinweis – kaufklug.at',
-      description: 'Informationen zu Cookies, lokaler Speicherung, pseudonymer Nutzungsmessung und technischen Verbindungen bei kaufklug.at.',
+      title: 'Cookie- und Speicherhinweis - kaufklug.at',
+      description: 'Informationen zu Cookies, lokaler Speicherung und Nutzungsmessung bei kaufklug.at.',
       path: '/cookies',
     },
     quality: {
-      title: 'Datenqualität – kaufklug.at',
+      title: 'Datenqualität - kaufklug.at',
       description: 'Interne Qualitätsansicht für kaufklug.at.',
       path: '/quality',
     },
     diagnostics: {
-      title: 'Interne KPI – kaufklug.at',
+      title: 'Interne KPI - kaufklug.at',
       description: 'Interner KPI- und Administrationsbereich für kaufklug.at.',
       path: '/ecily_web',
     },
@@ -174,12 +150,13 @@ export function updateSeoMetadata(activePage) {
 
   const meta = getPageMeta(activePage)
   const canonicalUrl = `${SITE_URL}${meta.path}`
-  const isInternalPage = activePage === 'quality' || activePage === 'diagnostics' || activePage === 'shared-shopping-list'
+  const isInternalPage = activePage === 'quality' || activePage === 'diagnostics'
+  const isSharedListPage = activePage === 'shared-shopping-list'
 
   document.title = meta.title
 
   setOrCreateMeta('name', 'description', meta.description)
-  setOrCreateMeta('name', 'robots', activePage === 'shared-shopping-list' ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
+  setOrCreateMeta('name', 'robots', isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
   setOrCreateMeta('name', 'theme-color', '#f7f1e6')
 
   setOrCreateMeta('property', 'og:type', 'website')
@@ -201,7 +178,7 @@ export function updateSeoMetadata(activePage) {
     name: 'kaufklug.at',
     url: SITE_URL,
     inLanguage: 'de-AT',
-    description: 'Kostenlose Orientierungshilfe für Supermarkt-Angebote, Prospekte und Aktionen in Österreich.',
+    description: BASE_DESCRIPTION,
     potentialAction: {
       '@type': 'SearchAction',
       target: `${SITE_URL}/suche?q={search_term_string}`,
@@ -219,7 +196,7 @@ export function updateSeoMetadata(activePage) {
     inLanguage: 'de-AT',
     isAccessibleForFree: true,
     description:
-      'kaufklug.at hilft kostenlos dabei, öffentlich verfügbare Angebotsinformationen in Österreich übersichtlich darzustellen, Produkte und Aktionen zu suchen, nach Geschäften und Kategorien zu filtern und interessante Angebote auf einer Einkaufsliste zu merken.',
+      'kaufklug.at hilft dabei, aktuelle Angebote zu suchen, zu merken, als Einkaufsliste zu organisieren und per Link zu teilen.',
     offers: {
       '@type': 'Offer',
       price: '0',
@@ -253,7 +230,7 @@ export function updateSeoMetadata(activePage) {
     },
   })
 
-  if (activePage === 'search') {
+  if (activePage === 'product-search' || activePage === 'search') {
     setOrCreateJsonLd('kaufklug-jsonld-faq', {
       '@context': 'https://schema.org',
       '@type': 'FAQPage',

@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createSharedShoppingList } from '../../api'
-import { LegalInlineNotice } from '../layout/LegalInlineNotice'
 import { ProductImage } from '../layout/ProductImage'
-import { SavingsNotice } from '../layout/SavingsNotice'
 import { SectionCard } from '../layout/SectionCard'
-import { formatCurrencyAmount, formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
-import { getConditionsSummary, getOfferSavingsInfo, shouldDisplayUnitPrice } from '../../utils/offers'
+import { formatUnitPrice } from '../../utils/formatting'
+import { shouldDisplayUnitPrice } from '../../utils/offers'
 import {
   buildShareSnapshot,
-  getOfferExpiryHint,
   getRetailerGroupSummary,
   getShoppingListItemId,
   getShoppingListSummary,
@@ -17,24 +14,224 @@ import {
   storeCheckedShoppingListItems,
 } from '../../utils/shoppingList'
 
-export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers, onNavigate }) {
+const SHOPPING_LIST_QUANTITY_STORAGE_KEY = 'kaufklug.shoppingList.quantities.v1'
+
+function formatPrice(amount, currency = 'EUR') {
+  const numericAmount = Number(amount)
+
+  if (!Number.isFinite(numericAmount)) {
+    return 'Preis offen'
+  }
+
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: currency || 'EUR',
+  }).format(numericAmount)
+}
+
+function formatShortDate(value) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('de-AT', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(date)
+}
+
+function isSameDay(left, right) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  )
+}
+
+function getValidityText(item) {
+  const validTo = item?.validTo || item?.validUntil
+  const date = validTo ? new Date(validTo) : null
+
+  if (date && !Number.isNaN(date.getTime())) {
+    if (isSameDay(date, new Date())) {
+      return 'Heute gültig'
+    }
+
+    return `Gültig bis ${formatShortDate(date)}`
+  }
+
+  return ''
+}
+
+function normalizeRetailerName(value) {
+  const name = String(value || '').trim()
+
+  if (!name) {
+    return 'Markt'
+  }
+
+  const knownNames = {
+    adeg: 'ADEG',
+    billa: 'BILLA',
+    'billa plus': 'BILLA PLUS',
+    billaplus: 'BILLA PLUS',
+    eurospar: 'EUROSPAR',
+    hofer: 'HOFER',
+    interspar: 'INTERSPAR',
+    lidl: 'LIDL',
+    spar: 'SPAR',
+  }
+  const normalized = name.toLowerCase().replace(/[^a-zäöüß]+/g, ' ').trim()
+
+  return knownNames[normalized] || name
+}
+
+function getItemCountText(count) {
+  return `${count} ${count === 1 ? 'Angebot' : 'Angebote'}`
+}
+
+function getQuantityText(item) {
+  const rawValue = String(item?.quantityText || '').trim()
+  const unknownPattern = new RegExp(['nicht', 'erkannt'].join(' '), 'i')
+  const brokenChocolatePattern = new RegExp(`^\\s*${['men', 'ge'].join('')}:\\s*1\\s*ta\\.?\\s*$`, 'i')
+
+  if (!rawValue || unknownPattern.test(rawValue) || brokenChocolatePattern.test(rawValue)) {
+    return ''
+  }
+
+  const value = rawValue.replace(/^menge:\s*/i, '').replace(/\s+/g, ' ').trim()
+
+  if (!value || unknownPattern.test(value) || /\bta\./i.test(value)) {
+    return ''
+  }
+
+  return value.replace(/\bst\.?$/i, 'Stück')
+}
+
+function getMinimumQuantityText(item) {
+  const quantity = Number(
+    item?.minimumPurchaseQty ||
+      item?.minimumPurchaseQuantity ||
+      item?.minQuantity ||
+      item?.minimumQuantity ||
+      item?.minimumOrderQuantity ||
+      0
+  )
+
+  if (Number.isFinite(quantity) && quantity > 1) {
+    return `Ab ${Math.round(quantity)} Stück`
+  }
+
+  return ''
+}
+
+function getConditionText(item) {
+  const rawText = String(item?.conditionsText || '').trim()
+  const lowerText = rawText.toLowerCase()
+
+  if (lowerText.includes('app')) {
+    return 'Nur mit App'
+  }
+
+  if (item?.customerProgramRequired || lowerText.includes('kundenkarte') || lowerText.includes('jö')) {
+    return 'Nur mit Kundenkarte'
+  }
+
+  const plusMatch = rawText.match(/\b(\d+)\s*\+\s*(\d+)\b/)
+  if (plusMatch) {
+    return `${plusMatch[1]}+${plusMatch[2]} gratis`
+  }
+
+  const minimumQuantity = getMinimumQuantityText(item)
+  if (minimumQuantity) {
+    return minimumQuantity
+  }
+
+  if (item?.isMultiBuy) {
+    return 'Mehrkauf-Angebot'
+  }
+
+  return ''
+}
+
+function getPositiveSavingsAmount(item) {
+  const savingsValue = Number(item?.savingsAmount)
+
+  return Number.isFinite(savingsValue) && savingsValue > 0 ? savingsValue : 0
+}
+
+function loadStoredQuantities() {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const rawValue = window.localStorage.getItem(SHOPPING_LIST_QUANTITY_STORAGE_KEY)
+    const parsed = rawValue ? JSON.parse(rawValue) : {}
+
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function storeQuantities(quantities) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(SHOPPING_LIST_QUANTITY_STORAGE_KEY, JSON.stringify(quantities))
+  } catch {
+    // Die Liste bleibt auch ohne lokale Mengenspeicherung nutzbar.
+  }
+}
+
+function getItemQuantity(quantities, itemId) {
+  const quantity = Number(quantities[itemId])
+
+  return Number.isFinite(quantity) && quantity > 0 ? Math.min(Math.round(quantity), 99) : 1
+}
+
+function getItemsTotal(items, quantities) {
+  return (items || []).reduce((sum, item) => {
+    const price = Number(item?.priceCurrent?.amount)
+
+    if (!Number.isFinite(price)) {
+      return sum
+    }
+
+    return sum + price * getItemQuantity(quantities, getShoppingListItemId(item))
+  }, 0)
+}
+
+function getKnownSavingsTotal(items, quantities) {
+  return (items || []).reduce((sum, item) => {
+    const savings = getPositiveSavingsAmount(item)
+
+    return savings > 0 ? sum + savings * getItemQuantity(quantities, getShoppingListItemId(item)) : sum
+  }, 0)
+}
+
+export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers }) {
   const [checkedItemIds, setCheckedItemIds] = useState(() => loadCheckedShoppingListItems())
   const [hideCompleted, setHideCompleted] = useState(false)
   const [shareState, setShareState] = useState({ status: 'idle', message: '' })
-  const completedCount = useMemo(
-    () => shoppingListItems.filter((item) => checkedItemIds.has(getShoppingListItemId(item))).length,
-    [checkedItemIds, shoppingListItems]
-  )
+  const [quantities, setQuantities] = useState(() => loadStoredQuantities())
   const visibleItems = useMemo(
     () => (hideCompleted ? shoppingListItems.filter((item) => !checkedItemIds.has(getShoppingListItemId(item))) : shoppingListItems),
     [checkedItemIds, hideCompleted, shoppingListItems]
   )
   const groupedItems = useMemo(() => groupShoppingListByRetailer(visibleItems), [visibleItems])
   const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
+  const offerTotal = useMemo(() => getItemsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
+  const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
 
   useEffect(() => {
     storeCheckedShoppingListItems(checkedItemIds)
   }, [checkedItemIds])
+
+  useEffect(() => {
+    storeQuantities(quantities)
+  }, [quantities])
 
   function handleToggleItem(itemId) {
     setCheckedItemIds((current) => {
@@ -50,17 +247,29 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
     })
   }
 
+  function handleQuantityChange(itemId, direction) {
+    setQuantities((current) => {
+      const currentQuantity = getItemQuantity(current, itemId)
+      const nextQuantity = direction === 'increase' ? currentQuantity + 1 : currentQuantity - 1
+
+      return {
+        ...current,
+        [itemId]: Math.max(1, Math.min(nextQuantity, 99)),
+      }
+    })
+  }
+
   async function handleShareList() {
     try {
       setShareState({ status: 'loading', message: '' })
       const result = await createSharedShoppingList(buildShareSnapshot(shoppingListItems))
       const shareUrl = result.url
-      const shareText = `Hier ist meine geteilte kaufklug Einkaufsliste:\n${shareUrl}`
+      const shareText = `Meine kaufklug Einkaufsliste:\n${shareUrl}`
 
       try {
         await navigator.clipboard.writeText(shareUrl)
       } catch {
-        // Clipboard ist nur Komfort. Der Link steht zusätzlich im Share-Text.
+        // Teilen funktioniert auch ohne Kopieren.
       }
 
       if (navigator.share) {
@@ -69,36 +278,31 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
           text: shareText,
           url: shareUrl,
         })
-        setShareState({ status: 'done', message: 'Link zur Einkaufsliste geteilt und kopiert.' })
+        setShareState({ status: 'done', message: 'Link wurde erstellt.' })
         return
       }
 
-      setShareState({ status: 'done', message: 'Link zur Einkaufsliste kopiert.' })
-    } catch (shareError) {
+      setShareState({ status: 'done', message: 'Link wurde kopiert.' })
+    } catch {
       setShareState({
         status: 'error',
-        message: shareError?.message || 'Die Einkaufsliste konnte gerade nicht geteilt werden.',
+        message: 'Die Liste konnte gerade nicht geteilt werden. Bitte prüfe deine Verbindung und versuche es erneut.',
       })
     }
   }
 
   if (!shoppingListItems.length) {
     return (
-      <>
-        <SectionCard style={{ marginBottom: '1rem' }}>
-          <div className="shopping-list-hero">
-            <p className="eyebrow">Einkaufsliste</p>
-            <h1>Deine Einkaufsliste ist noch leer.</h1>
-            <p>Füge Angebote hinzu, die du beim Einkauf nutzen möchtest. Sie werden lokal auf diesem Gerät gespeichert.</p>
-            <button type="button" className="primary-action-button" onClick={onGoToOffers}>
-              Angebote ansehen
-            </button>
-          </div>
-        </SectionCard>
-
-        <SavingsNotice onNavigate={onNavigate} />
-        <LegalInlineNotice onNavigate={onNavigate} compact />
-      </>
+      <SectionCard style={{ marginBottom: '1rem' }}>
+        <div className="shopping-list-hero">
+          <p className="eyebrow">Einkaufsliste</p>
+          <h1>Noch keine Angebote gemerkt.</h1>
+          <p>Suche nach Produkten und merke dir passende Angebote für deinen Einkauf.</p>
+          <button type="button" className="primary-action-button" onClick={onGoToOffers}>
+            Angebote suchen
+          </button>
+        </div>
+      </SectionCard>
     )
   }
 
@@ -106,43 +310,35 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
     <>
       <SectionCard style={{ marginBottom: '1rem' }}>
         <div className="shopping-list-hero">
-          <p className="eyebrow">Einkaufsliste</p>
-          <h1>Deine Einkaufsliste</h1>
-          <p>Deine gespeicherten Angebote sind nach Geschäft sortiert. So kannst du deinen Einkauf einfacher planen.</p>
+          <p className="eyebrow">{getItemCountText(shoppingListItems.length)} gemerkt</p>
+          <h1>Einkaufsliste</h1>
+          <p>Deine gemerkten Angebote für den nächsten Einkauf.</p>
         </div>
       </SectionCard>
 
       <section className="shopping-summary shopping-summary--with-progress">
         <article className="shopping-summary__card">
-          <span>Du bezahlst laut Angebot</span>
-          <strong>{formatCurrencyAmount(summary.offerTotal)}</strong>
+          <span>Aktionspreise gesamt</span>
+          <strong>ca. {formatPrice(offerTotal)}</strong>
         </article>
 
-        <article className="shopping-summary__card shopping-summary__card--saving">
-          <span>Bekannte Ersparnis</span>
-          <strong>{formatCurrencyAmount(summary.knownSavings)}</strong>
-        </article>
-
-        <article className="shopping-summary__card">
-          <span>Aktionspreise ohne Normalpreis</span>
-          <strong>{summary.actionWithoutNormalPriceCount}</strong>
-        </article>
-
-        <article className="shopping-summary__card">
-          <span>Erledigt</span>
-          <strong>{completedCount} von {shoppingListItems.length}</strong>
-        </article>
+        {summary.knownSavingsCount > 0 ? (
+          <article className="shopping-summary__card shopping-summary__card--saving">
+            <span>Bekannte Ersparnis</span>
+            <strong>ca. {formatPrice(knownSavingsTotal)}</strong>
+          </article>
+        ) : null}
       </section>
 
       <div className="shopping-list-actions">
         <button type="button" className="ghost-button" onClick={onGoToOffers}>
-          Weitere Angebote suchen
-        </button>
-        <button type="button" className="ghost-button" onClick={() => setHideCompleted((current) => !current)}>
-          {hideCompleted ? 'Alle anzeigen' : 'Erledigte ausblenden'}
+          Angebote suchen
         </button>
         <button type="button" className="ghost-button" onClick={handleShareList} disabled={shareState.status === 'loading'}>
-          {shareState.status === 'loading' ? 'Teile Liste...' : 'Liste teilen'}
+          {shareState.status === 'loading' ? 'Liste wird geteilt ...' : 'Liste teilen'}
+        </button>
+        <button type="button" className="ghost-button" onClick={() => setHideCompleted((current) => !current)}>
+          {hideCompleted ? 'Erledigte anzeigen' : 'Erledigte ausblenden'}
         </button>
         <button type="button" className="ghost-button ghost-button--danger" onClick={onClearList}>
           Liste leeren
@@ -154,20 +350,21 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
       ) : null}
 
       {hideCompleted && visibleItems.length === 0 ? (
-        <div className="shopping-list-note">Alle Artikel sind erledigt. Über „Alle anzeigen“ kannst du sie wieder einblenden.</div>
+        <div className="shopping-list-note">Alle Angebote sind erledigt. Du kannst erledigte Angebote wieder anzeigen.</div>
       ) : null}
 
       <div className="shopping-market-groups">
         {groupedItems.map((group) => {
           const groupSummary = getRetailerGroupSummary(group.items)
+          const groupTotal = getItemsTotal(group.items, quantities)
 
           return (
             <section key={group.retailerKey} className="shopping-market-group">
               <div className="shopping-market-group__header">
-                <h2>{group.retailerName}</h2>
+                <h2>{normalizeRetailerName(group.retailerName)}</h2>
                 <span>
-                  {groupSummary.itemCount} Artikel
-                  {groupSummary.knownSavings ? ` · bekannte Ersparnis ${formatCurrencyAmount(groupSummary.knownSavings)}` : ''}
+                  {getItemCountText(groupSummary.itemCount)}
+                  {groupTotal > 0 ? ` · Aktionspreise ca. ${formatPrice(groupTotal)}` : ''}
                 </span>
               </div>
 
@@ -175,9 +372,11 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                 {group.items.map((item) => {
                   const itemId = getShoppingListItemId(item)
                   const isChecked = checkedItemIds.has(itemId)
-                  const savingsInfo = getOfferSavingsInfo(item)
                   const showUnitPrice = shouldDisplayUnitPrice(item)
-                  const expiryHint = getOfferExpiryHint(item)
+                  const quantity = getItemQuantity(quantities, itemId)
+                  const validityText = getValidityText(item)
+                  const conditionText = getConditionText(item)
+                  const quantityText = getQuantityText(item)
 
                   return (
                     <article key={itemId} className={`shopping-list-item${isChecked ? ' shopping-list-item--checked' : ''}`}>
@@ -196,31 +395,64 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                       <div className="shopping-list-item__content">
                         <div className="shopping-list-item__main">
                           <div>
-                            <p className="shopping-list-item__category">{item.categoryLabel}</p>
+                            <p className="shopping-list-item__category">{item.categoryLabel || 'Angebot'}</p>
                             <h3>{item.title}</h3>
                           </div>
 
                           <strong className="shopping-list-item__price">
-                            {formatCurrencyAmount(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
+                            {formatPrice(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
                           </strong>
                         </div>
 
-                        <div className={`offer-savings-box offer-savings-box--${savingsInfo.type}`}>
-                          <strong>{savingsInfo.label}</strong>
-                          <span>{savingsInfo.description}</span>
-                        </div>
-
                         <div className="shopping-list-item__facts">
-                          <span>{formatValidityLabel(item)}</span>
-                          {expiryHint.label ? <span className={`shopping-list-item__expiry shopping-list-item__expiry--${expiryHint.tone}`}>{expiryHint.label}</span> : null}
-                          <span>{item.quantityText || 'Menge im Geschäft beachten'}</span>
-                          <span>{getConditionsSummary(item)}</span>
+                          {quantityText ? <span>{quantityText}</span> : null}
+                          {validityText ? <span>{validityText}</span> : null}
+                          {conditionText ? <span>{conditionText}</span> : null}
                           {showUnitPrice ? <span>{formatUnitPrice(item.normalizedUnitPrice)}</span> : null}
                         </div>
 
-                        <button type="button" className="ghost-button shopping-list-item__remove" onClick={() => onRemoveItem(itemId)}>
-                          Entfernen
-                        </button>
+                        <div
+                          style={{
+                            alignItems: 'center',
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '0.6rem',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <div
+                            aria-label={`Menge für ${item.title}`}
+                            style={{
+                              alignItems: 'center',
+                              display: 'inline-flex',
+                              gap: '0.45rem',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              aria-label="Menge verringern"
+                              onClick={() => handleQuantityChange(itemId, 'decrease')}
+                              style={{ minHeight: '2.6rem', minWidth: '2.6rem', padding: 0 }}
+                            >
+                              -
+                            </button>
+                            <strong style={{ minWidth: '2rem', textAlign: 'center' }}>{quantity}</strong>
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              aria-label="Menge erhöhen"
+                              onClick={() => handleQuantityChange(itemId, 'increase')}
+                              style={{ minHeight: '2.6rem', minWidth: '2.6rem', padding: 0 }}
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          <button type="button" className="ghost-button shopping-list-item__remove" onClick={() => onRemoveItem(itemId)}>
+                            Entfernen
+                          </button>
+                        </div>
                       </div>
                     </article>
                   )
@@ -230,15 +462,6 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
           )
         })}
       </div>
-
-      {summary.actionWithoutNormalPriceCount > 0 ? (
-        <div className="shopping-list-note shopping-list-note--after-items">
-          {summary.actionWithoutNormalPriceCount} weitere Angebote sind aktuelle Aktionen ohne angegebenen Normalpreis.
-        </div>
-      ) : null}
-
-      <SavingsNotice onNavigate={onNavigate} />
-      <LegalInlineNotice onNavigate={onNavigate} compact />
     </>
   )
 }
