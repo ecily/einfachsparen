@@ -45,51 +45,84 @@ function getFriendlyErrorMessage(error, fallback) {
   return message || fallback
 }
 
-function SearchStartExtras({ onNavigate }) {
-  const trackedDownloadUrl = buildTrackedApkDownloadUrl('web_start_button')
-  const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('web_start_qr')
+function SearchLandingHero({ onNavigate }) {
+  const trackedDownloadUrl = buildTrackedApkDownloadUrl('search_hero_button')
+  const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('search_hero_qr')
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(trackedQrDownloadUrl)}`
 
   return (
     <>
-      <section className="panel" style={{ display: 'grid', gap: '0.9rem', marginTop: '1rem', padding: '1rem' }}>
-        <div className="hero-benefit-grid">
-          {[
-            ['Ohne Konto', 'Direkt suchen und Angebote merken.'],
-            ['Angebote merken', 'Interessante Treffer landen auf deiner Einkaufsliste.'],
-            ['Liste teilen', 'Teile deine Einkaufsliste mit einem Link.'],
-            ['Am Handy praktisch', 'Nutze deine Liste direkt beim Einkaufen.'],
-          ].map(([title, text]) => (
-            <div key={title} className="hero-benefit-card">
-              <strong>{title}</strong>
-              <span>{text}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
       <section
         className="panel"
         style={{
           alignItems: 'center',
           display: 'grid',
-          gap: '1rem',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
-          marginTop: '1rem',
-          padding: '1rem',
+          gap: 'clamp(1rem, 4vw, 1.75rem)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+          marginBottom: '1rem',
+          padding: 'clamp(1rem, 4vw, 1.6rem)',
         }}
       >
-        <div style={{ display: 'grid', gap: '0.55rem' }}>
+        <div style={{ display: 'grid', gap: '0.75rem', minWidth: 0 }}>
+          <p className="eyebrow" style={{ margin: 0 }}>
+            kaufklug.at
+          </p>
+          <h1
+            style={{
+              fontSize: 'clamp(2rem, 7vw, 3.6rem)',
+              lineHeight: 1.05,
+              margin: 0,
+              maxWidth: '42rem',
+            }}
+          >
+            Angebote finden. Merken. Einfacher einkaufen.
+          </h1>
+          <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
+            Suche online nach aktuellen Supermarkt-Angeboten, merke passende Treffer und nutze deine Einkaufsliste im
+            Browser oder am Handy.
+          </p>
+          <div className="hero-benefit-grid" style={{ marginTop: '0.15rem' }}>
+            {[
+              ['Ohne Konto', 'Direkt suchen.'],
+              ['Angebote merken', 'Treffer für später sichern.'],
+              ['Einkaufsliste nutzen', 'Geplanten Einkauf im Blick behalten.'],
+              ['Am Handy besonders praktisch', 'Im Geschäft schnell nachsehen.'],
+            ].map(([title, text]) => (
+              <div key={title} className="hero-benefit-card">
+                <strong>{title}</strong>
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gap: '0.7rem',
+            justifyItems: 'center',
+            minWidth: 0,
+            textAlign: 'center',
+          }}
+        >
           <p className="eyebrow" style={{ margin: 0 }}>
             Einkauf am Smartphone
           </p>
-          <h2 style={{ margin: 0 }}>Am Handy ist kaufklug am praktischsten.</h2>
-          <p className="subtitle" style={{ margin: 0, maxWidth: '42rem' }}>
-            Scanne den QR-Code und nutze deine Einkaufsliste direkt beim Einkaufen.
+          <h2 style={{ fontSize: 'clamp(1.35rem, 5vw, 2rem)', lineHeight: 1.1, margin: 0 }}>
+            Am Handy ist kaufklug am praktischsten.
+          </h2>
+          <p style={{ color: '#5c6658', lineHeight: 1.45, margin: 0, maxWidth: '20rem' }}>
+            Nutze kaufklug auch direkt im Browser. Für den Einkauf im Geschäft ist die App am bequemsten.
           </p>
-          <p style={{ color: '#5c6658', margin: 0 }}>
-            Die Websuche funktioniert auch hier. Für den Einkauf im Geschäft ist die App bequemer.
-          </p>
+          <div className="app-download-modal__qr" style={{ margin: 0, width: 'min(42vw, 220px)' }}>
+            <img
+              src={qrUrl}
+              alt="QR-Code zum Laden der kaufklug.at Android-Testversion"
+              width="220"
+              height="220"
+              loading="eager"
+            />
+          </div>
           <a
             href={trackedDownloadUrl}
             target="_blank"
@@ -105,16 +138,9 @@ function SearchStartExtras({ onNavigate }) {
           >
             Android-Testversion laden
           </a>
-        </div>
-
-        <div className="app-download-modal__qr" style={{ justifySelf: 'center', margin: 0, width: 'min(42vw, 220px)' }}>
-          <img
-            src={qrUrl}
-            alt="QR-Code zum Laden der kaufklug.at Android-Testversion"
-            width="220"
-            height="220"
-            loading="lazy"
-          />
+          <p style={{ color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4, margin: 0, maxWidth: '18rem' }}>
+            QR-Code scannen und kaufklug direkt am Smartphone nutzen.
+          </p>
         </div>
       </section>
 
@@ -126,7 +152,7 @@ function SearchStartExtras({ onNavigate }) {
           flexWrap: 'wrap',
           gap: '0.85rem',
           justifyContent: 'space-between',
-          marginTop: '1rem',
+          marginBottom: '1rem',
           padding: '1rem',
         }}
       >
@@ -141,6 +167,34 @@ function SearchStartExtras({ onNavigate }) {
         </button>
       </section>
     </>
+  )
+}
+
+function ScopedPageTuning() {
+  return (
+    <style>
+      {`
+        .search-first-page .keyword-search-hero__copy {
+          display: none;
+        }
+
+        .search-first-page .keyword-search-hero {
+          margin-top: 0;
+        }
+
+        .browse-page > .panel:first-of-type,
+        .browse-page > .panel:nth-of-type(2),
+        .browse-page > .faq-section {
+          display: none;
+        }
+
+        @media (max-width: 720px) {
+          .search-first-page .app-download-modal__qr {
+            width: min(36vw, 150px) !important;
+          }
+        }
+      `}
+    </style>
   )
 }
 
@@ -718,6 +772,7 @@ function App() {
 
   return (
     <main className="shell" style={{ paddingBottom: '5.5rem' }}>
+      <ScopedPageTuning />
       <nav className="page-nav" aria-label="Seiten">
         <div className="page-nav__main">
           <button
@@ -764,40 +819,42 @@ function App() {
           onAdoptItems={handleAdoptSharedShoppingList}
         />
       ) : activePage === 'search' ? (
-        <SearchPage
-          retailers={retailers}
-          categories={categories}
-          filtersLoading={filtersLoading}
-          ranking={ranking}
-          rankingLoading={rankingLoading}
-          draftRetailers={draftSelectedRetailers}
-          draftCategoryLabels={draftSelectedCategoryLabels}
-          appliedRetailers={appliedSelectedRetailers}
-          appliedCategoryLabels={appliedSelectedCategoryLabels}
-          error={error}
-          hasPendingChanges={hasPendingChanges}
-          shoppingListIds={shoppingListIds}
-          onToggleDraftRetailer={handleToggleDraftRetailer}
-          onSelectAllRetailers={handleSelectAllRetailers}
-          onClearRetailers={handleClearRetailers}
-          onToggleDraftMainCategory={handleToggleDraftMainCategory}
-          onToggleDraftSubcategory={handleToggleDraftSubcategory}
-          onClearDraftCategories={handleClearDraftCategories}
-          onApplySearch={handleApplySearch}
-          onResetAll={handleResetAll}
-          onAddToShoppingList={handleAddToShoppingList}
-          onNavigate={handleNavigate}
-        />
+        <div className="browse-page">
+          <SearchPage
+            retailers={retailers}
+            categories={categories}
+            filtersLoading={filtersLoading}
+            ranking={ranking}
+            rankingLoading={rankingLoading}
+            draftRetailers={draftSelectedRetailers}
+            draftCategoryLabels={draftSelectedCategoryLabels}
+            appliedRetailers={appliedSelectedRetailers}
+            appliedCategoryLabels={appliedSelectedCategoryLabels}
+            error={error}
+            hasPendingChanges={hasPendingChanges}
+            shoppingListIds={shoppingListIds}
+            onToggleDraftRetailer={handleToggleDraftRetailer}
+            onSelectAllRetailers={handleSelectAllRetailers}
+            onClearRetailers={handleClearRetailers}
+            onToggleDraftMainCategory={handleToggleDraftMainCategory}
+            onToggleDraftSubcategory={handleToggleDraftSubcategory}
+            onClearDraftCategories={handleClearDraftCategories}
+            onApplySearch={handleApplySearch}
+            onResetAll={handleResetAll}
+            onAddToShoppingList={handleAddToShoppingList}
+            onNavigate={handleNavigate}
+          />
+        </div>
       ) : activePage === 'product-search' ? (
-        <>
+        <div className="search-first-page">
+          <SearchLandingHero onNavigate={handleNavigate} />
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
             shoppingListIds={shoppingListIds}
             onAddToShoppingList={handleAddToShoppingList}
           />
-          <SearchStartExtras onNavigate={handleNavigate} />
-        </>
+        </div>
       ) : activePage === 'shopping-list' ? (
         <ShoppingListPage
           shoppingListItems={shoppingListItems}
