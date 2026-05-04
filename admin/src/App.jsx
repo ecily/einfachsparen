@@ -21,7 +21,7 @@ import { SharedShoppingListPage } from './components/shopping/SharedShoppingList
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
 import { QualityPage } from './components/admin/QualityPage'
-import { fetchFilterCategories, fetchFilterRetailers, fetchOfferRankingDirect } from './utils/apiBase'
+import { buildTrackedApkDownloadUrl, fetchFilterCategories, fetchFilterRetailers, fetchOfferRankingDirect } from './utils/apiBase'
 import { trackAnalyticsEvent } from './utils/analytics'
 import {
   buildMainSelectionToken,
@@ -35,10 +35,120 @@ import { areStringSetsEqual, flattenRankingOffers } from './utils/offers'
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 
+function getFriendlyErrorMessage(error, fallback) {
+  const message = String(error?.message || '')
+
+  if (/failed to fetch|network|request|response|api|backend|status code|timeout|load failed/i.test(message)) {
+    return 'Die Angebote konnten gerade nicht geladen werden. Bitte versuche es später erneut.'
+  }
+
+  return message || fallback
+}
+
+function SearchStartExtras({ onNavigate }) {
+  const trackedDownloadUrl = buildTrackedApkDownloadUrl('web_start_button')
+  const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('web_start_qr')
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(trackedQrDownloadUrl)}`
+
+  return (
+    <>
+      <section className="panel" style={{ display: 'grid', gap: '0.9rem', marginTop: '1rem', padding: '1rem' }}>
+        <div className="hero-benefit-grid">
+          {[
+            ['Ohne Konto', 'Direkt suchen und Angebote merken.'],
+            ['Angebote merken', 'Interessante Treffer landen auf deiner Einkaufsliste.'],
+            ['Liste teilen', 'Teile deine Einkaufsliste mit einem Link.'],
+            ['Am Handy praktisch', 'Nutze deine Liste direkt beim Einkaufen.'],
+          ].map(([title, text]) => (
+            <div key={title} className="hero-benefit-card">
+              <strong>{title}</strong>
+              <span>{text}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section
+        className="panel"
+        style={{
+          alignItems: 'center',
+          display: 'grid',
+          gap: '1rem',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
+          marginTop: '1rem',
+          padding: '1rem',
+        }}
+      >
+        <div style={{ display: 'grid', gap: '0.55rem' }}>
+          <p className="eyebrow" style={{ margin: 0 }}>
+            Einkauf am Smartphone
+          </p>
+          <h2 style={{ margin: 0 }}>Am Handy ist kaufklug am praktischsten.</h2>
+          <p className="subtitle" style={{ margin: 0, maxWidth: '42rem' }}>
+            Scanne den QR-Code und nutze deine Einkaufsliste direkt beim Einkaufen.
+          </p>
+          <p style={{ color: '#5c6658', margin: 0 }}>
+            Die Websuche funktioniert auch hier. Für den Einkauf im Geschäft ist die App bequemer.
+          </p>
+          <a
+            href={trackedDownloadUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="primary-action-button"
+            style={{
+              alignItems: 'center',
+              display: 'inline-flex',
+              justifyContent: 'center',
+              maxWidth: '17rem',
+              textDecoration: 'none',
+            }}
+          >
+            Android-Testversion laden
+          </a>
+        </div>
+
+        <div className="app-download-modal__qr" style={{ justifySelf: 'center', margin: 0, width: 'min(42vw, 220px)' }}>
+          <img
+            src={qrUrl}
+            alt="QR-Code zum Laden der kaufklug.at Android-Testversion"
+            width="220"
+            height="220"
+            loading="lazy"
+          />
+        </div>
+      </section>
+
+      <section
+        className="panel"
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.85rem',
+          justifyContent: 'space-between',
+          marginTop: '1rem',
+          padding: '1rem',
+        }}
+      >
+        <div>
+          <p className="eyebrow" style={{ margin: 0 }}>
+            Stöbern
+          </p>
+          <h2 style={{ margin: '0.15rem 0 0' }}>Du möchtest lieber nach Märkten stöbern?</h2>
+        </div>
+        <button type="button" className="primary-action-button" onClick={() => onNavigate('search')}>
+          Zu Stöbern
+        </button>
+      </section>
+    </>
+  )
+}
+
 function App() {
   const rawPathname = typeof window !== 'undefined' ? window.location.pathname : ''
   const pathname = rawPathname.toLowerCase()
-  const initialPage = getInitialPageFromPathname(pathname)
+  const routedInitialPage = getInitialPageFromPathname(pathname)
+  const initialPage = routedInitialPage === 'search' ? 'product-search' : routedInitialPage
   const initialSharedListId = getSharedListIdFromPathname(rawPathname)
 
   const [activePage, setActivePage] = useState(initialPage)
@@ -143,7 +253,7 @@ function App() {
         setRetailers([])
         setDraftSelectedRetailers([])
         setAppliedSelectedRetailers([])
-        setError(filterError.message || 'Filterdaten konnten nicht geladen werden.')
+        setError(getFriendlyErrorMessage(filterError, 'Filterdaten konnten nicht geladen werden.'))
       } finally {
         if (active) setFiltersLoading(false)
       }
@@ -184,7 +294,7 @@ function App() {
         setError('')
       } catch (loadError) {
         if (!active) return
-        setError(loadError.message || 'Dashboard-Daten konnten nicht geladen werden.')
+        setError(getFriendlyErrorMessage(loadError, 'Dashboard-Daten konnten nicht geladen werden.'))
       } finally {
         if (active) {
           setLoading(false)
@@ -225,7 +335,7 @@ function App() {
         setError('')
       } catch (loadError) {
         if (!active) return
-        setError(loadError.message || 'Quality-Snapshot konnte nicht geladen werden.')
+        setError(getFriendlyErrorMessage(loadError, 'Die Qualitätsansicht konnte nicht geladen werden.'))
       } finally {
         if (active) setQualityLoading(false)
       }
@@ -256,7 +366,7 @@ function App() {
       } catch (filterError) {
         if (!active) return
         setCategories([])
-        setError(filterError.message || 'Filterdaten konnten nicht geladen werden.')
+        setError(getFriendlyErrorMessage(filterError, 'Filterdaten konnten nicht geladen werden.'))
       } finally {
         if (active) setFiltersLoading(false)
       }
@@ -306,7 +416,12 @@ function App() {
       } catch (rankingError) {
         if (!active) return
         setRanking(null)
-        setError(rankingError.message || 'Ranking-Daten konnten nicht geladen werden.')
+        setError(
+          getFriendlyErrorMessage(
+            rankingError,
+            'Die Angebote konnten gerade nicht geladen werden. Bitte versuche es später erneut.'
+          )
+        )
       } finally {
         if (active) setRankingLoading(false)
       }
@@ -340,7 +455,7 @@ function App() {
       setAnalyticsSummary(analyticsResult)
       setError('')
     } catch (analyticsError) {
-      setError(analyticsError.message || 'Analytics-KPI konnten nicht geladen werden.')
+      setError(getFriendlyErrorMessage(analyticsError, 'Die Kennzahlen konnten nicht geladen werden.'))
     } finally {
       setAnalyticsLoading(false)
     }
@@ -520,7 +635,7 @@ function App() {
       setError('')
     } catch (feedbackError) {
       setFeedbackState('failed')
-      setError(feedbackError.message || 'Feedback konnte nicht gespeichert werden.')
+      setError(getFriendlyErrorMessage(feedbackError, 'Feedback konnte nicht gespeichert werden.'))
     }
   }
 
@@ -541,7 +656,7 @@ function App() {
       setQualitySnapshot(nextSnapshot)
       setError('')
     } catch (saveError) {
-      setError(saveError.message || 'Subkategorie-Korrektur konnte nicht gespeichert werden.')
+      setError(getFriendlyErrorMessage(saveError, 'Subkategorie-Korrektur konnte nicht gespeichert werden.'))
     } finally {
       setQualitySavingKey('')
     }
@@ -567,7 +682,7 @@ function App() {
       setQualitySnapshot(nextSnapshot)
       setError('')
     } catch (saveError) {
-      setError(saveError.message || 'Artikel-Korrektur konnte nicht gespeichert werden.')
+      setError(getFriendlyErrorMessage(saveError, 'Artikel-Korrektur konnte nicht gespeichert werden.'))
     } finally {
       setQualitySavingKey('')
     }
@@ -591,7 +706,7 @@ function App() {
       setQualitySnapshot(nextSnapshot)
       setError('')
     } catch (saveError) {
-      setError(saveError.message || 'Artikel konnte nicht gelöscht werden.')
+      setError(getFriendlyErrorMessage(saveError, 'Artikel konnte nicht gelöscht werden.'))
     } finally {
       setQualitySavingKey('')
     }
@@ -606,13 +721,6 @@ function App() {
       <nav className="page-nav" aria-label="Seiten">
         <div className="page-nav__main">
           <button
-            className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('search')}
-          >
-            Angebote
-          </button>
-
-          <button
             className={`page-nav__button${activePage === 'product-search' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('product-search')}
           >
@@ -625,6 +733,13 @@ function App() {
           >
             Einkaufsliste
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
+          </button>
+
+          <button
+            className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('search')}
+          >
+            Stöbern
           </button>
         </div>
 
@@ -674,18 +789,21 @@ function App() {
           onNavigate={handleNavigate}
         />
       ) : activePage === 'product-search' ? (
-        <KeywordSearchPage
-          searchRequest={keywordSearchRequest}
-          retailers={retailers}
-          shoppingListIds={shoppingListIds}
-          onAddToShoppingList={handleAddToShoppingList}
-        />
+        <>
+          <KeywordSearchPage
+            searchRequest={keywordSearchRequest}
+            retailers={retailers}
+            shoppingListIds={shoppingListIds}
+            onAddToShoppingList={handleAddToShoppingList}
+          />
+          <SearchStartExtras onNavigate={handleNavigate} />
+        </>
       ) : activePage === 'shopping-list' ? (
         <ShoppingListPage
           shoppingListItems={shoppingListItems}
           onRemoveItem={handleRemoveShoppingListItem}
           onClearList={handleClearShoppingList}
-          onGoToOffers={() => handleNavigate('search')}
+          onGoToOffers={() => handleNavigate('product-search')}
           onNavigate={handleNavigate}
         />
       ) : activePage === 'impressum' ? (

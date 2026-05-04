@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -21,10 +21,12 @@ const SORT_OPTIONS = {
 };
 
 const SORT_LABELS = {
-  [SORT_OPTIONS.best]: 'Beste Treffer',
+  [SORT_OPTIONS.best]: 'Empfohlen',
   [SORT_OPTIONS.retailer]: 'Märkte',
-  [SORT_OPTIONS.savings]: 'Größte Ersparnis',
+  [SORT_OPTIONS.savings]: 'Ersparnis',
 };
+
+const INITIAL_MESSAGE = 'Suche ein Produkt und merke passende Angebote für deinen Einkauf.';
 
 function normalizeKey(value) {
   return String(value || '')
@@ -204,12 +206,15 @@ export default function ProductSearchScreen({
   const [ranking, setRanking] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('Gib ein Produkt, eine Marke oder Kategorie ein.');
+  const [message, setMessage] = useState(INITIAL_MESSAGE);
   const [marketFilterEnabled, setMarketFilterEnabled] = useState(false);
   const [selectedRetailerKeys, setSelectedRetailerKeys] = useState([]);
   const [sortMode, setSortMode] = useState(SORT_OPTIONS.best);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
   const requestIdRef = useRef(0);
+  const resultsAnchorYRef = useRef(0);
+  const shouldScrollToResultsRef = useRef(false);
 
   const offers = useMemo(() => {
     try {
@@ -255,6 +260,26 @@ export default function ProductSearchScreen({
   }, [marketFilterEnabled, offers, selectedRetailerKeys, sortMode]);
 
   const needsMarketSelection = marketFilterEnabled && selectedRetailerKeys.length === 0;
+  const hasActiveMarketFilter = marketFilterEnabled && selectedRetailerKeys.length > 0;
+
+  useEffect(() => {
+    if (!shouldScrollToResultsRef.current || (!loading && !submittedQuery && !error)) {
+      return;
+    }
+
+    const scrollHandle = setTimeout(() => {
+      listRef.current?.scrollToOffset({
+        offset: Math.max(resultsAnchorYRef.current - 8, 0),
+        animated: true,
+      });
+
+      if (!loading) {
+        shouldScrollToResultsRef.current = false;
+      }
+    }, 140);
+
+    return () => clearTimeout(scrollHandle);
+  }, [error, loading, submittedQuery]);
 
   async function runSearch() {
     if (loading) {
@@ -271,18 +296,19 @@ export default function ProductSearchScreen({
 
     if (trimmedQuery.length === 0) {
       setRanking(null);
-      setMessage('Gib ein Produkt, eine Marke oder Kategorie ein.');
+      setMessage(INITIAL_MESSAGE);
       return;
     }
 
     if (trimmedQuery.length < 2) {
       setRanking(null);
-      setMessage('Bitte mindestens 2 Zeichen eingeben.');
+      setMessage('Bitte gib mindestens zwei Zeichen ein.');
       return;
     }
 
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
+    shouldScrollToResultsRef.current = true;
     setLoading(true);
     setMessage('');
 
@@ -305,7 +331,7 @@ export default function ProductSearchScreen({
       }
 
       setRanking(null);
-      setError('Die Suche konnte nicht geladen werden.');
+      setError('Die Angebote konnten gerade nicht geladen werden.');
     } finally {
       if (requestIdRef.current === requestId) {
         setLoading(false);
@@ -320,8 +346,13 @@ export default function ProductSearchScreen({
     if (value.trim().length === 0 && !loading) {
       setRanking(null);
       setSubmittedQuery('');
-      setMessage('Gib ein Produkt, eine Marke oder Kategorie ein.');
+      setMessage(INITIAL_MESSAGE);
     }
+  }
+
+  function clearQuery() {
+    handleQueryChange('');
+    inputRef.current?.focus();
   }
 
   function toggleRetailer(retailerKey) {
@@ -332,68 +363,88 @@ export default function ProductSearchScreen({
     );
   }
 
+  function resetMarketSelection() {
+    setSelectedRetailerKeys([]);
+  }
+
+  function focusSearchInput() {
+    inputRef.current?.focus();
+  }
+
   const header = (
     <View style={styles.header}>
-      <Text style={styles.title}>Produktsuche</Text>
-      <Text style={styles.subtitle}>Suche nach Produkten, Marken oder Kategorien - über alle Händler.</Text>
+      <View style={styles.hero}>
+        <Text style={styles.title}>Was möchtest du günstiger kaufen?</Text>
+        <Text style={styles.subtitle}>Suche aktuelle Angebote und merke sie dir für deinen Einkauf.</Text>
+      </View>
 
       <View style={styles.searchBox}>
-        <TextInput
-          ref={inputRef}
-          value={query}
-          onChangeText={handleQueryChange}
-          placeholder="z. B. Butter, Kaffee, Waschmittel"
-          placeholderTextColor="#7b8476"
-          returnKeyType="search"
-          autoCorrect={false}
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-          onSubmitEditing={runSearch}
-          blurOnSubmit
-          style={styles.input}
-        />
+        <View style={styles.inputWrap}>
+          <TextInput
+            ref={inputRef}
+            value={query}
+            onChangeText={handleQueryChange}
+            placeholder="z. B. Milch, Kaffee, Butter ..."
+            placeholderTextColor="#7b8476"
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="never"
+            onSubmitEditing={runSearch}
+            blurOnSubmit
+            style={styles.input}
+          />
+          {query.length > 0 ? (
+            <Pressable
+              style={styles.clearButton}
+              onPress={clearQuery}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Suchtext löschen"
+            >
+              <Text style={styles.clearButtonLabel}>×</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <Pressable
           style={[styles.searchButton, loading ? styles.searchButtonDisabled : null]}
           onPress={runSearch}
           disabled={loading}
         >
-          <Text style={styles.searchButtonLabel}>Suchen</Text>
+          <Text style={styles.searchButtonLabel}>Angebote suchen</Text>
         </Pressable>
       </View>
 
       <View style={styles.filterPanel}>
+        <View style={styles.filterIntro}>
+          <Text style={styles.filterTitle}>Optional eingrenzen</Text>
+          <Text style={styles.filterText}>
+            Du kannst direkt suchen oder vorher bestimmte Märkte auswählen. Produktbereiche findest du unter Stöbern.
+          </Text>
+        </View>
         <Pressable
           style={[styles.filterToggle, marketFilterEnabled ? styles.filterToggleActive : null]}
           onPress={() => setMarketFilterEnabled((current) => !current)}
         >
           <Text style={[styles.filterToggleLabel, marketFilterEnabled ? styles.filterToggleLabelActive : null]}>
-            Nur bestimmte Märkte
+            Märkte wählen
           </Text>
         </Pressable>
 
-        <View style={styles.sortBlock}>
-          <Text style={styles.filterLabel}>Sortieren</Text>
-          <View style={styles.chipWrap}>
-            {Object.values(SORT_OPTIONS).map((option) => {
-              const selected = sortMode === option;
-
-              return (
-                <Pressable
-                  key={option}
-                  style={[styles.chip, selected ? styles.chipActive : null]}
-                  onPress={() => setSortMode(option)}
-                >
-                  <Text style={[styles.chipLabel, selected ? styles.chipLabelActive : null]}>
-                    {SORT_LABELS[option]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
         {marketFilterEnabled ? (
           <View style={styles.marketBlock}>
+            {selectedRetailerKeys.length > 0 ? (
+              <View style={styles.marketSummaryRow}>
+                <Text style={styles.marketSummaryText}>
+                  {selectedRetailerKeys.length === 1
+                    ? 'Ein Markt ausgewählt'
+                    : `${selectedRetailerKeys.length} Märkte ausgewählt`}
+                </Text>
+                <Pressable style={styles.textAction} onPress={resetMarketSelection}>
+                  <Text style={styles.textActionLabel}>Auswahl zurücksetzen</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={styles.chipWrap}>
               {availableRetailers.map((retailer) => {
                 const selected = selectedRetailerKeys.includes(retailer.key);
@@ -418,32 +469,71 @@ export default function ProductSearchScreen({
             ) : null}
           </View>
         ) : null}
+
+        {submittedQuery ? (
+          <View style={styles.sortBlock}>
+            <Text style={styles.filterLabel}>Sortieren</Text>
+            <View style={styles.chipWrap}>
+              {Object.values(SORT_OPTIONS).map((option) => {
+                const selected = sortMode === option;
+
+                return (
+                  <Pressable
+                    key={option}
+                    style={[styles.chip, selected ? styles.chipActive : null]}
+                    onPress={() => setSortMode(option)}
+                  >
+                    <Text style={[styles.chipLabel, selected ? styles.chipLabelActive : null]}>
+                      {SORT_LABELS[option]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
       </View>
 
-      {loading ? (
-        <View style={styles.statusBox}>
-          <ActivityIndicator color="#31582c" />
-          <Text style={styles.statusText}>Suche aktuelle Angebote ...</Text>
-        </View>
-      ) : null}
+      <View
+        collapsable={false}
+        onLayout={(event) => {
+          resultsAnchorYRef.current = event.nativeEvent.layout.y;
+        }}
+        style={styles.resultsAnchor}
+      >
+        {loading ? (
+          <View style={styles.statusBox}>
+            <ActivityIndicator color="#31582c" />
+            <Text style={styles.statusText}>Angebote werden gesucht ...</Text>
+          </View>
+        ) : null}
 
-      {!loading && error ? <Text style={styles.errorBox}>{error}</Text> : null}
+        {!loading && error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorTitle}>{error}</Text>
+            <Text style={styles.errorText}>Bitte prüfe deine Verbindung und versuche es erneut.</Text>
+            <Pressable style={styles.secondaryButton} onPress={runSearch}>
+              <Text style={styles.secondaryButtonLabel}>Erneut versuchen</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-      {!loading && !error && submittedQuery ? (
-        <View style={styles.resultsIntro}>
-          <Text style={styles.resultsTitle}>Suchergebnisse für „{submittedQuery}“</Text>
-          <Text style={styles.resultsCount}>
-            {visibleOffers.length} aktuelle Angebote gefunden
-            {marketFilterEnabled && selectedRetailerKeys.length > 0 ? ' · gefiltert nach ausgewählten Märkten' : ''}
-          </Text>
-        </View>
-      ) : null}
+        {!loading && !error && submittedQuery ? (
+          <View style={styles.resultsIntro}>
+            <Text style={styles.resultsTitle}>Angebote für „{submittedQuery}“</Text>
+            <Text style={styles.resultsCount}>
+              {visibleOffers.length} aktuelle Angebote gefunden
+              {hasActiveMarketFilter ? ' · gefiltert nach ausgewählten Märkten' : ''}
+            </Text>
+          </View>
+        ) : null}
 
-      {!loading && !error && message ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>{message}</Text>
-        </View>
-      ) : null}
+        {!loading && !error && message ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>{message}</Text>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 
@@ -453,6 +543,7 @@ export default function ProductSearchScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FlatList
+        ref={listRef}
         data={loading ? [] : visibleOffers}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item, index }) => (
@@ -469,17 +560,35 @@ export default function ProductSearchScreen({
           !loading && !error && submittedQuery && visibleOffers.length === 0 ? (
             <View style={styles.emptyState}>
               {needsMarketSelection ? (
-                <Text style={styles.emptyText}>
-                  Wähle mindestens einen Markt aus oder deaktiviere den Marktfilter.
-                </Text>
-              ) : (
                 <>
-                  <Text style={styles.emptyTitle}>Keine Treffer für „{submittedQuery}“.</Text>
+                  <Text style={styles.emptyTitle}>Kein Markt ausgewählt</Text>
                   <Text style={styles.emptyText}>
-                    Tipp: Suche allgemeiner, z. B. „Kaffee“ statt „Jacobs Crema“.
+                    Wähle mindestens einen Markt aus oder deaktiviere den Marktfilter.
                   </Text>
                 </>
+              ) : (
+                <>
+                  <Text style={styles.emptyTitle}>Kein passendes Angebot gefunden</Text>
+                  <Text style={styles.emptyText}>
+                    Für deine Suche haben wir gerade kein passendes Angebot gefunden.
+                  </Text>
+                  <View style={styles.hintList}>
+                    <Text style={styles.hintItem}>Versuche einen allgemeineren Begriff.</Text>
+                    <Text style={styles.hintItem}>Prüfe die Schreibweise.</Text>
+                    <Text style={styles.hintItem}>Entferne ausgewählte Märkte.</Text>
+                  </View>
+                </>
               )}
+              <View style={styles.emptyActions}>
+                <Pressable style={styles.secondaryButton} onPress={focusSearchInput}>
+                  <Text style={styles.secondaryButtonLabel}>Suche ändern</Text>
+                </Pressable>
+                {marketFilterEnabled ? (
+                  <Pressable style={styles.textAction} onPress={resetMarketSelection}>
+                    <Text style={styles.textActionLabel}>Märkte zurücksetzen</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ) : null
         }
@@ -496,11 +605,16 @@ export default function ProductSearchScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 18, gap: 14, paddingBottom: 32 },
-  header: { gap: 14 },
+  content: { padding: 18, gap: 12, paddingBottom: 32 },
+  header: { gap: 12 },
+  hero: {
+    gap: 8,
+    paddingTop: 4,
+  },
   title: {
     color: '#17251a',
-    fontSize: 30,
+    fontSize: 29,
+    lineHeight: 35,
     fontWeight: '900',
   },
   subtitle: {
@@ -510,24 +624,44 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     backgroundColor: '#fffaf1',
-    borderRadius: 18,
-    padding: 12,
-    gap: 10,
+    borderRadius: 16,
+    padding: 10,
+    gap: 9,
     borderWidth: 1,
     borderColor: 'rgba(49, 88, 44, 0.14)',
   },
+  inputWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
   input: {
-    minHeight: 52,
+    minHeight: 56,
     borderRadius: 14,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: 'rgba(49, 88, 44, 0.18)',
-    paddingHorizontal: 14,
+    paddingLeft: 14,
+    paddingRight: 52,
     color: '#17251a',
     fontSize: 16,
   },
+  clearButton: {
+    position: 'absolute',
+    right: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearButtonLabel: {
+    color: '#4e5b4b',
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '700',
+  },
   searchButton: {
-    minHeight: 52,
+    minHeight: 56,
     borderRadius: 14,
     backgroundColor: '#12361e',
     alignItems: 'center',
@@ -545,19 +679,31 @@ const styles = StyleSheet.create({
   },
   filterPanel: {
     backgroundColor: '#fffaf1',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 12,
     gap: 12,
     borderWidth: 1,
     borderColor: 'rgba(49, 88, 44, 0.14)',
   },
+  filterIntro: { gap: 3 },
+  filterTitle: {
+    color: '#17251a',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '900',
+  },
+  filterText: {
+    color: '#59635a',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   filterToggle: {
     alignSelf: 'flex-start',
-    minHeight: 42,
-    borderRadius: 999,
+    minHeight: 46,
+    borderRadius: 14,
     backgroundColor: '#efe9dc',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     justifyContent: 'center',
   },
   filterToggleActive: { backgroundColor: '#31582c' },
@@ -571,9 +717,8 @@ const styles = StyleSheet.create({
   marketBlock: { gap: 8 },
   filterLabel: {
     color: '#4e5b4b',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900',
-    textTransform: 'uppercase',
   },
   chipWrap: {
     flexDirection: 'row',
@@ -581,11 +726,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: 999,
     backgroundColor: '#efe9dc',
     paddingHorizontal: 13,
-    paddingVertical: 9,
+    paddingVertical: 10,
     justifyContent: 'center',
   },
   chipActive: { backgroundColor: '#31582c' },
@@ -604,6 +749,29 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '800',
   },
+  marketSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  marketSummaryText: {
+    color: '#4e5b4b',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  textAction: {
+    alignSelf: 'flex-start',
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  textActionLabel: {
+    color: '#31582c',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  resultsAnchor: { gap: 12 },
   statusBox: {
     backgroundColor: '#fffaf1',
     borderRadius: 16,
@@ -654,9 +822,47 @@ const styles = StyleSheet.create({
   },
   errorBox: {
     backgroundColor: '#fce8e4',
-    color: '#8e2c1f',
     borderRadius: 14,
-    padding: 14,
+    padding: 16,
+    gap: 10,
+  },
+  errorTitle: {
+    color: '#8e2c1f',
+    fontSize: 16,
     fontWeight: '800',
+  },
+  errorText: {
+    color: '#713125',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  hintList: {
+    gap: 4,
+  },
+  hintItem: {
+    color: '#4e5b4b',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  emptyActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+  },
+  secondaryButton: {
+    alignSelf: 'flex-start',
+    minHeight: 42,
+    borderRadius: 13,
+    backgroundColor: '#31582c',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  secondaryButtonLabel: {
+    color: '#f8f5ed',
+    fontSize: 13,
+    fontWeight: '900',
   },
 });

@@ -8,9 +8,9 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#023b25"
     },
     "ios": {
       "supportsTablet": true
@@ -22,7 +22,10 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.kaufgutat",
-      "versionCode": 2026043001
+      "versionCode": 2026043001,
+      "permissions": [
+        "INTERNET"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
