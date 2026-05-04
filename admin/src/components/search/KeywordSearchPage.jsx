@@ -333,6 +333,21 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     }
   }
 
+  function handleClearSearch() {
+    setQueryInput('')
+  }
+
+  function handleRetrySearch() {
+    if (!submittedQuery) return
+    setSubmittedQuery('')
+    window.setTimeout(() => setSubmittedQuery(submittedQuery), 0)
+  }
+
+  function handleResetMarkets() {
+    setSelectedRetailerKeys([])
+    setMarketFilterEnabled(false)
+  }
+
   function handleToggleRetailer(retailerKey) {
     setSelectedRetailerKeys((current) =>
       current.includes(retailerKey)
@@ -346,10 +361,8 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
       <section className="panel keyword-search-hero">
         <div className="keyword-search-hero__copy">
           <p className="eyebrow">Produktsuche</p>
-          <h1>Produktsuche</h1>
-          <p className="subtitle">
-            Suche nach Produkten, Marken oder Kategorien – unabhängig von deiner aktuellen Händlerauswahl.
-          </p>
+          <h1>Was möchtest du günstiger kaufen?</h1>
+          <p className="subtitle">Suche aktuelle Angebote und merke sie dir für deinen Einkauf.</p>
         </div>
 
         <form className="keyword-search-form" onSubmit={handleSubmit}>
@@ -357,35 +370,74 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
             Suchbegriff
           </label>
           <div className="keyword-search-form__row">
-            <input
-              id="keyword-search-input"
-              type="search"
-              value={queryInput}
-              placeholder="z. B. Butter, Kaffee, Waschmittel"
-              onChange={(event) => setQueryInput(event.target.value)}
-            />
+            <div
+              className="keyword-search-form__input-wrap"
+              style={{ position: 'relative', flex: '1 1 18rem', minWidth: 0 }}
+            >
+              <input
+                id="keyword-search-input"
+                type="search"
+                value={queryInput}
+                placeholder="z. B. Milch, Kaffee, Butter ..."
+                onChange={(event) => setQueryInput(event.target.value)}
+                style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
+              />
+              {queryInput ? (
+                <button
+                  type="button"
+                  className="keyword-search-form__clear"
+                  aria-label="Suchbegriff löschen"
+                  onClick={handleClearSearch}
+                  style={{
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 0,
+                    color: 'currentColor',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    fontSize: '1.4rem',
+                    height: '2.5rem',
+                    justifyContent: 'center',
+                    lineHeight: 1,
+                    opacity: 0.72,
+                    padding: 0,
+                    position: 'absolute',
+                    right: '0.2rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '2.5rem',
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
             <button type="submit" className="primary-action-button">
-              Suchen
+              Angebote suchen
             </button>
           </div>
         </form>
 
         <div className="keyword-search-controls">
-          <label className="keyword-search-toggle">
-            <input
-              type="checkbox"
-              checked={marketFilterEnabled}
-              onChange={(event) => setMarketFilterEnabled(event.target.checked)}
-            />
-            <span>Nur bestimmte Märkte</span>
-          </label>
+          <div className="keyword-search-filter-intro">
+            <p className="eyebrow">Optional eingrenzen</p>
+            <p>Du kannst direkt suchen oder vorher bestimmte Märkte auswählen.</p>
+            <label className="keyword-search-toggle">
+              <input
+                type="checkbox"
+                checked={marketFilterEnabled}
+                onChange={(event) => setMarketFilterEnabled(event.target.checked)}
+              />
+              <span>Märkte wählen</span>
+            </label>
+          </div>
 
           <label className="keyword-search-sort">
-            <span>Sortieren nach</span>
+            <span>Sortieren</span>
             <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
-              <option value={SORT_OPTIONS.best}>Beste Treffer</option>
+              <option value={SORT_OPTIONS.best}>Empfohlen</option>
               <option value={SORT_OPTIONS.retailer}>Märkte</option>
-              <option value={SORT_OPTIONS.savings}>Größte Ersparnis</option>
+              <option value={SORT_OPTIONS.savings}>Ersparnis</option>
             </select>
           </label>
         </div>
@@ -407,6 +459,11 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
                 </button>
               )
             })}
+            {selectedRetailerKeys.length > 0 ? (
+              <button type="button" className="chip" onClick={handleResetMarkets}>
+                Märkte zurücksetzen
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -414,20 +471,25 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
       <section className="panel keyword-search-results">
         {!submittedQuery && !hint ? <p className="status">Gib ein Produkt, eine Marke oder Kategorie ein.</p> : null}
         {hint ? <p className="status">{hint}</p> : null}
-        {loading ? <p className="status">Suche aktuelle Angebote …</p> : null}
-        {error ? <p className="status status--error">{error}</p> : null}
+        {loading ? <p className="status">Angebote werden gesucht ...</p> : null}
+        {error ? (
+          <div className="empty-state">
+            <h3>Die Angebote konnten gerade nicht geladen werden.</h3>
+            <p>Bitte prüfe deine Verbindung und versuche es erneut.</p>
+            <button type="button" className="primary-action-button" onClick={handleRetrySearch}>
+              Erneut versuchen
+            </button>
+          </div>
+        ) : null}
         {submittedQuery && needsMarketSelection ? (
-          <p className="status">Wähle mindestens einen Markt aus oder deaktiviere den Marktfilter.</p>
+          <p className="status">Wähle mindestens einen Markt aus oder suche ohne Marktfilter.</p>
         ) : null}
 
         {!loading && !error && submittedQuery ? (
           <div className="results-section">
             <div className="panel__header">
-              <h2>Suchergebnisse für „{submittedQuery}“</h2>
-              <p>
-                {visibleOffers.length} aktuelle Angebote gefunden
-                {marketFilterEnabled && selectedRetailerKeys.length > 0 ? ' - gefiltert nach ausgewählten Märkten' : ''}
-              </p>
+              <h2>Angebote für „{submittedQuery}“</h2>
+              <p>{visibleOffers.length} Angebote gefunden</p>
             </div>
 
             {visibleOffers.length > 0 ? (
@@ -444,8 +506,18 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
               </div>
             ) : needsMarketSelection ? null : (
               <div className="empty-state">
-                <h3>Keine aktuellen Angebote gefunden.</h3>
-                <p>Tipp: Suche allgemeiner, z. B. „Kaffee“ statt „Jacobs Crema“.</p>
+                <h3>Für deine Suche haben wir gerade kein passendes Angebot gefunden.</h3>
+                <p>Versuche einen allgemeineren Begriff.</p>
+                <p>Prüfe die Schreibweise.</p>
+                <p>Entferne ausgewählte Märkte.</p>
+                <button type="button" className="primary-action-button" onClick={() => setQueryInput(submittedQuery)}>
+                  Suche ändern
+                </button>
+                {marketFilterEnabled && selectedRetailerKeys.length > 0 ? (
+                  <button type="button" className="secondary-action-button" onClick={handleResetMarkets}>
+                    Märkte zurücksetzen
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
