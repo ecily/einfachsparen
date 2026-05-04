@@ -1,10 +1,37 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { computeOfferSavings } = require('../src/services/offers/promotionMath');
+const { computeOfferSavings, extractPromotionRequirement } = require('../src/services/offers/promotionMath');
 const { enrichOfferForStorage, inferRetailerFormatMetadata } = require('../src/services/crawl/offerAuditEnrichment');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 
 const VALIDITY_INCOMPLETE_REASON = 'Gueltigkeitszeitraum unvollstaendig';
+
+function activeComparableOffer(overrides = {}) {
+  return {
+    sourceId: '000000000000000000000101',
+    retailerKey: 'hofer',
+    retailerName: 'Hofer',
+    region: 'Grossraum Graz',
+    title: 'Testprodukt',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Test',
+    categoryKey: 'test',
+    comparisonGroup: 'testprodukt::basis',
+    sourceUrl: 'https://example.test/offer',
+    validFrom: new Date(Date.now() - 60 * 60 * 1000),
+    validTo: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    status: 'active',
+    isActiveNow: true,
+    priceCurrent: { amount: 1.99, currency: 'EUR', originalText: '1.99 EUR' },
+    priceReference: { amount: 2.49, currency: 'EUR', originalText: '2.49 EUR' },
+    quantityText: '250 g',
+    totalComparableAmount: 0.25,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 7.96, unit: 'kg', comparable: true, confidence: 0.9 },
+    quality: { completenessScore: 1, parsingConfidence: 0.9, comparisonSafe: true, issues: [] },
+    ...overrides,
+  };
+}
 
 test('marks offers without reference price as action price only', () => {
   const offer = enrichOfferForStorage({
@@ -71,6 +98,107 @@ test('does not turn estimated reference prices into secure savings', () => {
 
   assert.equal(savings.savingsAmount, null);
   assert.equal(savings.savingsPercent, null);
+});
+
+test('clears comparisonSafe and normalized comparability when comparableUnit is missing', () => {
+  const offer = enrichOfferForStorage(activeComparableOffer({
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: 7.96, unit: 'kg', comparable: true, confidence: 0.9 },
+  }));
+
+  assert.equal(offer.quality.comparisonSafe, false);
+  assert.equal(offer.normalizedUnitPrice.comparable, false);
+  assert.ok(offer.reviewReasons.includes('Vergleichseinheit unklar'));
+});
+
+test('keeps clear kg/g and l/ml offers comparable', () => {
+  const butter = enrichOfferForStorage(activeComparableOffer({
+    title: 'Butter 250 g',
+    quantityText: '250 g',
+    totalComparableAmount: 0.25,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 7.96, unit: 'kg', comparable: true, confidence: 0.9 },
+  }));
+  const milk = enrichOfferForStorage(activeComparableOffer({
+    title: 'Milch 500 ml',
+    quantityText: '500 ml',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 1.98, unit: 'l', comparable: true, confidence: 0.9 },
+  }));
+
+  assert.equal(butter.quality.comparisonSafe, true);
+  assert.equal(butter.normalizedUnitPrice.comparable, true);
+  assert.equal(milk.quality.comparisonSafe, true);
+  assert.equal(milk.normalizedUnitPrice.comparable, true);
+});
+
+test('keeps plausible piece, tab and capsule offers comparable only with a count', () => {
+  const tabs = enrichOfferForStorage(activeComparableOffer({
+    title: 'Waschmittel 20 Tabs',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Waschmittel & Reiniger',
+    quantityText: '20 Tabs',
+    totalComparableAmount: 20,
+    comparableUnit: 'Stk',
+    normalizedUnitPrice: { amount: 0.25, unit: 'Stk', comparable: true, confidence: 0.9 },
+  }));
+  const unclearPieces = enrichOfferForStorage(activeComparableOffer({
+    title: 'Waschmittel Tabs',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Waschmittel & Reiniger',
+    quantityText: 'Tabs',
+    totalComparableAmount: null,
+    comparableUnit: 'Stk',
+    normalizedUnitPrice: { amount: 4.99, unit: 'Stk', comparable: true, confidence: 0.9 },
+  }));
+
+  assert.equal(tabs.quality.comparisonSafe, true);
+  assert.equal(tabs.normalizedUnitPrice.comparable, true);
+  assert.equal(unclearPieces.quality.comparisonSafe, false);
+  assert.equal(unclearPieces.normalizedUnitPrice.comparable, false);
+  assert.ok(unclearPieces.reviewReasons.includes('Menge unvollstaendig'));
+});
+
+test('recognizes multi-buy and threshold promotion requirements conservatively', () => {
+  assert.deepEqual(extractPromotionRequirement({ title: 'Kaffee 2+1 gratis' }), {
+    requiredQuantity: 3,
+    payableQuantity: 2,
+    mechanic: 'x-plus-y',
+  });
+  assert.deepEqual(extractPromotionRequirement({ title: 'Bier 4 fuer 2' }), {
+    requiredQuantity: 4,
+    payableQuantity: 2,
+    mechanic: 'x-for-y',
+  });
+  assert.deepEqual(extractPromotionRequirement({ conditionsText: 'ab 2 Stueck' }), {
+    requiredQuantity: 2,
+    payableQuantity: null,
+    mechanic: 'threshold',
+  });
+});
+
+test('sets condition fields for multi-buy, minimum quantity and app or card prices', () => {
+  const multiBuy = enrichOfferForStorage(activeComparableOffer({
+    title: 'Kaffee 3+1 gratis',
+    conditionsText: '3+1 gratis',
+  }));
+  const threshold = enrichOfferForStorage(activeComparableOffer({
+    title: 'Bier Aktion',
+    conditionsText: 'ab 2 Stueck',
+  }));
+  const appPrice = enrichOfferForStorage(activeComparableOffer({
+    title: 'Joghurt App-Preis mit Kundenkarte',
+  }));
+
+  assert.equal(multiBuy.isMultiBuy, true);
+  assert.equal(multiBuy.minimumPurchaseQty, 4);
+  assert.equal(multiBuy.effectiveDiscountType, 'multi-buy');
+  assert.equal(threshold.minimumPurchaseQty, 2);
+  assert.equal(threshold.effectiveDiscountType, 'threshold');
+  assert.equal(appPrice.customerProgramRequired, true);
+  assert.equal(appPrice.hasConditions, true);
+  assert.equal(appPrice.effectiveDiscountType, 'card-required');
 });
 
 test('keeps SPAR retailer formats on offer documents without changing retailer identity', () => {

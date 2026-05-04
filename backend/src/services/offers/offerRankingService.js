@@ -3,6 +3,7 @@ const Category = require('../../models/Category');
 const Retailer = require('../../models/Retailer');
 const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
 const { computeOfferSavings } = require('./promotionMath');
+const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
 
 const OFFER_RANKING_FIELDS = [
   '_id',
@@ -521,8 +522,10 @@ function applyQueryMatch(offers, query) {
         return right.score - left.score;
       }
 
-      if (left.offer.normalizedUnitPrice.amount !== right.offer.normalizedUnitPrice.amount) {
-        return left.offer.normalizedUnitPrice.amount - right.offer.normalizedUnitPrice.amount;
+      const priceComparison = compareSafeUnitPrice(left.offer, right.offer);
+
+      if (priceComparison !== 0) {
+        return priceComparison;
       }
 
       return String(left.offer.title).localeCompare(String(right.offer.title), 'de');
@@ -562,6 +565,8 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
     'quality.comparisonSafe': true,
     comparisonGroup: { $ne: '' },
     'normalizedUnitPrice.amount': { $ne: null },
+    'normalizedUnitPrice.comparable': true,
+    comparableUnit: { $ne: '' },
     ...buildCurrentAvailabilityMatch(),
   };
 
@@ -590,29 +595,30 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
 }
 
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
+  const safelyComparable = isOfferSafelyComparable(offer);
   const fallbackSavings =
-    offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
+    !safelyComparable || (offer?.savingsAmount !== undefined && offer?.savingsAmount !== null)
       ? null
       : computeOfferSavings(offer);
   const savings = {
     savingsAmount:
-      offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
+      safelyComparable && offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
         ? offer.savingsAmount
-        : fallbackSavings?.savingsAmount,
+        : safelyComparable ? fallbackSavings?.savingsAmount : null,
     savingsPercent:
-      offer?.savingsPercent !== undefined && offer?.savingsPercent !== null
+      safelyComparable && offer?.savingsPercent !== undefined && offer?.savingsPercent !== null
         ? offer.savingsPercent
-        : fallbackSavings?.savingsPercent,
+        : safelyComparable ? fallbackSavings?.savingsPercent : null,
     requiredQuantity:
       offer?.minimumPurchaseQuantity !== undefined && offer?.minimumPurchaseQuantity !== null
         ? offer.minimumPurchaseQuantity
         : fallbackSavings?.requiredQuantity,
   };
   const normalizedAmount = Number(offer?.normalizedUnitPrice?.amount ?? 0);
-  const priceGapPercent = bestUnitPrice
+  const priceGapPercent = safelyComparable && bestUnitPrice
     ? Number((((normalizedAmount - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
     : 0;
-  const spread = worstUnitPrice && bestUnitPrice && worstUnitPrice !== bestUnitPrice
+  const spread = safelyComparable && worstUnitPrice && bestUnitPrice && worstUnitPrice !== bestUnitPrice
     ? (normalizedAmount - bestUnitPrice) / (worstUnitPrice - bestUnitPrice)
     : 0;
 
@@ -686,15 +692,45 @@ function hasReliableValidTo(offer) {
   return !Number.isNaN(validTo.getTime());
 }
 
+function compareSafeUnitPrice(left, right) {
+  const leftSafe = isOfferSafelyComparable(left);
+  const rightSafe = isOfferSafelyComparable(right);
+
+  if (leftSafe !== rightSafe) {
+    return leftSafe ? -1 : 1;
+  }
+
+  if (!leftSafe || !rightSafe) {
+    return 0;
+  }
+
+  const leftUnit = normalizeComparableUnit(left?.comparableUnit || left?.normalizedUnitPrice?.unit);
+  const rightUnit = normalizeComparableUnit(right?.comparableUnit || right?.normalizedUnitPrice?.unit);
+
+  if (leftUnit !== rightUnit) {
+    return 0;
+  }
+
+  const leftAmount = Number(left?.normalizedUnitPrice?.amount);
+  const rightAmount = Number(right?.normalizedUnitPrice?.amount);
+
+  if (Number.isFinite(leftAmount) && Number.isFinite(rightAmount) && leftAmount !== rightAmount) {
+    return leftAmount - rightAmount;
+  }
+
+  return 0;
+}
+
 function buildConsumerScore(offer) {
   let score = Number(offer?.sortScoreDefault || 0);
+  const safelyComparable = isOfferSafelyComparable(offer);
 
   if (offer?.status === 'active' && offer?.isActiveNow) score += 1000;
-  if (offer?.quality?.comparisonSafe && offer?.comparisonGroup) score += 500;
+  if (safelyComparable && offer?.comparisonGroup) score += 500;
   if (hasReliableValidTo(offer)) score += 25;
 
   const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
-  if (Number.isFinite(unitAmount) && unitAmount > 0) {
+  if (safelyComparable && Number.isFinite(unitAmount) && unitAmount > 0) {
     score += Math.max(0, 200 - Math.min(200, Math.round(unitAmount * 10)));
   }
 
@@ -714,7 +750,9 @@ function buildRetailerDistribution(offers) {
         retailerKey: offer.retailerKey,
         retailerName: offer.retailerName,
         offerCount: 0,
-        bestUnitPrice: Number(offer?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER),
+        bestUnitPrice: isOfferSafelyComparable(offer)
+          ? Number(offer?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+          : Number.MAX_SAFE_INTEGER,
       });
     }
 
@@ -722,7 +760,9 @@ function buildRetailerDistribution(offers) {
     current.offerCount += 1;
     current.bestUnitPrice = Math.min(
       current.bestUnitPrice,
-      Number(offer?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+      isOfferSafelyComparable(offer)
+        ? Number(offer?.normalizedUnitPrice?.amount ?? Number.MAX_SAFE_INTEGER)
+        : Number.MAX_SAFE_INTEGER
     );
   }
 
@@ -1034,8 +1074,10 @@ function compareOffersByRanking(left, right, { query = '' } = {}) {
     return rightConsumerScore - leftConsumerScore;
   }
 
-  if (left.normalizedUnitPrice.amount !== right.normalizedUnitPrice.amount) {
-    return left.normalizedUnitPrice.amount - right.normalizedUnitPrice.amount;
+  const priceComparison = compareSafeUnitPrice(left, right);
+
+  if (priceComparison !== 0) {
+    return priceComparison;
   }
 
   return String(left.title).localeCompare(String(right.title), 'de');
@@ -1403,8 +1445,10 @@ async function buildOfferRanking({
         return rightConsumerScore - leftConsumerScore;
       }
 
-      if (left.normalizedUnitPrice.amount !== right.normalizedUnitPrice.amount) {
-        return left.normalizedUnitPrice.amount - right.normalizedUnitPrice.amount;
+      const priceComparison = compareSafeUnitPrice(left, right);
+
+      if (priceComparison !== 0) {
+        return priceComparison;
       }
 
       const leftSimple = Number(Boolean(left.customerProgramRequired || left.hasConditions || left.isMultiBuy));
@@ -1419,9 +1463,10 @@ async function buildOfferRanking({
   const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query);
   const offers = responseCandidateOffers
     .slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit);
+  const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
 
-  const bestUnitPrice = offers[0]?.normalizedUnitPrice?.amount || null;
-  const worstUnitPrice = offers[offers.length - 1]?.normalizedUnitPrice?.amount || null;
+  const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
+  const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
   const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
 
   const response = {

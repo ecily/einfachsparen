@@ -333,12 +333,12 @@ function determineEffectiveDiscountType({ benefitType, customerProgramRequired, 
     return 'threshold';
   }
 
-  if (benefitType === 'price-cut') {
-    return 'price-cut';
-  }
-
   if (customerProgramRequired) {
     return 'card-required';
+  }
+
+  if (benefitType === 'price-cut') {
+    return 'price-cut';
   }
 
   return 'unknown';

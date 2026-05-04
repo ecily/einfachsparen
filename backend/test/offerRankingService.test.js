@@ -397,6 +397,53 @@ test('keeps offers without validTo in ranking groups', () => {
   assert.equal(grouped[0].offers[0].title, 'BILLA Bio Butter 250 g');
 });
 
+test('keeps unsafe comparable offers visible but prefers safe peers when otherwise similar', () => {
+  const unsafeCheap = offer({
+    title: 'A Kaffee unklare Menge',
+    retailerKey: 'hofer',
+    status: 'active',
+    isActiveNow: true,
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: '',
+    searchText: 'kaffee',
+    quantityText: '',
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: 1.99, unit: 'kg', comparable: false },
+    priceCurrent: { amount: 1.99 },
+    sortScoreDefault: 100,
+    quality: { comparisonSafe: false },
+  });
+  const safePeer = offer({
+    title: 'B Kaffee klare Menge',
+    retailerKey: 'spar',
+    status: 'active',
+    isActiveNow: true,
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'kaffee::0.5-kg',
+    searchText: 'kaffee',
+    quantityText: '500 g',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 5.98, unit: 'kg', comparable: true },
+    priceCurrent: { amount: 2.99 },
+    sortScoreDefault: 100,
+    quality: { comparisonSafe: true },
+  });
+  const groupedTitles = buildGroupedRankings(
+    prepareQueryOffersForResponse(applyQueryMatch([unsafeCheap, safePeer], 'kaffee'), 'kaffee'),
+    { query: 'kaffee' }
+  )
+    .flatMap((group) => group.offers)
+    .map((item) => item.title);
+
+  assert.deepEqual(groupedTitles, [
+    'B Kaffee klare Menge',
+    'A Kaffee unklare Menge',
+  ]);
+});
+
 test('slightly prefers otherwise similar offers with clear validTo', () => {
   const withoutValidTo = offer({
     title: 'A Kaffee Ohne Enddatum',

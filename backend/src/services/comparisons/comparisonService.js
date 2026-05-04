@@ -76,6 +76,8 @@ function buildCurrentAvailabilityMatch(now) {
     'quality.comparisonSafe': true,
     comparisonGroup: { $ne: '' },
     'normalizedUnitPrice.amount': { $ne: null },
+    'normalizedUnitPrice.comparable': true,
+    comparableUnit: { $ne: '' },
   };
 }
 
@@ -125,11 +127,11 @@ function buildCategoryGroupKeyExpression() {
       {
         $and: [
           { $ifNull: [categoryBaseExpression, false] },
-          { $gt: [{ $strLenCP: { $ifNull: ['$normalizedUnitPrice.unit', ''] } }, 0] },
+          { $gt: [{ $strLenCP: { $ifNull: ['$comparableUnit', ''] } }, 0] },
         ],
       },
       {
-        $concat: [categoryBaseExpression, '::', '$normalizedUnitPrice.unit'],
+        $concat: [categoryBaseExpression, '::', '$comparableUnit'],
       },
       null,
     ],
@@ -183,7 +185,7 @@ function buildComparisonGroupsPipeline({ keyExpression, labelExpression, topN })
         },
         key: { $first: '$comparisonGroupKey' },
         label: { $first: '$comparisonGroupLabel' },
-        unit: { $first: '$normalizedUnitPrice.unit' },
+        unit: { $first: '$comparableUnit' },
         retailerKey: { $first: '$retailerKey' },
         offer: {
           $first: {
@@ -318,7 +320,7 @@ async function buildComparisonSnapshot() {
         categoryBenchmarks: buildComparisonGroupsPipeline({
           keyExpression: buildCategoryGroupKeyExpression(),
           labelExpression: {
-            $concat: [categoryBaseExpression, ' / ', '$normalizedUnitPrice.unit'],
+            $concat: [categoryBaseExpression, ' / ', '$comparableUnit'],
           },
           topN: 8,
         }),

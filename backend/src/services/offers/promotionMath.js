@@ -65,7 +65,7 @@ function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts
   }
 
   const haystack = normalizeTitleForMatch(rawText);
-  const forMatch = rawText.match(/\b(\d+)\s*(?:fur|fuer|für)\s*(\d+)\b/i) || haystack.match(/\b(\d+)\s*(?:fur|fuer)\s*(\d+)\b/);
+  const forMatch = haystack.match(/\b(\d+)\s*(?:fur|fuer)\s*(\d+)\b/);
 
   if (forMatch) {
     return {
@@ -80,6 +80,16 @@ function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts
   if (thresholdMatch) {
     return {
       requiredQuantity: Number(thresholdMatch[1]),
+      payableQuantity: null,
+      mechanic: 'threshold',
+    };
+  }
+
+  const purchaseMatch = haystack.match(/\b(?:beim\s+kauf\s+von|bei\s+kauf\s+von|kauf\s+von|kauf)\s+(\d+)\b/);
+
+  if (purchaseMatch) {
+    return {
+      requiredQuantity: Number(purchaseMatch[1]),
       payableQuantity: null,
       mechanic: 'threshold',
     };

@@ -1,5 +1,9 @@
 const { normalizeTitleForMatch, dedupeSourceEvidence } = require('./sourceEvidence');
 const { NORMALIZATION_VERSION } = require('./crawlAudit');
+const {
+  assessComparableSafety,
+  inferConditionFields,
+} = require('./offerQualityGuards');
 
 const VALIDITY_INCOMPLETE_REVIEW_REASON = 'Gueltigkeitszeitraum unvollstaendig';
 
@@ -200,6 +204,24 @@ function buildQualityWithValidity(offer, reviewReasons) {
   return quality;
 }
 
+function buildQualityWithComparableSafety(offer, reviewReasons, comparableSafety) {
+  const quality = {
+    ...(offer?.quality || {}),
+    issues: Array.isArray(offer?.quality?.issues) ? [...offer.quality.issues] : [],
+  };
+
+  if (!comparableSafety.safe) {
+    quality.comparisonSafe = false;
+    quality.parsingConfidence = Math.min(Number(quality.parsingConfidence || 0.75), 0.72);
+    quality.issues = [...new Set([...quality.issues, ...comparableSafety.reviewReasons])];
+    comparableSafety.reviewReasons.forEach((reason) => reviewReasons.add(reason));
+  } else {
+    quality.comparisonSafe = Boolean(quality.comparisonSafe && offer?.comparisonGroup);
+  }
+
+  return quality;
+}
+
 function buildReviewReasons({ offer, categoryConfidence, subcategoryConfidence, savingsFields }) {
   const reasons = new Set(Array.isArray(offer?.reviewReasons) ? offer.reviewReasons : []);
 
@@ -251,13 +273,25 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
   const categoryConfidence = inferCategoryConfidence(document);
   const subcategoryConfidence = inferSubcategoryConfidence(document, categoryConfidence);
   const savingsFields = inferSavingsFields(document);
-  const reviewReasons = buildReviewReasons({
+  const reviewReasonSet = new Set(buildReviewReasons({
     offer: document,
     categoryConfidence,
     subcategoryConfidence,
     savingsFields,
+  }));
+  const conditionFields = inferConditionFields(document);
+  const comparableSafety = assessComparableSafety({
+    ...document,
+    ...conditionFields,
   });
-  const quality = buildQualityWithValidity(document, reviewReasons);
+  const comparableQuality = buildQualityWithComparableSafety(document, reviewReasonSet, comparableSafety);
+  const reviewReasons = [...reviewReasonSet];
+  const quality = buildQualityWithValidity({
+    ...document,
+    normalizedUnitPrice: comparableSafety.normalizedUnitPrice,
+    comparableUnit: comparableSafety.comparableUnit,
+    quality: comparableQuality,
+  }, reviewReasons);
   const subcategoryKey = normalizeKey(document.categorySecondary, '');
   const categoryKey = document.categoryKey || normalizeKey(document.categorySecondary || document.categoryPrimary, 'unkategorisiert');
 
@@ -287,6 +321,14 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     subcategoryKey,
     categoryConfidence,
     subcategoryConfidence,
+    customerProgramRequired: conditionFields.customerProgramRequired,
+    hasConditions: conditionFields.hasConditions,
+    isMultiBuy: conditionFields.isMultiBuy,
+    minimumPurchaseQty: conditionFields.minimumPurchaseQty,
+    effectiveDiscountType: conditionFields.effectiveDiscountType,
+    comparableUnit: comparableSafety.comparableUnit,
+    normalizedUnitPrice: comparableSafety.normalizedUnitPrice,
+    comparisonGroup: comparableSafety.safe ? document.comparisonGroup : '',
     ...savingsFields,
     normalizationVersion: normalizationVersion || document.normalizationVersion || NORMALIZATION_VERSION,
     parserVersion: parserVersion || document.parserVersion || source?.parserVersion || 'unknown-parser',
@@ -304,6 +346,8 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
       hasProspectNormalPrice: savingsFields.hasProspectNormalPrice,
       hasEstimatedReferencePrice: savingsFields.hasEstimatedReferencePrice,
       isActionPriceOnly: savingsFields.isActionPriceOnly,
+      minimumPurchaseQuantity: conditionFields.minimumPurchaseQty > 1 ? conditionFields.minimumPurchaseQty : undefined,
+      requiredQuantity: conditionFields.minimumPurchaseQty > 1 ? conditionFields.minimumPurchaseQty : undefined,
       sourceRetailerName: formatMetadata.sourceRetailerName,
       sourceRetailerFormat: formatMetadata.sourceRetailerFormat,
       retailerFormatLabel: formatMetadata.retailerFormatLabel,
