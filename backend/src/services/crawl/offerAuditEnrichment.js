@@ -1,6 +1,8 @@
 const { normalizeTitleForMatch, dedupeSourceEvidence } = require('./sourceEvidence');
 const { NORMALIZATION_VERSION } = require('./crawlAudit');
 
+const VALIDITY_INCOMPLETE_REVIEW_REASON = 'Gueltigkeitszeitraum unvollstaendig';
+
 function normalizeKey(value, fallback = '') {
   return normalizeTitleForMatch(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
 }
@@ -169,6 +171,35 @@ function inferSavingsFields(offer) {
   };
 }
 
+function hasReliableValidTo(offer) {
+  if (!offer?.validTo) {
+    return false;
+  }
+
+  const validTo = new Date(offer.validTo);
+  return !Number.isNaN(validTo.getTime());
+}
+
+function hasIncompleteValidity(offer) {
+  return !hasReliableValidTo(offer);
+}
+
+function buildQualityWithValidity(offer, reviewReasons) {
+  const quality = {
+    ...(offer?.quality || {}),
+    issues: Array.isArray(offer?.quality?.issues) ? [...offer.quality.issues] : [],
+  };
+
+  if (!reviewReasons.includes(VALIDITY_INCOMPLETE_REVIEW_REASON)) {
+    return quality;
+  }
+
+  quality.issues = [...new Set([...quality.issues, VALIDITY_INCOMPLETE_REVIEW_REASON])];
+  quality.completenessScore = Math.max(0, Number(quality.completenessScore || 0) - 0.1);
+
+  return quality;
+}
+
 function buildReviewReasons({ offer, categoryConfidence, subcategoryConfidence, savingsFields }) {
   const reasons = new Set(Array.isArray(offer?.reviewReasons) ? offer.reviewReasons : []);
 
@@ -178,7 +209,7 @@ function buildReviewReasons({ offer, categoryConfidence, subcategoryConfidence, 
   if (categoryConfidence < 0.5) reasons.add('category-low-confidence');
   if (subcategoryConfidence < 0.4) reasons.add('subcategory-low-confidence');
   if (!offer?.quantityText) reasons.add('missing-quantity');
-  if (!offer?.validTo && !offer?.rawFacts?.snapshotCurrent) reasons.add('validity-incomplete');
+  if (hasIncompleteValidity(offer)) reasons.add(VALIDITY_INCOMPLETE_REVIEW_REASON);
   if (savingsFields.isActionPriceOnly) reasons.add('action-price-only');
 
   return [...reasons];
@@ -226,6 +257,7 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     subcategoryConfidence,
     savingsFields,
   });
+  const quality = buildQualityWithValidity(document, reviewReasons);
   const subcategoryKey = normalizeKey(document.categorySecondary, '');
   const categoryKey = document.categoryKey || normalizeKey(document.categorySecondary || document.categoryPrimary, 'unkategorisiert');
 
@@ -260,6 +292,7 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     parserVersion: parserVersion || document.parserVersion || source?.parserVersion || 'unknown-parser',
     firstSeenAt: document.firstSeenAt || now,
     lastSeenAt: now,
+    quality,
     needsReview: Boolean(document.needsReview || reviewReasons.some((reason) => reason !== 'action-price-only')),
     reviewReasons,
     rawFacts: {

@@ -375,6 +375,90 @@ test('keeps grouped detergent response query-sorted for live response order', ()
   ]));
 });
 
+test('keeps offers without validTo in ranking groups', () => {
+  const noEndDateOffer = offer({
+    title: 'BILLA Bio Butter 250 g',
+    retailerKey: 'billa',
+    status: 'active',
+    isActiveNow: true,
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    comparisonGroup: 'billa-bio-butter::0.25-kg',
+    normalizedUnitPrice: { amount: 8.76, unit: 'kg' },
+    priceCurrent: { amount: 2.19 },
+    validTo: null,
+    sortScoreDefault: 100,
+    quality: { comparisonSafe: true },
+  });
+  const grouped = buildGroupedRankings([noEndDateOffer]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].offers.length, 1);
+  assert.equal(grouped[0].offers[0].title, 'BILLA Bio Butter 250 g');
+});
+
+test('slightly prefers otherwise similar offers with clear validTo', () => {
+  const withoutValidTo = offer({
+    title: 'A Kaffee Ohne Enddatum',
+    retailerKey: 'billa',
+    status: 'active',
+    isActiveNow: true,
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'test-kaffee::0.5-kg',
+    normalizedUnitPrice: { amount: 9.99, unit: 'kg' },
+    priceCurrent: { amount: 4.99 },
+    validTo: null,
+    sortScoreDefault: 100,
+    quality: { comparisonSafe: true },
+  });
+  const withValidTo = offer({
+    ...withoutValidTo,
+    title: 'B Kaffee Mit Enddatum',
+    validTo: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  });
+  const groupedTitles = buildGroupedRankings([withoutValidTo, withValidTo])[0].offers.map((item) => item.title);
+
+  assert.deepEqual(groupedTitles, [
+    'B Kaffee Mit Enddatum',
+    'A Kaffee Ohne Enddatum',
+  ]);
+});
+
+test('keeps BILLA-like snapshot offers without validTo findable but lower than clear validity peers', () => {
+  const billaSnapshot = offer({
+    title: 'BILLA Caffe Crema Ganze Bohne',
+    retailerKey: 'billa',
+    status: 'active',
+    isActiveNow: true,
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'caffe-crema::1-kg',
+    searchText: 'billa caffe crema kaffee',
+    normalizedUnitPrice: { amount: 11.99, unit: 'kg' },
+    priceCurrent: { amount: 11.99 },
+    validTo: null,
+    sortScoreDefault: 100,
+    quality: { comparisonSafe: true },
+    rawFacts: { sourceType: 'billa-official-algolia', snapshotCurrent: true },
+  });
+  const datedPeer = offer({
+    ...billaSnapshot,
+    title: 'PENNY Caffe Crema Ganze Bohne',
+    retailerKey: 'penny',
+    searchText: 'penny caffe crema kaffee',
+    validTo: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  });
+  const matched = applyQueryMatch([billaSnapshot, datedPeer], 'kaffee');
+  const groupedTitles = buildGroupedRankings(matched)[0].offers.map((item) => item.title);
+
+  assert.equal(matched.some((item) => item.retailerKey === 'billa'), true);
+  assert.deepEqual(groupedTitles, [
+    'PENNY Caffe Crema Ganze Bohne',
+    'BILLA Caffe Crema Ganze Bohne',
+  ]);
+});
+
 test('dedupes exact offer identities and dedupe keys for query responses', () => {
   const offers = [
     offer({

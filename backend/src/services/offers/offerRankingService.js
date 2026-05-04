@@ -677,11 +677,21 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
   };
 }
 
+function hasReliableValidTo(offer) {
+  if (!offer?.validTo) {
+    return false;
+  }
+
+  const validTo = new Date(offer.validTo);
+  return !Number.isNaN(validTo.getTime());
+}
+
 function buildConsumerScore(offer) {
   let score = Number(offer?.sortScoreDefault || 0);
 
   if (offer?.status === 'active' && offer?.isActiveNow) score += 1000;
   if (offer?.quality?.comparisonSafe && offer?.comparisonGroup) score += 500;
+  if (hasReliableValidTo(offer)) score += 25;
 
   const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
   if (Number.isFinite(unitAmount) && unitAmount > 0) {

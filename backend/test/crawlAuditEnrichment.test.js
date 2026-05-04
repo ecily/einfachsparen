@@ -4,6 +4,8 @@ const { computeOfferSavings } = require('../src/services/offers/promotionMath');
 const { enrichOfferForStorage, inferRetailerFormatMetadata } = require('../src/services/crawl/offerAuditEnrichment');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 
+const VALIDITY_INCOMPLETE_REASON = 'Gueltigkeitszeitraum unvollstaendig';
+
 test('marks offers without reference price as action price only', () => {
   const offer = enrichOfferForStorage({
     sourceId: '000000000000000000000001',
@@ -174,4 +176,77 @@ test('keeps BILLA and BILLA PLUS separate and disables low-yield sources', () =>
   assert.ok(marketguruSources.every((definition) => definition.enabled === false));
   assert.ok(adegSources.length >= 2);
   assert.ok(adegSources.every((definition) => definition.enabled === false));
+});
+
+test('does not mark offers with clear validTo as incomplete validity', () => {
+  const offer = enrichOfferForStorage({
+    sourceId: '000000000000000000000005',
+    retailerKey: 'hofer',
+    retailerName: 'Hofer',
+    region: 'Grossraum Graz',
+    title: 'Milsani Butter 250 g',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    sourceUrl: 'https://example.test/offer',
+    validFrom: new Date(Date.now() - 60 * 60 * 1000),
+    validTo: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    status: 'active',
+    isActiveNow: true,
+    priceCurrent: { amount: 1.99, currency: 'EUR', originalText: '1.99 EUR' },
+    priceReference: { amount: 2.49, currency: 'EUR', originalText: '2.49 EUR' },
+    quantityText: '250 g',
+    normalizedUnitPrice: { amount: 7.96, unit: 'kg', comparable: true, confidence: 0.9 },
+    quality: { completenessScore: 1, parsingConfidence: 0.9, comparisonSafe: true, issues: [] },
+  }, {
+    source: {
+      _id: '000000000000000000000006',
+      channel: 'aggregator',
+      sourceUrl: 'https://example.test/source',
+    },
+    sourceType: 'aktionsfinder-json',
+  });
+
+  assert.ok(offer);
+  assert.equal(offer.reviewReasons.includes(VALIDITY_INCOMPLETE_REASON), false);
+  assert.equal(offer.quality.issues.includes(VALIDITY_INCOMPLETE_REASON), false);
+  assert.equal(offer.quality.completenessScore, 1);
+});
+
+test('marks offers without validTo with a clear validity review reason', () => {
+  const offer = enrichOfferForStorage({
+    sourceId: '000000000000000000000007',
+    retailerKey: 'billa',
+    retailerName: 'Billa',
+    region: 'Grossraum Graz',
+    title: 'BILLA Bio Butter 250 g',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    sourceUrl: 'https://example.test/offer',
+    validFrom: new Date(Date.now() - 60 * 60 * 1000),
+    validTo: null,
+    status: 'active',
+    isActiveNow: true,
+    priceCurrent: { amount: 2.19, currency: 'EUR', originalText: '2.19 EUR' },
+    priceReference: { amount: 2.69, currency: 'EUR', originalText: '2.69 EUR' },
+    quantityText: '250 g',
+    normalizedUnitPrice: { amount: 8.76, unit: 'kg', comparable: true, confidence: 0.9 },
+    quality: { completenessScore: 1, parsingConfidence: 0.9, comparisonSafe: true, issues: [] },
+    rawFacts: {
+      sourceType: 'billa-official-algolia',
+      snapshotCurrent: true,
+    },
+  }, {
+    source: {
+      _id: '000000000000000000000008',
+      channel: 'official-site',
+      sourceUrl: 'https://example.test/source',
+    },
+    sourceType: 'billa-official-algolia',
+  });
+
+  assert.ok(offer);
+  assert.equal(offer.needsReview, true);
+  assert.ok(offer.reviewReasons.includes(VALIDITY_INCOMPLETE_REASON));
+  assert.ok(offer.quality.issues.includes(VALIDITY_INCOMPLETE_REASON));
+  assert.equal(offer.quality.completenessScore, 0.9);
 });
