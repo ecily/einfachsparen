@@ -21,7 +21,7 @@
         "backgroundColor": "#023b25"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.kaufgutat",
+      "package": "at.kaufklug.app",
       "versionCode": 2026043001,
       "permissions": [
         "INTERNET"
