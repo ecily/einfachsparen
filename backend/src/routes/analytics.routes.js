@@ -1,10 +1,12 @@
 const express = require('express');
 const { requireAdminApiKey } = require('../middleware/adminAuth');
+const { analyticsEventRateLimit } = require('../middleware/rateLimits');
+const { validateAnalyticsPayload } = require('../middleware/validators');
 const { buildAnalyticsSummary, trackAnalyticsEvent } = require('../services/analytics/analyticsService');
 
 const router = express.Router();
 
-router.post('/event', async (req, res, next) => {
+router.post('/event', analyticsEventRateLimit, validateAnalyticsPayload, async (req, res, next) => {
   try {
     await trackAnalyticsEvent({
       req,

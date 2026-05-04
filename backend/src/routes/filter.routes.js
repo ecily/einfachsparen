@@ -1,4 +1,6 @@
 const express = require('express');
+const { filterRateLimit } = require('../middleware/rateLimits');
+const { validateCategoryFilterQuery } = require('../middleware/validators');
 const { getRetailerFilters, getCategoryFilters } = require('../services/filters/filterMetadataService');
 
 const router = express.Router();
@@ -14,7 +16,7 @@ function normalizeStringList(value) {
     .filter(Boolean);
 }
 
-router.get('/retailers', async (req, res, next) => {
+router.get('/retailers', filterRateLimit, async (req, res, next) => {
   try {
     const retailers = await getRetailerFilters();
 
@@ -27,7 +29,7 @@ router.get('/retailers', async (req, res, next) => {
   }
 });
 
-router.get('/categories', async (req, res, next) => {
+router.get('/categories', filterRateLimit, validateCategoryFilterQuery, async (req, res, next) => {
   try {
     const retailerKeys = normalizeStringList(req.query.retailers);
     const categories = await getCategoryFilters({ retailerKeys });

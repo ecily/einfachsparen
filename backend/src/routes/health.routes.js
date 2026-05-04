@@ -19,11 +19,16 @@ router.get('/', (req, res) => {
 
   res.json({
     ok: true,
-    app: 'kaufklug-backend',
-    environment: env.NODE_ENV,
-    region: env.CRAWL_REGION,
+    status: 'ok',
     database,
     now: new Date().toISOString(),
+    ...(env.NODE_ENV === 'production'
+      ? {}
+      : {
+          app: 'kaufklug-backend',
+          environment: env.NODE_ENV,
+          region: env.CRAWL_REGION,
+        }),
   });
 });
 

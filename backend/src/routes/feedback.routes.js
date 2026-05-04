@@ -1,6 +1,8 @@
 const express = require('express');
 const env = require('../config/env');
 const { requireAdminApiKey } = require('../middleware/adminAuth');
+const { feedbackRateLimit } = require('../middleware/rateLimits');
+const { validateFeedbackPayload } = require('../middleware/validators');
 const AdminFeedback = require('../models/AdminFeedback');
 
 const router = express.Router();
@@ -14,7 +16,7 @@ router.get('/', requireAdminApiKey, async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', feedbackRateLimit, validateFeedbackPayload, async (req, res, next) => {
   try {
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const digest = typeof req.body?.digest === 'string' ? req.body.digest.trim() : '';
@@ -32,9 +34,9 @@ router.post('/', async (req, res, next) => {
       scope,
       note,
       digest,
-      metadata: {
-        source: 'admin-local',
-      },
+      metadata: req.body?.metadata && typeof req.body.metadata === 'object'
+        ? { ...req.body.metadata, source: 'public-feedback' }
+        : { source: 'public-feedback' },
     });
 
     res.status(201).json({

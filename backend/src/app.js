@@ -4,6 +4,7 @@ const env = require('./config/env');
 const logger = require('./lib/logger');
 const { requireAdminApiKey } = require('./middleware/adminAuth');
 const { globalRateLimit } = require('./middleware/rateLimits');
+const { validatePublicPayloadSize } = require('./middleware/validators');
 const healthRoutes = require('./routes/health.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const sourceRoutes = require('./routes/source.routes');
@@ -25,22 +26,40 @@ if (env.NODE_ENV === 'production') {
 }
 
 const allowedOrigins = new Set([
-  env.ADMIN_ORIGIN,
-  env.KAUFKLUG_PUBLIC_ORIGIN,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
   'https://kaufklug.at',
   'https://www.kaufklug.at',
 ]);
+
+if (env.NODE_ENV !== 'production') {
+  [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+  ].forEach((origin) => allowedOrigins.add(origin));
+}
+
+function isLocalOrigin(origin) {
+  try {
+    const originUrl = new URL(origin);
+    return originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1';
+  } catch (error) {
+    return false;
+  }
+}
 
 function addOrigin(origin) {
   if (typeof origin !== 'string' || !origin.trim()) {
     return;
   }
 
-  allowedOrigins.add(origin.trim().replace(/\/+$/, ''));
+  const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+
+  if (env.NODE_ENV === 'production' && isLocalOrigin(normalizedOrigin)) {
+    return;
+  }
+
+  allowedOrigins.add(normalizedOrigin);
 }
 
 function addWwwVariant(origin) {
@@ -86,9 +105,12 @@ function addLocalhostVariant(origin) {
 
 addOrigin(env.ADMIN_ORIGIN);
 addOrigin(env.KAUFKLUG_PUBLIC_ORIGIN);
-addLocalhostVariant(env.ADMIN_ORIGIN);
-addLocalhostVariant(env.KAUFKLUG_PUBLIC_ORIGIN);
 addWwwVariant(env.KAUFKLUG_PUBLIC_ORIGIN);
+
+if (env.NODE_ENV !== 'production') {
+  addLocalhostVariant(env.ADMIN_ORIGIN);
+  addLocalhostVariant(env.KAUFKLUG_PUBLIC_ORIGIN);
+}
 
 app.use(
   cors({
@@ -109,6 +131,7 @@ app.use(
 );
 
 app.use(globalRateLimit);
+app.use(validatePublicPayloadSize);
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => {

@@ -4,6 +4,8 @@ const {
   createSharedShoppingList,
   getSharedShoppingList,
 } = require('../services/shoppingLists/sharedShoppingListService');
+const { shoppingListShareRateLimit } = require('../middleware/rateLimits');
+const { validateShareId, validateSharePayload } = require('../middleware/validators');
 
 const router = express.Router();
 
@@ -26,7 +28,7 @@ function serializeList(list) {
   };
 }
 
-router.post('/share', async (req, res, next) => {
+router.post('/share', shoppingListShareRateLimit, validateSharePayload, async (req, res, next) => {
   try {
     const list = await createSharedShoppingList(req.body);
 
@@ -47,7 +49,7 @@ router.post('/share', async (req, res, next) => {
   }
 });
 
-router.get('/share/:shareId', async (req, res, next) => {
+router.get('/share/:shareId', shoppingListShareRateLimit, validateShareId, async (req, res, next) => {
   try {
     const list = await getSharedShoppingList(req.params.shareId);
 

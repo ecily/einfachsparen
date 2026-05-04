@@ -1,11 +1,42 @@
 const express = require('express');
 const axios = require('axios');
+const mongoose = require('mongoose');
 const Offer = require('../models/Offer');
+const { offersRateLimit, basketRateLimit, imageProxyRateLimit } = require('../middleware/rateLimits');
+const { validateBasketQuery, validateRankingQuery } = require('../middleware/validators');
 const { buildOfferRanking, buildBasketSuggestions } = require('../services/offers/offerRankingService');
 
 const router = express.Router();
 
-router.get('/ranking', async (req, res, next) => {
+function isPrivateHostname(hostname) {
+  const host = String(hostname || '').toLowerCase();
+
+  return host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    host === '::1' ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host) ||
+    /^169\.254\./.test(host);
+}
+
+function parseSafeImageUrl(value) {
+  try {
+    const parsed = new URL(value);
+
+    if (!['http:', 'https:'].includes(parsed.protocol) || isPrivateHostname(parsed.hostname)) {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch (error) {
+    return null;
+  }
+}
+
+router.get('/ranking', offersRateLimit, validateRankingQuery, async (req, res, next) => {
   try {
     const ranking = await buildOfferRanking({
       categories: req.query.categories || '',
@@ -23,7 +54,7 @@ router.get('/ranking', async (req, res, next) => {
   }
 });
 
-router.get('/basket', async (req, res, next) => {
+router.get('/basket', basketRateLimit, validateBasketQuery, async (req, res, next) => {
   try {
     const suggestions = await buildBasketSuggestions({
       items: req.query.items || '',
@@ -39,8 +70,12 @@ router.get('/basket', async (req, res, next) => {
   }
 });
 
-router.get('/:offerId/image', async (req, res, next) => {
+router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.offerId)) {
+      return res.status(400).json({ ok: false, message: 'Invalid offer id.' });
+    }
+
     const offer = await Offer.findById(req.params.offerId, { imageUrl: 1, title: 1, retailerName: 1 }).lean();
 
     if (!offer) {
@@ -51,16 +86,29 @@ router.get('/:offerId/image', async (req, res, next) => {
       return res.status(404).json({ ok: false, message: 'Offer image not available' });
     }
 
-    const response = await axios.get(offer.imageUrl, {
+    const imageUrl = parseSafeImageUrl(offer.imageUrl);
+
+    if (!imageUrl) {
+      return res.status(404).json({ ok: false, message: 'Offer image not available' });
+    }
+
+    const response = await axios.get(imageUrl, {
       responseType: 'stream',
-      timeout: 30000,
+      timeout: 10000,
+      maxRedirects: 2,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
         Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       },
     });
+    const contentType = String(response.headers['content-type'] || '').toLowerCase();
 
-    res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
+    if (!contentType.startsWith('image/')) {
+      response.data.destroy();
+      return res.status(502).json({ ok: false, message: 'Invalid image response.' });
+    }
+
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=3600');
 
     if (response.headers['content-length']) {
