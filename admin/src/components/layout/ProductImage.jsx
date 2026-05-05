@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { getOfferImageUrl } from '../../api'
 
+const failedImageSourceCache = new Set()
+
 export function ProductImage({ offerId, src, alt, compact = false }) {
-  const primarySrc = offerId ? getOfferImageUrl(offerId) : src
-  const [failedSources, setFailedSources] = useState(() => new Set())
-  const imageSources = [primarySrc, src].filter((item, index, items) => item && items.indexOf(item) === index)
+  const directSrc = String(src || '').trim()
+  const primarySrc = offerId && directSrc ? getOfferImageUrl(offerId) : directSrc
+  const [failedSources, setFailedSources] = useState(() => new Set(failedImageSourceCache))
+  const imageSources = [primarySrc, directSrc].filter((item, index, items) => item && items.indexOf(item) === index)
   const currentSrc = imageSources.find((item) => !failedSources.has(item)) || ''
 
   if (!currentSrc) {
@@ -22,6 +25,7 @@ export function ProductImage({ offerId, src, alt, compact = false }) {
         alt={alt}
         loading="lazy"
         onError={() => {
+          failedImageSourceCache.add(currentSrc)
           setFailedSources((current) => new Set(current).add(currentSrc))
         }}
       />

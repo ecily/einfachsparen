@@ -1,6 +1,17 @@
 import { ANALYTICS_SESSION_STORAGE_KEY } from '../config/constants'
 import { buildApiUrl } from './apiBase'
 
+const TRACKABLE_EVENTS = new Set([
+  'landing_page_view',
+  'shopping_list_opened',
+  'offer_search_started',
+  'offer_search_result',
+  'offer_added_to_list',
+  'apk_download_click',
+  'legal_page_opened',
+  'app_open',
+])
+
 export function createClientSessionId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
@@ -29,6 +40,7 @@ export function getClientSessionId() {
 
 export function trackAnalyticsEvent(eventName, metadata = {}) {
   if (typeof window === 'undefined') return
+  if (!TRACKABLE_EVENTS.has(eventName)) return
 
   const payload = {
     eventName,

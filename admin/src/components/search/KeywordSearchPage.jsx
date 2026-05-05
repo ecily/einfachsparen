@@ -4,7 +4,7 @@ import { trackAnalyticsEvent } from '../../utils/analytics'
 import { flattenRankingOffers, getOfferStableId, normalizeRetailerKey } from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
 
-const KEYWORD_SEARCH_LIMIT = 250
+const KEYWORD_SEARCH_LIMIT = 60
 
 const SORT_OPTIONS = {
   best: 'best',
@@ -265,9 +265,9 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         setError('')
         setHint('')
 
-        trackAnalyticsEvent('keyword_search_started', {
-          queryLength: submittedQuery.length,
-          source: 'keyword_search',
+        trackAnalyticsEvent('offer_search_started', {
+          selectedRetailerCount: 0,
+          selectedCategoryCount: 0,
         })
 
         const rankingResult = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT)
@@ -277,12 +277,12 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         const resultCount = flattenRankingOffers(rankingResult).length
         setRanking(rankingResult)
 
-        trackAnalyticsEvent('keyword_search_result', {
-          queryLength: submittedQuery.length,
+        trackAnalyticsEvent('offer_search_result', {
           resultCount,
-          resultCountRaw: resultCount,
-          limit: KEYWORD_SEARCH_LIMIT,
-          source: 'keyword_search',
+          safeOfferCount: 0,
+          actionOfferCount: resultCount,
+          selectedRetailerCount: 0,
+          selectedCategoryCount: 0,
         })
       } catch {
         if (!active) return
@@ -494,11 +494,10 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
 
             {visibleOffers.length > 0 ? (
               <div className="user-results">
-                {visibleOffers.map((offer, index) => (
+                {visibleOffers.map((offer) => (
                   <OfferCardConsumer
                     key={offer.id}
                     offer={offer}
-                    highlightLabel={`Treffer ${index + 1}`}
                     onAddToShoppingList={onAddToShoppingList}
                     isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
                   />

@@ -196,7 +196,7 @@ function getConditionTexts(offer) {
   return [...new Set([getMultiBuyText(offer), getMinimumQuantityText(offer), getProgramText(offer)].filter(Boolean))]
 }
 
-export function OfferCardConsumer({ offer, highlightLabel = '', onAddToShoppingList, isInShoppingList = false }) {
+export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList = false }) {
   const showUnitPrice = shouldDisplayUnitPrice(offer)
   const category = getShortCategory(offer)
   const validity = getValidityText(offer)
