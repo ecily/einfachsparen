@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "test": "node --test",
     "analyze:categories": "node scripts/analyze-category-quality.js",
+    "quality:search": "node scripts/qualitySmokeSearch.js",
     "rebuild:filters": "node scripts/rebuild-filter-metadata.js"
   },
   "keywords": [],
