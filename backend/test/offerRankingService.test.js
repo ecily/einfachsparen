@@ -482,6 +482,87 @@ test('does not give whole milk chocolate a positive milk intent boost', () => {
   assert.ok(scoreOfferAgainstQuery(drinkingMilk, 'milch') > scoreOfferAgainstQuery(chocolate, 'milch'));
 });
 
+[
+  {
+    name: 'palmolive liquid soap milk honey',
+    sideOffer: offer({
+      title: 'Palmolive Fluessigseife Milch-Honig',
+      brand: 'Palmolive',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'palmolive-fluessigseife-milch-honig::0.3-l',
+    }),
+  },
+  {
+    name: 'heumilk cheese slices',
+    sideOffer: offer({
+      title: 'Bio-Kaesescheiben aus Heumilch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'bio-kaesescheiben-heumilch::0.15-kg',
+    }),
+  },
+  {
+    name: 'tirol milch cheese brand hit',
+    sideOffer: offer({
+      title: 'Tirol Milch Feiner Tiroler',
+      brand: 'Tirol Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'tirol-milch-feiner-tiroler::0.25-kg',
+    }),
+  },
+  {
+    name: 'buttermilk cake',
+    sideOffer: offer({
+      title: 'Buttermilch-Kuchen',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'buttermilch-kuchen::1-Stk',
+    }),
+  },
+  {
+    name: 'hipp follow-on milk',
+    sideOffer: offer({
+      title: 'HiPP Combiotik Folgemilch',
+      brand: 'HiPP',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Baby / Kinder',
+      comparisonGroup: 'hipp-combiotik-folgemilch::0.6-kg',
+    }),
+  },
+].forEach(({ name, sideOffer }) => {
+  test(`ranks drinking milk ahead of ${name} for generic milk search`, () => {
+    const drinkingMilk = offer({
+      title: 'Trinkmilch 1 Liter',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'trinkmilch::1-l',
+    });
+    const sortedTitles = applyQueryMatch([sideOffer, drinkingMilk], 'milch').map((item) => item.title);
+
+    assert.equal(sortedTitles[0], 'Trinkmilch 1 Liter');
+    assert.ok(sortedTitles.indexOf(sideOffer.title) > 0);
+  });
+});
+
+test('does not boost whole milk chocolate as drinking milk for generic milk search', () => {
+  const drinkingMilk = offer({
+    title: 'Trinkmilch 1 Liter',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    comparisonGroup: 'trinkmilch::1-l',
+  });
+  const chocolate = offer({
+    title: 'Vollmilch-Schokolade',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+    comparisonGroup: 'vollmilch-schokolade::0.1-kg',
+  });
+
+  assert.ok(scoreOfferAgainstQuery(drinkingMilk, 'milch') - scoreOfferAgainstQuery(chocolate, 'milch') > 4000);
+});
+
 test('ranks drinking milk ahead of heumilk camembert or cheese for milk search', () => {
   const offers = [
     offer({

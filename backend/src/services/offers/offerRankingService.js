@@ -259,8 +259,8 @@ const QUERY_CONTEXTS = [
     tokens: ['milch'],
     preferred: ['milch', 'milchprodukte', 'molkerei', 'lebensmittel'],
     strongPreferred: ['milch', 'milchprodukte', 'molkerei'],
-    productIntent: ['milch', 'frischmilch', 'haltbarmilch', 'esl', 'buttermilch'],
-    exactProductIntent: ['frischmilch', 'haltbarmilch'],
+    productIntent: ['milch', 'trinkmilch', 'frischmilch', 'haltbarmilch', 'vollmilch', 'heumilch', 'biomilch'],
+    exactProductIntent: ['trinkmilch', 'frischmilch', 'haltbarmilch'],
     productContext: ['milchprodukte', 'molkerei', 'milch'],
     weakContexts: ['schlagobers', 'sahne', 'obers', 'dessert', 'pudding', 'torte', 'milchreis', 'drink', 'reisdrink'],
     severeWeakContexts: [
@@ -435,19 +435,40 @@ function hasAnyWordToken(wordString, tokens = []) {
   return tokens.some((token) => hasWordToken(wordString, token));
 }
 
+function isGenericMilkQuery(queryTokens) {
+  return queryTokens.length === 1 && queryTokens[0] === 'milch';
+}
+
+function hasAnyTokenFamily(fieldTokens, expectedTokens = []) {
+  return hasAnyTokenMatch(fieldTokens, expectedTokens, { exact: false, suffix: true });
+}
+
+function hasTokenSequence(fieldTokens, expectedTokens = []) {
+  if (expectedTokens.length === 0 || fieldTokens.length < expectedTokens.length) {
+    return false;
+  }
+
+  return fieldTokens.some((_, index) =>
+    expectedTokens.every((expectedToken, offset) => fieldTokens[index + offset] === expectedToken)
+  );
+}
+
 function hasMilkVolumeSignal(wordString) {
-  return /\b\d+(?:[.,]\d+)?\s*(?:l|liter)\b/.test(wordString) ||
-    /\b(?:1l|0 5l|500ml|500 ml|liter)\b/.test(wordString);
+  return /\b\d+(?:\s\d+)?\s*(?:l|liter|ml|milliliter)\b/.test(wordString) ||
+    /\b(?:1l|0 5l|0 5 l|500ml|500 ml|liter)\b/.test(wordString);
 }
 
 function scoreMilkSearchIntent({ titleTokens, categoryTokens, structuredTokens, comparisonTokens, aggregateTokens }) {
   const titleWords = ` ${titleTokens.join(' ')} `;
   const categoryWords = ` ${categoryTokens.join(' ')} `;
-  const structuredWords = ` ${structuredTokens.join(' ')} `;
-  const allWords = ` ${structuredTokens.concat(aggregateTokens).join(' ')} `;
+  const allTokens = structuredTokens.concat(aggregateTokens);
   const hardIndirectTokens = [
+    'alpenmilch',
+    'babymilch',
+    'buttermilch',
     'schokolade',
     'schoko',
+    'vollmilchschokolade',
     'zartbitter',
     'chocolonely',
     'mikado',
@@ -462,8 +483,11 @@ function scoreMilkSearchIntent({ titleTokens, categoryTokens, structuredTokens, 
     'riegel',
     'pralinen',
     'tafel',
+    'kuchen',
     'broetchen',
     'brotle',
+    'gebaeck',
+    'geback',
     'camembert',
     'emmentaler',
     'edamer',
@@ -472,10 +496,31 @@ function scoreMilkSearchIntent({ titleTokens, categoryTokens, structuredTokens, 
     'graukase',
     'kaese',
     'kase',
+    'kaesescheiben',
+    'kasescheiben',
+    'mozzarella',
+    'pizzakaese',
+    'pizzakase',
     'scheiben',
     'gerieben',
+    'seife',
+    'fluessigseife',
+    'flussigseife',
+    'palmolive',
+    'dusche',
+    'creme',
+    'pflege',
+    'folgemilch',
+    'combiotik',
+    'hipp',
+    'milchreis',
+    'reisdrink',
+    'haferdrink',
+    'mandeldrink',
+    'mandelmilch',
   ];
   const softIndirectTokens = [
+    'cremefine',
     'schlagobers',
     'sahne',
     'obers',
@@ -486,39 +531,40 @@ function scoreMilkSearchIntent({ titleTokens, categoryTokens, structuredTokens, 
     'drink',
     'reisdrink',
   ];
-  const drinkingMilkTokens = [
+  const directMilkTokens = [
     'milch',
+    'trinkmilch',
     'vollmilch',
     'frischmilch',
     'haltbarmilch',
     'heumilch',
-    'esl',
     'biomilch',
-    'laktosefrei',
-    'laktosefreie',
   ];
-  const hardIndirect = hasAnyWordToken(allWords, hardIndirectTokens);
-  const softIndirect = hasAnyWordToken(allWords, softIndirectTokens);
+  const hardIndirect =
+    hasAnyTokenFamily(allTokens, hardIndirectTokens) ||
+    hasTokenSequence(allTokens, ['feiner', 'tiroler']);
+  const softIndirect = hasAnyTokenFamily(allTokens, softIndirectTokens);
   const milkCategory = hasAnyWordToken(categoryWords, ['milchprodukte', 'molkerei']);
-  const milkInTitle = hasAnyWordToken(titleWords, drinkingMilkTokens);
-  const closeMilkTerm = hasAnyWordToken(titleWords, ['frischmilch', 'haltbarmilch', 'biomilch']) ||
+  const milkInTitle = hasAnyWordToken(titleWords, directMilkTokens) ||
+    (hasAnyWordToken(titleWords, ['laktosefrei', 'laktosefreie']) && hasAnyWordToken(titleWords, ['milch']));
+  const closeMilkTerm = hasAnyWordToken(titleWords, ['trinkmilch', 'frischmilch', 'haltbarmilch', 'biomilch']) ||
     (hasAnyWordToken(titleWords, ['bio', 'heumilch', 'vollmilch', 'laktosefrei', 'laktosefreie', 'esl']) && hasAnyWordToken(titleWords, ['milch', 'heumilch', 'vollmilch']));
   const volumeSignal = hasMilkVolumeSignal(titleWords) || hasMilkVolumeSignal(` ${comparisonTokens.join(' ')} `);
   const drinkingMilk = !hardIndirect && !softIndirect && milkInTitle && (closeMilkTerm || volumeSignal || milkCategory);
   let adjustment = 0;
 
   if (drinkingMilk) {
-    adjustment += 1400;
+    adjustment += 5000;
   }
 
   if (hardIndirect) {
-    adjustment -= 2600;
+    adjustment -= 6000;
   } else if (softIndirect) {
-    adjustment -= 1400;
+    adjustment -= 3500;
   }
 
-  if (!drinkingMilk && hasAnyWordToken(titleWords, ['vollmilch', 'heumilch'])) {
-    adjustment -= 700;
+  if (!drinkingMilk && hasAnyTokenFamily(titleTokens, ['milch', 'vollmilch', 'heumilch', 'biomilch'])) {
+    adjustment -= 1400;
   }
 
   return adjustment;
@@ -642,10 +688,11 @@ function scoreOfferAgainstQuery(offer, query) {
 
   const matchedStructuredTokens = countTokenMatches(structuredTokens, queryTokens, { allowPrefix: true });
   const matchedAggregateTokens = countTokenMatches(aggregateTokens, queryTokens, { allowSubstring: true });
+  const genericMilkQuery = context?.key === 'milch' && isGenericMilkQuery(queryTokens);
   const productIntentMatched = context
     ? hasAnyTokenMatch(titleTokens.concat(comparisonTokens), context.productIntent, {
         exact: true,
-        suffix: true,
+        suffix: !genericMilkQuery,
       })
     : false;
   const productContextMatched = context
@@ -693,7 +740,7 @@ function scoreOfferAgainstQuery(offer, query) {
       score -= severeWeakContextMatches * 1600;
     }
 
-    if (context.key === 'milch') {
+    if (genericMilkQuery) {
       score += scoreMilkSearchIntent({
         titleTokens,
         categoryTokens,
