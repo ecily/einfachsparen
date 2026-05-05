@@ -23,10 +23,11 @@ const SORT_OPTIONS = {
 const SORT_LABELS = {
   [SORT_OPTIONS.best]: 'Empfohlen',
   [SORT_OPTIONS.retailer]: 'Märkte',
-  [SORT_OPTIONS.savings]: 'Ersparnis',
+  [SORT_OPTIONS.savings]: 'Größte Ersparnis',
 };
 
 const INITIAL_MESSAGE = 'Suche ein Produkt und merke passende Angebote für deinen Einkauf.';
+const RETAILER_ORDER = ['billa', 'billa-plus', 'bipa', 'dm', 'hofer', 'lidl', 'pagro', 'penny', 'spar'];
 
 function normalizeKey(value) {
   return String(value || '')
@@ -171,7 +172,7 @@ function getOfferSavingsScore(offer) {
     return oldPrice - currentPrice;
   }
 
-  return firstPositiveNumber([offer?.savingsPercent, offer?.discountPercent, offer?.discount?.percent]);
+  return 0;
 }
 
 function buildAvailableRetailers(retailers) {
@@ -189,7 +190,18 @@ function buildAvailableRetailers(retailers) {
       seen.add(retailer.key);
       return true;
     })
-    .sort((left, right) => left.label.localeCompare(right.label, 'de-AT'));
+    .sort((left, right) => {
+      const leftOrder = RETAILER_ORDER.indexOf(left.key);
+      const rightOrder = RETAILER_ORDER.indexOf(right.key);
+
+      if (leftOrder !== -1 || rightOrder !== -1) {
+        if (leftOrder === -1) return 1;
+        if (rightOrder === -1) return -1;
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      }
+
+      return left.label.localeCompare(right.label, 'de-AT');
+    });
 }
 
 export default function ProductSearchScreen({
@@ -316,6 +328,9 @@ export default function ProductSearchScreen({
       const params = new URLSearchParams();
       params.set('q', trimmedQuery);
       params.set('limit', String(SEARCH_LIMIT));
+      if (marketFilterEnabled && selectedRetailerKeys.length > 0) {
+        params.set('retailers', selectedRetailerKeys.join(','));
+      }
 
       const nextRanking = await fetchJson(`/offers/ranking?${params.toString()}`);
 
@@ -361,6 +376,16 @@ export default function ProductSearchScreen({
         ? current.filter((key) => key !== retailerKey)
         : [...current, retailerKey]
     );
+  }
+
+  function toggleMarketFilter() {
+    setMarketFilterEnabled((current) => {
+      if (current) {
+        setSelectedRetailerKeys([]);
+      }
+
+      return !current;
+    });
   }
 
   function resetMarketSelection() {
@@ -424,7 +449,7 @@ export default function ProductSearchScreen({
         </View>
         <Pressable
           style={[styles.filterToggle, marketFilterEnabled ? styles.filterToggleActive : null]}
-          onPress={() => setMarketFilterEnabled((current) => !current)}
+          onPress={toggleMarketFilter}
         >
           <Text style={[styles.filterToggleLabel, marketFilterEnabled ? styles.filterToggleLabelActive : null]}>
             Märkte wählen
@@ -464,7 +489,7 @@ export default function ProductSearchScreen({
             </View>
             {needsMarketSelection ? (
               <Text style={styles.filterHint}>
-                Wähle mindestens einen Markt aus oder deaktiviere den Marktfilter.
+                Wähle mindestens einen Markt oder deaktiviere die Eingrenzung.
               </Text>
             ) : null}
           </View>
@@ -563,12 +588,12 @@ export default function ProductSearchScreen({
                 <>
                   <Text style={styles.emptyTitle}>Kein Markt ausgewählt</Text>
                   <Text style={styles.emptyText}>
-                    Wähle mindestens einen Markt aus oder deaktiviere den Marktfilter.
+                    Wähle mindestens einen Markt oder deaktiviere die Eingrenzung.
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.emptyTitle}>Kein passendes Angebot gefunden</Text>
+                  <Text style={styles.emptyTitle}>Keine Angebote gefunden.</Text>
                   <Text style={styles.emptyText}>
                     Für deine Suche haben wir gerade kein passendes Angebot gefunden.
                   </Text>

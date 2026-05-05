@@ -211,6 +211,10 @@ function getKnownSavingsTotal(items, quantities) {
   }, 0)
 }
 
+function hasKnownCurrentPrice(items = []) {
+  return (items || []).some((item) => Number.isFinite(Number(item?.priceCurrent?.amount)))
+}
+
 export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers }) {
   const [checkedItemIds, setCheckedItemIds] = useState(() => loadCheckedShoppingListItems())
   const [hideCompleted, setHideCompleted] = useState(false)
@@ -221,9 +225,13 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
     [checkedItemIds, hideCompleted, shoppingListItems]
   )
   const groupedItems = useMemo(() => groupShoppingListByRetailer(visibleItems), [visibleItems])
+  const allRetailerCount = useMemo(() => groupShoppingListByRetailer(shoppingListItems).length, [shoppingListItems])
   const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
   const offerTotal = useMemo(() => getItemsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
+  const canShowOfferTotal = useMemo(() => hasKnownCurrentPrice(shoppingListItems), [shoppingListItems])
+  const canShowKnownSavings = summary.knownSavingsCount > 0 && knownSavingsTotal > 0
+  const hasMissingSavings = summary.knownSavingsCount < shoppingListItems.length
 
   useEffect(() => {
     storeCheckedShoppingListItems(checkedItemIds)
@@ -296,8 +304,8 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
       <SectionCard style={{ marginBottom: '1rem' }}>
         <div className="shopping-list-hero">
           <p className="eyebrow">Einkaufsliste</p>
-          <h1>Noch keine Angebote gemerkt.</h1>
-          <p>Suche nach Produkten und merke dir passende Angebote für deinen Einkauf.</p>
+          <h1>Deine Einkaufsliste ist noch leer.</h1>
+          <p>Suche Angebote und merke sie dir für deinen Einkauf.</p>
           <button type="button" className="primary-action-button" onClick={onGoToOffers}>
             Angebote suchen
           </button>
@@ -316,18 +324,27 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
         </div>
       </SectionCard>
 
-      <section className="shopping-summary shopping-summary--with-progress">
-        <article className="shopping-summary__card">
-          <span>Aktionspreise gesamt</span>
-          <strong>ca. {formatPrice(offerTotal)}</strong>
-        </article>
+      <section className="shopping-check" aria-labelledby="shopping-check-title">
+        <div className="shopping-check__copy">
+          <h2 id="shopping-check-title">Einkaufscheck</h2>
+          <p>
+            {allRetailerCount === 1
+              ? 'Deine Liste liegt aktuell bei einem Markt.'
+              : `Deine Liste ist auf ${allRetailerCount} Märkte verteilt.`}
+          </p>
+          {allRetailerCount === 1 ? <span>Das ist bereits einfach geplant.</span> : null}
+        </div>
 
-        {summary.knownSavingsCount > 0 ? (
-          <article className="shopping-summary__card shopping-summary__card--saving">
-            <span>Bekannte Ersparnis</span>
-            <strong>ca. {formatPrice(knownSavingsTotal)}</strong>
-          </article>
+        <div className="shopping-check__facts">
+          <span>{shoppingListItems.length} Artikel gemerkt</span>
+          {canShowOfferTotal ? <span>Aktionssumme ca. {formatPrice(offerTotal)}</span> : null}
+          {canShowKnownSavings ? <span>Ersparnis ca. {formatPrice(knownSavingsTotal)}</span> : null}
+        </div>
+
+        {hasMissingSavings ? (
+          <p className="shopping-check__soft-note">Nicht für jedes Angebot ist eine verlässliche Ersparnis angegeben.</p>
         ) : null}
+        <p className="shopping-check__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
       </section>
 
       <div className="shopping-list-actions">
