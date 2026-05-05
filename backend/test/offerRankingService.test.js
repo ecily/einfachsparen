@@ -431,8 +431,10 @@ test('ranks real milk ahead of cheese or cream brand context hits', () => {
   ];
   const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
 
+  assert.deepEqual(sortedTitles, ['Ja Natuerlich Bio Vollmilch 1 l']);
   assert.equal(sortedTitles[0], 'Ja Natuerlich Bio Vollmilch 1 l');
-  assert.ok(sortedTitles.indexOf('Salzburg Milch Gouda Scheiben') > 0);
+  assert.equal(sortedTitles.includes('Salzburg Milch Gouda Scheiben'), false);
+  assert.equal(sortedTitles.includes('Tirol Milch Schlagobers'), false);
 });
 
 test('ranks drinking milk ahead of whole milk chocolate for milk search', () => {
@@ -460,9 +462,10 @@ test('ranks drinking milk ahead of whole milk chocolate for milk search', () => 
   ];
   const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
 
+  assert.deepEqual(sortedTitles, ['Bio Frischmilch 1 l']);
   assert.equal(sortedTitles[0], 'Bio Frischmilch 1 l');
-  assert.ok(sortedTitles.indexOf("Tony's Chocolonely Vollmilch Schokolade") > 0);
-  assert.ok(sortedTitles.indexOf('Milka Vollmilch Schokolade') > 0);
+  assert.equal(sortedTitles.includes("Tony's Chocolonely Vollmilch Schokolade"), false);
+  assert.equal(sortedTitles.includes('Milka Vollmilch Schokolade'), false);
 });
 
 test('does not give whole milk chocolate a positive milk intent boost', () => {
@@ -541,8 +544,9 @@ test('does not give whole milk chocolate a positive milk intent boost', () => {
     });
     const sortedTitles = applyQueryMatch([sideOffer, drinkingMilk], 'milch').map((item) => item.title);
 
+    assert.deepEqual(sortedTitles, ['Trinkmilch 1 Liter']);
     assert.equal(sortedTitles[0], 'Trinkmilch 1 Liter');
-    assert.ok(sortedTitles.indexOf(sideOffer.title) > 0);
+    assert.equal(sortedTitles.includes(sideOffer.title), false);
   });
 });
 
@@ -561,6 +565,104 @@ test('does not boost whole milk chocolate as drinking milk for generic milk sear
   });
 
   assert.ok(scoreOfferAgainstQuery(drinkingMilk, 'milch') - scoreOfferAgainstQuery(chocolate, 'milch') > 4000);
+});
+
+test('keeps drinking milk visible for generic milk search', () => {
+  const drinkingMilk = offer({
+    title: 'Trinkmilch 1 Liter',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    comparisonGroup: 'trinkmilch::1-l',
+  });
+
+  assert.deepEqual(applyQueryMatch([drinkingMilk], 'milch').map((item) => item.title), [
+    'Trinkmilch 1 Liter',
+  ]);
+});
+
+test('does not use butter, cosmetics or peanut butter cups as milk replacement hits', () => {
+  const offers = [
+    offer({
+      title: 'Milsani Irische Butter',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'milsani-irische-butter::0.25-kg',
+    }),
+    offer({
+      title: 'MANHATTAN Butter Me Up Lippenbalsam',
+      brand: 'MANHATTAN',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      comparisonGroup: 'manhattan-butter-lippenbalsam::1-Stk',
+    }),
+    offer({
+      title: 'Protein Peanut Butter Cups',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'protein-peanut-butter-cups::0.04-kg',
+    }),
+    offer({
+      title: 'Trinkmilch 1 Liter',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'trinkmilch::1-l',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles, ['Trinkmilch 1 Liter']);
+});
+
+test('does not use yoghurt or actimel as milk replacement hits', () => {
+  const offers = [
+    offer({
+      title: 'Naturjoghurt 3,5 Prozent',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'naturjoghurt::0.5-kg',
+    }),
+    offer({
+      title: 'Actimel Drink Erdbeere',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'actimel-drink::0.6-l',
+    }),
+    offer({
+      title: 'Frischmilch 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'frischmilch::1-l',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles, ['Frischmilch 1 l']);
+});
+
+test('returns no generic milk ranking when only irrelevant replacement hits are available', () => {
+  const offers = [
+    offer({
+      title: 'Milsani Irische Butter',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'milsani-irische-butter::0.25-kg',
+    }),
+    offer({
+      title: 'Naturjoghurt 3,5 Prozent',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'naturjoghurt::0.5-kg',
+    }),
+    offer({
+      title: 'MANHATTAN Butter Me Up Lippenbalsam',
+      brand: 'MANHATTAN',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      comparisonGroup: 'manhattan-butter-lippenbalsam::1-Stk',
+    }),
+  ];
+
+  assert.deepEqual(applyQueryMatch(offers, 'milch'), []);
 });
 
 test('ranks drinking milk ahead of heumilk camembert or cheese for milk search', () => {
@@ -586,9 +688,10 @@ test('ranks drinking milk ahead of heumilk camembert or cheese for milk search',
   ];
   const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
 
+  assert.deepEqual(sortedTitles, ['Bio Heumilch 1 l']);
   assert.equal(sortedTitles[0], 'Bio Heumilch 1 l');
-  assert.ok(sortedTitles.indexOf('Heumilch Bio-Camembert') > 0);
-  assert.ok(sortedTitles.indexOf('Heumilch Gouda Scheiben') > 0);
+  assert.equal(sortedTitles.includes('Heumilch Bio-Camembert'), false);
+  assert.equal(sortedTitles.includes('Heumilch Gouda Scheiben'), false);
 });
 
 test('dampens milk brand cheese hits for milk search', () => {
@@ -616,9 +719,10 @@ test('dampens milk brand cheese hits for milk search', () => {
   ];
   const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
 
+  assert.deepEqual(sortedTitles, ['Frischmilch 1 l']);
   assert.equal(sortedTitles[0], 'Frischmilch 1 l');
-  assert.ok(sortedTitles.indexOf('Gmundner Milch Edamer Scheiben') > 0);
-  assert.ok(sortedTitles.indexOf('Tirol Milch Graukaese') > 0);
+  assert.equal(sortedTitles.includes('Gmundner Milch Edamer Scheiben'), false);
+  assert.equal(sortedTitles.includes('Tirol Milch Graukaese'), false);
 });
 
 test('ranks drinking milk ahead of milk biscuit and chocolate snack hits', () => {
@@ -650,10 +754,11 @@ test('ranks drinking milk ahead of milk biscuit and chocolate snack hits', () =>
   ];
   const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
 
+  assert.deepEqual(sortedTitles, ['Laktosefreie Milch 1 l']);
   assert.equal(sortedTitles[0], 'Laktosefreie Milch 1 l');
-  assert.ok(sortedTitles.indexOf('Milch Broetle Schoko') > 0);
-  assert.ok(sortedTitles.indexOf('Leibniz Choco & Milch') > 0);
-  assert.ok(sortedTitles.indexOf('Merci Mandel-Milch-Nuss') > 0);
+  assert.equal(sortedTitles.includes('Milch Broetle Schoko'), false);
+  assert.equal(sortedTitles.includes('Leibniz Choco & Milch'), false);
+  assert.equal(sortedTitles.includes('Merci Mandel-Milch-Nuss'), false);
 });
 
 test('does not rank cream ahead of drinking milk for milk search', () => {
@@ -680,9 +785,10 @@ test('does not rank cream ahead of drinking milk for milk search', () => {
   ];
   const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
 
+  assert.deepEqual(sortedTitles, ['Haltbarmilch 1 l']);
   assert.equal(sortedTitles[0], 'Haltbarmilch 1 l');
-  assert.ok(sortedTitles.indexOf('Tirol Milch Schlagobers') > 0);
-  assert.ok(sortedTitles.indexOf('Sahne Dessert mit Milch') > 0);
+  assert.equal(sortedTitles.includes('Tirol Milch Schlagobers'), false);
+  assert.equal(sortedTitles.includes('Sahne Dessert mit Milch'), false);
 });
 
 test('ranks real yoghurt ahead of dessert, bar and margarine context hits', () => {
