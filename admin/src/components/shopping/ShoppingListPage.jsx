@@ -327,6 +327,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
       <section className="shopping-check" aria-labelledby="shopping-check-title">
         <div className="shopping-check__copy">
           <h2 id="shopping-check-title">Einkaufscheck</h2>
+          <span>So ist dein Einkauf aktuell verteilt.</span>
           <p>
             {allRetailerCount === 1
               ? 'Deine Liste liegt aktuell bei einem Markt.'
@@ -337,12 +338,12 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
 
         <div className="shopping-check__facts">
           <span>{shoppingListItems.length} Artikel gemerkt</span>
-          {canShowOfferTotal ? <span>Aktionssumme ca. {formatPrice(offerTotal)}</span> : null}
+          {canShowOfferTotal ? <span>Gemerkte Angebote ca. {formatPrice(offerTotal)}</span> : null}
           {canShowKnownSavings ? <span>Ersparnis ca. {formatPrice(knownSavingsTotal)}</span> : null}
         </div>
 
         {hasMissingSavings ? (
-          <p className="shopping-check__soft-note">Nicht für jedes Angebot ist eine verlässliche Ersparnis angegeben.</p>
+          <p className="shopping-check__soft-note">Nicht jedes Angebot enthält eine verlässliche Ersparnis.</p>
         ) : null}
         <p className="shopping-check__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
       </section>
