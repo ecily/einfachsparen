@@ -375,6 +375,216 @@ test('keeps grouped detergent response query-sorted for live response order', ()
   ]));
 });
 
+test('ranks chicken meat ahead of pet food for generic huhn search', () => {
+  const offers = [
+    offer({
+      title: 'Sheba Nassfutter mit Huhn',
+      brand: 'Sheba',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'sheba-nassfutter-huhn::12-Stk',
+    }),
+    offer({
+      title: 'Hendl Hühnerfilet frisch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'hendl-huehnerfilet::1-kg',
+    }),
+    offer({
+      title: 'Whiskas Katzenfutter Huhn',
+      brand: 'Whiskas',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'whiskas-katzenfutter-huhn::12-Stk',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'huhn').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Hendl Hühnerfilet frisch');
+  assert.ok(sortedTitles.includes('Sheba Nassfutter mit Huhn'));
+  assert.ok(sortedTitles.indexOf('Sheba Nassfutter mit Huhn') > 0);
+  assert.ok(sortedTitles.indexOf('Whiskas Katzenfutter Huhn') > 0);
+});
+
+test('ranks real milk ahead of cheese or cream brand context hits', () => {
+  const offers = [
+    offer({
+      title: 'Salzburg Milch Gouda Scheiben',
+      brand: 'Salzburg Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'salzburg-milch-gouda::0.25-kg',
+    }),
+    offer({
+      title: 'Tirol Milch Schlagobers',
+      brand: 'Tirol Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'tirol-milch-schlagobers::0.25-l',
+    }),
+    offer({
+      title: 'Ja Natuerlich Bio Vollmilch 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'bio-vollmilch::1-l',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Ja Natuerlich Bio Vollmilch 1 l');
+  assert.ok(sortedTitles.indexOf('Salzburg Milch Gouda Scheiben') > 0);
+});
+
+test('ranks real yoghurt ahead of dessert, bar and margarine context hits', () => {
+  const offers = [
+    offer({
+      title: 'Joghurttorte Erdbeer',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Backen & Suesswaren',
+      comparisonGroup: 'joghurttorte-erdbeer::1-Stk',
+    }),
+    offer({
+      title: 'Rama mit Joghurt',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Butter & Margarine',
+      comparisonGroup: 'rama-joghurt::0.25-kg',
+    }),
+    offer({
+      title: 'Naturjoghurt 3,5 Prozent',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'naturjoghurt::0.5-kg',
+    }),
+    offer({
+      title: 'Fruchtriegel Joghurt',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'fruchtriegel-joghurt::6-Stk',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'joghurt').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Naturjoghurt 3,5 Prozent');
+  assert.ok(sortedTitles.indexOf('Fruchtriegel Joghurt') > 0);
+  assert.ok(sortedTitles.indexOf('Rama mit Joghurt') > 0);
+});
+
+test('ranks cheese products ahead of meat products with cheese', () => {
+  const offers = [
+    offer({
+      title: 'Mini Pljeskavica mit Kaese',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'mini-pljeskavica-kaese::0.4-kg',
+    }),
+    offer({
+      title: 'Gouda Scheiben',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'gouda-scheiben::0.25-kg',
+    }),
+    offer({
+      title: 'Cabanossi mit Kaese',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'cabanossi-kaese::0.3-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'kaese').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Gouda Scheiben');
+  assert.ok(sortedTitles.indexOf('Cabanossi mit Kaese') > 0);
+});
+
+test('ranks chocolate bars ahead of chocolate dessert hits', () => {
+  const offers = [
+    offer({
+      title: 'Schokolade Dessert Creme',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Dessert',
+      comparisonGroup: 'schokolade-dessert-creme::0.2-kg',
+    }),
+    offer({
+      title: 'Milka Tafelschokolade Alpenmilch',
+      brand: 'Milka',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'milka-tafelschokolade::0.1-kg',
+    }),
+    offer({
+      title: 'Lindt Schokolade Riegel',
+      brand: 'Lindt',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'lindt-schokolade-riegel::0.05-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'schokolade').map((item) => item.title);
+
+  assert.deepEqual(new Set(sortedTitles.slice(0, 2)), new Set([
+    'Milka Tafelschokolade Alpenmilch',
+    'Lindt Schokolade Riegel',
+  ]));
+  assert.ok(sortedTitles.indexOf('Schokolade Dessert Creme') > 1);
+});
+
+test('ranks classic coffee ahead of iced coffee drink for generic coffee search', () => {
+  const offers = [
+    offer({
+      title: 'Emmi Caffe Latte Eiskaffee Drink',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'emmi-caffe-latte::0.23-l',
+    }),
+    offer({
+      title: 'Lavazza Kaffee Bohnen Espresso',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'lavazza-kaffee-bohnen::1-kg',
+    }),
+    offer({
+      title: 'Nespresso Kaffee Kapseln',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'nespresso-kaffee-kapseln::10-Stk',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'kaffee').map((item) => item.title);
+
+  assert.deepEqual(new Set(sortedTitles.slice(0, 2)), new Set([
+    'Lavazza Kaffee Bohnen Espresso',
+    'Nespresso Kaffee Kapseln',
+  ]));
+  assert.ok(sortedTitles.indexOf('Emmi Caffe Latte Eiskaffee Drink') > 1);
+});
+
+test('ranks real detergent ahead of unclear laundry accessory hits', () => {
+  const offers = [
+    offer({
+      title: 'Dr. Beckmann Aufhelltuecher',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'beckmann-aufhelltuecher::15-Stk',
+    }),
+    offer({
+      title: 'Ariel Waschmittel Pods 20 WG',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'ariel-waschmittel-pods::20-Stk',
+    }),
+    offer({
+      title: 'Profissimo Waesche Duftperlen',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reiniger',
+      comparisonGroup: 'profissimo-waesche-duftperlen::1-Stk',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'waschmittel').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Ariel Waschmittel Pods 20 WG');
+  assert.ok(sortedTitles.indexOf('Dr. Beckmann Aufhelltuecher') > 0);
+});
+
 test('keeps offers without validTo in ranking groups', () => {
   const noEndDateOffer = offer({
     title: 'BILLA Bio Butter 250 g',
