@@ -2,6 +2,10 @@ const MAX_RANKING_LIMIT = 60;
 const MAX_QUERY_LENGTH = 80;
 const MAX_LIST_VALUE_LENGTH = 60;
 const MAX_LIST_VALUES = 20;
+const MAX_RANKING_CATEGORY_VALUES = 80;
+const MAX_RANKING_RETAILER_VALUES = 30;
+const MAX_RANKING_CATEGORIES_LENGTH = 5000;
+const MAX_RANKING_RETAILERS_LENGTH = 1500;
 const MAX_UNIT_LENGTH = 20;
 const MAX_BASKET_ITEMS = 20;
 const MAX_BASKET_ITEM_LENGTH = 80;
@@ -69,7 +73,21 @@ function normalizeString(value, { maxLength, field, required = false } = {}) {
   return trimmed;
 }
 
-function normalizeStringList(value, { field, maxValues = MAX_LIST_VALUES, maxLength = MAX_LIST_VALUE_LENGTH } = {}) {
+function normalizeStringList(
+  value,
+  {
+    field,
+    maxValues = MAX_LIST_VALUES,
+    maxLength = MAX_LIST_VALUE_LENGTH,
+    maxTotalLength = maxValues * (maxLength + 1),
+  } = {}
+) {
+  const rawValue = Array.isArray(value) ? value.join(',') : String(value || '');
+
+  if (rawValue.length > maxTotalLength) {
+    rejectBadRequest(`${field} ist zu lang.`);
+  }
+
   const rawItems = Array.isArray(value) ? value : String(value || '').split(',');
   const items = rawItems.map((item) => String(item || '').trim()).filter(Boolean);
 
@@ -123,9 +141,24 @@ function validateRankingQuery(req, res, next) {
 
     req.query.limit = Math.min(parsedLimit, MAX_RANKING_LIMIT);
     req.query.q = normalizeString(req.query.q || '', { field: 'q', maxLength: MAX_QUERY_LENGTH });
-    req.query.categories = normalizeStringList(req.query.categories, { field: 'categories' });
-    req.query.retailers = normalizeStringList(req.query.retailers, { field: 'retailers' });
-    req.query.programRetailers = normalizeStringList(req.query.programRetailers, { field: 'programRetailers' });
+    req.query.categories = normalizeStringList(req.query.categories, {
+      field: 'categories',
+      maxValues: MAX_RANKING_CATEGORY_VALUES,
+      maxLength: MAX_LIST_VALUE_LENGTH,
+      maxTotalLength: MAX_RANKING_CATEGORIES_LENGTH,
+    });
+    req.query.retailers = normalizeStringList(req.query.retailers, {
+      field: 'retailers',
+      maxValues: MAX_RANKING_RETAILER_VALUES,
+      maxLength: MAX_LIST_VALUE_LENGTH,
+      maxTotalLength: MAX_RANKING_RETAILERS_LENGTH,
+    });
+    req.query.programRetailers = normalizeStringList(req.query.programRetailers, {
+      field: 'programRetailers',
+      maxValues: MAX_RANKING_RETAILER_VALUES,
+      maxLength: MAX_LIST_VALUE_LENGTH,
+      maxTotalLength: MAX_RANKING_RETAILERS_LENGTH,
+    });
     req.query.unit = normalizeString(req.query.unit || 'all', { field: 'unit', maxLength: MAX_UNIT_LENGTH }) || 'all';
 
     const sort = normalizeString(req.query.sort || '', { field: 'sort', maxLength: 20 });
