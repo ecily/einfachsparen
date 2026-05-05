@@ -262,6 +262,7 @@ const QUERY_CONTEXTS = [
     exactProductIntent: ['vollmilch', 'frischmilch', 'haltbarmilch', 'heumilch'],
     productContext: ['milchprodukte', 'molkerei', 'milch'],
     weakContexts: ['kaese', 'kase', 'gouda', 'emmentaler', 'bergkaese', 'bergkase', 'schlagobers', 'sahne', 'obers'],
+    severeWeakContexts: ['schokolade', 'chocolonely', 'camembert', 'kaese', 'kase', 'gouda', 'schlagobers', 'sahne', 'obers', 'dessert'],
   },
   {
     tokens: ['huhn', 'hendl', 'huehnchen', 'huhnchen'],

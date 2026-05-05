@@ -435,6 +435,93 @@ test('ranks real milk ahead of cheese or cream brand context hits', () => {
   assert.ok(sortedTitles.indexOf('Salzburg Milch Gouda Scheiben') > 0);
 });
 
+test('ranks drinking milk ahead of whole milk chocolate for milk search', () => {
+  const offers = [
+    offer({
+      title: "Tony's Chocolonely Vollmilch Schokolade",
+      brand: "Tony's Chocolonely",
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'tonys-chocolonely-vollmilch-schokolade::0.18-kg',
+    }),
+    offer({
+      title: 'Bio Frischmilch 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'bio-frischmilch::1-l',
+    }),
+    offer({
+      title: 'Milka Vollmilch Schokolade',
+      brand: 'Milka',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'milka-vollmilch-schokolade::0.1-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Bio Frischmilch 1 l');
+  assert.ok(sortedTitles.indexOf("Tony's Chocolonely Vollmilch Schokolade") > 0);
+  assert.ok(sortedTitles.indexOf('Milka Vollmilch Schokolade') > 0);
+});
+
+test('ranks drinking milk ahead of heumilk camembert or cheese for milk search', () => {
+  const offers = [
+    offer({
+      title: 'Heumilch Bio-Camembert',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'heumilch-bio-camembert::0.15-kg',
+    }),
+    offer({
+      title: 'Bio Heumilch 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'bio-heumilch::1-l',
+    }),
+    offer({
+      title: 'Heumilch Gouda Scheiben',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'heumilch-gouda-scheiben::0.25-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Bio Heumilch 1 l');
+  assert.ok(sortedTitles.indexOf('Heumilch Bio-Camembert') > 0);
+  assert.ok(sortedTitles.indexOf('Heumilch Gouda Scheiben') > 0);
+});
+
+test('does not rank cream ahead of drinking milk for milk search', () => {
+  const offers = [
+    offer({
+      title: 'Tirol Milch Schlagobers',
+      brand: 'Tirol Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'tirol-milch-schlagobers::0.25-l',
+    }),
+    offer({
+      title: 'Haltbarmilch 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'haltbarmilch::1-l',
+    }),
+    offer({
+      title: 'Sahne Dessert mit Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Dessert',
+      comparisonGroup: 'sahne-dessert-milch::0.2-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Haltbarmilch 1 l');
+  assert.ok(sortedTitles.indexOf('Tirol Milch Schlagobers') > 0);
+  assert.ok(sortedTitles.indexOf('Sahne Dessert mit Milch') > 0);
+});
+
 test('ranks real yoghurt ahead of dessert, bar and margarine context hits', () => {
   const offers = [
     offer({
