@@ -255,14 +255,44 @@ const QUERY_CONTEXTS = [
     weakContexts: ['eiskaffee', 'drink', 'pflanze', 'zierpflanze', 'duftgeranie', 'tomate', 'erdbeere', 'banane'],
   },
   {
+    key: 'milch',
     tokens: ['milch'],
     preferred: ['milch', 'milchprodukte', 'molkerei', 'lebensmittel'],
     strongPreferred: ['milch', 'milchprodukte', 'molkerei'],
-    productIntent: ['milch', 'vollmilch', 'frischmilch', 'haltbarmilch', 'heumilch', 'esl', 'buttermilch'],
-    exactProductIntent: ['vollmilch', 'frischmilch', 'haltbarmilch', 'heumilch'],
+    productIntent: ['milch', 'frischmilch', 'haltbarmilch', 'esl', 'buttermilch'],
+    exactProductIntent: ['frischmilch', 'haltbarmilch'],
     productContext: ['milchprodukte', 'molkerei', 'milch'],
-    weakContexts: ['kaese', 'kase', 'gouda', 'emmentaler', 'bergkaese', 'bergkase', 'schlagobers', 'sahne', 'obers'],
-    severeWeakContexts: ['schokolade', 'chocolonely', 'camembert', 'kaese', 'kase', 'gouda', 'schlagobers', 'sahne', 'obers', 'dessert'],
+    weakContexts: ['schlagobers', 'sahne', 'obers', 'dessert', 'pudding', 'torte', 'milchreis', 'drink', 'reisdrink'],
+    severeWeakContexts: [
+      'schokolade',
+      'schoko',
+      'zartbitter',
+      'chocolonely',
+      'mikado',
+      'pickup',
+      'pick',
+      'merci',
+      'choco',
+      'mandel',
+      'nuss',
+      'keks',
+      'kekse',
+      'riegel',
+      'pralinen',
+      'tafel',
+      'broetchen',
+      'brotle',
+      'camembert',
+      'emmentaler',
+      'edamer',
+      'gouda',
+      'graukaese',
+      'graukase',
+      'kaese',
+      'kase',
+      'scheiben',
+      'gerieben',
+    ],
   },
   {
     tokens: ['huhn', 'hendl', 'huehnchen', 'huhnchen'],
@@ -395,6 +425,103 @@ function hasAnyTokenMatch(fieldTokens, expectedTokens = [], { exact = false, suf
       (suffix && fieldToken.endsWith(expectedToken))
     )
   );
+}
+
+function hasWordToken(wordString, token) {
+  return wordString.includes(` ${token} `);
+}
+
+function hasAnyWordToken(wordString, tokens = []) {
+  return tokens.some((token) => hasWordToken(wordString, token));
+}
+
+function hasMilkVolumeSignal(wordString) {
+  return /\b\d+(?:[.,]\d+)?\s*(?:l|liter)\b/.test(wordString) ||
+    /\b(?:1l|0 5l|500ml|500 ml|liter)\b/.test(wordString);
+}
+
+function scoreMilkSearchIntent({ titleTokens, categoryTokens, structuredTokens, comparisonTokens, aggregateTokens }) {
+  const titleWords = ` ${titleTokens.join(' ')} `;
+  const categoryWords = ` ${categoryTokens.join(' ')} `;
+  const structuredWords = ` ${structuredTokens.join(' ')} `;
+  const allWords = ` ${structuredTokens.concat(aggregateTokens).join(' ')} `;
+  const hardIndirectTokens = [
+    'schokolade',
+    'schoko',
+    'zartbitter',
+    'chocolonely',
+    'mikado',
+    'pickup',
+    'pick',
+    'merci',
+    'choco',
+    'mandel',
+    'nuss',
+    'keks',
+    'kekse',
+    'riegel',
+    'pralinen',
+    'tafel',
+    'broetchen',
+    'brotle',
+    'camembert',
+    'emmentaler',
+    'edamer',
+    'gouda',
+    'graukaese',
+    'graukase',
+    'kaese',
+    'kase',
+    'scheiben',
+    'gerieben',
+  ];
+  const softIndirectTokens = [
+    'schlagobers',
+    'sahne',
+    'obers',
+    'dessert',
+    'pudding',
+    'torte',
+    'milchreis',
+    'drink',
+    'reisdrink',
+  ];
+  const drinkingMilkTokens = [
+    'milch',
+    'vollmilch',
+    'frischmilch',
+    'haltbarmilch',
+    'heumilch',
+    'esl',
+    'biomilch',
+    'laktosefrei',
+    'laktosefreie',
+  ];
+  const hardIndirect = hasAnyWordToken(allWords, hardIndirectTokens);
+  const softIndirect = hasAnyWordToken(allWords, softIndirectTokens);
+  const milkCategory = hasAnyWordToken(categoryWords, ['milchprodukte', 'molkerei']);
+  const milkInTitle = hasAnyWordToken(titleWords, drinkingMilkTokens);
+  const closeMilkTerm = hasAnyWordToken(titleWords, ['frischmilch', 'haltbarmilch', 'biomilch']) ||
+    (hasAnyWordToken(titleWords, ['bio', 'heumilch', 'vollmilch', 'laktosefrei', 'laktosefreie', 'esl']) && hasAnyWordToken(titleWords, ['milch', 'heumilch', 'vollmilch']));
+  const volumeSignal = hasMilkVolumeSignal(titleWords) || hasMilkVolumeSignal(` ${comparisonTokens.join(' ')} `);
+  const drinkingMilk = !hardIndirect && !softIndirect && milkInTitle && (closeMilkTerm || volumeSignal || milkCategory);
+  let adjustment = 0;
+
+  if (drinkingMilk) {
+    adjustment += 1400;
+  }
+
+  if (hardIndirect) {
+    adjustment -= 2600;
+  } else if (softIndirect) {
+    adjustment -= 1400;
+  }
+
+  if (!drinkingMilk && hasAnyWordToken(titleWords, ['vollmilch', 'heumilch'])) {
+    adjustment -= 700;
+  }
+
+  return adjustment;
 }
 
 function scoreFieldAgainstQuery(value, queryTokens, weights) {
@@ -564,6 +691,16 @@ function scoreOfferAgainstQuery(offer, query) {
 
     if (severeWeakContextMatches > 0) {
       score -= severeWeakContextMatches * 1600;
+    }
+
+    if (context.key === 'milch') {
+      score += scoreMilkSearchIntent({
+        titleTokens,
+        categoryTokens,
+        structuredTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
     }
   }
 

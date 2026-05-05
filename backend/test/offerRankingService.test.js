@@ -465,6 +465,23 @@ test('ranks drinking milk ahead of whole milk chocolate for milk search', () => 
   assert.ok(sortedTitles.indexOf('Milka Vollmilch Schokolade') > 0);
 });
 
+test('does not give whole milk chocolate a positive milk intent boost', () => {
+  const drinkingMilk = offer({
+    title: 'Vollmilch 1 Liter',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    comparisonGroup: 'vollmilch::1-l',
+  });
+  const chocolate = offer({
+    title: 'LU Mikado Vollmilch oder Zartbitter',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+    comparisonGroup: 'lu-mikado-vollmilch-zartbitter::0.075-kg',
+  });
+
+  assert.ok(scoreOfferAgainstQuery(drinkingMilk, 'milch') > scoreOfferAgainstQuery(chocolate, 'milch'));
+});
+
 test('ranks drinking milk ahead of heumilk camembert or cheese for milk search', () => {
   const offers = [
     offer({
@@ -491,6 +508,71 @@ test('ranks drinking milk ahead of heumilk camembert or cheese for milk search',
   assert.equal(sortedTitles[0], 'Bio Heumilch 1 l');
   assert.ok(sortedTitles.indexOf('Heumilch Bio-Camembert') > 0);
   assert.ok(sortedTitles.indexOf('Heumilch Gouda Scheiben') > 0);
+});
+
+test('dampens milk brand cheese hits for milk search', () => {
+  const offers = [
+    offer({
+      title: 'Gmundner Milch Edamer Scheiben',
+      brand: 'Gmundner Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'gmundner-milch-edamer-scheiben::0.25-kg',
+    }),
+    offer({
+      title: 'Tirol Milch Graukaese',
+      brand: 'Tirol Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'tirol-milch-graukaese::0.2-kg',
+    }),
+    offer({
+      title: 'Frischmilch 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'frischmilch::1-l',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Frischmilch 1 l');
+  assert.ok(sortedTitles.indexOf('Gmundner Milch Edamer Scheiben') > 0);
+  assert.ok(sortedTitles.indexOf('Tirol Milch Graukaese') > 0);
+});
+
+test('ranks drinking milk ahead of milk biscuit and chocolate snack hits', () => {
+  const offers = [
+    offer({
+      title: 'Milch Broetle Schoko',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'milch-broetle-schoko::1-Stk',
+    }),
+    offer({
+      title: 'Leibniz Choco & Milch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'leibniz-choco-milch::0.125-kg',
+    }),
+    offer({
+      title: 'Merci Mandel-Milch-Nuss',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'merci-mandel-milch-nuss::0.25-kg',
+    }),
+    offer({
+      title: 'Laktosefreie Milch 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'laktosefreie-milch::1-l',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'Laktosefreie Milch 1 l');
+  assert.ok(sortedTitles.indexOf('Milch Broetle Schoko') > 0);
+  assert.ok(sortedTitles.indexOf('Leibniz Choco & Milch') > 0);
+  assert.ok(sortedTitles.indexOf('Merci Mandel-Milch-Nuss') > 0);
 });
 
 test('does not rank cream ahead of drinking milk for milk search', () => {
