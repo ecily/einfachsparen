@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "test": "node --test",
     "analyze:categories": "node scripts/analyze-category-quality.js",
+    "audit:penny-leaflet": "node scripts/auditPennyLeafletCoverage.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",
     "rebuild:filters": "node scripts/rebuild-filter-metadata.js"
@@ -25,6 +26,7 @@
     "express-rate-limit": "^8.4.1",
     "mongoose": "^9.4.1",
     "p-limit": "^7.3.0",
+    "pdf-parse": "^2.4.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -18,6 +18,11 @@ const {
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+const {
+  PARSER_VERSION: PENNY_PDF_PARSER_VERSION,
+  extractPennyPdfReference,
+  normalizePennyPdfCandidatesToOffers,
+} = require('./pennyPdfLeafletParser');
 
 const PARSER_VERSION = 'official-v3-coverage';
 
@@ -30,7 +35,7 @@ function toAbsoluteUrl(href, baseUrl) {
 }
 
 function createHash(value) {
-  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+  return crypto.createHash('sha256').update(Buffer.isBuffer(value) ? value : String(value || '')).digest('hex');
 }
 
 function parseNumericAmount(value) {
@@ -910,6 +915,131 @@ async function fetchHtml(url) {
   };
 }
 
+async function fetchBinary(url, accept = 'application/pdf,*/*') {
+  const response = await axios.get(url, {
+    timeout: 45000,
+    responseType: 'arraybuffer',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      Accept: accept,
+      'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+    },
+  });
+
+  return {
+    response,
+    buffer: Buffer.from(response.data),
+    canonicalUrl: response.request?.res?.responseUrl || url,
+  };
+}
+
+function extractIssuuDocumentsFromHtml(html) {
+  const documents = [];
+  const seen = new Set();
+
+  function pushDocument(username, documentName, embedUrl = '') {
+    const normalizedUsername = sanitizeWhitespace(username);
+    const normalizedDocumentName = sanitizeWhitespace(documentName);
+
+    if (!normalizedUsername || !normalizedDocumentName) {
+      return;
+    }
+
+    const key = `${normalizedUsername}::${normalizedDocumentName}`;
+
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    documents.push({
+      username: normalizedUsername,
+      documentName: normalizedDocumentName,
+      embedUrl,
+      documentUrl: `https://issuu.com/${encodeURIComponent(normalizedUsername)}/docs/${encodeURIComponent(normalizedDocumentName)}`,
+    });
+  }
+
+  const $ = cheerio.load(html);
+
+  $('iframe[src], a[href]').each((index, element) => {
+    const src = $(element).attr('src') || $(element).attr('href') || '';
+    const absoluteUrl = toAbsoluteUrl(src, 'https://www.penny.at/');
+
+    if (!/issuu\.com/i.test(absoluteUrl)) {
+      return;
+    }
+
+    try {
+      const parsedUrl = new URL(absoluteUrl);
+      const username = parsedUrl.searchParams.get('u');
+      const documentName = parsedUrl.searchParams.get('d');
+
+      pushDocument(username, documentName, absoluteUrl);
+    } catch (error) {
+      // Ignore unrelated URLs.
+    }
+  });
+
+  for (const match of String(html || '').matchAll(/https?:\/\/e\.issuu\.com\/embed\.html\?[^"'<>\\]+/gi)) {
+    try {
+      const parsedUrl = new URL(match[0].replace(/&amp;/g, '&'));
+      pushDocument(parsedUrl.searchParams.get('u'), parsedUrl.searchParams.get('d'), parsedUrl.toString());
+    } catch (error) {
+      // Ignore malformed embeds.
+    }
+  }
+
+  return documents;
+}
+
+async function fetchIssuuTrpcQuery(procedure, input) {
+  const encodedInput = encodeURIComponent(JSON.stringify({ 0: { json: input } }));
+  const url = `https://issuu.com/api/content-service/public.reader.${procedure}?batch=1&input=${encodedInput}`;
+  const response = await axios.get(url, {
+    timeout: 30000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      Accept: 'application/json',
+      'x-trpc-source': 'nextjs-react',
+    },
+  });
+  const first = Array.isArray(response.data) ? response.data[0] : null;
+  const json = first?.result?.data?.json;
+
+  if (!json) {
+    throw new Error(`Issuu ${procedure} did not return a readable payload.`);
+  }
+
+  return json;
+}
+
+async function resolveIssuuOriginalPdfUrl(document) {
+  const readerPayload = await fetchIssuuTrpcQuery('reader4', {
+    username: document.username,
+    docname: document.documentName,
+  });
+  const publicationId = readerPayload?.document?.publicationId;
+
+  if (!publicationId) {
+    throw new Error('Issuu reader payload did not include publicationId.');
+  }
+
+  const downloadPayload = await fetchIssuuTrpcQuery('download', { publicationId });
+
+  if (!downloadPayload?.url) {
+    throw new Error('Issuu download payload did not include a PDF URL.');
+  }
+
+  return {
+    pdfUrl: downloadPayload.url,
+    publicationId,
+    revisionId: readerPayload?.document?.revisionId || '',
+    pageCount: readerPayload?.document?.pages?.length || 0,
+    title: readerPayload?.document?.title || document.documentName,
+  };
+}
+
 function buildBillaPrice(hit) {
   const currentPrice = hit?.price?.regular?.value ? Number((hit.price.regular.value / 100).toFixed(2)) : null;
   const referencePrice = hit?.price?.crossed ? Number((hit.price.crossed / 100).toFixed(2)) : null;
@@ -1337,6 +1467,172 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
   };
 }
 
+async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, links }) {
+  const pdfLinks = links.filter((link) => link.type === 'pdf');
+  const issuuDocuments = extractIssuuDocumentsFromHtml(html);
+  const collectedOffers = [];
+  const pdfReports = [];
+  const rawDocuments = [];
+
+  await Offer.deleteMany({ sourceId: source._id });
+
+  const pdfTargets = [];
+
+  for (const link of pdfLinks) {
+    pdfTargets.push({
+      kind: 'direct-pdf',
+      label: link.label,
+      pdfUrl: link.url,
+      observedUrl: link.url,
+    });
+  }
+
+  for (const document of issuuDocuments.slice(0, 3)) {
+    try {
+      const resolved = await resolveIssuuOriginalPdfUrl(document);
+      pdfTargets.push({
+        kind: 'issuu-original-pdf',
+        label: resolved.title,
+        pdfUrl: resolved.pdfUrl,
+        observedUrl: document.documentUrl,
+        publicationId: resolved.publicationId,
+        revisionId: resolved.revisionId,
+        pageCount: resolved.pageCount,
+      });
+    } catch (error) {
+      pdfReports.push({
+        kind: 'issuu-original-pdf',
+        observedUrl: document.documentUrl,
+        status: 'failed',
+        error: error.message,
+      });
+    }
+  }
+
+  const seenPdfUrls = new Set();
+
+  for (const target of pdfTargets) {
+    if (!target.pdfUrl || seenPdfUrls.has(target.pdfUrl)) {
+      continue;
+    }
+
+    seenPdfUrls.add(target.pdfUrl);
+
+    try {
+      const { response, buffer, canonicalUrl } = await fetchBinary(target.pdfUrl);
+      const pdfReference = await extractPennyPdfReference({
+        pdfBuffer: buffer,
+        sourceUrl: target.observedUrl || canonicalUrl || target.pdfUrl,
+      });
+      const normalizedOffers = normalizePennyPdfCandidatesToOffers({
+        pdfReference,
+        source,
+        crawlJobId,
+        region,
+        pdfUrl: target.observedUrl || canonicalUrl || target.pdfUrl,
+      });
+      const rawDocument = await createCompactRawDocument({
+        sourceId: source._id,
+        crawlJobId,
+        retailerKey: source.retailerKey,
+        region,
+        documentType: 'pdf',
+        sourceType: 'penny-official-pdf',
+        url: target.observedUrl || target.pdfUrl,
+        canonicalUrl: target.observedUrl || target.pdfUrl,
+        finalUrl: canonicalUrl,
+        title: target.label || 'PENNY official PDF leaflet',
+        httpStatus: response.status,
+        contentType: response.headers?.['content-type'] || '',
+        downloadBytes: buffer.length,
+        contentHash: createHash(buffer),
+        contentSnippet: pdfReference.candidates.slice(0, 8).map((candidate) => candidate.title).join(' | '),
+        extractedPreview: pdfReference.candidates.slice(0, 12).map((candidate) => candidate.title).filter(Boolean),
+        foundRawItems: pdfReference.candidates.length,
+        parsedOffers: normalizedOffers.length,
+        rejectedOffers: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+        parserVersion: PENNY_PDF_PARSER_VERSION,
+        extractionConfidence: 0.68,
+        rejectionReasons: [
+          {
+            reason: 'missing-title-or-current-price-or-non-offer-text',
+            count: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+          },
+        ],
+        payload: {
+          kind: target.kind,
+          observedUrl: target.observedUrl || '',
+          publicationId: target.publicationId || '',
+          revisionId: target.revisionId || '',
+          detectedPageCount: pdfReference.file.pages,
+          sourcePageCount: target.pageCount || 0,
+          detectedValidity: {
+            validFrom: pdfReference.validity.validFrom ? pdfReference.validity.validFrom.toISOString() : null,
+            validTo: pdfReference.validity.validTo ? pdfReference.validity.validTo.toISOString() : null,
+            detectedDates: pdfReference.validity.detectedDates,
+          },
+          pageCandidateCounts: pdfReference.pages,
+        },
+      });
+
+      rawDocuments.push(rawDocument);
+      collectedOffers.push(...normalizedOffers);
+      pdfReports.push({
+        kind: target.kind,
+        observedUrl: target.observedUrl || '',
+        status: 'success',
+        foundRawItems: pdfReference.candidates.length,
+        parsedOffers: normalizedOffers.length,
+        pages: pdfReference.file.pages,
+      });
+    } catch (error) {
+      pdfReports.push({
+        kind: target.kind,
+        observedUrl: target.observedUrl || target.pdfUrl,
+        status: 'failed',
+        error: error.message,
+      });
+    }
+  }
+
+  const seen = new Set();
+  const offerDocuments = collectedOffers
+    .map((offer) => enrichOffersForStorage([offer], {
+      source,
+      sourceType: 'penny-official-pdf',
+      parserVersion: PENNY_PDF_PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    })[0])
+    .filter(Boolean)
+    .filter((offer) => {
+      const key = [
+        offer.rawFacts?.candidateId || '',
+        offer.rawFacts?.page || '',
+        normalizeTitleForMatch(offer.title || ''),
+        String(offer.priceCurrent?.amount ?? ''),
+        String(offer.quantityText || ''),
+      ].join('::');
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+
+  if (offerDocuments.length > 0) {
+    await Offer.insertMany(offerDocuments, { ordered: false });
+  }
+
+  return {
+    offerDocuments,
+    rawDocuments: rawDocuments.length,
+    rawCandidateCount: pdfReports.reduce((sum, item) => sum + Number(item.foundRawItems || 0), 0),
+    pdfReports,
+  };
+}
+
 async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
   const flyerIdentifiers = extractLidlFlyerIdentifiers(html);
   const collectedOffers = [];
@@ -1699,6 +1995,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     let warningMessages = [];
     let rawCandidateCount = links.length;
     const allStoredOffers = [];
+    let parserDetails = {};
 
     if (source.retailerKey === 'hofer' && source.channel === 'official-flyer') {
       const hoferResult = await crawlHoferOfficialPages({
@@ -1723,6 +2020,25 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += billaOfficialResult.rawDocuments;
       rawCandidateCount += billaOfficialResult.hitCount || billaOfficialResult.offerDocuments.length;
       allStoredOffers.push(...billaOfficialResult.offerDocuments);
+    } else if (source.retailerKey === 'penny' && source.channel === 'official-flyer') {
+      const pennyFlyerResult = await crawlPennyOfficialFlyers({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        html,
+        links,
+      });
+
+      offersStored += pennyFlyerResult.offerDocuments.length;
+      extraRawDocuments += pennyFlyerResult.rawDocuments;
+      rawCandidateCount += pennyFlyerResult.rawCandidateCount || 0;
+      allStoredOffers.push(...pennyFlyerResult.offerDocuments);
+      parserDetails.pennyPdfReports = pennyFlyerResult.pdfReports;
+      warningMessages = warningMessages.concat(
+        pennyFlyerResult.pdfReports
+          .filter((item) => item.status === 'failed')
+          .map((item) => `PENNY PDF flyer could not be parsed: ${item.observedUrl || item.kind} (${item.error})`)
+      );
     } else if (source.retailerKey === 'penny' && source.sourceUrl.includes('penny.at/angebote')) {
       const pennyOfficialResult = await crawlPennyOfficialOffers({
         source,
@@ -1793,6 +2109,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         rawDocumentId: rootDocument._id,
         extractedLinkCount: links.length,
         evidenceMatched,
+        ...parserDetails,
       },
     }));
 
