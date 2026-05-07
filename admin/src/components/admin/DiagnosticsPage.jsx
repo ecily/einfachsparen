@@ -1,6 +1,12 @@
+import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { SectionCard } from '../layout/SectionCard'
 import { AnalyticsDashboard } from './AnalyticsDashboard'
+import {
+  clearStoredAdminApiKey,
+  getStoredAdminApiKey,
+  setStoredAdminApiKey,
+} from '../../utils/apiBase'
 
 export function DiagnosticsPage({
   health,
@@ -17,6 +23,33 @@ export function DiagnosticsPage({
 }) {
   const summary = snapshot?.qualitySummary || {}
   const comparisons = snapshot?.comparisonSnapshot || {}
+
+  const initialAdminApiKey = useMemo(() => getStoredAdminApiKey(), [])
+  const [adminApiKeyInput, setAdminApiKeyInput] = useState(initialAdminApiKey)
+  const [adminKeyMessage, setAdminKeyMessage] = useState('')
+
+  const hasAdminApiKey = adminApiKeyInput.trim().length > 0
+
+  function handleSaveAdminApiKey() {
+    const savedKey = setStoredAdminApiKey(adminApiKeyInput)
+
+    if (!savedKey) {
+      setAdminKeyMessage('Admin-Key wurde entfernt.')
+      return
+    }
+
+    setAdminKeyMessage('Admin-Key wurde lokal in diesem Browser gespeichert.')
+
+    if (typeof onReloadAnalytics === 'function') {
+      onReloadAnalytics()
+    }
+  }
+
+  function handleClearAdminApiKey() {
+    clearStoredAdminApiKey()
+    setAdminApiKeyInput('')
+    setAdminKeyMessage('Admin-Key wurde entfernt.')
+  }
 
   return (
     <>
@@ -60,6 +93,48 @@ export function DiagnosticsPage({
             <button type="button" className="ghost-button" onClick={() => window.location.assign('/quality')}>
               Qualität öffnen
             </button>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard style={{ marginBottom: '1rem' }}>
+        <div className="selection-block">
+          <div className="selection-block__header">
+            <p className="eyebrow">Admin-Zugriff</p>
+            <h2>Admin-Key</h2>
+            <p>Geschützte interne Endpunkte benötigen den Admin-Key. Der Key wird nur lokal in diesem Browser gespeichert.</p>
+          </div>
+
+          <div className="feedback-box">
+            <input
+              type="password"
+              value={adminApiKeyInput}
+              onChange={(event) => {
+                setAdminApiKeyInput(event.target.value)
+                setAdminKeyMessage('')
+              }}
+              placeholder="Admin-Key eingeben"
+              autoComplete="off"
+              spellCheck="false"
+              style={{
+                width: '100%',
+                border: '1px solid rgba(23, 34, 23, 0.16)',
+                borderRadius: '1rem',
+                padding: '0.85rem 1rem',
+                font: 'inherit',
+              }}
+            />
+
+            <div className="feedback-box__actions">
+              <button type="button" className="crawl-button" onClick={handleSaveAdminApiKey} disabled={!hasAdminApiKey}>
+                Admin-Key speichern
+              </button>
+              <button type="button" className="ghost-button" onClick={handleClearAdminApiKey}>
+                Entfernen
+              </button>
+            </div>
+
+            {adminKeyMessage ? <p className="status">{adminKeyMessage}</p> : null}
           </div>
         </div>
       </SectionCard>

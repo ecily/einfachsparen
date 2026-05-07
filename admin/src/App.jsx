@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './index.css'
 import {
-  fetchAnalyticsSummary,
-  fetchDashboardSnapshot,
-  fetchEssence,
   fetchHealth,
   fetchQualitySnapshot,
   ignoreArticleQualityItem,
@@ -21,7 +18,13 @@ import { SharedShoppingListPage } from './components/shopping/SharedShoppingList
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
 import { QualityPage } from './components/admin/QualityPage'
-import { buildTrackedApkDownloadUrl, fetchFilterCategories, fetchFilterRetailers, fetchOfferRankingDirect } from './utils/apiBase'
+import {
+  buildTrackedApkDownloadUrl,
+  fetchAdminJson,
+  fetchFilterCategories,
+  fetchFilterRetailers,
+  fetchOfferRankingDirect,
+} from './utils/apiBase'
 import { trackAnalyticsEvent } from './utils/analytics'
 import {
   buildMainSelectionToken,
@@ -36,13 +39,36 @@ import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } 
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 
 function getFriendlyErrorMessage(error, fallback) {
+  const status = Number(error?.status || 0)
   const message = String(error?.message || '')
+
+  if (status === 401 || /admin-zugriff|admin-key|nicht autorisiert|unauthorized/i.test(message)) {
+    return message || 'Admin-Zugriff erforderlich. Bitte Admin-Key prüfen.'
+  }
 
   if (/failed to fetch|network|request|response|api|backend|status code|timeout|load failed/i.test(message)) {
     return 'Die Angebote konnten gerade nicht geladen werden. Bitte versuche es später erneut.'
   }
 
   return message || fallback
+}
+
+async function fetchAdminDashboardSnapshot() {
+  return fetchAdminJson('/dashboard/snapshot')
+}
+
+async function fetchAdminAnalyticsSummary() {
+  return fetchAdminJson('/analytics/summary')
+}
+
+async function fetchAdminEssence() {
+  const payload = await fetchAdminJson('/essence')
+
+  if (typeof payload === 'string') {
+    return payload
+  }
+
+  return payload?.essence || payload?.digest || payload?.text || payload?.summary || ''
 }
 
 function SearchLandingHero({ onNavigate }) {
@@ -388,9 +414,9 @@ function App() {
 
         const [healthResult, snapshotResult, essenceResult, analyticsResult] = await Promise.all([
           fetchHealth(),
-          fetchDashboardSnapshot(),
-          fetchEssence(),
-          fetchAnalyticsSummary(),
+          fetchAdminDashboardSnapshot(),
+          fetchAdminEssence(),
+          fetchAdminAnalyticsSummary(),
         ])
 
         if (!active) return
@@ -402,6 +428,14 @@ function App() {
         setError('')
       } catch (loadError) {
         if (!active) return
+
+        try {
+          const healthResult = await fetchHealth()
+          if (active) setHealth(healthResult)
+        } catch {
+          if (active) setHealth(null)
+        }
+
         setError(getFriendlyErrorMessage(loadError, 'Dashboard-Daten konnten nicht geladen werden.'))
       } finally {
         if (active) {
@@ -545,23 +579,22 @@ function App() {
   async function reloadAll() {
     const [healthResult, snapshotResult, essenceResult, analyticsResult] = await Promise.all([
       fetchHealth(),
-      fetchDashboardSnapshot(),
-      fetchEssence(),
-      fetchAnalyticsSummary(),
+      fetchAdminDashboardSnapshot(),
+      fetchAdminEssence(),
+      fetchAdminAnalyticsSummary(),
     ])
 
     setHealth(healthResult)
     setSnapshot(snapshotResult)
     setEssence(essenceResult)
     setAnalyticsSummary(analyticsResult)
+    setError('')
   }
 
   async function reloadAnalyticsSummary() {
     try {
       setAnalyticsLoading(true)
-      const analyticsResult = await fetchAnalyticsSummary()
-      setAnalyticsSummary(analyticsResult)
-      setError('')
+      await reloadAll()
     } catch (analyticsError) {
       setError(getFriendlyErrorMessage(analyticsError, 'Die Kennzahlen konnten nicht geladen werden.'))
     } finally {
@@ -942,22 +975,19 @@ function App() {
       ) : (
         <>
           {loading && !snapshot ? <p className="status">Lade Ansicht …</p> : null}
-          {error && !snapshot ? <p className="status status--error">{error}</p> : null}
-          {snapshot ? (
-            <DiagnosticsPage
-              health={health}
-              snapshot={snapshot}
-              essence={essence}
-              analyticsSummary={analyticsSummary}
-              analyticsLoading={analyticsLoading}
-              error={error}
-              feedbackState={feedbackState}
-              feedbackNote={feedbackNote}
-              setFeedbackNote={setFeedbackNote}
-              handleSaveFeedback={handleSaveFeedback}
-              onReloadAnalytics={reloadAnalyticsSummary}
-            />
-          ) : null}
+          <DiagnosticsPage
+            health={health}
+            snapshot={snapshot}
+            essence={essence}
+            analyticsSummary={analyticsSummary}
+            analyticsLoading={analyticsLoading}
+            error={error}
+            feedbackState={feedbackState}
+            feedbackNote={feedbackNote}
+            setFeedbackNote={setFeedbackNote}
+            handleSaveFeedback={handleSaveFeedback}
+            onReloadAnalytics={reloadAnalyticsSummary}
+          />
         </>
       )}
 

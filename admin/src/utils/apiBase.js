@@ -2,6 +2,8 @@ import { API_BASE_URL } from '../api'
 import { SITE_URL } from '../config/constants'
 import { normalizeRetailerKey } from './offers'
 
+export const ADMIN_API_KEY_STORAGE_KEY = 'kaufklug.adminApiKey.v1'
+
 export function getApiBase() {
   const envBase =
     (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE || import.meta.env?.VITE_API_BASE_URL)) ||
@@ -44,6 +46,42 @@ export function buildTrackedApkDownloadUrl(source = 'hero') {
   return buildAbsoluteUrl(buildApiUrl(`/download/kaufklug-alpha?source=${encodeURIComponent(safeSource)}`))
 }
 
+export function getStoredAdminApiKey() {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    return String(window.localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY) || '').trim()
+  } catch {
+    return ''
+  }
+}
+
+export function setStoredAdminApiKey(value) {
+  if (typeof window === 'undefined') return ''
+
+  const safeValue = String(value || '').trim()
+
+  try {
+    if (safeValue) {
+      window.localStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, safeValue)
+    } else {
+      window.localStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY)
+    }
+  } catch {
+    // localStorage kann in privaten Browsermodi blockiert sein.
+  }
+
+  return safeValue
+}
+
+export function clearStoredAdminApiKey() {
+  return setStoredAdminApiKey('')
+}
+
+export function hasStoredAdminApiKey() {
+  return getStoredAdminApiKey().length > 0
+}
+
 export function extractArrayPayload(payload, preferredKeys = []) {
   if (Array.isArray(payload)) return payload
 
@@ -63,15 +101,60 @@ export function extractArrayPayload(payload, preferredKeys = []) {
   return []
 }
 
-export async function fetchJson(path) {
-  const response = await fetch(buildApiUrl(path), {
-    method: 'GET',
-    mode: 'cors',
-    credentials: 'omit',
-    headers: {
-      Accept: 'application/json',
-    },
-  })
+function createHeaders(headers = {}, adminApiKey = '') {
+  const nextHeaders = {
+    Accept: 'application/json',
+    ...headers,
+  }
+
+  const safeAdminApiKey = String(adminApiKey || '').trim()
+  if (safeAdminApiKey) {
+    nextHeaders['x-admin-api-key'] = safeAdminApiKey
+  }
+
+  return nextHeaders
+}
+
+function createRequestError(response, payload) {
+  const message =
+    payload?.message ||
+    payload?.error ||
+    (response.status === 401
+      ? 'Admin-Zugriff erforderlich. Bitte Admin-Key prüfen.'
+      : `Request failed: ${response.status}`)
+
+  const error = new Error(message)
+  error.status = response.status
+  error.payload = payload
+  return error
+}
+
+export async function fetchJson(path, options = {}) {
+  const {
+    method = 'GET',
+    body,
+    headers = {},
+    adminApiKey = '',
+    credentials = 'omit',
+    mode = 'cors',
+  } = options || {}
+
+  const requestOptions = {
+    method,
+    mode,
+    credentials,
+    headers: createHeaders(headers, adminApiKey),
+  }
+
+  if (body !== undefined) {
+    requestOptions.body = typeof body === 'string' ? body : JSON.stringify(body)
+
+    if (!requestOptions.headers['Content-Type']) {
+      requestOptions.headers['Content-Type'] = 'application/json'
+    }
+  }
+
+  const response = await fetch(buildApiUrl(path), requestOptions)
 
   let payload = null
 
@@ -82,10 +165,25 @@ export async function fetchJson(path) {
   }
 
   if (!response.ok) {
-    throw new Error(payload?.message || `Request failed: ${response.status}`)
+    throw createRequestError(response, payload)
   }
 
   return payload
+}
+
+export async function fetchAdminJson(path, options = {}) {
+  const adminApiKey = String(options?.adminApiKey || getStoredAdminApiKey()).trim()
+
+  if (!adminApiKey) {
+    const error = new Error('Admin-Zugriff erforderlich. Bitte Admin-Key eingeben.')
+    error.status = 401
+    throw error
+  }
+
+  return fetchJson(path, {
+    ...options,
+    adminApiKey,
+  })
 }
 
 export async function fetchFilterRetailers() {
