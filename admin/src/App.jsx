@@ -282,7 +282,8 @@ function App() {
   const rawPathname = typeof window !== 'undefined' ? window.location.pathname : ''
   const pathname = rawPathname.toLowerCase()
   const routedInitialPage = getInitialPageFromPathname(pathname)
-  const initialPage = routedInitialPage === 'search' ? 'product-search' : routedInitialPage
+  const isDiagnosticsPath = pathname === '/ecily_web'
+  const initialPage = isDiagnosticsPath ? 'diagnostics' : routedInitialPage === 'search' ? 'product-search' : routedInitialPage
   const initialSharedListId = getSharedListIdFromPathname(rawPathname)
 
   const [activePage, setActivePage] = useState(initialPage)
