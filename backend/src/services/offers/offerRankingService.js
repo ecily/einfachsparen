@@ -1218,27 +1218,138 @@ function getOfferSourceType(offer) {
   return String(offer?.sourceType || offer?.rawFacts?.sourceType || '').trim();
 }
 
-function getSourcePriorityRank(offer) {
+const RESPONSE_SOURCE_PRIORITY_MATRIX = {
+  billa: [
+    ['billa-official-algolia', 1, 'official-structured-json'],
+    ['billa-official-html', 2, 'official-html'],
+    ['flyer', 3, 'official-flyer'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  'billa-plus': [
+    ['billa-official-algolia', 1, 'official-structured-json'],
+    ['billa-official-html', 2, 'official-html'],
+    ['flyer', 3, 'official-flyer'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  lidl: [
+    ['lidl-official-flyer-api', 1, 'official-structured-json'],
+    ['lidl-official-html', 2, 'official-html'],
+    ['flyer', 3, 'official-flyer'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  penny: [
+    ['penny-official-html', 2, 'official-html'],
+    ['penny-official-pdf', 8, 'official-pdf-evidence'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+    ['penny-pdf-ocr-bbox', 99, 'ocr-diagnostic-only'],
+    ['penny-ocr-diagnostics', 99, 'ocr-diagnostic-only'],
+  ],
+  dm: [
+    ['dm-official-html', 2, 'official-html'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['wogibtswas-html', 7, 'aggregator-html'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  bipa: [
+    ['bipa-official-html', 2, 'official-html'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  spar: [
+    ['spar-official-html', 2, 'official-html'],
+    ['flyer', 3, 'official-flyer'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  hofer: [
+    ['hofer-official-html', 2, 'official-html'],
+    ['flyer', 3, 'official-flyer'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+};
+
+function getSourcePriorityEntry(offer) {
   const sourceType = getOfferSourceType(offer);
-  const retailerKey = String(offer?.retailerKey || '').trim();
+  const retailerKey = normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || '');
+  const entries = RESPONSE_SOURCE_PRIORITY_MATRIX[retailerKey] || [];
+  const exact = entries.find(([candidate]) => candidate === sourceType);
 
-  if (/ocr|bbox|tesseract|paddle/i.test(sourceType)) return 99;
-
-  if (retailerKey === 'penny') {
-    if (sourceType === 'penny-official-html') return 1;
-    if (sourceType === 'aktionsfinder-json') return 3;
-    if (sourceType === 'penny-official-pdf') return 8;
+  if (exact) {
+    return { sourceType: exact[0], rank: exact[1], role: exact[2] };
   }
 
-  if ((retailerKey === 'billa' || retailerKey === 'billa-plus') && sourceType === 'billa-official-algolia') return 1;
-  if (retailerKey === 'lidl' && sourceType === 'lidl-official-flyer-api') return 1;
+  if (/ocr|bbox|tesseract|paddle/i.test(sourceType)) {
+    return { sourceType, rank: 99, role: 'ocr-diagnostic-only' };
+  }
 
-  if (/official.*(?:algolia|api|json)|(?:algolia|api|json).*official/i.test(sourceType)) return 2;
-  if (/official.*html|html.*official/i.test(sourceType)) return 3;
-  if (/pdf/i.test(sourceType)) return 8;
-  if (/aktionsfinder|wogibtswas|marketguru|aggregator/i.test(sourceType)) return 5;
+  if (/official.*(?:algolia|api|json)|(?:algolia|api|json).*official/i.test(sourceType)) {
+    return { sourceType, rank: 1, role: 'official-structured-json' };
+  }
 
-  return 20;
+  if (/official.*html|html.*official/i.test(sourceType)) {
+    return { sourceType, rank: 2, role: 'official-html' };
+  }
+
+  if (/official.*pdf|pdf.*official/i.test(sourceType)) {
+    return { sourceType, rank: 8, role: 'official-pdf-evidence' };
+  }
+
+  if (/aktionsfinder/i.test(sourceType)) {
+    return { sourceType, rank: 5, role: 'aggregator-json' };
+  }
+
+  if (/marketguru.*(?:json|api|embedded)|(?:json|api|embedded).*marketguru/i.test(sourceType)) {
+    return { sourceType, rank: 6, role: 'aggregator-json' };
+  }
+
+  if (/wogibtswas|marketguru|aggregator/i.test(sourceType)) {
+    return { sourceType, rank: 7, role: 'aggregator' };
+  }
+
+  if (/pdf/i.test(sourceType)) {
+    return { sourceType, rank: 8, role: 'pdf-evidence' };
+  }
+
+  return { sourceType: sourceType || 'unknown', rank: 20, role: 'unknown' };
+}
+
+function getSourcePriorityRank(offer) {
+  return getSourcePriorityEntry(offer).rank;
 }
 
 function buildSourceQualityScore(offer) {
@@ -1377,6 +1488,32 @@ function getOfferQuantityKey(offer) {
   ].join(':');
 }
 
+function getOfferScopeKey(offer) {
+  const formats = Array.isArray(offer?.appliesToRetailerFormats)
+    ? offer.appliesToRetailerFormats
+    : Array.isArray(offer?.retailerFormats)
+      ? offer.retailerFormats
+      : [];
+  const formatKey = formats.map(normalizeSearchText).filter(Boolean).sort().join('+');
+
+  return [
+    normalizeSearchText(offer?.sourceRetailerFormat),
+    formatKey,
+    normalizeSearchText(offer?.retailerFormatLabel),
+  ].filter(Boolean).join(':') || 'scope:default';
+}
+
+function getOfferConditionKey(offer) {
+  return [
+    normalizeSearchText(offer?.conditionsText || offer?.conditionLabel),
+    normalizeSearchText(offer?.benefitType),
+    normalizeSearchText(offer?.effectiveDiscountType || offer?.discountMechanic || offer?.discountType),
+    normalizeSearchText(offer?.customerProgramRequired ? 'program-required' : 'public'),
+    normalizeSearchText(offer?.isMultiBuy ? 'multibuy' : 'single-buy'),
+    String(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || offer?.minQuantity || ''),
+  ].filter(Boolean).join(':') || 'condition:default';
+}
+
 function getOfferTitleKey(offer) {
   return normalizeSearchText(offer?.titleNormalized || offer?.title);
 }
@@ -1441,12 +1578,15 @@ function hasSameResponseFallbackIdentity(left, right) {
     return true;
   }
 
-  const sameRetailer = String(left.retailerKey || left.retailerName || '') === String(right.retailerKey || right.retailerName || '');
+  const sameRetailer =
+    String(left.retailerKey || left.retailerName || '') === String(right.retailerKey || right.retailerName || '');
+  const sameScope = getOfferScopeKey(left) === getOfferScopeKey(right);
   const samePrice = getOfferPriceKey(left) === getOfferPriceKey(right);
   const sameQuantity = getOfferQuantityKey(left) === getOfferQuantityKey(right);
+  const sameCondition = getOfferConditionKey(left) === getOfferConditionKey(right);
   const sameVariant = getOfferVariantKey(left) === getOfferVariantKey(right);
 
-  if (!sameRetailer || !samePrice || !sameQuantity || !sameVariant) {
+  if (!sameRetailer || !sameScope || !samePrice || !sameQuantity || !sameCondition || !sameVariant) {
     return false;
   }
 
@@ -1533,9 +1673,11 @@ function getStrictQueryDedupeKeys(offer) {
     keys.push([
       'fallback',
       offer?.retailerKey || offer?.retailerName || '',
+      getOfferScopeKey(offer),
       titleKey,
       getOfferPriceKey(offer),
       getOfferQuantityKey(offer),
+      getOfferConditionKey(offer),
       getOfferVariantKey(offer),
     ].join(':'));
   }
@@ -1571,18 +1713,18 @@ function hasSafeValidityWindow(offer) {
 }
 
 function compareResponseDuplicatePreference(left, right, query) {
-  const leftValidity = Number(hasSafeValidityWindow(left));
-  const rightValidity = Number(hasSafeValidityWindow(right));
-
-  if (leftValidity !== rightValidity) {
-    return rightValidity - leftValidity;
-  }
-
   const leftSourceRank = getSourcePriorityRank(left);
   const rightSourceRank = getSourcePriorityRank(right);
 
   if (leftSourceRank !== rightSourceRank) {
     return leftSourceRank - rightSourceRank;
+  }
+
+  const leftValidity = Number(hasSafeValidityWindow(left));
+  const rightValidity = Number(hasSafeValidityWindow(right));
+
+  if (leftValidity !== rightValidity) {
+    return rightValidity - leftValidity;
   }
 
   return compareOffersByRanking(left, right, { query });

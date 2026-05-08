@@ -1458,6 +1458,91 @@ test('response dedupe applies official source priority conservatively for BILLA 
   assert.deepEqual(prepared.map((item) => item._id).sort(), ['billa-official', 'lidl-official']);
 });
 
+[
+  ['billa', 'billa-official-algolia'],
+  ['billa-plus', 'billa-official-algolia'],
+  ['lidl', 'lidl-official-flyer-api'],
+  ['penny', 'penny-official-html'],
+  ['dm', 'dm-official-html'],
+  ['bipa', 'bipa-official-html'],
+  ['spar', 'spar-official-html'],
+  ['hofer', 'hofer-official-html'],
+].forEach(([retailerKey, officialSourceType]) => {
+  test(`prefers ${retailerKey} official response duplicate over aggregator with clearer validity`, () => {
+    const official = offer({
+      _id: `${retailerKey}-official`,
+      title: 'Bio Vollmilch 1 l',
+      titleNormalized: 'bio vollmilch 1 l',
+      retailerKey,
+      sourceType: officialSourceType,
+      priceCurrent: { amount: 1.49 },
+      quantityText: '1 l',
+      normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
+      validFrom: null,
+      validTo: null,
+    });
+    const aggregator = offer({
+      ...official,
+      _id: `${retailerKey}-aktionsfinder`,
+      sourceType: 'aktionsfinder-json',
+      validFrom: new Date('2026-05-07T12:00:00Z'),
+      validTo: new Date('2026-05-12T12:00:00Z'),
+    });
+    const prepared = prepareQueryOffersForResponse([aggregator, official], 'milch');
+
+    assert.equal(prepared.length, 1);
+    assert.equal(prepared[0]._id, `${retailerKey}-official`);
+  });
+});
+
+test('keeps response variants with different scope or condition visible', () => {
+  const base = {
+    title: 'Bio Vollmilch 1 l',
+    titleNormalized: 'bio vollmilch 1 l',
+    retailerKey: 'spar',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 l',
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
+  };
+  const sparOnly = offer({
+    ...base,
+    _id: 'spar-only',
+    sourceType: 'spar-official-html',
+    sourceRetailerFormat: 'spar',
+    appliesToRetailerFormats: ['spar'],
+    retailerFormatLabel: 'nur SPAR',
+  });
+  const intersparOnly = offer({
+    ...base,
+    _id: 'interspar-only',
+    sourceType: 'aktionsfinder-json',
+    sourceRetailerFormat: 'interspar',
+    appliesToRetailerFormats: ['interspar'],
+    retailerFormatLabel: 'nur INTERSPAR',
+  });
+  const appOnly = offer({
+    ...base,
+    _id: 'app-only',
+    sourceType: 'aktionsfinder-json',
+    customerProgramRequired: true,
+    conditionsText: 'nur mit App',
+  });
+  const publicOffer = offer({
+    ...base,
+    _id: 'public',
+    sourceType: 'aktionsfinder-json',
+  });
+  const prepared = prepareQueryOffersForResponse([sparOnly, intersparOnly, appOnly, publicOffer], 'milch');
+
+  assert.equal(prepared.length, 4);
+  assert.deepEqual(new Set(prepared.map((item) => item._id)), new Set([
+    'spar-only',
+    'interspar-only',
+    'app-only',
+    'public',
+  ]));
+});
+
 test('validity label includes concrete date when validTo is present', () => {
   assert.equal(
     buildValidityLabel({
