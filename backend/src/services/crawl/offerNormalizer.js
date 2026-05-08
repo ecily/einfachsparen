@@ -100,6 +100,92 @@ function buildValidityText(validFrom, validTo) {
   return parts.join(' ');
 }
 
+function isValidDateValue(value) {
+  if (!value) {
+    return false;
+  }
+
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime());
+}
+
+function parseAktionsfinderLeafletRange(value) {
+  const match = String(value || '').match(/-(\d{2})-(\d{2})-(\d{4})-(\d{2})-(\d{2})-(\d{4})\/?$/);
+
+  if (!match) {
+    return {
+      validFrom: null,
+      validTo: null,
+    };
+  }
+
+  const [, fromDay, fromMonth, fromYear, toDay, toMonth, toYear] = match.map(Number);
+
+  return {
+    validFrom: new Date(Date.UTC(fromYear, fromMonth - 1, fromDay, 12, 0, 0)),
+    validTo: new Date(Date.UTC(toYear, toMonth - 1, toDay, 12, 0, 0)),
+  };
+}
+
+function buildSafeOfferValidityEvidence(promotion = {}) {
+  const explicitFrom = isValidDateValue(promotion.validFrom) ? new Date(promotion.validFrom) : null;
+  const explicitTo = isValidDateValue(promotion.validTo) ? new Date(promotion.validTo) : null;
+  const directLeafletHref = sanitizeWhitespace(promotion.leafletHref || promotion.leaflet?.href || '');
+  const directClickoutUrl = sanitizeWhitespace(promotion.clickoutUrl || '');
+  const leafletRange = parseAktionsfinderLeafletRange(directLeafletHref);
+  const clickoutRange = parseAktionsfinderLeafletRange(directClickoutUrl);
+
+  if (explicitFrom && explicitTo) {
+    return {
+      validFrom: explicitFrom,
+      validTo: explicitTo,
+      validitySource: promotion.validitySource || 'aktionsfinder-offer-level',
+      validityText: promotion.validityText || buildValidityText(explicitFrom, explicitTo),
+      leafletHref: directLeafletHref,
+      clickoutUrl: directClickoutUrl,
+      promotionId: sanitizeWhitespace(promotion.id || promotion.promotionId || promotion.objectID || ''),
+      isSafe: true,
+    };
+  }
+
+  if (leafletRange.validFrom && leafletRange.validTo) {
+    return {
+      validFrom: leafletRange.validFrom,
+      validTo: leafletRange.validTo,
+      validitySource: 'aktionsfinder-leaflet-range',
+      validityText: buildValidityText(leafletRange.validFrom, leafletRange.validTo),
+      leafletHref: directLeafletHref,
+      clickoutUrl: directClickoutUrl,
+      promotionId: sanitizeWhitespace(promotion.id || promotion.promotionId || promotion.objectID || ''),
+      isSafe: true,
+    };
+  }
+
+  if (clickoutRange.validFrom && clickoutRange.validTo) {
+    return {
+      validFrom: clickoutRange.validFrom,
+      validTo: clickoutRange.validTo,
+      validitySource: 'aktionsfinder-offer-url-range',
+      validityText: buildValidityText(clickoutRange.validFrom, clickoutRange.validTo),
+      leafletHref: directLeafletHref,
+      clickoutUrl: directClickoutUrl,
+      promotionId: sanitizeWhitespace(promotion.id || promotion.promotionId || promotion.objectID || ''),
+      isSafe: true,
+    };
+  }
+
+  return {
+    validFrom: null,
+    validTo: null,
+    validitySource: '',
+    validityText: '',
+    leafletHref: directLeafletHref,
+    clickoutUrl: directClickoutUrl,
+    promotionId: sanitizeWhitespace(promotion.id || promotion.promotionId || promotion.objectID || ''),
+    isSafe: false,
+  };
+}
+
 function detectPackageType(product = {}, quantityText = '') {
   const packageUnitType = product?.packageQuantityUnit?.type;
   const packageUnitName = toAsciiLower(
@@ -450,12 +536,18 @@ function buildNormalizedUnitPrice(promotion) {
   };
 }
 
-function buildCompactRawFacts({ promotion, requirement, validityText, conditionsText }) {
+function buildCompactRawFacts({ promotion, requirement, validityEvidence, conditionsText }) {
   const tags = Array.isArray(promotion?.tags) ? promotion.tags.slice(0, 5).map((tag) => sanitizeWhitespace(tag)) : [];
   const infoParts = [promotion?.description, conditionsText].map((value) => sanitizeWhitespace(value)).filter(Boolean);
   const compact = {
     sourceType: 'aktionsfinder-json',
-    validityText,
+    validityText: validityEvidence?.validityText || '',
+    validFrom: validityEvidence?.isSafe && validityEvidence.validFrom ? validityEvidence.validFrom.toISOString() : '',
+    validTo: validityEvidence?.isSafe && validityEvidence.validTo ? validityEvidence.validTo.toISOString() : '',
+    leafletHref: validityEvidence?.leafletHref || '',
+    clickoutUrl: validityEvidence?.clickoutUrl || '',
+    promotionId: validityEvidence?.promotionId || '',
+    validitySource: validityEvidence?.isSafe ? validityEvidence.validitySource : '',
     infoText: infoParts.join(' / '),
     discountPercentage: parseNumericAmount(promotion?.discountPercentage),
     minimalAcceptance: parseNumericAmount(promotion?.minimalAcceptance),
@@ -478,6 +570,30 @@ function buildCompactRawFacts({ promotion, requirement, validityText, conditions
 
   if (!compact.validityText) {
     delete compact.validityText;
+  }
+
+  if (!compact.validFrom) {
+    delete compact.validFrom;
+  }
+
+  if (!compact.validTo) {
+    delete compact.validTo;
+  }
+
+  if (!compact.leafletHref) {
+    delete compact.leafletHref;
+  }
+
+  if (!compact.clickoutUrl) {
+    delete compact.clickoutUrl;
+  }
+
+  if (!compact.promotionId) {
+    delete compact.promotionId;
+  }
+
+  if (!compact.validitySource) {
+    delete compact.validitySource;
   }
 
   if (compact.minimumPurchaseQuantity <= 1) {
@@ -556,7 +672,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     benefitType: deriveBenefitType(promotion),
   });
   const structuredQuantityFields = buildStructuredQuantityFields(product, quantityText, comparableBase);
-  const validityText = buildValidityText(promotion.validFrom, promotion.validTo);
+  const validityEvidence = buildSafeOfferValidityEvidence(promotion);
   const safeClickoutUrl =
     typeof promotion.clickoutUrl === 'string' && promotion.clickoutUrl && promotion.clickoutUrl !== '$undefined'
       ? promotion.clickoutUrl
@@ -566,7 +682,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     return null;
   }
 
-  if (!promotion.validFrom || !promotion.validTo) {
+  if (!validityEvidence.validFrom || !validityEvidence.validTo) {
     issues.push('Gueltigkeitszeitraum unvollstaendig');
   }
 
@@ -584,13 +700,13 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
 
   const completenessBase = [
     priceCurrentAmount,
-    promotion.validFrom,
-    promotion.validTo,
+    validityEvidence.validFrom,
+    validityEvidence.validTo,
     comparisonCategory,
   ].filter(Boolean).length;
   const statusInfo = buildOfferStatus(
-    promotion.validFrom ? new Date(promotion.validFrom) : null,
-    promotion.validTo ? new Date(promotion.validTo) : null,
+    validityEvidence.validFrom,
+    validityEvidence.validTo,
     Boolean(promotion.snapshotCurrent)
   );
   const hasConditions = Boolean(conditionsText || customerProgramRequired || (requirement?.requiredQuantity || 1) > 1);
@@ -631,8 +747,8 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     String(priceCurrentAmount ?? 'na'),
     effectiveDiscountType,
     customerProgramRequired ? 'program' : 'public',
-    promotion.validFrom ? new Date(promotion.validFrom).toISOString().slice(0, 10) : 'na',
-    promotion.validTo ? new Date(promotion.validTo).toISOString().slice(0, 10) : 'na',
+    validityEvidence.validFrom ? validityEvidence.validFrom.toISOString().slice(0, 10) : 'na',
+    validityEvidence.validTo ? validityEvidence.validTo.toISOString().slice(0, 10) : 'na',
   ].join('::');
   const dedupeKey = [
     retailerKey,
@@ -641,7 +757,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     effectiveDiscountType,
     customerProgramRequired ? 'program' : 'public',
     String(priceCurrentAmount ?? 'na'),
-    promotion.validTo ? new Date(promotion.validTo).toISOString().slice(0, 10) : '',
+    validityEvidence.validTo ? validityEvidence.validTo.toISOString().slice(0, 10) : '',
   ].join('::');
   const benefitType = deriveBenefitType(promotion);
 
@@ -681,8 +797,8 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
         matchType: 'primary',
       }),
     ],
-    validFrom: promotion.validFrom ? new Date(promotion.validFrom) : null,
-    validTo: promotion.validTo ? new Date(promotion.validTo) : null,
+    validFrom: validityEvidence.validFrom,
+    validTo: validityEvidence.validTo,
     status: statusInfo.status,
     isActiveNow: statusInfo.isActiveNow,
     isActiveToday: statusInfo.isActiveToday,
@@ -729,7 +845,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
       ...buildCompactRawFacts({
         promotion,
         requirement,
-        validityText,
+        validityEvidence,
         conditionsText,
       }),
       categoryConfidence: categoryDecision.categoryConfidence,
@@ -750,5 +866,6 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
 }
 
 module.exports = {
+  buildSafeOfferValidityEvidence,
   normalizePromotionToOffer,
 };

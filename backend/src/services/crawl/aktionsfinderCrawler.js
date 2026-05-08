@@ -214,6 +214,8 @@ function parsePromotionsFromCategoryPage({ html, source, pageUrl }) {
       originalPrice,
       validFrom: validFrom ? validFrom.toISOString() : null,
       validTo: validTo ? validTo.toISOString() : null,
+      validitySource: validFrom && validTo ? 'aktionsfinder-leaflet-range' : '',
+      leafletHref,
       clickoutUrl: observedUrl,
       currency: {
         iso: 'EUR',
