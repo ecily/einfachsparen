@@ -55,6 +55,20 @@ test('accepts legitimate ranking query with around 20 categories', () => {
   assert.equal(req.query.programRetailers, 'billa,pagro');
 });
 
+test('preserves ranking category strings and repeated category parameters', () => {
+  const single = runRankingValidator({
+    categories: 'Fleisch, Wurst & Fisch',
+  });
+  const repeated = runRankingValidator({
+    categories: ['Fleisch, Wurst & Fisch', 'Kaese'],
+  });
+
+  assert.equal(single.error, null);
+  assert.equal(single.req.query.categories, 'Fleisch, Wurst & Fisch');
+  assert.equal(repeated.error, null);
+  assert.deepEqual(repeated.req.query.categories, ['Fleisch, Wurst & Fisch', 'Kaese']);
+});
+
 test('rejects ranking query with too many categories', () => {
   const tooManyCategories = Array.from({ length: 200 }, (_, index) => `Kategorie ${index + 1}`).join(',');
   const { error } = runRankingValidator({

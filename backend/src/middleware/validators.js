@@ -104,6 +104,60 @@ function normalizeStringList(
   return items.join(',');
 }
 
+function normalizeFlexibleStringList(
+  value,
+  {
+    field,
+    maxValues = MAX_LIST_VALUES,
+    maxLength = MAX_LIST_VALUE_LENGTH,
+    maxTotalLength = maxValues * (maxLength + 1),
+  } = {}
+) {
+  const rawValue = Array.isArray(value) ? value.join(',') : String(value || '');
+
+  if (rawValue.length > maxTotalLength) {
+    rejectBadRequest(`${field} ist zu lang.`);
+  }
+
+  let rawItems = Array.isArray(value) ? value : [value];
+
+  if (!Array.isArray(value)) {
+    const trimmed = String(value || '').trim();
+
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+
+        if (Array.isArray(parsed)) {
+          rawItems = parsed;
+        }
+      } catch (error) {
+        rawItems = [value];
+      }
+    } else {
+      rawItems = String(value || '').split(',');
+    }
+  }
+
+  const items = rawItems.map((item) => String(item || '').trim()).filter(Boolean);
+
+  if (items.length > maxValues) {
+    rejectBadRequest(`${field} enthaelt zu viele Werte.`);
+  }
+
+  for (const item of items) {
+    if (item.length > maxLength) {
+      rejectBadRequest(`${field} enthaelt zu lange Werte.`);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return items;
+  }
+
+  return String(value || '').trim();
+}
+
 function normalizeBooleanString(value) {
   return value === true || value === 'true' || value === '1' || value === 1;
 }
@@ -141,7 +195,7 @@ function validateRankingQuery(req, res, next) {
 
     req.query.limit = Math.min(parsedLimit, MAX_RANKING_LIMIT);
     req.query.q = normalizeString(req.query.q || '', { field: 'q', maxLength: MAX_QUERY_LENGTH });
-    req.query.categories = normalizeStringList(req.query.categories, {
+    req.query.categories = normalizeFlexibleStringList(req.query.categories, {
       field: 'categories',
       maxValues: MAX_RANKING_CATEGORY_VALUES,
       maxLength: MAX_LIST_VALUE_LENGTH,

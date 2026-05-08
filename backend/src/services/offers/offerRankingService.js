@@ -4,6 +4,7 @@ const Retailer = require('../../models/Retailer');
 const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
 const { computeOfferSavings } = require('./promotionMath');
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
+const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 
 const OFFER_RANKING_FIELDS = [
   '_id',
@@ -80,6 +81,130 @@ function normalizeStringList(value) {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizeCategoryLabelKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function buildKnownCategoryLabelMap(categoryDocuments = []) {
+  const labels = new Map();
+  const addLabel = (label) => {
+    const cleanLabel = String(label || '').trim();
+
+    if (cleanLabel) {
+      labels.set(normalizeCategoryLabelKey(cleanLabel), cleanLabel);
+    }
+  };
+
+  for (const category of CATEGORY_TAXONOMY) {
+    addLabel(category.main);
+
+    for (const subcategory of category.subcategories || []) {
+      addLabel(subcategory.label);
+    }
+  }
+
+  for (const category of categoryDocuments || []) {
+    addLabel(category?.mainCategoryLabel);
+
+    for (const subcategory of category?.subcategories || []) {
+      addLabel(subcategory?.subcategoryLabel);
+    }
+  }
+
+  return labels;
+}
+
+function parseJsonCategoryArray(value) {
+  const trimmed = String(value || '').trim();
+
+  if (!trimmed.startsWith('[')) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+  } catch (error) {
+    return null;
+  }
+
+  return null;
+}
+
+function parseLegacyCategoryList(value, knownCategoryLabels) {
+  const parts = String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const categories = [];
+
+  for (let index = 0; index < parts.length; index += 1) {
+    let matchedLabel = '';
+    let matchedEndIndex = index;
+
+    for (let endIndex = parts.length - 1; endIndex >= index; endIndex -= 1) {
+      const candidate = parts.slice(index, endIndex + 1).join(', ');
+      const knownLabel = knownCategoryLabels.get(normalizeCategoryLabelKey(candidate));
+
+      if (knownLabel) {
+        matchedLabel = knownLabel;
+        matchedEndIndex = endIndex;
+        break;
+      }
+    }
+
+    if (matchedLabel) {
+      categories.push(matchedLabel);
+      index = matchedEndIndex;
+    } else {
+      categories.push(parts[index]);
+    }
+  }
+
+  return categories;
+}
+
+function parseRankingCategories(value, knownCategoryLabels = buildKnownCategoryLabelMap()) {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => {
+        const jsonItems = parseJsonCategoryArray(item);
+        return jsonItems || [String(item || '').trim()];
+      })
+      .filter(Boolean);
+  }
+
+  const rawValue = String(value || '').trim();
+
+  if (!rawValue) {
+    return [];
+  }
+
+  const jsonItems = parseJsonCategoryArray(rawValue);
+
+  if (jsonItems) {
+    return jsonItems;
+  }
+
+  const knownLabel = knownCategoryLabels.get(normalizeCategoryLabelKey(rawValue));
+
+  if (knownLabel) {
+    return [knownLabel];
+  }
+
+  if (rawValue.includes(',')) {
+    return parseLegacyCategoryList(rawValue, knownCategoryLabels);
+  }
+
+  return [rawValue];
 }
 
 function normalizeBoolean(value) {
@@ -1662,12 +1787,15 @@ async function buildOfferRanking({
   const limitValue = String(limit || '30').trim().toLowerCase();
   const showAllMatching = limitValue === 'all';
   const safeLimit = showAllMatching ? null : Math.max(5, Math.min(Number(limit) || 30, 500));
-  const selectedCategories = normalizeStringList(categories);
   const selectedRetailers = normalizeStringList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
+  const categoryDocuments = await Category.find({ isActive: true })
+    .select('mainCategoryLabel offerCount subcategories')
+    .lean();
+  const selectedCategories = parseRankingCategories(categories, buildKnownCategoryLabelMap(categoryDocuments));
   const cacheKey = buildRankingCacheKey({
-    categories,
+    categories: selectedCategories,
     query,
     unit,
     retailers,
@@ -1688,12 +1816,9 @@ async function buildOfferRanking({
     selectedRetailers,
     selectedCategories,
   });
-  const [offerCacheDocuments, categoryDocuments, retailerOptions] = await Promise.all([
+  const [offerCacheDocuments, retailerOptions] = await Promise.all([
     RetailerCategoryOfferCache.find(cacheMatch)
       .select('offers')
-      .lean(),
-    Category.find({ isActive: true })
-      .select('mainCategoryLabel offerCount subcategories')
       .lean(),
     Retailer.find(retailerMatch)
       .select('retailerKey retailerName activeOfferCount')
@@ -1831,6 +1956,8 @@ module.exports = {
   dedupeQueryOffers,
   reduceAdjacentQueryDuplicates,
   prepareQueryOffersForResponse,
+  parseRankingCategories,
+  buildKnownCategoryLabelMap,
   normalizeSearchText,
   tokenizeSearchText,
 };

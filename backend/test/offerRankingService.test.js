@@ -4,8 +4,10 @@ const test = require('node:test');
 const {
   applyQueryMatch,
   buildGroupedRankings,
+  buildKnownCategoryLabelMap,
   dedupeQueryOffers,
   normalizeSearchText,
+  parseRankingCategories,
   prepareQueryOffersForResponse,
   scoreOfferAgainstQuery,
   tokenizeSearchText,
@@ -29,6 +31,32 @@ function offer(overrides) {
 test('normalizes umlauts and tokenizes search text for query matching', () => {
   assert.equal(normalizeSearchText('Käse & Öl'), 'kaese oel');
   assert.deepEqual(tokenizeSearchText('Red Bull 4-Pack'), ['red', 'bull', '4', 'pack']);
+});
+
+test('parses ranking category names containing commas as a single category', () => {
+  const knownCategories = buildKnownCategoryLabelMap();
+
+  assert.deepEqual(
+    parseRankingCategories('Fleisch, Wurst & Fisch', knownCategories),
+    ['Fleisch, Wurst & Fisch']
+  );
+  assert.deepEqual(
+    parseRankingCategories('Fleisch, Wurst & Fisch,Kaese', knownCategories),
+    ['Fleisch, Wurst & Fisch', 'Kaese']
+  );
+});
+
+test('parses repeated and JSON ranking categories without legacy comma damage', () => {
+  const knownCategories = buildKnownCategoryLabelMap();
+
+  assert.deepEqual(
+    parseRankingCategories(['Fleisch, Wurst & Fisch', 'Kaese'], knownCategories),
+    ['Fleisch, Wurst & Fisch', 'Kaese']
+  );
+  assert.deepEqual(
+    parseRankingCategories('["Fleisch, Wurst & Fisch","Kaese"]', knownCategories),
+    ['Fleisch, Wurst & Fisch', 'Kaese']
+  );
 });
 
 test('scores real butter offers ahead of cosmetic side meanings', () => {
