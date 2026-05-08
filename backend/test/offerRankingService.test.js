@@ -7,6 +7,7 @@ const {
   buildKnownCategoryLabelMap,
   dedupeQueryOffers,
   normalizeSearchText,
+  normalizeRetailerList,
   parseRankingCategories,
   prepareQueryOffersForResponse,
   scoreOfferAgainstQuery,
@@ -57,6 +58,12 @@ test('parses repeated and JSON ranking categories without legacy comma damage', 
     parseRankingCategories('["Fleisch, Wurst & Fisch","Kaese"]', knownCategories),
     ['Fleisch, Wurst & Fisch', 'Kaese']
   );
+});
+
+test('normalizes ranking retailer filters case-insensitively', () => {
+  assert.deepEqual(normalizeRetailerList('PENNY'), ['penny']);
+  assert.deepEqual(normalizeRetailerList('Penny,penny,BILLA PLUS'), ['penny', 'billa-plus']);
+  assert.deepEqual(normalizeRetailerList(['PENNY', 'Billa-Plus']), ['penny', 'billa-plus']);
 });
 
 test('scores real butter offers ahead of cosmetic side meanings', () => {

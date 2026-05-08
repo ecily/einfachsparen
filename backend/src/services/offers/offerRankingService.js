@@ -5,6 +5,7 @@ const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCa
 const { computeOfferSavings } = require('./promotionMath');
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
+const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 
 const OFFER_RANKING_FIELDS = [
   '_id',
@@ -81,6 +82,14 @@ function normalizeStringList(value) {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizeRetailerKey(value) {
+  return normalizeTitleForMatch(value).replace(/\s+/g, '-');
+}
+
+function normalizeRetailerList(value) {
+  return [...new Set(normalizeStringList(value).map(normalizeRetailerKey).filter(Boolean))];
 }
 
 function normalizeCategoryLabelKey(value) {
@@ -212,7 +221,7 @@ function normalizeBoolean(value) {
 }
 
 function normalizeProgramRetailers(value) {
-  return normalizeStringList(value);
+  return normalizeRetailerList(value);
 }
 
 function buildRankingCacheKey({
@@ -228,7 +237,7 @@ function buildRankingCacheKey({
     categories: normalizeStringList(categories).sort(),
     query: String(query || '').trim().toLowerCase(),
     unit: String(unit || 'all').trim().toLowerCase(),
-    retailers: normalizeStringList(retailers).sort(),
+    retailers: normalizeRetailerList(retailers).sort(),
     programRetailers: normalizeProgramRetailers(programRetailers).sort(),
     onlyWithoutProgram: normalizeBoolean(onlyWithoutProgram),
     limit: String(limit || '30').trim().toLowerCase(),
@@ -1787,7 +1796,7 @@ async function buildOfferRanking({
   const limitValue = String(limit || '30').trim().toLowerCase();
   const showAllMatching = limitValue === 'all';
   const safeLimit = showAllMatching ? null : Math.max(5, Math.min(Number(limit) || 30, 500));
-  const selectedRetailers = normalizeStringList(retailers);
+  const selectedRetailers = normalizeRetailerList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
   const categoryDocuments = await Category.find({ isActive: true })
@@ -1959,5 +1968,7 @@ module.exports = {
   parseRankingCategories,
   buildKnownCategoryLabelMap,
   normalizeSearchText,
+  normalizeRetailerKey,
+  normalizeRetailerList,
   tokenizeSearchText,
 };
