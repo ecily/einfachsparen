@@ -16,6 +16,7 @@
     "diagnose:source-dedupe": "node scripts/diagnoseSourceDedupe.js",
     "diagnose:validity-ingestion": "node scripts/diagnoseValidityIngestion.js",
     "diagnose:validity-coverage": "node scripts/diagnoseValidityCoverage.js",
+    "diagnose:retailer-readiness": "node scripts/diagnoseRetailerReadiness.js",
     "diagnose:sources-ladder": "node scripts/diagnoseSourcesLadder.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",
