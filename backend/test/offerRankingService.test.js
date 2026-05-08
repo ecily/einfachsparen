@@ -3,9 +3,11 @@ const test = require('node:test');
 
 const {
   applyQueryMatch,
+  buildValidityLabel,
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
   dedupeQueryOffers,
+  dedupeResponseOffers,
   normalizeSearchText,
   normalizeRetailerList,
   parseRankingCategories,
@@ -1340,4 +1342,134 @@ test('keeps milka and coffee response groups visibly de-clustered', () => {
   const coffeeGroupedTitles = buildGroupedRankings(coffeeOffers, { query: 'kaffee' })[0].offers.map((item) => item.title);
 
   assert.notEqual(coffeeGroupedTitles[0], coffeeGroupedTitles[1]);
+});
+
+test('prefers PENNY official html with safe validity over matching Aktionsfinder response duplicate', () => {
+  const aktionsfinder = offer({
+    _id: 'aktionsfinder-mango',
+    title: 'Mango vorgereift',
+    titleNormalized: 'mango vorgereift',
+    retailerKey: 'penny',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    normalizedUnitPrice: { amount: 1.49, unit: 'Stk', comparable: true },
+    validFrom: null,
+    validTo: null,
+    status: 'active',
+    isActiveNow: true,
+    sortScoreDefault: 500,
+    quality: { comparisonSafe: true },
+  });
+  const official = offer({
+    ...aktionsfinder,
+    _id: 'official-mango',
+    sourceType: 'penny-official-html',
+    validFrom: new Date('2026-05-07T12:00:00Z'),
+    validTo: new Date('2026-05-12T12:00:00Z'),
+    sortScoreDefault: 100,
+  });
+  const prepared = prepareQueryOffersForResponse([aktionsfinder, official], 'mango');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'official-mango');
+  assert.equal(prepared[0].sourceType, 'penny-official-html');
+});
+
+test('keeps Mango fruit and Mango Schaumbecher as separate response products', () => {
+  const fruit = offer({
+    _id: 'mango-fruit',
+    title: 'Mango vorgereift',
+    titleNormalized: 'mango vorgereift',
+    retailerKey: 'penny',
+    sourceType: 'penny-official-html',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    normalizedUnitPrice: { amount: 1.49, unit: 'Stk', comparable: true },
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  });
+  const dessert = offer({
+    _id: 'mango-dessert',
+    title: 'Schaumbecher mit Mango Geschmack',
+    titleNormalized: 'schaumbecher mit mango geschmack',
+    retailerKey: 'penny',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    normalizedUnitPrice: { amount: 1.49, unit: 'Stk', comparable: true },
+    validTo: null,
+  });
+  const prepared = prepareQueryOffersForResponse([dessert, fruit], 'mango');
+
+  assert.equal(prepared.length, 2);
+  assert.deepEqual(new Set(prepared.map((item) => item._id)), new Set(['mango-fruit', 'mango-dessert']));
+});
+
+test('keeps Aktionsfinder offer visible when no better official duplicate exists', () => {
+  const aktionsfinder = offer({
+    _id: 'aktionsfinder-only',
+    title: 'Mango vorgereift',
+    retailerKey: 'penny',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    normalizedUnitPrice: { amount: 1.49, unit: 'Stk', comparable: true },
+    validTo: null,
+  });
+
+  assert.deepEqual(prepareQueryOffersForResponse([aktionsfinder], 'mango'), [aktionsfinder]);
+});
+
+test('response dedupe applies official source priority conservatively for BILLA and LIDL', () => {
+  const billaOfficial = offer({
+    _id: 'billa-official',
+    title: 'Ja Natuerlich Bio Milch 1 l',
+    retailerKey: 'billa',
+    sourceType: 'billa-official-algolia',
+    priceCurrent: { amount: 1.29 },
+    quantityText: '1 l',
+    normalizedUnitPrice: { amount: 1.29, unit: 'l', comparable: true },
+    validTo: null,
+  });
+  const billaAggregator = offer({
+    ...billaOfficial,
+    _id: 'billa-aktionsfinder',
+    sourceType: 'aktionsfinder-json',
+  });
+  const lidlOfficial = offer({
+    _id: 'lidl-official',
+    title: 'Barilla Pasta 500 g',
+    retailerKey: 'lidl',
+    sourceType: 'lidl-official-flyer-api',
+    priceCurrent: { amount: 0.99 },
+    quantityText: '500 g',
+    normalizedUnitPrice: { amount: 1.98, unit: 'kg', comparable: true },
+    validFrom: new Date('2026-05-07T12:00:00Z'),
+    validTo: new Date('2026-05-13T12:00:00Z'),
+  });
+  const lidlAggregator = offer({
+    ...lidlOfficial,
+    _id: 'lidl-aktionsfinder',
+    sourceType: 'aktionsfinder-json',
+  });
+
+  const prepared = dedupeResponseOffers([billaAggregator, billaOfficial, lidlAggregator, lidlOfficial], '');
+
+  assert.deepEqual(prepared.map((item) => item._id).sort(), ['billa-official', 'lidl-official']);
+});
+
+test('validity label includes concrete date when validTo is present', () => {
+  assert.equal(
+    buildValidityLabel({
+      validFrom: new Date('2026-05-07T12:00:00Z'),
+      validTo: new Date('2026-05-12T12:00:00Z'),
+    }),
+    'gueltig 2026-05-07 bis 2026-05-12'
+  );
+  assert.equal(
+    buildValidityLabel({
+      validTo: new Date('2026-05-12T12:00:00Z'),
+    }),
+    'gueltig bis 2026-05-12'
+  );
 });

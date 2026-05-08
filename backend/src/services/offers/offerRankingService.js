@@ -33,6 +33,8 @@ const OFFER_RANKING_FIELDS = [
   'isMultiBuy',
   'effectiveDiscountType',
   'comparisonGroup',
+  'offerKey',
+  'dedupeKey',
   'status',
   'isActiveNow',
   'isActiveToday',
@@ -1125,8 +1127,32 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     minimumPurchaseQty: offer.minimumPurchaseQty ?? savings.requiredQuantity ?? 1,
     quality: offer.quality || {},
     sortScoreDefault: Number(offer.sortScoreDefault || 0),
-    validityLabel: offer.validTo ? 'gueltig bis' : 'aktuell verfuegbar, Enddatum nicht erkannt',
+    validityLabel: buildValidityLabel(offer),
   };
+}
+
+function formatDateLabel(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+}
+
+function buildValidityLabel(offer) {
+  const validFrom = formatDateLabel(offer?.validFrom);
+  const validTo = formatDateLabel(offer?.validTo);
+
+  if (validFrom && validTo) {
+    return `gueltig ${validFrom} bis ${validTo}`;
+  }
+
+  if (validTo) {
+    return `gueltig bis ${validTo}`;
+  }
+
+  return 'aktuell verfuegbar, Enddatum nicht erkannt';
 }
 
 function hasReliableValidTo(offer) {
@@ -1174,6 +1200,7 @@ function buildConsumerScore(offer) {
   if (offer?.status === 'active' && offer?.isActiveNow) score += 1000;
   if (safelyComparable && offer?.comparisonGroup) score += 500;
   if (hasReliableValidTo(offer)) score += 25;
+  score += buildSourceQualityScore(offer);
 
   const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
   if (safelyComparable && Number.isFinite(unitAmount) && unitAmount > 0) {
@@ -1185,6 +1212,46 @@ function buildConsumerScore(offer) {
   if (!offer?.hasConditions) score += 60;
 
   return score;
+}
+
+function getOfferSourceType(offer) {
+  return String(offer?.sourceType || offer?.rawFacts?.sourceType || '').trim();
+}
+
+function getSourcePriorityRank(offer) {
+  const sourceType = getOfferSourceType(offer);
+  const retailerKey = String(offer?.retailerKey || '').trim();
+
+  if (/ocr|bbox|tesseract|paddle/i.test(sourceType)) return 99;
+
+  if (retailerKey === 'penny') {
+    if (sourceType === 'penny-official-html') return 1;
+    if (sourceType === 'aktionsfinder-json') return 3;
+    if (sourceType === 'penny-official-pdf') return 8;
+  }
+
+  if ((retailerKey === 'billa' || retailerKey === 'billa-plus') && sourceType === 'billa-official-algolia') return 1;
+  if (retailerKey === 'lidl' && sourceType === 'lidl-official-flyer-api') return 1;
+
+  if (/official.*(?:algolia|api|json)|(?:algolia|api|json).*official/i.test(sourceType)) return 2;
+  if (/official.*html|html.*official/i.test(sourceType)) return 3;
+  if (/pdf/i.test(sourceType)) return 8;
+  if (/aktionsfinder|wogibtswas|marketguru|aggregator/i.test(sourceType)) return 5;
+
+  return 20;
+}
+
+function buildSourceQualityScore(offer) {
+  const rank = getSourcePriorityRank(offer);
+
+  if (rank === 1) return 45;
+  if (rank === 2) return 35;
+  if (rank === 3) return 30;
+  if (rank === 5) return 0;
+  if (rank === 8) return -10;
+  if (rank >= 90) return -30;
+
+  return 0;
 }
 
 function buildRetailerDistribution(offers) {
@@ -1222,8 +1289,8 @@ function buildRetailerDistribution(offers) {
 }
 
 function dedupeOffers(offers) {
-  const seen = new Set();
   const unique = [];
+  const keyToIndex = new Map();
 
   for (const offer of offers) {
     const dedupeKey = offer.dedupeKey || offer.offerKey || [
@@ -1235,12 +1302,16 @@ function dedupeOffers(offers) {
       offer.validTo?.toISOString?.() || offer.validTo,
     ].join('::');
 
-    if (seen.has(dedupeKey)) {
+    const duplicateIndex = keyToIndex.get(dedupeKey);
+
+    if (duplicateIndex === undefined) {
+      keyToIndex.set(dedupeKey, unique.length);
+      unique.push(offer);
       continue;
     }
 
-    seen.add(dedupeKey);
-    unique.push(offer);
+    const preferred = choosePreferredQueryDuplicate(unique[duplicateIndex], offer, '');
+    unique[duplicateIndex] = preferred;
   }
 
   return unique;
@@ -1308,6 +1379,82 @@ function getOfferQuantityKey(offer) {
 
 function getOfferTitleKey(offer) {
   return normalizeSearchText(offer?.titleNormalized || offer?.title);
+}
+
+function getComparableTitleTokens(offer) {
+  const noisyTokens = new Set([
+    'aktion',
+    'aktionen',
+    'angebot',
+    'angebote',
+    'div',
+    'diverse',
+    'geschmack',
+    'gueltig',
+    'penny',
+    'billa',
+    'plus',
+    'lidl',
+    'spar',
+    'hofer',
+    'sorten',
+    'versch',
+    'verschiedene',
+  ]);
+
+  return tokenizeSearchText(offer?.titleNormalized || offer?.title)
+    .filter((token) => token.length > 2 && !/^\d+$/.test(token) && !noisyTokens.has(token))
+    .slice(0, 10);
+}
+
+function sameConservativeTitleIdentity(left, right) {
+  const leftTokens = getComparableTitleTokens(left);
+  const rightTokens = getComparableTitleTokens(right);
+
+  if (leftTokens.length === 0 || rightTokens.length === 0) {
+    return false;
+  }
+
+  const leftSet = new Set(leftTokens);
+  const rightSet = new Set(rightTokens);
+  const shared = leftTokens.filter((token) => rightSet.has(token)).length;
+  const smaller = Math.min(leftSet.size, rightSet.size);
+  const larger = Math.max(leftSet.size, rightSet.size);
+
+  return shared >= 2 && shared / smaller >= 0.85 && shared / larger >= 0.6;
+}
+
+function hasSameResponseFallbackIdentity(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  if (getOfferIdentity(left) && getOfferIdentity(left) === getOfferIdentity(right)) {
+    return true;
+  }
+
+  if (left.dedupeKey && left.dedupeKey === right.dedupeKey) {
+    return true;
+  }
+
+  if (left.offerKey && left.offerKey === right.offerKey) {
+    return true;
+  }
+
+  const sameRetailer = String(left.retailerKey || left.retailerName || '') === String(right.retailerKey || right.retailerName || '');
+  const samePrice = getOfferPriceKey(left) === getOfferPriceKey(right);
+  const sameQuantity = getOfferQuantityKey(left) === getOfferQuantityKey(right);
+  const sameVariant = getOfferVariantKey(left) === getOfferVariantKey(right);
+
+  if (!sameRetailer || !samePrice || !sameQuantity || !sameVariant) {
+    return false;
+  }
+
+  if (getOfferTitleKey(left) === getOfferTitleKey(right)) {
+    return true;
+  }
+
+  return sameConservativeTitleIdentity(left, right);
 }
 
 function findRawFactValue(value, keys) {
@@ -1419,8 +1566,30 @@ function hasRicherOfferData(left, right) {
   return leftScore > rightScore;
 }
 
+function hasSafeValidityWindow(offer) {
+  return Boolean(formatDateLabel(offer?.validFrom) && formatDateLabel(offer?.validTo));
+}
+
+function compareResponseDuplicatePreference(left, right, query) {
+  const leftValidity = Number(hasSafeValidityWindow(left));
+  const rightValidity = Number(hasSafeValidityWindow(right));
+
+  if (leftValidity !== rightValidity) {
+    return rightValidity - leftValidity;
+  }
+
+  const leftSourceRank = getSourcePriorityRank(left);
+  const rightSourceRank = getSourcePriorityRank(right);
+
+  if (leftSourceRank !== rightSourceRank) {
+    return leftSourceRank - rightSourceRank;
+  }
+
+  return compareOffersByRanking(left, right, { query });
+}
+
 function choosePreferredQueryDuplicate(left, right, query) {
-  const rankingComparison = compareOffersByRanking(left, right, { query });
+  const rankingComparison = compareResponseDuplicatePreference(left, right, query);
 
   if (rankingComparison < 0) {
     return left;
@@ -1435,6 +1604,24 @@ function choosePreferredQueryDuplicate(left, right, query) {
   }
 
   return left;
+}
+
+function dedupeResponseOffers(offers, query = '') {
+  const unique = [];
+
+  for (const offer of offers) {
+    const duplicateIndex = unique.findIndex((candidate) => hasSameResponseFallbackIdentity(candidate, offer));
+
+    if (duplicateIndex < 0) {
+      unique.push(offer);
+      continue;
+    }
+
+    const preferred = choosePreferredQueryDuplicate(unique[duplicateIndex], offer, query);
+    unique[duplicateIndex] = preferred;
+  }
+
+  return unique;
 }
 
 function dedupeQueryOffers(offers, query) {
@@ -1498,7 +1685,7 @@ function reduceAdjacentQueryDuplicates(offers, query) {
 }
 
 function prepareQueryOffersForResponse(offers, query) {
-  return reduceAdjacentQueryDuplicates(dedupeQueryOffers(offers, query), query);
+  return reduceAdjacentQueryDuplicates(dedupeResponseOffers(dedupeQueryOffers(offers, query), query), query);
 }
 
 function compareOffersByRanking(left, right, { query = '' } = {}) {
@@ -1961,8 +2148,10 @@ module.exports = {
   clearRankingResponseCache,
   scoreOfferAgainstQuery,
   applyQueryMatch,
+  buildValidityLabel,
   buildGroupedRankings,
   dedupeQueryOffers,
+  dedupeResponseOffers,
   reduceAdjacentQueryDuplicates,
   prepareQueryOffersForResponse,
   parseRankingCategories,
