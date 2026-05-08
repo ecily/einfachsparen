@@ -10,8 +10,17 @@ const {
 } = require('./categoryClassifier');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
+const {
+  parsePdfPriceAmount,
+  isBadPdfLine,
+  hasPlausibleProductTitle,
+  validatePdfOfferCandidate,
+  summarizeRejections,
+  buildPdfSourceMetadata,
+} = require('./pdfOfferParsing');
 
-const PARSER_VERSION = 'penny-official-pdf-v1';
+const PARSER_VERSION = 'penny-pdf-v1';
+const PENNY_PDF_SOURCE_KEY = 'penny-official-flyer-pdf';
 
 const STOP_WORDS = new Set([
   'ab',
@@ -102,26 +111,7 @@ function dateKey(value) {
 }
 
 function parseNumericAmount(value) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  const text = String(value);
-  const wholeEuroMatch = text.match(/\b(\d{1,4})\.-(?!\d)/);
-
-  if (wholeEuroMatch) {
-    const amount = Number(wholeEuroMatch[1]);
-    return Number.isFinite(amount) ? amount : null;
-  }
-
-  const match = text.match(/(\d{1,3})[,.](\d{2})(?!\d)/);
-
-  if (!match) {
-    return null;
-  }
-
-  const amount = Number(`${match[1]}.${match[2]}`);
-  return Number.isFinite(amount) ? amount : null;
+  return parsePdfPriceAmount(value);
 }
 
 function hasPriceSignal(line) {
@@ -131,9 +121,7 @@ function hasPriceSignal(line) {
     return /\b\d{1,4}\.-(?!\d)/.test(text);
   }
 
-  return /\b\d{1,3}[,.]\d{2}\b/.test(text)
-    || /^\d{1,3}[,.]\d{2}(?!\d)/.test(text)
-    || /\b\d{1,4}\.-(?!\d)/.test(text);
+  return parseNumericAmount(text) !== null;
 }
 
 function hasUnitPriceSignal(line) {
@@ -171,7 +159,7 @@ function isMostlyUppercaseText(line) {
 function isNoiseLine(line) {
   const text = sanitizeWhitespace(line);
 
-  if (!text || text.length < 3) {
+  if (isBadPdfLine(text, NON_OFFER_PATTERNS)) {
     return true;
   }
 
@@ -209,9 +197,12 @@ function isProductishLine(line) {
     return false;
   }
 
-  return isMostlyUppercaseText(line)
+  return hasPlausibleProductTitle(line) && (
+    isMostlyUppercaseText(line)
+    || /^[A-Z]/.test(String(line || ''))
     || /\b\d+(?:[,.]\d+)?\s*(?:g|kg|ml|l|stk|stueck|stuck|cm)\b/i.test(normalized)
-    || /\b(od|oder|div|versch|sorten)\b/i.test(normalized);
+    || /\b(od|oder|div|versch|sorten)\b/i.test(normalized)
+  );
 }
 
 function extractDatesFromText(text) {
@@ -278,6 +269,11 @@ function classifyCandidate(candidate) {
   const tokens = tokenList(candidate.title);
   const normalizedTitle = normalizeForAudit(candidate.title);
   const normalizedText = normalizeForAudit(`${candidate.title} ${candidate.conditionsText} ${candidate.rawText}`);
+  const validation = validatePdfOfferCandidate(candidate);
+
+  if (!validation.ok) {
+    return validation.reason;
+  }
 
   if (/^(1 1\s*gratis|2 1\s*gratis|3 3\s*gratis|gratis)$/.test(normalizedTitle)) {
     return 'mechanic-without-product';
@@ -291,7 +287,7 @@ function classifyCandidate(candidate) {
     return 'deposit-footnote-fragment';
   }
 
-  if (tokens.length < 2 && !candidate.price && !candidate.conditionsText) {
+  if (tokens.length < 1) {
     return 'parser-noise';
   }
 
@@ -331,11 +327,15 @@ function classifyCandidate(candidate) {
 }
 
 function buildCandidate({ pageNumber, titleLines, contextLines, priceLine, index }) {
-  const title = sanitizeWhitespace(titleLines.join(' ')).replace(/\*/g, '');
+  const compactTitleLines = titleLines
+    .map((line) => sanitizeWhitespace(line).replace(/\*/g, ''))
+    .filter((line) => hasPlausibleProductTitle(line))
+    .slice(-3);
+  const title = sanitizeWhitespace(compactTitleLines.join(' ')).replace(/\*/g, '');
   const conditions = contextLines.filter(hasMechanicSignal);
   const price = parseNumericAmount(priceLine || contextLines.find(hasOfferPriceSignal));
-  const quantityText = extractQuantityText([...titleLines, ...contextLines]);
-  const rawText = sanitizeWhitespace([...titleLines, ...contextLines].join(' '));
+  const quantityText = extractQuantityText([...compactTitleLines, ...contextLines]);
+  const rawText = sanitizeWhitespace([...compactTitleLines, ...contextLines].join(' '));
   const candidate = {
     id: `p${pageNumber}-${index}`,
     page: pageNumber,
@@ -359,7 +359,8 @@ function extractCandidatesFromPage(page) {
   const rawLines = page.text
     .split(/\r?\n/)
     .map(sanitizeWhitespace)
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((line) => !isNoiseLine(line) || hasOfferPriceSignal(line) || hasStandaloneConditionSignal(line));
   const candidates = [];
   const seen = new Set();
 
@@ -370,17 +371,17 @@ function extractCandidatesFromPage(page) {
       continue;
     }
 
-    const lookback = rawLines.slice(Math.max(0, index - 9), index);
+    const lookback = rawLines.slice(Math.max(0, index - 6), index);
     const titleLines = [];
 
     for (let inner = lookback.length - 1; inner >= 0; inner -= 1) {
       const candidateLine = lookback[inner];
 
-      if (titleLines.length >= 5) {
+      if (titleLines.length >= 3) {
         break;
       }
 
-      if (hasOfferPriceSignal(candidateLine)) {
+      if (hasOfferPriceSignal(candidateLine) || hasStandaloneConditionSignal(candidateLine)) {
         break;
       }
 
@@ -398,7 +399,21 @@ function extractCandidatesFromPage(page) {
       continue;
     }
 
-    const contextLines = rawLines.slice(index, Math.min(rawLines.length, index + 5));
+    const contextLines = [line];
+
+    for (let forward = index + 1; forward < Math.min(rawLines.length, index + 5); forward += 1) {
+      const nextLine = rawLines[forward];
+
+      if (hasOfferPriceSignal(nextLine)) {
+        break;
+      }
+
+      if (isProductishLine(nextLine) && !hasMechanicSignal(nextLine)) {
+        break;
+      }
+
+      contextLines.push(nextLine);
+    }
     const candidate = buildCandidate({
       pageNumber: page.page,
       titleLines,
@@ -700,6 +715,14 @@ function normalizePennyPdfCandidateToOffer({
   }
 
   const titleNormalized = normalizeForAudit(candidate.title);
+  const sourceMetadata = buildPdfSourceMetadata({
+    source,
+    sourceKey: PENNY_PDF_SOURCE_KEY,
+    pdfUrl: pdfUrl || source.sourceUrl,
+    page: candidate.page,
+    parserVersion: PARSER_VERSION,
+    evidence: candidate.rawText,
+  });
   const offerKey = [
     source.retailerKey,
     'official-pdf',
@@ -792,10 +815,20 @@ function normalizePennyPdfCandidateToOffer({
     },
     rawFacts: {
       sourceType: 'penny-official-pdf',
+      sourceKind: 'pdf',
+      sourceKey: PENNY_PDF_SOURCE_KEY,
+      sourceId: source._id ? String(source._id) : '',
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
       sourceText: candidate.rawText,
+      evidenceText: sourceMetadata.evidence,
       page: candidate.page,
+      pageNumber: candidate.page,
+      pdfPage: candidate.page,
+      flyerPage: candidate.page,
       candidateId: candidate.id,
       pdfUrl: pdfUrl || '',
+      sourceMetadata,
       validityText: validity.validityText,
       validityConfidence: validity.confidence,
       detectedLeafletDates: pdfReference.validity?.detectedDates || [],
@@ -830,9 +863,13 @@ function normalizePennyPdfCandidatesToOffers({ pdfReference, source, crawlJobId,
 
 module.exports = {
   PARSER_VERSION,
+  PENNY_PDF_SOURCE_KEY,
   extractPennyPdfReference,
+  extractCandidatesFromPage,
   normalizePennyPdfCandidatesToOffers,
   normalizeForAudit,
   tokenList,
   dateKey,
+  parseNumericAmount,
+  summarizeRejections,
 };

@@ -20,9 +20,16 @@ const { enrichOffersForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
 const {
   PARSER_VERSION: PENNY_PDF_PARSER_VERSION,
+  PENNY_PDF_SOURCE_KEY,
   extractPennyPdfReference,
   normalizePennyPdfCandidatesToOffers,
+  summarizeRejections,
 } = require('./pennyPdfLeafletParser');
+const {
+  extractIssuuDocumentsFromHtml,
+  resolveIssuuOriginalPdfUrl,
+} = require('./issuuPdfResolver');
+const logger = require('../../lib/logger');
 
 const PARSER_VERSION = 'official-v3-coverage';
 
@@ -933,113 +940,6 @@ async function fetchBinary(url, accept = 'application/pdf,*/*') {
   };
 }
 
-function extractIssuuDocumentsFromHtml(html) {
-  const documents = [];
-  const seen = new Set();
-
-  function pushDocument(username, documentName, embedUrl = '') {
-    const normalizedUsername = sanitizeWhitespace(username);
-    const normalizedDocumentName = sanitizeWhitespace(documentName);
-
-    if (!normalizedUsername || !normalizedDocumentName) {
-      return;
-    }
-
-    const key = `${normalizedUsername}::${normalizedDocumentName}`;
-
-    if (seen.has(key)) {
-      return;
-    }
-
-    seen.add(key);
-    documents.push({
-      username: normalizedUsername,
-      documentName: normalizedDocumentName,
-      embedUrl,
-      documentUrl: `https://issuu.com/${encodeURIComponent(normalizedUsername)}/docs/${encodeURIComponent(normalizedDocumentName)}`,
-    });
-  }
-
-  const $ = cheerio.load(html);
-
-  $('iframe[src], a[href]').each((index, element) => {
-    const src = $(element).attr('src') || $(element).attr('href') || '';
-    const absoluteUrl = toAbsoluteUrl(src, 'https://www.penny.at/');
-
-    if (!/issuu\.com/i.test(absoluteUrl)) {
-      return;
-    }
-
-    try {
-      const parsedUrl = new URL(absoluteUrl);
-      const username = parsedUrl.searchParams.get('u');
-      const documentName = parsedUrl.searchParams.get('d');
-
-      pushDocument(username, documentName, absoluteUrl);
-    } catch (error) {
-      // Ignore unrelated URLs.
-    }
-  });
-
-  for (const match of String(html || '').matchAll(/https?:\/\/e\.issuu\.com\/embed\.html\?[^"'<>\\]+/gi)) {
-    try {
-      const parsedUrl = new URL(match[0].replace(/&amp;/g, '&'));
-      pushDocument(parsedUrl.searchParams.get('u'), parsedUrl.searchParams.get('d'), parsedUrl.toString());
-    } catch (error) {
-      // Ignore malformed embeds.
-    }
-  }
-
-  return documents;
-}
-
-async function fetchIssuuTrpcQuery(procedure, input) {
-  const encodedInput = encodeURIComponent(JSON.stringify({ 0: { json: input } }));
-  const url = `https://issuu.com/api/content-service/public.reader.${procedure}?batch=1&input=${encodedInput}`;
-  const response = await axios.get(url, {
-    timeout: 30000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-      Accept: 'application/json',
-      'x-trpc-source': 'nextjs-react',
-    },
-  });
-  const first = Array.isArray(response.data) ? response.data[0] : null;
-  const json = first?.result?.data?.json;
-
-  if (!json) {
-    throw new Error(`Issuu ${procedure} did not return a readable payload.`);
-  }
-
-  return json;
-}
-
-async function resolveIssuuOriginalPdfUrl(document) {
-  const readerPayload = await fetchIssuuTrpcQuery('reader4', {
-    username: document.username,
-    docname: document.documentName,
-  });
-  const publicationId = readerPayload?.document?.publicationId;
-
-  if (!publicationId) {
-    throw new Error('Issuu reader payload did not include publicationId.');
-  }
-
-  const downloadPayload = await fetchIssuuTrpcQuery('download', { publicationId });
-
-  if (!downloadPayload?.url) {
-    throw new Error('Issuu download payload did not include a PDF URL.');
-  }
-
-  return {
-    pdfUrl: downloadPayload.url,
-    publicationId,
-    revisionId: readerPayload?.document?.revisionId || '',
-    pageCount: readerPayload?.document?.pages?.length || 0,
-    title: readerPayload?.document?.title || document.documentName,
-  };
-}
-
 function buildBillaPrice(hit) {
   const currentPrice = hit?.price?.regular?.value ? Number((hit.price.regular.value / 100).toFixed(2)) : null;
   const referencePrice = hit?.price?.crossed ? Number((hit.price.crossed / 100).toFixed(2)) : null;
@@ -1531,6 +1431,7 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
         region,
         pdfUrl: target.observedUrl || canonicalUrl || target.pdfUrl,
       });
+      const rejectionReasons = summarizeRejections(pdfReference.candidates);
       const rawDocument = await createCompactRawDocument({
         sourceId: source._id,
         crawlJobId,
@@ -1553,14 +1454,15 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
         rejectedOffers: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
         parserVersion: PENNY_PDF_PARSER_VERSION,
         extractionConfidence: 0.68,
-        rejectionReasons: [
-          {
-            reason: 'missing-title-or-current-price-or-non-offer-text',
-            count: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
-          },
-        ],
+        rejectionReasons,
         payload: {
           kind: target.kind,
+          sourceKind: 'pdf',
+          sourceKey: PENNY_PDF_SOURCE_KEY,
+          sourceType: 'penny-official-pdf',
+          retailerKey: source.retailerKey,
+          retailerName: source.retailerName,
+          parserVersion: PENNY_PDF_PARSER_VERSION,
           observedUrl: target.observedUrl || '',
           publicationId: target.publicationId || '',
           revisionId: target.revisionId || '',
@@ -1577,12 +1479,24 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
 
       rawDocuments.push(rawDocument);
       collectedOffers.push(...normalizedOffers);
+      logger.info('PENNY PDF crawl parsed flyer', {
+        sourceKey: PENNY_PDF_SOURCE_KEY,
+        observedUrl: target.observedUrl || '',
+        pages: pdfReference.file.pages,
+        rawCandidates: pdfReference.candidates.length,
+        rejectedCandidates: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+        rejectionReasons: rejectionReasons.slice(0, 6),
+        offersCreated: normalizedOffers.length,
+      });
       pdfReports.push({
         kind: target.kind,
+        sourceKey: PENNY_PDF_SOURCE_KEY,
         observedUrl: target.observedUrl || '',
         status: 'success',
         foundRawItems: pdfReference.candidates.length,
         parsedOffers: normalizedOffers.length,
+        rejectedCandidates: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+        rejectionReasons: rejectionReasons.slice(0, 6),
         pages: pdfReference.file.pages,
       });
     } catch (error) {
@@ -1624,6 +1538,15 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
   if (offerDocuments.length > 0) {
     await Offer.insertMany(offerDocuments, { ordered: false });
   }
+
+  logger.info('PENNY PDF crawl summary', {
+    sourceKey: PENNY_PDF_SOURCE_KEY,
+    pdfTargets: seenPdfUrls.size,
+    pages: pdfReports.reduce((sum, item) => sum + Number(item.pages || 0), 0),
+    rawCandidates: pdfReports.reduce((sum, item) => sum + Number(item.foundRawItems || 0), 0),
+    rejectedCandidates: pdfReports.reduce((sum, item) => sum + Number(item.rejectedCandidates || 0), 0),
+    offersStored: offerDocuments.length,
+  });
 
   return {
     offerDocuments,
