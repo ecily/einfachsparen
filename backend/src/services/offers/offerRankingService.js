@@ -1766,6 +1766,115 @@ function dedupeResponseOffers(offers, query = '') {
   return unique;
 }
 
+function normalizeResponseFingerprintPart(value) {
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(Number(value.toFixed(4))) : '';
+  }
+
+  return normalizeSearchText(value);
+}
+
+function getResponseDateKey(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return normalizeResponseFingerprintPart(value);
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function getFinalResponseVisibleFingerprint(offer) {
+  const titleKey = normalizeResponseFingerprintPart(offer?.titleNormalized || offer?.title);
+
+  if (!titleKey) {
+    return '';
+  }
+
+  return [
+    'visible',
+    normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || ''),
+    titleKey,
+    getOfferPriceKey(offer),
+    getOfferQuantityKey(offer),
+    normalizeResponseFingerprintPart(offer?.sourceType || offer?.rawFacts?.sourceType || ''),
+    getResponseDateKey(offer?.validFrom),
+    getResponseDateKey(offer?.validTo),
+    getOfferConditionKey(offer),
+    getOfferVariantKey(offer),
+  ].join('::');
+}
+
+function getFinalResponseDedupeKeys(offer) {
+  const keys = [];
+  const identity = getOfferIdentity(offer);
+
+  if (identity) {
+    keys.push(`id:${identity}`);
+  }
+
+  if (offer?.dedupeKey) {
+    keys.push(`dedupe:${offer.dedupeKey}`);
+  }
+
+  if (offer?.offerKey) {
+    keys.push(`offer:${offer.offerKey}`);
+  }
+
+  const visibleFingerprint = getFinalResponseVisibleFingerprint(offer);
+
+  if (visibleFingerprint) {
+    keys.push(visibleFingerprint);
+  }
+
+  return keys;
+}
+
+function dedupeFinalResponseOffers(offers, query = '') {
+  const unique = [];
+  const keyToIndex = new Map();
+
+  for (const offer of offers) {
+    const keys = getFinalResponseDedupeKeys(offer);
+    const duplicateIndex = keys
+      .map((key) => keyToIndex.get(key))
+      .find((index) => index !== undefined);
+
+    if (duplicateIndex === undefined) {
+      const newIndex = unique.length;
+      unique.push(offer);
+      keys.forEach((key) => keyToIndex.set(key, newIndex));
+      continue;
+    }
+
+    const preferred = choosePreferredQueryDuplicate(unique[duplicateIndex], offer, query);
+
+    if (preferred !== unique[duplicateIndex]) {
+      unique[duplicateIndex] = preferred;
+    }
+
+    const mergedKeys = new Set([
+      ...getFinalResponseDedupeKeys(unique[duplicateIndex]),
+      ...keys,
+    ]);
+    mergedKeys.forEach((key) => keyToIndex.set(key, duplicateIndex));
+  }
+
+  return unique;
+}
+
 function dedupeQueryOffers(offers, query) {
   if (tokenizeSearchText(query).length === 0) {
     return offers;
@@ -2236,8 +2345,10 @@ async function buildOfferRanking({
       return String(left.title).localeCompare(String(right.title), 'de');
     });
   const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query);
-  const offers = responseCandidateOffers
-    .slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit);
+  const offers = dedupeFinalResponseOffers(
+    responseCandidateOffers.slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit),
+    query
+  );
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
 
   const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
@@ -2294,6 +2405,7 @@ module.exports = {
   buildGroupedRankings,
   dedupeQueryOffers,
   dedupeResponseOffers,
+  dedupeFinalResponseOffers,
   reduceAdjacentQueryDuplicates,
   prepareQueryOffersForResponse,
   parseRankingCategories,

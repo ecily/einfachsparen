@@ -6,6 +6,7 @@ const {
   buildValidityLabel,
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
+  dedupeFinalResponseOffers,
   dedupeQueryOffers,
   dedupeResponseOffers,
   normalizeSearchText,
@@ -1456,6 +1457,135 @@ test('response dedupe applies official source priority conservatively for BILLA 
   const prepared = dedupeResponseOffers([billaAggregator, billaOfficial, lidlAggregator, lidlOfficial], '');
 
   assert.deepEqual(prepared.map((item) => item._id).sort(), ['billa-official', 'lidl-official']);
+});
+
+test('final response dedupe keeps the same offer id only once', () => {
+  const duplicate = offer({
+    _id: 'same-offer-id',
+    title: 'Mango vorgereift',
+    titleNormalized: 'mango vorgereift',
+    retailerKey: 'penny',
+    sourceType: 'penny-official-html',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    validFrom: new Date('2026-05-07T12:00:00Z'),
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  });
+
+  assert.equal(dedupeFinalResponseOffers([duplicate, { ...duplicate }], 'mango').length, 1);
+});
+
+test('final response dedupe keeps the same visible offer fingerprint only once', () => {
+  const first = offer({
+    _id: 'first-visible',
+    title: 'Mango vorgereift',
+    titleNormalized: 'mango vorgereift',
+    retailerKey: 'penny',
+    sourceType: 'penny-official-html',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    validFrom: new Date('2026-05-07T12:00:00Z'),
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  });
+  const second = offer({
+    ...first,
+    _id: 'second-visible',
+  });
+
+  const prepared = dedupeFinalResponseOffers([first, second], 'mango');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'first-visible');
+});
+
+test('final response dedupe removes repeated q=mango PENNY Mango vorgereift result', () => {
+  const mango = offer({
+    _id: 'mango-vorgereift-a',
+    title: 'Mango vorgereift',
+    titleNormalized: 'mango vorgereift',
+    retailerKey: 'penny',
+    sourceType: 'penny-official-html',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    validFrom: new Date('2026-05-07T12:00:00Z'),
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  });
+  const prepared = dedupeFinalResponseOffers([
+    mango,
+    { ...mango, _id: 'mango-vorgereift-b' },
+  ], 'mango');
+
+  assert.equal(prepared.filter((item) => item.title === 'Mango vorgereift').length, 1);
+});
+
+test('final response dedupe removes repeated q=mango PENNY Schaumbecher result', () => {
+  const dessert = offer({
+    _id: 'schaumbecher-a',
+    title: 'Schaumbecher mit Mango Geschmack Penny 150 Gramm 1 Stück',
+    titleNormalized: 'schaumbecher mit mango geschmack penny 150 gramm 1 stueck',
+    retailerKey: 'penny',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 0.79 },
+    quantityText: '150 g',
+    validFrom: new Date('2026-05-07T12:00:00Z'),
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  });
+  const prepared = dedupeFinalResponseOffers([
+    dessert,
+    { ...dessert, _id: 'schaumbecher-b' },
+  ], 'mango');
+
+  assert.equal(
+    prepared.filter((item) => item.title === 'Schaumbecher mit Mango Geschmack Penny 150 Gramm 1 Stück').length,
+    1
+  );
+});
+
+test('final response dedupe keeps Mango vorgereift and Mango Schaumbecher separate', () => {
+  const fruit = offer({
+    _id: 'mango-fruit-final',
+    title: 'Mango vorgereift',
+    titleNormalized: 'mango vorgereift',
+    retailerKey: 'penny',
+    sourceType: 'penny-official-html',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  });
+  const dessert = offer({
+    _id: 'mango-dessert-final',
+    title: 'Schaumbecher mit Mango Geschmack Penny 150 Gramm 1 Stück',
+    titleNormalized: 'schaumbecher mit mango geschmack penny 150 gramm 1 stueck',
+    retailerKey: 'penny',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 0.79 },
+    quantityText: '150 g',
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  });
+  const prepared = dedupeFinalResponseOffers([fruit, dessert], 'mango');
+
+  assert.equal(prepared.length, 2);
+  assert.deepEqual(new Set(prepared.map((item) => item._id)), new Set(['mango-fruit-final', 'mango-dessert-final']));
+});
+
+test('final response dedupe keeps different retailers variants quantities and conditions visible', () => {
+  const base = {
+    title: 'Mango vorgereift',
+    titleNormalized: 'mango vorgereift',
+    sourceType: 'penny-official-html',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 Stk',
+    validTo: new Date('2026-05-12T12:00:00Z'),
+  };
+  const offers = [
+    offer({ ...base, _id: 'penny-mango', retailerKey: 'penny' }),
+    offer({ ...base, _id: 'billa-mango', retailerKey: 'billa' }),
+    offer({ ...base, _id: 'penny-two-pack', retailerKey: 'penny', quantityText: '2 Stk' }),
+    offer({ ...base, _id: 'penny-app', retailerKey: 'penny', customerProgramRequired: true, conditionsText: 'nur mit App' }),
+    offer({ ...base, _id: 'penny-brand', retailerKey: 'penny', brand: 'Biohof' }),
+  ];
+
+  assert.equal(dedupeFinalResponseOffers(offers, 'mango').length, 5);
 });
 
 [
