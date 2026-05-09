@@ -87,7 +87,13 @@ function normalizeStringList(value) {
 }
 
 function normalizeRetailerKey(value) {
-  return normalizeTitleForMatch(value).replace(/\s+/g, '-');
+  const normalized = normalizeTitleForMatch(value).replace(/\s+/g, '-');
+
+  if (normalized === 'interspar' || normalized === 'eurospar') {
+    return 'spar';
+  }
+
+  return normalized;
 }
 
 function normalizeRetailerList(value) {
@@ -337,13 +343,14 @@ function hasPhrase(wordString, queryTokens) {
 
 const QUERY_CONTEXTS = [
   {
+    key: 'butter',
     tokens: ['butter'],
     preferred: ['butter', 'milchprodukte', 'molkerei', 'milch', 'backen', 'lebensmittel'],
     strongPreferred: ['butter', 'milchprodukte', 'molkerei'],
     productIntent: ['butter', 'teebutter'],
     exactProductIntent: ['teebutter'],
     productContext: ['milchprodukte', 'molkerei'],
-    severeWeakContexts: ['lippenbalsam', 'kosmetik', 'make'],
+    severeWeakContexts: ['lippenbalsam', 'kosmetik', 'make', 'highlighter', 'body', 'bodybutter', 'peanut', 'erdnussbutter'],
     weakContexts: [
       'backbox',
       'brot',
@@ -477,13 +484,32 @@ const QUERY_CONTEXTS = [
     weakContexts: ['bierwurst', 'bierschinken'],
   },
   {
+    key: 'reis',
     tokens: ['reis'],
-    preferred: ['reis', 'pasta', 'konserven', 'grundnahrungsmittel', 'lebensmittel'],
-    strongPreferred: ['reis', 'pasta', 'konserven'],
-    productIntent: ['reis', 'basmati', 'jasmin', 'langkorn', 'expressreis', 'risotto'],
-    exactProductIntent: ['basmati', 'jasmin', 'langkorn', 'expressreis', 'risotto'],
-    productContext: ['reis', 'pasta', 'konserven', 'grundnahrungsmittel', 'lebensmittel'],
-    weakContexts: ['drink', 'reisdrink', 'milchersatz'],
+    preferred: ['reis', 'grundnahrungsmittel', 'lebensmittel'],
+    strongPreferred: ['reis'],
+    productIntent: ['reis', 'basmati', 'jasmin', 'langkorn', 'expressreis', 'risotto', 'risottoreis', 'milchreis', 'reiswaffel', 'reiswaffeln'],
+    exactProductIntent: ['basmati', 'jasmin', 'langkorn', 'expressreis', 'risotto', 'risottoreis'],
+    productContext: ['reis', 'grundnahrungsmittel', 'lebensmittel'],
+    weakContexts: [
+      'drink',
+      'reisdrink',
+      'milchersatz',
+      'pasta',
+      'nudel',
+      'nudeln',
+      'spaghetti',
+      'penne',
+      'fusilli',
+      'passata',
+      'sugo',
+      'konserve',
+      'konserven',
+      'bohnen',
+      'kichererbse',
+      'kichererbsen',
+    ],
+    severeWeakContexts: ['passata', 'sugo', 'spaghetti', 'nudel', 'nudeln', 'bohnen', 'kichererbse', 'kichererbsen'],
   },
   {
     tokens: ['waschmittel'],
@@ -752,6 +778,195 @@ function scoreMilkSearchIntent({ titleTokens, categoryTokens, structuredTokens, 
   return adjustment;
 }
 
+function getGenericButterOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const titleWords = ` ${titleTokens.join(' ')} `;
+  const categoryWords = ` ${categoryTokens.join(' ')} `;
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const hardSideTokens = [
+    'body',
+    'bodybutter',
+    'buttercroissant',
+    'buttergemuese',
+    'buttergemuse',
+    'butterkeks',
+    'butterkaese',
+    'butterkase',
+    'cups',
+    'erdnuss',
+    'erdnussbutter',
+    'highlighter',
+    'kosmetik',
+    'lippenbalsam',
+    'make',
+    'peanut',
+  ];
+  const softSideTokens = [
+    'briochestriezel',
+    'cookie',
+    'cookies',
+    'croissant',
+    'gebaeck',
+    'geback',
+    'gemuese',
+    'gemuse',
+    'gewuerz',
+    'gewuerzzubereitung',
+    'gewurz',
+    'gewurzzubereitung',
+    'kaese',
+    'kase',
+    'keks',
+    'kekse',
+    'kraeuterbutter',
+    'krauterbutter',
+    'protein',
+    'riegel',
+    'suesswaren',
+    'susswaren',
+    'topfengolatsche',
+  ];
+  const dairyCategory = hasAnyWordToken(categoryWords, ['milchprodukte', 'molkerei']);
+  const hardSide = hasAnyTokenFamily(allTokens, hardSideTokens) ||
+    (
+      hasAnyWordToken(titleWords, ['butter']) &&
+      hasAnyTokenFamily(titleTokens.concat(comparisonTokens), ['almond', 'cookie', 'cookies', 'protein'])
+    );
+  const softSide = hasAnyTokenFamily(allTokens, softSideTokens);
+  const explicitButter = hasAnyWordToken(titleWords, ['butter', 'teebutter', 'markenbutter', 'suessrahmbutter', 'sauerrahmbutter']);
+  const plausibleSpread = hasAnyTokenFamily(titleTokens.concat(comparisonTokens), [
+    'butterschmalz',
+    'margarine',
+    'streichfett',
+  ]);
+  const realButter = !hardSide && (
+    hasAnyWordToken(titleWords, ['teebutter', 'markenbutter', 'suessrahmbutter', 'sauerrahmbutter']) ||
+    (explicitButter && dairyCategory)
+  );
+
+  return {
+    hardSide,
+    plausibleSpread,
+    realButter,
+    softSide,
+  };
+}
+
+function scoreButterSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const {
+    hardSide,
+    plausibleSpread,
+    realButter,
+    softSide,
+  } = getGenericButterOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (realButter) {
+    adjustment += 4500;
+  } else if (plausibleSpread && !hardSide) {
+    adjustment += 900;
+  }
+
+  if (hardSide) {
+    adjustment -= 6500;
+  } else if (softSide) {
+    adjustment -= 3200;
+  }
+
+  return adjustment;
+}
+
+function getGenericRiceOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const titleWords = ` ${titleTokens.join(' ')} `;
+  const categoryWords = ` ${categoryTokens.join(' ')} `;
+  const productTokens = titleTokens.concat(comparisonTokens, aggregateTokens);
+  const hardSideTokens = [
+    'bohnen',
+    'fusilli',
+    'kichererbse',
+    'kichererbsen',
+    'konserve',
+    'konserven',
+    'nudel',
+    'nudeln',
+    'passata',
+    'pasta',
+    'penne',
+    'polpa',
+    'sauce',
+    'sugo',
+    'spaghetti',
+    'tomaten',
+    'tomatensauce',
+  ];
+  const weakRiceTokens = ['milchreis', 'reisgericht', 'reischips', 'reiswaffel', 'reiswaffeln'];
+  const strongRiceTokens = [
+    'basmati',
+    'basmatireis',
+    'expressreis',
+    'jasmin',
+    'jasminreis',
+    'langkorn',
+    'langkornreis',
+    'reis',
+    'risotto',
+    'risottoreis',
+  ];
+  const titleHasStrongRice = hasAnyWordToken(titleWords, strongRiceTokens) ||
+    hasAnyTokenFamily(
+      titleTokens.concat(comparisonTokens),
+      strongRiceTokens.filter((token) => token !== 'reis')
+    );
+  const weakRice = hasAnyTokenFamily(titleTokens.concat(comparisonTokens), weakRiceTokens);
+  const hardSide = hasAnyTokenFamily(productTokens, hardSideTokens);
+  const categoryOnly =
+    !titleHasStrongRice &&
+    !weakRice &&
+    hasAnyTokenFamily(categoryTokens, ['pasta', 'reis', 'konserve', 'konserven']);
+
+  return {
+    categoryOnly,
+    hardSide,
+    realRice: titleHasStrongRice && !hardSide,
+    weakRice: weakRice && !hardSide,
+  };
+}
+
+function scoreRiceSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const {
+    categoryOnly,
+    hardSide,
+    realRice,
+    weakRice,
+  } = getGenericRiceOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (realRice) {
+    adjustment += 4500;
+  } else if (weakRice) {
+    adjustment += 900;
+  }
+
+  if (hardSide) {
+    adjustment -= 6000;
+  }
+
+  if (categoryOnly) {
+    adjustment -= 3500;
+  }
+
+  return adjustment;
+}
+
 function scoreFieldAgainstQuery(value, queryTokens, weights) {
   const fieldTokens = tokenizeSearchText(value);
 
@@ -871,6 +1086,8 @@ function scoreOfferAgainstQuery(offer, query) {
   const matchedStructuredTokens = countTokenMatches(structuredTokens, queryTokens, { allowPrefix: true });
   const matchedAggregateTokens = countTokenMatches(aggregateTokens, queryTokens, { allowSubstring: true });
   const genericMilkQuery = context?.key === 'milch' && isGenericMilkQuery(queryTokens);
+  const genericButterQuery = context?.key === 'butter' && queryTokens.length === 1 && queryTokens[0] === 'butter';
+  const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
 
   if (
     genericMilkQuery &&
@@ -944,6 +1161,50 @@ function scoreOfferAgainstQuery(offer, query) {
         comparisonTokens,
         aggregateTokens,
       });
+    }
+
+    if (genericButterQuery) {
+      score += scoreButterSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
+    if (genericRiceQuery) {
+      score += scoreRiceSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+  }
+
+  if (score <= 0 && genericButterQuery) {
+    const { hardSide, realButter, plausibleSpread } = getGenericButterOfferIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+    });
+
+    if (hardSide && !realButter && !plausibleSpread) {
+      return 0;
+    }
+  }
+
+  if (genericRiceQuery) {
+    const { realRice, weakRice } = getGenericRiceOfferIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+    });
+
+    if (!realRice && !weakRice) {
+      return 0;
     }
   }
 
@@ -1019,7 +1280,7 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
   };
 
   const selectedCategories = normalizeStringList(categories);
-  const selectedRetailers = normalizeStringList(retailers);
+  const selectedRetailers = normalizeRetailerList(retailers);
 
   if (selectedCategories.length > 0) {
     filters.categoryKey = {
@@ -1712,7 +1973,22 @@ function hasSafeValidityWindow(offer) {
   return Boolean(formatDateLabel(offer?.validFrom) && formatDateLabel(offer?.validTo));
 }
 
+function hasUsableOfferPrice(offer) {
+  const currentAmount = Number(offer?.priceCurrent?.amount);
+  const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
+
+  return (Number.isFinite(currentAmount) && currentAmount > 0)
+    || (Number.isFinite(unitAmount) && unitAmount > 0);
+}
+
 function compareResponseDuplicatePreference(left, right, query) {
+  const leftHasPrice = Number(hasUsableOfferPrice(left));
+  const rightHasPrice = Number(hasUsableOfferPrice(right));
+
+  if (leftHasPrice !== rightHasPrice) {
+    return rightHasPrice - leftHasPrice;
+  }
+
   const leftSourceRank = getSourcePriorityRank(left);
   const rightSourceRank = getSourcePriorityRank(right);
 
@@ -2119,7 +2395,7 @@ async function buildBasketSuggestions({
 }) {
   const shoppingItems = parseShoppingItems(items);
   const selectedCategories = normalizeStringList(categories);
-  const selectedRetailers = normalizeStringList(retailers);
+  const selectedRetailers = normalizeRetailerList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
 
@@ -2401,6 +2677,7 @@ module.exports = {
   clearRankingResponseCache,
   scoreOfferAgainstQuery,
   applyQueryMatch,
+  applyProgramEligibility,
   buildValidityLabel,
   buildGroupedRankings,
   dedupeQueryOffers,
