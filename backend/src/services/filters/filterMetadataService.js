@@ -1,4 +1,3 @@
-const mongoose = require('mongoose');
 const Offer = require('../../models/Offer');
 const Retailer = require('../../models/Retailer');
 const Category = require('../../models/Category');
@@ -9,6 +8,8 @@ const CrawlJob = require('../../models/CrawlJob');
 const logger = require('../../lib/logger');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { computeOfferSavings } = require('../offers/promotionMath');
+
+const FILTER_METADATA_BULK_BATCH_SIZE = 100;
 
 function normalizeFilterKey(value, fallback = 'unknown') {
   const normalized = normalizeTitleForMatch(value).replace(/\s+/g, '-');
@@ -730,12 +731,131 @@ function buildOfferCacheDocuments(offers, now) {
     });
 }
 
-async function replaceCollection(Model, documents, session) {
-  await Model.deleteMany({}, { session });
+function chunkArray(items, size = FILTER_METADATA_BULK_BATCH_SIZE) {
+  const chunks = [];
 
-  if (documents.length > 0) {
-    await Model.insertMany(documents, { session, ordered: false });
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
   }
+
+  return chunks;
+}
+
+function buildKeyFilter(document, keyFields) {
+  return Object.fromEntries(keyFields.map((field) => [field, document[field] ?? '']));
+}
+
+function buildStableKey(document, keyFields) {
+  return keyFields.map((field) => String(document[field] ?? '')).join('\u001f');
+}
+
+function stripPersistenceFields(value) {
+  if (Array.isArray(value)) {
+    return value.map(stripPersistenceFields);
+  }
+
+  if (!value || typeof value !== 'object' || value instanceof Date) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !['_id', '__v', 'createdAt', 'updatedAt'].includes(key))
+      .map(([key, nestedValue]) => [key, stripPersistenceFields(nestedValue)])
+  );
+}
+
+function stableJson(value) {
+  return JSON.stringify(stripPersistenceFields(value));
+}
+
+function isSameFilterDocument(existingDocument, nextDocument) {
+  return stableJson(existingDocument) === stableJson(nextDocument);
+}
+
+function normalizeBulkWriteResult(result = {}) {
+  return {
+    matched: Number(result.matchedCount || result.nMatched || 0),
+    modified: Number(result.modifiedCount || result.nModified || 0),
+    upserted: Number(result.upsertedCount || result.nUpserted || 0),
+  };
+}
+
+async function runBulkWriteBatches(Model, operations, batchSize = FILTER_METADATA_BULK_BATCH_SIZE) {
+  const totals = {
+    matched: 0,
+    modified: 0,
+    upserted: 0,
+  };
+
+  for (const batch of chunkArray(operations, batchSize)) {
+    if (batch.length === 0) {
+      continue;
+    }
+
+    const result = normalizeBulkWriteResult(await Model.bulkWrite(batch, { ordered: false }));
+    totals.matched += result.matched;
+    totals.modified += result.modified;
+    totals.upserted += result.upserted;
+  }
+
+  return totals;
+}
+
+async function syncFilterMetadataCollection({
+  name,
+  Model,
+  documents,
+  keyFields,
+  deactivateUpdate,
+  batchSize = FILTER_METADATA_BULK_BATCH_SIZE,
+}) {
+  const now = new Date();
+  const existingDocuments = await Model.find({}).lean();
+  const existingByKey = new Map(
+    existingDocuments.map((document) => [buildStableKey(document, keyFields), document])
+  );
+  const documentsToWrite = documents.filter((document) => {
+    const existingDocument = existingByKey.get(buildStableKey(document, keyFields));
+    return !existingDocument || !isSameFilterDocument(existingDocument, document);
+  });
+  const unchanged = documents.length - documentsToWrite.length;
+  const upsertOperations = documentsToWrite.map((document) => ({
+    updateOne: {
+      filter: buildKeyFilter(document, keyFields),
+      update: {
+        $set: document,
+        $setOnInsert: { createdAt: now },
+      },
+      upsert: true,
+    },
+  }));
+  const upsertCounts = await runBulkWriteBatches(Model, upsertOperations, batchSize);
+  const activeKeys = new Set(documents.map((document) => buildStableKey(document, keyFields)));
+  const missingDocuments = existingDocuments.filter((document) => !activeKeys.has(buildStableKey(document, keyFields)));
+  let deactivateCounts = { matched: 0, modified: 0, upserted: 0 };
+
+  if (missingDocuments.length > 0 && deactivateUpdate) {
+    const deactivateOperations = missingDocuments.map((document) => ({
+      updateOne: {
+        filter: buildKeyFilter(document, keyFields),
+        update: { $set: typeof deactivateUpdate === 'function' ? deactivateUpdate(document) : deactivateUpdate },
+        upsert: false,
+      },
+    }));
+
+    deactivateCounts = await runBulkWriteBatches(Model, deactivateOperations, batchSize);
+  }
+
+  return {
+    collection: name,
+    desired: documents.length,
+    upserted: upsertCounts.upserted,
+    modified: upsertCounts.modified,
+    kept: Math.max(0, unchanged + upsertCounts.matched - upsertCounts.modified),
+    deactivated: deactivateCounts.modified,
+    staleMatched: deactivateCounts.matched,
+  };
 }
 
 async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } = {}) {
@@ -825,17 +945,62 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
   const categoryDocuments = buildCategoryDocuments(offers, now);
   const retailerCategoryStatDocuments = buildRetailerCategoryStatDocuments(offers, now);
   const offerCacheDocuments = buildOfferCacheDocuments(offers, now);
-  const session = await mongoose.startSession();
+  const collectionCounts = {};
 
-  try {
-    await session.withTransaction(async () => {
-      await replaceCollection(Retailer, retailerDocuments, session);
-      await replaceCollection(Category, categoryDocuments, session);
-      await replaceCollection(RetailerCategoryStat, retailerCategoryStatDocuments, session);
-      await replaceCollection(RetailerCategoryOfferCache, offerCacheDocuments, session);
-    });
-  } finally {
-    await session.endSession();
+  for (const syncConfig of [
+    {
+      name: 'retailers',
+      Model: Retailer,
+      documents: retailerDocuments,
+      keyFields: ['retailerKey'],
+      deactivateUpdate: {
+        isActive: false,
+        offerCount: 0,
+        activeOfferCount: 0,
+        totalOffers: 0,
+        activeOffers: 0,
+        offersBySource: [],
+        offersByChannel: [],
+        coverageStatus: 'gap',
+        activeCoverageSignal: 'empty',
+        coveragePriorityScore: 0,
+        coverageGapReasons: ['not present in latest filter metadata rebuild'],
+      },
+    },
+    {
+      name: 'categories',
+      Model: Category,
+      documents: categoryDocuments,
+      keyFields: ['mainCategoryKey'],
+      deactivateUpdate: {
+        isActive: false,
+        offerCount: 0,
+        subcategories: [],
+      },
+    },
+    {
+      name: 'retailerCategoryStats',
+      Model: RetailerCategoryStat,
+      documents: retailerCategoryStatDocuments,
+      keyFields: ['retailerKey', 'mainCategoryKey', 'subcategoryKey'],
+      deactivateUpdate: {
+        offerCount: 0,
+        activeOfferCount: 0,
+      },
+    },
+    {
+      name: 'retailerCategoryOfferCaches',
+      Model: RetailerCategoryOfferCache,
+      documents: offerCacheDocuments,
+      keyFields: ['retailerKey', 'mainCategoryKey', 'subcategoryKey'],
+      deactivateUpdate: {
+        offerCount: 0,
+        activeOfferCount: 0,
+        offers: [],
+      },
+    },
+  ]) {
+    collectionCounts[syncConfig.name] = await syncFilterMetadataCollection(syncConfig);
   }
 
   const summary = {
@@ -850,6 +1015,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
     gapRetailers: retailerDocuments.filter((item) => item.coverageStatus === 'gap').length,
     activeCategories: categoryDocuments.filter((item) => item.isActive).length,
     processedOffers: offers.length,
+    counts: collectionCounts,
     syncedAt: now.toISOString(),
     ...loggerContext,
   };
@@ -955,4 +1121,10 @@ module.exports = {
   getCategoryFilters,
   normalizeRetailerKey,
   normalizeCategoryKey,
+  _private: {
+    buildKeyFilter,
+    buildStableKey,
+    isSameFilterDocument,
+    syncFilterMetadataCollection,
+  },
 };
