@@ -11,11 +11,6 @@ const OFFER_RANKING_FIELDS = [
   '_id',
   'retailerKey',
   'retailerName',
-  'sourceRetailerName',
-  'sourceRetailerFormat',
-  'retailerFormats',
-  'appliesToRetailerFormats',
-  'retailerFormatLabel',
   'title',
   'titleNormalized',
   'brand',
@@ -26,7 +21,6 @@ const OFFER_RANKING_FIELDS = [
   'subcategoryKey',
   'categoryConfidence',
   'subcategoryConfidence',
-  'benefitType',
   'conditionsText',
   'customerProgramRequired',
   'hasConditions',
@@ -62,17 +56,12 @@ const OFFER_RANKING_FIELDS = [
   'quality',
   'sortScoreDefault',
   'minimumPurchaseQty',
-  'rawFacts',
-  'supportingSources',
   'sourceType',
-  'sourceUrls',
-  'evidenceUrls',
-  'sourceTypes',
-  'needsReview',
-  'reviewReasons',
 ].join(' ');
 
 const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const RANKING_CANDIDATE_CAP = 1000;
+const RANKING_QUERY_MAX_TIME_MS = 1500;
 const rankingResponseCache = new Map();
 
 function normalizeStringList(value) {
@@ -2083,6 +2072,121 @@ function buildCacheMatch({ selectedRetailers = [], selectedCategories = [] }) {
   return match;
 }
 
+function escapeRegexLiteral(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildMongoQuerySearchFilter(query) {
+  const queryTokens = tokenizeSearchText(query).slice(0, 5);
+
+  if (queryTokens.length === 0) {
+    return null;
+  }
+
+  const searchableFields = [
+    'titleNormalized',
+    'searchText',
+    'title',
+    'brand',
+    'categoryPrimary',
+    'categorySecondary',
+    'subcategoryKey',
+    'comparisonGroup',
+  ];
+
+  return {
+    $and: queryTokens.map((token) => {
+      const regex = new RegExp(escapeRegexLiteral(token), 'i');
+
+      return {
+        $or: searchableFields.map((field) => ({ [field]: regex })),
+      };
+    }),
+  };
+}
+
+function buildRankingCandidateMatch({
+  selectedRetailers = [],
+  selectedCategories = [],
+  unit = 'all',
+  onlyWithoutProgram = false,
+  query = '',
+}) {
+  const match = buildCurrentAvailabilityMatch();
+  const selectedCategoryKeys = selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+  const querySearchFilter = buildMongoQuerySearchFilter(query);
+
+  if (selectedRetailers.length > 0) {
+    match.retailerKey = { $in: selectedRetailers };
+  }
+
+  if (selectedCategoryKeys.length > 0) {
+    match.categoryKey = { $in: selectedCategoryKeys };
+  }
+
+  if (unit && unit !== 'all') {
+    match.comparableUnit = unit;
+  }
+
+  if (normalizeBoolean(onlyWithoutProgram)) {
+    match.customerProgramRequired = false;
+  }
+
+  if (querySearchFilter) {
+    match.$and = querySearchFilter.$and;
+  }
+
+  return match;
+}
+
+function buildRankingCandidateLimit({ safeLimit = 30, showAllMatching = false, hasQuery = false }) {
+  if (showAllMatching) {
+    return RANKING_CANDIDATE_CAP;
+  }
+
+  if (hasQuery) {
+    return Math.min(RANKING_CANDIDATE_CAP, Math.max(60, safeLimit * 3));
+  }
+
+  return Math.min(RANKING_CANDIDATE_CAP, Math.max(20, safeLimit * 20));
+}
+
+async function findRankingCandidateOffers({
+  selectedRetailers = [],
+  selectedCategories = [],
+  unit = 'all',
+  onlyWithoutProgram = false,
+  query = '',
+  candidateLimit = RANKING_CANDIDATE_CAP,
+}) {
+  const match = buildRankingCandidateMatch({
+    selectedRetailers,
+    selectedCategories,
+    unit,
+    onlyWithoutProgram,
+    query,
+  });
+  const dbQuery = Offer.find(match)
+    .select(OFFER_RANKING_FIELDS)
+    .sort({ sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
+    .limit(candidateLimit)
+    .lean();
+
+  if (query) {
+    dbQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
+  }
+
+  try {
+    return await dbQuery;
+  } catch (error) {
+    if (query && (error?.code === 50 || /maxTimeMS|time limit/i.test(String(error?.message || '')))) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 async function buildFallbackCandidateOffers({ selectedRetailers = [], selectedCategories = [] }) {
   const match = buildCurrentAvailabilityMatch();
   const selectedCategoryKeys = selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
@@ -2233,7 +2337,9 @@ async function buildOfferRanking({
 }) {
   const limitValue = String(limit || '30').trim().toLowerCase();
   const showAllMatching = limitValue === 'all';
-  const safeLimit = showAllMatching ? null : Math.max(5, Math.min(Number(limit) || 30, 500));
+  const safeLimit = showAllMatching ? null : Math.max(1, Math.min(Number(limit) || 30, 500));
+  const queryTokens = tokenizeSearchText(query);
+  const hasQuery = queryTokens.length > 0;
   const selectedRetailers = normalizeRetailerList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
@@ -2259,33 +2365,25 @@ async function buildOfferRanking({
   const retailerMatch = selectedRetailers.length > 0
     ? { isActive: true, retailerKey: { $in: selectedRetailers } }
     : { isActive: true };
-  const cacheMatch = buildCacheMatch({
-    selectedRetailers,
-    selectedCategories,
+  const candidateLimit = buildRankingCandidateLimit({
+    safeLimit: safeLimit || 30,
+    showAllMatching,
+    hasQuery,
   });
-  const [offerCacheDocuments, retailerOptions] = await Promise.all([
-    RetailerCategoryOfferCache.find(cacheMatch)
-      .select('offers')
-      .lean(),
+  const [candidateOffers, retailerOptions] = await Promise.all([
+    findRankingCandidateOffers({
+      selectedRetailers,
+      selectedCategories,
+      unit,
+      onlyWithoutProgram: withoutProgram,
+      query,
+      candidateLimit,
+    }),
     Retailer.find(retailerMatch)
       .select('retailerKey retailerName activeOfferCount')
       .sort({ sortOrder: 1, retailerName: 1 })
       .lean(),
   ]);
-
-  const selectedCategoryKeys = new Set(
-    selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
-  );
-  let candidateOffers = offerCacheDocuments
-    .flatMap((document) => document.offers || [])
-    .filter((offer) => selectedCategoryKeys.size === 0 || selectedCategoryKeys.has(String(offer.categoryKey || '')));
-
-  if (candidateOffers.length === 0) {
-    candidateOffers = await buildFallbackCandidateOffers({
-      selectedRetailers,
-      selectedCategories,
-    });
-  }
 
   const fullyFilteredOffers = dedupeOffers(
     applyQueryMatch(
@@ -2302,8 +2400,7 @@ async function buildOfferRanking({
       query
     )
   );
-  const queryTokens = tokenizeSearchText(query);
-  const queryScores = queryTokens.length > 0 ? new WeakMap() : null;
+  const queryScores = hasQuery ? new WeakMap() : null;
 
   if (queryScores) {
     for (const offer of fullyFilteredOffers) {
@@ -2378,7 +2475,9 @@ async function buildOfferRanking({
       resultCount: fullyFilteredOffers.length,
       displayedCount: rankedOffers.length,
       requestedDisplay: showAllMatching ? 'all' : safeLimit,
-      completeResultSetVisible: rankedOffers.length === fullyFilteredOffers.length,
+      completeResultSetVisible: candidateOffers.length < candidateLimit && rankedOffers.length === fullyFilteredOffers.length,
+      candidateCount: candidateOffers.length,
+      candidateLimit,
       bestUnitPrice,
       worstUnitPrice,
       spreadPercent:
@@ -2410,6 +2509,8 @@ module.exports = {
   prepareQueryOffersForResponse,
   parseRankingCategories,
   buildKnownCategoryLabelMap,
+  buildRankingCandidateLimit,
+  buildRankingCandidateMatch,
   normalizeSearchText,
   normalizeRetailerKey,
   normalizeRetailerList,

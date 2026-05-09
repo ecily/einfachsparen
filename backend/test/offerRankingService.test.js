@@ -3,6 +3,8 @@ const test = require('node:test');
 
 const {
   applyQueryMatch,
+  buildRankingCandidateLimit,
+  buildRankingCandidateMatch,
   buildValidityLabel,
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
@@ -80,6 +82,32 @@ test('normalizes ranking retailer filters case-insensitively', () => {
   assert.deepEqual(normalizeRetailerList('PENNY'), ['penny']);
   assert.deepEqual(normalizeRetailerList('Penny,penny,BILLA PLUS'), ['penny', 'billa-plus']);
   assert.deepEqual(normalizeRetailerList(['PENNY', 'Billa-Plus']), ['penny', 'billa-plus']);
+});
+
+test('builds bounded ranking candidate limits for small result requests', () => {
+  assert.equal(buildRankingCandidateLimit({ safeLimit: 1, hasQuery: false }), 20);
+  assert.equal(buildRankingCandidateLimit({ safeLimit: 1, hasQuery: true }), 60);
+  assert.equal(buildRankingCandidateLimit({ safeLimit: 60, hasQuery: true }), 180);
+});
+
+test('pushes unknown ranking query into Mongo candidate filtering before JS scoring', () => {
+  const match = buildRankingCandidateMatch({
+    selectedRetailers: ['hofer'],
+    selectedCategories: ['Kaffee & Tee'],
+    unit: 'kg',
+    onlyWithoutProgram: true,
+    query: 'zzzzzzzz',
+  });
+
+  assert.equal(match.status, 'active');
+  assert.equal(match.isActiveNow, true);
+  assert.deepEqual(match.retailerKey, { $in: ['hofer'] });
+  assert.deepEqual(match.categoryKey, { $in: ['kaffee-tee'] });
+  assert.equal(match.comparableUnit, 'kg');
+  assert.equal(match.customerProgramRequired, false);
+  assert.ok(Array.isArray(match.$and));
+  assert.equal(match.$and.length, 1);
+  assert.ok(match.$and[0].$or.some((item) => String(item.titleNormalized).includes('zzzzzzzz')));
 });
 
 test('scores real butter offers ahead of cosmetic side meanings', () => {
