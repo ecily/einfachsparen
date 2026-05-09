@@ -12,6 +12,7 @@ const smokeCases = [
   { label: 'ranking?q=kaffee&limit=20', args: { query: 'kaffee', limit: 20 } },
   { label: 'ranking?q=butter&limit=20', args: { query: 'butter', limit: 20 } },
   { label: 'ranking?q=reis&limit=20', args: { query: 'reis', limit: 20 } },
+  { label: 'ranking?q=waschmittel&limit=20', args: { query: 'waschmittel', limit: 20 } },
 ];
 
 async function measureSmokeCase(smokeCase) {

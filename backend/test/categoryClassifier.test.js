@@ -25,6 +25,35 @@ test('classifies common Austrian supermarket product names into concrete subcate
   }
 });
 
+test('keeps hardened launch-quality examples in the intended categories', () => {
+  const cases = [
+    ['Iglo Buttergemuese 400 g', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
+    ['Schartner Bombe Orange 1,5 l', 'Getraenke', 'Softdrinks & Energy'],
+    ['Gasteiner Mineralwasser prickelnd', 'Getraenke', 'Wasser'],
+    ['La Gioiosa Spumante', 'Getraenke', 'Wein & Sekt'],
+    ['Barilla Teigwaren Spaghetti 500 g', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['Iglo Fischstaebchen', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Ofenbackfisch Alaska Seelachs', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+  }
+});
+
+test('does not treat HOFER or discount wording alone as a product category', () => {
+  const decision = determineCategoryDecision({
+    title: 'HOFER Diskont Vorteilspreis',
+  });
+
+  assert.equal(decision.primaryCategory, 'Unkategorisiert');
+  assert.equal(decision.secondaryCategory, '');
+  assert.equal(decision.needsReview, true);
+});
+
 test('uses Sonstiges as controlled fallback when only the main category is clear', () => {
   const decision = determineCategoryDecision({
     title: 'Bio Genuss Mix Vorteilspackung',

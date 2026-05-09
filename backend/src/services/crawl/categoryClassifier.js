@@ -133,6 +133,36 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
+    patterns: [/\b(roestgemuese|rostgemuese|buttergemuese|buttergemuse|gemuese reindl|gemuse reindl|gemuese a la creme|gemuse a la creme|iglo gemuese|iglo gemuse|cremespinat|blattspinat|rotkraut)\b/],
+    main: 'Lebensmittel',
+    sub: 'Tiefkuehl- & Fertigprodukte',
+  },
+  {
+    patterns: [/\b(fischstaebchen|fischstabchen|ofenbackfisch|backfisch|filegro|polar dorsch|polardorsch|kabeljau|wildlachs|fisch n roesti|fisch n rosti)\b/],
+    main: 'Lebensmittel',
+    sub: 'Fleisch, Wurst & Fisch',
+  },
+  {
+    patterns: [/\b(gasteiner|infinity water|mineralwasser|wasser|sprudel|voslauer|voeslauer|soda|sparkling)\b/],
+    main: 'Getraenke',
+    sub: 'Wasser',
+  },
+  {
+    patterns: [/\b(schartner bombe|cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|isostar|powerade|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
+    main: 'Getraenke',
+    sub: 'Softdrinks & Energy',
+  },
+  {
+    patterns: [/\b(la gioiosa|spumante|rotwein|weisswein|rosewein|wein|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|welschriesling|veltliner|hugo|gluhwein|gluehwein|cuvee)\b/],
+    main: 'Getraenke',
+    sub: 'Wein & Sekt',
+  },
+  {
+    patterns: [/\b(barilla|teigwaren|fusilli|spaghetti|penne|nudel|nudeln|pasta|bavette|maccheroni|ravioli|gnocchi|couscous|bulgur|risotto)\b/],
+    main: 'Lebensmittel',
+    sub: 'Pasta, Reis & Konserven',
+  },
+  {
     patterns: [/\b(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|duftspueler|duftspuler)\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
