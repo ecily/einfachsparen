@@ -63,6 +63,19 @@ test('parses repeated and JSON ranking categories without legacy comma damage', 
   );
 });
 
+test('parses ampersand category labels as one ranking category', () => {
+  const knownCategories = buildKnownCategoryLabelMap();
+
+  assert.deepEqual(
+    parseRankingCategories('Kaffee & Tee', knownCategories),
+    ['Kaffee & Tee']
+  );
+  assert.deepEqual(
+    parseRankingCategories('["Kaffee & Tee"]', knownCategories),
+    ['Kaffee & Tee']
+  );
+});
+
 test('normalizes ranking retailer filters case-insensitively', () => {
   assert.deepEqual(normalizeRetailerList('PENNY'), ['penny']);
   assert.deepEqual(normalizeRetailerList('Penny,penny,BILLA PLUS'), ['penny', 'billa-plus']);

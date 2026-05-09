@@ -38,6 +38,8 @@ const DISMISSED_UPDATE_BUILD_STORAGE_KEY = 'einfachsparen.mobile.dismissedUpdate
 const DISMISSED_UPDATE_AT_STORAGE_KEY = 'einfachsparen.mobile.dismissedUpdateAt.v1';
 const UPDATE_CHECK_TIMEOUT_MS = 8000;
 const UPDATE_REMINDER_PAUSE_MS = 24 * 60 * 60 * 1000;
+const UNCERTAIN_VALIDITY_LABEL = 'Aktuell gefunden – bitte im Markt prüfen.';
+const MARKET_CHECK_HINT = 'Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.';
 
 const RETAILER_COLORS = {
   bipa: '#ec4f86',
@@ -82,6 +84,16 @@ function extractArrayPayload(payload, preferredKeys = []) {
   }
 
   return [];
+}
+
+function getOfferStableId(offer) {
+  return String(
+    offer?.id ||
+      offer?._id ||
+      offer?.offerKey ||
+      offer?.dedupeKey ||
+      `${offer?.title || 'angebot'}-${offer?.retailerName || offer?.retailerKey || 'markt'}-${offer?.priceCurrent?.amount || 'preis'}-${offer?.validTo || ''}`
+  );
 }
 
 async function fetchAlphaVersionInfo() {
@@ -210,11 +222,8 @@ function getShoppingSavingsTotal(offer) {
 }
 
 function getOfferStatusLabel(offer) {
-  if (offer?.status === 'active' && offer?.isActiveNow) return 'Aktuell gültig';
-  if (offer?.status === 'upcoming') return 'Bald gültig';
   if (offer?.status === 'expired') return 'Nicht mehr gültig';
-  if (offer?.isActiveToday) return 'Heute gültig';
-  return 'Aktuelles Angebot';
+  return formatValidityLabel(offer);
 }
 
 function shouldDisplayUnitPrice(offer) {
@@ -287,50 +296,33 @@ function formatShortDate(value) {
   });
 }
 
-function isToday(value) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return false;
-  }
-
-  const today = new Date();
-  return date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate();
-}
-
 function formatValidityLabel(offer) {
   const hasValidFrom = Boolean(offer?.validFrom);
   const hasValidTo = Boolean(offer?.validTo);
   const validFrom = hasValidFrom ? formatShortDate(offer.validFrom) : '';
   const validTo = hasValidTo ? formatShortDate(offer.validTo) : '';
 
-  if (hasValidTo && !validTo) {
-    return '';
-  }
-
-  if (hasValidTo && isToday(offer.validTo)) {
-    return 'Heute gültig';
+  if (hasValidFrom && validFrom && hasValidTo && validTo) {
+    return `Gültig von ${validFrom} bis ${validTo}`;
   }
 
   if (hasValidTo && validTo) {
     return `Gültig bis ${validTo}`;
   }
 
-  if (offer?.status === 'active' || offer?.isActiveNow) {
-    return 'Aktuell gültig';
-  }
-
   if (hasValidFrom && validFrom) {
     return `Gültig ab ${validFrom}`;
   }
 
-  if (offer?.isActiveToday) {
-    return 'Heute gültig';
+  if (hasValidFrom || hasValidTo) {
+    return UNCERTAIN_VALIDITY_LABEL;
   }
 
-  return '';
+  if (offer?.status === 'active' || offer?.isActiveNow || offer?.isActiveToday) {
+    return UNCERTAIN_VALIDITY_LABEL;
+  }
+
+  return UNCERTAIN_VALIDITY_LABEL;
 }
 
 function getRetailerColor(retailerKey) {
@@ -344,12 +336,49 @@ function getRetailerTextColor(retailerKey) {
 }
 
 function flattenRankingOffers(ranking) {
-  return (ranking?.rankedGroups || []).flatMap((group) => group.offers || []);
+  const normalizeOffer = (offer) => {
+    if (!offer || typeof offer !== 'object') {
+      return null;
+    }
+
+    return {
+      ...offer,
+      id: getOfferStableId(offer),
+    };
+  };
+
+  if (Array.isArray(ranking?.rankedOffers)) {
+    return ranking.rankedOffers
+      .map(normalizeOffer)
+      .filter(Boolean);
+  }
+
+  const groups = Array.isArray(ranking?.rankedGroups) ? ranking.rankedGroups : [];
+  const seen = new Set();
+  const offers = [];
+
+  for (const group of groups) {
+    const groupOffers = Array.isArray(group?.offers) ? group.offers : [];
+
+    for (const rawOffer of groupOffers) {
+      const offer = normalizeOffer(rawOffer);
+
+      if (!offer || seen.has(offer.id)) {
+        continue;
+      }
+
+      seen.add(offer.id);
+      offers.push(offer);
+    }
+  }
+
+  return offers;
 }
 
-function buildOfferSections(offers) {
-  const withSavings = offers.filter(hasReliableSavings);
-  const actionPrices = offers.filter((offer) => !hasReliableSavings(offer));
+function buildOfferSections(offers = []) {
+  const safeOffers = Array.isArray(offers) ? offers.filter((offer) => offer && typeof offer === 'object') : [];
+  const withSavings = safeOffers.filter(hasReliableSavings);
+  const actionPrices = safeOffers.filter((offer) => !hasReliableSavings(offer));
   const sections = [];
 
   if (withSavings.length > 0) {
@@ -712,7 +741,7 @@ function PriceTrustNote({ compact = false }) {
       <Text style={styles.noteTitle}>Hinweis zu Prospekten und Normalpreisen</Text>
       <Text style={styles.noteText}>
         kaufklug.at zeigt aktuelle Angebote aus Prospekten und Aktionen. Manche Prospekte nennen nur den Aktionspreis,
-        aber keinen Normalpreis. In diesem Fall zeigen wir den Aktionspreis, aber keine Euro-Ersparnis.
+        aber keinen Normalpreis. In diesem Fall zeigen wir den Aktionspreis, aber keine Euro-Ersparnis. {MARKET_CHECK_HINT}
       </Text>
     </View>
   );
@@ -914,6 +943,10 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
 
 function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
   const { width } = useWindowDimensions();
+
+  if (!offer || typeof offer !== 'object') {
+    return null;
+  }
   const isCompact = width < 390;
   const conditionBadges = buildConditionBadges(offer);
   const validityLabel = formatValidityLabel(offer);
@@ -922,11 +955,12 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
   const referencePrice = Number.isFinite(referenceAmount) && Number.isFinite(currentAmount) && referenceAmount > currentAmount
     ? formatCurrency(referenceAmount, offer.priceCurrent?.currency)
     : '';
+  const readableQuantityText = getReadableQuantityText(offer);
 
   return (
     <Pressable
       style={[styles.offerCard, isCompact ? styles.offerCardCompact : null]}
-      onPress={() => onOpenDetail(offer)}
+      onPress={() => onOpenDetail?.(offer)}
     >
       <OfferImage
         offer={offer}
@@ -947,7 +981,7 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
           {validityLabel ? <Text style={styles.offerValidity}>{validityLabel}</Text> : null}
         </View>
 
-        <Text style={styles.offerTitle}>{offer.title}</Text>
+        <Text style={styles.offerTitle}>{offer.title || 'Angebot'}</Text>
 
         {conditionBadges.length > 0 ? (
           <View style={styles.metaWrap}>
@@ -974,6 +1008,11 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
               {shouldDisplayUnitPrice(offer) ? (
                 <Text style={styles.offerMeta} numberOfLines={1}>
                   {formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/{offer.normalizedUnitPrice?.unit}
+                </Text>
+              ) : null}
+              {readableQuantityText ? (
+                <Text style={styles.offerMeta} numberOfLines={1}>
+                  {readableQuantityText}
                 </Text>
               ) : null}
             </View>
@@ -1047,7 +1086,7 @@ function SearchResultsList({
       <SectionList
         ref={listRef}
         sections={[]}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => String(item?.id || `loading-${index}`)}
         renderItem={null}
         ListHeaderComponent={hero}
         ListEmptyComponent={
@@ -1067,7 +1106,7 @@ function SearchResultsList({
       <SectionList
         ref={listRef}
         sections={[]}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => String(item?.id || `empty-${index}`)}
         renderItem={null}
         ListHeaderComponent={hero}
         ListEmptyComponent={
@@ -1088,11 +1127,11 @@ function SearchResultsList({
     <SectionList
       ref={listRef}
       sections={sections}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item, index) => String(item?.id || `offer-${index}`)}
       renderItem={({ item }) => (
         <OfferCard
           offer={item}
-          isSelected={Boolean(shoppingListMap[item.id])}
+          isSelected={Boolean(item?.id && shoppingListMap?.[item.id])}
           onToggleShoppingList={onToggleShoppingList}
           onOpenDetail={onOpenOfferDetail}
         />
@@ -1110,6 +1149,7 @@ function SearchResultsList({
             <Text style={styles.resultsTitle}>Deine Angebote</Text>
             <Text style={styles.resultsText}>
               Alle angezeigten Produkte sind aktuelle Angebote. Euro-Ersparnis zeigen wir nur dort, wo im Prospekt ein Normalpreis angegeben ist.
+              {' '}{MARKET_CHECK_HINT}
             </Text>
             <View style={styles.resultSummaryBox}>
               <Text style={styles.resultSummaryText}>{offers.length} aktuelle Angebote gefunden.</Text>
@@ -1576,8 +1616,13 @@ export default function App() {
       }
 
       const params = new URLSearchParams();
-      if (selectedCategoryLabelsForApi.length > 0 && !hasAllCategoriesSelected) params.set('categories', selectedCategoryLabelsForApi.join(','));
-      if (selectedRetailers.length > 0) params.set('retailers', selectedRetailers.join(','));
+      if (selectedCategoryLabelsForApi.length > 0 && !hasAllCategoriesSelected) {
+        params.set('categories', JSON.stringify(selectedCategoryLabelsForApi));
+      }
+      if (selectedRetailers.length > 0) {
+        params.set('retailers', selectedRetailers.join(','));
+        params.set('programRetailers', selectedRetailers.join(','));
+      }
       params.set('limit', '60');
 
       const rankingData = await fetchJson(`/offers/ranking?${params.toString()}`);
@@ -1766,17 +1811,28 @@ export default function App() {
   }
 
   function toggleShoppingList(offer) {
+    if (!offer || typeof offer !== 'object') {
+      return;
+    }
+
+    const offerId = getOfferStableId(offer);
+
+    if (!offerId) {
+      return;
+    }
+
     setShoppingListMap((current) => {
-      if (current[offer.id]) {
+      if (current[offerId]) {
         const next = { ...current };
-        delete next[offer.id];
+        delete next[offerId];
         return next;
       }
 
       return {
         ...current,
-        [offer.id]: {
+        [offerId]: {
           ...offer,
+          id: offerId,
           shoppingQuantity: getShoppingQuantity(offer),
         },
       };

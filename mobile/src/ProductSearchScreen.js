@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 const SEARCH_LIMIT = 250;
+const MARKET_CHECK_HINT = 'Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.';
 
 const SORT_OPTIONS = {
   best: 'best',
@@ -209,7 +210,7 @@ export default function ProductSearchScreen({
   flattenRankingOffers,
   OfferCardComponent,
   retailers = [],
-  shoppingListMap,
+  shoppingListMap = {},
   onToggleShoppingList,
   onOpenOfferDetail,
 }) {
@@ -230,7 +231,8 @@ export default function ProductSearchScreen({
 
   const offers = useMemo(() => {
     try {
-      return flattenRankingOffers(ranking);
+      const nextOffers = flattenRankingOffers(ranking);
+      return Array.isArray(nextOffers) ? nextOffers : [];
     } catch (parseError) {
       return [];
     }
@@ -243,7 +245,8 @@ export default function ProductSearchScreen({
 
     const selectedRetailers = new Set(selectedRetailerKeys);
 
-    return offers
+    return (Array.isArray(offers) ? offers : [])
+      .filter((offer) => offer && typeof offer === 'object')
       .map((offer, index) => ({
         offer,
         index,
@@ -330,6 +333,7 @@ export default function ProductSearchScreen({
       params.set('limit', String(SEARCH_LIMIT));
       if (marketFilterEnabled && selectedRetailerKeys.length > 0) {
         params.set('retailers', selectedRetailerKeys.join(','));
+        params.set('programRetailers', selectedRetailerKeys.join(','));
       }
 
       const nextRanking = await fetchJson(`/offers/ranking?${params.toString()}`);
@@ -550,6 +554,7 @@ export default function ProductSearchScreen({
               {visibleOffers.length} aktuelle Angebote gefunden
               {hasActiveMarketFilter ? ' · gefiltert nach ausgewählten Märkten' : ''}
             </Text>
+            <Text style={styles.resultsHint}>{MARKET_CHECK_HINT}</Text>
           </View>
         ) : null}
 
@@ -570,12 +575,12 @@ export default function ProductSearchScreen({
       <FlatList
         ref={listRef}
         data={loading ? [] : visibleOffers}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item, index) => String(item?.id || item?._id || item?.offerKey || item?.dedupeKey || `offer-${index}`)}
         renderItem={({ item, index }) => (
           <OfferCardComponent
             offer={item}
             rank={index}
-            isSelected={Boolean(shoppingListMap[item.id])}
+            isSelected={Boolean(item?.id && shoppingListMap?.[item.id])}
             onToggleShoppingList={onToggleShoppingList}
             onOpenDetail={onOpenOfferDetail}
           />
@@ -826,6 +831,11 @@ const styles = StyleSheet.create({
     color: '#4e5b4b',
     fontSize: 14,
     fontWeight: '700',
+  },
+  resultsHint: {
+    color: '#6a5b36',
+    fontSize: 13,
+    lineHeight: 18,
   },
   emptyState: {
     backgroundColor: '#fffaf1',

@@ -994,6 +994,14 @@ a {
   color: var(--kk-muted);
 }
 
+.market-check-note {
+  margin: -0.2rem 0 0;
+  color: var(--kk-muted);
+  font-size: 0.93rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
 .savings-notice {
   padding: 0.95rem 1rem;
   border-radius: 1rem;
@@ -1183,9 +1191,23 @@ a {
 .user-card__facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.85rem;
+  gap: 0.45rem;
   color: #495246;
   line-height: 1.45;
+}
+
+.user-card__facts span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.85rem;
+  padding: 0.25rem 0.58rem;
+  border-radius: 999px;
+  background: rgba(247, 244, 236, 0.86);
+  color: #495246;
+  font-size: 0.88rem;
+  font-weight: 760;
+  overflow-wrap: anywhere;
 }
 
 .user-card__condition {

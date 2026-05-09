@@ -1,6 +1,6 @@
 import { ProductImage } from '../layout/ProductImage'
-import { getOfferCategoryLabel, shouldDisplayUnitPrice } from '../../utils/offers'
-import { formatUnitPrice } from '../../utils/formatting'
+import { getOfferCategoryLabel, getReadableQuantityText, shouldDisplayUnitPrice } from '../../utils/offers'
+import { formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
 
 function formatPrice(amount, currency = 'EUR') {
   const numericAmount = Number(amount)
@@ -13,45 +13,6 @@ function formatPrice(amount, currency = 'EUR') {
     style: 'currency',
     currency: currency || 'EUR',
   }).format(numericAmount)
-}
-
-function formatShortDate(value) {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  return new Intl.DateTimeFormat('de-AT', {
-    day: '2-digit',
-    month: '2-digit',
-  }).format(date)
-}
-
-function isSameDay(left, right) {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  )
-}
-
-function getValidityText(offer) {
-  const validTo = offer?.validTo ? new Date(offer.validTo) : null
-
-  if (validTo && !Number.isNaN(validTo.getTime())) {
-    if (isSameDay(validTo, new Date())) {
-      return 'Heute gültig'
-    }
-
-    return `Gültig bis ${formatShortDate(validTo)}`
-  }
-
-  if (offer?.isActiveNow || offer?.isActiveToday || offer?.status === 'active') {
-    return 'Aktuell gültig'
-  }
-
-  return ''
 }
 
 function normalizeRetailerName(value) {
@@ -199,12 +160,13 @@ function getConditionTexts(offer) {
 export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList = false }) {
   const showUnitPrice = shouldDisplayUnitPrice(offer)
   const category = getShortCategory(offer)
-  const validity = getValidityText(offer)
+  const validity = formatValidityLabel(offer)
   const conditions = getConditionTexts(offer)
+  const quantityText = getReadableQuantityText(offer)
   const savingsAmount = getPositiveSavingsAmount(offer)
   const savingsPercent = getSavingsPercent(offer, savingsAmount)
   const referencePrice = getReferencePrice(offer)
-  const hasSavings = savingsAmount > 0
+  const hasSavings = savingsAmount > 0 && referencePrice > 0
 
   return (
     <article className={`user-card ${hasSavings ? 'user-card--known-savings' : 'user-card--action-price'}`}>
@@ -238,6 +200,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
           <div className="user-card__price">
             <strong>{formatPrice(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
             {referencePrice ? <span>statt {formatPrice(referencePrice, offer?.priceCurrent?.currency)}</span> : null}
+            {quantityText ? <span>{quantityText}</span> : null}
             {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
           </div>
         </div>
@@ -247,7 +210,12 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
             <strong>Du sparst {formatPrice(savingsAmount, offer?.priceCurrent?.currency)}</strong>
             {savingsPercent > 0 ? <span>-{savingsPercent} %</span> : null}
           </div>
-        ) : null}
+        ) : (
+          <div className="offer-savings-box offer-savings-box--action">
+            <strong>Aktionspreis</strong>
+            <span>Preise und Bedingungen bitte im Markt prüfen.</span>
+          </div>
+        )}
 
         <button
           type="button"
