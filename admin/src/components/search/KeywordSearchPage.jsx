@@ -491,6 +491,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
               <h2>Angebote für „{submittedQuery}“</h2>
               <p>{visibleOffers.length} Angebote gefunden</p>
             </div>
+            <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
 
             {visibleOffers.length > 0 ? (
               <div className="user-results">

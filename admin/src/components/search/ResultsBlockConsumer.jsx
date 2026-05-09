@@ -20,7 +20,7 @@ export function ResultsBlockConsumer({
         <div className="panel__header">
           <h2>Deine Angebote</h2>
           <p>
-            Alle Treffer sind aktuelle Angebote. Eine konkrete Ersparnis zeigen wir nur dort, wo ein Normalpreis
+            Wir zeigen aktuell gefundene Angebote. Eine konkrete Ersparnis zeigen wir nur dort, wo ein Normalpreis
             angegeben ist.
           </p>
         </div>
@@ -53,6 +53,7 @@ export function ResultsBlockConsumer({
                 {safeOffers.length} mit bekannter Ersparnis, {actionOffers.length} weitere aktuelle Aktionen.
               </span>
             </div>
+            <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
 
             <SavingsNotice onNavigate={onNavigate} />
             <LegalInlineNotice onNavigate={onNavigate} compact />

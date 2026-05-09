@@ -87,14 +87,18 @@ export function buildCategoryGroups(categories = []) {
   if ((categories || []).some((item) => item && typeof item === 'object')) {
     return (categories || [])
       .filter((item) => item && typeof item === 'object')
-      .map((category) => ({
-        mainCategory: category.mainCategoryLabel || resolveMainCategoryLabel(category.mainCategoryLabel || ''),
-        subcategories: [...new Set(
-          (category.subcategories || [])
+      .map((category) => {
+        const subcategories = Array.isArray(category.subcategories) ? category.subcategories : [];
+
+        return {
+          mainCategory: category.mainCategoryLabel || resolveMainCategoryLabel(category.mainCategoryLabel || ''),
+          subcategories: [...new Set(
+            subcategories
             .map((subcategory) => subcategory?.subcategoryLabel)
             .filter(Boolean)
-        )].sort((left, right) => left.localeCompare(right, 'de')),
-      }))
+          )].sort((left, right) => left.localeCompare(right, 'de')),
+        };
+      })
       .sort((left, right) => left.mainCategory.localeCompare(right.mainCategory, 'de'));
   }
 
