@@ -69,11 +69,6 @@ async function fetchReadOnlyContext({ limit = DEFAULT_LIMIT, rawDocumentLimit = 
       'validTo',
       'rawFacts',
       'parserVersion',
-      'firstSeenAt',
-      'lastSeenAt',
-      'fetchedAt',
-      'observedAt',
-      'checkedAt',
       'createdAt',
       'updatedAt',
     ].join(' '))
@@ -84,7 +79,7 @@ async function fetchReadOnlyContext({ limit = DEFAULT_LIMIT, rawDocumentLimit = 
 
   const [sources, rawDocuments] = await Promise.all([
     Source.find({ _id: { $in: sourceIds } })
-      .select('retailerKey retailerName channel label sourceUrl sourceType parserHint parserVersion enabled active latestRunAt latestStatus createdAt updatedAt')
+      .select('retailerKey retailerName channel label sourceUrl sourceType parserHint parserVersion latestRunAt latestStatus createdAt updatedAt')
       .lean(),
     rawDocumentLimit > 0
       ? RawDocument.find({

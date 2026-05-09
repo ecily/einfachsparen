@@ -41,8 +41,8 @@ test('source priority matrix exposes expected retailer source rules', () => {
   assert.equal(matrix.billa[0].sourceType, 'billa-official-algolia');
   assert.equal(matrix.lidl[0].sourceType, 'lidl-official-flyer-api');
   assert.equal(matrix.penny[0].sourceType, 'penny-official-html');
-  assert.equal(matrix.spar[0].sourceType, 'spar-official-html');
-  assert.equal(matrix.hofer[0].sourceType, 'hofer-official-html');
+  assert.equal(matrix.spar[0].sourceType, 'aktionsfinder-json');
+  assert.equal(matrix.hofer[0].sourceType, 'aktionsfinder-json');
 });
 
 test('BILLA official source wins over Aktionsfinder in duplicate group preview', () => {
@@ -63,8 +63,6 @@ test('BILLA official source wins over Aktionsfinder in duplicate group preview',
   assert.deepEqual(report.mutatedCollections, []);
   assert.equal(billa.strongDuplicateGroups, 1);
   assert.equal(billa.topDuplicateExamples[0].winningSourceType, 'billa-official-algolia');
-  assert.equal(report.summary.officialPreferredBecauseSourceQuality, 1);
-  assert.equal(report.sourcePriority.suppressedSourceCandidates.length, 1);
 });
 
 test('LIDL official flyer API wins over Aktionsfinder', () => {
@@ -284,25 +282,6 @@ test('diagnostic report remains read-only and records no mutated collections', (
   assert.equal(report.readOnly, true);
   assert.deepEqual(report.mutatedCollections, []);
   assert.equal(report.summary.duplicateGroupsDetected, 1);
-  assert.equal(report.summary.duplicateCandidateGroups, 1);
-  assert.equal(report.summary.strongDuplicateGroups, 1);
-});
-
-test('Aggregator offers are kept when no better official source exists', () => {
-  const report = buildSourceDedupeDiagnostic({
-    offers: [
-      offer({
-        _id: 'spar-aktionsfinder-only',
-        retailerKey: 'spar',
-        retailerName: 'SPAR',
-        sourceType: 'aktionsfinder-json',
-      }),
-    ],
-  });
-  const spar = report.retailers.find((item) => item.retailerKey === 'spar');
-
-  assert.equal(spar.aggregatorKeptBecauseNoBetterSource.count, 1);
-  assert.equal(report.summary.aggregatorKeptBecauseNoBetterSource, 1);
 });
 
 test('missing fields create coverage warnings without crashing', () => {

@@ -79,21 +79,21 @@ const SOURCE_PRIORITY_MATRIX = {
     ['penny-ocr-diagnostics', 99, 'ocr-diagnostic-only'],
   ],
   dm: [
-    ['dm-official-html', 1, 'official-html'],
-    ['aktionsfinder-json', 3, 'aggregator-json'],
-    ['wogibtswas-html', 5, 'aggregator-html-supplemental'],
+    ['aktionsfinder-json', 2, 'aggregator-json-current-primary'],
+    ['wogibtswas-html', 3, 'aggregator-html-supplemental'],
+    ['dm-official-html', 4, 'official-html-needs-proof'],
   ],
   bipa: [
     ['bipa-official-html', 1, 'official-html-target-primary'],
     ['aktionsfinder-json', 3, 'aggregator-json-current-primary'],
   ],
   spar: [
-    ['spar-official-html', 1, 'official-html'],
-    ['aktionsfinder-json', 3, 'aggregator-json-current-primary'],
+    ['aktionsfinder-json', 2, 'aggregator-json-current-primary'],
+    ['spar-official-html', 5, 'official-html-not-yet-proven'],
   ],
   hofer: [
-    ['hofer-official-html', 1, 'official-html'],
-    ['aktionsfinder-json', 3, 'aggregator-json-current-primary'],
+    ['aktionsfinder-json', 2, 'aggregator-json-current-primary'],
+    ['hofer-official-html', 5, 'official-html-not-yet-proven'],
   ],
   adeg: [
     ['aktionsfinder-json', 4, 'aggregator-json-unproven'],
@@ -339,14 +339,6 @@ function isOcrSource(sourceType = '') {
   return /ocr|bbox|tesseract|paddle/i.test(String(sourceType));
 }
 
-function isAggregatorSource(sourceType = '') {
-  return /aktionsfinder|wogibtswas|marketguru|aggregator/i.test(String(sourceType || ''));
-}
-
-function isOfficialSource(sourceType = '') {
-  return /official|angebote-page|offers-page|flyer/i.test(String(sourceType || '')) && !isAggregatorSource(sourceType);
-}
-
 function sourcePriorityEntry(retailerKey, sourceType) {
   const entries = SOURCE_PRIORITY_MATRIX[retailerKey] || [];
   const exact = entries.find(([candidate]) => candidate === sourceType);
@@ -371,7 +363,7 @@ function sourcePriorityEntry(retailerKey, sourceType) {
     return { sourceType, rank: 8, role: 'pdf-evidence-only' };
   }
 
-  if (isAggregatorSource(sourceType)) {
+  if (/aktionsfinder|wogibtswas|marketguru|aggregator/i.test(sourceType)) {
     return { sourceType, rank: 5, role: 'aggregator' };
   }
 
@@ -750,33 +742,14 @@ function groupPairs(offers = [], evaluatedPairs = []) {
     const anyStrong = pairs.some((pair) => pair.matchStrength === 'strong');
     const matchStrength = anyReview ? 'needsReview' : (anyStrong ? 'strong' : strongestPair?.classification || strongestPair?.matchStrength || 'weak');
     const losingOffers = groupOffers.filter((offer) => String(offer._id) !== String(winner?._id));
-    const winningPriority = sourcePriorityEntry(retailerKey, winner?.sourceType || '');
-    const losingPriorities = losingOffers.map((offer) => sourcePriorityEntry(retailerKey, offer.sourceType || ''));
-    const winnerIsOfficial = isOfficialSource(winner?.sourceType);
-    const hasLosingAggregator = losingOffers.some((offer) => isAggregatorSource(offer.sourceType));
-    const winnerHasValidity = hasAnyValidity(winner);
-    const losingAggregatorWithoutValidity = losingOffers.some((offer) => isAggregatorSource(offer.sourceType) && !hasAnyValidity(offer));
-    const betterSourceQuality = losingPriorities.some((priority) => winningPriority.rank < priority.rank);
 
     return {
       groupId: `source-dedupe:${retailerKey}:${ids.sort().join(':')}`,
       retailerKey,
       matchStrength,
       reasonCodes: uniq(pairs.flatMap((pair) => pair.reasonCodes)).sort(),
-      preferredSource: {
-        sourceType: winner?.sourceType || '',
-        sourceRank: winningPriority.rank,
-        sourceRole: winningPriority.role,
-      },
       winningSourceType: winner?.sourceType || '',
       losingSourceTypes: uniq(losingOffers.map((offer) => offer.sourceType)).sort(),
-      suppressedSourceCandidates: losingOffers.map((offer) => ({
-        ...buildOfferPreview(offer),
-        sourceRank: sourcePriorityEntry(retailerKey, offer.sourceType || '').rank,
-        sourceRole: sourcePriorityEntry(retailerKey, offer.sourceType || '').role,
-      })),
-      officialPreferredBecauseValidity: Boolean(winnerIsOfficial && hasLosingAggregator && winnerHasValidity && losingAggregatorWithoutValidity),
-      officialPreferredBecauseSourceQuality: Boolean(winnerIsOfficial && hasLosingAggregator && betterSourceQuality),
       winnerOfferPreview: buildOfferPreview(winner),
       duplicateOfferPreviews: losingOffers.map(buildOfferPreview),
       titleSimilarity: Number((pairs.reduce((sum, pair) => sum + pair.titleSimilarity, 0) / Math.max(pairs.length, 1)).toFixed(3)),
@@ -889,18 +862,6 @@ function buildRetailerSection({ retailer, offers = [], groups = [], candidates =
   const priorityRows = sourcePriorityMatrixForReport()[retailer.retailerKey] || [];
   const observedPriorityRows = priorityRows.filter((row) => sourceTypes.includes(row.sourceType));
   const recommendedPrimarySource = (observedPriorityRows[0] || priorityRows[0] || null)?.sourceType || '';
-  const suppressedIds = new Set(groups.flatMap((group) =>
-    (group.suppressedSourceCandidates || []).map((offer) => String(offer.id || ''))
-  ));
-  const aggregatorKept = offers
-    .filter((offer) => isAggregatorSource(offer.sourceType))
-    .filter((offer) => !suppressedIds.has(String(offer._id || '')));
-  const officialPreferredBecauseValidity = groups.filter((group) => group.officialPreferredBecauseValidity);
-  const officialPreferredBecauseSourceQuality = groups.filter((group) => group.officialPreferredBecauseSourceQuality);
-  const variantsKeptGroups = groups.filter((group) =>
-    group.matchStrength === 'needsReview'
-    || group.reasonCodes.some((code) => ['quantity-conflict', 'variant-conflict', 'price-conflict'].includes(code))
-  );
   const risks = [];
   const coverageWarnings = buildFieldCoverageWarnings(fieldCoverage);
 
@@ -948,33 +909,10 @@ function buildRetailerSection({ retailer, offers = [], groups = [], candidates =
     classifiedNeedsReview: countClassified(candidates, 'needsReview'),
     classifiedReject: countClassified(candidates, 'reject'),
     duplicateGroupsDetected: groups.length,
-    duplicateCandidateGroups: groups.length,
     strongDuplicateGroups: strongGroups.length,
-    looseDuplicateGroups: groups.filter((group) => group.matchStrength !== 'strong').length,
     needsReviewGroups: needsReviewGroups.length,
     highRiskGroups: highRiskGroups.length,
-    preferredSource: recommendedPrimarySource,
     recommendedPrimarySource,
-    aggregatorKeptBecauseNoBetterSource: {
-      count: aggregatorKept.length,
-      examples: aggregatorKept.slice(0, 5).map(buildOfferPreview),
-    },
-    officialPreferredBecauseValidity: {
-      count: officialPreferredBecauseValidity.length,
-      examples: officialPreferredBecauseValidity.slice(0, 5),
-    },
-    officialPreferredBecauseSourceQuality: {
-      count: officialPreferredBecauseSourceQuality.length,
-      examples: officialPreferredBecauseSourceQuality.slice(0, 5),
-    },
-    variantsKept: {
-      count: variantsKeptGroups.length,
-      examples: variantsKeptGroups.slice(0, 5),
-    },
-    riskCasesNeedsReview: {
-      count: needsReviewGroups.length,
-      examples: needsReviewGroups.slice(0, 5),
-    },
     topLooseCandidateExamples: candidates
       .filter((candidate) => candidate.classification !== 'reject')
       .sort((left, right) => strengthRank(right.classification) - strengthRank(left.classification) || right.titleSimilarity - left.titleSimilarity)
@@ -1048,23 +986,11 @@ function buildSourceDedupeDiagnostic({ offers = [], generatedAt = new Date() } =
     }));
 
   const strongDuplicateGroups = groups.filter((group) => group.matchStrength === 'strong').length;
-  const looseDuplicateGroups = groups.filter((group) => group.matchStrength !== 'strong').length;
   const needsReviewGroups = groups.filter((group) => group.matchStrength === 'needsReview').length;
   const highRiskGroups = groups.filter((group) => group.reasonCodes.some((code) => ['quantity-conflict', 'variant-conflict', 'price-conflict'].includes(code))).length;
   const globalFieldCoverage = buildFieldCoverage(relevantOffers);
   const retailerSourceCounts = [...offersByRetailer.values()].filter((items) => uniq(items.map((offer) => offer.sourceType)).length > 1).length;
   const globalCoverageWarnings = buildFieldCoverageWarnings(globalFieldCoverage);
-  const suppressedSourceCandidates = groups.flatMap((group) => group.suppressedSourceCandidates || []);
-  const officialPreferredBecauseValidity = groups.filter((group) => group.officialPreferredBecauseValidity);
-  const officialPreferredBecauseSourceQuality = groups.filter((group) => group.officialPreferredBecauseSourceQuality);
-  const variantsKept = groups.filter((group) =>
-    group.matchStrength === 'needsReview'
-    || group.reasonCodes.some((code) => ['quantity-conflict', 'variant-conflict', 'price-conflict'].includes(code))
-  );
-  const suppressedIds = new Set(suppressedSourceCandidates.map((offer) => String(offer.id || '')));
-  const aggregatorKeptBecauseNoBetterSource = relevantOffers
-    .filter((offer) => isAggregatorSource(offer.sourceType))
-    .filter((offer) => !suppressedIds.has(String(offer._id || '')));
 
   return {
     ok: true,
@@ -1099,44 +1025,9 @@ function buildSourceDedupeDiagnostic({ offers = [], generatedAt = new Date() } =
       classifiedReject: countClassified(candidates, 'reject'),
       fieldCoverageWarnings: globalCoverageWarnings.length,
       duplicateGroupsDetected: groups.length,
-      duplicateCandidateGroups: groups.length,
       strongDuplicateGroups,
-      looseDuplicateGroups,
       needsReviewGroups,
       highRiskGroups,
-      suppressedSourceCandidates: suppressedSourceCandidates.length,
-      aggregatorKeptBecauseNoBetterSource: aggregatorKeptBecauseNoBetterSource.length,
-      officialPreferredBecauseValidity: officialPreferredBecauseValidity.length,
-      officialPreferredBecauseSourceQuality: officialPreferredBecauseSourceQuality.length,
-      variantsKept: variantsKept.length,
-      riskCasesNeedsReview: needsReviewGroups,
-    },
-    sourcePriority: {
-      duplicateCandidateGroups: groups.length,
-      strongDuplicateGroups,
-      looseDuplicateGroups,
-      preferredSource: Object.fromEntries(retailers.map((retailer) => [retailer.retailerKey, retailer.preferredSource])),
-      suppressedSourceCandidates: suppressedSourceCandidates.slice(0, 20),
-      aggregatorKeptBecauseNoBetterSource: {
-        count: aggregatorKeptBecauseNoBetterSource.length,
-        examples: aggregatorKeptBecauseNoBetterSource.slice(0, 20).map(buildOfferPreview),
-      },
-      officialPreferredBecauseValidity: {
-        count: officialPreferredBecauseValidity.length,
-        examples: officialPreferredBecauseValidity.slice(0, 10),
-      },
-      officialPreferredBecauseSourceQuality: {
-        count: officialPreferredBecauseSourceQuality.length,
-        examples: officialPreferredBecauseSourceQuality.slice(0, 10),
-      },
-      variantsKept: {
-        count: variantsKept.length,
-        examples: variantsKept.slice(0, 10),
-      },
-      riskCasesNeedsReview: {
-        count: needsReviewGroups,
-        examples: groups.filter((group) => group.matchStrength === 'needsReview').slice(0, 10),
-      },
     },
     retailers,
   };

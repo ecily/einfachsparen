@@ -7,7 +7,7 @@ const CATEGORY_TAXONOMY = [
     subcategories: [
       { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz|mango|mangos|nektarine|nektarinen|kresse)/] },
       { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast|baguette|kornspitz|weizenweckerl|striezel|brioche|tortilla|wrap)/] },
-      { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|grillfleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
+      { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
       { label: 'Milchprodukte', patterns: [/\b(milch|heumilch|vollmilch|buttermilch|butter|joghurt|jogurt|topfen|sahne|rahm|quark|skyr|kefir|sauerrahm|schlagobers|obers|pudding|dessertcreme|milchreis)\b/] },
       { label: 'Kaese', patterns: [/\b(kase|kaese|grosslochkaese|grosslochkase|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|bergkase|frischkaese|frischkase|schnittkaese|schnittkase|weinkaese|weinkase|oesterkron|osterkron|feta|ricotta|mascarpone|grana|cheddar|brie)\b/] },
       { label: 'Tiefkuehl- & Fertigprodukte', patterns: [/\b(tiefkuhl|tiefkuehl|pizza|fertig|mikrowelle|tk|frost|lasagne|pommes|eis|eiscreme|fischstaebchen|fischstabchen|fertiggericht|convenience|tiefgekuhlt|tiefgekuehlt)\b/] },
@@ -23,12 +23,12 @@ const CATEGORY_TAXONOMY = [
     patterns: [/(getrank|getraenk|trinken|durst|pfandflasche|mehrweg|einweg)/],
     subcategories: [
       { label: 'Wasser', patterns: [/(wasser|mineralwasser|sprudel)/] },
-      { label: 'Softdrinks & Energy', patterns: [/\b(cola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|isostar|powerade|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink)\b/] },
+      { label: 'Softdrinks & Energy', patterns: [/\b(cola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink)\b/] },
       { label: 'Saefte & Sirupe', patterns: [/\b(saft|nektar|sirup|smoothie|orangensaft|apfelsaft|multivitamin)\b/] },
       { label: 'Bier', patterns: [/\b(bier|pils|weizen|radler|lager|helles|alkoholfrei|flaschenbier|dosenbier|ottakringer|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/] },
       { label: 'Wein & Sekt', patterns: [/\b(wein|rotwein|weisswein|rosewein|rose|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|gruener veltliner|veltliner|hugo)\b/] },
       { label: 'Spirituosen', patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister)\b/] },
-      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha|bohne|kaffeekapsel|kapseln|nespresso|dolce gusto|tassimo|cafe royal|caffe|lungo|prodomo|regio gold|meinl|dallmayr|lor\b|l or\b)/] },
+      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha|bohne|kaffeekapsel|kapseln|nespresso|dolce gusto)/] },
       { label: 'Milchgetraenke', patterns: [/(kakao|milchdrink|milchgetrank|milchgetraenk|joghurtdrink|proteindrink|eiskaffee)/] },
     ],
   },
@@ -53,7 +53,7 @@ const CATEGORY_TAXONOMY = [
     subcategories: [
       { label: 'Waschmittel & Reiniger', patterns: [/(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|geschirrspul|spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|waschcaps|tabs|vollwaschmittel|colorwaschmittel|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|maschinenreiniger|duftspueler|duftspuler)/] },
       { label: 'Kuechenhelfer', patterns: [/(geschirr|pfanne|topf|besteck|messer|kochen|kueche|kuche)/] },
-      { label: 'Aufbewahrung & Folien', patterns: [/(folie|frischhalte|alu|beutel|aufbewahrung|vorratsdose|frischhaltedose|dose mit deckel|box)/] },
+      { label: 'Aufbewahrung & Folien', patterns: [/(folie|frischhalte|alu|beutel|aufbewahrung|dose|box)/] },
       { label: 'Deko & Wohnen', patterns: [/(deko|kerze|vase|kissen|wohnen)/] },
       { label: 'Lufterfrischer & Raumduft', patterns: [/(lufterfrischer|raumduft|duftspray|duftstecker|nachfuller|nachfueller|glade|airwick|air wick)/] },
       { label: 'Papier & Buero', patterns: [/(papier|buero|buro|ordner|heft|stift|druckerpapier)/] },
@@ -117,7 +117,7 @@ const CATEGORY_TAXONOMY = [
       { label: 'Spielzeug', patterns: [/(spielzeug|lego|puppe|pluesch|plueschtier|hot wheels|barbie|spiel)/] },
       { label: 'Games & Konsolen', patterns: [/(games|spielkonsole|nintendo switch|playstation|xbox|videospiel)/] },
       { label: 'Schreibwaren & Schule', patterns: [/(schule|schreibwaren|heft|stift|malblock)/] },
-      { label: 'Sport & Camping', patterns: [/(sport|camping|fahrrad|e bike|e-bike|ebike|helm|outdoor|grill|freizeit)/] },
+      { label: 'Sport & Camping', patterns: [/(sport|camping|fahrrad|helm|outdoor|grill|freizeit)/] },
       { label: 'Autozubehoer', patterns: [/(autozubehor|autozubehoer|motoroel|reifen)/] },
     ],
   },
@@ -125,48 +125,13 @@ const CATEGORY_TAXONOMY = [
     main: 'Baby / Kinder',
     patterns: [/(baby|kinder|kind)/],
     subcategories: [
-      { label: 'Babybedarf', patterns: [/(baby|babynahrung|schnuller|strampler|babyflasche)/] },
-      { label: 'Kinderpflege', patterns: [/(kinderpflege|babyshampoo|babycreme|windel|windeln|feuchttucher|feuchttuecher)/] },
+      { label: 'Babybedarf', patterns: [/(baby|schnuller|strampler|babyflasche)/] },
+      { label: 'Kinderpflege', patterns: [/(kinderpflege|babyshampoo|babycreme|windel)/] },
     ],
   },
 ];
 
 const HARD_CATEGORY_OVERRIDES = [
-  {
-    patterns: [/\b(roestgemuese|rostgemuese|buttergemuese|buttergemuse|gemuese reindl|gemuse reindl|gemuese a la creme|gemuse a la creme|iglo gemuese|iglo gemuse|cremespinat|blattspinat|rotkraut)\b/],
-    main: 'Lebensmittel',
-    sub: 'Tiefkuehl- & Fertigprodukte',
-  },
-  {
-    patterns: [/\b(fischstaebchen|fischstabchen|ofenbackfisch|backfisch|filegro|polar dorsch|polardorsch|kabeljau|wildlachs|fisch n roesti|fisch n rosti)\b/],
-    main: 'Lebensmittel',
-    sub: 'Fleisch, Wurst & Fisch',
-  },
-  {
-    patterns: [/\b(gasteiner|infinity water|mineralwasser|wasser|sprudel|voslauer|voeslauer|soda|sparkling)\b/],
-    main: 'Getraenke',
-    sub: 'Wasser',
-  },
-  {
-    patterns: [/\b(schartner bombe|cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|isostar|powerade|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
-    main: 'Getraenke',
-    sub: 'Softdrinks & Energy',
-  },
-  {
-    patterns: [/\b(la gioiosa|spumante|rotwein|weisswein|rosewein|wein|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|welschriesling|veltliner|hugo|gluhwein|gluehwein|cuvee)\b/],
-    main: 'Getraenke',
-    sub: 'Wein & Sekt',
-  },
-  {
-    patterns: [/\b(barilla|teigwaren|fusilli|spaghetti|penne|nudel|nudeln|pasta|bavette|maccheroni|ravioli|gnocchi|couscous|bulgur|risotto)\b/],
-    main: 'Lebensmittel',
-    sub: 'Pasta, Reis & Konserven',
-  },
-  {
-    patterns: [/\b(olivenoel|olivenol|olive|oliven|artischocke|artischocken|asia cup)\b/],
-    main: 'Lebensmittel',
-    sub: 'Saucen, Oele & Gewuerze',
-  },
   {
     patterns: [/\b(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|duftspueler|duftspuler)\b/],
     main: 'Haushalt',
@@ -181,16 +146,6 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(glade|airwick|air wick|duftspray|lufterfrischer|raumduft|duftstecker|nachfuller|nachfueller|minispray)\b/],
     main: 'Haushalt',
     sub: 'Lufterfrischer & Raumduft',
-  },
-  {
-    patterns: [/\b(shampoo|spulung|spuelung|haarkur|haarspray|haarfarbe)\b/],
-    main: 'Drogerie / Hygiene',
-    sub: 'Haarpflege',
-  },
-  {
-    patterns: [/\b(duschgel|dusch|deo|deodorant|bodylotion|seife|handcreme|sonnencreme|sonnenschutz|gesichtscreme|creme|lotion)\b/],
-    main: 'Drogerie / Hygiene',
-    sub: 'Koerperpflege',
   },
   {
     patterns: [/\b(brot|gebaeck|geback|semmel|weckerl|toast|baguette|croissant|kornspitz|brioche|wrap|tortilla)\b/],
@@ -208,22 +163,12 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Kaese',
   },
   {
-    patterns: [/\b(hundefutter|hundesnack)\b/],
-    main: 'Tierbedarf',
-    sub: 'Hundefutter',
-  },
-  {
-    patterns: [/\b(katzenfutter|katzensnack|perfect fit|gourmet perle)\b/],
-    main: 'Tierbedarf',
-    sub: 'Katzenfutter',
-  },
-  {
     patterns: [/\b(mehl|zucker|backpulver|vanillezucker|hefe|germ|staerke|starke|eier|ei|haferflocken|gries|griess|salz)\b/],
     main: 'Lebensmittel',
     sub: 'Backen & Grundnahrungsmittel',
   },
   {
-    patterns: [/\b(fleisch|grillfleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|garnelen|shrimp)\b/],
+    patterns: [/\b(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|garnelen|shrimp)\b/],
     main: 'Lebensmittel',
     sub: 'Fleisch, Wurst & Fisch',
   },
@@ -231,11 +176,6 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(bier|pils|weizen|radler|lager|helles|flaschenbier|dosenbier|ottakringer|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/],
     main: 'Getraenke',
     sub: 'Bier',
-  },
-  {
-    patterns: [/\b(eis|eiscreme|cremissimo|eskimo|ben jerry|ben & jerry|cornetto)\b/],
-    main: 'Lebensmittel',
-    sub: 'Tiefkuehl- & Fertigprodukte',
   },
   {
     patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister|batida|averna|amaro|kokoslikoer|kokoslikor|gurktaler|alpenkrauter|alpenkraeuter|aperitivo|spritz|bourbon)\b/],
@@ -253,7 +193,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Wasser',
   },
   {
-    patterns: [/\b(cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|isostar|powerade|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
+    patterns: [/\b(cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
     main: 'Getraenke',
     sub: 'Softdrinks & Energy',
   },
@@ -283,12 +223,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Pasta, Reis & Konserven',
   },
   {
-    patterns: [/\b(cucina nobile)\b.*\b(pesto|passata|polpa|sugo|pasta|teigwaren|nudel|nudeln|spaghetti|penne|fusilli)\b/, /\b(pesto|passata|polpa|sugo|pasta|teigwaren|nudel|nudeln|spaghetti|penne|fusilli)\b.*\b(cucina nobile)\b/],
-    main: 'Lebensmittel',
-    sub: 'Pasta, Reis & Konserven',
-  },
-  {
-    patterns: [/\b(kaffee|cafe|caffe|moka|gemahlen|espresso|cappuccino|tee|matcha|kaffeekapsel|nespresso|dolce gusto|tassimo|nescafe|jacobs|tchibo|illy|cafe royal|lungo|prodomo|meinl|dallmayr|lor|l or|regio gold)\b/],
+    patterns: [/\b(kaffee|cafe|moka|gemahlen|espresso|cappuccino|tee|matcha|kaffeekapsel|nespresso|dolce gusto|nescafe|jacobs|tchibo|illy)\b/],
     main: 'Getraenke',
     sub: 'Kaffee & Tee',
   },
@@ -308,9 +243,9 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Obst & Gemuese',
   },
   {
-    patterns: [/\b(windel|windeln|pampers|feuchttucher|feuchttuecher|babynahrung|babycreme|babyshampoo)\b/],
-    main: 'Baby / Kinder',
-    sub: 'Kinderpflege',
+    patterns: [/\b(windel|windeln|pampers|feuchttucher|feuchttuecher|babycreme|babyshampoo)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Babyhygiene',
   },
   {
     patterns: [/\b(shampoo|spulung|spuelung|haarkur|haarspray|haarfarbe)\b/],
@@ -396,11 +331,6 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(hot wheels|pluesch|plueschtier)\b/],
     main: 'Freizeit / Sonstiges',
     sub: 'Spielzeug',
-  },
-  {
-    patterns: [/\b(fahrrad|e bike|e-bike|ebike|trekking e bike|trekking e-bike|mountainbike)\b/],
-    main: 'Freizeit / Sonstiges',
-    sub: 'Sport & Camping',
   },
   {
     patterns: [/\b(nintendo switch|videospiel|konsole|games)\b/],

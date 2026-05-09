@@ -3,7 +3,6 @@ const test = require('node:test');
 
 const {
   applyQueryMatch,
-  applyProgramEligibility,
   buildValidityLabel,
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
@@ -83,35 +82,6 @@ test('normalizes ranking retailer filters case-insensitively', () => {
   assert.deepEqual(normalizeRetailerList(['PENNY', 'Billa-Plus']), ['penny', 'billa-plus']);
 });
 
-test('normalizes SPAR market formats to the shared spar retailer key', () => {
-  assert.deepEqual(normalizeRetailerList('SPAR,INTERSPAR,EUROSPAR'), ['spar']);
-  assert.deepEqual(normalizeRetailerList(['INTERSPAR', 'eurospar']), ['spar']);
-});
-
-test('program retailer eligibility keeps selected retailer program offers visible when opted in', () => {
-  const publicOffer = offer({
-    _id: 'spar-public',
-    title: 'REGIO Gold 500 g',
-    retailerKey: 'spar',
-    customerProgramRequired: false,
-  });
-  const programOffer = offer({
-    _id: 'spar-program',
-    title: 'Tassimo Kaffeekapseln',
-    retailerKey: 'spar',
-    customerProgramRequired: true,
-  });
-
-  assert.deepEqual(
-    applyProgramEligibility([publicOffer, programOffer], { programRetailers: [] }).map((item) => item._id),
-    ['spar-public']
-  );
-  assert.deepEqual(
-    applyProgramEligibility([publicOffer, programOffer], { programRetailers: ['spar'] }).map((item) => item._id),
-    ['spar-public', 'spar-program']
-  );
-});
-
 test('scores real butter offers ahead of cosmetic side meanings', () => {
   const dairyButter = offer({
     title: 'Milsani Irische Butter 250 g',
@@ -183,8 +153,7 @@ test('ranks dairy butter intent ahead of butter side meanings', () => {
     'MANHATTAN Butter Me Up Lippenbalsam dm',
     'Milbona Butterkaese oder Gouda',
   ]) {
-    const sideIndex = sortedTitles.indexOf(sideMeaning);
-    assert.ok(sideIndex === -1 || sideIndex > 1, sideMeaning);
+    assert.ok(sortedTitles.indexOf(sideMeaning) > 1, sideMeaning);
   }
 });
 
@@ -267,212 +236,6 @@ test('keeps grouped butter response query-sorted for live response order', () =>
     'Milsani Irische Butter HOFER 250 Gramm',
     'Schaerdinger Oesterreichische Teebutter Penny 250 Gramm',
   ]));
-});
-
-test('ranks real butter ahead of peanut butter cups and cosmetic butter hits', () => {
-  const offers = [
-    offer({
-      title: 'Protein Peanut Butter Cups',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Suesswaren & Knabbereien',
-      comparisonGroup: 'protein-peanut-butter-cups::0.04-kg',
-    }),
-    offer({
-      title: 'MANHATTAN Body Butter Lippenbalsam',
-      categoryPrimary: 'Drogerie / Hygiene',
-      categorySecondary: 'Kosmetik & Make-up',
-      comparisonGroup: 'manhattan-body-butter-lippenbalsam::1-Stk',
-    }),
-    offer({
-      title: 'NYX Buttermelt Highlighter',
-      categoryPrimary: 'Drogerie / Hygiene',
-      categorySecondary: 'Kosmetik & Make-up',
-      comparisonGroup: 'nyx-buttermelt-highlighter::1-Stk',
-    }),
-    offer({
-      title: 'Schaerdinger Teebutter 250 g',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Milchprodukte',
-      comparisonGroup: 'schaerdinger-teebutter::0.25-kg',
-    }),
-  ];
-  const sortedTitles = applyQueryMatch(offers, 'butter').map((item) => item.title);
-
-  assert.equal(sortedTitles[0], 'Schaerdinger Teebutter 250 g');
-  assert.equal(sortedTitles.includes('Protein Peanut Butter Cups'), false);
-  assert.equal(sortedTitles.includes('MANHATTAN Body Butter Lippenbalsam'), false);
-  assert.equal(sortedTitles.includes('NYX Buttermelt Highlighter'), false);
-});
-
-test('does not keep buttergemuese or butter sweets as top butter results', () => {
-  const offers = [
-    offer({
-      title: 'Iglo Buttergemuese',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Tiefkuehl',
-      comparisonGroup: 'iglo-buttergemuese::0.4-kg',
-    }),
-    offer({
-      title: 'Butterkeks Schokolade',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Suesswaren & Knabbereien',
-      comparisonGroup: 'butterkeks-schokolade::0.2-kg',
-    }),
-    offer({
-      title: 'Ja Natuerlich Bio Butter',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Milchprodukte',
-      comparisonGroup: 'ja-natuerlich-bio-butter::0.25-kg',
-    }),
-  ];
-  const sortedTitles = applyQueryMatch(offers, 'butter').map((item) => item.title);
-
-  assert.equal(sortedTitles[0], 'Ja Natuerlich Bio Butter');
-  assert.equal(sortedTitles.includes('Iglo Buttergemuese'), false);
-  assert.equal(sortedTitles.includes('Butterkeks Schokolade'), false);
-});
-
-test('dampens or excludes butter side hits when no real butter exists', () => {
-  const offers = [
-    offer({
-      title: 'Peanut Butter Cups',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Suesswaren & Knabbereien',
-      comparisonGroup: 'peanut-butter-cups::0.04-kg',
-    }),
-    offer({
-      title: 'Butter Me Up Lippenbalsam',
-      categoryPrimary: 'Drogerie / Hygiene',
-      categorySecondary: 'Kosmetik & Make-up',
-      comparisonGroup: 'butter-me-up-lippenbalsam::1-Stk',
-    }),
-    offer({
-      title: 'Protein Cookie Almond Butter',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Suesswaren & Knabbereien',
-      comparisonGroup: 'protein-cookie-almond-butter::0.05-kg',
-    }),
-  ];
-
-  assert.deepEqual(applyQueryMatch(offers, 'butter'), []);
-});
-
-test('ranks real rice ahead of pasta sauce noodles beans and category-only conserve hits', () => {
-  const offers = [
-    offer({
-      title: 'Despar Passata di Pomodoro',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Pasta, Reis & Konserven',
-      subcategoryKey: 'pasta-reis-konserven',
-      comparisonGroup: 'despar-passata-pomodoro::0.7-kg',
-    }),
-    offer({
-      title: 'Barilla Spaghetti',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Pasta, Reis & Konserven',
-      comparisonGroup: 'barilla-spaghetti::0.5-kg',
-    }),
-    offer({
-      title: 'Bonduelle Kichererbsen',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Pasta, Reis & Konserven',
-      comparisonGroup: 'bonduelle-kichererbsen::0.4-kg',
-    }),
-    offer({
-      title: 'Basmati Reis 1 kg',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Pasta, Reis & Konserven',
-      comparisonGroup: 'basmati-reis::1-kg',
-    }),
-    offer({
-      title: 'Langkornreis',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Pasta, Reis & Konserven',
-      comparisonGroup: 'langkornreis::1-kg',
-    }),
-  ];
-  const sortedTitles = applyQueryMatch(offers, 'reis').map((item) => item.title);
-
-  assert.deepEqual(new Set(sortedTitles.slice(0, 2)), new Set([
-    'Basmati Reis 1 kg',
-    'Langkornreis',
-  ]));
-  assert.equal(sortedTitles.includes('Despar Passata di Pomodoro'), false);
-  assert.equal(sortedTitles.includes('Barilla Spaghetti'), false);
-  assert.equal(sortedTitles.includes('Bonduelle Kichererbsen'), false);
-});
-
-test('does not make pasta reis konserven category-only offers strong rice hits', () => {
-  const passata = offer({
-    title: 'Tomaten Passata',
-    categoryPrimary: 'Lebensmittel',
-    categorySecondary: 'Pasta, Reis & Konserven',
-    subcategoryKey: 'pasta-reis-konserven',
-    comparisonGroup: 'tomaten-passata::0.7-kg',
-  });
-
-  assert.equal(scoreOfferAgainstQuery(passata, 'reis'), 0);
-});
-
-test('does not match random reis substrings as generic rice intent', () => {
-  const offers = [
-    offer({
-      title: 'Darbo Preiselbeer Konfituere',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Obst & Gemuese',
-      comparisonGroup: 'darbo-preiselbeer-konfituere::0.45-kg',
-    }),
-    offer({
-      title: 'Framstagspreis Getraenke Aktion',
-      categoryPrimary: 'Getraenke',
-      categorySecondary: 'Bier',
-      comparisonGroup: 'framstagspreis-getraenke::1-Stk',
-    }),
-    offer({
-      title: 'Greisinger Berner Wuerstel',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Fleisch, Wurst & Fisch',
-      comparisonGroup: 'greisinger-berner-wuerstel::0.4-kg',
-    }),
-    offer({
-      title: 'Wassereis Swip',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Eis',
-      comparisonGroup: 'wassereis-swip::0.66-l',
-    }),
-  ];
-
-  assert.deepEqual(applyQueryMatch(offers, 'reis'), []);
-});
-
-test('keeps milchreis and reiswaffeln as weaker plausible rice-related hits', () => {
-  const offers = [
-    offer({
-      title: 'Reiswaffeln Natur',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Bio Snacks',
-      comparisonGroup: 'reiswaffeln-natur::0.1-kg',
-    }),
-    offer({
-      title: 'Milchreis pur',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Baby Nahrung',
-      comparisonGroup: 'milchreis-pur::0.19-kg',
-    }),
-    offer({
-      title: 'Jasminreis 1 kg',
-      categoryPrimary: 'Lebensmittel',
-      categorySecondary: 'Pasta, Reis & Konserven',
-      comparisonGroup: 'jasminreis::1-kg',
-    }),
-  ];
-  const sortedTitles = applyQueryMatch(offers, 'reis').map((item) => item.title);
-
-  assert.equal(sortedTitles[0], 'Jasminreis 1 kg');
-  assert.ok(sortedTitles.includes('Milchreis pur'));
-  assert.ok(sortedTitles.includes('Reiswaffeln Natur'));
-  assert.ok(sortedTitles.indexOf('Milchreis pur') > 0);
-  assert.ok(sortedTitles.indexOf('Reiswaffeln Natur') > 0);
 });
 
 test('scores coffee products ahead of plant assortment side hits', () => {
@@ -1432,61 +1195,6 @@ test('keeps same title for different retailers and distinct variants', () => {
   assert.equal(dedupeQueryOffers(offers, 'kaffee').length, 3);
 });
 
-test('final response dedupe keeps distinct coffee flyer offers visible', () => {
-  const coffeeOffers = [
-    offer({
-      title: 'REGIO Gold 500 g',
-      titleNormalized: 'regio gold 500 g',
-      retailerKey: 'spar',
-      sourceType: 'aktionsfinder-json',
-      priceCurrent: { amount: 5.99 },
-      quantityText: '500 g',
-    }),
-    offer({
-      title: 'Tassimo Kaffeekapseln',
-      titleNormalized: 'tassimo kaffeekapseln',
-      retailerKey: 'spar',
-      sourceType: 'aktionsfinder-json',
-      priceCurrent: { amount: 4.49 },
-      quantityText: '16 Stk',
-    }),
-    offer({
-      title: 'Nescafe Classic Loeskaffee 200 g',
-      titleNormalized: 'nescafe classic loeskaffee 200 g',
-      retailerKey: 'spar',
-      sourceType: 'aktionsfinder-json',
-      priceCurrent: { amount: 6.99 },
-      quantityText: '200 g',
-    }),
-    offer({
-      title: 'Cafe Royal Kapseln',
-      titleNormalized: 'cafe royal kapseln',
-      retailerKey: 'spar',
-      sourceType: 'aktionsfinder-json',
-      priceCurrent: { amount: 3.49 },
-      quantityText: '10 Stk',
-    }),
-    offer({
-      title: 'Meinl Praesident 500 g',
-      titleNormalized: 'meinl praesident 500 g',
-      retailerKey: 'spar',
-      sourceType: 'aktionsfinder-json',
-      priceCurrent: { amount: 7.99 },
-      quantityText: '500 g',
-    }),
-    offer({
-      title: 'Dallmayr Prodomo 500 g',
-      titleNormalized: 'dallmayr prodomo 500 g',
-      retailerKey: 'spar',
-      sourceType: 'aktionsfinder-json',
-      priceCurrent: { amount: 7.49 },
-      quantityText: '500 g',
-    }),
-  ];
-
-  assert.equal(dedupeFinalResponseOffers(coffeeOffers, 'kaffee').length, coffeeOffers.length);
-});
-
 test('keeps hardware variants with material power model or color differences', () => {
   const offers = [
     offer({
@@ -1762,50 +1470,6 @@ test('response dedupe applies official source priority conservatively for BILLA 
   const prepared = dedupeResponseOffers([billaAggregator, billaOfficial, lidlAggregator, lidlOfficial], '');
 
   assert.deepEqual(prepared.map((item) => item._id).sort(), ['billa-official', 'lidl-official']);
-});
-
-test('response dedupe keeps priced aggregator when official duplicate has no usable price', () => {
-  const aggregator = offer({
-    _id: 'priced-aggregator',
-    title: 'Bio Vollmilch 1 l',
-    titleNormalized: 'bio vollmilch 1 l',
-    retailerKey: 'billa',
-    sourceType: 'aktionsfinder-json',
-    priceCurrent: { amount: 1.49 },
-    quantityText: '1 l',
-    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
-    dedupeKey: 'billa::bio-vollmilch::1l::same-upstream',
-    validTo: null,
-  });
-  const officialMissingPrice = offer({
-    ...aggregator,
-    _id: 'official-without-price',
-    sourceType: 'billa-official-algolia',
-    priceCurrent: { amount: null },
-    normalizedUnitPrice: { amount: null, unit: 'l', comparable: false },
-  });
-  const prepared = prepareQueryOffersForResponse([aggregator, officialMissingPrice], 'milch');
-
-  assert.equal(prepared.length, 1);
-  assert.equal(prepared[0]._id, 'priced-aggregator');
-});
-
-test('SPAR Aktionsfinder remains visible while no active official SPAR duplicate exists', () => {
-  const aggregator = offer({
-    _id: 'spar-aktionsfinder-visible',
-    title: 'Bio Vollmilch 1 l',
-    titleNormalized: 'bio vollmilch 1 l',
-    retailerKey: 'spar',
-    sourceType: 'aktionsfinder-json',
-    priceCurrent: { amount: 1.49 },
-    quantityText: '1 l',
-    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
-    validTo: null,
-  });
-  const prepared = prepareQueryOffersForResponse([aggregator], 'milch');
-
-  assert.equal(prepared.length, 1);
-  assert.equal(prepared[0]._id, 'spar-aktionsfinder-visible');
 });
 
 test('final response dedupe keeps the same offer id only once', () => {

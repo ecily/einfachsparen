@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   buildValidityCoverageDiagnostic,
-  classifyValidityRecovery,
   inferRecoverability,
 } = require('../src/services/diagnostics/validityCoverageDiagnostic');
 
@@ -17,9 +16,6 @@ function offer(overrides = {}) {
     sourceUrl: 'https://shop.billa.at/aktionen',
     validFrom: null,
     validTo: null,
-    status: 'active',
-    isActiveNow: false,
-    isActiveToday: false,
     rawFacts: {},
     parserVersion: 'test-parser',
     ...overrides,
@@ -56,64 +52,25 @@ test('aggregates validity coverage by retailer and sourceType', () => {
   assert.equal(report.readOnly, true);
   assert.deepEqual(report.mutatedCollections, []);
   assert.equal(report.summary.totalOffersAnalyzed, 3);
-  assert.equal(billa.totalOffers, 2);
-  assert.equal(billa.offersWithValidFrom, 1);
-  assert.equal(billa.offersWithValidTo, 1);
-  assert.equal(billa.offersWithAnyValidity, 1);
-  assert.equal(billa.statusCounts.already_safe, 1);
-  assert.equal(penny.anyValidityPresentPct, 100);
+  assert.equal(billa.offerCount, 2);
+  assert.equal(billa.bothValidityPresentPct, 50);
+  assert.equal(penny.bothValidityPresentPct, 100);
 });
 
-test('offer-level validFrom and validTo remains already_safe', () => {
-  const result = classifyValidityRecovery({
-    offer: offer({
-      validFrom: new Date('2026-05-01T00:00:00Z'),
-      validTo: new Date('2026-05-08T23:59:59Z'),
-    }),
-  });
-
-  assert.equal(result.status, 'already_safe');
-  assert.equal(result.safety, 'safe');
-  assert.deepEqual(result.recoveredValidity, {
-    validFrom: '2026-05-01',
-    validTo: '2026-05-08',
-  });
-});
-
-test('validityLabel with explicit German date range is safe recoverable', () => {
-  const result = classifyValidityRecovery({
+test('detects recoverable-from-validityLabel from explicit German date text', () => {
+  const result = inferRecoverability({
     offer: offer({
       rawFacts: {
-        validityLabel: 'gueltig von 01.05.2026 bis 08.05.2026',
+        validityText: 'gueltig von 01.05.2026 bis 08.05.2026',
       },
     }),
   });
 
-  assert.equal(result.status, 'safely_recoverable_from_validity_label');
-  assert.equal(result.safety, 'safe');
-  assert.deepEqual(result.recoveredValidity, {
-    validFrom: '01.05.2026',
-    validTo: '08.05.2026',
-    sourceText: 'gueltig von 01.05.2026 bis 08.05.2026',
-  });
+  assert.equal(result, 'recoverable-from-validityLabel');
 });
 
-test('explicit offer rawFacts validity text is safe recoverable', () => {
-  const result = classifyValidityRecovery({
-    offer: offer({
-      rawFacts: {
-        offerStartDate: '2026-05-01',
-        offerEndDate: '2026-05-08',
-      },
-    }),
-  });
-
-  assert.equal(result.status, 'safely_recoverable_from_explicit_offer_text');
-  assert.equal(result.safety, 'safe');
-});
-
-test('source-title-only explicit date range is conditional and not safe', () => {
-  const result = classifyValidityRecovery({
+test('detects recoverable-from-source-title from flyer title or URL', () => {
+  const result = inferRecoverability({
     offer: offer({ sourceId: 'source-flyer' }),
     source: {
       _id: 'source-flyer',
@@ -122,47 +79,28 @@ test('source-title-only explicit date range is conditional and not safe', () => 
     },
   });
 
-  assert.equal(result.status, 'conditional_source_context_only');
-  assert.equal(result.safety, 'conditional');
-  assert.equal(inferRecoverability({
-    offer: offer({ sourceId: 'source-flyer' }),
-    source: { _id: 'source-flyer', label: 'Flugblatt Do 07.05. bis Di 12.05.2026' },
-  }), 'conditional_source_context_only');
+  assert.equal(result, 'recoverable-from-source-title');
 });
 
-test('URL calendar week without explicit calendar date is conditional and not safe', () => {
-  const result = classifyValidityRecovery({
-    offer: offer({
-      sourceUrl: 'https://example.test/angebote/kw-19/aktuelles-flugblatt',
-    }),
-  });
-
-  assert.equal(result.status, 'conditional_source_context_only');
-  assert.equal(result.safety, 'conditional');
-});
-
-test('fetchedAt observedAt and checkedAt are never safe', () => {
-  const result = classifyValidityRecovery({
-    offer: offer({
-      rawFacts: {
-        fetchedAt: '2026-05-01T00:00:00.000Z',
-        observedAt: '2026-05-02T00:00:00.000Z',
-        checkedAt: '2026-05-03T00:00:00.000Z',
+test('empty fields do not crash and remain not safely recoverable', () => {
+  const report = buildValidityCoverageDiagnostic({
+    offers: [
+      {
+        _id: 'empty',
+        retailerKey: 'dm',
+        sourceType: 'wogibtswas-html',
+        rawFacts: null,
       },
-    }),
+    ],
+    sources: [{}],
+    rawDocuments: [{}],
   });
+  const row = report.rows[0];
 
-  assert.equal(result.status, 'unsafe_fetched_or_observed_time');
-  assert.equal(result.safety, 'unsafe');
-});
-
-test('missing validity evidence remains missing', () => {
-  const result = classifyValidityRecovery({
-    offer: offer({ sourceUrl: '' }),
-  });
-
-  assert.equal(result.status, 'missing');
-  assert.equal(result.safety, 'unsafe');
+  assert.equal(row.retailerKey, 'dm');
+  assert.equal(row.validFromPresentPct, 0);
+  assert.equal(row.validToPresentPct, 0);
+  assert.equal(row.likelyRecoverable[0].status, 'not-safely-recoverable');
 });
 
 test('diagnostic remains read-only and records no mutated collections', () => {
@@ -178,35 +116,4 @@ test('diagnostic remains read-only and records no mutated collections', () => {
   assert.equal(report.ok, true);
   assert.equal(report.readOnly, true);
   assert.deepEqual(report.mutatedCollections, []);
-});
-
-test('safeSmallFixCandidates excludes source context only evidence', () => {
-  const report = buildValidityCoverageDiagnostic({
-    offers: [
-      offer({
-        _id: 'source-only',
-        sourceId: 'source-flyer',
-        sourceUrl: 'https://example.test/angebote/kw-19/aktuelles-flugblatt',
-      }),
-      offer({
-        _id: 'safe-label',
-        rawFacts: {
-          validityLabel: 'gueltig von 01.05.2026 bis 08.05.2026',
-        },
-      }),
-    ],
-    sources: [
-      {
-        _id: 'source-flyer',
-        retailerKey: 'billa',
-        sourceType: 'billa-official-algolia',
-        label: 'Aktuelles Flugblatt KW 19',
-      },
-    ],
-  });
-
-  assert.equal(report.summary.safelyRecoverableValidityCount, 1);
-  assert.equal(report.summary.conditionallyRecoverableValidityCount, 1);
-  assert.equal(report.safeSmallFixCandidates.length, 1);
-  assert.equal(report.safeSmallFixCandidates[0].safety, 'safe');
 });
