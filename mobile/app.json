@@ -2,7 +2,7 @@
   "expo": {
     "name": "kaufklug.at",
     "slug": "kaufklug-at",
-    "version": "2026.05.08-1",
+    "version": "2026.05.09-1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -22,7 +22,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "at.kaufklug.app",
-      "versionCode": 2026050801,
+      "versionCode": 2026050901,
       "permissions": [
         "INTERNET"
       ]
