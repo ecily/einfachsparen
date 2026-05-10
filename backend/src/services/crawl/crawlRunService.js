@@ -28,7 +28,10 @@ function determineMode(options = {}) {
 function asStringId(value) {
   if (!value) return '';
   if (typeof value === 'string') return value;
-  if (value._id) return asStringId(value._id);
+  if (value._bsontype === 'ObjectId' || value instanceof mongoose.Types.ObjectId) {
+    return String(value);
+  }
+  if (value._id && value._id !== value) return asStringId(value._id);
   return String(value);
 }
 
@@ -52,7 +55,7 @@ function sanitizeJsonValue(value, seen = new WeakSet()) {
   if (typeof value === 'bigint') return Number(value);
   if (typeof value !== 'object') return value;
   if (value instanceof Date) return toIsoOrNull(value);
-  if (mongoose.Types.ObjectId.isValid(value) && value._bsontype === 'ObjectId') return String(value);
+  if (value._bsontype === 'ObjectId' || value instanceof mongoose.Types.ObjectId) return String(value);
 
   if (seen.has(value)) return '[Circular]';
   seen.add(value);

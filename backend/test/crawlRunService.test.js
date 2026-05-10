@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const mongoose = require('mongoose');
 
 const {
   serializeCrawlRun,
@@ -147,18 +148,23 @@ test('serializeCrawlRun tolerates malformed compact source entries', () => {
 });
 
 test('serializeCrawlRun sanitizes mixed result payloads for JSON responses', () => {
+  const runId = new mongoose.Types.ObjectId();
+  const sourceId = new mongoose.Types.ObjectId();
   const serialized = serializeCrawlRun({
-    _id: { toString: () => '665000000000000000000012' },
+    _id: runId,
     status: 'success',
     trigger: 'manual',
     mode: 'full',
     summary: { processedOffers: 12n },
     result: {
+      sources: [{ sourceId, sourceKey: 'spar', status: 'success' }],
       dedupe: { duplicateGroups: 1n },
       filterMetadata: { ok: true, processedOffers: 12n },
     },
   });
 
+  assert.equal(serialized.id, String(runId));
+  assert.equal(serialized.result.sources[0].sourceId, String(sourceId));
   assert.equal(serialized.summary.processedOffers, 12);
   assert.equal(serialized.result.dedupe.duplicateGroups, 1);
   assert.equal(serialized.result.filterMetadata.processedOffers, 12);
