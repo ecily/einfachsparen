@@ -2,13 +2,13 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
-const Offer = require('../../models/Offer');
 const { buildPayloadDigest } = require('./aktionsfinderParser');
 const { normalizePromotionToOffer } = require('./offerNormalizer');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+const { replaceOffersForSource } = require('./offerRefreshGuard');
 
 const PARSER_VERSION = 'wogibtswas-v2-coverage';
 
@@ -246,8 +246,6 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
       },
     });
 
-    await Offer.deleteMany({ sourceId: source._id });
-
     const normalizedOffers = promotions
       .map((promotion) =>
         normalizePromotionToOffer({
@@ -277,9 +275,10 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
       normalizationVersion: NORMALIZATION_VERSION,
     });
 
-    if (offerDocuments.length > 0) {
-      await Offer.insertMany(offerDocuments, { ordered: false });
-    }
+    const refreshResult = await replaceOffersForSource({
+      sourceId: source._id,
+      offerDocuments,
+    });
 
     const status = offerDocuments.length > 0 ? 'success' : 'partial';
 
@@ -300,6 +299,7 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
         sourceLabel: source.label,
         sourceUrl: source.sourceUrl,
         validTo,
+        refreshResult,
       },
     }));
 
@@ -312,7 +312,12 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
       retailerKey: source.retailerKey,
       retailerName: source.retailerName,
       channel: source.channel,
+      sourceType: source.sourceType || source.channel,
       sourceUrl: source.sourceUrl,
+      status,
+      foundRawItems: promotions.length,
+      parsedOffers: offerDocuments.length,
+      rejectedOffers: Math.max(0, promotions.length - offerDocuments.length),
       offersStored: offerDocuments.length,
       discoveredLinks: promotions.length,
       evidenceMatched: 0,

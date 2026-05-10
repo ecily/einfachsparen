@@ -2,7 +2,6 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
-const Offer = require('../../models/Offer');
 const {
   sanitizeWhitespace,
   normalizeTitleForMatch,
@@ -17,6 +16,7 @@ const {
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+const { replaceOffersForSource } = require('./offerRefreshGuard');
 
 let cachedClientKey = '';
 const PARSER_VERSION = 'marktguru-v3-coverage';
@@ -735,8 +735,6 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
       },
     });
 
-    await Offer.deleteMany({ sourceId: source._id });
-
     const normalizedOffers = apiOffers.length > 0
       ? parseOffersFromEmbeddedPayload({
         payload: {
@@ -771,12 +769,14 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
       normalizationVersion: NORMALIZATION_VERSION,
     });
 
-    if (offerDocuments.length > 0) {
-      await Offer.insertMany(offerDocuments, { ordered: false });
-    }
+    const refreshResult = await replaceOffersForSource({
+      sourceId: source._id,
+      offerDocuments,
+    });
+    const status = offerDocuments.length > 0 ? 'success' : 'partial';
 
     await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
-      status: offerDocuments.length > 0 ? 'success' : 'partial',
+      status,
       discoveredPages: 1,
       rawDocuments: 1,
       rawCandidateCount,
@@ -794,19 +794,25 @@ async function crawlMarktguruSource({ source, region, trigger = 'manual' }) {
         rawDocumentId: rootDocument._id,
         retailerSlug,
         apiOfferCount: apiOffers.length,
+        refreshResult,
       },
     }));
 
     await Source.findByIdAndUpdate(source._id, {
       latestRunAt: new Date(),
-      latestStatus: offerDocuments.length > 0 ? 'success' : 'partial',
+      latestStatus: status,
     });
 
     return {
       retailerKey: source.retailerKey,
       retailerName: source.retailerName,
       channel: source.channel,
+      sourceType: source.sourceType || source.channel,
       sourceUrl: source.sourceUrl,
+      status,
+      foundRawItems: rawCandidateCount,
+      parsedOffers: offerDocuments.length,
+      rejectedOffers: Math.max(0, rawCandidateCount - offerDocuments.length),
       offersStored: offerDocuments.length,
       discoveredLinks: 1,
       evidenceMatched: 0,

@@ -163,6 +163,11 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Pasta, Reis & Konserven',
   },
   {
+    patterns: [/\b(reiswaffel|reiswaffeln|reischips)\b/],
+    main: 'Lebensmittel',
+    sub: 'Suesswaren & Knabbereien',
+  },
+  {
     patterns: [/\b(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|duftspueler|duftspuler)\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
@@ -248,12 +253,12 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Backen & Grundnahrungsmittel',
   },
   {
-    patterns: [/\b(fusilli|spaghetti|penne|nudel|nudeln|pasta|reis|risotto|passata|polpa|sugo|gnocchi|couscous|bulgur|bohnen|linsen|kichererbse|mais|ravioli)\b/],
+    patterns: [/\b(fusilli|spaghetti|penne|nudel|nudeln|pasta|reis|risotto|risottoreis|passata|polpa|sugo|gnocchi|couscous|bulgur|bohnen|linsen|kichererbse|mais|ravioli)\b/],
     main: 'Lebensmittel',
     sub: 'Pasta, Reis & Konserven',
   },
   {
-    patterns: [/\b(kaffee|cafe|moka|gemahlen|espresso|cappuccino|tee|matcha|kaffeekapsel|nespresso|dolce gusto|nescafe|jacobs|tchibo|illy)\b/],
+    patterns: [/\b(kaffee|cafe|caffe|moka|gemahlen|espresso|cappuccino|tee|matcha|kaffeekapsel|nespresso|dolce gusto|nescafe|jacobs|tchibo|illy|lavazza|dallmayr|prodomo|meinl|praesident|prasident)\b/],
     main: 'Getraenke',
     sub: 'Kaffee & Tee',
   },
@@ -338,7 +343,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Tierzubehoer',
   },
   {
-    patterns: [/\b(spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|geschirrspueltabs|geschirrspultabs|waschcaps|reiniger tabs)\b/],
+    patterns: [/\b(spueltabs|spultabs|spuelmaschinentabs|spulmaschinentabs|geschirrspueltabs|geschirrspultabs|waschcaps|reiniger tabs|somat|dr beckmann|profissimo schmutzradierer|schmutzradierer)\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
   },

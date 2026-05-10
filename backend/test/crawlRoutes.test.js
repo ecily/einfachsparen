@@ -7,6 +7,7 @@ const {
   createCrawlRouter,
   parseCrawlRunBody,
 } = require('../src/routes/crawl.routes');
+const { serializeCrawlRun } = require('../src/services/crawl/crawlRunService');
 
 function requestJson(app, { method = 'POST', path = '/api/crawl/run', body = {}, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -45,11 +46,57 @@ function requestJson(app, { method = 'POST', path = '/api/crawl/run', body = {},
   });
 }
 
-function buildTestApp(crawlAllSourcesImpl, { adminProtected = false } = {}) {
+function run(overrides = {}) {
+  return {
+    _id: overrides._id || '665000000000000000000001',
+    id: overrides.id,
+    status: overrides.status || 'queued',
+    trigger: overrides.trigger || 'manual',
+    mode: overrides.mode || 'full',
+    dryRun: overrides.dryRun || false,
+    region: overrides.region || 'Steiermark',
+    startedAt: overrides.startedAt || null,
+    finishedAt: overrides.finishedAt || null,
+    durationMs: overrides.durationMs ?? null,
+    sourceKeys: overrides.sourceKeys || [],
+    sourceIds: overrides.sourceIds || [],
+    summary: overrides.summary || {},
+    perRetailer: overrides.perRetailer || [],
+    sourceTypes: overrides.sourceTypes || [],
+    result: overrides.result || {
+      sources: [],
+      dedupe: {},
+      filterMetadata: {},
+      effectiveRetailerKeys: [],
+      requestedSourceKeys: overrides.sourceKeys || [],
+      requestedSourceIds: overrides.sourceIds || [],
+    },
+    errorMessages: overrides.errorMessages || [],
+    warnings: overrides.warnings || [],
+  };
+}
+
+function buildService({ startResult, latestRun = null, byIdRun = null, calls = [] } = {}) {
+  return {
+    async startCrawlRun(payload) {
+      calls.push(payload);
+      return startResult || { accepted: true, alreadyRunning: false, run: run() };
+    },
+    async getLatestCrawlRun() {
+      return latestRun;
+    },
+    async getCrawlRunById() {
+      return byIdRun;
+    },
+    serializeCrawlRun,
+  };
+}
+
+function buildTestApp(crawlRunServiceImpl, { adminProtected = false } = {}) {
   const app = express();
   app.use(express.json());
   app.use('/api/crawl', adminProtected ? requireAdminApiKey : (req, res, next) => next(), createCrawlRouter({
-    crawlAllSourcesImpl,
+    crawlRunServiceImpl,
     envConfig: { CRAWL_REGION: 'Steiermark' },
   }));
   app.use((error, req, res, next) => {
@@ -62,7 +109,7 @@ function buildTestApp(crawlAllSourcesImpl, { adminProtected = false } = {}) {
   return app;
 }
 
-test('parseCrawlRunBody preserves compatible retailerKeys-only requests and new source selectors', () => {
+test('parseCrawlRunBody preserves compatible retailerKeys-only requests and source selectors', () => {
   assert.deepEqual(parseCrawlRunBody({ retailerKeys: ['spar', 'spar', ''] }), {
     retailerKeys: ['spar'],
     sourceKeys: [],
@@ -86,73 +133,167 @@ test('parseCrawlRunBody preserves compatible retailerKeys-only requests and new 
   });
 });
 
-test('dryRun request returns preview and does not require route-level crawl execution', async () => {
-  let received = null;
-  const app = buildTestApp(async (options) => {
-    received = options;
-    return {
-      dryRun: true,
-      crawlStarted: false,
-      matchedSources: [
-        { sourceKey: 'aktionsfinder-spar', retailerKey: 'spar' },
-        { sourceKey: 'aktionsfinder-interspar', retailerKey: 'spar' },
-        { sourceKey: 'aktionsfinder-eurospar', retailerKey: 'spar' },
-      ],
-      skippedSources: [],
-      disabledSources: [],
-      effectiveRetailerKeys: ['spar'],
-      requestedSourceKeys: options.sourceKeys,
-      requestedSourceIds: [],
-      wouldRunCount: 3,
-    };
+test('POST /api/crawl/run accepts an async full CrawlRun without waiting for crawl completion', async () => {
+  const calls = [];
+  const service = buildService({
+    calls,
+    startResult: {
+      accepted: true,
+      alreadyRunning: false,
+      run: run({ mode: 'full' }),
+    },
   });
+  const app = buildTestApp(service);
+
+  const response = await requestJson(app, {
+    body: { dryRun: false },
+  });
+
+  assert.equal(response.statusCode, 202);
+  assert.equal(response.body.accepted, true);
+  assert.equal(response.body.alreadyRunning, false);
+  assert.equal(response.body.mode, 'full');
+  assert.equal(response.body.runId, '665000000000000000000001');
+  assert.deepEqual(calls[0].options.retailerKeys, []);
+  assert.deepEqual(calls[0].options.sourceKeys, []);
+});
+
+test('POST /api/crawl/run accepts scoped sourceKeys and keeps the request scoped', async () => {
+  const calls = [];
+  const service = buildService({
+    calls,
+    startResult: {
+      accepted: true,
+      alreadyRunning: false,
+      run: run({
+        mode: 'scoped',
+        sourceKeys: ['spar-official-flyer-pdf'],
+      }),
+    },
+  });
+  const app = buildTestApp(service);
 
   const response = await requestJson(app, {
     body: {
       retailerKeys: ['spar'],
-      sourceKeys: ['aktionsfinder-spar', 'aktionsfinder-interspar', 'aktionsfinder-eurospar'],
-      dryRun: true,
+      sourceKeys: ['spar-official-flyer-pdf'],
+      dryRun: false,
     },
   });
 
+  assert.equal(response.statusCode, 202);
+  assert.equal(response.body.mode, 'scoped');
+  assert.deepEqual(response.body.requestedSourceKeys, ['spar-official-flyer-pdf']);
+  assert.deepEqual(calls[0].options.sourceKeys, ['spar-official-flyer-pdf']);
+  assert.equal(calls[0].options.sourceSelectionRequested, true);
+});
+
+test('POST /api/crawl/run returns existing run when another CrawlRun is active', async () => {
+  const service = buildService({
+    startResult: {
+      accepted: false,
+      alreadyRunning: true,
+      run: run({
+        _id: '665000000000000000000002',
+        status: 'running',
+      }),
+    },
+  });
+  const app = buildTestApp(service);
+
+  const response = await requestJson(app, {
+    body: { dryRun: false },
+  });
+
   assert.equal(response.statusCode, 200);
-  assert.equal(response.body.dryRun, true);
-  assert.equal(response.body.crawlStarted, false);
-  assert.equal(response.body.wouldRunCount, 3);
-  assert.deepEqual(received.sourceKeys, ['aktionsfinder-spar', 'aktionsfinder-interspar', 'aktionsfinder-eurospar']);
-  assert.equal(received.sourceSelectionRequested, true);
+  assert.equal(response.body.accepted, false);
+  assert.equal(response.body.alreadyRunning, true);
+  assert.equal(response.body.runId, '665000000000000000000002');
+  assert.equal(response.body.status, 'running');
 });
 
-test('unknown sourceKeys bubble up as 400 from the route', async () => {
-  const app = buildTestApp(async () => {
-    const error = new Error('Unknown sourceKeys/sourceIds requested.');
-    error.statusCode = 400;
-    error.details = { unknownSourceKeys: ['missing-source'] };
-    throw error;
+test('GET /api/crawl/runs/latest returns compact serialized CrawlRun status', async () => {
+  const service = buildService({
+    latestRun: run({
+      status: 'partial',
+      summary: { matchedSourcesCount: 3, failedSourcesCount: 1 },
+      result: {
+        sources: [{ sourceKey: 'aktionsfinder-spar', status: 'success', offersStored: 10 }],
+        dedupe: { duplicateGroups: 1, removedOffers: 2 },
+        filterMetadata: { ok: true, processedOffers: 100 },
+        effectiveRetailerKeys: ['spar'],
+        requestedSourceKeys: [],
+        requestedSourceIds: [],
+      },
+    }),
   });
+  const app = buildTestApp(service);
 
   const response = await requestJson(app, {
-    body: { sourceKeys: ['missing-source'] },
+    method: 'GET',
+    path: '/api/crawl/runs/latest',
   });
 
-  assert.equal(response.statusCode, 400);
-  assert.deepEqual(response.body.details.unknownSourceKeys, ['missing-source']);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.run.status, 'partial');
+  assert.equal(response.body.run.summary.failedSourcesCount, 1);
+  assert.equal(response.body.run.result.sources[0].sourceKey, 'aktionsfinder-spar');
+  assert.equal(response.body.run.result.sources[0].rawDocuments, undefined);
+  assert.equal(response.body.run.result.offers, undefined);
 });
 
-test('admin protection blocks crawl route before handler is called', async () => {
+test('GET /api/crawl/runs/:runId serializes ObjectIds as strings and returns 404 for missing runs', async () => {
+  const service = buildService({
+    byIdRun: run({
+      _id: { toString: () => '665000000000000000000003' },
+      status: 'success',
+    }),
+  });
+  const app = buildTestApp(service);
+
+  const response = await requestJson(app, {
+    method: 'GET',
+    path: '/api/crawl/runs/665000000000000000000003',
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.run.id, '665000000000000000000003');
+
+  const missingApp = buildTestApp(buildService({ byIdRun: null }));
+  const missing = await requestJson(missingApp, {
+    method: 'GET',
+    path: '/api/crawl/runs/665000000000000000000004',
+  });
+
+  assert.equal(missing.statusCode, 404);
+});
+
+test('admin protection blocks crawl run and status endpoints before handlers are called', async () => {
   let called = false;
-  const app = buildTestApp(async () => {
+  const service = buildService();
+  service.startCrawlRun = async () => {
     called = true;
-    return { sources: [] };
-  }, { adminProtected: true });
+    return { accepted: true, alreadyRunning: false, run: run() };
+  };
+  service.getLatestCrawlRun = async () => {
+    called = true;
+    return run();
+  };
+  const app = buildTestApp(service, { adminProtected: true });
 
-  const response = await requestJson(app, {
+  const postResponse = await requestJson(app, {
     body: {
       sourceKeys: ['aktionsfinder-spar'],
       dryRun: true,
     },
   });
+  const getResponse = await requestJson(app, {
+    method: 'GET',
+    path: '/api/crawl/runs/latest',
+  });
 
-  assert.equal([401, 503].includes(response.statusCode), true);
+  assert.equal([401, 503].includes(postResponse.statusCode), true);
+  assert.equal([401, 503].includes(getResponse.statusCode), true);
   assert.equal(called, false);
 });

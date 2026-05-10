@@ -27,6 +27,16 @@ test('classifies common Austrian supermarket product names into concrete subcate
 
 test('keeps hardened launch-quality examples in the intended categories', () => {
   const cases = [
+    ['Meinl Praesident Ganze Bohne oder gemahlen 500 g', 'Getraenke', 'Kaffee & Tee'],
+    ['Dallmayr Prodomo ganze Bohne 500 g', 'Getraenke', 'Kaffee & Tee'],
+    ['Lavazza Caffe Crema Classico 1 kg', 'Getraenke', 'Kaffee & Tee'],
+    ['Riso Gallo Risottoreis 500 g', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['Milsani Irische Butter 250 g', 'Lebensmittel', 'Milchprodukte'],
+    ['Somat Excellence 4in1 Caps', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Dr. Beckmann Farb- und Schmutzfangtuecher', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Profissimo Schmutzradierer', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Ja! Natuerlich Joghurt 500 g', 'Lebensmittel', 'Milchprodukte'],
+    ['Goesser Bier 0,5 l', 'Getraenke', 'Bier'],
     ['Iglo Buttergemuese 400 g', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
     ['Schartner Bombe Orange 1,5 l', 'Getraenke', 'Softdrinks & Energy'],
     ['Gasteiner Mineralwasser prickelnd', 'Getraenke', 'Wasser'],
@@ -42,6 +52,17 @@ test('keeps hardened launch-quality examples in the intended categories', () => 
     assert.equal(decision.primaryCategory, primaryCategory, title);
     assert.equal(decision.secondaryCategory, secondaryCategory, title);
   }
+});
+
+test('keeps critical side hits out of misleading butter and rice categories', () => {
+  const bodyButter = determineCategoryDecision({ title: 'Kakaobutter Duschgel 250 ml' });
+  const croissant = determineCategoryDecision({ title: 'Butter Croissant 1 Stueck' });
+  const reiswaffeln = determineCategoryDecision({ title: 'Bio Reiswaffeln Natur 30 g' });
+
+  assert.equal(bodyButter.primaryCategory, 'Drogerie / Hygiene');
+  assert.equal(bodyButter.secondaryCategory, 'Koerperpflege');
+  assert.equal(croissant.secondaryCategory, 'Brot & Gebaeck');
+  assert.equal(reiswaffeln.secondaryCategory, 'Suesswaren & Knabbereien');
 });
 
 test('does not treat HOFER or discount wording alone as a product category', () => {

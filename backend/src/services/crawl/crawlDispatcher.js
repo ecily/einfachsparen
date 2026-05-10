@@ -55,6 +55,11 @@ async function crawlAllSources({
   sourceSelectionRequested: explicitSourceSelectionRequested = false,
   trigger = 'manual',
 } = {}) {
+  const sourceCoverage = {
+    totalRegisteredSources: await Source.countDocuments({ active: true }),
+    activeEligibleSources: await Source.countDocuments({ active: true, enabled: { $ne: false } }),
+    disabledSourcesCount: await Source.countDocuments({ active: true, enabled: false }),
+  };
   const sourceSelectionRequested = explicitSourceSelectionRequested || sourceKeys.length > 0 || sourceIds.length > 0;
   const selection = await resolveCrawlSourceSelection({
     Source,
@@ -81,6 +86,7 @@ async function crawlAllSources({
       requestedSourceKeys: selection.requestedSourceKeys,
       requestedSourceIds: selection.requestedSourceIds,
       wouldRunCount: selection.wouldRunCount,
+      sourceCoverage,
     };
   }
 
@@ -88,18 +94,55 @@ async function crawlAllSources({
   const prioritizedSources = selection.sources;
   const results = [];
 
+  if (prioritizedSources.length === 0) {
+    const disabledSources = sourceSelectionRequested
+      ? selection.disabledSources
+      : (await fetchDisabledSourcesForRetailers({ retailerKeys })).map((source) => ({
+        ...summarizeSource(source),
+        skippedReason: 'disabled-source',
+      }));
+
+    return {
+      sources: [],
+      matchedSources: [],
+      skippedSources: selection.skippedSources || [],
+      disabledSources,
+      unknownSourceKeys: selection.unknownSourceKeys || [],
+      unknownSourceIds: selection.unknownSourceIds || [],
+      effectiveRetailerKeys: [],
+      requestedSourceKeys: selection.requestedSourceKeys,
+      requestedSourceIds: selection.requestedSourceIds,
+      dedupe: {
+        skipped: true,
+        reason: 'no-active-eligible-sources',
+      },
+      filterMetadata: {
+        ok: false,
+        skipped: true,
+        message: 'No active eligible crawl sources matched this run.',
+      },
+      sourceCoverage,
+      warnings: ['No active eligible crawl sources matched this run.'],
+    };
+  }
+
   for (const source of prioritizedSources) {
+    const sourceSummary = summarizeSource(source);
+
     try {
       const result = await crawlSource({ source, region, trigger });
       results.push({
+        ...sourceSummary,
         ...result,
-        status: 'success',
+        status: result.status || 'success',
       });
     } catch (error) {
       results.push({
+        ...sourceSummary,
         retailerKey: source.retailerKey,
         retailerName: source.retailerName,
         channel: source.channel,
+        sourceType: source.sourceType || '',
         sourceUrl: source.sourceUrl,
         offersStored: 0,
         discoveredLinks: 0,
@@ -166,6 +209,7 @@ async function crawlAllSources({
     requestedSourceIds: selection.requestedSourceIds,
     dedupe: dedupeResult,
     filterMetadata,
+    sourceCoverage,
   };
 }
 

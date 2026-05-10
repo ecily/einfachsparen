@@ -18,6 +18,7 @@ const {
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+const { replaceOffersForSource } = require('./offerRefreshGuard');
 const {
   PARSER_VERSION: PENNY_PDF_PARSER_VERSION,
   PENNY_PDF_SOURCE_KEY,
@@ -1057,9 +1058,10 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
       return true;
     });
 
-  if (offerDocuments.length > 0) {
-    await Offer.insertMany(offerDocuments, { ordered: false });
-  }
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
 
   logger.info('SPAR PDF crawl parsed flyer', {
     sourceKey,
@@ -1092,6 +1094,7 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
       downloadBytes: buffer.length,
       contentHash: pdfSha256,
     },
+    refreshResult,
   };
 }
 
@@ -1446,8 +1449,6 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
     sample: hits.slice(0, 25),
   };
 
-  await Offer.deleteMany({ sourceId: source._id });
-
   await createCompactRawDocument({
     sourceId: source._id,
     crawlJobId,
@@ -1483,20 +1484,20 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
     normalizationVersion: NORMALIZATION_VERSION,
   });
 
-  if (offerDocuments.length > 0) {
-    await Offer.insertMany(offerDocuments, { ordered: false });
-  }
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
 
   return {
     hitCount: hits.length,
     offerDocuments,
     rawDocuments: 1,
+    refreshResult,
   };
 }
 
 async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
-  await Offer.deleteMany({ sourceId: source._id });
-
   const normalizedOffers = parsePennyOffersFromHtml({
     html,
     source,
@@ -1511,14 +1512,16 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
     normalizationVersion: NORMALIZATION_VERSION,
   });
 
-  if (offerDocuments.length > 0) {
-    await Offer.insertMany(offerDocuments, { ordered: false });
-  }
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
 
   return {
     offerDocuments,
     rawDocuments: 0,
     rawCandidateCount: normalizedOffers.length,
+    refreshResult,
   };
 }
 
@@ -1528,8 +1531,6 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
   const collectedOffers = [];
   const pdfReports = [];
   const rawDocuments = [];
-
-  await Offer.deleteMany({ sourceId: source._id });
 
   const pdfTargets = [];
 
@@ -1690,9 +1691,10 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
       return true;
     });
 
-  if (offerDocuments.length > 0) {
-    await Offer.insertMany(offerDocuments, { ordered: false });
-  }
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
 
   logger.info('PENNY PDF crawl summary', {
     sourceKey: PENNY_PDF_SOURCE_KEY,
@@ -1708,6 +1710,7 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
     rawDocuments: rawDocuments.length,
     rawCandidateCount: pdfReports.reduce((sum, item) => sum + Number(item.foundRawItems || 0), 0),
     pdfReports,
+    refreshResult,
   };
 }
 
@@ -1715,8 +1718,6 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
   const flyerIdentifiers = extractLidlFlyerIdentifiers(html);
   const collectedOffers = [];
   const seenFlyers = [];
-
-  await Offer.deleteMany({ sourceId: source._id });
 
   for (const identifier of flyerIdentifiers.slice(0, 8)) {
     let flyer = null;
@@ -1781,9 +1782,10 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
       return true;
     });
 
-  if (offerDocuments.length > 0) {
-    await Offer.insertMany(offerDocuments, { ordered: false });
-  }
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
 
   await createCompactRawDocument({
     sourceId: source._id,
@@ -1814,6 +1816,7 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     offerDocuments,
     rawDocuments: 1,
     rawCandidateCount: collectedOffers.length,
+    refreshResult,
   };
 }
 
@@ -1840,8 +1843,6 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
       // Continue with the pages that were fetched successfully.
     }
   }
-
-  await Offer.deleteMany({ sourceId: source._id });
 
   for (const page of pageCandidates) {
     const pageOffers = parseBipaOffersFromHtml({
@@ -1880,14 +1881,16 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
       return true;
     });
 
-  if (offerDocuments.length > 0) {
-    await Offer.insertMany(offerDocuments, { ordered: false });
-  }
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
 
   return {
     offerDocuments,
     rawDocuments: 0,
     rawCandidateCount: collectedOffers.length,
+    refreshResult,
   };
 }
 
@@ -1955,8 +1958,6 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
   const allOffers = [];
   let rawDocumentCount = 0;
 
-  await Offer.deleteMany({ sourceId: source._id });
-
   for (let index = 0; index < datedLinks.length; index += 1) {
     const current = datedLinks[index];
     const next = datedLinks[index + 1];
@@ -2006,14 +2007,16 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
     normalizationVersion: NORMALIZATION_VERSION,
   });
 
-  if (offerDocuments.length > 0) {
-    await Offer.insertMany(offerDocuments, { ordered: false });
-  }
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
 
   return {
     offerDocuments,
     rawDocumentCount,
     rawCandidateCount: allOffers.length,
+    refreshResult,
   };
 }
 
@@ -2072,7 +2075,9 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         retailerKey: source.retailerKey,
         retailerName: source.retailerName,
         channel: source.channel,
+        sourceType: source.sourceType || SPAR_PDF_SOURCE_TYPE,
         sourceKey,
+        status,
         offersStored,
         foundRawItems: sparPdfResult.rawCandidateCount,
         parsedOffers: offersStored,
@@ -2252,6 +2257,11 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       retailerKey: source.retailerKey,
       retailerName: source.retailerName,
       channel: source.channel,
+      sourceType: source.sourceType || source.channel,
+      status,
+      foundRawItems: rawCandidateCount,
+      parsedOffers: offersStored,
+      rejectedOffers: Math.max(0, rawCandidateCount - offersStored),
       offersStored,
       evidenceMatched,
       discoveredLinks: links.length,

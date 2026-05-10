@@ -1,6 +1,6 @@
 const express = require('express');
 const env = require('../config/env');
-const { crawlAllSources } = require('../services/crawl/crawlDispatcher');
+const crawlRunService = require('../services/crawl/crawlRunService');
 
 function arrayFromBody(value) {
   if (!Array.isArray(value)) return [];
@@ -20,38 +20,91 @@ function parseCrawlRunBody(body = {}) {
   };
 }
 
-function createCrawlRouter({ crawlAllSourcesImpl = crawlAllSources, envConfig = env } = {}) {
+function buildAcceptedResponse({ serviceResult, options, envConfig }) {
+  const run = crawlRunService.serializeCrawlRun(serviceResult.run);
+
+  if (!serviceResult.accepted) {
+    return {
+      statusCode: 200,
+      body: {
+        ok: true,
+        accepted: false,
+        alreadyRunning: true,
+        runId: run?.id || '',
+        status: run?.status || 'running',
+      },
+    };
+  }
+
+  return {
+    statusCode: 202,
+    body: {
+      ok: true,
+      accepted: true,
+      alreadyRunning: false,
+      runId: run.id,
+      status: run.status,
+      region: envConfig.CRAWL_REGION,
+      dryRun: options.dryRun,
+      mode: run.mode,
+      requestedSourceKeys: run.requestedSourceKeys || options.sourceKeys,
+      requestedSourceIds: run.requestedSourceIds || options.sourceIds,
+    },
+  };
+}
+
+function createCrawlRouter({
+  crawlRunServiceImpl = crawlRunService,
+  envConfig = env,
+} = {}) {
   const router = express.Router();
 
   router.post('/run', async (req, res, next) => {
     try {
       const options = parseCrawlRunBody(req.body || {});
-      const crawlResult = await crawlAllSourcesImpl({
-        ...options,
+      const serviceResult = await crawlRunServiceImpl.startCrawlRun({
+        options,
         region: envConfig.CRAWL_REGION,
         trigger: 'manual',
       });
+      const response = buildAcceptedResponse({ serviceResult, options, envConfig });
+
+      res.status(response.statusCode).json(response.body);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/runs/latest', async (req, res, next) => {
+    try {
+      const run = await crawlRunServiceImpl.getLatestCrawlRun();
 
       res.json({
         ok: true,
-        region: envConfig.CRAWL_REGION,
-        dryRun: Boolean(crawlResult.dryRun),
-        crawlStarted: crawlResult.crawlStarted !== false && !crawlResult.dryRun,
-        results: crawlResult.sources || [],
-        matchedSources: crawlResult.matchedSources || [],
-        skippedSources: crawlResult.skippedSources || [],
-        disabledSources: crawlResult.disabledSources || [],
-        unknownSourceKeys: crawlResult.unknownSourceKeys || [],
-        unknownSourceIds: crawlResult.unknownSourceIds || [],
-        effectiveRetailerKeys: crawlResult.effectiveRetailerKeys || [],
-        requestedSourceKeys: crawlResult.requestedSourceKeys || options.sourceKeys,
-        requestedSourceIds: crawlResult.requestedSourceIds || options.sourceIds,
-        wouldRunCount: crawlResult.wouldRunCount ?? (crawlResult.sources || []).length,
-        dedupe: crawlResult.dedupe,
-        filterMetadata: crawlResult.filterMetadata,
+        run: crawlRunServiceImpl.serializeCrawlRun(run),
       });
     } catch (error) {
       next(error);
+    }
+  });
+
+  router.get('/runs/:runId', async (req, res, next) => {
+    try {
+      const run = await crawlRunServiceImpl.getCrawlRunById(req.params.runId);
+
+      if (!run) {
+        return res.status(404).json({
+          ok: false,
+          message: 'CrawlRun wurde nicht gefunden.',
+        });
+      }
+
+      return res.json({
+        ok: true,
+        run: crawlRunServiceImpl.serializeCrawlRun(run),
+      });
+    } catch (error) {
+      return next(error);
     }
   });
 
@@ -63,3 +116,4 @@ const router = createCrawlRouter();
 module.exports = router;
 module.exports.createCrawlRouter = createCrawlRouter;
 module.exports.parseCrawlRunBody = parseCrawlRunBody;
+module.exports.buildAcceptedResponse = buildAcceptedResponse;

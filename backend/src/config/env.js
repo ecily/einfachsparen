@@ -32,7 +32,10 @@ const envSchema = z.object({
   ANALYTICS_SESSION_SECRET: z.string().min(16).default('change-this-analytics-session-secret'),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   CRAWL_REGION: z.string().default('Grossraum Graz'),
-  CRAWL_RUN_ON_START: booleanFromEnv.default(true),
+  CRAWL_RUN_ON_START: booleanFromEnv.default(false),
+  CRAWL_SCHEDULE_ENABLED: booleanFromEnv.default(false),
+  CRAWL_SCHEDULE_CRON: z.string().trim().default('0 2 * * *'),
+  CRAWL_SCHEDULE_TIMEZONE: z.string().trim().default('Europe/Vienna'),
   CRAWL_INTERVAL_MINUTES: z.coerce.number().int().min(15).max(1440).default(360),
 }).superRefine((value, context) => {
   if (value.NODE_ENV === 'production' && !value.ADMIN_API_KEY) {

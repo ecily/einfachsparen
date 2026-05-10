@@ -1,0 +1,145 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+
+const {
+  serializeCrawlRun,
+  _private,
+} = require('../src/services/crawl/crawlRunService');
+
+test('determineMode marks full and scoped CrawlRuns correctly', () => {
+  assert.equal(_private.determineMode({}), 'full');
+  assert.equal(_private.determineMode({ retailerKeys: ['spar'] }), 'scoped');
+  assert.equal(_private.determineMode({ sourceKeys: ['spar-official-flyer-pdf'] }), 'scoped');
+  assert.equal(_private.determineMode({ sourceSelectionRequested: true }), 'scoped');
+});
+
+test('buildRunSummary aggregates source, retailer, type, dedupe and filter metadata inputs compactly', () => {
+  const result = {
+    sourceCoverage: {
+      totalRegisteredSources: 5,
+      activeEligibleSources: 3,
+      disabledSourcesCount: 2,
+    },
+    matchedSources: [
+      { sourceId: 's1', sourceKey: 'aktionsfinder-spar', retailerKey: 'spar', channel: 'aggregator', sourceType: 'aggregator' },
+      { sourceId: 's2', sourceKey: 'lidl-official-flyer', retailerKey: 'lidl', channel: 'official-flyer', sourceType: 'flyer' },
+    ],
+    disabledSources: [{ sourceKey: 'marktguru-spar' }],
+    sources: [
+      {
+        sourceId: 's1',
+        sourceKey: 'aktionsfinder-spar',
+        retailerKey: 'spar',
+        channel: 'aggregator',
+        sourceType: 'aggregator',
+        status: 'success',
+        foundRawItems: 12,
+        parsedOffers: 10,
+        offersStored: 10,
+        rejectedOffers: 2,
+      },
+      {
+        sourceId: 's2',
+        sourceKey: 'lidl-official-flyer',
+        retailerKey: 'lidl',
+        channel: 'official-flyer',
+        sourceType: 'flyer',
+        status: 'failed',
+        error: 'upstream timeout',
+      },
+    ],
+    filterMetadata: { ok: true, processedOffers: 120 },
+  };
+
+  const summary = _private.buildRunSummary(result);
+
+  assert.equal(summary.summary.totalRegisteredSources, 5);
+  assert.equal(summary.summary.activeEligibleSources, 3);
+  assert.equal(summary.summary.matchedSourcesCount, 2);
+  assert.equal(summary.summary.disabledSourcesCount, 1);
+  assert.equal(summary.summary.failedSourcesCount, 1);
+  assert.equal(summary.summary.successfulSourcesCount, 1);
+  assert.equal(summary.summary.foundRawItemsTotal, 12);
+  assert.equal(summary.summary.parsedOffersTotal, 10);
+  assert.equal(summary.summary.offersStoredTotal, 10);
+  assert.equal(summary.summary.rejectedOffersTotal, 2);
+  assert.equal(summary.summary.processedOffers, 120);
+  assert.equal(summary.perRetailer.find((item) => item.retailerKey === 'spar').offersStored, 10);
+  assert.equal(summary.sourceTypes.find((item) => item.channel === 'aggregator').offersStored, 10);
+  assert.equal(summary.sources[1].error, 'upstream timeout');
+});
+
+test('determineFinalStatus is success only for complete successful crawl results', () => {
+  assert.equal(_private.determineFinalStatus({
+    mode: 'full',
+    crawlResult: { filterMetadata: { ok: true } },
+    summary: { matchedSourcesCount: 3, activeEligibleSources: 3, failedSourcesCount: 0, partialSourcesCount: 0 },
+  }), 'success');
+
+  assert.equal(_private.determineFinalStatus({
+    mode: 'full',
+    crawlResult: { filterMetadata: { ok: true } },
+    summary: { matchedSourcesCount: 3, activeEligibleSources: 3, failedSourcesCount: 1, partialSourcesCount: 0 },
+  }), 'partial');
+
+  assert.equal(_private.determineFinalStatus({
+    mode: 'full',
+    crawlResult: { filterMetadata: { ok: false } },
+    summary: { matchedSourcesCount: 3, activeEligibleSources: 3, failedSourcesCount: 0, partialSourcesCount: 0 },
+  }), 'failed');
+
+  assert.equal(_private.determineFinalStatus({
+    mode: 'full',
+    crawlResult: { filterMetadata: { ok: true } },
+    summary: { matchedSourcesCount: 0, activeEligibleSources: 0, failedSourcesCount: 0, partialSourcesCount: 0 },
+  }), 'skipped');
+
+  assert.equal(_private.determineFinalStatus({
+    mode: 'full',
+    crawlResult: { filterMetadata: { ok: true } },
+    summary: { matchedSourcesCount: 2, activeEligibleSources: 3, failedSourcesCount: 0, partialSourcesCount: 0 },
+  }), 'partial');
+});
+
+test('serializeCrawlRun returns status payload without raw offers or raw documents', () => {
+  const serialized = serializeCrawlRun({
+    _id: { toString: () => '665000000000000000000010' },
+    status: 'success',
+    trigger: 'manual',
+    mode: 'full',
+    dryRun: false,
+    region: 'Steiermark',
+    startedAt: new Date('2026-05-10T00:00:00.000Z'),
+    finishedAt: new Date('2026-05-10T00:01:00.000Z'),
+    durationMs: 60000,
+    summary: { matchedSourcesCount: 1 },
+    result: {
+      sources: [{ sourceKey: 'spar', status: 'success', offersStored: 1, rawDocuments: [{ secret: 'nope' }] }],
+      offers: [{ title: 'nope' }],
+      dedupe: { duplicateGroups: 0 },
+      filterMetadata: { ok: true },
+      effectiveRetailerKeys: ['spar'],
+      requestedSourceKeys: [],
+      requestedSourceIds: [],
+    },
+  });
+
+  assert.equal(serialized.id, '665000000000000000000010');
+  assert.equal(serialized.startedAt, '2026-05-10T00:00:00.000Z');
+  assert.equal(serialized.result.offers, undefined);
+  assert.equal(serialized.result.sources[0].rawDocuments, undefined);
+});
+
+test('stale lock detection only recovers long-running stuck CrawlRuns', () => {
+  const now = new Date('2026-05-10T20:00:00.000Z');
+
+  assert.equal(_private.isRunStale({
+    status: 'running',
+    startedAt: new Date('2026-05-10T03:00:00.000Z'),
+  }, now), false);
+
+  assert.equal(_private.isRunStale({
+    status: 'running',
+    startedAt: new Date('2026-05-10T01:00:00.000Z'),
+  }, now), true);
+});

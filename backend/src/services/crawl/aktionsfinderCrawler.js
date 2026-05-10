@@ -2,7 +2,6 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
-const Offer = require('../../models/Offer');
 const {
   buildPayloadDigest,
   getScriptPushStrings,
@@ -15,6 +14,7 @@ const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawD
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+const { replaceOffersForSource } = require('./offerRefreshGuard');
 
 const PARSER_VERSION = 'aktionsfinder-v3-coverage';
 
@@ -422,8 +422,6 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       },
     });
 
-    await Offer.deleteMany({ sourceId: source._id });
-
     const normalizedOffers = promotions
       .map((promotion) =>
         normalizePromotionToOffer({
@@ -444,9 +442,10 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       normalizationVersion: NORMALIZATION_VERSION,
     });
 
-    if (offerDocuments.length > 0) {
-      await Offer.insertMany(offerDocuments, { ordered: false });
-    }
+    const refreshResult = await replaceOffersForSource({
+      sourceId: source._id,
+      offerDocuments,
+    });
 
     const essence = buildEssence({
       retailerName: source.retailerName,
@@ -476,18 +475,27 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         sourceUrl: source.sourceUrl,
         rawDocumentId: rawDocument._id,
         essence,
+        refreshResult,
         fallbackOfficial,
       },
     }));
 
+    const status = offerDocuments.length > 0 ? 'success' : 'partial';
+
     await Source.findByIdAndUpdate(source._id, {
       latestRunAt: new Date(),
-      latestStatus: offerDocuments.length > 0 ? 'success' : 'partial',
+      latestStatus: status,
     });
 
     return {
       retailerKey: source.retailerKey,
       retailerName: source.retailerName,
+      channel: source.channel,
+      sourceType: source.sourceType || source.channel,
+      status,
+      foundRawItems: promotions.length,
+      parsedOffers: offerDocuments.length,
+      rejectedOffers: Math.max(0, promotions.length - offerDocuments.length),
       offersStored: offerDocuments.length,
       essence,
     };
