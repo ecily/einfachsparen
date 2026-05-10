@@ -111,6 +111,16 @@ test('pushes unknown ranking query into Mongo candidate filtering before JS scor
   assert.ok(match.$and[0].$or.some((item) => String(item.titleNormalized).includes('zzzzzzzz')));
 });
 
+test('generic rice Mongo prefilter avoids broad pasta category flooding', () => {
+  const match = buildRankingCandidateMatch({
+    query: 'reis',
+  });
+
+  const searchedFields = match.$and[0].$or.flatMap((item) => Object.keys(item));
+
+  assert.deepEqual(searchedFields.sort(), ['brand', 'comparisonGroup', 'title', 'titleNormalized'].sort());
+});
+
 test('scores real butter offers ahead of cosmetic side meanings', () => {
   const dairyButter = offer({
     title: 'Milsani Irische Butter 250 g',
@@ -351,6 +361,18 @@ test('excludes bakery dairy and seasoning side hits when no real butter exists',
       categorySecondary: 'Saucen, Oele & Gewuerze',
       comparisonGroup: 'kotanyi-kraeuterbutter-gewuerzzubereitung::1-Stk',
     }),
+    offer({
+      title: 'Fa Cream & Oil Kakaobutter Duschgel',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'fa-kakaobutter-duschgel::0.25-l',
+    }),
+    offer({
+      title: 'Butter Laugencroissant',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Brot & Gebaeck',
+      comparisonGroup: 'butter-laugencroissant::0.07-kg',
+    }),
   ];
 
   assert.deepEqual(applyQueryMatch(offers, 'butter'), []);
@@ -401,7 +423,7 @@ test('ranks real rice ahead of pasta sauce noodles beans and category-only conse
   assert.equal(sortedTitles.includes('Bonduelle Kichererbsen'), false);
 });
 
-test('keeps milchreis and reiswaffeln as weaker plausible rice-related hits', () => {
+test('excludes rice-adjacent snacks for generic rice queries', () => {
   const offers = [
     offer({
       title: 'Reiswaffeln Natur',
@@ -425,8 +447,31 @@ test('keeps milchreis and reiswaffeln as weaker plausible rice-related hits', ()
   const sortedTitles = applyQueryMatch(offers, 'reis').map((item) => item.title);
 
   assert.equal(sortedTitles[0], 'Jasminreis 1 kg');
-  assert.ok(sortedTitles.includes('Milchreis pur'));
-  assert.ok(sortedTitles.includes('Reiswaffeln Natur'));
+  assert.equal(sortedTitles.includes('Milchreis pur'), false);
+  assert.equal(sortedTitles.includes('Reiswaffeln Natur'), false);
+});
+
+test('keeps real rice products even when broad category text contains pasta', () => {
+  const offers = [
+    offer({
+      title: 'Barilla Spaghetti N.5',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Pasta, Reis & Konserven',
+      subcategoryKey: 'pasta-reis-konserven',
+      searchText: 'barilla spaghetti n 5 lebensmittel pasta reis konserven 500 g',
+    }),
+    offer({
+      title: 'Riso Gallo Risottoreis Selezione Speciale',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Pasta, Reis & Konserven',
+      subcategoryKey: 'pasta-reis-konserven',
+      searchText: 'riso gallo risottoreis selezione speciale lebensmittel pasta reis konserven 500 g',
+      comparisonGroup: '',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'reis').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles, ['Riso Gallo Risottoreis Selezione Speciale']);
 });
 
 test('scores coffee products ahead of plant assortment side hits', () => {

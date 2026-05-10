@@ -782,6 +782,7 @@ function getGenericButterOfferIntent({ titleTokens, categoryTokens, comparisonTo
     'gewuerzzubereitung',
     'gewurzzubereitung',
     'highlighter',
+    'kakaobutter',
     'kosmetik',
     'kraeuterbutter',
     'krauterbutter',
@@ -873,7 +874,7 @@ function scoreButterSearchIntent({ titleTokens, categoryTokens, comparisonTokens
 
 function getGenericRiceOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
   const titleWords = ` ${titleTokens.join(' ')} `;
-  const productTokens = titleTokens.concat(comparisonTokens, aggregateTokens);
+  const productTokens = titleTokens.concat(comparisonTokens);
   const hardSideTokens = [
     'bohnen',
     'fusilli',
@@ -912,7 +913,7 @@ function getGenericRiceOfferIntent({ titleTokens, categoryTokens, comparisonToke
       strongRiceTokens.filter((token) => token !== 'reis')
     );
   const weakRice = hasAnyTokenFamily(titleTokens.concat(comparisonTokens), weakRiceTokens);
-  const hardSide = hasAnyTokenFamily(productTokens, hardSideTokens);
+  const hardSide = hasAnyTokenFamily(productTokens, hardSideTokens) && !titleHasStrongRice;
   const categoryOnly =
     !titleHasStrongRice &&
     !weakRice &&
@@ -1185,15 +1186,33 @@ function scoreOfferAgainstQuery(offer, query) {
     }
   }
 
-  if (genericRiceQuery) {
-    const { realRice, weakRice } = getGenericRiceOfferIntent({
+  if (genericButterQuery) {
+    const {
+      hardSide,
+      plausibleSpread,
+      realButter,
+      softSide,
+    } = getGenericButterOfferIntent({
       titleTokens,
       categoryTokens,
       comparisonTokens,
       aggregateTokens,
     });
 
-    if (!realRice && !weakRice) {
+    if ((hardSide || softSide) && !realButter && !plausibleSpread) {
+      return 0;
+    }
+  }
+
+  if (genericRiceQuery) {
+    const { realRice } = getGenericRiceOfferIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+    });
+
+    if (!realRice) {
       return 0;
     }
   }
@@ -2885,7 +2904,13 @@ function buildMongoQuerySearchFilter(query) {
     return null;
   }
 
-  const searchableFields = [
+  const isGenericRiceQuery = queryTokens.length === 1 && queryTokens[0] === 'reis';
+  const searchableFields = isGenericRiceQuery ? [
+    'titleNormalized',
+    'title',
+    'brand',
+    'comparisonGroup',
+  ] : [
     'titleNormalized',
     'searchText',
     'title',
