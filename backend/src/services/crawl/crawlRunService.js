@@ -47,6 +47,34 @@ function compactErrorMessage(value) {
   return String(value || '').slice(0, 400);
 }
 
+function sanitizeJsonValue(value, seen = new WeakSet()) {
+  if (value == null) return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value !== 'object') return value;
+  if (value instanceof Date) return toIsoOrNull(value);
+  if (mongoose.Types.ObjectId.isValid(value) && value._bsontype === 'ObjectId') return String(value);
+
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeJsonValue(item, seen));
+  }
+
+  const plain = typeof value.toObject === 'function'
+    ? value.toObject({ getters: false, virtuals: false })
+    : value;
+  const sanitized = {};
+
+  for (const [key, entry] of Object.entries(plain)) {
+    if (typeof entry !== 'undefined' && typeof entry !== 'function') {
+      sanitized[key] = sanitizeJsonValue(entry, seen);
+    }
+  }
+
+  return sanitized;
+}
+
 function normalizeSourceResult(source = {}) {
   if (!source || typeof source !== 'object') {
     source = {};
@@ -228,21 +256,21 @@ function serializeCrawlRun(run) {
     requestedSourceKeys: plain.result?.requestedSourceKeys || plain.sourceKeys || [],
     requestedSourceIds: plain.result?.requestedSourceIds || plain.sourceIds || [],
     effectiveRetailerKeys: plain.result?.effectiveRetailerKeys || [],
-    summary: plain.summary || {},
-    perRetailer: plain.perRetailer || [],
-    sourceTypes: plain.sourceTypes || [],
+    summary: sanitizeJsonValue(plain.summary || {}),
+    perRetailer: sanitizeJsonValue(plain.perRetailer || []),
+    sourceTypes: sanitizeJsonValue(plain.sourceTypes || []),
     result: {
       sources: Array.isArray(plain.result?.sources)
         ? plain.result.sources.map(normalizeSourceResult)
         : [],
-      dedupe: plain.result?.dedupe || {},
-      filterMetadata: plain.result?.filterMetadata || {},
-      effectiveRetailerKeys: plain.result?.effectiveRetailerKeys || [],
-      requestedSourceKeys: plain.result?.requestedSourceKeys || plain.sourceKeys || [],
-      requestedSourceIds: plain.result?.requestedSourceIds || plain.sourceIds || [],
+      dedupe: sanitizeJsonValue(plain.result?.dedupe || {}),
+      filterMetadata: sanitizeJsonValue(plain.result?.filterMetadata || {}),
+      effectiveRetailerKeys: compactStrings(plain.result?.effectiveRetailerKeys || []),
+      requestedSourceKeys: compactStrings(plain.result?.requestedSourceKeys || plain.sourceKeys || []),
+      requestedSourceIds: compactStrings(plain.result?.requestedSourceIds || plain.sourceIds || []),
     },
-    errorMessages: plain.errorMessages || [],
-    warnings: plain.warnings || [],
+    errorMessages: compactStrings(plain.errorMessages || []),
+    warnings: compactStrings(plain.warnings || []),
   };
 }
 
@@ -573,7 +601,7 @@ async function startCrawlRun({
 
 async function getLatestCrawlRun() {
   return CrawlRun.findOne({})
-    .sort({ createdAt: -1 })
+    .sort({ _id: -1 })
     .lean();
 }
 
@@ -602,5 +630,6 @@ module.exports = {
     failStaleRun,
     isRunStale,
     normalizeSourceResult,
+    sanitizeJsonValue,
   },
 };

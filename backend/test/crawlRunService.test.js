@@ -146,6 +146,25 @@ test('serializeCrawlRun tolerates malformed compact source entries', () => {
   assert.equal(serialized.result.sources[0].status, 'success');
 });
 
+test('serializeCrawlRun sanitizes mixed result payloads for JSON responses', () => {
+  const serialized = serializeCrawlRun({
+    _id: { toString: () => '665000000000000000000012' },
+    status: 'success',
+    trigger: 'manual',
+    mode: 'full',
+    summary: { processedOffers: 12n },
+    result: {
+      dedupe: { duplicateGroups: 1n },
+      filterMetadata: { ok: true, processedOffers: 12n },
+    },
+  });
+
+  assert.equal(serialized.summary.processedOffers, 12);
+  assert.equal(serialized.result.dedupe.duplicateGroups, 1);
+  assert.equal(serialized.result.filterMetadata.processedOffers, 12);
+  assert.doesNotThrow(() => JSON.stringify(serialized));
+});
+
 test('stale lock detection only recovers long-running stuck CrawlRuns', () => {
   const now = new Date('2026-05-10T20:00:00.000Z');
 
