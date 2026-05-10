@@ -24,6 +24,7 @@
     "diagnose:spar-source-coverage": "node scripts/diagnoseSparSourceCoverage.js",
     "diagnose:spar-official-parser-fixture": "node scripts/diagnoseSparOfficialParserFixture.js",
     "diagnose:official-source-matrix": "node scripts/diagnoseOfficialSourceMatrix.js",
+    "diagnose:official-validity-coverage": "node scripts/diagnoseOfficialValidityCoverage.js",
     "fetch:spar-official-snapshot": "node scripts/fetchSparOfficialSnapshot.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",
