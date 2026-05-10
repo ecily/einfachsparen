@@ -20,6 +20,7 @@
     "diagnose:sources-ladder": "node scripts/diagnoseSourcesLadder.js",
     "diagnose:ranking-performance": "node scripts/rankingPerformanceSmoke.js",
     "diagnose:query-quality-gaps": "node scripts/diagnoseQueryQualityGaps.js",
+    "diagnose:coverage-baseline": "node scripts/diagnoseCoverageBaseline.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",
     "rebuild:filters": "node scripts/rebuild-filter-metadata.js"
