@@ -22,6 +22,7 @@
     "diagnose:query-quality-gaps": "node scripts/diagnoseQueryQualityGaps.js",
     "diagnose:coverage-baseline": "node scripts/diagnoseCoverageBaseline.js",
     "diagnose:spar-source-coverage": "node scripts/diagnoseSparSourceCoverage.js",
+    "diagnose:spar-flyer-pdf-evidence": "node scripts/diagnoseSparFlyerPdfEvidence.js",
     "diagnose:spar-official-parser-fixture": "node scripts/diagnoseSparOfficialParserFixture.js",
     "diagnose:official-source-matrix": "node scripts/diagnoseOfficialSourceMatrix.js",
     "diagnose:official-validity-coverage": "node scripts/diagnoseOfficialValidityCoverage.js",
