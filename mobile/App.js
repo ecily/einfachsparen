@@ -188,20 +188,44 @@ function isUpdateReminderPaused(latestBuildNumber, dismissedReminder) {
 }
 
 function getReliableSavingsAmount(offer) {
-  const directSavings = Number(offer?.savingsAmount);
+  const directSavings = Number(offer?.savingsAmount ?? offer?.savings?.amount);
 
   if (Number.isFinite(directSavings) && directSavings > 0) {
     return Number(directSavings.toFixed(2));
   }
 
   const currentAmount = Number(offer?.priceCurrent?.amount);
-  const referenceAmount = Number(offer?.priceReference?.amount);
+  const referenceAmount = Number(offer?.referencePrice?.amount ?? offer?.priceReference?.amount);
 
   if (Number.isFinite(currentAmount) && Number.isFinite(referenceAmount) && referenceAmount > currentAmount) {
     return Number((referenceAmount - currentAmount).toFixed(2));
   }
 
   return 0;
+}
+
+function getReferenceInfo(offer) {
+  const currentAmount = Number(offer?.priceCurrent?.amount);
+  const referenceAmount = Number(offer?.referencePrice?.amount ?? offer?.priceReference?.amount);
+
+  if (!Number.isFinite(currentAmount) || !Number.isFinite(referenceAmount) || referenceAmount <= currentAmount) {
+    return {
+      amount: 0,
+      type: 'none',
+      isApproximate: false,
+      labelPrefix: '',
+    };
+  }
+
+  const type = String(offer?.referencePrice?.type || '');
+  const isApproximate = Boolean(offer?.referencePrice?.isApproximate || offer?.savings?.isApproximate);
+
+  return {
+    amount: referenceAmount,
+    type,
+    isApproximate,
+    labelPrefix: type === 'external_comparison' ? 'woanders ca.' : isApproximate ? 'Normalpreis ca.' : 'statt',
+  };
 }
 
 function hasReliableSavings(offer) {
@@ -749,12 +773,17 @@ function PriceTrustNote({ compact = false }) {
 
 function SavingsMessage({ offer, compact = false }) {
   const savingsAmount = getReliableSavingsAmount(offer);
+  const referenceInfo = getReferenceInfo(offer);
 
   if (savingsAmount > 0) {
     return (
       <View style={[styles.savingsBox, compact ? styles.savingsBoxCompact : null]}>
-        <Text style={styles.savingsValue}>Du sparst {formatCurrency(savingsAmount, offer.priceCurrent?.currency)}</Text>
-        {!compact ? <Text style={styles.savingsDescription}>Verglichen mit dem angegebenen Normalpreis.</Text> : null}
+        <Text style={styles.savingsValue}>Du sparst {referenceInfo.isApproximate ? 'ca. ' : ''}{formatCurrency(savingsAmount, offer.priceCurrent?.currency)}</Text>
+        {!compact ? (
+          <Text style={styles.savingsDescription}>
+            {referenceInfo.isApproximate ? 'Aus Quellenangabe abgeleitete Ersparnis.' : 'Verglichen mit dem angegebenen Normalpreis.'}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -857,9 +886,9 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
   const normalizedUnitPrice = shouldDisplayUnitPrice(offer)
     ? `${formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/${offer.normalizedUnitPrice?.unit}`
     : '';
-  const referenceAmount = Number(offer?.priceReference?.amount);
-  const referencePrice = Number.isFinite(referenceAmount)
-    ? formatCurrency(referenceAmount, offer.priceCurrent?.currency)
+  const referenceInfo = getReferenceInfo(offer);
+  const referencePrice = referenceInfo.amount
+    ? `${referenceInfo.labelPrefix} ${formatCurrency(referenceInfo.amount, offer.priceCurrent?.currency)}`
     : '';
   const minimumQuantityHint = getMinimumQuantityHint(offer);
   const readableQuantityText = getReadableQuantityText(offer);
@@ -900,7 +929,7 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
                 </View>
               ) : null}
               <DetailRow label="Aktionspreis" value={formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)} strong />
-              <DetailRow label="Normalpreis im Prospekt" value={referencePrice} />
+              <DetailRow label={referenceInfo.isApproximate ? 'Referenzpreis' : 'Normalpreis im Prospekt'} value={referencePrice} />
               <DetailRow
                 label="Euro-Ersparnis"
                 value={reliableSavingsAmount > 0 ? formatCurrency(reliableSavingsAmount, offer.priceCurrent?.currency) : 'nicht angegeben'}
@@ -950,10 +979,9 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
   const isCompact = width < 390;
   const conditionBadges = buildConditionBadges(offer);
   const validityLabel = formatValidityLabel(offer);
-  const referenceAmount = Number(offer?.priceReference?.amount);
-  const currentAmount = Number(offer?.priceCurrent?.amount);
-  const referencePrice = Number.isFinite(referenceAmount) && Number.isFinite(currentAmount) && referenceAmount > currentAmount
-    ? formatCurrency(referenceAmount, offer.priceCurrent?.currency)
+  const referenceInfo = getReferenceInfo(offer);
+  const referencePrice = referenceInfo.amount
+    ? `${referenceInfo.labelPrefix} ${formatCurrency(referenceInfo.amount, offer.priceCurrent?.currency)}`
     : '';
   const readableQuantityText = getReadableQuantityText(offer);
 
@@ -1004,7 +1032,7 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
               {formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}
             </Text>
             <View style={styles.offerPriceMetaRow}>
-              {referencePrice ? <Text style={styles.offerMeta}>statt {referencePrice}</Text> : null}
+              {referencePrice ? <Text style={styles.offerMeta}>{referencePrice}</Text> : null}
               {shouldDisplayUnitPrice(offer) ? (
                 <Text style={styles.offerMeta} numberOfLines={1}>
                   {formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/{offer.normalizedUnitPrice?.unit}

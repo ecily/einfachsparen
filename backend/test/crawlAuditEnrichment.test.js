@@ -100,6 +100,76 @@ test('does not turn estimated reference prices into secure savings', () => {
   assert.equal(savings.savingsPercent, null);
 });
 
+test('computes exact savings from direct prospect reference prices', () => {
+  const savings = computeOfferSavings({
+    title: 'Lavazza Espresso 1 kg',
+    priceCurrent: { amount: 22.99, currency: 'EUR' },
+    priceReference: { amount: 28.99, currency: 'EUR' },
+    priceReferenceSource: 'prospect',
+    savingsDisplayType: 'prospect-saving',
+    rawFacts: {},
+  });
+
+  assert.equal(savings.referencePrice.type, 'direct_source_reference_price');
+  assert.equal(savings.referencePrice.isApproximate, false);
+  assert.equal(savings.savingsAmount, 6);
+  assert.equal(savings.savings.isApproximate, false);
+  assert.equal(savings.savings.basis, 'direct_source_reference_price');
+});
+
+test('derives approximate reference price and savings from product-level percent discount', () => {
+  const enriched = enrichOfferForStorage(activeComparableOffer({
+    title: 'Dallmayr Prodomo 500 g',
+    priceCurrent: { amount: 11.99, currency: 'EUR', originalText: '11.99 EUR' },
+    priceReference: { amount: null, currency: 'EUR', originalText: '' },
+    rawFacts: {
+      discountPercentage: 25,
+    },
+  }));
+  const savings = computeOfferSavings(enriched);
+
+  assert.equal(enriched.priceReference.amount, 15.99);
+  assert.equal(enriched.priceReferenceSource, 'discount-percent-derived');
+  assert.equal(enriched.hasEstimatedReferencePrice, true);
+  assert.equal(enriched.hasProspectNormalPrice, false);
+  assert.equal(savings.referencePrice.type, 'source_percent_derived');
+  assert.equal(savings.referencePrice.discountPercent, 25);
+  assert.equal(savings.referencePrice.isApproximate, true);
+  assert.equal(savings.savingsAmount, 4);
+  assert.equal(savings.savingsPercent, 25);
+  assert.equal(savings.savings.isApproximate, true);
+  assert.match(savings.savings.label, /Spart ca\./);
+});
+
+test('does not derive product savings from campaign-level percent discounts', () => {
+  const savings = computeOfferSavings({
+    title: 'Kaffee Aktion',
+    priceCurrent: { amount: 11.99 },
+    priceReference: { amount: null },
+    rawFacts: {
+      discountPercentage: 25,
+      discountScope: 'campaign',
+    },
+  });
+
+  assert.equal(savings.referencePrice.type, 'none');
+  assert.equal(savings.savingsAmount, null);
+  assert.equal(savings.savings.basis, 'none');
+});
+
+test('does not show savings when comparison basis is missing', () => {
+  const savings = computeOfferSavings({
+    title: 'Aktionsprodukt ohne Normalpreis',
+    priceCurrent: { amount: 1.99 },
+    priceReference: { amount: null },
+    rawFacts: {},
+  });
+
+  assert.equal(savings.referencePrice.amount, null);
+  assert.equal(savings.savingsAmount, null);
+  assert.equal(savings.savings.label, 'Aktionspreis');
+});
+
 test('clears comparisonSafe and normalized comparability when comparableUnit is missing', () => {
   const offer = enrichOfferForStorage(activeComparableOffer({
     comparableUnit: '',

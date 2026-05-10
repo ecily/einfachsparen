@@ -88,6 +88,50 @@ function createCrawlRouter({
     }
   });
 
+  router.post('/runs/:runId/recover-stale', async (req, res, next) => {
+    try {
+      const recovery = await crawlRunServiceImpl.recoverStaleCrawlRun({
+        runId: req.params.runId,
+        reason: req.body?.reason,
+        staleAfterMinutes: req.body?.staleAfterMinutes,
+      });
+
+      if (recovery.notFound) {
+        return res.status(404).json({
+          ok: false,
+          recovered: false,
+          reason: recovery.reason,
+          message: 'CrawlRun wurde nicht gefunden.',
+        });
+      }
+
+      if (!recovery.recovered) {
+        return res.status(recovery.conflict ? 409 : 200).json({
+          ok: false,
+          recovered: false,
+          reason: recovery.reason,
+          ageMs: recovery.ageMs ?? null,
+          staleAfterMs: recovery.staleAfterMs ?? null,
+          processStartedAt: recovery.processStartedAt,
+          lock: recovery.lock || null,
+          run: crawlRunServiceImpl.serializeCrawlRun(recovery.run),
+        });
+      }
+
+      return res.json({
+        ok: true,
+        recovered: true,
+        reason: recovery.reason,
+        ageMs: recovery.ageMs ?? null,
+        staleAfterMs: recovery.staleAfterMs,
+        lock: recovery.lock || null,
+        run: crawlRunServiceImpl.serializeCrawlRun(recovery.run),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
   router.get('/runs/:runId', async (req, res, next) => {
     try {
       const run = await crawlRunServiceImpl.getCrawlRunById(req.params.runId);

@@ -1428,6 +1428,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
       category: hit?.category || '',
       tags: hit?.price?.regular?.tags || [],
       loyaltyTags: hit?.price?.loyalty?.tags || [],
+      discountPercentage: parseNumericAmount(hit?.price?.discountPercentage),
       snapshotCurrent: true,
     },
     adminReview: {

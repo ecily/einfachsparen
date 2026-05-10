@@ -5,6 +5,7 @@ const {
   applyQueryMatch,
   buildRankingCandidateLimit,
   buildRankingCandidateMatch,
+  buildRankedOffer,
   buildValidityLabel,
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
@@ -109,6 +110,64 @@ test('pushes unknown ranking query into Mongo candidate filtering before JS scor
   assert.ok(Array.isArray(match.$and));
   assert.equal(match.$and.length, 1);
   assert.ok(match.$and[0].$or.some((item) => String(item.titleNormalized).includes('zzzzzzzz')));
+});
+
+test('ranked offer response contains structured reference price and approximate savings fields', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'coffee-percent-derived',
+    title: 'Dallmayr Prodomo 500 g',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    priceCurrent: { amount: 11.99, currency: 'EUR' },
+    priceReference: { amount: 15.99, currency: 'EUR' },
+    priceReferenceSource: 'discount-percent-derived',
+    priceReferenceConfidence: 0.72,
+    savingsDisplayType: 'estimated-reference-price',
+    hasReferencePrice: true,
+    hasEstimatedReferencePrice: true,
+    rawFacts: {
+      discountPercentage: 25,
+      referencePriceType: 'source_percent_derived',
+      referencePriceDerived: true,
+    },
+    quantityText: '500 g',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 23.98, unit: 'kg', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+  }), 23.98, 23.98);
+
+  assert.equal(ranked.referencePrice.amount, 15.99);
+  assert.equal(ranked.referencePrice.type, 'source_percent_derived');
+  assert.equal(ranked.referencePrice.discountPercent, 25);
+  assert.equal(ranked.savings.amount, 4);
+  assert.equal(ranked.savings.percent, 25);
+  assert.equal(ranked.savings.isApproximate, true);
+  assert.equal(ranked.savings.basis, 'source_discount_percent');
+  assert.equal(ranked.savingsAmount, 4);
+  assert.equal(ranked.savingsPercent, 25);
+});
+
+test('ranked offer keeps direct source savings even when cross-offer comparability is unsafe', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'direct-reference-unsafe-unit',
+    title: 'Kaffee Packung',
+    retailerKey: 'billa',
+    retailerName: 'Billa',
+    priceCurrent: { amount: 15.99, currency: 'EUR' },
+    priceReference: { amount: 21.99, currency: 'EUR' },
+    priceReferenceSource: 'prospect',
+    priceReferenceConfidence: 0.95,
+    savingsDisplayType: 'prospect-saving',
+    quantityText: '1 Packung',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+    quality: { comparisonSafe: false },
+  }), null, null);
+
+  assert.equal(ranked.referencePrice.type, 'direct_source_reference_price');
+  assert.equal(ranked.savings.amount, 6);
+  assert.equal(ranked.savings.basis, 'direct_source_reference_price');
+  assert.equal(ranked.savingsAmount, 6);
 });
 
 test('generic rice Mongo prefilter avoids broad pasta category flooding', () => {

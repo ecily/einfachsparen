@@ -50,7 +50,7 @@ const crawlRunSchema = new mongoose.Schema(
   {
     status: {
       type: String,
-      enum: ['queued', 'running', 'success', 'partial', 'failed', 'skipped'],
+      enum: ['queued', 'running', 'success', 'partial', 'failed', 'skipped', 'stale'],
       default: 'queued',
       index: true,
     },

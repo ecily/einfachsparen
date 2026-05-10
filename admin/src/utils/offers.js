@@ -276,13 +276,14 @@ export function hasKnownSavings(offer) {
 
 export function getOfferSavingsInfo(offer) {
   const savingsValue = getSavingsValue(offer)
+  const isApproximate = Boolean(offer?.savings?.isApproximate || offer?.referencePrice?.isApproximate)
 
   if (savingsValue > 0) {
     return {
       type: 'known',
-      label: `Spart ca. ${formatCurrencyAmount(savingsValue)}`,
-      shortLabel: `ca. ${formatCurrencyAmount(savingsValue)}`,
-      description: 'Ersparnis mit angegebenem Normalpreis.',
+      label: `Spart ${isApproximate ? 'ca. ' : ''}${formatCurrencyAmount(savingsValue)}`,
+      shortLabel: `${isApproximate ? 'ca. ' : ''}${formatCurrencyAmount(savingsValue)}`,
+      description: isApproximate ? 'Ersparnis aus Quellenangabe abgeleitet.' : 'Ersparnis mit angegebenem Normalpreis.',
     }
   }
 

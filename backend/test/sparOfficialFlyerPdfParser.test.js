@@ -59,6 +59,7 @@ test('extracts concrete EUROSPAR coffee offers from textlayer fixtures', () => {
   assert.equal(candidates[0].quantityText, '500 g');
   assert.equal(candidates[1].brand, 'Lavazza');
   assert.equal(candidates[1].price, 22.99);
+  assert.equal(candidates[1].referencePrice, 28.99);
   assert.equal(candidates[1].quantityText, '1 kg');
 });
 

@@ -88,6 +88,23 @@ function buildService({ startResult, latestRun = null, byIdRun = null, calls = [
     async getCrawlRunById() {
       return byIdRun;
     },
+    async recoverStaleCrawlRun(payload) {
+      calls.push(payload);
+      return {
+        recovered: true,
+        reason: 'age-threshold-exceeded',
+        ageMs: 3600000,
+        staleAfterMs: 1800000,
+        lock: null,
+        run: run({
+          _id: payload.runId,
+          status: 'stale',
+          finishedAt: new Date('2026-05-10T20:00:00.000Z'),
+          durationMs: 3600000,
+          warnings: ['Stale CrawlRun recovery: test'],
+        }),
+      };
+    },
     serializeCrawlRun,
   };
 }
@@ -269,6 +286,29 @@ test('GET /api/crawl/runs/:runId serializes ObjectIds as strings and returns 404
   assert.equal(missing.statusCode, 404);
 });
 
+test('POST /api/crawl/runs/:runId/recover-stale returns recovered stale run status', async () => {
+  const calls = [];
+  const service = buildService({ calls });
+  const app = buildTestApp(service);
+
+  const response = await requestJson(app, {
+    method: 'POST',
+    path: '/api/crawl/runs/665000000000000000000099/recover-stale',
+    body: {
+      reason: 'deploy restart orphan',
+      staleAfterMinutes: 30,
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.recovered, true);
+  assert.equal(response.body.run.status, 'stale');
+  assert.equal(response.body.run.id, '665000000000000000000099');
+  assert.equal(calls[0].reason, 'deploy restart orphan');
+  assert.equal(calls[0].staleAfterMinutes, 30);
+});
+
 test('admin protection blocks crawl run and status endpoints before handlers are called', async () => {
   let called = false;
   const service = buildService();
@@ -292,8 +332,16 @@ test('admin protection blocks crawl run and status endpoints before handlers are
     method: 'GET',
     path: '/api/crawl/runs/latest',
   });
+  const recoverResponse = await requestJson(app, {
+    method: 'POST',
+    path: '/api/crawl/runs/665000000000000000000003/recover-stale',
+    body: {
+      reason: 'blocked',
+    },
+  });
 
   assert.equal([401, 503].includes(postResponse.statusCode), true);
   assert.equal([401, 503].includes(getResponse.statusCode), true);
+  assert.equal([401, 503].includes(recoverResponse.statusCode), true);
   assert.equal(called, false);
 });

@@ -4,6 +4,7 @@ const {
   assessComparableSafety,
   inferConditionFields,
 } = require('./offerQualityGuards');
+const { resolveReferencePrice } = require('../offers/promotionMath');
 
 const VALIDITY_INCOMPLETE_REVIEW_REASON = 'Gueltigkeitszeitraum unvollstaendig';
 
@@ -152,7 +153,8 @@ function inferSavingsFields(offer) {
     ].join(' ')
   );
   const hasReferencePrice = Number.isFinite(referenceAmount) && referenceAmount > 0;
-  const hasProspectNormalPrice = hasReferencePrice && !/(estimate|estimated|historisch|history|produktseite|product-search|normalerweise|referenz)/i.test(sourceText);
+  const hasDerivedReferencePrice = hasReferencePrice && /(derived|discount\s+percent|percent\s+derived|percentage\s+derived|source\s+percent)/i.test(sourceText);
+  const hasProspectNormalPrice = hasReferencePrice && !hasDerivedReferencePrice && !/(estimate|estimated|historisch|history|produktseite|product-search|normalerweise|referenz)/i.test(sourceText);
   const hasEstimatedReferencePrice = hasReferencePrice && !hasProspectNormalPrice;
   const isActionPriceOnly = !hasReferencePrice;
   const savingsDisplayType = hasProspectNormalPrice
@@ -169,9 +171,44 @@ function inferSavingsFields(offer) {
     hasEstimatedReferencePrice,
     isActionPriceOnly,
     savingsDisplayType,
-    savingsConfidence: hasProspectNormalPrice && referenceAmount > currentAmount ? 0.95 : hasEstimatedReferencePrice ? 0.55 : 0,
+    savingsConfidence: hasProspectNormalPrice && referenceAmount > currentAmount ? 0.95 : hasDerivedReferencePrice ? 0.72 : hasEstimatedReferencePrice ? 0.55 : 0,
     priceReferenceSource: offer?.priceReferenceSource || (hasProspectNormalPrice ? 'prospect' : hasEstimatedReferencePrice ? 'reference' : ''),
-    priceReferenceConfidence: Number(offer?.priceReferenceConfidence || 0) || (hasProspectNormalPrice ? 0.95 : hasEstimatedReferencePrice ? 0.55 : 0),
+    priceReferenceConfidence: Number(offer?.priceReferenceConfidence || 0) || (hasProspectNormalPrice ? 0.95 : hasDerivedReferencePrice ? 0.72 : hasEstimatedReferencePrice ? 0.55 : 0),
+  };
+}
+
+function applyDerivedReferencePrice(offer = {}) {
+  const existingReferenceAmount = Number(offer?.priceReference?.amount);
+
+  if (Number.isFinite(existingReferenceAmount) && existingReferenceAmount > 0) {
+    return offer;
+  }
+
+  const reference = resolveReferencePrice(offer);
+
+  if (reference.type !== 'source_percent_derived' || !(reference.amount > 0)) {
+    return offer;
+  }
+
+  const currency = offer?.priceCurrent?.currency || offer?.priceReference?.currency || 'EUR';
+
+  return {
+    ...offer,
+    priceReference: {
+      ...(offer.priceReference || {}),
+      amount: reference.amount,
+      currency,
+      originalText: `ca. ${reference.amount.toFixed(2)} ${currency}`,
+    },
+    priceReferenceSource: 'discount-percent-derived',
+    priceReferenceConfidence: Math.max(Number(offer.priceReferenceConfidence || 0), reference.confidence || 0.72),
+    rawFacts: {
+      ...(offer.rawFacts || {}),
+      discountPercentage: reference.discountPercent ?? offer.rawFacts?.discountPercentage,
+      referencePriceType: 'source_percent_derived',
+      referencePriceSource: 'discount-percent-derived',
+      referencePriceDerived: true,
+    },
   };
 }
 
@@ -242,12 +279,14 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     return null;
   }
 
-  const { scope, ...document } = offer;
+  let { scope, ...document } = offer;
   const now = new Date();
 
   if (!isCurrentlyRelevantOffer(document, now)) {
     return null;
   }
+
+  document = applyDerivedReferencePrice(document);
 
   const resolvedSourceType = inferSourceType({ offer: document, source, sourceType });
   const formatMetadata = inferRetailerFormatMetadata({ offer: document, source });

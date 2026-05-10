@@ -57,6 +57,19 @@ const OFFER_RANKING_FIELDS = [
   'sortScoreDefault',
   'minimumPurchaseQty',
   'sourceType',
+  'sourceTypes',
+  'evidenceUrls',
+  'reviewReasons',
+  'rawFacts.discountPercentage',
+  'rawFacts.discountPercent',
+  'rawFacts.discountScope',
+  'rawFacts.discountLevel',
+  'rawFacts.isCampaignDiscount',
+  'rawFacts.discountAppliesToProduct',
+  'rawFacts.referencePriceType',
+  'rawFacts.referencePriceSource',
+  'rawFacts.referencePriceDerived',
+  'rawFacts.savingsDisplayType',
 ].join(' ');
 
 const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -1316,23 +1329,36 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
 
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
   const safelyComparable = isOfferSafelyComparable(offer);
-  const fallbackSavings =
-    !safelyComparable || (offer?.savingsAmount !== undefined && offer?.savingsAmount !== null)
-      ? null
-      : computeOfferSavings(offer);
-  const savings = {
+  const computedPromotion = computeOfferSavings(offer);
+  const legacySavings = {
     savingsAmount:
-      safelyComparable && offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
+      offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
         ? offer.savingsAmount
-        : safelyComparable ? fallbackSavings?.savingsAmount : null,
+        : computedPromotion?.savingsAmount ?? null,
     savingsPercent:
-      safelyComparable && offer?.savingsPercent !== undefined && offer?.savingsPercent !== null
+      offer?.savingsPercent !== undefined && offer?.savingsPercent !== null
         ? offer.savingsPercent
-        : safelyComparable ? fallbackSavings?.savingsPercent : null,
+        : computedPromotion?.savingsPercent ?? null,
     requiredQuantity:
       offer?.minimumPurchaseQuantity !== undefined && offer?.minimumPurchaseQuantity !== null
         ? offer.minimumPurchaseQuantity
-        : fallbackSavings?.requiredQuantity,
+        : computedPromotion?.requiredQuantity,
+  };
+  const structuredReferencePrice = computedPromotion?.referencePrice || {
+    amount: null,
+    type: 'none',
+    source: '',
+    confidence: 0,
+    discountPercent: null,
+    isApproximate: false,
+    label: '',
+  };
+  const structuredSavings = {
+    amount: legacySavings.savingsAmount ?? null,
+    percent: legacySavings.savingsPercent ?? null,
+    isApproximate: Boolean(legacySavings.savingsAmount && computedPromotion?.savings?.isApproximate),
+    basis: legacySavings.savingsAmount ? (computedPromotion?.savings?.basis || 'none') : 'none',
+    label: legacySavings.savingsAmount ? (computedPromotion?.savings?.label || '') : 'Aktionspreis',
   };
   const normalizedAmount = Number(offer?.normalizedUnitPrice?.amount ?? 0);
   const priceGapPercent = safelyComparable && bestUnitPrice
@@ -1385,6 +1411,8 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     hasProspectNormalPrice: Boolean(offer.hasProspectNormalPrice),
     hasEstimatedReferencePrice: Boolean(offer.hasEstimatedReferencePrice),
     isActionPriceOnly: Boolean(offer.isActionPriceOnly),
+    referencePrice: structuredReferencePrice,
+    savings: structuredSavings,
     imageUrl: offer.imageUrl || '',
     sourceType: offer.sourceType || '',
     sourceTypes: offer.sourceTypes || [],
@@ -1393,10 +1421,10 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     reviewReasons: offer.reviewReasons || [],
     priceGapPercent,
     relativeScore: Number((spread * 100).toFixed(2)),
-    savingsAmount: savings.savingsAmount,
-    savingsPercent: savings.savingsPercent,
-    minimumPurchaseQuantity: savings.requiredQuantity,
-    minimumPurchaseQty: offer.minimumPurchaseQty ?? savings.requiredQuantity ?? 1,
+    savingsAmount: legacySavings.savingsAmount,
+    savingsPercent: legacySavings.savingsPercent,
+    minimumPurchaseQuantity: legacySavings.requiredQuantity,
+    minimumPurchaseQty: offer.minimumPurchaseQty ?? legacySavings.requiredQuantity ?? 1,
     quality: offer.quality || {},
     sortScoreDefault: Number(offer.sortScoreDefault || 0),
     validityLabel: buildValidityLabel(offer),
@@ -3327,6 +3355,7 @@ async function buildOfferRanking({
 module.exports = {
   buildOfferRanking,
   buildBasketSuggestions,
+  buildRankedOffer,
   clearRankingResponseCache,
   scoreOfferAgainstQuery,
   applyQueryMatch,

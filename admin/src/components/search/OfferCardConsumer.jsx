@@ -75,19 +75,40 @@ function getPositiveSavingsAmount(offer) {
   return 0
 }
 
-function getReferencePrice(offer) {
-  const referencePrice = Number(offer?.priceBefore?.amount || offer?.priceOriginal?.amount || offer?.priceRegular?.amount)
+function getReferenceInfo(offer) {
+  const referencePrice = Number(
+    offer?.referencePrice?.amount ||
+      offer?.priceReference?.amount ||
+      offer?.priceBefore?.amount ||
+      offer?.priceOriginal?.amount ||
+      offer?.priceRegular?.amount
+  )
   const currentPrice = Number(offer?.priceCurrent?.amount)
 
   if (Number.isFinite(referencePrice) && Number.isFinite(currentPrice) && referencePrice > currentPrice) {
-    return referencePrice
+    const type = String(offer?.referencePrice?.type || '')
+    const isApproximate = Boolean(offer?.referencePrice?.isApproximate || offer?.savings?.isApproximate)
+
+    return {
+      amount: referencePrice,
+      type,
+      isApproximate,
+      labelPrefix: type === 'external_comparison' ? 'woanders ca.'
+        : isApproximate ? 'Normalpreis ca.'
+          : 'statt',
+    }
   }
 
-  return 0
+  return {
+    amount: 0,
+    type: 'none',
+    isApproximate: false,
+    labelPrefix: '',
+  }
 }
 
-function getSavingsPercent(offer, savingsAmount) {
-  const referencePrice = getReferencePrice(offer)
+function getSavingsPercent(offer, savingsAmount, referenceInfo) {
+  const referencePrice = referenceInfo?.amount || 0
 
   if (!referencePrice || !Number.isFinite(savingsAmount) || savingsAmount <= 0) {
     return 0
@@ -164,9 +185,9 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const conditions = getConditionTexts(offer)
   const quantityText = getReadableQuantityText(offer)
   const savingsAmount = getPositiveSavingsAmount(offer)
-  const savingsPercent = getSavingsPercent(offer, savingsAmount)
-  const referencePrice = getReferencePrice(offer)
-  const hasSavings = savingsAmount > 0 && referencePrice > 0
+  const referenceInfo = getReferenceInfo(offer)
+  const savingsPercent = getSavingsPercent(offer, savingsAmount, referenceInfo)
+  const hasSavings = savingsAmount > 0 && referenceInfo.amount > 0
 
   return (
     <article className={`user-card ${hasSavings ? 'user-card--known-savings' : 'user-card--action-price'}`}>
@@ -199,7 +220,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
         <div className="user-card__decision">
           <div className="user-card__price">
             <strong>{formatPrice(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
-            {referencePrice ? <span>statt {formatPrice(referencePrice, offer?.priceCurrent?.currency)}</span> : null}
+            {referenceInfo.amount ? <span>{referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, offer?.priceCurrent?.currency)}</span> : null}
             {quantityText ? <span>{quantityText}</span> : null}
             {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
           </div>
@@ -207,7 +228,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
 
         {hasSavings ? (
           <div className="offer-savings-box offer-savings-box--known">
-            <strong>Du sparst {formatPrice(savingsAmount, offer?.priceCurrent?.currency)}</strong>
+            <strong>Du sparst {referenceInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsAmount, offer?.priceCurrent?.currency)}</strong>
             {savingsPercent > 0 ? <span>-{savingsPercent} %</span> : null}
           </div>
         ) : (

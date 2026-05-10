@@ -8,6 +8,8 @@ const logger = require('../../lib/logger');
 const GLOBAL_CRAWL_LOCK_KEY = 'crawl-run-global';
 const ACTIVE_RUN_STATUSES = ['queued', 'running'];
 const LOCK_STALE_MS = 18 * 60 * 60 * 1000;
+const EXPLICIT_RECOVERY_MIN_STALE_MS = 30 * 60 * 1000;
+const PROCESS_STARTED_AT = new Date();
 
 function compactStrings(values = []) {
   if (!Array.isArray(values)) return [];
@@ -48,6 +50,10 @@ function numberFrom(value, fallback = 0) {
 
 function compactErrorMessage(value) {
   return String(value || '').slice(0, 400);
+}
+
+function compactRecoveryReason(value) {
+  return compactErrorMessage(value || 'Admin-triggered stale CrawlRun recovery.');
 }
 
 function sanitizeJsonValue(value, seen = new WeakSet()) {
@@ -421,6 +427,155 @@ async function releaseCrawlRunLock(runId) {
   );
 }
 
+function serializeLockForAudit(lock) {
+  if (!lock) return null;
+
+  return sanitizeJsonValue({
+    runId: asStringId(lock.runId),
+    status: lock.status || '',
+    acquiredAt: toIsoOrNull(lock.acquiredAt),
+    heartbeatAt: toIsoOrNull(lock.heartbeatAt),
+    expiresAt: toIsoOrNull(lock.expiresAt),
+    owner: lock.owner || '',
+  });
+}
+
+function parseExplicitRecoveryStaleMs(value) {
+  const minutes = Number(value);
+
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return EXPLICIT_RECOVERY_MIN_STALE_MS;
+  }
+
+  return Math.max(EXPLICIT_RECOVERY_MIN_STALE_MS, Math.round(minutes * 60 * 1000));
+}
+
+function getRunReferenceDate(run) {
+  return run?.startedAt || run?.createdAt || null;
+}
+
+function isRecoverableStaleRun({ run, lock, now = new Date(), staleAfterMs = EXPLICIT_RECOVERY_MIN_STALE_MS } = {}) {
+  if (!run || !ACTIVE_RUN_STATUSES.includes(run.status)) {
+    return {
+      recoverable: false,
+      reason: 'not-active',
+      ageMs: null,
+      startedBeforeProcess: false,
+    };
+  }
+
+  const reference = getRunReferenceDate(run);
+  const referenceTime = reference ? new Date(reference).getTime() : 0;
+  const lockHeartbeatTime = lock?.heartbeatAt ? new Date(lock.heartbeatAt).getTime() : 0;
+  const ageMs = referenceTime > 0 ? now.getTime() - referenceTime : null;
+  const lockBelongsToRun = !lock?.runId || String(lock.runId) === String(run._id);
+  const ageExpired = ageMs !== null && ageMs >= staleAfterMs;
+  const startedBeforeProcess =
+    referenceTime > 0
+    && referenceTime < PROCESS_STARTED_AT.getTime()
+    && (!lockHeartbeatTime || lockHeartbeatTime < PROCESS_STARTED_AT.getTime())
+    && lockBelongsToRun;
+
+  if (!lockBelongsToRun) {
+    return {
+      recoverable: false,
+      reason: 'lock-owned-by-different-run',
+      ageMs,
+      startedBeforeProcess,
+    };
+  }
+
+  return {
+    recoverable: ageExpired || startedBeforeProcess,
+    reason: ageExpired ? 'age-threshold-exceeded' : startedBeforeProcess ? 'started-before-current-process' : 'not-stale-enough',
+    ageMs,
+    startedBeforeProcess,
+  };
+}
+
+async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now = new Date() } = {}) {
+  if (!mongoose.Types.ObjectId.isValid(String(runId || ''))) {
+    return {
+      recovered: false,
+      notFound: true,
+      reason: 'invalid-run-id',
+      run: null,
+    };
+  }
+
+  const run = await CrawlRun.findById(runId);
+
+  if (!run) {
+    return {
+      recovered: false,
+      notFound: true,
+      reason: 'not-found',
+      run: null,
+    };
+  }
+
+  const lock = await CrawlRunLock.findById(GLOBAL_CRAWL_LOCK_KEY).lean();
+  const staleAfterMs = parseExplicitRecoveryStaleMs(staleAfterMinutes);
+  const recoverable = isRecoverableStaleRun({ run, lock, now, staleAfterMs });
+
+  if (!recoverable.recoverable) {
+    return {
+      recovered: false,
+      conflict: ACTIVE_RUN_STATUSES.includes(run.status),
+      reason: recoverable.reason,
+      ageMs: recoverable.ageMs,
+      staleAfterMs,
+      processStartedAt: PROCESS_STARTED_AT,
+      lock: serializeLockForAudit(lock),
+      run,
+    };
+  }
+
+  const reference = getRunReferenceDate(run) || now;
+  const auditReason = compactRecoveryReason(reason);
+  const durationMs = Math.max(0, now.getTime() - new Date(reference).getTime());
+  const auditMessage = `Stale CrawlRun recovery: ${auditReason}`;
+
+  await CrawlRun.findByIdAndUpdate(run._id, {
+    $set: {
+      status: 'stale',
+      finishedAt: now,
+      durationMs,
+      'metadata.staleRecovery': {
+        reason: auditReason,
+        recoveredAt: now,
+        recoveredBy: 'admin-route',
+        previousStatus: run.status,
+        staleAfterMs,
+        ageMs: recoverable.ageMs,
+        processStartedAt: PROCESS_STARTED_AT,
+        detectionReason: recoverable.reason,
+        lock: serializeLockForAudit(lock),
+      },
+    },
+    $push: {
+      warnings: auditMessage,
+      errorMessages: 'CrawlRun was marked stale by admin recovery; no automatic replacement crawl was started.',
+    },
+  });
+
+  if (!lock?.runId || String(lock.runId) === String(run._id)) {
+    await releaseCrawlRunLock(run._id);
+  }
+
+  const recoveredRun = await CrawlRun.findById(run._id);
+
+  return {
+    recovered: true,
+    reason: recoverable.reason,
+    ageMs: recoverable.ageMs,
+    staleAfterMs,
+    processStartedAt: PROCESS_STARTED_AT,
+    lock: serializeLockForAudit(lock),
+    run: recoveredRun,
+  };
+}
+
 async function markLockRunning(runId) {
   await CrawlRunLock.updateOne(
     {
@@ -628,17 +783,23 @@ module.exports = {
   executeCrawlRun,
   getLatestCrawlRun,
   getCrawlRunById,
+  recoverStaleCrawlRun,
   serializeCrawlRun,
   _private: {
     ACTIVE_RUN_STATUSES,
+    EXPLICIT_RECOVERY_MIN_STALE_MS,
     LOCK_STALE_MS,
+    PROCESS_STARTED_AT,
     buildRunDocument,
     buildRunSummary,
     determineFinalStatus,
     determineMode,
     failStaleRun,
+    isRecoverableStaleRun,
     isRunStale,
     normalizeSourceResult,
+    parseExplicitRecoveryStaleMs,
     sanitizeJsonValue,
+    serializeLockForAudit,
   },
 };

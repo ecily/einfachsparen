@@ -184,3 +184,43 @@ test('stale lock detection only recovers long-running stuck CrawlRuns', () => {
     startedAt: new Date('2026-05-10T01:00:00.000Z'),
   }, now), true);
 });
+
+test('explicit stale recovery classifies active orphan runs conservatively', () => {
+  const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 60 * 60 * 1000);
+  const staleRun = {
+    _id: new mongoose.Types.ObjectId(),
+    status: 'running',
+    startedAt: new Date(now.getTime() - 60 * 60 * 1000),
+  };
+  const freshRun = {
+    _id: new mongoose.Types.ObjectId(),
+    status: 'running',
+    startedAt: new Date(now.getTime() - 15 * 60 * 1000),
+  };
+  const otherRunLock = {
+    runId: new mongoose.Types.ObjectId(),
+    status: 'running',
+    heartbeatAt: new Date(now.getTime() - 60 * 1000),
+  };
+
+  assert.deepEqual(_private.isRecoverableStaleRun({
+    run: staleRun,
+    lock: { runId: staleRun._id, status: 'running' },
+    now,
+    staleAfterMs: 30 * 60 * 1000,
+  }).recoverable, true);
+
+  assert.equal(_private.isRecoverableStaleRun({
+    run: freshRun,
+    lock: { runId: freshRun._id, status: 'running' },
+    now,
+    staleAfterMs: 30 * 60 * 1000,
+  }).reason, 'not-stale-enough');
+
+  assert.equal(_private.isRecoverableStaleRun({
+    run: staleRun,
+    lock: otherRunLock,
+    now,
+    staleAfterMs: 30 * 60 * 1000,
+  }).reason, 'lock-owned-by-different-run');
+});

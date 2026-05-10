@@ -53,6 +53,14 @@ function buildCacheRawFacts(rawFacts = {}) {
     validityText: rawFacts?.validityText || '',
     infoText: rawFacts?.infoText || '',
     discountPercentage: rawFacts?.discountPercentage ?? null,
+    discountPercent: rawFacts?.discountPercent ?? null,
+    discountScope: rawFacts?.discountScope || '',
+    discountLevel: rawFacts?.discountLevel || '',
+    isCampaignDiscount: rawFacts?.isCampaignDiscount ?? null,
+    discountAppliesToProduct: rawFacts?.discountAppliesToProduct ?? null,
+    referencePriceType: rawFacts?.referencePriceType || '',
+    referencePriceSource: rawFacts?.referencePriceSource || '',
+    referencePriceDerived: rawFacts?.referencePriceDerived ?? null,
     minimalAcceptance: rawFacts?.minimalAcceptance ?? null,
     minimumPurchaseQuantity: rawFacts?.minimumPurchaseQuantity ?? null,
     requiredQuantity: rawFacts?.requiredQuantity ?? null,
@@ -693,6 +701,8 @@ function buildOfferCacheDocuments(offers, now) {
       reviewReasons: offer.reviewReasons || [],
       savingsAmount: savings.savingsAmount,
       savingsPercent: savings.savingsPercent,
+      referencePrice: savings.referencePrice,
+      savings: savings.savings,
       minimumPurchaseQuantity: savings.requiredQuantity,
     });
   }
