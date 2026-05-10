@@ -400,6 +400,12 @@ test('ranks real rice ahead of pasta sauce noodles beans and category-only conse
       comparisonGroup: 'bonduelle-kichererbsen::0.4-kg',
     }),
     offer({
+      title: 'MAGGI Asia Fix Gebratener Reis',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Pasta, Reis & Konserven',
+      comparisonGroup: 'maggi-asia-fix-gebratener-reis::1-beutel',
+    }),
+    offer({
       title: 'Basmati Reis 1 kg',
       categoryPrimary: 'Lebensmittel',
       categorySecondary: 'Pasta, Reis & Konserven',
@@ -421,6 +427,7 @@ test('ranks real rice ahead of pasta sauce noodles beans and category-only conse
   assert.equal(sortedTitles.includes('Despar Passata di Pomodoro'), false);
   assert.equal(sortedTitles.includes('Barilla Spaghetti'), false);
   assert.equal(sortedTitles.includes('Bonduelle Kichererbsen'), false);
+  assert.equal(sortedTitles.includes('MAGGI Asia Fix Gebratener Reis'), false);
 });
 
 test('excludes rice-adjacent snacks for generic rice queries', () => {

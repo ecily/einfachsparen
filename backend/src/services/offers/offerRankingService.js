@@ -895,6 +895,7 @@ function getGenericRiceOfferIntent({ titleTokens, categoryTokens, comparisonToke
     'tomatensauce',
   ];
   const weakRiceTokens = ['milchreis', 'reisgericht', 'reischips', 'reiswaffel', 'reiswaffeln'];
+  const dishMixSideTokens = ['fix'];
   const strongRiceTokens = [
     'basmati',
     'basmatireis',
@@ -913,7 +914,8 @@ function getGenericRiceOfferIntent({ titleTokens, categoryTokens, comparisonToke
       strongRiceTokens.filter((token) => token !== 'reis')
     );
   const weakRice = hasAnyTokenFamily(titleTokens.concat(comparisonTokens), weakRiceTokens);
-  const hardSide = hasAnyTokenFamily(productTokens, hardSideTokens) && !titleHasStrongRice;
+  const hardSide = (hasAnyTokenFamily(productTokens, hardSideTokens) && !titleHasStrongRice) ||
+    hasAnyTokenFamily(productTokens, dishMixSideTokens);
   const categoryOnly =
     !titleHasStrongRice &&
     !weakRice &&
