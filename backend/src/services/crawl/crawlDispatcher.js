@@ -8,27 +8,11 @@ const { dedupeOffersAcrossSources } = require('./catalogDeduper');
 const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
 const { clearRankingResponseCache } = require('../offers/offerRankingService');
 const { ensureManualCategoryOverrideCacheLoaded } = require('../quality/manualCategoryOverrideService');
+const {
+  resolveCrawlSourceSelection,
+  summarizeSource,
+} = require('./crawlSourceSelection');
 const logger = require('../../lib/logger');
-
-const CHANNEL_PRIORITY = {
-  'official-site': 0,
-  'official-flyer': 1,
-  aggregator: 2,
-  other: 3,
-};
-
-const RETAILER_PRIORITY = {
-  spar: 0,
-  lidl: 1,
-  penny: 2,
-  dm: 3,
-  pagro: 4,
-  bipa: 5,
-  adeg: 6,
-  hofer: 7,
-  billa: 8,
-  'billa-plus': 9,
-};
 
 async function crawlSource({ source, region, trigger = 'manual' }) {
   if (source.channel === 'aggregator') {
@@ -50,69 +34,58 @@ async function crawlSource({ source, region, trigger = 'manual' }) {
   return crawlOfficialSource({ source, region, trigger });
 }
 
-async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }) {
-  await ensureManualCategoryOverrideCacheLoaded();
-  const filter = retailerKeys.length > 0
-    ? { active: true, enabled: { $ne: false }, retailerKey: { $in: retailerKeys } }
-    : { active: true, enabled: { $ne: false } };
+async function fetchDisabledSourcesForRetailers({ retailerKeys = [] } = {}) {
   const disabledFilter = retailerKeys.length > 0
     ? { active: true, enabled: false, retailerKey: { $in: retailerKeys } }
     : { active: true, enabled: false };
 
-  const [sources, disabledSources, activeOfferCounts] = await Promise.all([
-    Source.find(filter).lean(),
-    Source.find(disabledFilter)
-      .select('retailerKey retailerName channel label sourceUrl disabledReason notes latestStatus')
+  return Source.find(disabledFilter)
+      .select('retailerKey retailerName channel label sourceUrl sourceType sourceRetailerFormat enabled active disabledReason notes latestStatus latestRunAt')
       .sort({ retailerName: 1, label: 1 })
-      .lean(),
-    Offer.aggregate([
-      {
-        $match: retailerKeys.length > 0
-          ? { retailerKey: { $in: retailerKeys }, status: 'active', isActiveNow: true }
-          : { status: 'active', isActiveNow: true },
-      },
-      {
-        $group: {
-          _id: '$retailerKey',
-          activeOfferCount: { $sum: 1 },
-        },
-      },
-    ]),
-  ]);
-  const activeOfferCountMap = new Map(
-    activeOfferCounts.map((item) => [String(item._id || ''), Number(item.activeOfferCount || 0)])
-  );
-  const prioritizedSources = [...sources].sort((left, right) => {
-    const leftRetailerPriority = RETAILER_PRIORITY[left.retailerKey] ?? 50;
-    const rightRetailerPriority = RETAILER_PRIORITY[right.retailerKey] ?? 50;
+      .lean();
+}
 
-    if (leftRetailerPriority !== rightRetailerPriority) {
-      return leftRetailerPriority - rightRetailerPriority;
-    }
-
-    const leftCoverage = activeOfferCountMap.get(left.retailerKey) ?? 0;
-    const rightCoverage = activeOfferCountMap.get(right.retailerKey) ?? 0;
-
-    if (leftCoverage !== rightCoverage) {
-      return leftCoverage - rightCoverage;
-    }
-
-    const leftChannelPriority = CHANNEL_PRIORITY[left.channel] ?? 99;
-    const rightChannelPriority = CHANNEL_PRIORITY[right.channel] ?? 99;
-
-    if (leftChannelPriority !== rightChannelPriority) {
-      return leftChannelPriority - rightChannelPriority;
-    }
-
-    const leftSourcePriority = Number(left.priority ?? 50);
-    const rightSourcePriority = Number(right.priority ?? 50);
-
-    if (leftSourcePriority !== rightSourcePriority) {
-      return leftSourcePriority - rightSourcePriority;
-    }
-
-    return `${left.retailerName} ${left.label}`.localeCompare(`${right.retailerName} ${right.label}`, 'de');
+async function crawlAllSources({
+  region,
+  retailerKeys = [],
+  sourceKeys = [],
+  sourceIds = [],
+  allowDisabled = false,
+  dryRun = false,
+  sourceSelectionRequested: explicitSourceSelectionRequested = false,
+  trigger = 'manual',
+} = {}) {
+  const sourceSelectionRequested = explicitSourceSelectionRequested || sourceKeys.length > 0 || sourceIds.length > 0;
+  const selection = await resolveCrawlSourceSelection({
+    Source,
+    Offer,
+    retailerKeys,
+    sourceKeys,
+    sourceIds,
+    allowDisabled,
+    dryRun,
+    sourceSelectionRequested,
   });
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      crawlStarted: false,
+      matchedSources: selection.matchedSources,
+      skippedSources: selection.skippedSources,
+      disabledSources: selection.disabledSources,
+      unknownSourceKeys: selection.unknownSourceKeys,
+      unknownSourceIds: selection.unknownSourceIds,
+      effectiveRetailerKeys: selection.effectiveRetailerKeys,
+      requestedRetailerKeys: selection.requestedRetailerKeys,
+      requestedSourceKeys: selection.requestedSourceKeys,
+      requestedSourceIds: selection.requestedSourceIds,
+      wouldRunCount: selection.wouldRunCount,
+    };
+  }
+
+  await ensureManualCategoryOverrideCacheLoaded();
+  const prioritizedSources = selection.sources;
   const results = [];
 
   for (const source of prioritizedSources) {
@@ -136,7 +109,10 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
     }
   }
 
-  const dedupeResult = await dedupeOffersAcrossSources({ retailerKeys });
+  const effectiveRetailerKeys = selection.effectiveRetailerKeys.length > 0
+    ? selection.effectiveRetailerKeys
+    : retailerKeys;
+  const dedupeResult = await dedupeOffersAcrossSources({ retailerKeys: effectiveRetailerKeys });
   let filterMetadata = {
     ok: true,
     skipped: false,
@@ -147,7 +123,8 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
       trigger: `crawl:${trigger}`,
       loggerContext: {
         region,
-        retailerScope: retailerKeys,
+        retailerScope: effectiveRetailerKeys,
+        sourceScope: selection.requestedSourceKeys,
       },
     });
 
@@ -169,22 +146,24 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
       stack: error.stack,
       trigger,
       region,
-      retailerKeys,
+      retailerKeys: effectiveRetailerKeys,
     });
   }
+  const disabledSources = sourceSelectionRequested
+    ? selection.disabledSources
+    : (await fetchDisabledSourcesForRetailers({ retailerKeys })).map((source) => ({
+      ...summarizeSource(source),
+      skippedReason: 'disabled-source',
+    }));
 
   return {
     sources: results,
-    disabledSources: disabledSources.map((source) => ({
-      retailerKey: source.retailerKey,
-      retailerName: source.retailerName,
-      channel: source.channel,
-      label: source.label,
-      sourceUrl: source.sourceUrl,
-      disabledReason: source.disabledReason || 'disabled',
-      notes: source.notes || '',
-      status: 'disabled',
-    })),
+    matchedSources: selection.matchedSources,
+    skippedSources: sourceSelectionRequested ? selection.skippedSources : [],
+    disabledSources,
+    effectiveRetailerKeys,
+    requestedSourceKeys: selection.requestedSourceKeys,
+    requestedSourceIds: selection.requestedSourceIds,
     dedupe: dedupeResult,
     filterMetadata,
   };
@@ -193,4 +172,5 @@ async function crawlAllSources({ region, retailerKeys = [], trigger = 'manual' }
 module.exports = {
   crawlAllSources,
   crawlSource,
+  fetchDisabledSourcesForRetailers,
 };
