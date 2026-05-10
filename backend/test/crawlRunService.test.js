@@ -130,6 +130,22 @@ test('serializeCrawlRun returns status payload without raw offers or raw documen
   assert.equal(serialized.result.sources[0].rawDocuments, undefined);
 });
 
+test('serializeCrawlRun tolerates malformed compact source entries', () => {
+  const serialized = serializeCrawlRun({
+    _id: { toString: () => '665000000000000000000011' },
+    status: 'failed',
+    trigger: 'manual',
+    mode: 'full',
+    result: {
+      sources: [null],
+    },
+  });
+
+  assert.equal(serialized.result.sources.length, 1);
+  assert.equal(serialized.result.sources[0].sourceKey, '');
+  assert.equal(serialized.result.sources[0].status, 'success');
+});
+
 test('stale lock detection only recovers long-running stuck CrawlRuns', () => {
   const now = new Date('2026-05-10T20:00:00.000Z');
 

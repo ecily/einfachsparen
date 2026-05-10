@@ -48,6 +48,10 @@ function compactErrorMessage(value) {
 }
 
 function normalizeSourceResult(source = {}) {
+  if (!source || typeof source !== 'object') {
+    source = {};
+  }
+
   const foundRawItems = numberFrom(source.foundRawItems ?? source.rawCandidateCount ?? source.discoveredLinks);
   const parsedOffers = numberFrom(source.parsedOffers ?? source.offersExtracted ?? source.offersStored);
   const offersStored = numberFrom(source.offersStored);
@@ -108,7 +112,8 @@ function incrementSourceTypeSummary(map, source) {
 }
 
 function buildRunSummary(crawlResult = {}) {
-  const sources = (crawlResult.sources || []).map(normalizeSourceResult);
+  const sourceInputs = Array.isArray(crawlResult.sources) ? crawlResult.sources : [];
+  const sources = sourceInputs.map(normalizeSourceResult);
   const matchedSources = Array.isArray(crawlResult.matchedSources) ? crawlResult.matchedSources : [];
   const skippedSources = Array.isArray(crawlResult.skippedSources) ? crawlResult.skippedSources : [];
   const disabledSources = Array.isArray(crawlResult.disabledSources) ? crawlResult.disabledSources : [];
@@ -568,7 +573,8 @@ async function startCrawlRun({
 
 async function getLatestCrawlRun() {
   return CrawlRun.findOne({})
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .lean();
 }
 
 async function getCrawlRunById(runId) {
@@ -576,7 +582,7 @@ async function getCrawlRunById(runId) {
     return null;
   }
 
-  return CrawlRun.findById(runId);
+  return CrawlRun.findById(runId).lean();
 }
 
 module.exports = {
