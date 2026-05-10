@@ -27,6 +27,7 @@
     "diagnose:official-validity-coverage": "node scripts/diagnoseOfficialValidityCoverage.js",
     "diagnose:billa-official-validity": "node scripts/diagnoseBillaOfficialValidity.js",
     "diagnose:billa-algolia-hit-sample": "node scripts/diagnoseBillaAlgoliaHitSample.js",
+    "diagnose:launch-coverage-audit": "node scripts/diagnoseLaunchCoverageAudit.js",
     "fetch:spar-official-snapshot": "node scripts/fetchSparOfficialSnapshot.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",

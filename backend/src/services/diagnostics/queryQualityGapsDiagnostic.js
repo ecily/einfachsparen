@@ -41,6 +41,7 @@ const QUERY_TERMS = {
 };
 
 const BUTTER_SIDE_TOKENS = [
+  'body',
   'bodybutter',
   'buttercroissant',
   'buttergemuese',
