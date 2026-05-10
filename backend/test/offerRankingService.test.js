@@ -1745,6 +1745,184 @@ test('final response dedupe keeps the same visible offer fingerprint only once',
   assert.equal(prepared[0]._id, 'first-visible');
 });
 
+test('final response dedupe collapses identical visible detergent fingerprints', () => {
+  const first = offer({
+    _id: 'somat-a',
+    title: 'Somat Geschirrspuel-Tabs 55 Stk',
+    titleNormalized: 'somat geschirrspuel tabs 55 stk',
+    retailerKey: 'bipa',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 9.99 },
+    quantityText: '55 Stk',
+    unitValue: 55,
+    unitType: 'stueck',
+    totalComparableAmount: 55,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 0.18, unit: 'Stk', comparable: true },
+  });
+  const second = offer({
+    ...first,
+    _id: 'somat-b',
+    sourceUrl: 'https://example.test/other',
+  });
+
+  const prepared = dedupeFinalResponseOffers([first, second], 'waschmittel');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'somat-a');
+});
+
+test('final response dedupe keeps detergent price variants visible', () => {
+  const base = {
+    title: 'Coral Magic Wash Waschmittel Fluessig div. Sorten 21 WG BIPA 1 Flasche',
+    titleNormalized: 'coral magic wash waschmittel fluessig div sorten 21 wg bipa 1 flasche',
+    retailerKey: 'bipa',
+    sourceType: 'aktionsfinder-json',
+    quantityText: '1 flasche',
+    unitValue: 1,
+    unitType: 'stueck',
+    totalComparableAmount: 1,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 3.99, unit: 'Stk', comparable: true },
+  };
+  const prepared = dedupeFinalResponseOffers([
+    offer({ ...base, _id: 'coral-399', priceCurrent: { amount: 3.99 } }),
+    offer({ ...base, _id: 'coral-499', priceCurrent: { amount: 4.99 }, normalizedUnitPrice: { amount: 4.99, unit: 'Stk', comparable: true } }),
+  ], 'waschmittel');
+
+  assert.equal(prepared.length, 2);
+});
+
+test('final response dedupe keeps real quantity variants but tolerates broken display text with same structured quantity', () => {
+  const goodQuantity = offer({
+    _id: 'ariel-good-qty',
+    title: 'Ariel Waschmittel Fluessig div. Sorten 40 WL dm 1 Flasche',
+    titleNormalized: 'ariel waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    retailerKey: 'dm',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 11.65 },
+    quantityText: '1 flasche',
+    unitValue: 1,
+    unitType: 'stueck',
+    totalComparableAmount: 1,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 11.65, unit: 'Stk', comparable: true },
+  });
+  const brokenQuantityText = offer({
+    ...goodQuantity,
+    _id: 'ariel-broken-qty',
+    quantityText: '$undefined WG / 1 Fl.',
+  });
+  const realQuantityVariant = offer({
+    ...goodQuantity,
+    _id: 'ariel-two-bottles',
+    quantityText: '2 flaschen',
+    unitValue: 2,
+    totalComparableAmount: 2,
+  });
+
+  const prepared = dedupeFinalResponseOffers([goodQuantity, brokenQuantityText, realQuantityVariant], 'waschmittel');
+
+  assert.equal(prepared.length, 2);
+  assert.deepEqual(new Set(prepared.map((item) => item._id)), new Set(['ariel-good-qty', 'ariel-two-bottles']));
+});
+
+test('final response dedupe treats common quantity abbreviations as cosmetic', () => {
+  const longText = offer({
+    _id: 'frosch-long',
+    title: 'Frosch baby Vollwaschmittel fluessig 22 WL dm 1 Flasche',
+    titleNormalized: 'frosch baby vollwaschmittel fluessig 22 wl dm 1 flasche',
+    retailerKey: 'dm',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 6.35 },
+    quantityText: '1 flasche',
+    normalizedUnitPrice: { amount: 6.35, unit: 'Stk', comparable: true },
+  });
+  const shortText = offer({
+    ...longText,
+    _id: 'frosch-short',
+    quantityText: '1 Fl.',
+  });
+
+  const prepared = dedupeFinalResponseOffers([longText, shortText], 'waschmittel');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'frosch-long');
+});
+
+test('final response dedupe keeps condition and retailer variants visible', () => {
+  const base = {
+    title: 'Dr Beckmann WC Reinigungs Blaetter 20 Stk',
+    titleNormalized: 'dr beckmann wc reinigungs blaetter 20 stk',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 2.99 },
+    quantityText: '20 Stk',
+    unitValue: 20,
+    unitType: 'stueck',
+    totalComparableAmount: 20,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 0.15, unit: 'Stk', comparable: true },
+  };
+  const prepared = dedupeFinalResponseOffers([
+    offer({ ...base, _id: 'public-bipa', retailerKey: 'bipa' }),
+    offer({ ...base, _id: 'app-bipa', retailerKey: 'bipa', customerProgramRequired: true, conditionsText: 'nur mit App' }),
+    offer({ ...base, _id: 'public-dm', retailerKey: 'dm' }),
+  ], 'waschmittel');
+
+  assert.equal(prepared.length, 3);
+});
+
+test('final response dedupe prefers better source for true visible duplicate', () => {
+  const aggregator = offer({
+    _id: 'ariel-aggregator',
+    title: 'Ariel Waschmittel Fluessig 40 WL',
+    titleNormalized: 'ariel waschmittel fluessig 40 wl',
+    retailerKey: 'billa',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 11.65 },
+    quantityText: '1 flasche',
+    unitValue: 1,
+    unitType: 'stueck',
+    totalComparableAmount: 1,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 11.65, unit: 'Stk', comparable: true },
+    validFrom: new Date('2026-05-01T00:00:00Z'),
+    validTo: new Date('2026-05-12T00:00:00Z'),
+  });
+  const official = offer({
+    ...aggregator,
+    _id: 'ariel-official',
+    sourceType: 'billa-official-algolia',
+  });
+
+  const prepared = dedupeFinalResponseOffers([aggregator, official], 'waschmittel');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'ariel-official');
+});
+
+test('final response dedupe keeps aggregator when no better source exists', () => {
+  const aggregator = offer({
+    _id: 'dr-beckmann-aggregator',
+    title: 'Dr Beckmann WC Reinigungs Blaetter 20 Stk',
+    titleNormalized: 'dr beckmann wc reinigungs blaetter 20 stk',
+    retailerKey: 'bipa',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 2.99 },
+    quantityText: '20 Stk',
+    unitValue: 20,
+    unitType: 'stueck',
+    totalComparableAmount: 20,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 0.15, unit: 'Stk', comparable: true },
+  });
+
+  const prepared = dedupeFinalResponseOffers([aggregator], 'waschmittel');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'dr-beckmann-aggregator');
+});
+
 test('final response dedupe removes repeated q=mango PENNY Mango vorgereift result', () => {
   const mango = offer({
     _id: 'mango-vorgereift-a',

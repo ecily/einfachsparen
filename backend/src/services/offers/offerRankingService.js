@@ -1739,6 +1739,81 @@ function getOfferQuantityKey(offer) {
   ].join(':');
 }
 
+function normalizeQuantityUnit(value) {
+  const normalized = normalizeSearchText(value);
+
+  if (['stuck', 'stk', 'stueck', 'piece', 'pieces'].includes(normalized)) {
+    return 'stueck';
+  }
+
+  if (['liter'].includes(normalized)) {
+    return 'l';
+  }
+
+  if (['gramm'].includes(normalized)) {
+    return 'g';
+  }
+
+  return normalized;
+}
+
+function numericSignature(value, digits = 4) {
+  const number = Number(value);
+
+  return Number.isFinite(number) && number > 0 ? number.toFixed(digits) : '';
+}
+
+function getStructuredQuantitySignature(offer) {
+  const total = numericSignature(offer?.totalComparableAmount, 4);
+  const comparableUnit = normalizeQuantityUnit(offer?.comparableUnit || offer?.normalizedUnitPrice?.unit || '');
+
+  if (total && comparableUnit) {
+    return `total:${total}:${comparableUnit}`;
+  }
+
+  const unitValue = numericSignature(offer?.unitValue, 4);
+  const unitType = normalizeQuantityUnit(offer?.unitType || '');
+  const packCount = numericSignature(offer?.packCount, 0);
+
+  if (unitValue && unitType) {
+    return `unit:${packCount || '1'}:${unitValue}:${unitType}`;
+  }
+
+  return '';
+}
+
+function normalizeVisibleQuantityText(value) {
+  return normalizeSearchText(value)
+    .replace(/\bundefined\b/g, ' ')
+    .replace(/\bnan\b/g, ' ')
+    .replace(/\bfl\b/g, 'flasche')
+    .replace(/\bflaschen\b/g, 'flasche')
+    .replace(/\bpackung\b/g, 'packung')
+    .replace(/\bpackungen\b/g, 'packung')
+    .replace(/\bstk\b/g, 'stueck')
+    .replace(/\bstuck\b/g, 'stueck')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getVisibleQuantitySignature(offer) {
+  return getStructuredQuantitySignature(offer) || normalizeVisibleQuantityText(offer?.quantityText);
+}
+
+function haveSameVisibleQuantity(left, right) {
+  const leftStructured = getStructuredQuantitySignature(left);
+  const rightStructured = getStructuredQuantitySignature(right);
+
+  if (leftStructured && rightStructured) {
+    return leftStructured === rightStructured;
+  }
+
+  const leftText = normalizeVisibleQuantityText(left?.quantityText);
+  const rightText = normalizeVisibleQuantityText(right?.quantityText);
+
+  return Boolean(leftText && leftText === rightText);
+}
+
 function getOfferScopeKey(offer) {
   const formats = Array.isArray(offer?.appliesToRetailerFormats)
     ? offer.appliesToRetailerFormats
@@ -1963,6 +2038,204 @@ function hasSafeValidityWindow(offer) {
   return Boolean(formatDateLabel(offer?.validFrom) && formatDateLabel(offer?.validTo));
 }
 
+function centsValue(value) {
+  const number = Number(
+    value && typeof value === 'object' && typeof value.toString === 'function'
+      ? value.toString()
+      : value,
+  );
+  return Number.isFinite(number) ? Math.round(number * 100) : null;
+}
+
+function sameVisiblePrice(left, right) {
+  const leftCurrent = centsValue(left?.priceCurrent?.amount);
+  const rightCurrent = centsValue(right?.priceCurrent?.amount);
+
+  if (leftCurrent !== null || rightCurrent !== null) {
+    return leftCurrent !== null && rightCurrent !== null && leftCurrent === rightCurrent;
+  }
+
+  const leftUnit = centsValue(left?.normalizedUnitPrice?.amount);
+  const rightUnit = centsValue(right?.normalizedUnitPrice?.amount);
+  const leftUnitName = normalizeQuantityUnit(left?.normalizedUnitPrice?.unit || left?.comparableUnit || '');
+  const rightUnitName = normalizeQuantityUnit(right?.normalizedUnitPrice?.unit || right?.comparableUnit || '');
+
+  return leftUnit !== null && rightUnit !== null && leftUnit === rightUnit && leftUnitName === rightUnitName;
+}
+
+function dateValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function haveCompatibleResponseValidity(left, right) {
+  const leftFrom = dateValue(left?.validFrom);
+  const leftTo = dateValue(left?.validTo);
+  const rightFrom = dateValue(right?.validFrom);
+  const rightTo = dateValue(right?.validTo);
+
+  if (!leftFrom && !leftTo) return true;
+  if (!rightFrom && !rightTo) return true;
+
+  if (getResponseDateKey(left?.validFrom) === getResponseDateKey(right?.validFrom)
+    && getResponseDateKey(left?.validTo) === getResponseDateKey(right?.validTo)) {
+    return true;
+  }
+
+  if (leftFrom && leftTo && rightFrom && rightTo) {
+    return leftFrom <= rightTo && rightFrom <= leftTo;
+  }
+
+  if (leftTo && rightTo) {
+    return getResponseDateKey(leftTo) === getResponseDateKey(rightTo);
+  }
+
+  return false;
+}
+
+function getResponseDiscountKey(offer) {
+  const value = normalizeSearchText(
+    offer?.benefitType || offer?.effectiveDiscountType || offer?.discountMechanic || offer?.discountType,
+  );
+
+  return value && value !== 'unknown' ? value : '';
+}
+
+function haveCompatibleResponseConditions(left, right) {
+  const leftConditionText = normalizeSearchText(left?.conditionsText || left?.conditionLabel);
+  const rightConditionText = normalizeSearchText(right?.conditionsText || right?.conditionLabel);
+
+  if (leftConditionText && rightConditionText && leftConditionText !== rightConditionText) {
+    return false;
+  }
+
+  if (Boolean(left?.customerProgramRequired) !== Boolean(right?.customerProgramRequired)) {
+    return false;
+  }
+
+  if (Boolean(left?.isMultiBuy) !== Boolean(right?.isMultiBuy)) {
+    return false;
+  }
+
+  const leftMinimum = Number(left?.minimumPurchaseQty || left?.minimumPurchaseQuantity || left?.minQuantity || 1);
+  const rightMinimum = Number(right?.minimumPurchaseQty || right?.minimumPurchaseQuantity || right?.minQuantity || 1);
+
+  if (Number.isFinite(leftMinimum) && Number.isFinite(rightMinimum) && leftMinimum !== rightMinimum) {
+    return false;
+  }
+
+  const leftDiscount = getResponseDiscountKey(left);
+  const rightDiscount = getResponseDiscountKey(right);
+
+  return !leftDiscount || !rightDiscount || leftDiscount === rightDiscount;
+}
+
+function getResponseRawVariantKey(offer) {
+  const rawVariantKeys = [
+    'abmessung',
+    'akku',
+    'breite',
+    'color',
+    'durchmesser',
+    'farbe',
+    'groesse',
+    'grosse',
+    'hoehe',
+    'hohe',
+    'laenge',
+    'lange',
+    'leistung',
+    'material',
+    'model',
+    'modell',
+    'spannung',
+    'staerke',
+    'starke',
+    'tiefe',
+    'voltage',
+    'watt',
+  ];
+
+  return findRawFactValue(offer?.rawFacts, rawVariantKeys);
+}
+
+function haveCompatibleResponseVariant(left, right) {
+  const leftBrand = normalizeSearchText(left?.brand);
+  const rightBrand = normalizeSearchText(right?.brand);
+  const visibleTitle = normalizeSearchText(`${left?.title || ''} ${right?.title || ''}`);
+
+  if (leftBrand && rightBrand && leftBrand !== rightBrand) {
+    return false;
+  }
+
+  const oneSidedBrand = leftBrand || rightBrand;
+  if (oneSidedBrand && !visibleTitle.includes(oneSidedBrand)) {
+    return false;
+  }
+
+  const leftPackage = normalizeSearchText(left?.packageType);
+  const rightPackage = normalizeSearchText(right?.packageType);
+
+  if (leftPackage && rightPackage && leftPackage !== rightPackage) {
+    return false;
+  }
+
+  const leftRawVariant = getResponseRawVariantKey(left);
+  const rightRawVariant = getResponseRawVariantKey(right);
+
+  return !leftRawVariant || !rightRawVariant || leftRawVariant === rightRawVariant;
+}
+
+function hasSameVisibleResponseFingerprint(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  const sameRetailer =
+    normalizeRetailerKey(left.retailerKey || left.retailerName || '') ===
+    normalizeRetailerKey(right.retailerKey || right.retailerName || '');
+
+  if (!sameRetailer) {
+    return false;
+  }
+
+  if (!sameVisiblePrice(left, right)) {
+    return false;
+  }
+
+  if (!haveSameVisibleQuantity(left, right)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseConditions(left, right)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseVariant(left, right)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseValidity(left, right)) {
+    return false;
+  }
+
+  const leftVisibleTitle = normalizeSearchText(left?.title || left?.titleNormalized);
+  const rightVisibleTitle = normalizeSearchText(right?.title || right?.titleNormalized);
+
+  if (leftVisibleTitle && leftVisibleTitle === rightVisibleTitle) {
+    return true;
+  }
+
+  const leftTitle = getOfferTitleKey(left);
+  const rightTitle = getOfferTitleKey(right);
+
+  return Boolean(leftTitle && leftTitle === rightTitle) || sameConservativeTitleIdentity(left, right);
+}
+
 function hasUsableOfferPrice(offer) {
   const currentAmount = Number(offer?.priceCurrent?.amount);
   const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
@@ -2114,9 +2387,16 @@ function dedupeFinalResponseOffers(offers, query = '') {
 
   for (const offer of offers) {
     const keys = getFinalResponseDedupeKeys(offer);
-    const duplicateIndex = keys
+    let duplicateIndex = keys
       .map((key) => keyToIndex.get(key))
       .find((index) => index !== undefined);
+
+    if (duplicateIndex === undefined) {
+      duplicateIndex = unique.findIndex((candidate) => hasSameVisibleResponseFingerprint(candidate, offer));
+      if (duplicateIndex < 0) {
+        duplicateIndex = undefined;
+      }
+    }
 
     if (duplicateIndex === undefined) {
       const newIndex = unique.length;
@@ -2782,6 +3062,7 @@ module.exports = {
   dedupeQueryOffers,
   dedupeResponseOffers,
   dedupeFinalResponseOffers,
+  hasSameVisibleResponseFingerprint,
   reduceAdjacentQueryDuplicates,
   prepareQueryOffersForResponse,
   parseRankingCategories,

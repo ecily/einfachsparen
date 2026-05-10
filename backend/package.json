@@ -19,6 +19,7 @@
     "diagnose:retailer-readiness": "node scripts/diagnoseRetailerReadiness.js",
     "diagnose:sources-ladder": "node scripts/diagnoseSourcesLadder.js",
     "diagnose:ranking-performance": "node scripts/rankingPerformanceSmoke.js",
+    "diagnose:query-quality-gaps": "node scripts/diagnoseQueryQualityGaps.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",
     "rebuild:filters": "node scripts/rebuild-filter-metadata.js"
