@@ -17,6 +17,34 @@ const FLYER_TYPE_PATTERNS = [
   { type: 'weekly-flyer', pattern: /flugblatt|wochen|kw\s*\d+/i },
 ];
 
+const CARD_SELECTOR = [
+  '[data-spar-official-flyer]',
+  '[data-flyer-card]',
+  '[data-testid*="flyer" i]',
+  '[data-testid*="flugblatt" i]',
+  '[class*="flyer" i]',
+  '[class*="leaflet" i]',
+  '[class*="flugblatt" i]',
+  '[class*="brochure" i]',
+  'article',
+  'section',
+  'li',
+].join(', ');
+
+const ACTION_SELECTOR = [
+  '[data-spar-official-action]',
+  '[data-action-card]',
+  '[data-testid*="action" i]',
+  '[data-testid*="aktion" i]',
+  '[class*="action" i]',
+  '[class*="aktion" i]',
+  '[class*="promotion" i]',
+  '[class*="offer" i]',
+  'article',
+  'section',
+  'li',
+].join(', ');
+
 function compactWhitespace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -153,10 +181,14 @@ function detectRegion({ $, sourceUrl, explicitRegionKey, explicitRegionName }) {
   const urlRegion = String(sourceUrl || '').match(/\/aktionen\/([^/?#]+)/i)?.[1] || '';
   const htmlRegionKey = $('[data-region-key]').first().attr('data-region-key') || '';
   const htmlRegionName = $('[data-region-name]').first().attr('data-region-name') || '';
+  const selectedRegion = compactWhitespace($('[aria-current="page"], [aria-selected="true"], .active, .is-active')
+    .toArray()
+    .map((element) => $(element).text())
+    .join(' '));
   const bodyText = compactWhitespace($('body').text());
 
   const regionKey = compactWhitespace(explicitRegionKey || htmlRegionKey || urlRegion).toLowerCase();
-  let regionName = compactWhitespace(explicitRegionName || htmlRegionName);
+  let regionName = compactWhitespace(explicitRegionName || htmlRegionName || selectedRegion.match(/Steiermark/i)?.[0]);
 
   if (!regionName && /steiermark/i.test(bodyText)) {
     regionName = 'Steiermark';
@@ -181,7 +213,14 @@ function collectPageContextYear(html, options = {}) {
 
 function closestText($, element, selectors) {
   for (const selector of selectors) {
-    const value = compactWhitespace($(element).find(selector).first().text());
+    const node = $(element).find(selector).first();
+    const value = compactWhitespace(
+      node.text()
+      || node.attr('content')
+      || node.attr('aria-label')
+      || node.attr('title')
+      || node.attr('datetime')
+    );
     if (value) return value;
   }
 
@@ -193,7 +232,12 @@ function linkByText($, element, textPattern) {
 
   $(element).find('a[href]').each((index, link) => {
     if (found) return;
-    const label = compactWhitespace($(link).text());
+    const label = compactWhitespace([
+      $(link).text(),
+      $(link).attr('aria-label'),
+      $(link).attr('title'),
+      $(link).attr('download'),
+    ].join(' '));
     const href = $(link).attr('href');
     if (textPattern.test(`${label} ${href || ''}`)) {
       found = href;
@@ -203,16 +247,71 @@ function linkByText($, element, textPattern) {
   return found;
 }
 
+function hasFlyerSignal($, element) {
+  const text = compactWhitespace($(element).text());
+  const attrText = compactWhitespace([
+    $(element).attr('class'),
+    $(element).attr('data-testid'),
+    $(element).attr('aria-label'),
+    $(element).attr('title'),
+  ].join(' '));
+
+  return /flugblatt|flyer|leaflet|prospekt|brosch|kw\s*\d+|pdf|flugblatt\.spar\.at/i.test(`${text} ${attrText}`)
+    || $(element).find('a[href*="flugblatt.spar.at"], a[href$=".pdf"], a[href*=".pdf"]').length > 0;
+}
+
+function uniqueElements(elements = []) {
+  const seen = new Set();
+  return elements.filter((element) => {
+    if (!element || seen.has(element)) return false;
+    seen.add(element);
+    return true;
+  });
+}
+
 function extractFlyerCards($) {
-  const explicit = $('[data-spar-official-flyer], [data-flyer-card], article, .flyer-card, .leaflet-card').toArray();
+  const explicit = $('[data-spar-official-flyer], [data-flyer-card]').toArray();
 
   if (explicit.length > 0) {
     return explicit;
   }
 
-  return $('a[href*="flugblatt.spar.at"], a[href$=".pdf"], a[href*=".pdf"]').toArray()
-    .map((link) => $(link).closest('section, article, div').get(0))
+  const selectorMatches = $(CARD_SELECTOR).toArray().filter((element) => hasFlyerSignal($, element));
+  const linkMatches = $('a[href*="flugblatt.spar.at"], a[href$=".pdf"], a[href*=".pdf"]').toArray()
+    .map((link) => $(link).closest('section, article, li, div').get(0))
     .filter(Boolean);
+
+  return uniqueElements([...selectorMatches, ...linkMatches]);
+}
+
+function extractValidityTextFromAttributes($, element) {
+  const attrText = compactWhitespace([
+    $(element).attr('data-validity'),
+    $(element).attr('data-date'),
+    $(element).attr('aria-label'),
+    $(element).attr('title'),
+    $(element).find('[datetime]').first().attr('datetime'),
+  ].join(' '));
+
+  return extractDateParts(attrText).length > 0 ? attrText : '';
+}
+
+function inferTitleFromLinks($, element) {
+  let title = '';
+
+  $(element).find('a[href]').each((index, link) => {
+    if (title) return;
+    const text = compactWhitespace([
+      $(link).text(),
+      $(link).attr('aria-label'),
+      $(link).attr('title'),
+    ].join(' '));
+    if (/spar|interspar|eurospar|gourmet|flugblatt|flyer|kw\s*\d+/i.test(text)) {
+      title = text.replace(/\bPDF\s*(anzeigen|ansehen|herunterladen|download)\b/ig, '').trim();
+    }
+  });
+
+  return compactWhitespace(title);
 }
 
 function buildFlyerCandidate({ $, element, region, sourceUrl, contextYear }) {
@@ -224,17 +323,24 @@ function buildFlyerCandidate({ $, element, region, sourceUrl, contextYear }) {
     'h2',
     'h3',
     'strong',
-  ]) || text.split(' ').slice(0, 10).join(' ');
+  ]) || inferTitleFromLinks($, element) || text.split(' ').slice(0, 10).join(' ');
   const validityText = closestText($, element, [
     '[data-validity]',
+    '[data-date]',
+    '[class*="valid" i]',
+    '[class*="date" i]',
+    '[class*="zeitraum" i]',
+    '[class*="gueltig" i]',
+    '[class*="gültig" i]',
     '.validity',
     '.date',
     'time',
-  ]) || (text.match(/(?:\d{1,2}\.\d{1,2}\.(?:\d{2,4})?).{0,30}(?:\d{1,2}\.\d{1,2}\.(?:\d{2,4})?)/)?.[0] || '');
+  ]) || extractValidityTextFromAttributes($, element)
+    || (text.match(/(?:\d{1,2}\.\d{1,2}\.(?:\d{2,4})?).{0,40}(?:\d{1,2}\.\d{1,2}\.(?:\d{2,4})?)/)?.[0] || '');
   const pdfViewHref = $(element).attr('data-pdf-view-url')
-    || linkByText($, element, /pdf\s*(?:anzeigen|ansehen)|flugblatt\.spar\.at/i);
+    || linkByText($, element, /pdf\s*(?:anzeigen|ansehen)|online\s*(?:anzeigen|blaettern|blättern)|flugblatt\.spar\.at/i);
   const pdfDownloadHref = $(element).attr('data-pdf-download-url')
-    || linkByText($, element, /pdf\s*(?:download|herunterladen)|download/i);
+    || linkByText($, element, /pdf\s*(?:download|herunterladen)|download|\.pdf(?:\?|$)/i);
   const retailerScope = $(element).attr('data-retailer-scope') || detectRetailerScope(text);
   const parsedValidity = parseSparOfficialValidity(validityText, { contextYear });
   const parseWarnings = [...parsedValidity.parseWarnings];
@@ -313,7 +419,16 @@ function extractProductScopeText(text, discountText) {
 }
 
 function extractActionCards($) {
-  return $('[data-spar-official-action], [data-action-card], .action-card, .promotion-card').toArray();
+  const explicit = $('[data-spar-official-action], [data-action-card]').toArray();
+  if (explicit.length > 0) {
+    return explicit;
+  }
+
+  return $(ACTION_SELECTOR).toArray().filter((element) => {
+    const text = compactWhitespace($(element).text());
+    return /-\s?\d+\s?%|\d+\s?%\s*(?:Rabatt|guenstiger|günstiger)/i.test(text)
+      && /kaffee|kaffees|aktion|rabatt|coupon|pickerl/i.test(text);
+  });
 }
 
 function buildActionCandidate({ $, element, region, sourceUrl, contextYear }) {
@@ -322,6 +437,8 @@ function buildActionCandidate({ $, element, region, sourceUrl, contextYear }) {
     '[data-action-title]',
     '.action-title',
     '.promotion-title',
+    '[class*="title" i]',
+    '[class*="headline" i]',
     'h1',
     'h2',
     'h3',
@@ -329,12 +446,19 @@ function buildActionCandidate({ $, element, region, sourceUrl, contextYear }) {
   ]) || text;
   const validityText = closestText($, element, [
     '[data-validity]',
+    '[data-date]',
+    '[class*="valid" i]',
+    '[class*="date" i]',
     '.validity',
     '.date',
     'time',
-  ]);
+  ]) || extractValidityTextFromAttributes($, element)
+    || (text.match(/(?:\d{1,2}\.\d{1,2}\.(?:\d{2,4})?).{0,40}(?:\d{1,2}\.\d{1,2}\.(?:\d{2,4})?)/)?.[0] || '');
   const conditionsText = closestText($, element, [
     '[data-conditions]',
+    '[class*="condition" i]',
+    '[class*="note" i]',
+    '[class*="legal" i]',
     '.conditions',
     '.condition',
     '.notes',

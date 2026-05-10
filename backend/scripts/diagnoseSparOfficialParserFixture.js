@@ -4,20 +4,33 @@ const {
   extractSparOfficialFlyerPage,
 } = require('../src/services/crawl/sparOfficialFlyerParser');
 
+const SOURCE_URL = 'https://www.spar.at/aktionen/steiermark';
+const SYNTHETIC_FIXTURE_PATH = path.resolve(__dirname, '..', 'test', 'fixtures', 'spar-official-steiermark-actions.html');
+const REAL_SNAPSHOT_FIXTURE_PATH = path.resolve(__dirname, '..', 'test', 'fixtures', 'spar-official-steiermark-real-snapshot.html');
+const REAL_SNAPSHOT_HINT = 'HTML von https://www.spar.at/aktionen/steiermark manuell speichern unter test/fixtures/spar-official-steiermark-real-snapshot.html';
+
 function summarize(result) {
-  const dateParseWarnings = [
+  const allWarnings = [
     ...result.flyers.flatMap((flyer) => flyer.quality?.parseWarnings || []),
     ...result.actionCandidates.flatMap((action) => action.quality?.parseWarnings || []),
   ];
+  const uniqueWarnings = [...new Set(allWarnings.filter(Boolean))];
 
   return {
+    available: true,
     sourceKey: result.sourceKey,
     sourceUrl: result.sourceUrl,
     region: result.region,
     extractedFlyersCount: result.flyers.length,
     extractedActionsCount: result.actionCandidates.length,
-    retailerScopes: [...new Set(result.flyers.map((flyer) => flyer.retailerScope).filter(Boolean))],
-    dateParseWarnings: [...new Set(dateParseWarnings.filter((warning) => /validity|date|year/i.test(warning)))],
+    scopes: [...new Set([
+      ...result.flyers.map((flyer) => flyer.retailerScope),
+      ...result.actionCandidates.map((action) => action.retailerScope),
+    ].filter(Boolean))],
+    pdfLinkCount: result.flyers.reduce((count, flyer) =>
+      count + (flyer.pdfViewUrl ? 1 : 0) + (flyer.pdfDownloadUrl ? 1 : 0), 0),
+    dateParseWarnings: uniqueWarnings.filter((warning) => /validity|date|year/i.test(warning)),
+    parserWarnings: uniqueWarnings,
     sampleFlyers: result.flyers.slice(0, 3).map((flyer) => ({
       retailerScope: flyer.retailerScope,
       flyerTitle: flyer.flyerTitle,
@@ -40,16 +53,47 @@ function summarize(result) {
   };
 }
 
-function main() {
-  const fixturePath = process.argv[2]
-    ? path.resolve(process.argv[2])
-    : path.resolve(__dirname, '..', 'test', 'fixtures', 'spar-official-steiermark-actions.html');
+function summarizeFixture(fixturePath, options = {}) {
+  if (!fs.existsSync(fixturePath)) {
+    return {
+      available: false,
+      path: fixturePath,
+      installHint: options.installHint || '',
+      manualHint: options.manualHint || options.installHint || '',
+    };
+  }
+
   const html = fs.readFileSync(fixturePath, 'utf8');
   const result = extractSparOfficialFlyerPage(html, {
-    sourceUrl: 'https://www.spar.at/aktionen/steiermark',
+    sourceUrl: SOURCE_URL,
   });
 
-  console.log(JSON.stringify(summarize(result), null, 2));
+  return {
+    path: fixturePath,
+    ...summarize(result),
+  };
+}
+
+function buildFixtureDiagnostics(options = {}) {
+  const syntheticPath = options.syntheticPath || SYNTHETIC_FIXTURE_PATH;
+  const realSnapshotPath = options.realSnapshotPath || REAL_SNAPSHOT_FIXTURE_PATH;
+
+  return {
+    syntheticFixture: summarizeFixture(syntheticPath),
+    realSnapshotFixture: summarizeFixture(realSnapshotPath, {
+      installHint: REAL_SNAPSHOT_HINT,
+      manualHint: REAL_SNAPSHOT_HINT,
+    }),
+  };
+}
+
+function main() {
+  const overridePath = process.argv[2] ? path.resolve(process.argv[2]) : '';
+  const diagnostics = overridePath
+    ? { syntheticFixture: summarizeFixture(overridePath), realSnapshotFixture: summarizeFixture(REAL_SNAPSHOT_FIXTURE_PATH, { installHint: REAL_SNAPSHOT_HINT, manualHint: REAL_SNAPSHOT_HINT }) }
+    : buildFixtureDiagnostics();
+
+  console.log(JSON.stringify(diagnostics, null, 2));
 }
 
 if (require.main === module) {
@@ -57,5 +101,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  REAL_SNAPSHOT_FIXTURE_PATH,
+  REAL_SNAPSHOT_HINT,
+  SYNTHETIC_FIXTURE_PATH,
+  buildFixtureDiagnostics,
   summarize,
+  summarizeFixture,
 };

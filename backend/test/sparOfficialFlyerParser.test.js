@@ -4,6 +4,10 @@ const path = require('node:path');
 const test = require('node:test');
 const mongoose = require('mongoose');
 const {
+  REAL_SNAPSHOT_HINT,
+  buildFixtureDiagnostics,
+} = require('../scripts/diagnoseSparOfficialParserFixture');
+const {
   detectRetailerScope,
   extractSparOfficialFlyerPage,
   parseSparOfficialValidity,
@@ -12,6 +16,7 @@ const {
 
 const fixturePath = path.join(__dirname, 'fixtures', 'spar-official-steiermark-actions.html');
 const fixtureHtml = fs.readFileSync(fixturePath, 'utf8');
+const missingRealSnapshotPath = path.join(__dirname, 'fixtures', 'missing-real-snapshot-for-test.html');
 
 function extractFixture() {
   return extractSparOfficialFlyerPage(fixtureHtml, {
@@ -112,6 +117,66 @@ test('dedupes identical PDF flyer cards without losing real format variants', ()
   assert.ok(result.flyers.some((flyer) => flyer.retailerScope === 'eurospar'));
   assert.ok(result.flyers.some((flyer) => flyer.retailerScope === 'interspar'));
   assert.ok(result.flyers.some((flyer) => flyer.retailerScope === 'spar-gourmet'));
+});
+
+test('extracts real-like SPAR snapshot structures with tolerant selectors', () => {
+  const html = `
+    <html>
+      <body>
+        <nav><a aria-current="page" href="/aktionen/steiermark">Steiermark</a></nav>
+        <main>
+          <section class="cmp-flyout cmp-flyer-teaser" data-testid="flyer-teaser">
+            <p class="brand">EUROSPAR</p>
+            <h3>Flugblatt KW 19</h3>
+            <span class="validity-label">Do., 07.05.26 - Mi., 20.05.26</span>
+            <a aria-label="PDF anzeigen EUROSPAR Flugblatt" href="https://flugblatt.spar.at/view/eurospar-real-kw19">Zum Flugblatt</a>
+            <a title="PDF herunterladen" href="/downloads/eurospar-real-kw19.pdf">Download</a>
+          </section>
+          <article class="promotion-tile">
+            <h3 class="headline">-25% auf alle KAFFEES</h3>
+            <p class="date-range">Do., 07.05.26 - Mi., 20.05.26</p>
+            <small class="legal-text">Nur in teilnehmenden SPAR-Maerkten. Ausgenommen Aktionsware.</small>
+          </article>
+        </main>
+      </body>
+    </html>
+  `;
+  const result = extractSparOfficialFlyerPage(html, {
+    sourceUrl: 'https://www.spar.at/aktionen/steiermark',
+  });
+
+  assert.equal(result.region.regionKey, 'steiermark');
+  assert.equal(result.region.regionName, 'Steiermark');
+  assert.deepEqual(result.extractedOffers, []);
+  assert.equal(result.flyers.length, 1);
+  assert.equal(result.flyers[0].retailerScope, 'eurospar');
+  assert.equal(result.flyers[0].pdfViewUrl, 'https://flugblatt.spar.at/view/eurospar-real-kw19');
+  assert.equal(result.flyers[0].pdfDownloadUrl, 'https://www.spar.at/downloads/eurospar-real-kw19.pdf');
+  assert.equal(result.actionCandidates.length, 1);
+  assert.equal(result.actionCandidates[0].discountText, '-25%');
+  assert.equal(result.actionCandidates[0].productScopeText, 'alle KAFFEES');
+});
+
+test('diagnose fixture report handles missing real snapshot without crashing', () => {
+  const beforeState = mongoose.connection.readyState;
+  const report = buildFixtureDiagnostics({
+    syntheticPath: fixturePath,
+    realSnapshotPath: missingRealSnapshotPath,
+  });
+
+  assert.equal(report.syntheticFixture.available, true);
+  assert.equal(report.syntheticFixture.extractedFlyersCount, 4);
+  assert.equal(report.syntheticFixture.extractedActionsCount, 1);
+  assert.equal(report.syntheticFixture.pdfLinkCount, 6);
+  assert.deepEqual(
+    report.syntheticFixture.scopes.sort(),
+    ['eurospar', 'interspar', 'spar', 'spar-gourmet'].sort()
+  );
+  assert.equal(report.realSnapshotFixture.available, false);
+  assert.equal(report.realSnapshotFixture.manualHint, REAL_SNAPSHOT_HINT);
+  assert.match(report.realSnapshotFixture.installHint, /spar-official-steiermark-real-snapshot\.html/);
+  assert.equal(mongoose.connection.readyState, beforeState);
+  assert.equal(mongoose.connection.readyState, 0);
 });
 
 test('parser is fixture-only and does not open a MongoDB connection', () => {
