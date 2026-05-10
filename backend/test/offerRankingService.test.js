@@ -11,6 +11,7 @@ const {
   dedupeFinalResponseOffers,
   dedupeQueryOffers,
   dedupeResponseOffers,
+  dedupeVisibleCardResponseOffers,
   normalizeSearchText,
   normalizeRetailerList,
   parseRankingCategories,
@@ -2011,6 +2012,161 @@ test('final response dedupe keeps different retailers variants quantities and co
   ];
 
   assert.equal(dedupeFinalResponseOffers(offers, 'mango').length, 5);
+});
+
+test('visible card dedupe collapses dm Dr Beckmann identical card duplicates', () => {
+  const base = offer({
+    _id: 'dr-beckmann-a',
+    title: 'Dr. Beckmann Aufhelltuecher Aktiv-Weiss 3 in 1 15 Stueck',
+    titleNormalized: 'dr beckmann aufhelltuecher aktiv weiss 3 in 1 15 stueck',
+    retailerKey: 'dm',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 3.25 },
+    quantityText: '15 Stueck',
+    unitValue: 15,
+    unitType: 'stueck',
+    totalComparableAmount: 15,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 0.2167, unit: 'Stk', comparable: true },
+    validFrom: new Date('2026-05-01T00:00:00Z'),
+    validTo: new Date('2026-05-12T00:00:00Z'),
+  });
+
+  const result = dedupeVisibleCardResponseOffers([base, { ...base, _id: 'dr-beckmann-b', sourceType: 'wogibtswas-html' }], 'waschmittel');
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0]._id, 'dr-beckmann-a');
+});
+
+test('visible card dedupe collapses dm Somat Excellence identical card duplicates', () => {
+  const base = offer({
+    _id: 'somat-excellence-a',
+    title: 'Somat Excellence Premium Geschirrspuel-Tabs 5 in 1 36 Stueck',
+    titleNormalized: 'somat excellence premium geschirrspuel tabs 5 in 1 36 stueck',
+    retailerKey: 'dm',
+    sourceType: 'wogibtswas-html',
+    priceCurrent: { amount: 9.35 },
+    quantityText: '36 Stueck',
+    unitValue: 36,
+    unitType: 'stueck',
+    totalComparableAmount: 36,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 0.2597, unit: 'Stk', comparable: true },
+    validFrom: new Date('2026-05-01T00:00:00Z'),
+    validTo: new Date('2026-05-12T00:00:00Z'),
+  });
+
+  const result = dedupeVisibleCardResponseOffers([{ ...base, _id: 'somat-excellence-b' }, base], 'waschmittel');
+
+  assert.equal(result.offers.length, 1);
+});
+
+test('visible card dedupe collapses dm Profissimo Schmutzradierer identical card duplicates', () => {
+  const base = offer({
+    _id: 'profissimo-a',
+    title: 'Profissimo Schmutzradierer 6 Stueck',
+    titleNormalized: 'profissimo schmutzradierer 6 stueck',
+    retailerKey: 'dm',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 2.55 },
+    quantityText: '6 Stueck',
+    unitValue: 6,
+    unitType: 'stueck',
+    totalComparableAmount: 6,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 0.425, unit: 'Stk', comparable: true },
+    validFrom: new Date('2026-05-01T00:00:00Z'),
+    validTo: new Date('2026-05-12T00:00:00Z'),
+  });
+
+  const result = dedupeVisibleCardResponseOffers([base, { ...base, _id: 'profissimo-b' }], 'waschmittel');
+
+  assert.equal(result.offers.length, 1);
+});
+
+test('visible card dedupe keeps Coral and Ariel price variants visible', () => {
+  const coral = {
+    title: 'Coral Magic Wash Waschmittel Fluessig 21 WG BIPA 1 Flasche',
+    titleNormalized: 'coral magic wash waschmittel fluessig 21 wg bipa 1 flasche',
+    retailerKey: 'bipa',
+    quantityText: '1 Flasche',
+    unitValue: 1,
+    unitType: 'stueck',
+    totalComparableAmount: 1,
+    comparableUnit: 'stueck',
+  };
+  const ariel = {
+    title: 'Ariel Waschmittel Pods 54 WG BIPA 1 Packung',
+    titleNormalized: 'ariel waschmittel pods 54 wg bipa 1 packung',
+    retailerKey: 'bipa',
+    quantityText: '1 Packung',
+    unitValue: 1,
+    unitType: 'stueck',
+    totalComparableAmount: 1,
+    comparableUnit: 'stueck',
+  };
+  const result = dedupeVisibleCardResponseOffers([
+    offer({ ...coral, _id: 'coral-399', priceCurrent: { amount: 3.99 } }),
+    offer({ ...coral, _id: 'coral-499', priceCurrent: { amount: 4.99 } }),
+    offer({ ...ariel, _id: 'ariel-1899', priceCurrent: { amount: 18.99 } }),
+    offer({ ...ariel, _id: 'ariel-1999', priceCurrent: { amount: 19.99 } }),
+  ], 'waschmittel');
+
+  assert.deepEqual(new Set(result.offers.map((item) => item._id)), new Set([
+    'coral-399',
+    'coral-499',
+    'ariel-1899',
+    'ariel-1999',
+  ]));
+});
+
+test('visible card dedupe keeps condition retailer validity and customer-program variants visible', () => {
+  const base = {
+    title: 'Somat Excellence Premium Geschirrspuel-Tabs 5 in 1 36 Stueck',
+    titleNormalized: 'somat excellence premium geschirrspuel tabs 5 in 1 36 stueck',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 9.35 },
+    quantityText: '36 Stueck',
+    unitValue: 36,
+    unitType: 'stueck',
+    totalComparableAmount: 36,
+    comparableUnit: 'stueck',
+    validFrom: new Date('2026-05-01T00:00:00Z'),
+    validTo: new Date('2026-05-12T00:00:00Z'),
+  };
+  const result = dedupeVisibleCardResponseOffers([
+    offer({ ...base, _id: 'dm-public', retailerKey: 'dm' }),
+    offer({ ...base, _id: 'bipa-public', retailerKey: 'bipa' }),
+    offer({ ...base, _id: 'dm-app', retailerKey: 'dm', customerProgramRequired: true, conditionsText: 'nur mit App' }),
+    offer({ ...base, _id: 'dm-discount', retailerKey: 'dm', conditionsText: 'ab 2 Packungen' }),
+    offer({ ...base, _id: 'dm-other-validity', retailerKey: 'dm', validTo: new Date('2026-05-19T00:00:00Z') }),
+  ], 'waschmittel');
+
+  assert.equal(result.offers.length, 5);
+});
+
+test('visible card dedupe only tolerates broken quantity text when structured quantity safely matches', () => {
+  const base = {
+    title: 'Profissimo Schmutzradierer 6 Stueck',
+    titleNormalized: 'profissimo schmutzradierer 6 stueck',
+    retailerKey: 'dm',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 2.55 },
+    normalizedUnitPrice: { amount: 0.425, unit: 'Stk', comparable: true },
+    validFrom: new Date('2026-05-01T00:00:00Z'),
+    validTo: new Date('2026-05-12T00:00:00Z'),
+  };
+  const safeResult = dedupeVisibleCardResponseOffers([
+    offer({ ...base, _id: 'good', quantityText: '6 Stueck', unitValue: 6, unitType: 'stueck', totalComparableAmount: 6, comparableUnit: 'stueck' }),
+    offer({ ...base, _id: 'broken', quantityText: '$undefined Stk', unitValue: 6, unitType: 'stueck', totalComparableAmount: 6, comparableUnit: 'stueck' }),
+  ], 'waschmittel');
+  const unsafeResult = dedupeVisibleCardResponseOffers([
+    offer({ ...base, _id: 'good-text-only', quantityText: '6 Stueck' }),
+    offer({ ...base, _id: 'broken-text-only', quantityText: '$undefined Stk' }),
+  ], 'waschmittel');
+
+  assert.equal(safeResult.offers.length, 1);
+  assert.equal(unsafeResult.offers.length, 2);
 });
 
 [

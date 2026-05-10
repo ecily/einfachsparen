@@ -179,6 +179,10 @@ function printTextSummary(report) {
   console.log(`butter true=${report.butter.trueCandidateCount} sideHits=${report.butter.sideHitCount} excludedByIntent=${report.butter.excludedByIntent.length}`);
   console.log(`reis true=${report.reis.trueCandidateCount} weak=${report.reis.weakCandidateCount} sideHits=${report.reis.sideHitCount} excludedByIntent=${report.reis.excludedByIntent.length}`);
   console.log(`waschmittel duplicateGroups=${report.waschmittelDuplicates.duplicateGroupCount}`);
+  if (report.waschmittelDuplicates.responseDedupeSimulation) {
+    const simulation = report.waschmittelDuplicates.responseDedupeSimulation;
+    console.log(`waschmittel visibleRepeats before=${simulation.visibleRepeatCountBefore} after=${simulation.visibleRepeatCountAfter} secondStageCollapsed=${simulation.secondStageCollapsedCount}`);
+  }
   for (const action of report.recommendedNextActions) {
     console.log(`- ${action}`);
   }

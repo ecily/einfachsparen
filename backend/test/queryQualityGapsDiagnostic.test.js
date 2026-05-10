@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   buildQueryQualityGapsDiagnostic,
+  buildResponseDedupeSimulation,
   buildWaschmittelDuplicates,
   classifyButterOffer,
   classifyRiceOffer,
@@ -198,4 +199,44 @@ test('read-only contract remains explicit', () => {
   assert.deepEqual(report.mutatedCollections, []);
   assert.equal(report.performanceSafe, true);
   assert.equal(report.checkedAt, '2026-05-09T12:00:00.000Z');
+});
+
+test('response dedupe simulation reports second-stage visible card collapse fields', () => {
+  const first = offer({
+    _id: 'somat-a',
+    title: 'Somat Excellence Premium Geschirrspuel-Tabs 5 in 1 36 Stueck',
+    titleNormalized: 'somat excellence premium geschirrspuel tabs 5 in 1 36 stueck',
+    retailerKey: 'dm',
+    brand: 'Somat',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Waschmittel',
+    categoryKey: 'drogerie-hygiene',
+    subcategoryKey: 'waschmittel',
+    sourceId: 'source-a',
+    sourceType: 'aktionsfinder-json',
+    dedupeKey: 'dm::somat-a',
+    comparisonGroup: 'somat-excellence-premium-tabs-36-stueck',
+    priceCurrent: { amount: 9.35, currency: 'EUR' },
+    quantityText: '36 Stueck',
+    unitValue: 36,
+    unitType: 'stueck',
+    totalComparableAmount: 36,
+    comparableUnit: 'stueck',
+    normalizedUnitPrice: { amount: 0.2597, unit: 'stueck', comparable: true },
+  });
+  const second = {
+    ...first,
+    _id: 'somat-b',
+    brand: 'Somat Plus',
+    sourceId: 'source-b',
+    dedupeKey: 'dm::somat-b',
+    sourceUrl: 'https://example.test/other',
+    sourceType: 'wogibtswas-html',
+  };
+  const simulation = buildResponseDedupeSimulation({ offers: [first, second], limit: 10 });
+
+  assert.equal(simulation.secondStageCollapsedCount, 1);
+  assert.ok(Array.isArray(simulation.examplesSecondStageCollapsed));
+  assert.ok(Array.isArray(simulation.examplesKeptBecauseVariant));
+  assert.equal(simulation.visibleRepeatCountAfter, 0);
 });

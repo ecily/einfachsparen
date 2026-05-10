@@ -2,6 +2,7 @@ const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const {
   applyQueryMatch,
   dedupeFinalResponseOffers,
+  dedupeVisibleCardResponseOffers,
   scoreOfferAgainstQuery,
 } = require('../offers/offerRankingService');
 
@@ -526,7 +527,9 @@ function offerId(offer = {}) {
 function buildResponseDedupeSimulation({ offers = [], limit = 60 } = {}) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 60, 200));
   const before = applyQueryMatch(offers, 'waschmittel').slice(0, safeLimit);
-  const after = dedupeFinalResponseOffers(before, 'waschmittel');
+  const afterFirstStage = dedupeFinalResponseOffers(before, 'waschmittel');
+  const secondStage = dedupeVisibleCardResponseOffers(afterFirstStage, 'waschmittel', { collectDiagnostics: true });
+  const after = secondStage.offers;
   const beforeGroups = buildVisibleRankingDuplicateGroups(before);
   const afterGroups = buildVisibleRankingDuplicateGroups(after);
   const afterIds = new Set(after.map(offerId).filter(Boolean));
@@ -549,7 +552,8 @@ function buildResponseDedupeSimulation({ offers = [], limit = 60 } = {}) {
     simulatedOutputCount: after.length,
     visibleRepeatCountBefore: beforeGroups.length,
     visibleRepeatCountAfter: afterGroups.length,
-    strongCollapsedCount: before.length - after.length,
+    strongCollapsedCount: before.length - afterFirstStage.length,
+    secondStageCollapsedCount: secondStage.diagnostics.secondStageCollapsedCount,
     variantsKeptCount: keptAsVariants.length,
     examplesCollapsed: collapsedGroups.slice(0, 8).map((group) => ({
       reason: group.reason,
@@ -558,6 +562,8 @@ function buildResponseDedupeSimulation({ offers = [], limit = 60 } = {}) {
       kept: group.offers.filter((offer) => !offer.id || afterIds.has(offer.id)).slice(0, 2),
       collapsed: group.collapsedOffers.slice(0, 3),
     })),
+    examplesSecondStageCollapsed: secondStage.diagnostics.examplesSecondStageCollapsed,
+    examplesKeptBecauseVariant: secondStage.diagnostics.examplesKeptBecauseVariant,
     examplesKeptAsVariants: keptAsVariants.slice(0, 8),
   };
 }

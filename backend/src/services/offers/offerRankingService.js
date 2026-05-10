@@ -2134,6 +2134,43 @@ function haveCompatibleResponseConditions(left, right) {
   return !leftDiscount || !rightDiscount || leftDiscount === rightDiscount;
 }
 
+function haveSameVisibleCardConditions(left, right) {
+  const leftConditionText = normalizeSearchText(left?.conditionsText || left?.conditionLabel);
+  const rightConditionText = normalizeSearchText(right?.conditionsText || right?.conditionLabel);
+
+  if (leftConditionText !== rightConditionText) {
+    return false;
+  }
+
+  if (Boolean(left?.customerProgramRequired) !== Boolean(right?.customerProgramRequired)) {
+    return false;
+  }
+
+  if (Boolean(left?.isMultiBuy) !== Boolean(right?.isMultiBuy)) {
+    return false;
+  }
+
+  const leftMinimum = Number(left?.minimumPurchaseQty || left?.minimumPurchaseQuantity || left?.minQuantity || 1);
+  const rightMinimum = Number(right?.minimumPurchaseQty || right?.minimumPurchaseQuantity || right?.minQuantity || 1);
+
+  if (Number.isFinite(leftMinimum) && Number.isFinite(rightMinimum) && leftMinimum !== rightMinimum) {
+    return false;
+  }
+
+  return true;
+}
+
+function getVisibleCardValidityLabel(offer) {
+  return normalizeSearchText(buildValidityLabel(offer));
+}
+
+function haveSameVisibleCardValidity(left, right) {
+  const leftLabel = getVisibleCardValidityLabel(left);
+  const rightLabel = getVisibleCardValidityLabel(right);
+
+  return leftLabel === rightLabel;
+}
+
 function getResponseRawVariantKey(offer) {
   const rawVariantKeys = [
     'abmessung',
@@ -2236,6 +2273,65 @@ function hasSameVisibleResponseFingerprint(left, right) {
   return Boolean(leftTitle && leftTitle === rightTitle) || sameConservativeTitleIdentity(left, right);
 }
 
+function hasVeryStrongVisibleCardTitleIdentity(left, right) {
+  const leftVisibleTitle = normalizeSearchText(left?.title || left?.titleNormalized);
+  const rightVisibleTitle = normalizeSearchText(right?.title || right?.titleNormalized);
+
+  if (!leftVisibleTitle || !rightVisibleTitle) {
+    return false;
+  }
+
+  if (leftVisibleTitle === rightVisibleTitle) {
+    return true;
+  }
+
+  const leftTokens = getComparableTitleTokens(left);
+  const rightTokens = getComparableTitleTokens(right);
+
+  if (leftTokens.length < 3 || rightTokens.length < 3) {
+    return false;
+  }
+
+  const rightSet = new Set(rightTokens);
+  const shared = leftTokens.filter((token) => rightSet.has(token)).length;
+  const smaller = Math.min(new Set(leftTokens).size, new Set(rightTokens).size);
+  const larger = Math.max(new Set(leftTokens).size, new Set(rightTokens).size);
+
+  return shared >= 3 && shared / smaller >= 0.9 && shared / larger >= 0.8;
+}
+
+function hasSameVisibleCardFingerprint(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  const sameRetailer =
+    normalizeRetailerKey(left.retailerKey || left.retailerName || '') ===
+    normalizeRetailerKey(right.retailerKey || right.retailerName || '');
+
+  if (!sameRetailer) {
+    return false;
+  }
+
+  if (!hasVeryStrongVisibleCardTitleIdentity(left, right)) {
+    return false;
+  }
+
+  if (!sameVisiblePrice(left, right)) {
+    return false;
+  }
+
+  if (!haveSameVisibleQuantity(left, right)) {
+    return false;
+  }
+
+  if (!haveSameVisibleCardValidity(left, right)) {
+    return false;
+  }
+
+  return haveSameVisibleCardConditions(left, right);
+}
+
 function hasUsableOfferPrice(offer) {
   const currentAmount = Number(offer?.priceCurrent?.amount);
   const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
@@ -2264,6 +2360,52 @@ function compareResponseDuplicatePreference(left, right, query) {
 
   if (leftValidity !== rightValidity) {
     return rightValidity - leftValidity;
+  }
+
+  return compareOffersByRanking(left, right, { query });
+}
+
+function visibleQuantityTextCompletenessScore(offer) {
+  const text = normalizeVisibleQuantityText(offer?.quantityText);
+
+  if (!text) {
+    return 0;
+  }
+
+  if (/\bundefined\b|\bnan\b/.test(normalizeSearchText(offer?.quantityText))) {
+    return 1;
+  }
+
+  return Math.min(10, text.length);
+}
+
+function compareVisibleCardDuplicatePreference(left, right, query) {
+  const leftSourceRank = getSourcePriorityRank(left);
+  const rightSourceRank = getSourcePriorityRank(right);
+
+  if (leftSourceRank !== rightSourceRank) {
+    return leftSourceRank - rightSourceRank;
+  }
+
+  const leftValidity = Number(hasSafeValidityWindow(left));
+  const rightValidity = Number(hasSafeValidityWindow(right));
+
+  if (leftValidity !== rightValidity) {
+    return rightValidity - leftValidity;
+  }
+
+  const leftQuantityScore = visibleQuantityTextCompletenessScore(left);
+  const rightQuantityScore = visibleQuantityTextCompletenessScore(right);
+
+  if (leftQuantityScore !== rightQuantityScore) {
+    return rightQuantityScore - leftQuantityScore;
+  }
+
+  const leftImage = Number(Boolean(left?.imageUrl));
+  const rightImage = Number(Boolean(right?.imageUrl));
+
+  if (leftImage !== rightImage) {
+    return rightImage - leftImage;
   }
 
   return compareOffersByRanking(left, right, { query });
@@ -2419,6 +2561,109 @@ function dedupeFinalResponseOffers(offers, query = '') {
   }
 
   return unique;
+}
+
+function summarizeVisibleCardDedupeOffer(offer = {}) {
+  return {
+    id: String(offer._id || offer.id || ''),
+    retailerKey: offer.retailerKey || '',
+    sourceType: offer.sourceType || '',
+    title: offer.title || '',
+    price: offer.priceCurrent?.amount ?? null,
+    quantityText: offer.quantityText || '',
+    validityLabel: buildValidityLabel(offer),
+    conditionsText: offer.conditionsText || '',
+    customerProgramRequired: Boolean(offer.customerProgramRequired),
+  };
+}
+
+function getVisibleCardVariantDifference(left, right) {
+  if (
+    normalizeRetailerKey(left?.retailerKey || left?.retailerName || '') !==
+    normalizeRetailerKey(right?.retailerKey || right?.retailerName || '')
+  ) {
+    return 'retailer';
+  }
+
+  if (!sameVisiblePrice(left, right)) {
+    return 'price';
+  }
+
+  if (!haveSameVisibleQuantity(left, right)) {
+    return 'quantity';
+  }
+
+  if (!haveSameVisibleCardValidity(left, right)) {
+    return 'validity';
+  }
+
+  if (!haveSameVisibleCardConditions(left, right)) {
+    return 'conditions';
+  }
+
+  if (!hasVeryStrongVisibleCardTitleIdentity(left, right)) {
+    return 'title';
+  }
+
+  return '';
+}
+
+function dedupeVisibleCardResponseOffers(offers, query = '', { collectDiagnostics = false } = {}) {
+  const unique = [];
+  const diagnostics = {
+    visibleRepeatCountBefore: Math.max(0, offers.length - new Set(offers.map((offer) => getOfferIdentity(offer)).filter(Boolean)).size),
+    visibleRepeatCountAfter: 0,
+    secondStageCollapsedCount: 0,
+    examplesSecondStageCollapsed: [],
+    examplesKeptBecauseVariant: [],
+  };
+
+  for (const offer of offers) {
+    const duplicateIndex = unique.findIndex((candidate) => hasSameVisibleCardFingerprint(candidate, offer));
+
+    if (duplicateIndex < 0) {
+      if (collectDiagnostics && diagnostics.examplesKeptBecauseVariant.length < 8) {
+        const related = unique.find((candidate) => {
+          const leftTitle = getOfferTitleKey(candidate);
+          const rightTitle = getOfferTitleKey(offer);
+
+          return leftTitle && rightTitle && leftTitle === rightTitle;
+        });
+        const reason = related ? getVisibleCardVariantDifference(related, offer) : '';
+
+        if (reason && reason !== 'title') {
+          diagnostics.examplesKeptBecauseVariant.push({
+            reason,
+            kept: summarizeVisibleCardDedupeOffer(related),
+            variant: summarizeVisibleCardDedupeOffer(offer),
+          });
+        }
+      }
+
+      unique.push(offer);
+      continue;
+    }
+
+    const current = unique[duplicateIndex];
+    const comparison = compareVisibleCardDuplicatePreference(current, offer, query);
+    const preferred = comparison <= 0 ? current : offer;
+    const collapsed = preferred === current ? offer : current;
+
+    unique[duplicateIndex] = preferred;
+    diagnostics.secondStageCollapsedCount += 1;
+
+    if (collectDiagnostics && diagnostics.examplesSecondStageCollapsed.length < 8) {
+      diagnostics.examplesSecondStageCollapsed.push({
+        reason: 'same visible card fingerprint',
+        kept: summarizeVisibleCardDedupeOffer(preferred),
+        collapsed: summarizeVisibleCardDedupeOffer(collapsed),
+      });
+    }
+  }
+
+  diagnostics.visibleRepeatCountAfter = Math.max(0, unique.length - new Set(unique.map((offer) => getOfferIdentity(offer)).filter(Boolean)).size);
+
+  return collectDiagnostics ? { offers: unique, diagnostics } : { offers: unique };
 }
 
 function dedupeQueryOffers(offers, query) {
@@ -2999,10 +3244,11 @@ async function buildOfferRanking({
       return String(left.title).localeCompare(String(right.title), 'de');
     });
   const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query);
-  const offers = dedupeFinalResponseOffers(
+  const finalResponseOffers = dedupeFinalResponseOffers(
     responseCandidateOffers.slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit),
     query
   );
+  const offers = dedupeVisibleCardResponseOffers(finalResponseOffers, query).offers;
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
 
   const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
@@ -3062,7 +3308,9 @@ module.exports = {
   dedupeQueryOffers,
   dedupeResponseOffers,
   dedupeFinalResponseOffers,
+  dedupeVisibleCardResponseOffers,
   hasSameVisibleResponseFingerprint,
+  hasSameVisibleCardFingerprint,
   reduceAdjacentQueryDuplicates,
   prepareQueryOffersForResponse,
   parseRankingCategories,
