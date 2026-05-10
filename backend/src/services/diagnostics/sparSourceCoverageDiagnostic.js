@@ -102,6 +102,9 @@ function deriveSourceKey(definition = {}) {
 
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
+  if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
   if (url.includes('spar.at')) return 'spar-official-flyer';
 
   return compact([definition.channel, definition.retailerKey, format]).join('-');
@@ -112,6 +115,9 @@ function inferParserOrAdapter(definition = {}) {
 
   if (definition.channel === 'aggregator' && url.includes('aktionsfinder.at')) return 'crawlAktionsfinderSource / aktionsfinderParser / offerNormalizer';
   if (definition.channel === 'aggregator' && url.includes('marktguru.at')) return 'crawlMarktguruSource';
+  if (definition.channel === 'official-flyer' && definition.sourceType === 'pdf' && /flugblatt\.(?:spar|interspar)\.at/i.test(url)) {
+    return 'crawlOfficialSource / sparOfficialFlyerPdfParser text-layer only';
+  }
   if (definition.channel === 'official-flyer') return 'crawlOfficialSource generic link discovery; no SPAR-specific flyer/PDF offer parser branch';
   if (definition.channel === 'official-site') return 'crawlOfficialSource';
 

@@ -26,6 +26,15 @@ const {
   summarizeRejections,
 } = require('./pennyPdfLeafletParser');
 const {
+  PARSER_VERSION: SPAR_PDF_PARSER_VERSION,
+  SOURCE_TYPE: SPAR_PDF_SOURCE_TYPE,
+  buildValidityFromSource,
+  extractSparPdfReference,
+  normalizeSparPdfCandidatesToOffers,
+  sourceKeyForFormat,
+  summarizeRejections: summarizeSparPdfRejections,
+} = require('./sparOfficialFlyerPdfParser');
+const {
   extractIssuuDocumentsFromHtml,
   resolveIssuuOriginalPdfUrl,
 } = require('./issuuPdfResolver');
@@ -922,10 +931,11 @@ async function fetchHtml(url) {
   };
 }
 
-async function fetchBinary(url, accept = 'application/pdf,*/*') {
+async function fetchBinary(url, accept = 'application/pdf,*/*', { timeoutMs = 45000, maxContentLength = 40 * 1024 * 1024 } = {}) {
   const response = await axios.get(url, {
-    timeout: 45000,
+    timeout: timeoutMs,
     responseType: 'arraybuffer',
+    maxContentLength,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
       Accept: accept,
@@ -937,6 +947,151 @@ async function fetchBinary(url, accept = 'application/pdf,*/*') {
     response,
     buffer: Buffer.from(response.data),
     canonicalUrl: response.request?.res?.responseUrl || url,
+  };
+}
+
+function isSparOfficialPdfSource(source = {}) {
+  const url = String(source.sourceUrl || '');
+  return source.retailerKey === 'spar'
+    && (source.sourceType === 'pdf' || /\/(?:getPdf|ViewPdf)\.ashx$/i.test(url))
+    && /https:\/\/flugblatt\.(?:spar|interspar)\.at\//i.test(url);
+}
+
+async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
+  const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
+  const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
+  const maxPdfBytes = Number(source.crawlPolicy?.maxPdfBytes || 40 * 1024 * 1024);
+  const maxPages = Number(source.crawlPolicy?.maxPdfPages || 6);
+  const { response, buffer, canonicalUrl } = await fetchBinary(source.sourceUrl, 'application/pdf,*/*', {
+    timeoutMs: Number(source.crawlPolicy?.timeoutMs || 120000),
+    maxContentLength: maxPdfBytes,
+  });
+
+  if (buffer.length > maxPdfBytes) {
+    throw new Error(`SPAR PDF exceeds configured maxPdfBytes ${maxPdfBytes}.`);
+  }
+
+  const pdfSha256 = createHash(buffer);
+  const validity = buildValidityFromSource(source);
+  const pdfReference = await extractSparPdfReference({
+    pdfBuffer: buffer,
+    sourceUrl: canonicalUrl || source.sourceUrl,
+    sourceRetailerFormat,
+    validity,
+    maxPages,
+  });
+  const normalizedOffers = normalizeSparPdfCandidatesToOffers({
+    pdfReference,
+    source,
+    crawlJobId,
+    region,
+    pdfUrl: canonicalUrl || source.sourceUrl,
+    pdfSha256,
+  });
+  const rejectionReasons = summarizeSparPdfRejections(pdfReference.candidates);
+
+  const rawDocument = await createCompactRawDocument({
+    sourceId: source._id,
+    crawlJobId,
+    retailerKey: source.retailerKey,
+    region,
+    documentType: 'pdf',
+    sourceType: SPAR_PDF_SOURCE_TYPE,
+    url: source.sourceUrl,
+    canonicalUrl: source.sourceUrl,
+    finalUrl: canonicalUrl,
+    title: source.label || 'SPAR official PDF flyer',
+    httpStatus: response.status,
+    contentType: response.headers?.['content-type'] || '',
+    downloadBytes: buffer.length,
+    contentHash: pdfSha256,
+    contentSnippet: pdfReference.candidates.slice(0, 8).map((candidate) => candidate.title || candidate.exclusionReason).join(' | '),
+    extractedPreview: pdfReference.candidates.slice(0, 12).map((candidate) => candidate.title || candidate.exclusionReason).filter(Boolean),
+    foundRawItems: pdfReference.candidates.length,
+    parsedOffers: normalizedOffers.length,
+    rejectedOffers: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+    parserVersion: SPAR_PDF_PARSER_VERSION,
+    extractionConfidence: 0.8,
+    rejectionReasons,
+    payload: {
+      sourceKind: 'pdf',
+      sourceKey,
+      sourceType: SPAR_PDF_SOURCE_TYPE,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      sourceRetailerFormat,
+      parserVersion: SPAR_PDF_PARSER_VERSION,
+      extractionMethod: 'text-layer',
+      pdfUrl: canonicalUrl || source.sourceUrl,
+      pdfSha256,
+      detectedPageCount: pdfReference.file.pages,
+      detectedValidity: {
+        validFrom: validity.validFrom ? validity.validFrom.toISOString() : null,
+        validTo: validity.validTo ? validity.validTo.toISOString() : null,
+        validityText: validity.validityText || '',
+      },
+      pageCandidateCounts: pdfReference.pages,
+    },
+  });
+
+  const seen = new Set();
+  const offerDocuments = normalizedOffers
+    .map((offer) => enrichOffersForStorage([offer], {
+      source,
+      sourceType: SPAR_PDF_SOURCE_TYPE,
+      parserVersion: SPAR_PDF_PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    })[0])
+    .filter(Boolean)
+    .filter((offer) => {
+      const key = [
+        offer.rawFacts?.candidateId || '',
+        offer.rawFacts?.page || '',
+        normalizeTitleForMatch(offer.title || ''),
+        String(offer.priceCurrent?.amount ?? ''),
+        String(offer.quantityText || ''),
+      ].join('::');
+
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  if (offerDocuments.length > 0) {
+    await Offer.insertMany(offerDocuments, { ordered: false });
+  }
+
+  logger.info('SPAR PDF crawl parsed flyer', {
+    sourceKey,
+    sourceRetailerFormat,
+    pages: pdfReference.file.pages,
+    rawCandidates: pdfReference.candidates.length,
+    rejectedCandidates: Math.max(0, pdfReference.candidates.length - offerDocuments.length),
+    offersStored: offerDocuments.length,
+  });
+
+  return {
+    offerDocuments,
+    rawDocuments: 1,
+    rawCandidateCount: pdfReference.candidates.length,
+    pdfReports: [{
+      sourceKey,
+      sourceRetailerFormat,
+      status: 'success',
+      foundRawItems: pdfReference.candidates.length,
+      parsedOffers: offerDocuments.length,
+      rejectedCandidates: Math.max(0, pdfReference.candidates.length - offerDocuments.length),
+      rejectionReasons,
+      pages: pdfReference.file.pages,
+      rawDocumentId: rawDocument._id,
+    }],
+    httpLog: {
+      status: response.status,
+      contentType: response.headers?.['content-type'] || '',
+      finalUrl: canonicalUrl || source.sourceUrl,
+      downloadBytes: buffer.length,
+      contentHash: pdfSha256,
+    },
   };
 }
 
@@ -1876,6 +2031,58 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
   try {
     await clearRawDocumentsForSource(source._id);
+
+    if (isSparOfficialPdfSource(source)) {
+      const sparPdfResult = await crawlSparOfficialPdfSource({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+      });
+      const sourceKey = sourceKeyForFormat(source.sourceRetailerFormat || 'spar');
+      const offersStored = sparPdfResult.offerDocuments.length;
+      const status = offersStored > 0 || sparPdfResult.rawCandidateCount > 0 ? 'success' : 'partial';
+
+      await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
+        status,
+        discoveredPages: 1,
+        rawDocuments: sparPdfResult.rawDocuments,
+        rawCandidateCount: sparPdfResult.rawCandidateCount,
+        offers: sparPdfResult.offerDocuments,
+        source,
+        sourceType: SPAR_PDF_SOURCE_TYPE,
+        parserVersion: SPAR_PDF_PARSER_VERSION,
+        normalizationVersion: NORMALIZATION_VERSION,
+        httpLog: sparPdfResult.httpLog || {},
+        warningMessages: [],
+        errorMessages: [],
+        metadata: {
+          sourceLabel: source.label,
+          sourceUrl: source.sourceUrl,
+          sourceKey,
+          sparPdfReports: sparPdfResult.pdfReports,
+        },
+      }));
+
+      await Source.findByIdAndUpdate(source._id, {
+        latestRunAt: new Date(),
+        latestStatus: status,
+      });
+
+      return {
+        retailerKey: source.retailerKey,
+        retailerName: source.retailerName,
+        channel: source.channel,
+        sourceKey,
+        offersStored,
+        foundRawItems: sparPdfResult.rawCandidateCount,
+        parsedOffers: offersStored,
+        rejectedOffers: Math.max(0, sparPdfResult.rawCandidateCount - offersStored),
+        evidenceMatched: 0,
+        discoveredLinks: 1,
+        sourceUrl: source.sourceUrl,
+        pdfReports: sparPdfResult.pdfReports,
+      };
+    }
 
     const { response, html, canonicalUrl } = await fetchHtml(source.sourceUrl);
     const httpLog = buildHttpLogFromResponse(response, html);

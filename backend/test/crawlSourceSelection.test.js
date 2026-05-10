@@ -57,6 +57,18 @@ const SOURCES = [
     disabledReason: 'disabled-source-blocked',
   },
   {
+    _id: '666666666666666666666666',
+    retailerKey: 'spar',
+    retailerName: 'Spar',
+    channel: 'official-flyer',
+    label: 'EUROSPAR Steiermark offizielles PDF-Flugblatt',
+    sourceUrl: 'https://flugblatt.spar.at/steiermark/eurospar/260507-1-flugblatt-kw-19/getPdf.ashx',
+    sourceType: 'pdf',
+    sourceRetailerFormat: 'eurospar',
+    enabled: true,
+    active: true,
+  },
+  {
     _id: '555555555555555555555555',
     retailerKey: 'billa',
     retailerName: 'Billa',
@@ -107,6 +119,7 @@ test('source key derivation recognizes the three SPAR Aktionsfinder sources and 
   assert.equal(deriveSourceKey(SOURCES[1]), 'aktionsfinder-interspar');
   assert.equal(deriveSourceKey(SOURCES[2]), 'aktionsfinder-eurospar');
   assert.equal(deriveSourceKey(SOURCES[3]), 'spar-official-flyer');
+  assert.equal(deriveSourceKey(SOURCES[4]), 'eurospar-official-flyer-pdf');
 });
 
 test('sourceKeys select exactly the requested runnable sources without SPAR official', async () => {
@@ -124,6 +137,20 @@ test('sourceKeys select exactly the requested runnable sources without SPAR offi
     'aktionsfinder-spar',
   ]);
   assert.equal(selection.matchedSources.some((source) => source.sourceKey === 'spar-official-flyer'), false);
+  assert.deepEqual(selection.effectiveRetailerKeys, ['spar']);
+});
+
+test('sourceKeys can select SPAR official PDF source exactly', async () => {
+  const selection = await resolveCrawlSourceSelection({
+    Source: fakeSourceModel(),
+    Offer: fakeOfferModel([{ _id: 'spar', activeOfferCount: 10 }]),
+    sourceKeys: ['eurospar-official-flyer-pdf'],
+    sourceSelectionRequested: true,
+  });
+
+  assert.equal(selection.wouldRunCount, 1);
+  assert.equal(selection.matchedSources[0].sourceKey, 'eurospar-official-flyer-pdf');
+  assert.equal(selection.matchedSources[0].sourceRetailerFormat, 'eurospar');
   assert.deepEqual(selection.effectiveRetailerKeys, ['spar']);
 });
 
@@ -180,7 +207,7 @@ test('retailerKeys-only path remains compatible and excludes disabled sources', 
     retailerKeys: ['spar'],
   });
 
-  assert.equal(selection.wouldRunCount, 3);
+  assert.equal(selection.wouldRunCount, 4);
   assert.deepEqual(seenFilters[0].retailerKey, { $in: ['spar'] });
   assert.deepEqual(seenFilters[0].enabled, { $ne: false });
 });

@@ -29,15 +29,20 @@ test('maps SPAR code sources with activation and parser hints', () => {
   assert.deepEqual(source.retailerKeys, ['spar', 'interspar', 'eurospar']);
 });
 
-test('SPAR source definitions include active aggregators and disabled official flyer', () => {
+test('SPAR source definitions include active aggregators, active PDF flyers and disabled legacy official flyer', () => {
   const sources = getSparCodeSources();
   const keys = sources.map((source) => source.sourceKey);
 
   assert.ok(keys.includes('aktionsfinder-spar'));
   assert.ok(keys.includes('aktionsfinder-interspar'));
   assert.ok(keys.includes('aktionsfinder-eurospar'));
+  assert.ok(keys.includes('spar-official-flyer-pdf'));
+  assert.ok(keys.includes('eurospar-official-flyer-pdf'));
+  assert.ok(keys.includes('interspar-official-flyer-pdf'));
   assert.ok(keys.includes('spar-official-flyer'));
-  assert.equal(sources.find((source) => source.sourceKey === 'spar-official-flyer').appearsActive, false);
+  assert.equal(sources.find((source) => source.sourceKey === 'spar-official-flyer' && source.sourceUrl === 'https://www.spar.at/aktionen').appearsActive, false);
+  assert.equal(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').appearsActive, true);
+  assert.match(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').parserOrAdapter, /text-layer/i);
 });
 
 test('official SPAR Steiermark reference is recognized as missing exact URL but covered by generic actions entry', () => {

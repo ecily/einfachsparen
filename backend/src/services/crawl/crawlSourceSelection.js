@@ -26,6 +26,9 @@ function deriveSourceKey(source = {}) {
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
+  if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
   if (url.includes('spar.at')) return 'spar-official-flyer';
   if (url.includes('billa.at')) return `${format || 'billa'}-${source.channel || 'official'}-${source.sourceType || 'source'}`;
   if (url.includes('hofer.at')) return 'hofer-official-flyer';

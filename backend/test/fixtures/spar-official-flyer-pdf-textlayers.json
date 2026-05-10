@@ -1,0 +1,33 @@
+{
+  "validity": {
+    "validFrom": "2026-05-07T12:00:00.000Z",
+    "validTo": "2026-05-20T12:00:00.000Z"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "sourceRetailerFormat": "eurospar",
+      "text": "Angebote gueltig ab Donnerstag, 7.5. bis Mittwoch, 20.5.2026\n1 Pkg. 11,99 ab 2 Pkg. je\n7,25\nMeinl Praesident\nganze Bohne oder\ngemahlen, 500 g\n(per kg 14,50)\nAngebot gueltig bis Di., 12.5.26"
+    },
+    {
+      "pageNumber": 2,
+      "sourceRetailerFormat": "eurospar",
+      "text": "Lavazza Espresso\nCremoso, Espresso\nAromatico oder\nCrema e Aroma\nganze Bohne, 1000 g\nstatt 28,99\n22,99\nNoch zusaetzlich -25% am Fr., 8.5. und Sa., 9.5."
+    },
+    {
+      "pageNumber": 3,
+      "sourceRetailerFormat": "interspar",
+      "text": "bis zu -25% auf Kaffee* am Fr, 8.5. und Sa, 9.5.\nLavazza Espresso Cremoso,\nEspresso Aromatico oder\nCrema e Aroma\nGanze Bohne,\n1-kg-Packung\nstatt 28,99\n22,99\nLavazza Caffe Crema Classico\noder Crema Edition\nGanze Bohne,\n1-kg-Packung\nstatt 27,49\n19,99\nDallmayr Prodomo\nGanze Bohne oder gemahlen,\n500-g-Packung\n(= per kg 23,98)\nMeinl Praesident\nGanze Bohne oder gemahlen,\n500-g-Packung\n(= per kg 14,50)\nAngebot gueltig bis Di, 12.5.2026."
+    },
+    {
+      "pageNumber": 4,
+      "sourceRetailerFormat": "interspar",
+      "text": "bis zu -25% auf Kaffee* am Fr, 8.5. und Sa, 9.5.\nAusgenommen S-BUDGET, Tchibo, Eduscho und trinkfertige Produkte."
+    },
+    {
+      "pageNumber": 5,
+      "sourceRetailerFormat": "spar",
+      "text": "Lavazza Espresso Cremoso, Espresso Aromatico oder Crema e Aroma\nGanze Bohne, 1 kg\nSortimentshinweis ohne Preis"
+    }
+  ]
+}
