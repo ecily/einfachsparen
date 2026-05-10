@@ -22,6 +22,7 @@
     "diagnose:query-quality-gaps": "node scripts/diagnoseQueryQualityGaps.js",
     "diagnose:coverage-baseline": "node scripts/diagnoseCoverageBaseline.js",
     "diagnose:spar-source-coverage": "node scripts/diagnoseSparSourceCoverage.js",
+    "diagnose:spar-official-parser-fixture": "node scripts/diagnoseSparOfficialParserFixture.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",
     "rebuild:filters": "node scripts/rebuild-filter-metadata.js"
