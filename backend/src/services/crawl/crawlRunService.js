@@ -600,9 +600,13 @@ async function startCrawlRun({
 }
 
 async function getLatestCrawlRun() {
-  return CrawlRun.findOne({})
+  const runs = await CrawlRun.collection
+    .find({})
     .sort({ _id: -1 })
-    .lean();
+    .limit(1)
+    .toArray();
+
+  return runs[0] || null;
 }
 
 async function getCrawlRunById(runId) {
@@ -610,7 +614,9 @@ async function getCrawlRunById(runId) {
     return null;
   }
 
-  return CrawlRun.findById(runId).lean();
+  return CrawlRun.collection.findOne({
+    _id: new mongoose.Types.ObjectId(String(runId)),
+  });
 }
 
 module.exports = {
