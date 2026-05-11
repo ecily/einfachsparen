@@ -35,6 +35,7 @@ const ALPHA_VERSION_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufkl
 const SHOPPING_LIST_STORAGE_KEY = 'einfachsparen.mobile.shoppingList.v1';
 const DISMISSED_UPDATE_BUILD_STORAGE_KEY = 'einfachsparen.mobile.dismissedUpdateBuildNumber.v1';
 const DISMISSED_UPDATE_AT_STORAGE_KEY = 'einfachsparen.mobile.dismissedUpdateAt.v1';
+const SAVINGS_SOURCE_BACKEND_REFERENCE = 'backend-reference-price';
 const UPDATE_CHECK_TIMEOUT_MS = 8000;
 const UPDATE_REMINDER_PAUSE_MS = 24 * 60 * 60 * 1000;
 const UNCERTAIN_VALIDITY_LABEL = 'Aktuell gefunden – bitte im Markt prüfen.';
@@ -233,6 +234,42 @@ function getReferenceInfo(offer) {
   };
 }
 
+function getShoppingSavingsSnapshot(offer) {
+  const amount = getReliableSavingsAmount(offer);
+  const referenceInfo = getReferenceInfo(offer);
+  const hasKnownSavings = amount > 0 && referenceInfo.amount > 0;
+
+  return {
+    amount: hasKnownSavings ? amount : null,
+    isApproximate: hasKnownSavings ? referenceInfo.isApproximate : false,
+    source: hasKnownSavings ? SAVINGS_SOURCE_BACKEND_REFERENCE : '',
+    hasKnownSavings,
+  };
+}
+
+function getShoppingSavingsInfo(offer) {
+  const savingsAmount = Number(offer?.shoppingSavingsAmount ?? offer?.savingsAmount);
+  const hasTrustedSavings =
+    offer?.savingsSource === SAVINGS_SOURCE_BACKEND_REFERENCE &&
+    offer?.hasKnownSavings === true &&
+    Number.isFinite(savingsAmount) &&
+    savingsAmount > 0;
+
+  if (!hasTrustedSavings) {
+    return {
+      type: 'action',
+      amount: 0,
+      isApproximate: false,
+    };
+  }
+
+  return {
+    type: 'known',
+    amount: Number(savingsAmount.toFixed(2)),
+    isApproximate: Boolean(offer?.savingsIsApproximate),
+  };
+}
+
 function hasReliableSavings(offer) {
   return getReliableSavingsAmount(offer) > 0;
 }
@@ -256,7 +293,8 @@ function getShoppingCurrentTotal(offer) {
 }
 
 function getShoppingSavingsTotal(offer) {
-  return getReliableSavingsAmount(offer) * getShoppingQuantity(offer);
+  const savingsInfo = getShoppingSavingsInfo(offer);
+  return savingsInfo.type === 'known' ? savingsInfo.amount * getShoppingQuantity(offer) : 0;
 }
 
 function getOfferStatusLabel(offer) {
@@ -302,21 +340,69 @@ function getConditionsSummary(offer) {
   return '';
 }
 
+function normalizeConditionKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(?:bedingung|aktion|angebot|nur|mit|bei)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function conditionIncludesText(text, candidate) {
+  const normalizedText = normalizeConditionKey(text);
+  const normalizedCandidate = normalizeConditionKey(candidate);
+
+  return Boolean(normalizedText && normalizedCandidate && normalizedText.includes(normalizedCandidate));
+}
+
+function isRedundantCondition(candidate, existingConditions) {
+  const candidateKey = normalizeConditionKey(candidate);
+
+  if (!candidateKey) return true;
+
+  return existingConditions.some((existingCondition) => {
+    const existingKey = normalizeConditionKey(existingCondition);
+
+    return (
+      existingKey === candidateKey ||
+      existingKey.includes(candidateKey) ||
+      candidateKey.includes(existingKey)
+    );
+  });
+}
+
 function buildConditionBadges(offer) {
   const badges = [];
   const multiBuyLabel = getMultiBuyLabel(offer);
+  const rawCondition = getReadableConditionText(offer?.conditionsText);
+  const rawLabel = getReadableConditionText(offer?.conditionLabel);
   const addBadge = (label) => {
     const readableLabel = getReadableConditionText(label);
 
-    if (readableLabel && !badges.includes(readableLabel) && !isDuplicateMinimumCondition(readableLabel, offer)) {
+    if (
+      readableLabel &&
+      !isDuplicateMinimumCondition(readableLabel, offer) &&
+      !isRedundantCondition(readableLabel, badges)
+    ) {
       badges.push(readableLabel);
     }
   };
+  const addDerivedBadge = (label) => {
+    if (conditionIncludesText(rawCondition, label) || conditionIncludesText(rawLabel, label)) {
+      return;
+    }
 
-  if (offer?.customerProgramRequired) addBadge(getCustomerProgramLabel(offer));
-  if (!multiBuyLabel) addBadge(getMinimumQuantityHint(offer));
-  if (offer?.isMultiBuy || multiBuyLabel) addBadge(multiBuyLabel || 'Mehrkauf-Angebot');
-  addBadge(offer?.conditionsText);
+    addBadge(label);
+  };
+
+  if (offer?.customerProgramRequired) addDerivedBadge(getCustomerProgramLabel(offer));
+  if (!multiBuyLabel) addDerivedBadge(getMinimumQuantityHint(offer));
+  if (offer?.isMultiBuy || multiBuyLabel) addDerivedBadge(multiBuyLabel || 'Mehrkauf-Angebot');
+  addBadge(rawCondition);
+  addBadge(rawLabel);
 
   return badges;
 }
@@ -363,14 +449,37 @@ function formatValidityLabel(offer) {
   return UNCERTAIN_VALIDITY_LABEL;
 }
 
+function normalizeRetailerKey(retailerKey) {
+  const normalizedKey = String(retailerKey || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (normalizedKey === 'billaplus' || normalizedKey === 'billa-plus-markt') {
+    return 'billa-plus';
+  }
+
+  return normalizedKey;
+}
+
 function getRetailerColor(retailerKey) {
-  const normalizedKey = String(retailerKey || '').toLowerCase().replace(/_/g, '-');
-  return RETAILER_COLORS[normalizedKey] || '#31582c';
+  return RETAILER_COLORS[normalizeRetailerKey(retailerKey)] || '#31582c';
 }
 
 function getRetailerTextColor(retailerKey) {
-  const normalizedKey = String(retailerKey || '').toLowerCase().replace(/_/g, '-');
-  return RETAILER_TEXT_COLORS[normalizedKey] || '#ffffff';
+  return RETAILER_TEXT_COLORS[normalizeRetailerKey(retailerKey)] || '#ffffff';
+}
+
+function getRetailerAccentTextColor(retailerKey) {
+  const normalizedKey = normalizeRetailerKey(retailerKey);
+
+  if (normalizedKey === 'lidl') {
+    return '#6c5300';
+  }
+
+  return getRetailerColor(retailerKey);
 }
 
 function hexToRgba(hexColor, alpha) {
@@ -693,7 +802,7 @@ function groupShoppingListEntries(entries) {
       offers: group.offers.sort((left, right) => left.title.localeCompare(right.title, 'de')),
       savingsTotal: group.offers.reduce((sum, offer) => sum + getShoppingSavingsTotal(offer), 0),
       currentTotal: group.offers.reduce((sum, offer) => sum + getShoppingCurrentTotal(offer), 0),
-      actionPriceCount: group.offers.filter((offer) => !hasReliableSavings(offer)).length,
+      actionPriceCount: group.offers.filter((offer) => getShoppingSavingsInfo(offer).type !== 'known').length,
     }))
     .sort((left, right) => left.retailerName.localeCompare(right.retailerName, 'de'));
 }
@@ -775,30 +884,6 @@ function SummaryCard({ label, value, hint, accent = false }) {
       <Text style={styles.summaryLabel}>{label}</Text>
       <Text style={styles.summaryValue}>{value}</Text>
       {hint ? <Text style={styles.summaryHint}>{hint}</Text> : null}
-    </View>
-  );
-}
-
-function StepHeader({ step, title, text }) {
-  return (
-    <View style={styles.stepHeader}>
-      <Text style={styles.stepNumber}>{step}</Text>
-      <View style={styles.stepTextBox}>
-        <Text style={styles.stepTitle}>{title}</Text>
-        <Text style={styles.stepText}>{text}</Text>
-      </View>
-    </View>
-  );
-}
-
-function PriceTrustNote({ compact = false }) {
-  return (
-    <View style={[styles.noteBox, compact ? styles.noteBoxCompact : null]}>
-      <Text style={styles.noteTitle}>Hinweis zu Prospekten und Normalpreisen</Text>
-      <Text style={styles.noteText}>
-        kaufklug.at zeigt aktuelle Angebote aus Prospekten und Aktionen. Manche Prospekte nennen nur den Aktionspreis,
-        aber keinen Normalpreis. In diesem Fall zeigen wir den Aktionspreis, aber keine Euro-Ersparnis. {MARKET_CHECK_HINT}
-      </Text>
     </View>
   );
 }
@@ -934,8 +1019,16 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
 
             <View style={styles.detailHeader}>
               <View style={styles.offerBadgeRow}>
-                <View style={[styles.retailerBadge, { backgroundColor: getRetailerColor(offer.retailerKey) }]}>
-                  <Text style={[styles.retailerBadgeLabel, { color: getRetailerTextColor(offer.retailerKey) }]}>{offer.retailerName}</Text>
+                <View
+                  style={[
+                    styles.retailerBadge,
+                    {
+                      backgroundColor: getRetailerSoftColor(offer.retailerKey, 0.12),
+                      borderColor: getRetailerSoftColor(offer.retailerKey, 0.42),
+                    },
+                  ]}
+                >
+                  <Text style={[styles.retailerBadgeLabel, { color: getRetailerAccentTextColor(offer.retailerKey) }]}>{offer.retailerName}</Text>
                 </View>
                 <View style={styles.softBadge}>
                   <Text style={styles.softBadgeLabel}>{getOfferStatusLabel(offer)}</Text>
@@ -981,9 +1074,10 @@ function OfferDetailModal({ offer, visible, isSelected, bottomInset = 0, onClose
             <Pressable
               style={[styles.detailPrimaryButton, isSelected ? styles.detailMutedButton : null]}
               onPress={() => onToggleShoppingList(offer)}
+              disabled={isSelected}
             >
-              <Text style={styles.detailPrimaryButtonLabel}>
-                {isSelected ? 'Nicht mehr merken' : 'Merken'}
+              <Text style={[styles.detailPrimaryButtonLabel, isSelected ? styles.detailPrimaryButtonLabelMuted : null]}>
+                {isSelected ? 'Auf der Liste' : 'Auf die Liste'}
               </Text>
             </Pressable>
             <Pressable style={styles.detailSecondaryButton} onPress={onClose}>
@@ -1031,8 +1125,16 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
       <View style={styles.offerBody}>
         <View style={styles.offerTopRow}>
           <View style={styles.offerBadgeRow}>
-            <View style={[styles.retailerBadge, { backgroundColor: getRetailerColor(offer.retailerKey) }]}>
-              <Text style={[styles.retailerBadgeLabel, { color: getRetailerTextColor(offer.retailerKey) }]}>
+            <View
+              style={[
+                styles.retailerBadge,
+                {
+                  backgroundColor: getRetailerSoftColor(offer.retailerKey, 0.12),
+                  borderColor: getRetailerSoftColor(offer.retailerKey, 0.42),
+                },
+              ]}
+            >
+              <Text style={[styles.retailerBadgeLabel, { color: getRetailerAccentTextColor(offer.retailerKey) }]}>
                 {String(offer.retailerName || '').toUpperCase()}
               </Text>
             </View>
@@ -1084,13 +1186,14 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
           style={({ pressed }) => [
             styles.shoppingToggle,
             isSelected ? styles.shoppingToggleActive : null,
-            pressed ? styles.pressedButton : null,
+            pressed && !isSelected ? styles.pressedButton : null,
           ]}
           onPress={() => onToggleShoppingList(offer)}
+          disabled={isSelected}
           hitSlop={6}
         >
           <Text style={[styles.shoppingToggleLabel, isSelected ? styles.shoppingToggleLabelActive : null]}>
-            {isSelected ? 'Gemerkt' : 'Merken'}
+            {isSelected ? 'Auf der Liste' : 'Auf die Liste'}
           </Text>
         </Pressable>
       </View>
@@ -1201,8 +1304,7 @@ function SearchResultsList({
           <View style={styles.resultsIntro}>
             <Text style={styles.resultsTitle}>Deine Angebote</Text>
             <Text style={styles.resultsText}>
-              Alle angezeigten Produkte sind aktuelle Angebote. Euro-Ersparnis zeigen wir nur dort, wo im Prospekt ein Normalpreis angegeben ist.
-              {' '}{MARKET_CHECK_HINT}
+              Euro-Ersparnis nur bei angegebenem Vergleichspreis. {MARKET_CHECK_HINT}
             </Text>
             <View style={styles.resultSummaryBox}>
               <Text style={styles.resultSummaryText}>{offers.length} aktuelle Angebote gefunden.</Text>
@@ -1210,7 +1312,6 @@ function SearchResultsList({
                 {offersWithSavingsCount} mit angegebener Euro-Ersparnis, {actionPriceCount} weitere Aktionspreise.
               </Text>
             </View>
-            <PriceTrustNote compact />
           </View>
         </>
       }
@@ -1259,11 +1360,14 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
     [shoppingListEntries]
   );
   const knownSavingsCount = useMemo(
-    () => shoppingListEntries.filter(hasReliableSavings).length,
+    () => shoppingListEntries.filter((offer) => getShoppingSavingsInfo(offer).type === 'known').length,
     [shoppingListEntries]
   );
   const approximateSavingsCount = useMemo(
-    () => shoppingListEntries.filter((offer) => hasReliableSavings(offer) && getReferenceInfo(offer).isApproximate).length,
+    () => shoppingListEntries.filter((offer) => {
+      const savingsInfo = getShoppingSavingsInfo(offer);
+      return savingsInfo.type === 'known' && savingsInfo.isApproximate;
+    }).length,
     [shoppingListEntries]
   );
   const knownSavingsLabel = totalSavings > 0
@@ -1365,7 +1469,9 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
           {knownSavingsCount > 0 ? (
             <Text style={styles.shoppingFact}>{knownSavingsCount} mit bekannter Ersparnis</Text>
           ) : null}
-          <Text style={styles.shoppingFact}>Aktionspreise ca. {formatCurrency(totalCurrent)}</Text>
+          {totalCurrent > 0 ? (
+            <Text style={styles.shoppingFact}>Aktionspreise ca. {formatCurrency(totalCurrent)}</Text>
+          ) : null}
         </View>
 
         <View style={styles.shoppingMarketWrap}>
@@ -1446,8 +1552,7 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
           </View>
 
           {group.offers.map((offer) => {
-            const itemSavingsAmount = getReliableSavingsAmount(offer);
-            const itemReferenceInfo = getReferenceInfo(offer);
+            const itemSavingsInfo = getShoppingSavingsInfo(offer);
             const unitPriceText = shouldDisplayUnitPrice(offer)
               ? `${formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/${offer.normalizedUnitPrice?.unit}`
               : '';
@@ -1468,9 +1573,9 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
                         {formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}
                         {getShoppingQuantity(offer) > 1 ? ` × ${getShoppingQuantity(offer)} = ca. ${formatCurrency(getShoppingCurrentTotal(offer), offer.priceCurrent?.currency)}` : ''}
                       </Text>
-                      <Text style={itemSavingsAmount > 0 ? styles.listItemSavingsKnown : styles.listItemSavingsAction}>
-                        {itemSavingsAmount > 0
-                          ? `Spart ${itemReferenceInfo.isApproximate ? 'ca. ' : ''}${formatCurrency(itemSavingsAmount, offer.priceCurrent?.currency)}`
+                      <Text style={itemSavingsInfo.type === 'known' ? styles.listItemSavingsKnown : styles.listItemSavingsAction}>
+                        {itemSavingsInfo.type === 'known'
+                          ? `Spart ${itemSavingsInfo.isApproximate ? 'ca. ' : ''}${formatCurrency(itemSavingsInfo.amount, offer.priceCurrent?.currency)}`
                           : 'Aktionspreis'}
                       </Text>
                     </View>
@@ -1735,6 +1840,13 @@ export default function App() {
 
   async function loadRanking(isRefresh = false) {
     try {
+      if (selectedRetailers.length === 0 && selectedCategories.length === 0) {
+        setRanking(null);
+        setHasTriggeredSearch(false);
+        setError('');
+        return;
+      }
+
       if (false && selectedRetailers.length === 0) {
         setRanking(null);
         setError('Wähle zuerst mindestens ein Geschäft aus.');
@@ -1877,6 +1989,7 @@ export default function App() {
     () => offers.reduce((max, offer) => Math.max(max, getReliableSavingsAmount(offer)), 0),
     [offers]
   );
+  const browseCanLoadOffers = hasActiveFilters;
 
   function toggleRetailer(retailerKey) {
     setSelectedRetailers((current) => (
@@ -1892,7 +2005,6 @@ export default function App() {
 
   function resetRetailers() {
     setSelectedRetailers([]);
-    setSelectedCategories([]);
     setRanking(null);
     setHasTriggeredSearch(false);
     setError('');
@@ -1954,6 +2066,7 @@ export default function App() {
     }
 
     const offerId = getOfferStableId(offer);
+    const savingsSnapshot = getShoppingSavingsSnapshot(offer);
 
     if (!offerId) {
       return;
@@ -1971,7 +2084,13 @@ export default function App() {
         [offerId]: {
           ...offer,
           id: offerId,
+          offerId,
           shoppingQuantity: getShoppingQuantity(offer),
+          savingsAmount: savingsSnapshot.amount,
+          savingsIsApproximate: savingsSnapshot.isApproximate,
+          savingsSource: savingsSnapshot.source,
+          hasKnownSavings: savingsSnapshot.hasKnownSavings,
+          shoppingSavingsAmount: savingsSnapshot.amount,
         },
       };
     });
@@ -2014,11 +2133,28 @@ export default function App() {
   const searchHeader = (
     <>
       <View style={styles.flowCard}>
-        <StepHeader
-          step="1. Geschäfte wählen"
-          title="Märkte eingrenzen"
-          text="Wähle die Geschäfte aus, die für dich erreichbar sind."
-        />
+        <View style={styles.browseIntroRow}>
+          <View style={styles.browseIntroText}>
+            <Text style={styles.browseTitle}>Stöbern</Text>
+            <Text style={styles.browseText}>Wähle Märkte oder Kategorien und sieh passende Aktionen.</Text>
+          </View>
+          <View style={styles.browseStatusPill}>
+            <Text style={styles.browseStatusText}>{filterStatusLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.browsePanelHeader}>
+          <Text style={styles.browsePanelTitle}>Märkte</Text>
+          <View style={styles.browseHeaderActions}>
+            <Pressable style={styles.textButton} onPress={selectAllRetailers}>
+              <Text style={styles.textButtonLabel}>Alle</Text>
+            </Pressable>
+            {selectedRetailerCount > 0 ? (
+              <Pressable style={styles.textButton} onPress={resetRetailers}>
+                <Text style={styles.textButtonLabel}>Zurücksetzen</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
         <View style={styles.chipWrap}>
           {(retailers || []).map((retailer) => (
             <FilterChip
@@ -2031,29 +2167,22 @@ export default function App() {
             />
           ))}
         </View>
-        <View style={styles.actionRow}>
-          <Pressable style={styles.secondaryButton} onPress={selectAllRetailers}>
-            <Text style={styles.secondaryButtonLabel}>Alle Märkte auswählen</Text>
-          </Pressable>
-          {selectedRetailerCount > 0 ? (
-          <Pressable style={styles.secondaryButton} onPress={resetRetailers}>
-            <Text style={styles.secondaryButtonLabel}>Geschäfte zurücksetzen</Text>
-          </Pressable>
-          ) : null}
-        </View>
       </View>
 
       <View style={styles.flowCard}>
-        <StepHeader
-          step="2. Produkte wählen"
-          title="Produkte eingrenzen"
-          text="Tippe eine Kategorie zum Öffnen an. Mit Alle oder Keine steuerst du die ganze Gruppe."
-        />
-        <Pressable style={styles.secondaryWideButton} onPress={toggleAllCategories}>
-          <Text style={styles.secondaryWideButtonLabel}>
-            {hasAllCategoriesSelected ? 'Alles deaktivieren' : 'Alles aktivieren'}
-          </Text>
-        </Pressable>
+        <View style={styles.browsePanelHeader}>
+          <View>
+            <Text style={styles.browsePanelTitle}>Kategorien</Text>
+            <Text style={styles.browsePanelMeta}>Aufklappen, auswählen, kombinieren.</Text>
+          </View>
+          {hasCategoryFilterOptions ? (
+            <Pressable style={styles.textButton} onPress={toggleAllCategories}>
+              <Text style={styles.textButtonLabel}>
+                {hasAllCategoriesSelected ? 'Keine' : 'Alle'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         <View style={styles.categoryList}>
           {categoryGroups.map((group) => {
             const selectedCount = group.subcategories.filter((item) => selectedCategories.includes(getCategorySelectionKey(group.mainCategory, item))).length;
@@ -2118,41 +2247,26 @@ export default function App() {
       </View>
 
       <View style={styles.flowCard}>
-        <StepHeader
-          step="3. Angebote ansehen"
-          title="Deine Auswahl ist bereit."
-          text="Tippe auf „Angebote anzeigen“. Danach kannst du passende Produkte merken."
-        />
-        <View style={styles.filterStatusCard}>
-          <Text style={styles.filterStatusText}>{filterStatusLabel}</Text>
+        <View style={styles.browseActionHeader}>
+          <Text style={styles.browsePanelTitle}>Angebote ansehen</Text>
+          <Text style={styles.browsePanelMeta}>
+            {browseCanLoadOffers ? 'Auswahl übernehmen und Aktionen laden.' : 'Wähle zuerst einen Markt oder eine Kategorie.'}
+          </Text>
         </View>
         <Pressable
-          style={[styles.fullWidthSearchButton, loading ? styles.disabledButton : null]}
+          style={[styles.fullWidthSearchButton, loading || !browseCanLoadOffers ? styles.disabledButton : null]}
           onPress={() => loadRanking(false)}
-          disabled={loading}
+          disabled={loading || !browseCanLoadOffers}
         >
           <Text style={styles.fullWidthSearchButtonLabel}>
-            {loading ? 'Angebote werden geladen …' : 'Angebote anzeigen'}
+            {loading ? 'Angebote werden geladen …' : browseCanLoadOffers ? 'Angebote anzeigen' : 'Auswahl treffen'}
           </Text>
         </Pressable>
         {hasActiveFilters ? (
-        <Pressable style={styles.secondaryWideButton} onPress={resetSelection}>
-          <Text style={styles.secondaryWideButtonLabel}>Filter zurücksetzen</Text>
-        </Pressable>
+          <Pressable style={styles.secondaryWideButton} onPress={resetSelection}>
+            <Text style={styles.secondaryWideButtonLabel}>Filter zurücksetzen</Text>
+          </Pressable>
         ) : null}
-        <View style={styles.quickInfoCard}>
-          <Text style={styles.quickInfoTitle}>Deine Auswahl</Text>
-          <Text style={styles.quickInfoText}>
-            {selectedRetailerCount > 0
-              ? `${selectedRetailerCount} Geschäft${selectedRetailerCount === 1 ? '' : 'e'} ausgewählt`
-              : 'Alle Märkte'}
-            {hasAllCategoriesSelected
-              ? ' · alle Kategorien aktiv'
-              : selectedCategoryCount > 0
-                ? ` · ${selectedCategoryCount} Kategorie${selectedCategoryCount === 1 ? '' : 'n'} aktiv`
-                : hasCategoryFilterOptions ? ' · alle Kategorien' : ''}
-          </Text>
-        </View>
       </View>
 
       {hasTriggeredSearch ? (
@@ -2160,7 +2274,7 @@ export default function App() {
           <SummaryCard label="Aktuelle Angebote" value={resultCount} accent />
           <SummaryCard label="Mit Euro-Ersparnis" value={offersWithSavingsCount} />
           <SummaryCard label="Weitere Aktionspreise" value={actionPriceCount} />
-          <SummaryCard label="Größte Ersparnis" value={formatCurrency(strongestSaving)} />
+          <SummaryCard label="Höchste bekannte Ersparnis" value={strongestSaving > 0 ? formatCurrency(strongestSaving) : 'Keine'} />
         </View>
       ) : null}
 
@@ -2359,7 +2473,20 @@ const styles = StyleSheet.create({
   benefitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   benefitPill: { backgroundColor: 'rgba(248, 245, 237, 0.14)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   benefitPillText: { color: '#f8f5ed', fontSize: 12, fontWeight: '800' },
-  flowCard: { backgroundColor: '#fffaf2', borderRadius: 22, padding: 16, gap: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  flowCard: { backgroundColor: '#fffaf2', borderRadius: 18, padding: 14, gap: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  browseIntroRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  browseIntroText: { flex: 1, minWidth: 190, gap: 3 },
+  browseTitle: { color: '#132014', fontSize: 22, lineHeight: 28, fontWeight: '900' },
+  browseText: { color: '#5d695a', fontSize: 13, lineHeight: 18 },
+  browseStatusPill: { alignSelf: 'flex-start', backgroundColor: '#e9f6db', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, borderWidth: 1, borderColor: 'rgba(49, 88, 44, 0.12)' },
+  browseStatusText: { color: '#244320', fontSize: 12, lineHeight: 16, fontWeight: '900' },
+  browsePanelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  browsePanelTitle: { color: '#132014', fontSize: 16, lineHeight: 21, fontWeight: '900' },
+  browsePanelMeta: { color: '#667064', fontSize: 12, lineHeight: 17, marginTop: 2 },
+  browseHeaderActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
+  browseActionHeader: { gap: 2 },
+  textButton: { minHeight: 38, justifyContent: 'center', borderRadius: 999, backgroundColor: '#efe9dc', paddingHorizontal: 12, paddingVertical: 8 },
+  textButtonLabel: { color: '#31582c', fontSize: 12, lineHeight: 16, fontWeight: '900' },
   stepHeader: { gap: 6 },
   stepNumber: { color: '#31582c', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   stepTextBox: { gap: 4 },
@@ -2465,8 +2592,8 @@ const styles = StyleSheet.create({
   offerBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   rankBadge: { backgroundColor: '#e3dccd', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   rankBadgeLabel: { color: '#425040', fontSize: 11, fontWeight: '900' },
-  retailerBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
-  retailerBadgeLabel: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
+  retailerBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, backgroundColor: '#e9f6db' },
+  retailerBadgeLabel: { color: '#31582c', fontSize: 11, fontWeight: '900' },
   softBadge: { backgroundColor: '#e7f0da', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   softBadgeLabel: { color: '#31582c', fontSize: 11, fontWeight: '900' },
   offerCategory: { color: '#31582c', fontSize: 12, fontWeight: '800' },
@@ -2553,8 +2680,9 @@ const styles = StyleSheet.create({
   detailValueStrong: { fontSize: 18, lineHeight: 24, fontWeight: '900', color: '#173118' },
   detailFooter: { flexDirection: 'row', gap: 10, padding: 18, paddingTop: 12, backgroundColor: '#f4efe5', borderTopWidth: 1, borderTopColor: 'rgba(19, 32, 20, 0.08)' },
   detailPrimaryButton: { flex: 1.5, backgroundColor: '#31582c', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, alignItems: 'center' },
-  detailMutedButton: { backgroundColor: '#7b3535' },
+  detailMutedButton: { backgroundColor: '#e7f0da', borderWidth: 1, borderColor: '#31582c' },
   detailPrimaryButtonLabel: { color: '#f8f5ed', fontWeight: '900', textAlign: 'center' },
+  detailPrimaryButtonLabelMuted: { color: '#31582c' },
   detailSecondaryButton: { flex: 1, backgroundColor: '#ece4d7', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, alignItems: 'center' },
   detailSecondaryButtonLabel: { color: '#304230', fontWeight: '900', textAlign: 'center' },
   shoppingHero: { backgroundColor: '#fffaf2', borderRadius: 22, padding: 16, gap: 8, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },

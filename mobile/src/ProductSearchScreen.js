@@ -24,7 +24,7 @@ const SORT_OPTIONS = {
 const SORT_LABELS = {
   [SORT_OPTIONS.best]: 'Empfohlen',
   [SORT_OPTIONS.retailer]: 'Märkte',
-  [SORT_OPTIONS.savings]: 'Größte Ersparnis',
+  [SORT_OPTIONS.savings]: 'Belastbare Ersparnis',
 };
 
 const INITIAL_MESSAGE = 'Suche ein Produkt und merke passende Angebote für deinen Einkauf.';
@@ -420,8 +420,8 @@ export default function ProductSearchScreen({
   const header = (
     <View style={styles.header}>
       <View style={styles.hero}>
-        <Text style={styles.title}>Was möchtest du günstiger kaufen?</Text>
-        <Text style={styles.subtitle}>Suche aktuelle Angebote und merke sie dir für deinen Einkauf.</Text>
+        <Text style={styles.title}>Angebote suchen</Text>
+        <Text style={styles.subtitle}>Produkt eingeben, Aktionen vergleichen, passende Angebote merken.</Text>
       </View>
 
       <View style={styles.searchBox}>
@@ -465,7 +465,7 @@ export default function ProductSearchScreen({
         <View style={styles.filterIntro}>
           <Text style={styles.filterTitle}>Optional eingrenzen</Text>
           <Text style={styles.filterText}>
-            Du kannst direkt suchen oder vorher bestimmte Märkte auswählen. Produktbereiche findest du unter Stöbern.
+            Suche direkt oder wähle vorher Märkte aus.
           </Text>
         </View>
         <Pressable
@@ -586,10 +586,8 @@ export default function ProductSearchScreen({
           </View>
         ) : null}
 
-        {!loading && !error && message ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{message}</Text>
-          </View>
+        {!loading && !error && message && message !== INITIAL_MESSAGE ? (
+          <Text style={styles.inlineHint}>{message}</Text>
         ) : null}
       </View>
     </View>
@@ -671,8 +669,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#17251a',
-    fontSize: 29,
-    lineHeight: 35,
+    fontSize: 27,
+    lineHeight: 32,
     fontWeight: '900',
   },
   subtitle: {
@@ -805,6 +803,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff6dd',
     borderRadius: 12,
     padding: 11,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800',
+  },
+  inlineHint: {
+    color: '#7c520c',
+    backgroundColor: '#fff6dd',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '800',
