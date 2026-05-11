@@ -1396,6 +1396,10 @@ a {
   scroll-margin-top: 7rem;
 }
 
+.search-results-heading:focus {
+  outline: none;
+}
+
 .keyword-search-hero__copy {
   display: grid;
   gap: 0.35rem;

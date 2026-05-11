@@ -441,7 +441,9 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         {!loading && !error && submittedQuery ? (
           <div className="results-section">
             <div className="panel__header">
-              <h2 ref={resultsHeadingRef} tabIndex="-1">Angebote für „{submittedQuery}“</h2>
+              <h2 ref={resultsHeadingRef} className="search-results-heading" tabIndex="-1">
+                Angebote für „{submittedQuery}“
+              </h2>
               <p>{visibleOffers.length} Angebote gefunden</p>
             </div>
             <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
