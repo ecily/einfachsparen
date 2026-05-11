@@ -71,7 +71,7 @@ async function fetchAdminEssence() {
   return payload?.essence || payload?.digest || payload?.text || payload?.summary || ''
 }
 
-function SearchLandingHero({ onNavigate }) {
+function SearchLandingHero() {
   const trackedDownloadUrl = buildTrackedApkDownloadUrl('search_hero_button')
   const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('search_hero_qr')
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(trackedQrDownloadUrl)}`
@@ -169,26 +169,6 @@ function SearchLandingHero({ onNavigate }) {
             QR-Code scannen und kaufklug direkt am Smartphone nutzen.
           </p>
         </div>
-      </section>
-
-      <section
-        className="panel"
-        style={{
-          alignItems: 'center',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '0.85rem',
-          justifyContent: 'space-between',
-          marginBottom: '1rem',
-          padding: '1rem',
-        }}
-      >
-        <div>
-          <h2 style={{ margin: '0.15rem 0 0' }}>Du möchtest lieber nach Märkten stöbern?</h2>
-        </div>
-        <button type="button" className="primary-action-button" onClick={() => onNavigate('search')}>
-          Märkte stöbern
-        </button>
       </section>
     </>
   )
@@ -932,7 +912,7 @@ function App() {
         </div>
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
-          <SearchLandingHero onNavigate={handleNavigate} />
+          <SearchLandingHero />
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
