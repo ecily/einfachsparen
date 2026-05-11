@@ -40,6 +40,8 @@ const SYNONYMS = new Map([
   ['kaffee', ['cafe', 'caffe']],
   ['kase', ['kaese']],
   ['kaese', ['kase']],
+  ['nudeln', ['nudel', 'pasta', 'spaghetti', 'penne', 'fusilli', 'makkaroni', 'maccheroni', 'teigwaren']],
+  ['nudel', ['nudeln', 'pasta', 'spaghetti', 'penne', 'fusilli', 'makkaroni', 'maccheroni', 'teigwaren']],
   ['oel', ['ol']],
   ['ol', ['oel']],
   ['suesswaren', ['susswaren']],
@@ -49,6 +51,19 @@ const SYNONYMS = new Map([
 const COMPOUND_PRODUCT_TOKENS = new Set([
   'milch',
   'reis',
+]);
+
+const CONSERVATIVE_COMPOUND_TOKEN_ALIASES = new Map([
+  ['butter', [
+    'alpenbutter',
+    'bauernbutter',
+    'markenbutter',
+    'sauerrahmbutter',
+    'streichbutter',
+    'suessrahmbutter',
+    'sussrahmbutter',
+    'teebutter',
+  ]],
 ]);
 
 function normalizeSearchTokenText(value) {
@@ -83,6 +98,12 @@ function addConservativeCompoundTokens(tokens, token) {
     }
 
     if (token.endsWith(productToken) || token.startsWith(productToken)) {
+      addTokenWithSynonyms(tokens, productToken);
+    }
+  }
+
+  for (const [productToken, compounds] of CONSERVATIVE_COMPOUND_TOKEN_ALIASES.entries()) {
+    if (compounds.includes(token)) {
       addTokenWithSynonyms(tokens, productToken);
     }
   }

@@ -447,6 +447,7 @@ const QUERY_CONTEXTS = [
       'schoko',
       'zartbitter',
       'chocolonely',
+      'bahlsen',
       'mikado',
       'pickup',
       'pick',
@@ -471,6 +472,7 @@ const QUERY_CONTEXTS = [
       'kase',
       'scheiben',
       'gerieben',
+      'bahlsen',
     ],
   },
   {
@@ -546,6 +548,72 @@ const QUERY_CONTEXTS = [
       'kichererbsen',
     ],
     severeWeakContexts: ['passata', 'sugo', 'spaghetti', 'nudel', 'nudeln', 'bohnen', 'kichererbse', 'kichererbsen'],
+  },
+  {
+    key: 'nudeln',
+    tokens: ['nudeln', 'nudel', 'pasta', 'spaghetti', 'penne', 'fusilli', 'makkaroni', 'maccheroni', 'teigwaren'],
+    preferred: ['nudeln', 'nudel', 'pasta', 'teigwaren', 'grundnahrungsmittel', 'lebensmittel'],
+    strongPreferred: ['nudeln', 'nudel', 'pasta', 'teigwaren'],
+    productIntent: ['nudeln', 'nudel', 'pasta', 'spaghetti', 'penne', 'fusilli', 'makkaroni', 'maccheroni', 'tagliatelle', 'bavette', 'teigwaren'],
+    exactProductIntent: ['spaghetti', 'penne', 'fusilli', 'makkaroni', 'maccheroni', 'tagliatelle', 'bavette', 'teigwaren'],
+    productContext: ['nudeln', 'nudel', 'pasta', 'teigwaren', 'grundnahrungsmittel'],
+    weakContexts: ['mohnnudeln', 'germknoedel', 'germknodel', 'suessspeise', 'susspeise', 'dessert'],
+    severeWeakContexts: ['mohnnudeln', 'germknoedel', 'germknodel'],
+  },
+  {
+    key: 'eier',
+    tokens: ['eier'],
+    preferred: ['eier', 'ei', 'grundnahrungsmittel', 'backen', 'lebensmittel'],
+    strongPreferred: ['eier', 'ei', 'grundnahrungsmittel'],
+    productIntent: ['eier', 'ei', 'freilandeier', 'bodenhaltung', 'bioeier'],
+    exactProductIntent: ['freilandeier', 'bioeier'],
+    productContext: ['eier', 'ei', 'grundnahrungsmittel', 'backen'],
+    weakContexts: ['eiersalat'],
+    severeWeakContexts: ['steiermark', 'suedsteiermark', 'schleierkraut', 'osterei', 'schokoeier', 'eiermuschel', 'eiermuschelsuppe'],
+  },
+  {
+    key: 'oel',
+    tokens: ['oel'],
+    preferred: ['oel', 'oele', 'olivenoel', 'rapsoel', 'sonnenblumenoel', 'kuerbiskernoel', 'lebensmittel'],
+    strongPreferred: ['oel', 'oele', 'olivenoel', 'rapsoel', 'sonnenblumenoel', 'kuerbiskernoel'],
+    productIntent: ['oel', 'olivenoel', 'rapsoel', 'sonnenblumenoel', 'kuerbiskernoel', 'kurbiskernol', 'kronenoel'],
+    exactProductIntent: ['olivenoel', 'rapsoel', 'sonnenblumenoel', 'kuerbiskernoel', 'kurbiskernol', 'kronenoel'],
+    productContext: ['oel', 'oele', 'gewuerze', 'saucen'],
+    weakContexts: ['thunfisch', 'frischkaese', 'in oel', 'mit oel'],
+    severeWeakContexts: ['oleo', 'haaroel', 'haarfarbe', 'coloration', 'motoroel'],
+  },
+  {
+    key: 'fleisch',
+    tokens: ['fleisch'],
+    preferred: ['fleisch', 'rind', 'schwein', 'huhn', 'hendl', 'wurst', 'lebensmittel'],
+    strongPreferred: ['fleisch', 'rind', 'schwein', 'huhn', 'hendl', 'wurst'],
+    productIntent: ['fleisch', 'rind', 'schwein', 'huhn', 'hendl', 'faschiertes', 'filet', 'schnitzel', 'steak', 'braten'],
+    exactProductIntent: ['rind', 'schwein', 'huhn', 'hendl', 'faschiertes', 'filet', 'schnitzel', 'steak', 'braten'],
+    productContext: ['fleisch', 'wurst'],
+    weakContexts: ['fleischersatz', 'pflanzlich', 'moussaka', 'fertiggericht'],
+    severeWeakContexts: ['zahnfleisch', 'mundpflege', 'mundspuelung', 'fleischtomaten', 'tomatenpflanzen', 'hundefutter', 'katzenfutter', 'tierfutter'],
+  },
+  {
+    key: 'gemuese',
+    tokens: ['gemuese'],
+    preferred: ['gemuese', 'gemuse', 'obst', 'frisch', 'lebensmittel'],
+    strongPreferred: ['gemuese', 'gemuse', 'obst', 'frisch'],
+    productIntent: ['gemuese', 'gemuse', 'tomaten', 'gurken', 'paprika', 'karotten', 'salat', 'zucchini', 'brokkoli', 'kartoffeln', 'zwiebeln'],
+    exactProductIntent: ['tomaten', 'gurken', 'paprika', 'karotten', 'salat', 'zucchini', 'brokkoli', 'kartoffeln', 'zwiebeln'],
+    productContext: ['gemuese', 'gemuse', 'obst', 'frisch'],
+    weakContexts: ['thunfisch', 'in gemuese', 'mit gemuese', 'gemuesesuppe', 'gewuerz'],
+    severeWeakContexts: ['pflanzen', 'salatpflanzen'],
+  },
+  {
+    key: 'obst',
+    tokens: ['obst'],
+    preferred: ['obst', 'frisch', 'gemuese', 'lebensmittel'],
+    strongPreferred: ['obst', 'frisch', 'gemuese'],
+    productIntent: ['obst', 'tiefkuehlobst', 'steinobst', 'aepfel', 'apfel', 'bananen', 'orange', 'orangen', 'erdbeeren', 'trauben', 'birnen', 'kiwi'],
+    exactProductIntent: ['tiefkuehlobst', 'steinobst', 'aepfel', 'apfel', 'bananen', 'orange', 'orangen', 'erdbeeren', 'trauben', 'birnen', 'kiwi'],
+    productContext: ['obst', 'gemuese', 'frisch'],
+    weakContexts: ['obstriegel', 'obstgarten'],
+    severeWeakContexts: ['geschirr', 'geschirrspuel', 'tabs', 'pflanzen', 'salatpflanzen'],
   },
   {
     tokens: ['waschmittel'],
@@ -753,7 +821,8 @@ function getGenericMilkOfferIntent({ titleTokens, categoryTokens, structuredToke
   ];
   const hardIndirect =
     hasAnyTokenFamily(allTokens, hardIndirectTokens) ||
-    hasTokenSequence(allTokens, ['feiner', 'tiroler']);
+    hasTokenSequence(allTokens, ['feiner', 'tiroler']) ||
+    hasTokenSequence(allTokens, ['ohne', 'gleichen']);
   const softIndirect = hasAnyTokenFamily(allTokens, softIndirectTokens);
   const milkCategory = hasAnyWordToken(categoryWords, ['milchprodukte', 'molkerei']);
   const milkInTitle = hasAnyWordToken(titleWords, directMilkTokens) ||
@@ -1134,6 +1203,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericMilkQuery = context?.key === 'milch' && isGenericMilkQuery(queryTokens);
   const genericButterQuery = context?.key === 'butter' && queryTokens.length === 1 && queryTokens[0] === 'butter';
   const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
+  const conservativeFalsePositiveQuery = context && ['eier', 'oel', 'fleisch', 'gemuese', 'obst'].includes(context.key);
 
   if (
     genericMilkQuery &&
@@ -1144,6 +1214,16 @@ function scoreOfferAgainstQuery(offer, query) {
       comparisonTokens,
       aggregateTokens,
     })
+  ) {
+    return 0;
+  }
+
+  if (
+    conservativeFalsePositiveQuery &&
+    countAnyTokenMatches(
+      titleTokens.concat(categoryTokens, comparisonTokens),
+      (context.weakContexts || []).concat(context.severeWeakContexts || [])
+    ) > 0
   ) {
     return 0;
   }
@@ -1197,6 +1277,13 @@ function scoreOfferAgainstQuery(offer, query) {
 
     if (severeWeakContextMatches > 0) {
       score -= severeWeakContextMatches * 1600;
+    }
+
+    if (
+      (weakContextMatches > 0 || severeWeakContextMatches > 0) &&
+      ['eier', 'oel', 'fleisch', 'gemuese', 'obst'].includes(context.key)
+    ) {
+      return 0;
     }
 
     if (genericMilkQuery) {

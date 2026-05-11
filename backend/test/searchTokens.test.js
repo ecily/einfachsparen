@@ -39,6 +39,20 @@ test('does not broaden waschmittel query to cleaning accessories', () => {
   assert.deepEqual(buildQuerySearchTokens('waschmittel'), ['waschmittel']);
 });
 
+test('expands nudeln query only to direct pasta product tokens', () => {
+  assert.deepEqual(new Set(buildQuerySearchTokens('nudeln')), new Set([
+    'fusilli',
+    'maccheroni',
+    'makkaroni',
+    'nudel',
+    'nudeln',
+    'pasta',
+    'penne',
+    'spaghetti',
+    'teigwaren',
+  ]));
+});
+
 test('keeps reis and milch query tokens and indexes conservative product compounds', () => {
   assert.deepEqual(buildQuerySearchTokens('reis'), ['reis']);
   assert.deepEqual(buildQuerySearchTokens('milch'), ['milch']);
@@ -50,6 +64,20 @@ test('keeps reis and milch query tokens and indexes conservative product compoun
   assert.equal(riceTokens.includes('reis'), true);
   assert.equal(milkTokens.includes('milch'), true);
   assert.equal(priceTokens.includes('reis'), false);
+});
+
+test('indexes only true butter product compounds as butter search tokens', () => {
+  const teaButterTokens = buildOfferSearchTokens({ title: 'Schaerdinger Teebutter 250 g' });
+  const sourCreamButterTokens = buildOfferSearchTokens({ title: 'Sauerrahmbutter 250 g' });
+  const bodyButterTokens = buildOfferSearchTokens({ title: 'Bodybutter Kokos' });
+  const pastryTokens = buildOfferSearchTokens({ title: 'Oelz Butterpinze 400 g' });
+  const peanutTokens = buildOfferSearchTokens({ title: 'Peanut Butter Cups' });
+
+  assert.equal(teaButterTokens.includes('butter'), true);
+  assert.equal(sourCreamButterTokens.includes('butter'), true);
+  assert.equal(bodyButterTokens.includes('butter'), false);
+  assert.equal(pastryTokens.includes('butter'), false);
+  assert.equal(peanutTokens.includes('butter'), true);
 });
 
 test('adds search token metadata to offer documents', () => {

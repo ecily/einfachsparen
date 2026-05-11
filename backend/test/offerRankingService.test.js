@@ -1148,6 +1148,117 @@ test('ranks drinking milk ahead of milk biscuit and chocolate snack hits', () =>
   assert.equal(sortedTitles.includes('Merci Mandel-Milch-Nuss'), false);
 });
 
+test('does not rank Bahlsen Ohne Gleichen as drinking milk for milk search', () => {
+  const offers = [
+    offer({
+      title: 'Bahlsen Ohne Gleichen Vollmilch',
+      brand: 'Bahlsen',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'bahlsen-ohne-gleichen-vollmilch::0.125-kg',
+    }),
+    offer({
+      title: 'Vollmilch aus Deiner Region 1 l',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'vollmilch-aus-deiner-region::1-l',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'milch').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles, ['Vollmilch aus Deiner Region 1 l']);
+});
+
+test('nudeln search keeps pasta visible ahead of sweet noodle side hits', () => {
+  const offers = [
+    offer({
+      title: 'Mohnnudeln mit Butterbroesel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suessspeisen',
+      comparisonGroup: 'mohnnudeln-butterbroesel::0.5-kg',
+    }),
+    offer({
+      title: 'Barilla Spaghetti No. 5',
+      brand: 'Barilla',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Pasta, Reis & Konserven',
+      comparisonGroup: 'barilla-spaghetti-no-5::0.5-kg',
+    }),
+    offer({
+      title: 'Penne Rigate',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Pasta, Reis & Konserven',
+      comparisonGroup: 'penne-rigate::0.5-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'nudeln').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles.slice(0, 2), ['Barilla Spaghetti No. 5', 'Penne Rigate']);
+  assert.ok(sortedTitles.indexOf('Mohnnudeln mit Butterbroesel') > 1);
+});
+
+test('filters safe core-product false positives without broadening generic queries', () => {
+  assert.deepEqual(applyQueryMatch([
+    offer({
+      title: 'Syoss Oleo Intense Haarfarbe Permanente Oel-Coloration',
+      categoryPrimary: 'Drogerie',
+      categorySecondary: 'Haarfarbe',
+      comparisonGroup: 'syoss-oleo-haarfarbe::1-stueck',
+    }),
+    offer({
+      title: 'Bona Oel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Oele & Gewuerze',
+      comparisonGroup: 'bona-oel::1-l',
+    }),
+  ], 'oel').map((item) => item.title), ['Bona Oel']);
+
+  assert.deepEqual(applyQueryMatch([
+    offer({
+      title: 'Meridol Mundspuelung Zahnfleischschutz',
+      categoryPrimary: 'Drogerie',
+      categorySecondary: 'Mundpflege',
+      comparisonGroup: 'meridol-zahnfleischschutz::0.4-l',
+    }),
+    offer({
+      title: 'Fleisch geschnitten',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'fleisch-geschnitten::1-kg',
+    }),
+  ], 'fleisch').map((item) => item.title), ['Fleisch geschnitten']);
+
+  assert.deepEqual(applyQueryMatch([
+    offer({
+      title: 'Somat Geschirrspuel-Tabs Zitrone Limette',
+      categoryPrimary: 'Drogerie',
+      categorySecondary: 'Geschirrspuelmittel',
+      comparisonGroup: 'somat-tabs-zitrone-limette::55-stueck',
+    }),
+    offer({
+      title: 'Kiwi Gruen',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Obst & Gemuese',
+      comparisonGroup: 'kiwi-gruen::1-stueck',
+    }),
+  ], 'obst').map((item) => item.title), ['Kiwi Gruen']);
+
+  assert.deepEqual(applyQueryMatch([
+    offer({
+      title: 'Skoff Sauvignon Blanc Suedsteiermark',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Wein',
+      comparisonGroup: 'skoff-suedsteiermark::0.75-l',
+    }),
+    offer({
+      title: 'Freilandeier 10 Stueck',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Grundnahrungsmittel',
+      comparisonGroup: 'freilandeier::10-stueck',
+    }),
+  ], 'eier').map((item) => item.title), ['Freilandeier 10 Stueck']);
+});
+
 test('does not rank cream ahead of drinking milk for milk search', () => {
   const offers = [
     offer({

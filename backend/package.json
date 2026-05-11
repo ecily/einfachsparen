@@ -21,6 +21,8 @@
     "diagnose:ranking-performance": "node scripts/rankingPerformanceSmoke.js",
     "diagnose:query-quality-gaps": "node scripts/diagnoseQueryQualityGaps.js",
     "diagnose:coverage-baseline": "node scripts/diagnoseCoverageBaseline.js",
+    "diagnose:core-product-coverage": "node scripts/diagnoseCoreProductCoverage.js",
+    "diagnose:source-product-coverage": "node scripts/diagnoseSourceProductCoverage.js",
     "diagnose:spar-source-coverage": "node scripts/diagnoseSparSourceCoverage.js",
     "diagnose:spar-flyer-pdf-evidence": "node scripts/diagnoseSparFlyerPdfEvidence.js",
     "diagnose:spar-flyer-pdf-ingestion": "node scripts/diagnoseSparFlyerPdfIngestion.js",
