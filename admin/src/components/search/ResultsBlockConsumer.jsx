@@ -1,6 +1,4 @@
 import { SectionCard } from '../layout/SectionCard'
-import { LegalInlineNotice } from '../layout/LegalInlineNotice'
-import { SavingsNotice } from '../layout/SavingsNotice'
 import { ResultsSection } from './ResultsSection'
 
 export function ResultsBlockConsumer({
@@ -10,7 +8,6 @@ export function ResultsBlockConsumer({
   actionOffers,
   onAddToShoppingList,
   shoppingListIds,
-  onNavigate,
 }) {
   const visibleOfferCount = safeOffers.length + actionOffers.length
 
@@ -50,9 +47,6 @@ export function ResultsBlockConsumer({
               </span>
             </div>
             <p className="market-check-note">Preise, Verf&uuml;gbarkeit und Bedingungen bitte im Markt pr&uuml;fen.</p>
-
-            <SavingsNotice onNavigate={onNavigate} />
-            <LegalInlineNotice onNavigate={onNavigate} compact />
 
             <ResultsSection
               title="Angebote mit bekannter Ersparnis"

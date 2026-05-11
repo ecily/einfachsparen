@@ -898,7 +898,6 @@ function App() {
             onApplySearch={handleApplySearch}
             onResetAll={handleResetAll}
             onAddToShoppingList={handleAddToShoppingList}
-            onNavigate={handleNavigate}
           />
         </div>
       ) : activePage === 'product-search' ? (

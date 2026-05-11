@@ -30,7 +30,6 @@ export function SearchPage({
   onApplySearch,
   onResetAll,
   onAddToShoppingList,
-  onNavigate,
 }) {
   const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
@@ -76,8 +75,7 @@ export function SearchPage({
 
       <section className="panel browse-intro">
         <div className="browse-intro__copy">
-          <p className="eyebrow">St&ouml;bern</p>
-          <h1>Nach M&auml;rkten und Kategorien st&ouml;bern</h1>
+          <h1>St&ouml;bere nach M&auml;rkten und Angeboten</h1>
           <p className="subtitle">W&auml;hle einen Markt oder eine Kategorie und entdecke aktuelle Angebote.</p>
         </div>
       </section>
@@ -130,7 +128,6 @@ export function SearchPage({
             actionOffers={actionOffers}
             onAddToShoppingList={onAddToShoppingList}
             shoppingListIds={shoppingListIds}
-            onNavigate={onNavigate}
           />
         </div>
       ) : null}
