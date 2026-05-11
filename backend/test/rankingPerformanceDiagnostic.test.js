@@ -85,8 +85,35 @@ test('readable output keeps a stable compact format and redacts secret-like fiel
       {
         label: 'kaffee',
         apiParams: { q: 'kaffee', ADMIN_API_KEY: 'should-not-print' },
-        timings: { totalMs: 12.34, dbLoadMs: 4, rankingMs: 5, responseMappingMs: 3 },
+        timings: {
+          totalMs: 12.34,
+          dbLoadMs: 4,
+          rankingMs: 5,
+          responseMappingMs: 3,
+          serializationMs: 1,
+          categoryLoadMs: 1,
+          candidateFindMs: 2,
+          retailerLoadMs: 1,
+          cacheLookupMs: 0,
+          explainMs: 0,
+          activeFilterMs: 0,
+          programFilterMs: 0,
+          unitFilterMs: 0,
+          queryMatchMs: 1,
+          dedupeMs: 1,
+          scoreCacheMs: 1,
+          sortMs: 1,
+          responsePreparationMs: 1,
+          finalDedupeMs: 1,
+          visibleDedupeMs: 1,
+          responseHydrationMs: 1,
+          rankedOfferMappingMs: 1,
+          responseAssemblyMs: 1,
+        },
         candidateCountBeforeRanking: 10,
+        loadedDocumentCount: 10,
+        loadedDocumentBytes: 2048,
+        projectionFieldCount: 42,
         queryTokens: ['kaffee'],
         usesSearchTokens: true,
         candidateQueryMode: 'searchTokensOnly',
@@ -95,6 +122,10 @@ test('readable output keeps a stable compact format and redacts secret-like fiel
         resultCount: 8,
         displayedCount: 5,
         responseSizeBytes: 1234,
+        cacheProbe: {
+          cold: { totalMs: 15, buildMs: 14, serializationMs: 1 },
+          warm: { totalMs: 1, buildMs: 0.5, serializationMs: 0.5, cacheHit: true },
+        },
         warningLevel: 'OK',
         executionStats: {
           executionTimeMillis: 2,
@@ -128,6 +159,8 @@ test('readable output keeps a stable compact format and redacts secret-like fiel
   assert.match(output, /\[OK\] kaffee/);
   assert.match(output, /candidateQueryMode=searchTokensOnly/);
   assert.match(output, /fallbackUsed=false/);
+  assert.match(output, /dbSplit category=/);
+  assert.match(output, /cache cold=/);
   assert.match(output, /docsExamined=10/);
   assert.doesNotMatch(output, /should-not-print/);
   assert.match(output, /\[redacted\]/);

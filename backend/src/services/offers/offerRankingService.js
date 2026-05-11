@@ -8,7 +8,7 @@ const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/o
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 
-const OFFER_RANKING_FIELDS = [
+const OFFER_RANKING_FIELD_LIST = [
   '_id',
   'retailerKey',
   'retailerName',
@@ -73,7 +73,8 @@ const OFFER_RANKING_FIELDS = [
   'rawFacts.referencePriceSource',
   'rawFacts.referencePriceDerived',
   'rawFacts.savingsDisplayType',
-].join(' ');
+];
+const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v3-search-token-v${SEARCH_TOKEN_VERSION}`;
@@ -283,6 +284,10 @@ function setCachedRankingResponse(cacheKey, value) {
 
 function clearRankingResponseCache() {
   rankingResponseCache.clear();
+}
+
+function getRankingResponseCacheSize() {
+  return rankingResponseCache.size;
 }
 
 function summarizeDebugRankingOffer(offer, { query = '' } = {}) {
@@ -3273,6 +3278,7 @@ async function findRankingCandidateOffers({
   candidateLimit = RANKING_CANDIDATE_CAP,
   collectExecutionStats = false,
 }) {
+  const queryStartedAt = nowMs();
   const primaryMatch = buildRankingCandidateMatch({
     selectedRetailers,
     selectedCategories,
@@ -3288,7 +3294,9 @@ async function findRankingCandidateOffers({
   }
 
   try {
+    const primaryStartedAt = nowMs();
     const primaryOffers = await dbQuery;
+    const primaryLoadMs = nowMs() - primaryStartedAt;
     const fallbackReason = shouldRunSeparatedRegexFallback({
       query,
       offers: primaryOffers,
@@ -3309,11 +3317,15 @@ async function findRankingCandidateOffers({
       fallbackQueryMetadata = buildRankingCandidateFallbackMetadata(fallbackReason);
       const fallbackQuery = buildRankingOfferQuery(fallbackMatch, candidateLimit);
       fallbackQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
+      const fallbackStartedAt = nowMs();
       const fallbackOffers = await fallbackQuery;
+      const fallbackLoadMs = nowMs() - fallbackStartedAt;
       offers = mergeCandidateOffers(primaryOffers, fallbackOffers).slice(0, candidateLimit);
       queryMetadata.candidateQueryMode = 'searchTokensThenFallback';
       queryMetadata.fallbackUsed = true;
       queryMetadata.fallbackReason = fallbackReason;
+      fallbackQueryMetadata.loadMs = fallbackLoadMs;
+      fallbackQueryMetadata.loadedDocumentCount = fallbackOffers.length;
     }
 
     if (!collectExecutionStats) {
@@ -3329,6 +3341,15 @@ async function findRankingCandidateOffers({
       fields: OFFER_RANKING_FIELDS.split(' '),
       queryMetadata,
       fallbackQueryMetadata,
+      loadTimings: {
+        totalFindMs: nowMs() - queryStartedAt,
+        primaryFindMs: primaryLoadMs,
+        fallbackFindMs: fallbackQueryMetadata?.loadMs || 0,
+        primaryLoadedDocumentCount: primaryOffers.length,
+        fallbackLoadedDocumentCount: fallbackQueryMetadata?.loadedDocumentCount || 0,
+        loadedDocumentCount: offers.length,
+        loadedDocumentBytes: Buffer.byteLength(JSON.stringify(offers), 'utf8'),
+      },
       executionStats: null,
       primaryExecutionStats: null,
       fallbackExecutionStats: null,
@@ -3555,6 +3576,25 @@ async function buildOfferRanking({
 }) {
   const totalStartedAt = nowMs();
   const timings = {
+    categoryLoadMs: 0,
+    cacheLookupMs: 0,
+    retailerLoadMs: 0,
+    candidateFindMs: 0,
+    activeFilterMs: 0,
+    programFilterMs: 0,
+    unitFilterMs: 0,
+    queryMatchMs: 0,
+    dedupeMs: 0,
+    scoreCacheMs: 0,
+    sortMs: 0,
+    responsePreparationMs: 0,
+    finalDedupeMs: 0,
+    visibleDedupeMs: 0,
+    responseHydrationMs: 0,
+    comparableFilterMs: 0,
+    rankedOfferMappingMs: 0,
+    responseAssemblyMs: 0,
+    explainMs: 0,
     dbLoadMs: 0,
     rankingMs: 0,
     responseMappingMs: 0,
@@ -3568,13 +3608,32 @@ async function buildOfferRanking({
   const selectedRetailers = normalizeRetailerList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
+  const rawCategories = normalizeStringList(categories);
+  const earlyCacheKey = rawCategories.length === 0 ? buildRankingCacheKey({
+    categories: [],
+    query,
+    unit,
+    retailers,
+    programRetailers,
+    onlyWithoutProgram,
+    limit,
+  }) : '';
+  const cacheLookupStartedAt = nowMs();
+  const earlyCachedResponse = !diagnostics && earlyCacheKey ? getCachedRankingResponse(earlyCacheKey) : null;
+  timings.cacheLookupMs += nowMs() - cacheLookupStartedAt;
+
+  if (earlyCachedResponse) {
+    return earlyCachedResponse;
+  }
+
   const categoryLoadStartedAt = nowMs();
   const categoryDocuments = await Category.find({ isActive: true })
     .select('mainCategoryLabel offerCount subcategories')
     .lean();
-  timings.dbLoadMs += nowMs() - categoryLoadStartedAt;
+  timings.categoryLoadMs = nowMs() - categoryLoadStartedAt;
+  timings.dbLoadMs += timings.categoryLoadMs;
   const selectedCategories = parseRankingCategories(categories, buildKnownCategoryLabelMap(categoryDocuments));
-  const cacheKey = buildRankingCacheKey({
+  const cacheKey = earlyCacheKey || buildRankingCacheKey({
     categories: selectedCategories,
     query,
     unit,
@@ -3583,7 +3642,9 @@ async function buildOfferRanking({
     onlyWithoutProgram,
     limit,
   });
-  const cachedResponse = diagnostics ? null : getCachedRankingResponse(cacheKey);
+  const lateCacheLookupStartedAt = nowMs();
+  const cachedResponse = diagnostics || earlyCacheKey ? null : getCachedRankingResponse(cacheKey);
+  timings.cacheLookupMs += nowMs() - lateCacheLookupStartedAt;
 
   if (cachedResponse) {
     return cachedResponse;
@@ -3598,6 +3659,7 @@ async function buildOfferRanking({
     hasQuery,
   });
   const dbLoadStartedAt = nowMs();
+  const retailerLoadTiming = { ms: 0 };
   const [candidateResult, retailerOptions] = await Promise.all([
     findRankingCandidateOffers({
       selectedRetailers,
@@ -3608,14 +3670,23 @@ async function buildOfferRanking({
       candidateLimit,
       collectExecutionStats: diagnostics,
     }),
-    Retailer.find(retailerMatch)
-      .select('retailerKey retailerName activeOfferCount')
-      .sort({ sortOrder: 1, retailerName: 1 })
-      .lean(),
+    (async () => {
+      const retailerLoadStartedAt = nowMs();
+      const rows = await Retailer.find(retailerMatch)
+        .select('retailerKey retailerName activeOfferCount')
+        .sort({ sortOrder: 1, retailerName: 1 })
+        .lean();
+      retailerLoadTiming.ms = nowMs() - retailerLoadStartedAt;
+      return rows;
+    })(),
   ]);
   timings.dbLoadMs += nowMs() - dbLoadStartedAt;
   const candidateOffers = diagnostics ? candidateResult.offers : candidateResult;
   const mongoDiagnostics = diagnostics ? candidateResult.mongo : null;
+  timings.retailerLoadMs = retailerLoadTiming.ms;
+  timings.candidateFindMs = diagnostics
+    ? Number(mongoDiagnostics?.loadTimings?.totalFindMs || 0)
+    : Math.max(0, timings.dbLoadMs - timings.categoryLoadMs - timings.retailerLoadMs);
   const debugStages = diagnostics && debugCandidates ? [] : null;
 
   if (debugStages) {
@@ -3627,7 +3698,10 @@ async function buildOfferRanking({
   }
 
   const rankingStartedAt = nowMs();
+  const activeFilterStartedAt = nowMs();
   const activeCandidateOffers = candidateOffers.filter((offer) => offer?.status === 'active' && offer?.isActiveNow);
+  timings.activeFilterMs = nowMs() - activeFilterStartedAt;
+  const programFilterStartedAt = nowMs();
   const programEligibleOffers = applyProgramEligibility(
     activeCandidateOffers,
     {
@@ -3635,9 +3709,16 @@ async function buildOfferRanking({
       onlyWithoutProgram: withoutProgram,
     }
   );
+  timings.programFilterMs = nowMs() - programFilterStartedAt;
+  const unitFilterStartedAt = nowMs();
   const unitFilteredOffers = applyUnitFilter(programEligibleOffers, unit);
+  timings.unitFilterMs = nowMs() - unitFilterStartedAt;
+  const queryMatchStartedAt = nowMs();
   const queryMatchedOffers = applyQueryMatch(unitFilteredOffers, query);
+  timings.queryMatchMs = nowMs() - queryMatchStartedAt;
+  const dedupeStartedAt = nowMs();
   const fullyFilteredOffers = dedupeOffers(queryMatchedOffers);
+  timings.dedupeMs = nowMs() - dedupeStartedAt;
 
   if (debugStages) {
     const candidateIds = new Set(candidateOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
@@ -3685,11 +3766,14 @@ async function buildOfferRanking({
   const queryScores = hasQuery ? new WeakMap() : null;
 
   if (queryScores) {
+    const scoreCacheStartedAt = nowMs();
     for (const offer of fullyFilteredOffers) {
       queryScores.set(offer, scoreOfferAgainstQuery(offer, query));
     }
+    timings.scoreCacheMs = nowMs() - scoreCacheStartedAt;
   }
 
+  const sortStartedAt = nowMs();
   const sortedOffers = fullyFilteredOffers
     .sort((left, right) => {
       if (queryScores) {
@@ -3723,14 +3807,21 @@ async function buildOfferRanking({
 
       return String(left.title).localeCompare(String(right.title), 'de');
     });
+  timings.sortMs = nowMs() - sortStartedAt;
+  const responsePreparationStartedAt = nowMs();
   const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query);
+  timings.responsePreparationMs = nowMs() - responsePreparationStartedAt;
+  const finalDedupeStartedAt = nowMs();
   const finalResponseOffers = dedupeFinalResponseOffers(
     responseCandidateOffers.slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit),
     query
   );
+  timings.finalDedupeMs = nowMs() - finalDedupeStartedAt;
+  const visibleDedupeStartedAt = nowMs();
   const visibleDedupeResult = dedupeVisibleCardResponseOffers(finalResponseOffers, query, {
     collectDiagnostics: Boolean(debugStages),
   });
+  timings.visibleDedupeMs = nowMs() - visibleDedupeStartedAt;
   const offers = visibleDedupeResult.offers;
 
   if (debugStages) {
@@ -3760,14 +3851,19 @@ async function buildOfferRanking({
       reason: 'visible-card-dedupe',
     }));
   }
+  const comparableFilterStartedAt = nowMs();
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
+  timings.comparableFilterMs = nowMs() - comparableFilterStartedAt;
   timings.rankingMs = nowMs() - rankingStartedAt;
 
   const responseMappingStartedAt = nowMs();
   const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
   const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
+  const rankedOfferMappingStartedAt = nowMs();
   const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
+  timings.rankedOfferMappingMs = nowMs() - rankedOfferMappingStartedAt;
 
+  const responseAssemblyStartedAt = nowMs();
   const response = {
     generatedAt: new Date().toISOString(),
     filters: {
@@ -3805,10 +3901,12 @@ async function buildOfferRanking({
     rankedGroups: buildGroupedRankings(rankedOffers, { query }),
     rankedOffers,
   };
+  timings.responseAssemblyMs = nowMs() - responseAssemblyStartedAt;
   timings.responseMappingMs = nowMs() - responseMappingStartedAt;
   timings.totalMs = nowMs() - totalStartedAt;
 
   if (diagnostics) {
+    const explainStartedAt = nowMs();
     const primaryExplainResult = await explainRankingCandidateQuery({
       selectedRetailers,
       selectedCategories,
@@ -3840,6 +3938,7 @@ async function buildOfferRanking({
         mongoDiagnostics.fallbackError = fallbackExplainResult.error;
       }
     }
+    timings.explainMs = nowMs() - explainStartedAt;
 
     return {
       response,
@@ -3867,6 +3966,7 @@ module.exports = {
   buildBasketSuggestions,
   buildRankedOffer,
   clearRankingResponseCache,
+  getRankingResponseCacheSize,
   scoreOfferAgainstQuery,
   applyQueryMatch,
   buildValidityLabel,

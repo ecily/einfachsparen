@@ -5,17 +5,16 @@ const {
   buildOfferRanking,
   buildRankingCandidateMatch,
   clearRankingResponseCache,
+  getRankingResponseCacheSize,
 } = require('../offers/offerRankingService');
 
 const DEFAULT_RANKING_PERFORMANCE_CASES = [
   { label: 'kaffee', params: { q: 'kaffee', limit: 20 }, args: { query: 'kaffee', limit: 20 } },
   { label: 'kaffee + retailer spar', params: { q: 'kaffee', retailers: 'spar', limit: 20 }, args: { query: 'kaffee', retailers: 'spar', limit: 20 } },
-  { label: 'butter', params: { q: 'butter', limit: 20 }, args: { query: 'butter', limit: 20 } },
   { label: 'reis', params: { q: 'reis', limit: 20 }, args: { query: 'reis', limit: 20 } },
-  { label: 'waschmittel', params: { q: 'waschmittel', limit: 20 }, args: { query: 'waschmittel', limit: 20 } },
   { label: 'milch', params: { q: 'milch', limit: 20 }, args: { query: 'milch', limit: 20 } },
-  { label: 'joghurt', params: { q: 'joghurt', limit: 20 }, args: { query: 'joghurt', limit: 20 } },
   { label: 'nudeln', params: { q: 'nudeln', limit: 20 }, args: { query: 'nudeln', limit: 20 } },
+  { label: 'waschmittel', params: { q: 'waschmittel', limit: 20 }, args: { query: 'waschmittel', limit: 20 } },
   { label: 'bier', params: { q: 'bier', limit: 20 }, args: { query: 'bier', limit: 20 } },
 ];
 
@@ -130,6 +129,10 @@ function estimateResponseSizeBytes(response) {
   return Buffer.byteLength(JSON.stringify(sanitizeForOutput(response)), 'utf8');
 }
 
+function nowMs() {
+  return Number(process.hrtime.bigint()) / 1e6;
+}
+
 function buildIndexRecommendations(cases = []) {
   const recommendations = [];
 
@@ -165,6 +168,9 @@ async function diagnoseRankingCase(testCase) {
   const response = result.response;
   const timings = result.diagnostics.timings;
   const mongo = result.diagnostics.mongo || {};
+  const serializationStartedAt = nowMs();
+  const responseSizeBytes = estimateResponseSizeBytes(response);
+  const serializationMs = nowMs() - serializationStartedAt;
   const primaryExecutionStats = summarizeExecutionStats(mongo.primaryExecutionStats || mongo.executionStats);
   const fallbackExecutionStats = mongo.fallbackExecutionStats
     ? summarizeExecutionStats(mongo.fallbackExecutionStats)
@@ -198,13 +204,61 @@ async function diagnoseRankingCase(testCase) {
       totalDocsExamined,
       totalKeysExamined,
     },
+    projectionFieldCount: Array.isArray(mongo.fields) ? mongo.fields.length : 0,
+    loadedDocumentCount: mongo.loadTimings?.loadedDocumentCount ?? response.summary?.candidateCount ?? null,
+    loadedDocumentBytes: mongo.loadTimings?.loadedDocumentBytes ?? null,
     candidateCountBeforeRanking: response.summary?.candidateCount ?? null,
     debugCandidates: testCase.debugCandidates ? sanitizeForOutput(result.diagnostics.candidates || null) : null,
-    timings,
-    responseSizeBytes: estimateResponseSizeBytes(response),
+    timings: {
+      ...timings,
+      serializationMs: Number(serializationMs.toFixed(1)),
+    },
+    responseSizeBytes,
     resultCount: response.summary?.resultCount ?? null,
     displayedCount: response.summary?.displayedCount ?? null,
     warningLevel: classifyWarningLevel(timings.totalMs),
+  };
+}
+
+async function measureCacheCase(testCase) {
+  clearRankingResponseCache();
+  const beforeCacheSize = getRankingResponseCacheSize();
+  const coldStartedAt = nowMs();
+  const coldResponse = await buildOfferRanking(testCase.args);
+  const coldBuildMs = nowMs() - coldStartedAt;
+  const coldSerializationStartedAt = nowMs();
+  const coldResponseSizeBytes = estimateResponseSizeBytes(coldResponse);
+  const coldSerializationMs = nowMs() - coldSerializationStartedAt;
+  const afterColdCacheSize = getRankingResponseCacheSize();
+  const warmStartedAt = nowMs();
+  const warmResponse = await buildOfferRanking(testCase.args);
+  const warmBuildMs = nowMs() - warmStartedAt;
+  const warmSerializationStartedAt = nowMs();
+  const warmResponseSizeBytes = estimateResponseSizeBytes(warmResponse);
+  const warmSerializationMs = nowMs() - warmSerializationStartedAt;
+
+  return {
+    beforeCacheSize,
+    afterColdCacheSize,
+    afterWarmCacheSize: getRankingResponseCacheSize(),
+    cold: {
+      totalMs: Number((coldBuildMs + coldSerializationMs).toFixed(1)),
+      buildMs: Number(coldBuildMs.toFixed(1)),
+      serializationMs: Number(coldSerializationMs.toFixed(1)),
+      responseSizeBytes: coldResponseSizeBytes,
+      resultCount: coldResponse.summary?.resultCount ?? null,
+      displayedCount: coldResponse.summary?.displayedCount ?? null,
+      cacheHit: false,
+    },
+    warm: {
+      totalMs: Number((warmBuildMs + warmSerializationMs).toFixed(1)),
+      buildMs: Number(warmBuildMs.toFixed(1)),
+      serializationMs: Number(warmSerializationMs.toFixed(1)),
+      responseSizeBytes: warmResponseSizeBytes,
+      resultCount: warmResponse.summary?.resultCount ?? null,
+      displayedCount: warmResponse.summary?.displayedCount ?? null,
+      cacheHit: afterColdCacheSize > beforeCacheSize,
+    },
   };
 }
 
@@ -212,7 +266,9 @@ async function buildRankingPerformanceDiagnostic({ cases = DEFAULT_RANKING_PERFO
   const results = [];
 
   for (const testCase of cases) {
-    results.push(await diagnoseRankingCase(testCase));
+    const diagnostic = await diagnoseRankingCase(testCase);
+    diagnostic.cacheProbe = await measureCacheCase(testCase);
+    results.push(diagnostic);
   }
 
   return {
@@ -317,8 +373,14 @@ function printReadableReport(report, { jsonPath = '' } = {}) {
     console.log(`[${item.warningLevel}] ${item.label}`);
     console.log(`  apiParams=${JSON.stringify(sanitizeForOutput(item.apiParams))}`);
     console.log(`  queryTokens=${JSON.stringify(item.queryTokens)} candidateQueryMode=${item.candidateQueryMode} usesSearchTokens=${item.usesSearchTokens} fallbackUsed=${item.fallbackUsed} fallbackReason=${item.fallbackReason || '-'}`);
-    console.log(`  total=${formatMs(item.timings.totalMs)} db=${formatMs(item.timings.dbLoadMs)} ranking=${formatMs(item.timings.rankingMs)} mapping=${formatMs(item.timings.responseMappingMs)}`);
-    console.log(`  candidates=${item.candidateCountBeforeRanking} resultCount=${item.resultCount} displayed=${item.displayedCount} responseBytes=${item.responseSizeBytes}`);
+    console.log(`  total=${formatMs(item.timings.totalMs)} db=${formatMs(item.timings.dbLoadMs)} ranking=${formatMs(item.timings.rankingMs)} mapping=${formatMs(item.timings.responseMappingMs)} serialization=${formatMs(item.timings.serializationMs)}`);
+    console.log(`  dbSplit category=${formatMs(item.timings.categoryLoadMs)} candidateFind=${formatMs(item.timings.candidateFindMs)} retailers=${formatMs(item.timings.retailerLoadMs)} cacheLookup=${formatMs(item.timings.cacheLookupMs)} explain=${formatMs(item.timings.explainMs)}`);
+    console.log(`  rankingSplit active=${formatMs(item.timings.activeFilterMs)} program=${formatMs(item.timings.programFilterMs)} unit=${formatMs(item.timings.unitFilterMs)} queryScore=${formatMs(item.timings.queryMatchMs)} dedupe=${formatMs(item.timings.dedupeMs)} scoreCache=${formatMs(item.timings.scoreCacheMs)} sort=${formatMs(item.timings.sortMs)}`);
+    console.log(`  mappingSplit prepare=${formatMs(item.timings.responsePreparationMs)} finalDedupe=${formatMs(item.timings.finalDedupeMs)} visibleDedupe=${formatMs(item.timings.visibleDedupeMs)} hydrate=${formatMs(item.timings.responseHydrationMs)} mapOffers=${formatMs(item.timings.rankedOfferMappingMs)} assemble=${formatMs(item.timings.responseAssemblyMs)}`);
+    console.log(`  candidates=${item.candidateCountBeforeRanking} loadedDocs=${item.loadedDocumentCount} loadedBytes=${item.loadedDocumentBytes ?? '-'} projectionFields=${item.projectionFieldCount} resultCount=${item.resultCount} displayed=${item.displayedCount} responseBytes=${item.responseSizeBytes}`);
+    if (item.cacheProbe) {
+      console.log(`  cache cold=${formatMs(item.cacheProbe.cold.totalMs)} (build=${formatMs(item.cacheProbe.cold.buildMs)} serialize=${formatMs(item.cacheProbe.cold.serializationMs)}) warm=${formatMs(item.cacheProbe.warm.totalMs)} (build=${formatMs(item.cacheProbe.warm.buildMs)} serialize=${formatMs(item.cacheProbe.warm.serializationMs)}) hit=${item.cacheProbe.warm.cacheHit}`);
+    }
     console.log(`  primary execution=${stats.executionTimeMillis}ms docsExamined=${stats.totalDocsExamined} keysExamined=${stats.totalKeysExamined} nReturned=${stats.nReturned}`);
     console.log(`  primary plan indexes=${stats.indexNames.length ? stats.indexNames.join(',') : '-'} collscan=${stats.hasCollectionScan}`);
     if (item.fallbackExecutionStats) {
