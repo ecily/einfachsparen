@@ -82,7 +82,6 @@ function SearchLandingHero() {
     ['spar', 'SPAR'],
     ['hofer', 'HOFER'],
     ['lidl', 'Lidl'],
-    ['penny', 'PENNY'],
     ['dm', 'dm'],
     ['bipa', 'BIPA'],
     ['adeg', 'ADEG'],
@@ -91,14 +90,16 @@ function SearchLandingHero() {
   return (
     <>
       <section
-        className="panel"
+        className="panel search-landing-hero"
         style={{
           alignItems: 'center',
           display: 'grid',
           gap: 'clamp(1rem, 4vw, 1.75rem)',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
           marginBottom: '1rem',
+          minWidth: 0,
           padding: 'clamp(1rem, 4vw, 1.6rem)',
+          width: '100%',
         }}
       >
         <div style={{ display: 'grid', gap: '0.75rem', minWidth: 0 }}>

@@ -599,6 +599,7 @@ a {
   display: grid;
   gap: 0.42rem;
   max-width: 48rem;
+  min-width: 0;
 }
 
 .hero-market-strip__label {
@@ -614,6 +615,7 @@ a {
   flex-wrap: wrap;
   gap: 0.38rem;
   max-width: 100%;
+  min-width: 0;
 }
 
 .hero-market-badge {
@@ -632,6 +634,16 @@ a {
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
+}
+
+.search-landing-hero {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.search-landing-hero > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .hero-benefit-grid {
@@ -2392,6 +2404,16 @@ textarea:focus {
 
   .hero-benefit-card {
     padding: 0.82rem 0.88rem;
+  }
+
+  .hero-market-strip__badges {
+    gap: 0.3rem;
+  }
+
+  .hero-market-badge {
+    min-height: 1.62rem;
+    padding: 0.28rem 0.46rem;
+    font-size: 0.76rem;
   }
 
   .browse-intro {
