@@ -20,6 +20,11 @@ const DEFAULT_RANKING_PERFORMANCE_CASES = [
 ];
 
 const SECRET_KEY_PATTERN = /(secret|password|token|authorization|api[_-]?key|mongodb|uri|connection)/i;
+const SAFE_TOKEN_FIELD_KEYS = new Set([
+  'queryTokens',
+  'searchTokens',
+  'searchTokenVersion',
+]);
 const WRITE_METHOD_PATTERN = /\.(create|insertMany|insertOne|updateOne|updateMany|replaceOne|deleteOne|deleteMany|findOneAndUpdate|findByIdAndUpdate|bulkWrite|save)\s*\(/;
 
 function classifyWarningLevel(totalMs) {
@@ -57,7 +62,7 @@ function sanitizeForOutput(value, seen = new WeakSet()) {
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => [
       key,
-      SECRET_KEY_PATTERN.test(key) ? '[redacted]' : sanitizeForOutput(entry, seen),
+      SECRET_KEY_PATTERN.test(key) && !SAFE_TOKEN_FIELD_KEYS.has(key) ? '[redacted]' : sanitizeForOutput(entry, seen),
     ])
   );
 }
@@ -155,6 +160,7 @@ async function diagnoseRankingCase(testCase) {
   const result = await buildOfferRanking({
     ...testCase.args,
     diagnostics: true,
+    debugCandidates: Boolean(testCase.debugCandidates),
   });
   const response = result.response;
   const timings = result.diagnostics.timings;
@@ -193,6 +199,7 @@ async function diagnoseRankingCase(testCase) {
       totalKeysExamined,
     },
     candidateCountBeforeRanking: response.summary?.candidateCount ?? null,
+    debugCandidates: testCase.debugCandidates ? sanitizeForOutput(result.diagnostics.candidates || null) : null,
     timings,
     responseSizeBytes: estimateResponseSizeBytes(response),
     resultCount: response.summary?.resultCount ?? null,
@@ -221,6 +228,8 @@ function parseArgs(argv = []) {
   const options = {
     jsonPath: '',
     jsonToStdout: false,
+    query: '',
+    debugCandidates: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -239,10 +248,49 @@ function parseArgs(argv = []) {
 
     if (arg.startsWith('--json=')) {
       options.jsonPath = arg.slice('--json='.length);
+      continue;
+    }
+
+    if (arg === '--query' || arg === '-q') {
+      const next = argv[index + 1];
+      if (next && !next.startsWith('--')) {
+        options.query = next;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--query=')) {
+      options.query = arg.slice('--query='.length);
+      continue;
+    }
+
+    if (arg === '--debug-candidates') {
+      options.debugCandidates = true;
     }
   }
 
   return options;
+}
+
+function buildCasesFromOptions(options = {}) {
+  const query = String(options.query || '').trim();
+
+  if (!query) {
+    return DEFAULT_RANKING_PERFORMANCE_CASES.map((testCase) => ({
+      ...testCase,
+      debugCandidates: Boolean(options.debugCandidates),
+    }));
+  }
+
+  return [
+    {
+      label: query,
+      params: { q: query, limit: 20 },
+      args: { query, limit: 20 },
+      debugCandidates: Boolean(options.debugCandidates),
+    },
+  ];
 }
 
 async function writeJsonReport(filePath, report) {
@@ -279,6 +327,18 @@ function printReadableReport(report, { jsonPath = '' } = {}) {
       console.log(`  fallback plan indexes=${fallback.indexNames.length ? fallback.indexNames.join(',') : '-'} collscan=${fallback.hasCollectionScan}`);
     }
     console.log(`  totalDocsExamined=${item.totalExecutionStats.totalDocsExamined} totalKeysExamined=${item.totalExecutionStats.totalKeysExamined}`);
+    if (item.debugCandidates?.stages?.length) {
+      for (const stage of item.debugCandidates.stages) {
+        console.log(`  debug ${stage.stage}: count=${stage.count}`);
+        for (const candidate of stage.top.slice(0, 20)) {
+          console.log(`    - id=${candidate.id} retailer=${candidate.retailerKey} score=${candidate.score ?? '-'} title=${candidate.title}`);
+          console.log(`      searchTokens=${JSON.stringify(candidate.searchTokens)}`);
+        }
+        for (const removed of stage.removed || []) {
+          console.log(`      removed id=${removed.id} reason=${removed.reason}`);
+        }
+      }
+    }
   }
 
   if (report.recommendations.length > 0) {
@@ -299,6 +359,7 @@ module.exports = {
   WRITE_METHOD_PATTERN,
   assertReadOnlySource,
   buildIndexRecommendations,
+  buildCasesFromOptions,
   buildRankingPerformanceDiagnostic,
   classifyWarningLevel,
   estimateResponseSizeBytes,

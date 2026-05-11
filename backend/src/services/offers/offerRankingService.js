@@ -15,6 +15,8 @@ const OFFER_RANKING_FIELDS = [
   'title',
   'titleNormalized',
   'brand',
+  'searchTokens',
+  'searchTokenVersion',
   'searchText',
   'categoryKey',
   'categoryPrimary',
@@ -74,6 +76,7 @@ const OFFER_RANKING_FIELDS = [
 ].join(' ');
 
 const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v3-search-token-v${SEARCH_TOKEN_VERSION}`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -245,6 +248,7 @@ function buildRankingCacheKey({
   limit = 30,
 }) {
   return JSON.stringify({
+    cacheSchemaVersion: RANKING_CACHE_SCHEMA_VERSION,
     categories: normalizeStringList(categories).sort(),
     query: String(query || '').trim().toLowerCase(),
     unit: String(unit || 'all').trim().toLowerCase(),
@@ -279,6 +283,35 @@ function setCachedRankingResponse(cacheKey, value) {
 
 function clearRankingResponseCache() {
   rankingResponseCache.clear();
+}
+
+function summarizeDebugRankingOffer(offer, { query = '' } = {}) {
+  return {
+    id: String(offer?._id || offer?.id || ''),
+    retailerKey: offer?.retailerKey || '',
+    retailerName: offer?.retailerName || '',
+    title: offer?.title || '',
+    searchTokens: Array.isArray(offer?.searchTokens) ? offer.searchTokens.slice(0, 24) : [],
+    searchTokenVersion: offer?.searchTokenVersion ?? null,
+    score: query ? scoreOfferAgainstQuery(offer, query) : null,
+  };
+}
+
+function buildDebugRankingStage({ stage, offers = [], query = '', previousIds = null, reason = '' }) {
+  const ids = new Set(offers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+  const removed = previousIds
+    ? [...previousIds]
+        .filter((id) => !ids.has(id))
+        .slice(0, 20)
+        .map((id) => ({ id, reason }))
+    : [];
+
+  return {
+    stage,
+    count: offers.length,
+    top: offers.slice(0, 20).map((offer) => summarizeDebugRankingOffer(offer, { query })),
+    removed,
+  };
 }
 
 function buildCurrentAvailabilityMatch() {
@@ -3431,6 +3464,7 @@ async function buildOfferRanking({
   onlyWithoutProgram = false,
   limit = 30,
   diagnostics = false,
+  debugCandidates = false,
 }) {
   const totalStartedAt = nowMs();
   const timings = {
@@ -3495,23 +3529,72 @@ async function buildOfferRanking({
   timings.dbLoadMs += nowMs() - dbLoadStartedAt;
   const candidateOffers = diagnostics ? candidateResult.offers : candidateResult;
   const mongoDiagnostics = diagnostics ? candidateResult.mongo : null;
+  const debugStages = diagnostics && debugCandidates ? [] : null;
+
+  if (debugStages) {
+    debugStages.push(buildDebugRankingStage({
+      stage: 'candidates-before-ranking',
+      offers: candidateOffers,
+      query,
+    }));
+  }
 
   const rankingStartedAt = nowMs();
-  const fullyFilteredOffers = dedupeOffers(
-    applyQueryMatch(
-      applyUnitFilter(
-        applyProgramEligibility(
-          candidateOffers.filter((offer) => offer?.status === 'active' && offer?.isActiveNow),
-          {
-            programRetailers: selectedProgramRetailers,
-            onlyWithoutProgram: withoutProgram,
-          }
-        ),
-        unit
-      ),
-      query
-    )
+  const activeCandidateOffers = candidateOffers.filter((offer) => offer?.status === 'active' && offer?.isActiveNow);
+  const programEligibleOffers = applyProgramEligibility(
+    activeCandidateOffers,
+    {
+      programRetailers: selectedProgramRetailers,
+      onlyWithoutProgram: withoutProgram,
+    }
   );
+  const unitFilteredOffers = applyUnitFilter(programEligibleOffers, unit);
+  const queryMatchedOffers = applyQueryMatch(unitFilteredOffers, query);
+  const fullyFilteredOffers = dedupeOffers(queryMatchedOffers);
+
+  if (debugStages) {
+    const candidateIds = new Set(candidateOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+    const activeIds = new Set(activeCandidateOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+    const programIds = new Set(programEligibleOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+    const unitIds = new Set(unitFilteredOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+    const queryIds = new Set(queryMatchedOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+
+    debugStages.push(buildDebugRankingStage({
+      stage: 'after-active-filter',
+      offers: activeCandidateOffers,
+      query,
+      previousIds: candidateIds,
+      reason: 'inactive-or-not-active-now',
+    }));
+    debugStages.push(buildDebugRankingStage({
+      stage: 'after-program-filter',
+      offers: programEligibleOffers,
+      query,
+      previousIds: activeIds,
+      reason: 'customer-program-filter',
+    }));
+    debugStages.push(buildDebugRankingStage({
+      stage: 'after-unit-filter',
+      offers: unitFilteredOffers,
+      query,
+      previousIds: programIds,
+      reason: 'unit-filter',
+    }));
+    debugStages.push(buildDebugRankingStage({
+      stage: 'after-query-ranking-filter',
+      offers: queryMatchedOffers,
+      query,
+      previousIds: unitIds,
+      reason: 'scoreOfferAgainstQuery-zero',
+    }));
+    debugStages.push(buildDebugRankingStage({
+      stage: 'after-dedupe',
+      offers: fullyFilteredOffers,
+      query,
+      previousIds: queryIds,
+      reason: 'dedupeOffers',
+    }));
+  }
   const queryScores = hasQuery ? new WeakMap() : null;
 
   if (queryScores) {
@@ -3558,7 +3641,38 @@ async function buildOfferRanking({
     responseCandidateOffers.slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit),
     query
   );
-  const offers = dedupeVisibleCardResponseOffers(finalResponseOffers, query).offers;
+  const visibleDedupeResult = dedupeVisibleCardResponseOffers(finalResponseOffers, query, {
+    collectDiagnostics: Boolean(debugStages),
+  });
+  const offers = visibleDedupeResult.offers;
+
+  if (debugStages) {
+    const sortedIds = new Set(sortedOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+    const responseCandidateIds = new Set(responseCandidateOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+    const finalIds = new Set(finalResponseOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+
+    debugStages.push(buildDebugRankingStage({
+      stage: 'after-response-preparation',
+      offers: responseCandidateOffers,
+      query,
+      previousIds: sortedIds,
+      reason: 'prepareQueryOffersForResponse',
+    }));
+    debugStages.push(buildDebugRankingStage({
+      stage: 'after-limit-and-final-dedupe',
+      offers: finalResponseOffers,
+      query,
+      previousIds: responseCandidateIds,
+      reason: 'limit-or-final-dedupe',
+    }));
+    debugStages.push(buildDebugRankingStage({
+      stage: 'final-api-like-results',
+      offers,
+      query,
+      previousIds: finalIds,
+      reason: 'visible-card-dedupe',
+    }));
+  }
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
   timings.rankingMs = nowMs() - rankingStartedAt;
 
@@ -3647,6 +3761,12 @@ async function buildOfferRanking({
           Object.entries(timings).map(([key, value]) => [key, Number(value.toFixed(1))])
         ),
         mongo: mongoDiagnostics,
+        ...(debugStages ? {
+          candidates: {
+            stages: debugStages,
+            visibleDedupe: visibleDedupeResult.diagnostics,
+          },
+        } : {}),
       },
     };
   }

@@ -4,6 +4,7 @@ process.env.DOTENV_CONFIG_QUIET = process.env.DOTENV_CONFIG_QUIET || 'true';
 
 const { connectToDatabase } = require('../src/config/mongodb');
 const {
+  buildCasesFromOptions,
   buildRankingPerformanceDiagnostic,
   parseArgs,
   printReadableReport,
@@ -15,7 +16,9 @@ async function run() {
 
   await connectToDatabase();
 
-  const report = await buildRankingPerformanceDiagnostic();
+  const report = await buildRankingPerformanceDiagnostic({
+    cases: buildCasesFromOptions(options),
+  });
 
   if (options.jsonPath) {
     const resolvedJsonPath = await writeJsonReport(options.jsonPath, report);

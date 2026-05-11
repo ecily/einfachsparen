@@ -5,6 +5,7 @@ const test = require('node:test');
 
 const {
   assertReadOnlySource,
+  buildCasesFromOptions,
   buildIndexRecommendations,
   classifyWarningLevel,
   parseArgs,
@@ -22,16 +23,35 @@ test('classifies ranking performance warning levels', () => {
 });
 
 test('parses optional JSON output path for Git Bash and PowerShell invocations', () => {
-  assert.deepEqual(parseArgs([]), { jsonPath: '', jsonToStdout: false });
-  assert.deepEqual(parseArgs(['--json']), { jsonPath: '', jsonToStdout: true });
+  assert.deepEqual(parseArgs([]), { jsonPath: '', jsonToStdout: false, query: '', debugCandidates: false });
+  assert.deepEqual(parseArgs(['--json']), { jsonPath: '', jsonToStdout: true, query: '', debugCandidates: false });
   assert.deepEqual(parseArgs(['--json', 'tmp/ranking-performance.json']), {
     jsonPath: 'tmp/ranking-performance.json',
     jsonToStdout: false,
+    query: '',
+    debugCandidates: false,
   });
   assert.deepEqual(parseArgs(['--json=tmp/ranking-performance.json']), {
     jsonPath: 'tmp/ranking-performance.json',
     jsonToStdout: false,
+    query: '',
+    debugCandidates: false,
   });
+  assert.deepEqual(parseArgs(['--query', 'reis', '--debug-candidates']), {
+    jsonPath: '',
+    jsonToStdout: false,
+    query: 'reis',
+    debugCandidates: true,
+  });
+});
+
+test('builds a single debug diagnostic case from query options', () => {
+  const cases = buildCasesFromOptions({ query: 'milch', debugCandidates: true });
+
+  assert.equal(cases.length, 1);
+  assert.equal(cases[0].label, 'milch');
+  assert.deepEqual(cases[0].args, { query: 'milch', limit: 20 });
+  assert.equal(cases[0].debugCandidates, true);
 });
 
 test('summarizes executionStats with index and COLLSCAN details', () => {
@@ -116,10 +136,12 @@ test('readable output keeps a stable compact format and redacts secret-like fiel
 test('diagnostic sanitization redacts secrets and renders regex safely', () => {
   const sanitized = sanitizeForOutput({
     MONGODB_URI: 'mongodb+srv://secret',
+    searchTokens: ['reis', 'risottoreis'],
     filter: /kaffee/i,
   });
 
   assert.equal(sanitized.MONGODB_URI, '[redacted]');
+  assert.deepEqual(sanitized.searchTokens, ['reis', 'risottoreis']);
   assert.deepEqual(sanitized.filter, { $regex: 'kaffee', $options: 'i' });
 });
 
