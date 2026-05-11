@@ -75,6 +75,33 @@ test('scheduler registers exactly one 02:00 Europe/Vienna cron job when enabled'
   assert.equal(cronCalls[0][2].timezone, 'Europe/Vienna');
 });
 
+test('scheduler uses configured 01:00 Europe/Vienna cron job when provided by env', () => {
+  const cronCalls = [];
+  const handle = startCrawlScheduler({
+    envConfig: env({
+      CRAWL_SCHEDULE_ENABLED: true,
+      CRAWL_SCHEDULE_CRON: '0 1 * * *',
+      CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
+    }),
+    crawlRunServiceImpl: service([]),
+    cronImpl: {
+      validate(expression) {
+        assert.equal(expression, '0 1 * * *');
+        return true;
+      },
+      schedule(...args) {
+        cronCalls.push(args);
+        return { task: 'scheduled' };
+      },
+    },
+  });
+
+  assert.deepEqual(handle, { task: 'scheduled' });
+  assert.equal(cronCalls.length, 1);
+  assert.equal(cronCalls[0][0], '0 1 * * *');
+  assert.equal(cronCalls[0][2].timezone, 'Europe/Vienna');
+});
+
 test('scheduled execution starts a full CrawlRun through CrawlRun service and skips parallel runs', async () => {
   const calls = [];
   const accepted = await executeScheduledCrawl({
