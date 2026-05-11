@@ -171,25 +171,82 @@ function getProgramText(offer) {
   return ''
 }
 
+function normalizeConditionKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(?:bedingung|aktion|angebot|nur|mit|bei)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function conditionIncludesText(text, candidate) {
+  const normalizedText = normalizeConditionKey(text)
+  const normalizedCandidate = normalizeConditionKey(candidate)
+
+  return Boolean(normalizedText && normalizedCandidate && normalizedText.includes(normalizedCandidate))
+}
+
+function isRedundantCondition(candidate, existingConditions) {
+  const candidateKey = normalizeConditionKey(candidate)
+
+  if (!candidateKey) return true
+
+  return existingConditions.some((existingCondition) => {
+    const existingKey = normalizeConditionKey(existingCondition)
+
+    return (
+      existingKey === candidateKey ||
+      existingKey.includes(candidateKey) ||
+      candidateKey.includes(existingKey)
+    )
+  })
+}
+
 function getConditionTexts(offer) {
-  return [
-    ...new Set([
-      String(offer?.conditionsText || '').trim(),
-      getMultiBuyText(offer),
-      getMinimumQuantityText(offer),
-      getProgramText(offer),
-    ].filter(Boolean)),
-  ]
+  const rawCondition = String(offer?.conditionsText || '').replace(/\s+/g, ' ').trim()
+  const rawLabel = String(offer?.conditionLabel || '').replace(/\s+/g, ' ').trim()
+  const derivedConditions = [
+    getProgramText(offer),
+    getMultiBuyText(offer),
+    getMinimumQuantityText(offer),
+  ].filter(Boolean)
+  const conditions = []
+
+  for (const condition of derivedConditions) {
+    if (rawCondition && conditionIncludesText(rawCondition, condition)) continue
+    if (rawLabel && conditionIncludesText(rawLabel, condition)) continue
+    if (!isRedundantCondition(condition, conditions)) conditions.push(condition)
+  }
+
+  for (const condition of [rawCondition, rawLabel]) {
+    if (condition && !isRedundantCondition(condition, conditions)) conditions.push(condition)
+  }
+
+  return conditions
 }
 
 function getCompactConditionText(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
 
-  if (text.length <= 92) {
+  if (text.length <= 68) {
     return text
   }
 
-  return `${text.slice(0, 89).trim()}...`
+  return `${text.slice(0, 65).trim()}...`
+}
+
+function getVisibleConditionInfo(conditions) {
+  const visibleConditions = conditions.slice(0, 2)
+  const hiddenConditions = conditions.slice(2)
+
+  return {
+    visibleConditions,
+    hiddenConditions,
+    fullText: conditions.join(' / '),
+  }
 }
 
 export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList = false }) {
@@ -197,6 +254,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const category = getShortCategory(offer)
   const validity = formatValidityLabel(offer)
   const conditions = getConditionTexts(offer)
+  const { visibleConditions, hiddenConditions, fullText: fullConditionText } = getVisibleConditionInfo(conditions)
   const quantityText = getReadableQuantityText(offer)
   const savingsAmount = getSavingsValue(offer)
   const referenceInfo = getReferenceInfo(offer)
@@ -238,13 +296,22 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
         </div>
 
         <div className="user-card__decision">
-          {conditions.length > 0 ? (
-            <div className="user-card__conditions" aria-label="Wichtige Angebotsbedingungen">
-              {conditions.map((condition) => (
+          {visibleConditions.length > 0 ? (
+            <div className="user-card__conditions" aria-label={`Wichtige Angebotsbedingungen: ${fullConditionText}`}>
+              {visibleConditions.map((condition) => (
                 <span className="user-card__condition-chip" key={condition} title={condition} aria-label={`Bedingung: ${condition}`}>
-                  <strong>Bedingung:</strong> {getCompactConditionText(condition)}
+                  {getCompactConditionText(condition)}
                 </span>
               ))}
+              {hiddenConditions.length > 0 ? (
+                <span
+                  className="user-card__condition-chip user-card__condition-chip--more"
+                  title={hiddenConditions.join(' / ')}
+                  aria-label={`Weitere Bedingungen: ${hiddenConditions.join(' / ')}`}
+                >
+                  +{hiddenConditions.length} weitere
+                </span>
+              ) : null}
             </div>
           ) : null}
 

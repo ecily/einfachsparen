@@ -595,6 +595,45 @@ a {
   line-height: 1.55;
 }
 
+.hero-market-strip {
+  display: grid;
+  gap: 0.42rem;
+  max-width: 48rem;
+}
+
+.hero-market-strip__label {
+  color: #5c6658;
+  font-size: 0.82rem;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero-market-strip__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+  max-width: 100%;
+}
+
+.hero-market-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8rem;
+  padding: 0.32rem 0.58rem;
+  border-radius: 999px;
+  border: 1px solid var(--retailer-border-color, rgba(22, 33, 24, 0.14));
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.86), rgba(255, 252, 247, 0.72)),
+    var(--retailer-soft-color, rgba(255, 252, 247, 0.9));
+  color: var(--retailer-color, #31582c);
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .hero-benefit-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -1268,7 +1307,7 @@ a {
 .user-card__conditions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.32rem;
   max-width: 100%;
   min-width: 0;
 }
@@ -1276,21 +1315,22 @@ a {
 .user-card__condition-chip {
   display: inline-block;
   max-width: 100%;
-  min-height: 1.95rem;
-  padding: 0.42rem 0.64rem;
-  border-radius: 0.72rem;
-  background: rgba(255, 244, 217, 0.92);
-  border: 1px solid rgba(201, 139, 25, 0.18);
-  color: #6f4a0d;
-  font-size: 0.88rem;
-  font-weight: 760;
-  line-height: 1.25;
+  min-height: 1.74rem;
+  padding: 0.32rem 0.54rem;
+  border-radius: 999px;
+  background: rgba(255, 246, 224, 0.84);
+  border: 1px solid rgba(201, 139, 25, 0.14);
+  color: #75531a;
+  font-size: 0.78rem;
+  font-weight: 780;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
-.user-card__condition-chip strong {
-  color: #553705;
-  font-weight: 900;
+.user-card__condition-chip--more {
+  background: rgba(255, 252, 247, 0.9);
+  color: #5c6658;
+  border-color: rgba(22, 33, 24, 0.1);
 }
 
 .user-card__price {

@@ -37,6 +37,7 @@ import {
 import { areStringSetsEqual, flattenRankingOffers } from './utils/offers'
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
+import { getRetailerTheme } from './utils/retailerColors'
 
 function getFriendlyErrorMessage(error, fallback) {
   const status = Number(error?.status || 0)
@@ -75,6 +76,17 @@ function SearchLandingHero() {
   const trackedDownloadUrl = buildTrackedApkDownloadUrl('search_hero_button')
   const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('search_hero_qr')
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(trackedQrDownloadUrl)}`
+  const heroRetailers = [
+    ['billa', 'BILLA'],
+    ['billa-plus', 'BILLA Plus'],
+    ['spar', 'SPAR'],
+    ['hofer', 'HOFER'],
+    ['lidl', 'Lidl'],
+    ['penny', 'PENNY'],
+    ['dm', 'dm'],
+    ['bipa', 'BIPA'],
+    ['adeg', 'ADEG'],
+  ]
 
   return (
     <>
@@ -90,9 +102,29 @@ function SearchLandingHero() {
         }}
       >
         <div style={{ display: 'grid', gap: '0.75rem', minWidth: 0 }}>
-          <p className="eyebrow" style={{ margin: 0 }}>
-            kaufklug.at
-          </p>
+          <div className="hero-market-strip" aria-label="Gefundene Angebote unter anderem von">
+            <span className="hero-market-strip__label">Gefundene Angebote u. a. von</span>
+            <div className="hero-market-strip__badges" aria-hidden="true">
+              {heroRetailers.map(([key, label]) => {
+                const theme = getRetailerTheme(key)
+
+                return (
+                  <span
+                    key={key}
+                    className="hero-market-badge"
+                    style={{
+                      '--retailer-color': theme.color,
+                      '--retailer-text-color': theme.textColor,
+                      '--retailer-border-color': theme.borderColor,
+                      '--retailer-soft-color': theme.softColor,
+                    }}
+                  >
+                    {label}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
           <h1
             style={{
               fontSize: 'clamp(2rem, 7vw, 3.6rem)',
