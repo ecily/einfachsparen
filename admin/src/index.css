@@ -1460,6 +1460,13 @@ a {
   scroll-margin-top: 7rem;
 }
 
+.keyword-search-hero {
+  border-color: rgba(49, 94, 42, 0.18);
+  background:
+    linear-gradient(90deg, rgba(49, 94, 42, 0.12) 0 4px, transparent 4px),
+    linear-gradient(180deg, rgba(248, 253, 242, 0.96), rgba(255, 252, 247, 0.96));
+}
+
 .keyword-search-results .panel__header h2 {
   scroll-margin-top: 7rem;
 }
@@ -1484,6 +1491,7 @@ a {
   font-size: clamp(1.35rem, 3.8vw, 2.15rem);
   line-height: 1.08;
   letter-spacing: -0.035em;
+  color: #24451f;
 }
 
 .keyword-search-form {

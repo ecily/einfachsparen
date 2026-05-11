@@ -169,6 +169,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
       .map((item) => item.offer)
   }, [marketFilterEnabled, offers, selectedRetailerKeys, sortMode])
   const needsMarketSelection = marketFilterEnabled && selectedRetailerKeys.length === 0
+  const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
 
   useEffect(() => {
     if (!searchRequest?.nonce) return
@@ -316,7 +317,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
       <section className="panel keyword-search-hero">
         <div className="keyword-search-hero__copy">
           <h1>Probier aus, was kaufklug für dich findet.</h1>
-          <p className="subtitle">Suche nach Produkten wie Kaffee, Milch, Nudeln oder Waschmittel.</p>
+          <p className="subtitle">Suche z. B. nach Kaffee, Milka, Bier oder S-Budget.</p>
         </div>
 
         <form className="keyword-search-form" onSubmit={handleSubmit}>
@@ -332,7 +333,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
                 id="keyword-search-input"
                 type="search"
                 value={queryInput}
-                placeholder="z. B. Milch, Kaffee, Butter ..."
+                placeholder="Produkt oder Marke suchen"
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
               />
@@ -421,8 +422,8 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         ) : null}
       </section>
 
-      <section className="panel keyword-search-results">
-        {!submittedQuery && !hint ? <p className="status">Gib ein Produkt, eine Marke oder Kategorie ein.</p> : null}
+      {showResultsPanel ? (
+        <section className="panel keyword-search-results">
         {hint ? <p className="status">{hint}</p> : null}
         {loading ? <p className="status">Angebote werden gesucht ...</p> : null}
         {error ? (
@@ -475,7 +476,8 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
             )}
           </div>
         ) : null}
-      </section>
+        </section>
+      ) : null}
     </div>
   )
 }
