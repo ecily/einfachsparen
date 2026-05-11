@@ -41,12 +41,29 @@ function formatDayMonth(value) {
   }).format(value)
 }
 
+function formatBackendValidityLabel(value) {
+  const label = String(value || '').trim()
+
+  if (!label) return ''
+
+  return label
+    .replace(/\bgueltig\b/gi, 'gültig')
+    .replace(/\bverfuegbar\b/gi, 'verfügbar')
+    .replace(/\bpruefen\b/gi, 'prüfen')
+    .replace(/^\w/, (character) => character.toUpperCase())
+}
+
 export function formatValidityLabel(offer) {
+  const backendLabel = formatBackendValidityLabel(offer?.validityLabel)
   const validFrom = parseDisplayDate(offer?.validFrom)
   const validTo = parseDisplayDate(offer?.validTo)
 
   if (validFrom && validTo) {
     return `Gültig von ${formatDayMonth(validFrom)} bis ${formatDayMonth(validTo)}`
+  }
+
+  if (backendLabel) {
+    return backendLabel
   }
 
   if (validTo) {

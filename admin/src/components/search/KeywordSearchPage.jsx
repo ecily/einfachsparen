@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchKeywordOfferSearch } from '../../utils/apiBase'
 import { trackAnalyticsEvent } from '../../utils/analytics'
-import { flattenRankingOffers, getOfferStableId, normalizeRetailerKey } from '../../utils/offers'
+import { flattenRankingOffers, getOfferStableId, getSavingsValue, normalizeRetailerKey } from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
 
 const KEYWORD_SEARCH_LIMIT = 60
@@ -93,70 +93,9 @@ function getOfferRetailerKey(offer) {
   return normalizeKey(getOfferRetailerLabel(offer))
 }
 
-function getNumericCandidate(value) {
-  if (value && typeof value === 'object') {
-    return getNumericCandidate(value.amount ?? value.value ?? value.eur ?? value.price)
-  }
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null
-  }
-
-  if (typeof value !== 'string') return null
-
-  const normalized = value
-    .replace(/\s/g, '')
-    .replace(/%/g, '')
-    .replace(/€/g, '')
-    .replace(',', '.')
-    .replace(/[^0-9.-]/g, '')
-  const numeric = Number(normalized)
-
-  return Number.isFinite(numeric) ? numeric : null
-}
-
-function firstPositiveNumber(candidates) {
-  for (const candidate of candidates) {
-    const numeric = getNumericCandidate(candidate)
-    if (numeric !== null && numeric > 0) return numeric
-  }
-
-  return 0
-}
-
 function getOfferSavingsScore(offer) {
-  const directSavings = firstPositiveNumber([
-    offer?.savingsAmount,
-    offer?.savingAmount,
-    offer?.savingsAbsolute,
-    offer?.discountAmount,
-    offer?.savings?.amount,
-    offer?.discount?.amount,
-    offer?.priceSavings?.amount,
-  ])
-
-  if (directSavings > 0) return directSavings
-
-  const currentPrice = firstPositiveNumber([
-    offer?.price,
-    offer?.priceCurrent,
-    offer?.currentPrice,
-    offer?.offerPrice,
-  ])
-  const oldPrice = firstPositiveNumber([
-    offer?.oldPrice,
-    offer?.regularPrice,
-    offer?.previousPrice,
-    offer?.priceBefore,
-    offer?.priceOriginal,
-    offer?.priceRegular,
-  ])
-
-  if (oldPrice > currentPrice && currentPrice > 0) {
-    return oldPrice - currentPrice
-  }
-
-  return firstPositiveNumber([offer?.savingsPercent, offer?.discountPercent, offer?.discount?.percent])
+  const savingsValue = getSavingsValue(offer)
+  return savingsValue > 0 ? savingsValue : 0
 }
 
 function buildAvailableRetailers(retailers) {
@@ -437,7 +376,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
             <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
               <option value={SORT_OPTIONS.best}>Empfohlen</option>
               <option value={SORT_OPTIONS.retailer}>Märkte</option>
-              <option value={SORT_OPTIONS.savings}>Ersparnis</option>
+              <option value={SORT_OPTIONS.savings}>Belastbare Ersparnis</option>
             </select>
           </label>
         </div>
@@ -506,10 +445,8 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
               </div>
             ) : needsMarketSelection ? null : (
               <div className="empty-state">
-                <h3>Für deine Suche haben wir gerade kein passendes Angebot gefunden.</h3>
-                <p>Versuche einen allgemeineren Begriff.</p>
-                <p>Prüfe die Schreibweise.</p>
-                <p>Entferne ausgewählte Märkte.</p>
+                <h3>Aktuell kein passendes Angebot gefunden.</h3>
+                <p>Bitte prüfe später erneut oder suche allgemeiner.</p>
                 <button type="button" className="primary-action-button" onClick={() => setQueryInput(submittedQuery)}>
                   Suche ändern
                 </button>

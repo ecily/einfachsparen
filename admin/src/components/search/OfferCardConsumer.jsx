@@ -1,8 +1,12 @@
 import { ProductImage } from '../layout/ProductImage'
-import { getOfferCategoryLabel, getReadableQuantityText, shouldDisplayUnitPrice } from '../../utils/offers'
+import { getOfferCategoryLabel, getReadableQuantityText, getSavingsValue, shouldDisplayUnitPrice } from '../../utils/offers'
 import { formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
 
 function formatPrice(amount, currency = 'EUR') {
+  if (amount === null || amount === undefined || amount === '') {
+    return 'Preis nicht verfügbar'
+  }
+
   const numericAmount = Number(amount)
 
   if (!Number.isFinite(numericAmount)) {
@@ -13,6 +17,19 @@ function formatPrice(amount, currency = 'EUR') {
     style: 'currency',
     currency: currency || 'EUR',
   }).format(numericAmount)
+}
+
+function getNumericAmount(value) {
+  if (value && typeof value === 'object') {
+    return getNumericAmount(value.amount ?? value.value ?? value.price)
+  }
+
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function getPriceCurrency(value) {
+  return value && typeof value === 'object' ? value.currency : ''
 }
 
 function normalizeRetailerName(value) {
@@ -52,38 +69,18 @@ function getShortCategory(offer) {
     .slice(-1)[0]
 }
 
-function getPositiveSavingsAmount(offer) {
-  const candidates = [
-    offer?.savingsAmount,
-    offer?.savings?.amount,
-    offer?.priceSavings?.amount,
-    offer?.discountAmount,
-  ]
-
-  for (const candidate of candidates) {
-    const numeric = Number(candidate)
-    if (Number.isFinite(numeric) && numeric > 0) return numeric
-  }
-
-  const oldPrice = Number(offer?.priceBefore?.amount || offer?.priceOriginal?.amount || offer?.priceRegular?.amount)
-  const currentPrice = Number(offer?.priceCurrent?.amount)
-
-  if (Number.isFinite(oldPrice) && Number.isFinite(currentPrice) && oldPrice > currentPrice) {
-    return oldPrice - currentPrice
-  }
-
-  return 0
-}
-
 function getReferenceInfo(offer) {
-  const referencePrice = Number(
-    offer?.referencePrice?.amount ||
-      offer?.priceReference?.amount ||
-      offer?.priceBefore?.amount ||
-      offer?.priceOriginal?.amount ||
-      offer?.priceRegular?.amount
-  )
-  const currentPrice = Number(offer?.priceCurrent?.amount)
+  if (offer?.referencePrice?.allowsSavings !== true) {
+    return {
+      amount: 0,
+      type: 'none',
+      isApproximate: false,
+      labelPrefix: '',
+    }
+  }
+
+  const referencePrice = getNumericAmount(offer?.referencePrice?.amount || offer?.priceReference?.amount)
+  const currentPrice = getNumericAmount(offer?.priceCurrent ?? offer?.price)
 
   if (Number.isFinite(referencePrice) && Number.isFinite(currentPrice) && referencePrice > currentPrice) {
     const type = String(offer?.referencePrice?.type || '')
@@ -107,14 +104,9 @@ function getReferenceInfo(offer) {
   }
 }
 
-function getSavingsPercent(offer, savingsAmount, referenceInfo) {
-  const referencePrice = referenceInfo?.amount || 0
-
-  if (!referencePrice || !Number.isFinite(savingsAmount) || savingsAmount <= 0) {
-    return 0
-  }
-
-  return Math.round((savingsAmount / referencePrice) * 100)
+function getSavingsPercent(offer) {
+  const percent = Number(offer?.savings?.percent ?? offer?.savingsPercent)
+  return Number.isFinite(percent) && percent > 0 ? Math.round(percent) : 0
 }
 
 function getMinimumQuantityText(offer) {
@@ -175,7 +167,14 @@ function getProgramText(offer) {
 }
 
 function getConditionTexts(offer) {
-  return [...new Set([getMultiBuyText(offer), getMinimumQuantityText(offer), getProgramText(offer)].filter(Boolean))]
+  return [
+    ...new Set([
+      String(offer?.conditionsText || '').trim(),
+      getMultiBuyText(offer),
+      getMinimumQuantityText(offer),
+      getProgramText(offer),
+    ].filter(Boolean)),
+  ]
 }
 
 export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList = false }) {
@@ -184,10 +183,12 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const validity = formatValidityLabel(offer)
   const conditions = getConditionTexts(offer)
   const quantityText = getReadableQuantityText(offer)
-  const savingsAmount = getPositiveSavingsAmount(offer)
+  const savingsAmount = getSavingsValue(offer)
   const referenceInfo = getReferenceInfo(offer)
-  const savingsPercent = getSavingsPercent(offer, savingsAmount, referenceInfo)
+  const savingsPercent = getSavingsPercent(offer)
   const hasSavings = savingsAmount > 0 && referenceInfo.amount > 0
+  const currentPriceAmount = getNumericAmount(offer?.priceCurrent ?? offer?.price)
+  const currentPriceCurrency = getPriceCurrency(offer?.priceCurrent) || getPriceCurrency(offer?.price) || 'EUR'
 
   return (
     <article className={`user-card ${hasSavings ? 'user-card--known-savings' : 'user-card--action-price'}`}>
@@ -219,8 +220,8 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
 
         <div className="user-card__decision">
           <div className="user-card__price">
-            <strong>{formatPrice(offer?.priceCurrent?.amount, offer?.priceCurrent?.currency)}</strong>
-            {referenceInfo.amount ? <span>{referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, offer?.priceCurrent?.currency)}</span> : null}
+            <strong>{formatPrice(currentPriceAmount, currentPriceCurrency)}</strong>
+            {referenceInfo.amount ? <span>{referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}</span> : null}
             {quantityText ? <span>{quantityText}</span> : null}
             {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
           </div>
@@ -228,7 +229,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
 
         {hasSavings ? (
           <div className="offer-savings-box offer-savings-box--known">
-            <strong>Du sparst {referenceInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsAmount, offer?.priceCurrent?.currency)}</strong>
+            <strong>Spart {referenceInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsAmount, currentPriceCurrency)}</strong>
             {savingsPercent > 0 ? <span>-{savingsPercent} %</span> : null}
           </div>
         ) : (

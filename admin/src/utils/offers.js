@@ -150,7 +150,16 @@ export function getDisplayConditionInfo(offer) {
 export function getReadableQuantityText(offer) {
   const rawValue = String(offer?.quantityText || '').trim()
 
-  if (!rawValue) return ''
+  if (!rawValue) {
+    const unitValue = Number(offer?.unitValue)
+    const unitType = String(offer?.unitType || '').trim()
+
+    if (Number.isFinite(unitValue) && unitValue > 0 && unitType) {
+      return `${new Intl.NumberFormat('de-AT').format(unitValue)} ${unitType}`
+    }
+
+    return ''
+  }
 
   const value = rawValue.replace(/^menge:\s*/i, '').trim()
 
@@ -248,23 +257,19 @@ export function areStringSetsEqual(left = [], right = []) {
 }
 
 export function getSavingsValue(offer) {
+  if (offer?.referencePrice?.allowsSavings !== true) {
+    return -1
+  }
+
   const candidates = [
-    offer?.savingsAmount,
     offer?.savings?.amount,
+    offer?.savingsAmount,
     offer?.priceSavings?.amount,
-    offer?.discountAmount,
   ]
 
   for (const candidate of candidates) {
     const numeric = Number(candidate)
     if (Number.isFinite(numeric) && numeric > 0) return numeric
-  }
-
-  const oldPrice = Number(offer?.priceBefore?.amount || offer?.priceOriginal?.amount || offer?.priceRegular?.amount)
-  const currentPrice = Number(offer?.priceCurrent?.amount)
-
-  if (Number.isFinite(oldPrice) && Number.isFinite(currentPrice) && oldPrice > currentPrice) {
-    return oldPrice - currentPrice
   }
 
   return -1
