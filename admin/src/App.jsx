@@ -101,7 +101,7 @@ function SearchLandingHero() {
               maxWidth: '42rem',
             }}
           >
-            Angebote finden. Merken. Einfacher einkaufen.
+            Angebote finden. Merken. Geld sparen.
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
             Suche online nach aktuellen Supermarkt-Angeboten, merke passende Treffer und nutze deine Einkaufsliste im
@@ -231,10 +231,6 @@ function ScopedPageTuning() {
   return (
     <style>
       {`
-        .search-first-page .keyword-search-hero__copy {
-          display: none;
-        }
-
         .search-first-page .keyword-search-hero {
           margin-top: 0;
         }

@@ -1324,13 +1324,13 @@ a {
 .keyword-search-hero,
 .keyword-search-results {
   display: grid;
-  gap: 1rem;
-  padding: clamp(1rem, 4vw, 2.15rem);
+  gap: 0.85rem;
+  padding: clamp(0.9rem, 3vw, 1.45rem);
 }
 
 .keyword-search-hero__copy {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.35rem;
   max-width: 760px;
 }
 
@@ -1340,15 +1340,21 @@ a {
   margin: 0;
 }
 
+.keyword-search-hero__copy h1 {
+  font-size: clamp(1.35rem, 3.8vw, 2.15rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
 .keyword-search-form {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.32rem;
   max-width: 760px;
 }
 
 .keyword-search-form__label {
   color: var(--kk-muted-2);
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
@@ -1379,17 +1385,29 @@ a {
 .keyword-search-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.55rem 0.8rem;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   max-width: 760px;
+  padding-top: 0.1rem;
+}
+
+.keyword-search-filter-intro {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  align-items: center;
+}
+
+.keyword-search-filter-intro .eyebrow {
+  margin: 0;
 }
 
 .keyword-search-toggle,
 .keyword-search-sort {
   display: inline-flex;
   align-items: center;
-  min-height: var(--kk-touch);
+  min-height: 42px;
   color: var(--kk-ink);
   font-weight: 800;
 }
@@ -1407,7 +1425,7 @@ a {
 
 .keyword-search-sort {
   gap: 0.55rem;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .keyword-search-sort span {
@@ -1416,12 +1434,12 @@ a {
 }
 
 .keyword-search-sort select {
-  min-height: var(--kk-touch);
+  min-height: 42px;
   border: 1px solid rgba(22, 33, 24, 0.16);
   border-radius: 999px;
   background: rgba(255, 252, 247, 0.96);
   color: var(--kk-ink);
-  padding: 0.72rem 2.2rem 0.72rem 0.95rem;
+  padding: 0.58rem 2.1rem 0.58rem 0.9rem;
   outline: none;
 }
 
@@ -2163,11 +2181,17 @@ textarea:focus {
   .keyword-search-controls {
     display: grid;
     grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .keyword-search-filter-intro {
+    display: grid;
+    gap: 0.4rem;
   }
 
   .keyword-search-sort {
     display: grid;
-    gap: 0.35rem;
+    gap: 0.28rem;
     margin-left: 0;
   }
 

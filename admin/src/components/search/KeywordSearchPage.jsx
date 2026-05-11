@@ -299,14 +299,13 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     <div className="keyword-search-page">
       <section className="panel keyword-search-hero">
         <div className="keyword-search-hero__copy">
-          <p className="eyebrow">Produktsuche</p>
-          <h1>Was möchtest du günstiger kaufen?</h1>
-          <p className="subtitle">Suche aktuelle Angebote und merke sie dir für deinen Einkauf.</p>
+          <h1>Probier aus, was kaufklug für dich findet.</h1>
+          <p className="subtitle">Suche nach Produkten wie Kaffee, Milch, Nudeln oder Waschmittel.</p>
         </div>
 
         <form className="keyword-search-form" onSubmit={handleSubmit}>
           <label className="keyword-search-form__label" htmlFor="keyword-search-input">
-            Suchbegriff
+            Produkt suchen
           </label>
           <div className="keyword-search-form__row">
             <div
@@ -360,7 +359,6 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         <div className="keyword-search-controls">
           <div className="keyword-search-filter-intro">
             <p className="eyebrow">Optional eingrenzen</p>
-            <p>Du kannst direkt suchen oder vorher bestimmte Märkte auswählen.</p>
             <label className="keyword-search-toggle">
               <input
                 type="checkbox"
