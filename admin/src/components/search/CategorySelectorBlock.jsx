@@ -29,23 +29,20 @@ export function CategorySelectorBlock({
     <SectionCard style={{ marginBottom: '1rem' }}>
       <div className="selection-block">
         <div className="selection-block__header">
-          <p className="eyebrow">Optional: Produkte eingrenzen</p>
-          <h2>Produkte eingrenzen</h2>
-          <p>
-            Dieser Schritt ist freiwillig. Ohne Auswahl zeigt kaufklug alle aktuellen Angebote deiner gewählten
-            Geschäfte.
-          </p>
+          <p className="eyebrow">Optional: Kategorien</p>
+          <h2>Kategorie eingrenzen</h2>
+          <p>Ohne Kategorieauswahl zeigt kaufklug alle aktuellen Angebote deiner gew&auml;hlten M&auml;rkte.</p>
         </div>
 
         {disabled ? (
-          <p className="status">Wähle zuerst mindestens ein Geschäft aus.</p>
+          <p className="status">W&auml;hle zuerst mindestens einen Markt aus.</p>
         ) : loading ? (
-          <p className="status">Kategorien werden geladen …</p>
+          <p className="status">Kategorien werden geladen ...</p>
         ) : (
           <div className="category-list">
             <div className="quick-action-row">
               <button type="button" className="ghost-button" onClick={onClearCategories}>
-                Alle Produkte anzeigen
+                Alle Kategorien anzeigen
               </button>
             </div>
 
@@ -79,7 +76,7 @@ export function CategorySelectorBlock({
                       </span>
                       {hasSubcategories ? (
                         <span className="category-main-button__chevron" aria-hidden="true">
-                          {isOpen ? '−' : '+'}
+                          {isOpen ? '-' : '+'}
                         </span>
                       ) : null}
                     </button>
@@ -96,7 +93,7 @@ export function CategorySelectorBlock({
 
                   {hasSubcategories && isOpen ? (
                     <div className="category-card__subcategories">
-                      <div className="category-card__subheader">Genauer auswählen</div>
+                      <div className="category-card__subheader">Genauer ausw&auml;hlen</div>
 
                       <div className="chip-grid chip-grid--subcategories">
                         {group.subcategories.map((subcategory) => {

@@ -624,11 +624,50 @@ a {
 
 /* Selection blocks */
 
+.browse-intro {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: clamp(0.95rem, 3vw, 1.3rem);
+  scroll-margin-top: 7rem;
+}
+
+.browse-intro__copy {
+  display: grid;
+  gap: 0.28rem;
+  max-width: 46rem;
+}
+
+.browse-intro__copy .eyebrow,
+.browse-intro__copy h1,
+.browse-intro__copy p {
+  margin: 0;
+}
+
+.browse-intro__copy h1 {
+  font-size: clamp(1.35rem, 4.6vw, 2.15rem);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.browse-results-anchor {
+  scroll-margin-top: 7rem;
+}
+
 .selection-block,
 .results-block {
   display: grid;
   gap: 0.95rem;
   padding: 1.1rem 1.1rem 1.15rem;
+}
+
+.browse-page .selection-block {
+  gap: 0.78rem;
+  padding: 0.95rem;
+}
+
+.browse-page .selection-block--action {
+  gap: 0.82rem;
 }
 
 .selection-block__header {
@@ -914,6 +953,35 @@ a {
   background: linear-gradient(135deg, #315e2a, #7ca452);
   color: #fffdf7;
   border-color: transparent;
+}
+
+.retailer-chip {
+  border-color: var(--retailer-border-color, rgba(22, 33, 24, 0.12));
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.94), rgba(255, 252, 247, 0.86)),
+    var(--retailer-soft-color, rgba(255, 252, 247, 0.9));
+}
+
+.retailer-chip::before {
+  content: "";
+  width: 0.62rem;
+  height: 0.62rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--retailer-color, #315e2a);
+  box-shadow: 0 0 0 3px var(--retailer-soft-color, rgba(49, 94, 42, 0.12));
+}
+
+.retailer-chip--active {
+  background: var(--retailer-color, #315e2a);
+  color: var(--retailer-text-color, #fffdf7);
+  border-color: transparent;
+  box-shadow: 0 12px 24px var(--retailer-soft-color, rgba(49, 94, 42, 0.22));
+}
+
+.retailer-chip--active::before {
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
 }
 
 .chip--static {
@@ -2222,6 +2290,26 @@ textarea:focus {
 
   .hero-benefit-card {
     padding: 0.82rem 0.88rem;
+  }
+
+  .browse-intro {
+    margin-bottom: 0.75rem;
+    padding: 0.95rem;
+  }
+
+  .browse-intro__copy h1 {
+    font-size: 1.38rem;
+    line-height: 1.12;
+  }
+
+  .browse-intro__copy .subtitle {
+    font-size: 0.98rem;
+    line-height: 1.42;
+  }
+
+  .browse-page .selection-block,
+  .browse-page .results-block {
+    padding: 0.85rem;
   }
 
   .selection-summary-grid {

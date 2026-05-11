@@ -235,12 +235,6 @@ function ScopedPageTuning() {
           margin-top: 0;
         }
 
-        .browse-page > .panel:first-of-type,
-        .browse-page > .panel:nth-of-type(2),
-        .browse-page > .faq-section {
-          display: none;
-        }
-
         @media (max-width: 720px) {
           .search-first-page .app-download-modal__qr {
             width: min(36vw, 150px) !important;
@@ -256,7 +250,8 @@ function App() {
   const pathname = rawPathname.toLowerCase()
   const routedInitialPage = getInitialPageFromPathname(pathname)
   const isDiagnosticsPath = pathname === '/ecily_web'
-  const initialPage = isDiagnosticsPath ? 'diagnostics' : routedInitialPage === 'search' ? 'product-search' : routedInitialPage
+  const initialPage =
+    isDiagnosticsPath ? 'diagnostics' : routedInitialPage === 'search' && pathname === '/' ? 'product-search' : routedInitialPage
   const initialSharedListId = getSharedListIdFromPathname(rawPathname)
 
   const [activePage, setActivePage] = useState(initialPage)

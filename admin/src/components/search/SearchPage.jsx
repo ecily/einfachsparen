@@ -1,11 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { filterVisibleOffers } from '../../utils/categories'
 import { flattenRankingOffers, splitRankingOffers } from '../../utils/offers'
 import { SectionCard } from '../layout/SectionCard'
 import { HeroLoaderModal } from '../layout/HeroLoaderModal'
-import { HeroBlock } from './HeroBlock'
-import { SeoIntroSections } from './SeoIntroSections'
-import { FaqSection } from './FaqSection'
 import { RetailerSelectorBlock } from './RetailerSelectorBlock'
 import { CategorySelectorBlock } from './CategorySelectorBlock'
 import { ActionBlock } from './ActionBlock'
@@ -37,6 +34,8 @@ export function SearchPage({
 }) {
   const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
+  const [activeBrowseScrollKey, setActiveBrowseScrollKey] = useState(0)
+  const resultsRef = useRef(null)
 
   const allOffers = useMemo(() => flattenRankingOffers(ranking), [ranking])
   const visibleOffers = useMemo(() => {
@@ -52,6 +51,20 @@ export function SearchPage({
   }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, categories])
   const { bestComparableOffers, actionOffers } = useMemo(() => splitRankingOffers(visibleOffers), [visibleOffers])
 
+  useEffect(() => {
+    if (!activeBrowseScrollKey || rankingLoading || !hasAppliedRetailerScope) return
+
+    resultsRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }, [activeBrowseScrollKey, rankingLoading, hasAppliedRetailerScope])
+
+  function handleApplyBrowseSelection() {
+    setActiveBrowseScrollKey((current) => current + 1)
+    onApplySearch()
+  }
+
   return (
     <>
       <HeroLoaderModal
@@ -59,8 +72,13 @@ export function SearchPage({
         label="kaufklug lädt Geschäfte, Kategorien und aktuelle Angebote."
       />
 
-      <HeroBlock />
-      <SeoIntroSections />
+      <section className="panel browse-intro">
+        <div className="browse-intro__copy">
+          <p className="eyebrow">St&ouml;bern</p>
+          <h1>Nach M&auml;rkten und Kategorien st&ouml;bern</h1>
+          <p className="subtitle">W&auml;hle einen Markt oder eine Kategorie und entdecke aktuelle Angebote.</p>
+        </div>
+      </section>
 
       {error ? (
         <SectionCard style={{ marginBottom: '1rem' }}>
@@ -93,23 +111,23 @@ export function SearchPage({
         canSearch={draftRetailers.length > 0}
         selectedRetailerCount={draftRetailers.length}
         selectedCategoryCount={draftCategoryLabels.length}
-        onApplySearch={onApplySearch}
+        onApplySearch={handleApplyBrowseSelection}
         onReset={onResetAll}
         hasPendingChanges={hasPendingChanges}
         searching={rankingLoading}
       />
 
-      <ResultsBlockConsumer
-        rankingLoading={rankingLoading}
-        hasAppliedRetailerScope={hasAppliedRetailerScope}
-        safeOffers={bestComparableOffers}
-        actionOffers={actionOffers}
-        onAddToShoppingList={onAddToShoppingList}
-        shoppingListIds={shoppingListIds}
-        onNavigate={onNavigate}
-      />
-
-      <FaqSection />
+      <div ref={resultsRef} className="browse-results-anchor">
+        <ResultsBlockConsumer
+          rankingLoading={rankingLoading}
+          hasAppliedRetailerScope={hasAppliedRetailerScope}
+          safeOffers={bestComparableOffers}
+          actionOffers={actionOffers}
+          onAddToShoppingList={onAddToShoppingList}
+          shoppingListIds={shoppingListIds}
+          onNavigate={onNavigate}
+        />
+      </div>
     </>
   )
 }

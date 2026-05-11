@@ -18,22 +18,18 @@ export function ResultsBlockConsumer({
     <SectionCard>
       <div className="results-block">
         <div className="panel__header">
-          <h2>Deine Angebote</h2>
-          <p>
-            Wir zeigen aktuell gefundene Angebote. Eine konkrete Ersparnis zeigen wir nur dort, wo ein Normalpreis
-            angegeben ist.
-          </p>
+          <h2>Angebote aus deiner Auswahl</h2>
+          <p>Aktuelle Treffer aus den gew&auml;hlten M&auml;rkten und Kategorien.</p>
         </div>
 
         {!hasAppliedRetailerScope ? (
-          <p className="status">
-            Noch keine Suche gestartet. Wähle zuerst deine Geschäfte und tippe dann auf „Angebote anzeigen“.
-          </p>
+          <div className="empty-state">
+            <h3>W&auml;hle einen Markt oder eine Kategorie, um passende Angebote zu sehen.</h3>
+            <p>Zum Start reicht ein Markt. Kategorien kannst du danach optional eingrenzen.</p>
+          </div>
         ) : rankingLoading ? (
           <div className="results-loading">
-            <p className="status">
-              kaufklug prüft gerade Preise, Gültigkeit und Bedingungen …
-            </p>
+            <p className="status">kaufklug pr&uuml;ft gerade Preise, G&uuml;ltigkeit und Bedingungen ...</p>
             <div className="skeleton-grid">
               {Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="skeleton-card" />
@@ -42,8 +38,8 @@ export function ResultsBlockConsumer({
           </div>
         ) : visibleOfferCount === 0 ? (
           <div className="empty-state">
-            <h3>Keine passenden Angebote gefunden.</h3>
-            <p>Versuche mehr Geschäfte auszuwählen oder alle Produkte anzuzeigen.</p>
+            <h3>Aktuell keine passenden Angebote gefunden.</h3>
+            <p>Bitte pr&uuml;fe sp&auml;ter erneut oder &auml;ndere die Auswahl.</p>
           </div>
         ) : (
           <>
@@ -53,7 +49,7 @@ export function ResultsBlockConsumer({
                 {safeOffers.length} mit bekannter Ersparnis, {actionOffers.length} weitere aktuelle Aktionen.
               </span>
             </div>
-            <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
+            <p className="market-check-note">Preise, Verf&uuml;gbarkeit und Bedingungen bitte im Markt pr&uuml;fen.</p>
 
             <SavingsNotice onNavigate={onNavigate} />
             <LegalInlineNotice onNavigate={onNavigate} compact />

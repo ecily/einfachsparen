@@ -35,9 +35,10 @@ const BASE_DESCRIPTION =
 export function getPageMeta(activePage) {
   const pages = {
     search: {
-      title: BASE_TITLE,
-      description: BASE_DESCRIPTION,
-      path: '/',
+      title: 'Stöbern - kaufklug.at',
+      description:
+        'Stöbere nach Märkten und Kategorien und entdecke aktuelle Angebote für deinen Einkauf.',
+      path: '/stoebern',
     },
     'product-search': {
       title: BASE_TITLE,
@@ -257,6 +258,7 @@ export function getInitialPageFromPathname(pathname) {
   if (pathname.includes('cookies') || pathname.includes('cookie')) return 'cookies'
   if (pathname.includes('quality')) return 'quality'
   if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
+  if (pathname.includes('stoebern') || pathname.includes('stobern')) return 'search'
   if (pathname.includes('suche')) return 'product-search'
   if (pathname.includes('einkaufsliste') || pathname.includes('shopping')) return 'shopping-list'
 
@@ -272,6 +274,7 @@ export function getPathForPage(nextPage) {
   if (nextPage === 'quality') return '/quality'
   if (nextPage === 'diagnostics') return '/ecily_web'
   if (nextPage === 'product-search') return '/suche'
+  if (nextPage === 'search') return '/stoebern'
   if (nextPage === 'shopping-list') return '/einkaufsliste'
   if (nextPage === 'impressum') return '/impressum'
   if (nextPage === 'privacy') return '/datenschutz'

@@ -11,22 +11,22 @@ export function ActionBlock({
 }) {
   return (
     <SectionCard style={{ marginBottom: '1rem' }}>
-      <div className="selection-block">
+      <div className="selection-block selection-block--action">
         <div className="selection-block__header">
-          <p className="eyebrow">2. Angebote anzeigen</p>
-          <h2>Deine Auswahl ist bereit.</h2>
-          <p>Geschäfte reichen aus. Produktfilter sind optional und können die Ergebnisse danach weiter eingrenzen.</p>
+          <p className="eyebrow">Angebote</p>
+          <h2>Auswahl anzeigen</h2>
+          <p>M&auml;rkte reichen aus. Kategorien sind optional und grenzen die Treffer ein.</p>
         </div>
 
         <div className="selection-summary-grid">
           <div className="selection-summary-card">
-            <strong>Geschäfte</strong>
+            <strong>M&auml;rkte</strong>
             <span>{selectedRetailerCount > 0 ? `${selectedRetailerCount} ausgewählt` : 'Keine Auswahl'}</span>
           </div>
 
           <div className="selection-summary-card">
-            <strong>Produktfilter</strong>
-            <span>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Optional: alle anzeigen'}</span>
+            <strong>Kategorien</strong>
+            <span>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Alle Kategorien'}</span>
           </div>
 
           <div className={`selection-summary-card ${hasPendingChanges ? 'selection-summary-card--ready' : ''}`}>
@@ -42,11 +42,11 @@ export function ActionBlock({
             onClick={onApplySearch}
             disabled={!canSearch || searching}
           >
-            {searching ? 'Angebote werden geladen …' : 'Angebote anzeigen'}
+            {searching ? 'Angebote werden geladen ...' : 'Angebote anzeigen'}
           </button>
 
           <button type="button" className="ghost-button" onClick={onReset}>
-            Auswahl zurücksetzen
+            Auswahl zur&uuml;cksetzen
           </button>
         </div>
       </div>
