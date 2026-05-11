@@ -79,6 +79,8 @@ test('marks offers without reference price as action price only', () => {
   });
 
   assert.equal(offer.savingsDisplayType, 'action-price-only');
+  assert.ok(offer.searchTokens.includes('aktionsprodukt'));
+  assert.equal(offer.searchTokenVersion, 1);
   assert.equal(offer.isActionPriceOnly, true);
   assert.equal(offer.hasProspectNormalPrice, false);
   assert.equal(offer.needsReview, true);

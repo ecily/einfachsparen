@@ -1,65 +1,52 @@
 const mongoose = require('mongoose');
 
+process.env.DOTENV_CONFIG_QUIET = process.env.DOTENV_CONFIG_QUIET || 'true';
+
 const { connectToDatabase } = require('../src/config/mongodb');
 const {
-  buildOfferRanking,
-  clearRankingResponseCache,
-} = require('../src/services/offers/offerRankingService');
+  buildRankingPerformanceDiagnostic,
+  parseArgs,
+  printReadableReport,
+  writeJsonReport,
+} = require('../src/services/diagnostics/rankingPerformanceDiagnostic');
 
-const smokeCases = [
-  { label: 'ranking?limit=1', args: { limit: 1 } },
-  { label: 'ranking?q=zzzzzzzz&limit=1', args: { query: 'zzzzzzzz', limit: 1 } },
-  { label: 'ranking?q=kaffee&limit=20', args: { query: 'kaffee', limit: 20 } },
-  { label: 'ranking?q=butter&limit=20', args: { query: 'butter', limit: 20 } },
-  { label: 'ranking?q=reis&limit=20', args: { query: 'reis', limit: 20 } },
-  { label: 'ranking?q=waschmittel&limit=20', args: { query: 'waschmittel', limit: 20 } },
-];
+async function run() {
+  const options = parseArgs(process.argv.slice(2));
 
-async function measureSmokeCase(smokeCase) {
-  clearRankingResponseCache();
-  const startedAt = process.hrtime.bigint();
-  const response = await buildOfferRanking(smokeCase.args);
-  const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
-
-  return {
-    case: smokeCase.label,
-    durationMs: Number(durationMs.toFixed(1)),
-    resultCount: response.summary?.resultCount ?? null,
-    displayedCount: response.summary?.displayedCount ?? null,
-    candidateCount: response.summary?.candidateCount ?? null,
-    candidateLimit: response.summary?.candidateLimit ?? null,
-    shape: {
-      hasFilters: Boolean(response.filters),
-      hasCategories: Array.isArray(response.categories),
-      hasRetailers: Array.isArray(response.retailers),
-      hasSummary: Boolean(response.summary),
-      hasRankedGroups: Array.isArray(response.rankedGroups),
-      hasRankedOffers: Array.isArray(response.rankedOffers),
-    },
-  };
-}
-
-async function main() {
   await connectToDatabase();
 
-  const results = [];
+  const report = await buildRankingPerformanceDiagnostic();
 
-  for (const smokeCase of smokeCases) {
-    results.push(await measureSmokeCase(smokeCase));
+  if (options.jsonPath) {
+    const resolvedJsonPath = await writeJsonReport(options.jsonPath, report);
+    printReadableReport(report, { jsonPath: resolvedJsonPath });
+    return;
   }
 
-  console.log(JSON.stringify({
-    generatedAt: new Date().toISOString(),
-    readOnly: true,
-    cases: results,
-  }, null, 2));
+  if (options.jsonToStdout) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  printReadableReport(report);
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await mongoose.disconnect();
-  });
+if (require.main === module) {
+  run()
+    .catch((error) => {
+      console.error(JSON.stringify({
+        ok: false,
+        readOnly: true,
+        mutatedCollections: [],
+        message: error.message,
+      }, null, 2));
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await mongoose.disconnect();
+    });
+}
+
+module.exports = {
+  run,
+};

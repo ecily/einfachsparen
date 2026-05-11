@@ -3,6 +3,7 @@ const Category = require('../../models/Category');
 const Retailer = require('../../models/Retailer');
 const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
 const { computeOfferSavings } = require('./promotionMath');
+const { SEARCH_TOKEN_VERSION, buildQuerySearchTokens } = require('./searchTokens');
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
@@ -15,6 +16,8 @@ const OFFER_RANKING_FIELDS = [
   'titleNormalized',
   'brand',
   'searchText',
+  'searchTokens',
+  'searchTokenVersion',
   'categoryKey',
   'categoryPrimary',
   'categorySecondary',
@@ -76,6 +79,10 @@ const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const rankingResponseCache = new Map();
+
+function nowMs() {
+  return Number(process.hrtime.bigint()) / 1e6;
+}
 
 function normalizeStringList(value) {
   if (Array.isArray(value)) {
@@ -2962,16 +2969,71 @@ function buildMongoQuerySearchFilter(query) {
   };
 }
 
+function buildTokenizedSearchFilter(query) {
+  const queryTokens = buildQuerySearchTokens(query).slice(0, 8);
+
+  if (queryTokens.length === 0) {
+    return {
+      filter: buildMongoQuerySearchFilter(query),
+      queryTokens,
+      candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+    };
+  }
+
+  const regexFilter = buildMongoQuerySearchFilter(query);
+  const missingTokenFallback = regexFilter
+    ? {
+      $and: [
+        {
+          $or: [
+            { searchTokenVersion: { $lt: SEARCH_TOKEN_VERSION } },
+            { searchTokenVersion: { $exists: false } },
+            { searchTokens: { $exists: false } },
+            { searchTokens: { $size: 0 } },
+          ],
+        },
+        ...regexFilter.$and,
+      ],
+    }
+    : null;
+
+  return {
+    filter: missingTokenFallback
+      ? {
+        $and: [
+          {
+            $or: [
+              { searchTokens: { $in: queryTokens }, searchTokenVersion: { $gte: SEARCH_TOKEN_VERSION } },
+              missingTokenFallback,
+            ],
+          },
+        ],
+      }
+      : {
+        $and: [
+          { searchTokens: { $in: queryTokens }, searchTokenVersion: { $gte: SEARCH_TOKEN_VERSION } },
+        ],
+      },
+    queryTokens,
+    candidateQueryMode: 'searchTokens',
+  };
+}
+
 function buildRankingCandidateMatch({
   selectedRetailers = [],
   selectedCategories = [],
   unit = 'all',
   onlyWithoutProgram = false,
   query = '',
+  useSearchTokens = true,
 }) {
   const match = buildCurrentAvailabilityMatch();
   const selectedCategoryKeys = selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-  const querySearchFilter = buildMongoQuerySearchFilter(query);
+  const querySearch = useSearchTokens ? buildTokenizedSearchFilter(query) : {
+    filter: buildMongoQuerySearchFilter(query),
+    queryTokens: tokenizeSearchText(query).slice(0, 5),
+    candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+  };
 
   if (selectedRetailers.length > 0) {
     match.retailerKey = { $in: selectedRetailers };
@@ -2989,11 +3051,25 @@ function buildRankingCandidateMatch({
     match.customerProgramRequired = false;
   }
 
-  if (querySearchFilter) {
-    match.$and = querySearchFilter.$and;
+  if (querySearch.filter) {
+    match.$and = querySearch.filter.$and;
   }
 
   return match;
+}
+
+function buildRankingCandidateQueryMetadata({ query = '', useSearchTokens = true } = {}) {
+  const querySearch = useSearchTokens ? buildTokenizedSearchFilter(query) : {
+    filter: buildMongoQuerySearchFilter(query),
+    queryTokens: tokenizeSearchText(query).slice(0, 5),
+    candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+  };
+
+  return {
+    queryTokens: querySearch.queryTokens,
+    candidateQueryMode: querySearch.candidateQueryMode,
+    usesSearchTokens: querySearch.candidateQueryMode === 'searchTokens',
+  };
 }
 
 function buildRankingCandidateLimit({ safeLimit = 30, showAllMatching = false, hasQuery = false }) {
@@ -3015,6 +3091,7 @@ async function findRankingCandidateOffers({
   onlyWithoutProgram = false,
   query = '',
   candidateLimit = RANKING_CANDIDATE_CAP,
+  collectExecutionStats = false,
 }) {
   const match = buildRankingCandidateMatch({
     selectedRetailers,
@@ -3023,6 +3100,7 @@ async function findRankingCandidateOffers({
     onlyWithoutProgram,
     query,
   });
+  const queryMetadata = buildRankingCandidateQueryMetadata({ query });
   const dbQuery = Offer.find(match)
     .select(OFFER_RANKING_FIELDS)
     .sort({ sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
@@ -3034,13 +3112,84 @@ async function findRankingCandidateOffers({
   }
 
   try {
-    return await dbQuery;
+    const offers = await dbQuery;
+
+    if (!collectExecutionStats) {
+      return offers;
+    }
+
+    const mongo = {
+      match,
+      sort: { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 },
+      limit: candidateLimit,
+      fields: OFFER_RANKING_FIELDS.split(' '),
+      queryMetadata,
+      executionStats: null,
+    };
+
+    return {
+      offers,
+      mongo,
+    };
   } catch (error) {
     if (query && (error?.code === 50 || /maxTimeMS|time limit/i.test(String(error?.message || '')))) {
-      return [];
+      return collectExecutionStats
+        ? {
+          offers: [],
+          mongo: {
+            match,
+            sort: { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 },
+            limit: candidateLimit,
+            fields: OFFER_RANKING_FIELDS.split(' '),
+            queryMetadata,
+            executionStats: null,
+            error: 'query-time-limit',
+          },
+        }
+        : [];
     }
 
     throw error;
+  }
+}
+
+async function explainRankingCandidateQuery({
+  selectedRetailers = [],
+  selectedCategories = [],
+  unit = 'all',
+  onlyWithoutProgram = false,
+  query = '',
+  candidateLimit = RANKING_CANDIDATE_CAP,
+}) {
+  const match = buildRankingCandidateMatch({
+    selectedRetailers,
+    selectedCategories,
+    unit,
+    onlyWithoutProgram,
+    query,
+  });
+  const explainQuery = Offer.find(match)
+    .select(OFFER_RANKING_FIELDS)
+    .sort({ sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
+    .limit(candidateLimit)
+    .lean();
+
+  if (query) {
+    explainQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
+  }
+
+  try {
+    return {
+      executionStats: await explainQuery.explain('executionStats'),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      executionStats: null,
+      error: error?.code === 50 || /maxTimeMS|time limit/i.test(String(error?.message || ''))
+        ? 'explain-time-limit'
+        : 'explain-failed',
+    };
   }
 }
 
@@ -3191,7 +3340,15 @@ async function buildOfferRanking({
   programRetailers = '',
   onlyWithoutProgram = false,
   limit = 30,
+  diagnostics = false,
 }) {
+  const totalStartedAt = nowMs();
+  const timings = {
+    dbLoadMs: 0,
+    rankingMs: 0,
+    responseMappingMs: 0,
+    totalMs: 0,
+  };
   const limitValue = String(limit || '30').trim().toLowerCase();
   const showAllMatching = limitValue === 'all';
   const safeLimit = showAllMatching ? null : Math.max(1, Math.min(Number(limit) || 30, 500));
@@ -3200,9 +3357,11 @@ async function buildOfferRanking({
   const selectedRetailers = normalizeRetailerList(retailers);
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
+  const categoryLoadStartedAt = nowMs();
   const categoryDocuments = await Category.find({ isActive: true })
     .select('mainCategoryLabel offerCount subcategories')
     .lean();
+  timings.dbLoadMs += nowMs() - categoryLoadStartedAt;
   const selectedCategories = parseRankingCategories(categories, buildKnownCategoryLabelMap(categoryDocuments));
   const cacheKey = buildRankingCacheKey({
     categories: selectedCategories,
@@ -3213,7 +3372,7 @@ async function buildOfferRanking({
     onlyWithoutProgram,
     limit,
   });
-  const cachedResponse = getCachedRankingResponse(cacheKey);
+  const cachedResponse = diagnostics ? null : getCachedRankingResponse(cacheKey);
 
   if (cachedResponse) {
     return cachedResponse;
@@ -3227,7 +3386,8 @@ async function buildOfferRanking({
     showAllMatching,
     hasQuery,
   });
-  const [candidateOffers, retailerOptions] = await Promise.all([
+  const dbLoadStartedAt = nowMs();
+  const [candidateResult, retailerOptions] = await Promise.all([
     findRankingCandidateOffers({
       selectedRetailers,
       selectedCategories,
@@ -3235,13 +3395,18 @@ async function buildOfferRanking({
       onlyWithoutProgram: withoutProgram,
       query,
       candidateLimit,
+      collectExecutionStats: diagnostics,
     }),
     Retailer.find(retailerMatch)
       .select('retailerKey retailerName activeOfferCount')
       .sort({ sortOrder: 1, retailerName: 1 })
       .lean(),
   ]);
+  timings.dbLoadMs += nowMs() - dbLoadStartedAt;
+  const candidateOffers = diagnostics ? candidateResult.offers : candidateResult;
+  const mongoDiagnostics = diagnostics ? candidateResult.mongo : null;
 
+  const rankingStartedAt = nowMs();
   const fullyFilteredOffers = dedupeOffers(
     applyQueryMatch(
       applyUnitFilter(
@@ -3305,7 +3470,9 @@ async function buildOfferRanking({
   );
   const offers = dedupeVisibleCardResponseOffers(finalResponseOffers, query).offers;
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
+  timings.rankingMs = nowMs() - rankingStartedAt;
 
+  const responseMappingStartedAt = nowMs();
   const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
   const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
   const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
@@ -3347,6 +3514,33 @@ async function buildOfferRanking({
     rankedGroups: buildGroupedRankings(rankedOffers, { query }),
     rankedOffers,
   };
+  timings.responseMappingMs = nowMs() - responseMappingStartedAt;
+  timings.totalMs = nowMs() - totalStartedAt;
+
+  if (diagnostics) {
+    const explainResult = await explainRankingCandidateQuery({
+      selectedRetailers,
+      selectedCategories,
+      unit,
+      onlyWithoutProgram: withoutProgram,
+      query,
+      candidateLimit,
+    });
+    mongoDiagnostics.executionStats = explainResult.executionStats;
+    if (explainResult.error) {
+      mongoDiagnostics.error = explainResult.error;
+    }
+
+    return {
+      response,
+      diagnostics: {
+        timings: Object.fromEntries(
+          Object.entries(timings).map(([key, value]) => [key, Number(value.toFixed(1))])
+        ),
+        mongo: mongoDiagnostics,
+      },
+    };
+  }
 
   setCachedRankingResponse(cacheKey, response);
   return response;
@@ -3373,6 +3567,7 @@ module.exports = {
   buildKnownCategoryLabelMap,
   buildRankingCandidateLimit,
   buildRankingCandidateMatch,
+  buildRankingCandidateQueryMetadata,
   normalizeSearchText,
   normalizeRetailerKey,
   normalizeRetailerList,

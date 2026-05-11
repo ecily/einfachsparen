@@ -13,6 +13,7 @@ const {
   dedupeQueryOffers,
   dedupeResponseOffers,
   dedupeVisibleCardResponseOffers,
+  buildRankingCandidateQueryMetadata,
   normalizeSearchText,
   normalizeRetailerList,
   parseRankingCategories,
@@ -92,13 +93,13 @@ test('builds bounded ranking candidate limits for small result requests', () => 
   assert.equal(buildRankingCandidateLimit({ safeLimit: 60, hasQuery: true }), 180);
 });
 
-test('pushes unknown ranking query into Mongo candidate filtering before JS scoring', () => {
+test('pushes ranking query into Mongo searchTokens candidate filtering before JS scoring', () => {
   const match = buildRankingCandidateMatch({
     selectedRetailers: ['hofer'],
     selectedCategories: ['Kaffee & Tee'],
     unit: 'kg',
     onlyWithoutProgram: true,
-    query: 'zzzzzzzz',
+    query: 'kaffee',
   });
 
   assert.equal(match.status, 'active');
@@ -109,7 +110,21 @@ test('pushes unknown ranking query into Mongo candidate filtering before JS scor
   assert.equal(match.customerProgramRequired, false);
   assert.ok(Array.isArray(match.$and));
   assert.equal(match.$and.length, 1);
-  assert.ok(match.$and[0].$or.some((item) => String(item.titleNormalized).includes('zzzzzzzz')));
+  assert.ok(JSON.stringify(match.$and).includes('searchTokens'));
+  assert.ok(JSON.stringify(match.$and).includes('kaffee'));
+  assert.deepEqual(buildRankingCandidateQueryMetadata({ query: 'kaffee' }), {
+    queryTokens: ['cafe', 'caffe', 'kaffee'],
+    candidateQueryMode: 'searchTokens',
+    usesSearchTokens: true,
+  });
+});
+
+test('query without useful tokens uses safe regex fallback metadata', () => {
+  assert.deepEqual(buildRankingCandidateQueryMetadata({ query: '1 kg' }), {
+    queryTokens: [],
+    candidateQueryMode: 'fallbackRegex',
+    usesSearchTokens: false,
+  });
 });
 
 test('ranked offer response contains structured reference price and approximate savings fields', () => {
@@ -173,6 +188,7 @@ test('ranked offer keeps direct source savings even when cross-offer comparabili
 test('generic rice Mongo prefilter avoids broad pasta category flooding', () => {
   const match = buildRankingCandidateMatch({
     query: 'reis',
+    useSearchTokens: false,
   });
 
   const searchedFields = match.$and[0].$or.flatMap((item) => Object.keys(item));

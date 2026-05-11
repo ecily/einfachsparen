@@ -5,6 +5,7 @@ const {
   inferConditionFields,
 } = require('./offerQualityGuards');
 const { resolveReferencePrice } = require('../offers/promotionMath');
+const { buildOfferSearchTokens, SEARCH_TOKEN_VERSION } = require('../offers/searchTokens');
 
 const VALIDITY_INCOMPLETE_REVIEW_REASON = 'Gueltigkeitszeitraum unvollstaendig';
 
@@ -333,6 +334,15 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
   }, reviewReasons);
   const subcategoryKey = normalizeKey(document.categorySecondary, '');
   const categoryKey = document.categoryKey || normalizeKey(document.categorySecondary || document.categoryPrimary, 'unkategorisiert');
+  const tokenSource = {
+    ...document,
+    ...formatMetadata,
+    sourceType: resolvedSourceType,
+    categoryKey,
+    subcategoryKey,
+    categoryPrimary: document.categoryPrimary,
+    categorySecondary: document.categorySecondary,
+  };
 
   return {
     ...document,
@@ -368,6 +378,8 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     comparableUnit: comparableSafety.comparableUnit,
     normalizedUnitPrice: comparableSafety.normalizedUnitPrice,
     comparisonGroup: comparableSafety.safe ? document.comparisonGroup : '',
+    searchTokens: buildOfferSearchTokens(tokenSource),
+    searchTokenVersion: SEARCH_TOKEN_VERSION,
     ...savingsFields,
     normalizationVersion: normalizationVersion || document.normalizationVersion || NORMALIZATION_VERSION,
     parserVersion: parserVersion || document.parserVersion || source?.parserVersion || 'unknown-parser',

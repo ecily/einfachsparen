@@ -35,7 +35,8 @@
     "fetch:spar-official-snapshot": "node scripts/fetchSparOfficialSnapshot.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",
     "quality:search": "node scripts/qualitySmokeSearch.js",
-    "rebuild:filters": "node scripts/rebuild-filter-metadata.js"
+    "rebuild:filters": "node scripts/rebuild-filter-metadata.js",
+    "backfill:offer-search-tokens": "node scripts/backfillOfferSearchTokens.js"
   },
   "keywords": [],
   "author": "",

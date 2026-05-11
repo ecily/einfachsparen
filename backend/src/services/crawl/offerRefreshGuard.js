@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Offer = require('../../models/Offer');
+const { hasCurrentSearchTokens, withOfferSearchTokens } = require('../offers/searchTokens');
 
 function isTransactionUnsupportedError(error) {
   const message = String(error?.message || '').toLowerCase();
@@ -59,7 +60,7 @@ async function replaceOffersForSource({
     const deleteOptions = session ? { session } : {};
     const inserted = await OfferModel.insertMany(
       documents.map((document) => ({
-        ...document,
+        ...(hasCurrentSearchTokens(document) ? document : withOfferSearchTokens(document)),
         sourceId: document.sourceId || sourceId,
       })),
       options

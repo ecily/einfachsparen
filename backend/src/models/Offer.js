@@ -63,6 +63,8 @@ const offerSchema = new mongoose.Schema(
     titleNormalized: { type: String, default: '', index: true },
     brand: { type: String, default: '' },
     searchText: { type: String, default: '' },
+    searchTokens: { type: [String], default: [] },
+    searchTokenVersion: { type: Number, default: 0 },
     categoryPrimary: { type: String, default: 'Unkategorisiert', index: true },
     categorySecondary: { type: String, default: '' },
     categoryKey: { type: String, default: 'unkategorisiert', index: true },
@@ -168,5 +170,6 @@ offerSchema.index({ retailerKey: 1, categoryKey: 1, isActiveNow: 1 });
 offerSchema.index({ comparisonGroup: 1, isActiveNow: 1 });
 offerSchema.index({ dedupeKey: 1 });
 offerSchema.index({ 'normalizedUnitPrice.amount': 1, isActiveNow: 1 });
+offerSchema.index({ status: 1, isActiveNow: 1, searchTokens: 1, retailerKey: 1 });
 
 module.exports = mongoose.model('Offer', offerSchema);
