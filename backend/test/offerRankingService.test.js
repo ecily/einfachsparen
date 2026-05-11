@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   applyQueryMatch,
   buildRankingCandidateLimit,
+  buildRankingCandidateFallbackMatch,
   buildRankingCandidateMatch,
   buildRankedOffer,
   buildValidityLabel,
@@ -89,8 +90,9 @@ test('normalizes ranking retailer filters case-insensitively', () => {
 
 test('builds bounded ranking candidate limits for small result requests', () => {
   assert.equal(buildRankingCandidateLimit({ safeLimit: 1, hasQuery: false }), 20);
-  assert.equal(buildRankingCandidateLimit({ safeLimit: 1, hasQuery: true }), 60);
-  assert.equal(buildRankingCandidateLimit({ safeLimit: 60, hasQuery: true }), 180);
+  assert.equal(buildRankingCandidateLimit({ safeLimit: 1, hasQuery: true }), 200);
+  assert.equal(buildRankingCandidateLimit({ safeLimit: 60, hasQuery: true }), 200);
+  assert.equal(buildRankingCandidateLimit({ safeLimit: 100, hasQuery: true }), 300);
 });
 
 test('pushes ranking query into Mongo searchTokens candidate filtering before JS scoring', () => {
@@ -112,10 +114,13 @@ test('pushes ranking query into Mongo searchTokens candidate filtering before JS
   assert.equal(match.$and.length, 1);
   assert.ok(JSON.stringify(match.$and).includes('searchTokens'));
   assert.ok(JSON.stringify(match.$and).includes('kaffee'));
+  assert.doesNotMatch(JSON.stringify(match), /titleNormalized|comparisonGroup|brand/);
   assert.deepEqual(buildRankingCandidateQueryMetadata({ query: 'kaffee' }), {
     queryTokens: ['cafe', 'caffe', 'kaffee'],
-    candidateQueryMode: 'searchTokens',
+    candidateQueryMode: 'searchTokensOnly',
     usesSearchTokens: true,
+    fallbackUsed: false,
+    fallbackReason: '',
   });
 });
 
@@ -124,7 +129,20 @@ test('query without useful tokens uses safe regex fallback metadata', () => {
     queryTokens: [],
     candidateQueryMode: 'fallbackRegex',
     usesSearchTokens: false,
+    fallbackUsed: true,
+    fallbackReason: 'no-query-tokens',
   });
+});
+
+test('separate regex fallback is not mixed into the searchTokens primary match', () => {
+  const primary = buildRankingCandidateMatch({ query: 'kaffee' });
+  const fallback = buildRankingCandidateFallbackMatch({ query: 'kaffee' });
+
+  assert.match(JSON.stringify(primary), /searchTokens/);
+  assert.doesNotMatch(JSON.stringify(primary), /titleNormalized|comparisonGroup|brand/);
+  assert.doesNotMatch(JSON.stringify(primary), /\$or/);
+  assert.doesNotMatch(JSON.stringify(fallback), /searchTokens/);
+  assert.match(JSON.stringify(fallback), /titleNormalized/);
 });
 
 test('ranked offer response contains structured reference price and approximate savings fields', () => {

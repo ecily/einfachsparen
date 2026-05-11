@@ -16,8 +16,6 @@ const OFFER_RANKING_FIELDS = [
   'titleNormalized',
   'brand',
   'searchText',
-  'searchTokens',
-  'searchTokenVersion',
   'categoryKey',
   'categoryPrimary',
   'categorySecondary',
@@ -78,6 +76,8 @@ const OFFER_RANKING_FIELDS = [
 const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
+const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
+const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
 const rankingResponseCache = new Map();
 
 function nowMs() {
@@ -2977,45 +2977,23 @@ function buildTokenizedSearchFilter(query) {
       filter: buildMongoQuerySearchFilter(query),
       queryTokens,
       candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+      usesSearchTokens: false,
+      fallbackUsed: Boolean(query),
+      fallbackReason: query ? 'no-query-tokens' : '',
     };
   }
 
-  const regexFilter = buildMongoQuerySearchFilter(query);
-  const missingTokenFallback = regexFilter
-    ? {
-      $and: [
-        {
-          $or: [
-            { searchTokenVersion: { $lt: SEARCH_TOKEN_VERSION } },
-            { searchTokenVersion: { $exists: false } },
-            { searchTokens: { $exists: false } },
-            { searchTokens: { $size: 0 } },
-          ],
-        },
-        ...regexFilter.$and,
-      ],
-    }
-    : null;
-
   return {
-    filter: missingTokenFallback
-      ? {
-        $and: [
-          {
-            $or: [
-              { searchTokens: { $in: queryTokens }, searchTokenVersion: { $gte: SEARCH_TOKEN_VERSION } },
-              missingTokenFallback,
-            ],
-          },
-        ],
-      }
-      : {
-        $and: [
-          { searchTokens: { $in: queryTokens }, searchTokenVersion: { $gte: SEARCH_TOKEN_VERSION } },
-        ],
-      },
+    filter: {
+      $and: [
+        { searchTokens: { $in: queryTokens }, searchTokenVersion: { $gte: SEARCH_TOKEN_VERSION } },
+      ],
+    },
     queryTokens,
-    candidateQueryMode: 'searchTokens',
+    candidateQueryMode: 'searchTokensOnly',
+    usesSearchTokens: true,
+    fallbackUsed: false,
+    fallbackReason: '',
   };
 }
 
@@ -3033,6 +3011,9 @@ function buildRankingCandidateMatch({
     filter: buildMongoQuerySearchFilter(query),
     queryTokens: tokenizeSearchText(query).slice(0, 5),
     candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+    usesSearchTokens: false,
+    fallbackUsed: Boolean(query),
+    fallbackReason: query ? 'legacy-regex-mode' : '',
   };
 
   if (selectedRetailers.length > 0) {
@@ -3063,13 +3044,92 @@ function buildRankingCandidateQueryMetadata({ query = '', useSearchTokens = true
     filter: buildMongoQuerySearchFilter(query),
     queryTokens: tokenizeSearchText(query).slice(0, 5),
     candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+    usesSearchTokens: false,
+    fallbackUsed: Boolean(query),
+    fallbackReason: query ? 'legacy-regex-mode' : '',
   };
 
   return {
     queryTokens: querySearch.queryTokens,
     candidateQueryMode: querySearch.candidateQueryMode,
-    usesSearchTokens: querySearch.candidateQueryMode === 'searchTokens',
+    usesSearchTokens: Boolean(querySearch.usesSearchTokens),
+    fallbackUsed: Boolean(querySearch.fallbackUsed),
+    fallbackReason: querySearch.fallbackReason || '',
   };
+}
+
+function buildRankingCandidateFallbackMetadata(reason) {
+  return {
+    queryTokens: [],
+    candidateQueryMode: 'fallbackRegex',
+    usesSearchTokens: false,
+    fallbackUsed: true,
+    fallbackReason: reason,
+  };
+}
+
+function buildRankingCandidateFallbackMatch({
+  selectedRetailers = [],
+  selectedCategories = [],
+  unit = 'all',
+  onlyWithoutProgram = false,
+  query = '',
+}) {
+  return buildRankingCandidateMatch({
+    selectedRetailers,
+    selectedCategories,
+    unit,
+    onlyWithoutProgram,
+    query,
+    useSearchTokens: false,
+  });
+}
+
+function shouldRunSeparatedRegexFallback({ query = '', offers = [], queryMetadata = {} }) {
+  if (!query || queryMetadata.candidateQueryMode !== 'searchTokensOnly') {
+    return '';
+  }
+
+  if (RANKING_SEARCH_TOKEN_FALLBACK_MODE === 'always' || RANKING_SEARCH_TOKEN_FALLBACK_MODE === 'force') {
+    return 'explicit-transition-mode';
+  }
+
+  if (offers.length === 0) {
+    return 'token-query-empty';
+  }
+
+  return '';
+}
+
+function mergeCandidateOffers(primaryOffers, fallbackOffers) {
+  if (primaryOffers.length === 0) {
+    return fallbackOffers;
+  }
+
+  const seen = new Set(primaryOffers.map((offer) => String(offer?._id || offer?.id || offer?.offerKey || '')));
+  const merged = [...primaryOffers];
+
+  for (const offer of fallbackOffers) {
+    const key = String(offer?._id || offer?.id || offer?.offerKey || '');
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    merged.push(offer);
+  }
+
+  return merged;
+}
+
+function buildRankingOfferQuery(match, candidateLimit) {
+  const dbQuery = Offer.find(match)
+    .select(OFFER_RANKING_FIELDS)
+    .sort(RANKING_SORT)
+    .limit(candidateLimit)
+    .lean();
+
+  return dbQuery;
 }
 
 function buildRankingCandidateLimit({ safeLimit = 30, showAllMatching = false, hasQuery = false }) {
@@ -3078,7 +3138,7 @@ function buildRankingCandidateLimit({ safeLimit = 30, showAllMatching = false, h
   }
 
   if (hasQuery) {
-    return Math.min(RANKING_CANDIDATE_CAP, Math.max(60, safeLimit * 3));
+    return Math.min(RANKING_CANDIDATE_CAP, Math.max(200, safeLimit * 3));
   }
 
   return Math.min(RANKING_CANDIDATE_CAP, Math.max(20, safeLimit * 20));
@@ -3093,7 +3153,7 @@ async function findRankingCandidateOffers({
   candidateLimit = RANKING_CANDIDATE_CAP,
   collectExecutionStats = false,
 }) {
-  const match = buildRankingCandidateMatch({
+  const primaryMatch = buildRankingCandidateMatch({
     selectedRetailers,
     selectedCategories,
     unit,
@@ -3101,30 +3161,57 @@ async function findRankingCandidateOffers({
     query,
   });
   const queryMetadata = buildRankingCandidateQueryMetadata({ query });
-  const dbQuery = Offer.find(match)
-    .select(OFFER_RANKING_FIELDS)
-    .sort({ sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
-    .limit(candidateLimit)
-    .lean();
+  const dbQuery = buildRankingOfferQuery(primaryMatch, candidateLimit);
 
   if (query) {
     dbQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
   }
 
   try {
-    const offers = await dbQuery;
+    const primaryOffers = await dbQuery;
+    const fallbackReason = shouldRunSeparatedRegexFallback({
+      query,
+      offers: primaryOffers,
+      queryMetadata,
+    });
+    let offers = primaryOffers;
+    let fallbackMatch = null;
+    let fallbackQueryMetadata = null;
+
+    if (fallbackReason) {
+      fallbackMatch = buildRankingCandidateFallbackMatch({
+        selectedRetailers,
+        selectedCategories,
+        unit,
+        onlyWithoutProgram,
+        query,
+      });
+      fallbackQueryMetadata = buildRankingCandidateFallbackMetadata(fallbackReason);
+      const fallbackQuery = buildRankingOfferQuery(fallbackMatch, candidateLimit);
+      fallbackQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
+      const fallbackOffers = await fallbackQuery;
+      offers = mergeCandidateOffers(primaryOffers, fallbackOffers).slice(0, candidateLimit);
+      queryMetadata.candidateQueryMode = 'searchTokensThenFallback';
+      queryMetadata.fallbackUsed = true;
+      queryMetadata.fallbackReason = fallbackReason;
+    }
 
     if (!collectExecutionStats) {
       return offers;
     }
 
     const mongo = {
-      match,
-      sort: { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 },
+      match: primaryMatch,
+      primaryMatch,
+      fallbackMatch,
+      sort: RANKING_SORT,
       limit: candidateLimit,
       fields: OFFER_RANKING_FIELDS.split(' '),
       queryMetadata,
+      fallbackQueryMetadata,
       executionStats: null,
+      primaryExecutionStats: null,
+      fallbackExecutionStats: null,
     };
 
     return {
@@ -3137,12 +3224,16 @@ async function findRankingCandidateOffers({
         ? {
           offers: [],
           mongo: {
-            match,
-            sort: { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 },
+            match: primaryMatch,
+            primaryMatch,
+            fallbackMatch: null,
+            sort: RANKING_SORT,
             limit: candidateLimit,
             fields: OFFER_RANKING_FIELDS.split(' '),
             queryMetadata,
             executionStats: null,
+            primaryExecutionStats: null,
+            fallbackExecutionStats: null,
             error: 'query-time-limit',
           },
         }
@@ -3160,19 +3251,18 @@ async function explainRankingCandidateQuery({
   onlyWithoutProgram = false,
   query = '',
   candidateLimit = RANKING_CANDIDATE_CAP,
+  useSearchTokens = true,
+  matchOverride = null,
 }) {
-  const match = buildRankingCandidateMatch({
+  const match = matchOverride || buildRankingCandidateMatch({
     selectedRetailers,
     selectedCategories,
     unit,
     onlyWithoutProgram,
     query,
+    useSearchTokens,
   });
-  const explainQuery = Offer.find(match)
-    .select(OFFER_RANKING_FIELDS)
-    .sort({ sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
-    .limit(candidateLimit)
-    .lean();
+  const explainQuery = buildRankingOfferQuery(match, candidateLimit);
 
   if (query) {
     explainQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
@@ -3518,17 +3608,36 @@ async function buildOfferRanking({
   timings.totalMs = nowMs() - totalStartedAt;
 
   if (diagnostics) {
-    const explainResult = await explainRankingCandidateQuery({
+    const primaryExplainResult = await explainRankingCandidateQuery({
       selectedRetailers,
       selectedCategories,
       unit,
       onlyWithoutProgram: withoutProgram,
       query,
       candidateLimit,
+      matchOverride: mongoDiagnostics.primaryMatch || mongoDiagnostics.match,
     });
-    mongoDiagnostics.executionStats = explainResult.executionStats;
-    if (explainResult.error) {
-      mongoDiagnostics.error = explainResult.error;
+    mongoDiagnostics.primaryExecutionStats = primaryExplainResult.executionStats;
+    mongoDiagnostics.executionStats = primaryExplainResult.executionStats;
+    if (primaryExplainResult.error) {
+      mongoDiagnostics.error = primaryExplainResult.error;
+    }
+
+    if (mongoDiagnostics.fallbackMatch) {
+      const fallbackExplainResult = await explainRankingCandidateQuery({
+        selectedRetailers,
+        selectedCategories,
+        unit,
+        onlyWithoutProgram: withoutProgram,
+        query,
+        candidateLimit,
+        useSearchTokens: false,
+        matchOverride: mongoDiagnostics.fallbackMatch,
+      });
+      mongoDiagnostics.fallbackExecutionStats = fallbackExplainResult.executionStats;
+      if (fallbackExplainResult.error) {
+        mongoDiagnostics.fallbackError = fallbackExplainResult.error;
+      }
     }
 
     return {
@@ -3567,6 +3676,7 @@ module.exports = {
   buildKnownCategoryLabelMap,
   buildRankingCandidateLimit,
   buildRankingCandidateMatch,
+  buildRankingCandidateFallbackMatch,
   buildRankingCandidateQueryMetadata,
   normalizeSearchText,
   normalizeRetailerKey,

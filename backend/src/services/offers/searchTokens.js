@@ -1,6 +1,6 @@
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 
-const SEARCH_TOKEN_VERSION = 1;
+const SEARCH_TOKEN_VERSION = 2;
 
 const STOPWORDS = new Set([
   'ab',
@@ -46,6 +46,11 @@ const SYNONYMS = new Map([
   ['susswaren', ['suesswaren']],
 ]);
 
+const COMPOUND_PRODUCT_TOKENS = new Set([
+  'milch',
+  'reis',
+]);
+
 function normalizeSearchTokenText(value) {
   return normalizeTitleForMatch(
     String(value || '')
@@ -67,6 +72,18 @@ function addTokenWithSynonyms(tokens, token) {
   for (const synonym of SYNONYMS.get(token) || []) {
     if (synonym.length >= 3 && !STOPWORDS.has(synonym)) {
       tokens.add(synonym);
+    }
+  }
+}
+
+function addConservativeCompoundTokens(tokens, token) {
+  for (const productToken of COMPOUND_PRODUCT_TOKENS) {
+    if (token === productToken || token === `p${productToken}` || token.endsWith(`p${productToken}`)) {
+      continue;
+    }
+
+    if (token.endsWith(productToken) || token.startsWith(productToken)) {
+      addTokenWithSynonyms(tokens, productToken);
     }
   }
 }
@@ -97,6 +114,7 @@ function buildOfferSearchTokens(offer = {}) {
   for (const value of weightedSources) {
     for (const token of tokenizeValue(value)) {
       addTokenWithSynonyms(tokens, token);
+      addConservativeCompoundTokens(tokens, token);
     }
   }
 

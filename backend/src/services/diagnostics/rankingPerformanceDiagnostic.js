@@ -159,7 +159,14 @@ async function diagnoseRankingCase(testCase) {
   const response = result.response;
   const timings = result.diagnostics.timings;
   const mongo = result.diagnostics.mongo || {};
-  const executionStats = summarizeExecutionStats(mongo.executionStats);
+  const primaryExecutionStats = summarizeExecutionStats(mongo.primaryExecutionStats || mongo.executionStats);
+  const fallbackExecutionStats = mongo.fallbackExecutionStats
+    ? summarizeExecutionStats(mongo.fallbackExecutionStats)
+    : null;
+  const totalDocsExamined = Number(primaryExecutionStats.totalDocsExamined || 0) +
+    Number(fallbackExecutionStats?.totalDocsExamined || 0);
+  const totalKeysExamined = Number(primaryExecutionStats.totalKeysExamined || 0) +
+    Number(fallbackExecutionStats?.totalKeysExamined || 0);
 
   return {
     label: testCase.label,
@@ -176,7 +183,15 @@ async function diagnoseRankingCase(testCase) {
     queryTokens: mongo.queryMetadata?.queryTokens || [],
     usesSearchTokens: Boolean(mongo.queryMetadata?.usesSearchTokens),
     candidateQueryMode: mongo.queryMetadata?.candidateQueryMode || (testCase.args.query ? 'fallbackRegex' : 'noTextQuery'),
-    executionStats,
+    fallbackUsed: Boolean(mongo.queryMetadata?.fallbackUsed),
+    fallbackReason: mongo.queryMetadata?.fallbackReason || '',
+    executionStats: primaryExecutionStats,
+    primaryExecutionStats,
+    fallbackExecutionStats,
+    totalExecutionStats: {
+      totalDocsExamined,
+      totalKeysExamined,
+    },
     candidateCountBeforeRanking: response.summary?.candidateCount ?? null,
     timings,
     responseSizeBytes: estimateResponseSizeBytes(response),
@@ -253,11 +268,17 @@ function printReadableReport(report, { jsonPath = '' } = {}) {
     console.log('');
     console.log(`[${item.warningLevel}] ${item.label}`);
     console.log(`  apiParams=${JSON.stringify(sanitizeForOutput(item.apiParams))}`);
-    console.log(`  queryTokens=${JSON.stringify(item.queryTokens)} candidateQueryMode=${item.candidateQueryMode} usesSearchTokens=${item.usesSearchTokens}`);
+    console.log(`  queryTokens=${JSON.stringify(item.queryTokens)} candidateQueryMode=${item.candidateQueryMode} usesSearchTokens=${item.usesSearchTokens} fallbackUsed=${item.fallbackUsed} fallbackReason=${item.fallbackReason || '-'}`);
     console.log(`  total=${formatMs(item.timings.totalMs)} db=${formatMs(item.timings.dbLoadMs)} ranking=${formatMs(item.timings.rankingMs)} mapping=${formatMs(item.timings.responseMappingMs)}`);
     console.log(`  candidates=${item.candidateCountBeforeRanking} resultCount=${item.resultCount} displayed=${item.displayedCount} responseBytes=${item.responseSizeBytes}`);
-    console.log(`  mongo execution=${stats.executionTimeMillis}ms docsExamined=${stats.totalDocsExamined} keysExamined=${stats.totalKeysExamined} nReturned=${stats.nReturned}`);
-    console.log(`  plan indexes=${stats.indexNames.length ? stats.indexNames.join(',') : '-'} collscan=${stats.hasCollectionScan}`);
+    console.log(`  primary execution=${stats.executionTimeMillis}ms docsExamined=${stats.totalDocsExamined} keysExamined=${stats.totalKeysExamined} nReturned=${stats.nReturned}`);
+    console.log(`  primary plan indexes=${stats.indexNames.length ? stats.indexNames.join(',') : '-'} collscan=${stats.hasCollectionScan}`);
+    if (item.fallbackExecutionStats) {
+      const fallback = item.fallbackExecutionStats;
+      console.log(`  fallback execution=${fallback.executionTimeMillis}ms docsExamined=${fallback.totalDocsExamined} keysExamined=${fallback.totalKeysExamined} nReturned=${fallback.nReturned}`);
+      console.log(`  fallback plan indexes=${fallback.indexNames.length ? fallback.indexNames.join(',') : '-'} collscan=${fallback.hasCollectionScan}`);
+    }
+    console.log(`  totalDocsExamined=${item.totalExecutionStats.totalDocsExamined} totalKeysExamined=${item.totalExecutionStats.totalKeysExamined}`);
   }
 
   if (report.recommendations.length > 0) {

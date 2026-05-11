@@ -39,6 +39,19 @@ test('does not broaden waschmittel query to cleaning accessories', () => {
   assert.deepEqual(buildQuerySearchTokens('waschmittel'), ['waschmittel']);
 });
 
+test('keeps reis and milch query tokens and indexes conservative product compounds', () => {
+  assert.deepEqual(buildQuerySearchTokens('reis'), ['reis']);
+  assert.deepEqual(buildQuerySearchTokens('milch'), ['milch']);
+
+  const riceTokens = buildOfferSearchTokens({ title: 'Riso Gallo Risottoreis 500 g' });
+  const milkTokens = buildOfferSearchTokens({ title: 'Ja! Natuerlich Vollmilch 1 Liter' });
+  const priceTokens = buildOfferSearchTokens({ title: 'Stattpreis Aktion' });
+
+  assert.equal(riceTokens.includes('reis'), true);
+  assert.equal(milkTokens.includes('milch'), true);
+  assert.equal(priceTokens.includes('reis'), false);
+});
+
 test('adds search token metadata to offer documents', () => {
   const offer = withOfferSearchTokens({
     title: 'Lavazza Caffe Crema',

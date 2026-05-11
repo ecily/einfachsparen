@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { replaceOffersForSource } = require('../src/services/crawl/offerRefreshGuard');
+const { SEARCH_TOKEN_VERSION } = require('../src/services/offers/searchTokens');
 
 function buildOfferModel(calls) {
   return {
@@ -49,7 +50,7 @@ test('replaceOffersForSource inserts the new source snapshot before removing pre
   assert.equal(calls.insertMany.length, 1);
   assert.equal(calls.deleteMany.length, 1);
   assert.ok(calls.insertMany[0].documents[0].searchTokens.includes('kaffee'));
-  assert.equal(calls.insertMany[0].documents[0].searchTokenVersion, 1);
+  assert.equal(calls.insertMany[0].documents[0].searchTokenVersion, SEARCH_TOKEN_VERSION);
   assert.deepEqual(calls.deleteMany[0].filter, {
     sourceId: 'source-1',
     crawlJobId: { $ne: 'job-2' },

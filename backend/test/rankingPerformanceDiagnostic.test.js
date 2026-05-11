@@ -69,7 +69,9 @@ test('readable output keeps a stable compact format and redacts secret-like fiel
         candidateCountBeforeRanking: 10,
         queryTokens: ['kaffee'],
         usesSearchTokens: true,
-        candidateQueryMode: 'searchTokens',
+        candidateQueryMode: 'searchTokensOnly',
+        fallbackUsed: false,
+        fallbackReason: '',
         resultCount: 8,
         displayedCount: 5,
         responseSizeBytes: 1234,
@@ -81,6 +83,11 @@ test('readable output keeps a stable compact format and redacts secret-like fiel
           nReturned: 10,
           indexNames: ['status_1_isActiveNow_1_retailerKey_1'],
           hasCollectionScan: false,
+        },
+        fallbackExecutionStats: null,
+        totalExecutionStats: {
+          totalDocsExamined: 10,
+          totalKeysExamined: 12,
         },
       },
     ],
@@ -99,7 +106,8 @@ test('readable output keeps a stable compact format and redacts secret-like fiel
   const output = lines.join('\n');
   assert.match(output, /Ranking Performance Diagnostic/);
   assert.match(output, /\[OK\] kaffee/);
-  assert.match(output, /candidateQueryMode=searchTokens/);
+  assert.match(output, /candidateQueryMode=searchTokensOnly/);
+  assert.match(output, /fallbackUsed=false/);
   assert.match(output, /docsExamined=10/);
   assert.doesNotMatch(output, /should-not-print/);
   assert.match(output, /\[redacted\]/);

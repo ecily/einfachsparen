@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { computeOfferSavings, extractPromotionRequirement } = require('../src/services/offers/promotionMath');
 const { enrichOfferForStorage, inferRetailerFormatMetadata } = require('../src/services/crawl/offerAuditEnrichment');
+const { SEARCH_TOKEN_VERSION } = require('../src/services/offers/searchTokens');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 
 const VALIDITY_INCOMPLETE_REASON = 'Gueltigkeitszeitraum unvollstaendig';
@@ -80,7 +81,7 @@ test('marks offers without reference price as action price only', () => {
 
   assert.equal(offer.savingsDisplayType, 'action-price-only');
   assert.ok(offer.searchTokens.includes('aktionsprodukt'));
-  assert.equal(offer.searchTokenVersion, 1);
+  assert.equal(offer.searchTokenVersion, SEARCH_TOKEN_VERSION);
   assert.equal(offer.isActionPriceOnly, true);
   assert.equal(offer.hasProspectNormalPrice, false);
   assert.equal(offer.needsReview, true);
