@@ -239,8 +239,8 @@ function getCompactConditionText(value) {
 }
 
 function getVisibleConditionInfo(conditions) {
-  const visibleConditions = conditions.slice(0, 2)
-  const hiddenConditions = conditions.slice(2)
+  const visibleConditions = conditions.slice(0, 1)
+  const hiddenConditions = conditions.slice(1)
 
   return {
     visibleConditions,
