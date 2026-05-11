@@ -109,8 +109,8 @@ function SearchLandingHero({ onNavigate }) {
           </p>
           <div className="hero-benefit-grid" style={{ marginTop: '0.15rem' }}>
             {[
-              ['Ohne Konto', 'Direkt suchen.'],
-              ['Angebote merken', 'Treffer für später sichern.'],
+              ['Ohne Konto', 'Keine Anmeldung. Kostenlos. Deine Daten bleiben bei dir.'],
+              ['Angebote finden', 'Finde Angebote, mit denen du beim Einkauf sparen kannst.'],
               ['Einkaufsliste nutzen', 'Geplanten Einkauf im Blick behalten.'],
               ['Liste teilen', 'Einkauf einfach abstimmen.'],
               ['Am Handy praktisch', 'Im Geschäft schnell nachsehen.'],
@@ -184,13 +184,10 @@ function SearchLandingHero({ onNavigate }) {
         }}
       >
         <div>
-          <p className="eyebrow" style={{ margin: 0 }}>
-            Stöbern
-          </p>
           <h2 style={{ margin: '0.15rem 0 0' }}>Du möchtest lieber nach Märkten stöbern?</h2>
         </div>
         <button type="button" className="primary-action-button" onClick={() => onNavigate('search')}>
-          Zu Stöbern
+          Märkte stöbern
         </button>
       </section>
     </>
@@ -871,18 +868,18 @@ function App() {
           </button>
 
           <button
+            className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('search')}
+          >
+            Stöbern
+          </button>
+
+          <button
             className={`page-nav__button${activePage === 'shopping-list' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('shopping-list')}
           >
             Einkaufsliste
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
-          </button>
-
-          <button
-            className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('search')}
-          >
-            Stöbern
           </button>
         </div>
 
