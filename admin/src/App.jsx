@@ -84,7 +84,6 @@ function SearchLandingHero() {
     ['lidl', 'Lidl'],
     ['dm', 'dm'],
     ['bipa', 'BIPA'],
-    ['adeg', 'ADEG'],
   ]
 
   return (
@@ -103,28 +102,25 @@ function SearchLandingHero() {
         }}
       >
         <div style={{ display: 'grid', gap: '0.75rem', minWidth: 0 }}>
-          <div className="hero-market-strip" aria-label="Gefundene Angebote unter anderem von">
-            <span className="hero-market-strip__label">Gefundene Angebote u. a. von</span>
-            <div className="hero-market-strip__badges" aria-hidden="true">
-              {heroRetailers.map(([key, label]) => {
-                const theme = getRetailerTheme(key)
+          <div className="hero-market-strip" aria-label="Marktbeispiele">
+            {heroRetailers.map(([key, label]) => {
+              const theme = getRetailerTheme(key)
 
-                return (
-                  <span
-                    key={key}
-                    className="hero-market-badge"
-                    style={{
-                      '--retailer-color': theme.color,
-                      '--retailer-text-color': theme.textColor,
-                      '--retailer-border-color': theme.borderColor,
-                      '--retailer-soft-color': theme.softColor,
-                    }}
-                  >
-                    {label}
-                  </span>
-                )
-              })}
-            </div>
+              return (
+                <span
+                  key={key}
+                  className="hero-market-badge"
+                  style={{
+                    '--retailer-color': theme.color,
+                    '--retailer-text-color': theme.textColor,
+                    '--retailer-border-color': theme.borderColor,
+                    '--retailer-soft-color': theme.softColor,
+                  }}
+                >
+                  {label}
+                </span>
+              )
+            })}
           </div>
           <h1
             style={{
@@ -134,26 +130,14 @@ function SearchLandingHero() {
               maxWidth: '42rem',
             }}
           >
-            Angebote finden. Merken. Geld sparen.
+            Angebote finden. Merken. <span className="hero-headline-accent">Geld sparen.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
-            Suche online nach aktuellen Supermarkt-Angeboten, merke passende Treffer und nutze deine Einkaufsliste im
-            Browser oder am Handy.
+            Suche aktuelle Angebote aus österreichischen Märkten und merke sie für deinen Einkauf.
           </p>
-          <div className="hero-benefit-grid" style={{ marginTop: '0.15rem' }}>
-            {[
-              ['Ohne Konto', 'Keine Anmeldung. Kostenlos. Deine Daten bleiben bei dir.'],
-              ['Angebote finden', 'Finde Angebote, mit denen du beim Einkauf sparen kannst.'],
-              ['Einkaufsliste nutzen', 'Geplanten Einkauf im Blick behalten.'],
-              ['Liste teilen', 'Einkauf einfach abstimmen.'],
-              ['Am Handy praktisch', 'Im Geschäft schnell nachsehen.'],
-            ].map(([title, text]) => (
-              <div key={title} className="hero-benefit-card">
-                <strong>{title}</strong>
-                <span>{text}</span>
-              </div>
-            ))}
-          </div>
+          <p className="hero-trust-line">
+            Kostenlos. Ohne Anmeldung. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.
+          </p>
         </div>
 
         <div
@@ -616,6 +600,18 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  function handleLogoClick() {
+    setActivePage('product-search')
+    setSharedListId('')
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.history.replaceState({}, '', '/')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   function handleNavSearchSubmit(event) {
     event.preventDefault()
 
@@ -863,6 +859,9 @@ function App() {
     <main className="shell" style={{ paddingBottom: '5.5rem' }}>
       <ScopedPageTuning />
       <nav className="page-nav" aria-label="Seiten">
+        <button className="page-nav__logo" type="button" onClick={handleLogoClick} aria-label="Zur Startseite">
+          <img src="/favicon.svg" alt="" width="48" height="46" />
+        </button>
         <div className="page-nav__main">
           <button
             className={`page-nav__button${activePage === 'product-search' ? ' page-nav__button--active' : ''}`}
