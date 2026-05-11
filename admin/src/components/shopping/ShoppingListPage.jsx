@@ -8,6 +8,7 @@ import {
   buildShareSnapshot,
   getRetailerGroupSummary,
   getShoppingListItemId,
+  getShoppingListItemSavingsInfo,
   getShoppingListSummary,
   groupShoppingListByRetailer,
   loadCheckedShoppingListItems,
@@ -156,12 +157,6 @@ function getConditionText(item) {
   return ''
 }
 
-function getPositiveSavingsAmount(item) {
-  const savingsValue = Number(item?.savingsAmount)
-
-  return Number.isFinite(savingsValue) && savingsValue > 0 ? savingsValue : 0
-}
-
 function loadStoredQuantities() {
   if (typeof window === 'undefined') return {}
 
@@ -205,9 +200,9 @@ function getItemsTotal(items, quantities) {
 
 function getKnownSavingsTotal(items, quantities) {
   return (items || []).reduce((sum, item) => {
-    const savings = getPositiveSavingsAmount(item)
+    const savings = getShoppingListItemSavingsInfo(item)
 
-    return savings > 0 ? sum + savings * getItemQuantity(quantities, getShoppingListItemId(item)) : sum
+    return savings.type === 'known' ? sum + savings.amount * getItemQuantity(quantities, getShoppingListItemId(item)) : sum
   }, 0)
 }
 
@@ -231,6 +226,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
   const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const canShowOfferTotal = useMemo(() => hasKnownCurrentPrice(shoppingListItems), [shoppingListItems])
   const canShowKnownSavings = summary.knownSavingsCount > 0 && knownSavingsTotal > 0
+  const knownSavingsLabel = summary.approximateSavingsCount > 0 ? 'Bekannte Ersparnis ca.' : 'Bekannte Ersparnis'
   const hasMissingSavings = summary.knownSavingsCount < shoppingListItems.length
 
   useEffect(() => {
@@ -339,11 +335,11 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
         <div className="shopping-check__facts">
           <span>{shoppingListItems.length} Artikel gemerkt</span>
           {canShowOfferTotal ? <span>Gemerkte Angebote ca. {formatPrice(offerTotal)}</span> : null}
-          {canShowKnownSavings ? <span>Ersparnis ca. {formatPrice(knownSavingsTotal)}</span> : null}
+          {canShowKnownSavings ? <span>{knownSavingsLabel} {formatPrice(knownSavingsTotal)}</span> : null}
         </div>
 
-        {hasMissingSavings ? (
-          <p className="shopping-check__soft-note">Nicht jedes Angebot enthält eine verlässliche Ersparnis.</p>
+        {canShowKnownSavings || hasMissingSavings ? (
+          <p className="shopping-check__soft-note">Die Summe berücksichtigt nur Angebote mit belastbarer Vergleichsbasis.</p>
         ) : null}
         <p className="shopping-check__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
       </section>
@@ -395,6 +391,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                   const validityText = getValidityText(item)
                   const conditionText = getConditionText(item)
                   const quantityText = getQuantityText(item)
+                  const savingsInfo = getShoppingListItemSavingsInfo(item)
 
                   return (
                     <article key={itemId} className={`shopping-list-item${isChecked ? ' shopping-list-item--checked' : ''}`}>
@@ -427,6 +424,13 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                           {validityText ? <span>{validityText}</span> : null}
                           {conditionText ? <span>{conditionText}</span> : null}
                           {showUnitPrice ? <span>{formatUnitPrice(item.normalizedUnitPrice)}</span> : null}
+                          {savingsInfo.type === 'known' ? (
+                            <span>
+                              Spart {savingsInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsInfo.amount)}
+                            </span>
+                          ) : (
+                            <span>Aktionspreis</span>
+                          )}
                         </div>
 
                         <div

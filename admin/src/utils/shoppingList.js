@@ -2,6 +2,19 @@ import dayjs from 'dayjs'
 import { SHOPPING_LIST_CHECKED_STORAGE_KEY, SHOPPING_LIST_STORAGE_KEY } from '../config/constants'
 import { getOfferCategoryLabel, getOfferStableId, getSavingsValue, hasKnownSavings, normalizeRetailerKey } from './offers'
 
+const SAVINGS_SOURCE_BACKEND_REFERENCE = 'backend-reference-price'
+
+function getOfferSavingsSnapshot(offer) {
+  const savingsAmount = getSavingsValue(offer)
+  const knownSavings = savingsAmount > 0 && hasKnownSavings(offer)
+
+  return {
+    amount: knownSavings ? savingsAmount : null,
+    isApproximate: knownSavings ? Boolean(offer?.savings?.isApproximate || offer?.referencePrice?.isApproximate) : false,
+    source: knownSavings ? SAVINGS_SOURCE_BACKEND_REFERENCE : '',
+  }
+}
+
 export function loadStoredShoppingList() {
   if (typeof window === 'undefined') return []
 
@@ -16,6 +29,7 @@ export function loadStoredShoppingList() {
 
 export function buildShoppingListItem(offer) {
   const id = getOfferStableId(offer)
+  const savings = getOfferSavingsSnapshot(offer)
 
   return {
     id,
@@ -35,8 +49,10 @@ export function buildShoppingListItem(offer) {
     hasConditions: Boolean(offer?.hasConditions),
     validFrom: offer?.validFrom || '',
     validTo: offer?.validTo || '',
-    savingsAmount: getSavingsValue(offer) > 0 ? getSavingsValue(offer) : null,
-    hasKnownSavings: hasKnownSavings(offer),
+    savingsAmount: savings.amount,
+    savingsIsApproximate: savings.isApproximate,
+    savingsSource: savings.source,
+    hasKnownSavings: savings.amount !== null,
     addedAt: new Date().toISOString(),
   }
 }
@@ -63,8 +79,33 @@ export function buildShoppingListItemFromSnapshot(item) {
     validFrom: '',
     validTo: item?.validUntil || '',
     savingsAmount: null,
+    savingsIsApproximate: false,
+    savingsSource: '',
     hasKnownSavings: false,
     addedAt: new Date().toISOString(),
+  }
+}
+
+export function getShoppingListItemSavingsInfo(item) {
+  const savingsValue = Number(item?.savingsAmount)
+  const hasTrustedSavings =
+    item?.savingsSource === SAVINGS_SOURCE_BACKEND_REFERENCE &&
+    item?.hasKnownSavings === true &&
+    Number.isFinite(savingsValue) &&
+    savingsValue > 0
+
+  if (!hasTrustedSavings) {
+    return {
+      type: 'action',
+      amount: 0,
+      isApproximate: false,
+    }
+  }
+
+  return {
+    type: 'known',
+    amount: savingsValue,
+    isApproximate: Boolean(item?.savingsIsApproximate),
   }
 }
 
@@ -95,13 +136,15 @@ export function groupShoppingListByRetailer(items = []) {
 
 export function getRetailerGroupSummary(items = []) {
   const knownSavings = (items || []).reduce((sum, item) => {
-    const savingsValue = Number(item?.savingsAmount)
-    return Number.isFinite(savingsValue) && savingsValue > 0 ? sum + savingsValue : sum
+    const savings = getShoppingListItemSavingsInfo(item)
+    return savings.type === 'known' ? sum + savings.amount : sum
   }, 0)
+  const hasApproximateSavings = (items || []).some((item) => getShoppingListItemSavingsInfo(item).isApproximate)
 
   return {
     itemCount: (items || []).length,
     knownSavings: knownSavings > 0 ? knownSavings : null,
+    hasApproximateSavings,
   }
 }
 
@@ -109,15 +152,16 @@ export function getShoppingListSummary(items = []) {
   return (items || []).reduce(
     (summary, item) => {
       const currentPrice = Number(item?.priceCurrent?.amount)
-      const savingsValue = Number(item?.savingsAmount)
+      const savings = getShoppingListItemSavingsInfo(item)
 
       if (Number.isFinite(currentPrice)) {
         summary.offerTotal += currentPrice
       }
 
-      if (Number.isFinite(savingsValue) && savingsValue > 0) {
-        summary.knownSavings += savingsValue
+      if (savings.type === 'known') {
+        summary.knownSavings += savings.amount
         summary.knownSavingsCount += 1
+        if (savings.isApproximate) summary.approximateSavingsCount += 1
       } else {
         summary.actionWithoutNormalPriceCount += 1
       }
@@ -130,6 +174,7 @@ export function getShoppingListSummary(items = []) {
       offerTotal: 0,
       knownSavings: 0,
       knownSavingsCount: 0,
+      approximateSavingsCount: 0,
       actionWithoutNormalPriceCount: 0,
     }
   )
