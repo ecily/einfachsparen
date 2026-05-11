@@ -93,15 +93,15 @@ function SearchLandingHero() {
         style={{
           alignItems: 'center',
           display: 'grid',
-          gap: 'clamp(1rem, 4vw, 1.75rem)',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+          gap: 'clamp(1rem, 3vw, 1.5rem)',
+          gridTemplateColumns: 'minmax(0, 1.95fr) minmax(240px, 0.95fr)',
           marginBottom: '1rem',
           minWidth: 0,
-          padding: 'clamp(1rem, 4vw, 1.6rem)',
+          padding: 'clamp(1rem, 3vw, 1.5rem)',
           width: '100%',
         }}
       >
-        <div style={{ display: 'grid', gap: '0.75rem', minWidth: 0 }}>
+        <div className="search-landing-hero__usp">
           <div className="hero-market-strip" aria-label="Marktbeispiele">
             {heroRetailers.map(([key, label]) => {
               const theme = getRetailerTheme(key)
@@ -124,10 +124,10 @@ function SearchLandingHero() {
           </div>
           <h1
             style={{
-              fontSize: 'clamp(2rem, 7vw, 3.6rem)',
+              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
               lineHeight: 1.05,
               margin: 0,
-              maxWidth: '42rem',
+              maxWidth: '46rem',
             }}
           >
             Angebote finden. Merken. <span className="hero-headline-accent">Geld sparen.</span>
@@ -141,9 +141,10 @@ function SearchLandingHero() {
         </div>
 
         <div
+          className="search-landing-hero__mobile"
           style={{
             display: 'grid',
-            gap: '0.7rem',
+            gap: '0.55rem',
             justifyItems: 'center',
             minWidth: 0,
             textAlign: 'center',
@@ -152,13 +153,13 @@ function SearchLandingHero() {
           <p className="eyebrow" style={{ margin: 0 }}>
             Einkauf am Smartphone
           </p>
-          <h2 style={{ fontSize: 'clamp(1.35rem, 5vw, 2rem)', lineHeight: 1.1, margin: 0 }}>
-            Am Handy ist kaufklug am praktischsten.
+          <h2 style={{ fontSize: 'clamp(1.05rem, 2.4vw, 1.35rem)', lineHeight: 1.14, margin: 0 }}>
+            Am Handy schnell nachsehen.
           </h2>
-          <p style={{ color: '#5c6658', lineHeight: 1.45, margin: 0, maxWidth: '20rem' }}>
-            Nutze kaufklug auch direkt im Browser. Für den Einkauf im Geschäft ist die App am bequemsten.
+          <p style={{ color: '#5c6658', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
+            Scanne den QR-Code und nutze kaufklug direkt am Smartphone.
           </p>
-          <div className="app-download-modal__qr" style={{ margin: 0, width: 'min(42vw, 220px)' }}>
+          <div className="app-download-modal__qr search-landing-hero__qr" style={{ margin: 0 }}>
             <img
               src={qrUrl}
               alt="QR-Code zum Laden der kaufklug.at Android-Testversion"
@@ -176,15 +177,12 @@ function SearchLandingHero() {
               alignItems: 'center',
               display: 'inline-flex',
               justifyContent: 'center',
-              maxWidth: '17rem',
+              maxWidth: '15.5rem',
               textDecoration: 'none',
             }}
           >
             Android-Testversion laden
           </a>
-          <p style={{ color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4, margin: 0, maxWidth: '18rem' }}>
-            QR-Code scannen und kaufklug direkt am Smartphone nutzen.
-          </p>
         </div>
       </section>
     </>
@@ -253,8 +251,8 @@ function ScopedPageTuning() {
         }
 
         @media (max-width: 720px) {
-          .search-first-page .app-download-modal__qr {
-            width: min(36vw, 150px) !important;
+          .search-first-page .search-landing-hero__qr {
+            width: min(40vw, 132px) !important;
           }
         }
       `}
