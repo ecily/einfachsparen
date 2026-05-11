@@ -1,6 +1,7 @@
 import { ProductImage } from '../layout/ProductImage'
-import { getOfferCategoryLabel, getReadableQuantityText, getSavingsValue, shouldDisplayUnitPrice } from '../../utils/offers'
+import { getOfferCategoryLabel, getReadableQuantityText, getSavingsValue, normalizeRetailerKey, shouldDisplayUnitPrice } from '../../utils/offers'
 import { formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
+import { getRetailerTheme } from '../../utils/retailerColors'
 
 function formatPrice(amount, currency = 'EUR') {
   if (amount === null || amount === undefined || amount === '') {
@@ -30,6 +31,10 @@ function getNumericAmount(value) {
 
 function getPriceCurrency(value) {
   return value && typeof value === 'object' ? value.currency : ''
+}
+
+function getRetailerColorKey(offer) {
+  return offer?.retailerKey || normalizeRetailerKey(offer?.retailerName)
 }
 
 function normalizeRetailerName(value) {
@@ -189,16 +194,28 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const hasSavings = savingsAmount > 0 && referenceInfo.amount > 0
   const currentPriceAmount = getNumericAmount(offer?.priceCurrent ?? offer?.price)
   const currentPriceCurrency = getPriceCurrency(offer?.priceCurrent) || getPriceCurrency(offer?.price) || 'EUR'
+  const unitPriceText = showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : ''
+  const quantityUnitText = [quantityText, unitPriceText].filter(Boolean).join(' · ')
+  const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
 
   return (
-    <article className={`user-card ${hasSavings ? 'user-card--known-savings' : 'user-card--action-price'}`}>
+    <article
+      className={`user-card ${hasSavings ? 'user-card--known-savings' : 'user-card--action-price'}`}
+      style={{
+        '--retailer-color': retailerTheme.color,
+        '--retailer-text-color': retailerTheme.textColor,
+        '--retailer-border-color': retailerTheme.borderColor,
+        '--retailer-soft-color': retailerTheme.softColor,
+        '--retailer-glow-color': retailerTheme.glowColor,
+      }}
+    >
       <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
 
       <div className="user-card__content">
         <div className="user-card__top">
           <div>
             <div className="user-card__eyebrow">
-              <span>{normalizeRetailerName(offer.retailerName)}</span>
+              <span className="user-card__retailer-badge">{normalizeRetailerName(offer.retailerName)}</span>
             </div>
 
             <div className="user-card__facts" aria-label="Angebotsdetails">
@@ -220,17 +237,22 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
 
         <div className="user-card__decision">
           <div className="user-card__price">
-            <strong>{formatPrice(currentPriceAmount, currentPriceCurrency)}</strong>
-            {referenceInfo.amount ? <span>{referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}</span> : null}
-            {quantityText ? <span>{quantityText}</span> : null}
-            {showUnitPrice ? <span>{formatUnitPrice(offer?.normalizedUnitPrice)}</span> : null}
+            <div className="user-card__price-row">
+              <strong>{formatPrice(currentPriceAmount, currentPriceCurrency)}</strong>
+              {hasSavings && savingsPercent > 0 ? <span className="user-card__discount-badge">-{savingsPercent} %</span> : null}
+            </div>
+            {referenceInfo.amount ? (
+              <span className="user-card__reference-price">
+                {referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}
+              </span>
+            ) : null}
+            {quantityUnitText ? <span className="user-card__quantity-unit">{quantityUnitText}</span> : null}
           </div>
         </div>
 
         {hasSavings ? (
           <div className="offer-savings-box offer-savings-box--known">
             <strong>Spart {referenceInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsAmount, currentPriceCurrency)}</strong>
-            {savingsPercent > 0 ? <span>-{savingsPercent} %</span> : null}
           </div>
         ) : (
           <div className="offer-savings-box offer-savings-box--action">
