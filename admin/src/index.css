@@ -956,20 +956,43 @@ a {
 }
 
 .retailer-chip {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.42rem;
+  min-width: 0;
   border-color: var(--retailer-border-color, rgba(22, 33, 24, 0.12));
   background:
     linear-gradient(180deg, rgba(255, 252, 247, 0.94), rgba(255, 252, 247, 0.86)),
     var(--retailer-soft-color, rgba(255, 252, 247, 0.9));
 }
 
-.retailer-chip::before {
-  content: "";
+.retailer-chip__dot {
   width: 0.62rem;
   height: 0.62rem;
   flex: 0 0 auto;
   border-radius: 999px;
   background: var(--retailer-color, #315e2a);
   box-shadow: 0 0 0 3px var(--retailer-soft-color, rgba(49, 94, 42, 0.12));
+}
+
+.retailer-chip__label {
+  min-width: 0;
+  font-weight: 840;
+  overflow-wrap: anywhere;
+}
+
+.retailer-chip__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin-left: 0.05rem;
+  opacity: 0.72;
+  white-space: normal;
+}
+
+.retailer-chip__meta::before {
+  content: "·";
+  opacity: 0.76;
 }
 
 .retailer-chip--active {
@@ -979,7 +1002,7 @@ a {
   box-shadow: 0 12px 24px var(--retailer-soft-color, rgba(49, 94, 42, 0.22));
 }
 
-.retailer-chip--active::before {
+.retailer-chip--active .retailer-chip__dot {
   background: currentColor;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
 }
@@ -1461,10 +1484,11 @@ a {
 }
 
 .keyword-search-hero {
-  border-color: rgba(49, 94, 42, 0.18);
+  border-color: rgba(49, 94, 42, 0.24);
   background:
-    linear-gradient(90deg, rgba(49, 94, 42, 0.12) 0 4px, transparent 4px),
-    linear-gradient(180deg, rgba(248, 253, 242, 0.96), rgba(255, 252, 247, 0.96));
+    linear-gradient(90deg, rgba(49, 94, 42, 0.22) 0 5px, transparent 5px),
+    linear-gradient(180deg, rgba(244, 252, 237, 0.98), rgba(255, 252, 247, 0.97));
+  box-shadow: 0 14px 34px rgba(49, 94, 42, 0.1);
 }
 
 .keyword-search-results .panel__header h2 {
@@ -1491,7 +1515,7 @@ a {
   font-size: clamp(1.35rem, 3.8vw, 2.15rem);
   line-height: 1.08;
   letter-spacing: -0.035em;
-  color: #24451f;
+  color: #1f4a1b;
 }
 
 .keyword-search-form {
@@ -2516,6 +2540,11 @@ textarea:focus {
     display: block;
     margin-top: 0.12rem;
     font-size: 0.82em;
+  }
+
+  .retailer-chip__meta {
+    display: inline-flex;
+    margin-top: 0;
   }
 
   .shopping-market-group {

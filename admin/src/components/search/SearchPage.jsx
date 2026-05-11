@@ -34,6 +34,8 @@ export function SearchPage({
 }) {
   const isInitialBusy = filtersLoading
   const hasAppliedRetailerScope = appliedRetailers.length > 0
+  const hasDraftSelection = draftRetailers.length > 0 || draftCategoryLabels.length > 0
+  const shouldShowBrowseResults = hasAppliedRetailerScope
   const [activeBrowseScrollKey, setActiveBrowseScrollKey] = useState(0)
   const resultsRef = useRef(null)
 
@@ -107,27 +109,31 @@ export function SearchPage({
         disabled={!draftRetailers.length}
       />
 
-      <ActionBlock
-        canSearch={draftRetailers.length > 0}
-        selectedRetailerCount={draftRetailers.length}
-        selectedCategoryCount={draftCategoryLabels.length}
-        onApplySearch={handleApplyBrowseSelection}
-        onReset={onResetAll}
-        hasPendingChanges={hasPendingChanges}
-        searching={rankingLoading}
-      />
-
-      <div ref={resultsRef} className="browse-results-anchor">
-        <ResultsBlockConsumer
-          rankingLoading={rankingLoading}
-          hasAppliedRetailerScope={hasAppliedRetailerScope}
-          safeOffers={bestComparableOffers}
-          actionOffers={actionOffers}
-          onAddToShoppingList={onAddToShoppingList}
-          shoppingListIds={shoppingListIds}
-          onNavigate={onNavigate}
+      {hasDraftSelection ? (
+        <ActionBlock
+          canSearch={draftRetailers.length > 0}
+          selectedRetailerCount={draftRetailers.length}
+          selectedCategoryCount={draftCategoryLabels.length}
+          onApplySearch={handleApplyBrowseSelection}
+          onReset={onResetAll}
+          hasPendingChanges={hasPendingChanges}
+          searching={rankingLoading}
         />
-      </div>
+      ) : null}
+
+      {shouldShowBrowseResults ? (
+        <div ref={resultsRef} className="browse-results-anchor">
+          <ResultsBlockConsumer
+            rankingLoading={rankingLoading}
+            hasAppliedRetailerScope={hasAppliedRetailerScope}
+            safeOffers={bestComparableOffers}
+            actionOffers={actionOffers}
+            onAddToShoppingList={onAddToShoppingList}
+            shoppingListIds={shoppingListIds}
+            onNavigate={onNavigate}
+          />
+        </div>
+      ) : null}
     </>
   )
 }

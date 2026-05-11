@@ -50,9 +50,10 @@ export function RetailerSelectorBlock({
                     aria-pressed={selected}
                     onClick={() => onToggleRetailer(retailer.retailerKey)}
                   >
-                    <span>{retailer.retailerName}</span>{' '}
-                    <span className="chip__meta">
-                      {retailer.activeOffers > 0 ? `(${retailer.activeOffers} Aktionen)` : '(derzeit keine Aktionen)'}
+                    <span className="retailer-chip__dot" aria-hidden="true" />
+                    <span className="retailer-chip__label">{retailer.retailerName}</span>
+                    <span className="retailer-chip__meta chip__meta">
+                      {retailer.activeOffers > 0 ? `${retailer.activeOffers} Aktionen` : 'derzeit keine Aktionen'}
                     </span>
                   </button>
                 )
