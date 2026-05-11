@@ -860,7 +860,7 @@ function App() {
       <ScopedPageTuning />
       <nav className="page-nav" aria-label="Seiten">
         <button className="page-nav__logo" type="button" onClick={handleLogoClick} aria-label="Zur Startseite">
-          <img src="/favicon.svg" alt="" width="48" height="46" />
+          <img src="/kaufklug-logo.png" alt="" width="1024" height="1024" />
         </button>
         <div className="page-nav__main">
           <button
