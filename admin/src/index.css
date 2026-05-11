@@ -1261,6 +1261,36 @@ a {
   display: grid;
   gap: 0.45rem;
   justify-items: start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.user-card__conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.user-card__condition-chip {
+  display: inline-block;
+  max-width: 100%;
+  min-height: 1.95rem;
+  padding: 0.42rem 0.64rem;
+  border-radius: 0.72rem;
+  background: rgba(255, 244, 217, 0.92);
+  border: 1px solid rgba(201, 139, 25, 0.18);
+  color: #6f4a0d;
+  font-size: 0.88rem;
+  font-weight: 760;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.user-card__condition-chip strong {
+  color: #553705;
+  font-weight: 900;
 }
 
 .user-card__price {

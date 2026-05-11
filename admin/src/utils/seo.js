@@ -28,63 +28,64 @@ const FAQ_ITEMS = [
   },
 ]
 
-const BASE_TITLE = 'kaufklug.at - Angebote finden, merken und einfacher einkaufen'
+const TAB_TITLE = 'einfach sparen'
+const SEO_TITLE = 'kaufklug.at – Aktuelle Angebote finden und beim Einkauf sparen'
 const BASE_DESCRIPTION =
-  'Suche aktuelle Angebote, merke sie dir für deinen Einkauf und teile deine Einkaufsliste. kaufklug.at funktioniert im Browser und ist am Handy besonders praktisch.'
+  'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Suche nach Produkten, vergleiche Aktionen und merke Angebote für deine Einkaufsliste.'
 
 export function getPageMeta(activePage) {
   const pages = {
     search: {
-      title: 'Stöbern - kaufklug.at',
+      title: SEO_TITLE,
       description:
         'Stöbere nach Märkten und Kategorien und entdecke aktuelle Angebote für deinen Einkauf.',
       path: '/stoebern',
     },
     'product-search': {
-      title: BASE_TITLE,
+      title: SEO_TITLE,
       description: BASE_DESCRIPTION,
       path: '/suche',
     },
     'shopping-list': {
-      title: 'Einkaufsliste - kaufklug.at',
+      title: SEO_TITLE,
       description:
         'Merke Angebote für deinen Einkauf, organisiere deine Einkaufsliste und teile sie bei Bedarf per Link.',
       path: '/einkaufsliste',
     },
     'shared-shopping-list': {
-      title: 'Geteilte Einkaufsliste - kaufklug.at',
+      title: SEO_TITLE,
       description:
         'Eine mit kaufklug geteilte Einkaufsliste. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.',
       path: '/liste',
     },
     impressum: {
-      title: 'Impressum - kaufklug.at',
+      title: SEO_TITLE,
       description: 'Impressum und Betreiberinformationen zu kaufklug.at.',
       path: '/impressum',
     },
     privacy: {
-      title: 'Datenschutz - kaufklug.at',
+      title: SEO_TITLE,
       description: 'Datenschutzhinweise zu kaufklug.at, lokaler Speicherung und Nutzungsmessung.',
       path: '/datenschutz',
     },
     liability: {
-      title: 'Nutzungs- und Haftungshinweise - kaufklug.at',
+      title: SEO_TITLE,
       description:
         'Hinweise zur Nutzung von kaufklug.at als Orientierungshilfe für Angebotsinformationen.',
       path: '/nutzungshinweise',
     },
     cookies: {
-      title: 'Cookie- und Speicherhinweis - kaufklug.at',
+      title: SEO_TITLE,
       description: 'Informationen zu Cookies, lokaler Speicherung und Nutzungsmessung bei kaufklug.at.',
       path: '/cookies',
     },
     quality: {
-      title: 'Datenqualität - kaufklug.at',
+      title: SEO_TITLE,
       description: 'Interne Qualitätsansicht für kaufklug.at.',
       path: '/quality',
     },
     diagnostics: {
-      title: 'Interne KPI - kaufklug.at',
+      title: SEO_TITLE,
       description: 'Interner KPI- und Administrationsbereich für kaufklug.at.',
       path: '/ecily_web',
     },
@@ -154,8 +155,9 @@ export function updateSeoMetadata(activePage) {
   const isInternalPage = activePage === 'quality' || activePage === 'diagnostics'
   const isSharedListPage = activePage === 'shared-shopping-list'
 
-  document.title = meta.title
+  document.title = TAB_TITLE
 
+  setOrCreateMeta('name', 'title', meta.title)
   setOrCreateMeta('name', 'description', meta.description)
   setOrCreateMeta('name', 'robots', isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
   setOrCreateMeta('name', 'theme-color', '#f7f1e6')

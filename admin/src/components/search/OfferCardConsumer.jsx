@@ -182,6 +182,16 @@ function getConditionTexts(offer) {
   ]
 }
 
+function getCompactConditionText(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+
+  if (text.length <= 92) {
+    return text
+  }
+
+  return `${text.slice(0, 89).trim()}...`
+}
+
 export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList = false }) {
   const showUnitPrice = shouldDisplayUnitPrice(offer)
   const category = getShortCategory(offer)
@@ -227,15 +237,17 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
           </div>
         </div>
 
-        {conditions.length > 0 ? (
-          <div className="user-card__facts" aria-label="Wichtige Bedingungen">
-            {conditions.map((condition) => (
-              <span key={condition}>{condition}</span>
-            ))}
-          </div>
-        ) : null}
-
         <div className="user-card__decision">
+          {conditions.length > 0 ? (
+            <div className="user-card__conditions" aria-label="Wichtige Angebotsbedingungen">
+              {conditions.map((condition) => (
+                <span className="user-card__condition-chip" key={condition} title={condition} aria-label={`Bedingung: ${condition}`}>
+                  <strong>Bedingung:</strong> {getCompactConditionText(condition)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <div className="user-card__price">
             <div className="user-card__price-row">
               <strong>{formatPrice(currentPriceAmount, currentPriceCurrency)}</strong>
