@@ -73,13 +73,6 @@ export function SearchPage({
         label="kaufklug lädt Geschäfte, Kategorien und aktuelle Angebote."
       />
 
-      <section className="panel browse-intro">
-        <div className="browse-intro__copy">
-          <h1>St&ouml;bere nach M&auml;rkten und Angeboten</h1>
-          <p className="subtitle">W&auml;hle einen Markt oder eine Kategorie und entdecke aktuelle Angebote.</p>
-        </div>
-      </section>
-
       {error ? (
         <SectionCard style={{ marginBottom: '1rem' }}>
           <div className="error-box">
