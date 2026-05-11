@@ -29,6 +29,20 @@ const SORT_LABELS = {
 
 const INITIAL_MESSAGE = 'Suche ein Produkt und merke passende Angebote für deinen Einkauf.';
 const RETAILER_ORDER = ['billa', 'billa-plus', 'bipa', 'dm', 'hofer', 'lidl', 'pagro', 'penny', 'spar'];
+const RETAILER_COLORS = {
+  bipa: '#ec4f86',
+  billa: '#d63b2e',
+  'billa-plus': '#a51417',
+  dm: '#005b8f',
+  hofer: '#184a96',
+  lidl: '#f2bf00',
+  pagro: '#7a177e',
+  penny: '#d81920',
+  spar: '#19944a',
+};
+const RETAILER_TEXT_COLORS = {
+  lidl: '#173118',
+};
 
 function normalizeKey(value) {
   return String(value || '')
@@ -141,37 +155,40 @@ function firstPositiveNumber(candidates) {
   return 0;
 }
 
+function getRetailerColor(retailerKey) {
+  return RETAILER_COLORS[normalizeKey(retailerKey)] || '#31582c';
+}
+
+function getRetailerTextColor(retailerKey) {
+  return RETAILER_TEXT_COLORS[normalizeKey(retailerKey)] || '#ffffff';
+}
+
+function hexToRgba(hexColor, alpha) {
+  const hex = String(hexColor || '').replace('#', '');
+
+  if (!/^[0-9a-f]{6}$/i.test(hex)) {
+    return `rgba(49, 88, 44, ${alpha})`;
+  }
+
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 function getOfferSavingsScore(offer) {
+  if (offer?.referencePrice?.allowsSavings !== true) {
+    return 0;
+  }
+
   const directSavings = firstPositiveNumber([
-    offer?.savingsAmount,
-    offer?.savingAmount,
-    offer?.savingsAbsolute,
-    offer?.discountAmount,
     offer?.savings?.amount,
-    offer?.discount?.amount,
+    offer?.savingsAmount,
     offer?.priceSavings?.amount,
   ]);
 
   if (directSavings > 0) return directSavings;
-
-  const currentPrice = firstPositiveNumber([
-    offer?.price,
-    offer?.priceCurrent,
-    offer?.currentPrice,
-    offer?.offerPrice,
-  ]);
-  const oldPrice = firstPositiveNumber([
-    offer?.oldPrice,
-    offer?.regularPrice,
-    offer?.previousPrice,
-    offer?.priceBefore,
-    offer?.priceOriginal,
-    offer?.priceRegular,
-  ]);
-
-  if (oldPrice > currentPrice && currentPrice > 0) {
-    return oldPrice - currentPrice;
-  }
 
   return 0;
 }
@@ -481,10 +498,21 @@ export default function ProductSearchScreen({
                 return (
                   <Pressable
                     key={retailer.key}
-                    style={[styles.chip, selected ? styles.chipActive : null]}
+                    style={[
+                      styles.chip,
+                      {
+                        borderColor: hexToRgba(getRetailerColor(retailer.key), selected ? 0.72 : 0.22),
+                        backgroundColor: selected ? getRetailerColor(retailer.key) : hexToRgba(getRetailerColor(retailer.key), 0.1),
+                      },
+                    ]}
                     onPress={() => toggleRetailer(retailer.key)}
                   >
-                    <Text style={[styles.chipLabel, selected ? styles.chipLabelActive : null]}>
+                    <Text
+                      style={[
+                        styles.chipLabel,
+                        selected ? [styles.chipLabelActive, { color: getRetailerTextColor(retailer.key) }] : null,
+                      ]}
+                    >
                       {retailer.label}
                     </Text>
                   </Pressable>
@@ -759,6 +787,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 999,
     backgroundColor: '#efe9dc',
+    borderWidth: 1,
+    borderColor: 'rgba(49, 88, 44, 0.12)',
     paddingHorizontal: 13,
     paddingVertical: 10,
     justifyContent: 'center',

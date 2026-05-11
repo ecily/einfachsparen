@@ -29,7 +29,6 @@ import {
   getOfferCategoryLabel,
 } from './src/searchHelpers';
 
-const BRAND_NAME = 'kaufklug.at';
 const ECILY_URL = 'https://www.ecily.com';
 const ALPHA_APK_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha.apk';
 const ALPHA_VERSION_URL = 'https://stepsmatch.fra1.digitaloceanspaces.com/kaufklug/kaufklug_alpha_version.json';
@@ -188,23 +187,29 @@ function isUpdateReminderPaused(latestBuildNumber, dismissedReminder) {
 }
 
 function getReliableSavingsAmount(offer) {
-  const directSavings = Number(offer?.savingsAmount ?? offer?.savings?.amount);
+  if (offer?.referencePrice?.allowsSavings !== true) {
+    return 0;
+  }
+
+  const directSavings = Number(offer?.savings?.amount ?? offer?.savingsAmount ?? offer?.priceSavings?.amount);
 
   if (Number.isFinite(directSavings) && directSavings > 0) {
     return Number(directSavings.toFixed(2));
-  }
-
-  const currentAmount = Number(offer?.priceCurrent?.amount);
-  const referenceAmount = Number(offer?.referencePrice?.amount ?? offer?.priceReference?.amount);
-
-  if (Number.isFinite(currentAmount) && Number.isFinite(referenceAmount) && referenceAmount > currentAmount) {
-    return Number((referenceAmount - currentAmount).toFixed(2));
   }
 
   return 0;
 }
 
 function getReferenceInfo(offer) {
+  if (offer?.referencePrice?.allowsSavings !== true) {
+    return {
+      amount: 0,
+      type: 'none',
+      isApproximate: false,
+      labelPrefix: '',
+    };
+  }
+
   const currentAmount = Number(offer?.priceCurrent?.amount);
   const referenceAmount = Number(offer?.referencePrice?.amount ?? offer?.priceReference?.amount);
 
@@ -230,6 +235,15 @@ function getReferenceInfo(offer) {
 
 function hasReliableSavings(offer) {
   return getReliableSavingsAmount(offer) > 0;
+}
+
+function getSavingsPercent(offer) {
+  if (!hasReliableSavings(offer) || !getReferenceInfo(offer).amount) {
+    return 0;
+  }
+
+  const percent = Number(offer?.savings?.percent ?? offer?.savingsPercent);
+  return Number.isFinite(percent) && percent > 0 ? Math.round(percent) : 0;
 }
 
 function getShoppingQuantity(offer) {
@@ -357,6 +371,24 @@ function getRetailerColor(retailerKey) {
 function getRetailerTextColor(retailerKey) {
   const normalizedKey = String(retailerKey || '').toLowerCase().replace(/_/g, '-');
   return RETAILER_TEXT_COLORS[normalizedKey] || '#ffffff';
+}
+
+function hexToRgba(hexColor, alpha) {
+  const hex = String(hexColor || '').replace('#', '');
+
+  if (!/^[0-9a-f]{6}$/i.test(hex)) {
+    return `rgba(49, 88, 44, ${alpha})`;
+  }
+
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function getRetailerSoftColor(retailerKey, alpha = 0.14) {
+  return hexToRgba(getRetailerColor(retailerKey), alpha);
 }
 
 function flattenRankingOffers(ranking) {
@@ -774,30 +806,24 @@ function PriceTrustNote({ compact = false }) {
 function SavingsMessage({ offer, compact = false }) {
   const savingsAmount = getReliableSavingsAmount(offer);
   const referenceInfo = getReferenceInfo(offer);
+  const savingsPercent = getSavingsPercent(offer);
 
   if (savingsAmount > 0) {
     return (
-      <View style={[styles.savingsBox, compact ? styles.savingsBoxCompact : null]}>
-        <Text style={styles.savingsValue}>Du sparst {referenceInfo.isApproximate ? 'ca. ' : ''}{formatCurrency(savingsAmount, offer.priceCurrent?.currency)}</Text>
-        {!compact ? (
-          <Text style={styles.savingsDescription}>
-            {referenceInfo.isApproximate ? 'Aus Quellenangabe abgeleitete Ersparnis.' : 'Verglichen mit dem angegebenen Normalpreis.'}
-          </Text>
+      <View style={[styles.priceBadgeRow, compact ? styles.priceBadgeRowCompact : null]}>
+        {savingsPercent > 0 ? (
+          <Text style={styles.discountBadge}>-{savingsPercent} %</Text>
         ) : null}
+        <Text style={styles.savingsChip}>
+          Spart {referenceInfo.isApproximate ? 'ca. ' : ''}{formatCurrency(savingsAmount, offer.priceCurrent?.currency)}
+        </Text>
       </View>
     );
   }
 
-  if (compact) {
-    return null;
-  }
-
   return (
-    <View style={[styles.actionPriceBox, compact ? styles.savingsBoxCompact : null]}>
-      <Text style={styles.actionPriceTitle}>Aktionspreis</Text>
-      <Text style={styles.actionPriceText}>
-        Kein Normalpreis im Prospekt angegeben. Wir zeigen deshalb nur den Aktionspreis.
-      </Text>
+    <View style={[styles.priceBadgeRow, compact ? styles.priceBadgeRowCompact : null]}>
+      <Text style={styles.actionPriceBadge}>Aktionspreis</Text>
     </View>
   );
 }
@@ -984,10 +1010,16 @@ function OfferCard({ offer, isSelected, onToggleShoppingList, onOpenDetail }) {
     ? `${referenceInfo.labelPrefix} ${formatCurrency(referenceInfo.amount, offer.priceCurrent?.currency)}`
     : '';
   const readableQuantityText = getReadableQuantityText(offer);
+  const retailerAccent = getRetailerColor(offer.retailerKey);
+  const retailerSoftBorder = getRetailerSoftColor(offer.retailerKey, 0.28);
 
   return (
     <Pressable
-      style={[styles.offerCard, isCompact ? styles.offerCardCompact : null]}
+      style={[
+        styles.offerCard,
+        { borderColor: retailerSoftBorder, borderLeftColor: retailerAccent },
+        isCompact ? styles.offerCardCompact : null,
+      ]}
       onPress={() => onOpenDetail?.(offer)}
     >
       <OfferImage
@@ -1137,14 +1169,7 @@ function SearchResultsList({
         keyExtractor={(item, index) => String(item?.id || `empty-${index}`)}
         renderItem={null}
         ListHeaderComponent={hero}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Noch keine Suche gestartet</Text>
-            <Text style={styles.emptyText}>
-              Tippe auf Angebote anzeigen. Märkte und Kategorien kannst du optional eingrenzen.
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={null}
         contentContainerStyle={styles.content}
         stickySectionHeadersEnabled={false}
       />
@@ -1220,6 +1245,7 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
   const [shareState, setShareState] = useState({ status: 'idle', message: '' });
+  const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
   const groupedEntries = useMemo(
     () => groupShoppingListEntries(shoppingListEntries),
     [shoppingListEntries]
@@ -1232,6 +1258,17 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
     () => shoppingListEntries.reduce((sum, offer) => sum + getShoppingCurrentTotal(offer), 0),
     [shoppingListEntries]
   );
+  const knownSavingsCount = useMemo(
+    () => shoppingListEntries.filter(hasReliableSavings).length,
+    [shoppingListEntries]
+  );
+  const approximateSavingsCount = useMemo(
+    () => shoppingListEntries.filter((offer) => hasReliableSavings(offer) && getReferenceInfo(offer).isApproximate).length,
+    [shoppingListEntries]
+  );
+  const knownSavingsLabel = totalSavings > 0
+    ? approximateSavingsCount > 0 ? 'Bekannte Ersparnis ca.' : 'Bekannte Ersparnis'
+    : 'Noch keine bekannte Ersparnis';
 
   async function handleShareList() {
     try {
@@ -1277,6 +1314,16 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
     }
   }
 
+  function handleClearList() {
+    if (!clearConfirmVisible) {
+      setClearConfirmVisible(true);
+      return;
+    }
+
+    setClearConfirmVisible(false);
+    onClearList();
+  }
+
   if (groupedEntries.length === 0) {
     return (
       <ScrollView contentContainerStyle={styles.content}>
@@ -1299,17 +1346,48 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.shoppingHero}>
-        <Text style={styles.shoppingHeroTitle}>Einkaufsliste</Text>
-        <Text style={styles.shoppingHeroText}>
-          Deine gemerkten Angebote für den nächsten Einkauf.
-        </Text>
-        <Text style={styles.shoppingHeroCount}>{formatOfferCount(shoppingListEntries.length)} gemerkt</Text>
-      </View>
+      <View style={styles.shoppingCheck}>
+        <View style={styles.shoppingSaving}>
+          <Text style={styles.shoppingSavingLabel}>{knownSavingsLabel}</Text>
+          <Text style={styles.shoppingSavingValue}>
+            {totalSavings > 0 ? formatCurrency(totalSavings) : 'Aktionspreise'}
+          </Text>
+          <Text style={styles.shoppingSavingText}>
+            Wir zählen nur Ersparnisse, bei denen ein Vergleichspreis vorliegt.
+          </Text>
+        </View>
 
-      <View style={styles.summaryRow}>
-        <SummaryCard label="Aktionspreise gesamt" value={`ca. ${formatCurrency(totalCurrent)}`} accent />
-        <SummaryCard label="Bekannte Ersparnis" value={formatCurrency(totalSavings)} />
+        <View style={styles.shoppingFactWrap}>
+          <Text style={styles.shoppingFact}>{formatOfferCount(shoppingListEntries.length)}</Text>
+          <Text style={styles.shoppingFact}>
+            {groupedEntries.length} {groupedEntries.length === 1 ? 'Markt' : 'Märkte'}
+          </Text>
+          {knownSavingsCount > 0 ? (
+            <Text style={styles.shoppingFact}>{knownSavingsCount} mit bekannter Ersparnis</Text>
+          ) : null}
+          <Text style={styles.shoppingFact}>Aktionspreise ca. {formatCurrency(totalCurrent)}</Text>
+        </View>
+
+        <View style={styles.shoppingMarketWrap}>
+          {groupedEntries.map((group) => (
+            <Text
+              key={group.retailerKey}
+              style={[
+                styles.shoppingMarketPill,
+                {
+                  borderColor: getRetailerSoftColor(group.retailerKey, 0.32),
+                  backgroundColor: getRetailerSoftColor(group.retailerKey, 0.1),
+                },
+              ]}
+            >
+              {group.retailerName} · {group.offers.length}
+            </Text>
+          ))}
+        </View>
+
+        <Text style={styles.shoppingTrustNote}>
+          Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine Preisgarantie.
+        </Text>
       </View>
 
       <View style={styles.shoppingActions}>
@@ -1346,67 +1424,97 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
       </View>
 
       {groupedEntries.map((group) => (
-        <View key={group.retailerKey} style={styles.groupCard}>
+        <View
+          key={group.retailerKey}
+          style={[
+            styles.groupCard,
+            {
+              borderColor: getRetailerSoftColor(group.retailerKey, 0.28),
+              borderLeftColor: getRetailerColor(group.retailerKey),
+            },
+          ]}
+        >
           <View style={styles.groupHeader}>
             <View style={styles.groupHeaderText}>
               <Text style={styles.groupTitle}>{String(group.retailerName || '').toUpperCase()}</Text>
               <Text style={styles.groupSubtitle}>
                 {formatOfferCount(group.offers.length)} · Aktionspreise ca. {formatCurrency(group.currentTotal)}
+                {group.savingsTotal > 0 ? ` · bekannte Ersparnis ${formatCurrency(group.savingsTotal)}` : ''}
               </Text>
             </View>
             <Text style={styles.groupCount}>{group.offers.length}</Text>
           </View>
 
-          {group.offers.map((offer) => (
-            <View key={offer.id} style={[styles.listItemCard, isCompact ? styles.listItemCardCompact : null]}>
-              <View style={styles.listItemMain}>
-                <OfferImage
-                  offer={offer}
-                  sizeStyle={[styles.listItemImage, isCompact ? styles.listItemImageCompact : null]}
-                  placeholderStyle={[styles.listItemImageFallback, isCompact ? styles.listItemImageFallbackCompact : null]}
-                  placeholderTextStyle={styles.listItemImageFallbackText}
-                />
-                <View style={styles.listItemBody}>
-                  <Text style={styles.listItemTitle}>{offer.title}</Text>
-                  <Text style={styles.offerPriceSmall}>
-                    {formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}
-                    {getShoppingQuantity(offer) > 1 ? ` × ${getShoppingQuantity(offer)} = ca. ${formatCurrency(getShoppingCurrentTotal(offer), offer.priceCurrent?.currency)}` : ''}
-                  </Text>
-                  <View style={styles.metaWrap}>
-                    {formatValidityLabel(offer) ? (
-                      <View style={styles.metaPill}>
-                        <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
-                      </View>
-                    ) : null}
-                    {getReadableQuantityText(offer) ? (
-                      <View style={styles.metaPill}>
-                        <Text style={styles.metaPillLabel}>{getReadableQuantityText(offer)}</Text>
-                      </View>
-                    ) : null}
-                    {buildConditionBadges(offer).map((badge) => (
-                      <View key={badge} style={styles.conditionPill}>
-                        <Text style={styles.conditionPillLabel}>{badge}</Text>
-                      </View>
-                    ))}
+          {group.offers.map((offer) => {
+            const itemSavingsAmount = getReliableSavingsAmount(offer);
+            const itemReferenceInfo = getReferenceInfo(offer);
+            const unitPriceText = shouldDisplayUnitPrice(offer)
+              ? `${formatCurrency(offer.normalizedUnitPrice?.amount, offer.priceCurrent?.currency)}/${offer.normalizedUnitPrice?.unit}`
+              : '';
+
+            return (
+              <View key={offer.id} style={[styles.listItemCard, isCompact ? styles.listItemCardCompact : null]}>
+                <View style={styles.listItemMain}>
+                  <OfferImage
+                    offer={offer}
+                    sizeStyle={[styles.listItemImage, isCompact ? styles.listItemImageCompact : null]}
+                    placeholderStyle={[styles.listItemImageFallback, isCompact ? styles.listItemImageFallbackCompact : null]}
+                    placeholderTextStyle={styles.listItemImageFallbackText}
+                  />
+                  <View style={styles.listItemBody}>
+                    <Text style={styles.listItemTitle}>{offer.title}</Text>
+                    <View style={styles.listItemPriceBlock}>
+                      <Text style={styles.offerPriceSmall}>
+                        {formatCurrency(offer.priceCurrent?.amount, offer.priceCurrent?.currency)}
+                        {getShoppingQuantity(offer) > 1 ? ` × ${getShoppingQuantity(offer)} = ca. ${formatCurrency(getShoppingCurrentTotal(offer), offer.priceCurrent?.currency)}` : ''}
+                      </Text>
+                      <Text style={itemSavingsAmount > 0 ? styles.listItemSavingsKnown : styles.listItemSavingsAction}>
+                        {itemSavingsAmount > 0
+                          ? `Spart ${itemReferenceInfo.isApproximate ? 'ca. ' : ''}${formatCurrency(itemSavingsAmount, offer.priceCurrent?.currency)}`
+                          : 'Aktionspreis'}
+                      </Text>
+                    </View>
+                    <View style={styles.metaWrap}>
+                      {formatValidityLabel(offer) ? (
+                        <View style={styles.metaPill}>
+                          <Text style={styles.metaPillLabel}>{formatValidityLabel(offer)}</Text>
+                        </View>
+                      ) : null}
+                      {getReadableQuantityText(offer) ? (
+                        <View style={styles.metaPill}>
+                          <Text style={styles.metaPillLabel}>{getReadableQuantityText(offer)}</Text>
+                        </View>
+                      ) : null}
+                      {unitPriceText ? (
+                        <View style={styles.metaPill}>
+                          <Text style={styles.metaPillLabel}>{unitPriceText}</Text>
+                        </View>
+                      ) : null}
+                      {buildConditionBadges(offer).map((badge) => (
+                        <View key={badge} style={styles.conditionPill}>
+                          <Text style={styles.conditionPillLabel}>{badge}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
                 </View>
+                <View style={[styles.listItemActions, isCompact ? styles.listItemActionsCompact : null]}>
+                  <Pressable
+                    style={({ pressed }) => [styles.removeButton, pressed ? styles.pressedButton : null]}
+                    onPress={() => onRemove(offer.id)}
+                    hitSlop={6}
+                  >
+                    <Text style={styles.removeButtonLabel}>Entfernen</Text>
+                  </Pressable>
+                  <QuantityControl
+                    quantity={getShoppingQuantity(offer)}
+                    onDecrease={() => onQuantityChange(offer.id, -1)}
+                    onIncrease={() => onQuantityChange(offer.id, 1)}
+                  />
+                </View>
               </View>
-              <View style={[styles.listItemActions, isCompact ? styles.listItemActionsCompact : null]}>
-                <Pressable
-                  style={({ pressed }) => [styles.removeButton, pressed ? styles.pressedButton : null]}
-                  onPress={() => onRemove(offer.id)}
-                  hitSlop={6}
-                >
-                  <Text style={styles.removeButtonLabel}>Entfernen</Text>
-                </Pressable>
-                <QuantityControl
-                  quantity={getShoppingQuantity(offer)}
-                  onDecrease={() => onQuantityChange(offer.id, -1)}
-                  onIncrease={() => onQuantityChange(offer.id, 1)}
-                />
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       ))}
 
@@ -1420,10 +1528,12 @@ function ShoppingListPage({ shoppingListEntries, onRemove, onBrowse, onClearList
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.secondaryWideButton, pressed ? styles.pressedButton : null]}
-          onPress={onClearList}
+          onPress={handleClearList}
           hitSlop={6}
         >
-          <Text style={styles.secondaryWideButtonLabel}>Liste leeren</Text>
+          <Text style={styles.secondaryWideButtonLabel}>
+            {clearConfirmVisible ? 'Wirklich leeren?' : 'Liste leeren'}
+          </Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -1903,22 +2013,6 @@ export default function App() {
 
   const searchHeader = (
     <>
-      <View style={styles.heroCard}>
-        <Text style={styles.eyebrow}>{BRAND_NAME}</Text>
-        <Text style={styles.title}>Einfach klug einkaufen.</Text>
-        <Text style={styles.subtitle}>
-          Wähle deine Geschäfte und was du einkaufen möchtest. kaufklug.at zeigt dir aktuelle Angebote aus Prospekten
-          und Aktionen - einfach, verständlich und ohne Prospekt-Chaos.
-        </Text>
-        <View style={styles.benefitGrid}>
-          {['Aktuelle Aktionen', 'Einfach auswählen', 'Einkaufsliste', 'Ehrliche Ersparnis'].map((item) => (
-            <View key={item} style={styles.benefitPill}>
-              <Text style={styles.benefitPillText}>{item}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
       <View style={styles.flowCard}>
         <StepHeader
           step="1. Geschäfte wählen"
@@ -2099,31 +2193,6 @@ export default function App() {
         <Pressable
           style={({ pressed }) => [
             styles.topMenuButton,
-            activePage === 'shopping' ? styles.topMenuButtonActive : null,
-            pressed ? styles.topMenuButtonPressed : null,
-          ]}
-          onPress={() => setActivePage('shopping')}
-          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-        >
-          <Text
-            style={[styles.topMenuLabel, activePage === 'shopping' ? styles.topMenuLabelActive : null]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.82}
-          >
-            Einkaufsliste
-          </Text>
-          {shoppingListEntries.length > 0 ? (
-            <View style={[styles.topMenuBadge, activePage === 'shopping' ? styles.topMenuBadgeActive : null]}>
-              <Text style={[styles.topMenuBadgeLabel, activePage === 'shopping' ? styles.topMenuBadgeLabelActive : null]}>
-                {shoppingListEntries.length}
-              </Text>
-            </View>
-          ) : null}
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.topMenuButton,
             activePage === 'offers' ? styles.topMenuButtonActive : null,
             pressed ? styles.topMenuButtonPressed : null,
           ]}
@@ -2138,6 +2207,31 @@ export default function App() {
           >
             Stöbern
           </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.topMenuButton,
+            activePage === 'shopping' ? styles.topMenuButtonActive : null,
+            pressed ? styles.topMenuButtonPressed : null,
+          ]}
+          onPress={() => setActivePage('shopping')}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+        >
+          <Text
+            style={[styles.topMenuLabel, activePage === 'shopping' ? styles.topMenuLabelActive : null]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+          >
+            Liste
+          </Text>
+          {shoppingListEntries.length > 0 ? (
+            <View style={[styles.topMenuBadge, activePage === 'shopping' ? styles.topMenuBadgeActive : null]}>
+              <Text style={[styles.topMenuBadgeLabel, activePage === 'shopping' ? styles.topMenuBadgeLabelActive : null]}>
+                {shoppingListEntries.length}
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -2345,7 +2439,21 @@ const styles = StyleSheet.create({
   resultSectionHeader: { backgroundColor: '#f4efe5', paddingTop: 6, paddingBottom: 4, gap: 3 },
   resultSectionTitle: { color: '#132014', fontSize: 18, lineHeight: 24, fontWeight: '900' },
   resultSectionSubtitle: { color: '#5e685d', fontSize: 13, lineHeight: 18 },
-  offerCard: { flexDirection: 'row', gap: 10, backgroundColor: '#fffaf2', borderRadius: 20, padding: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  offerCard: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#fffaf2',
+    borderRadius: 20,
+    padding: 12,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+    borderColor: 'rgba(19, 32, 20, 0.08)',
+    shadowColor: '#2d2417',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 2,
+  },
   offerCardCompact: { flexDirection: 'column' },
   offerImage: { width: 82, height: 82, borderRadius: 14, backgroundColor: '#fff' },
   offerImageCompact: { width: '100%', height: 136 },
@@ -2372,6 +2480,47 @@ const styles = StyleSheet.create({
   offerPrice: { color: '#173118', fontSize: 24, lineHeight: 30, fontWeight: '900' },
   offerPriceSmall: { color: '#173118', fontSize: 18, fontWeight: '900' },
   offerMeta: { color: '#59635a', fontSize: 13 },
+  priceBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 7, marginTop: 1 },
+  priceBadgeRowCompact: { marginTop: 0 },
+  discountBadge: {
+    minHeight: 28,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#e7f0da',
+    borderWidth: 1,
+    borderColor: 'rgba(49, 88, 44, 0.16)',
+    color: '#173118',
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '900',
+  },
+  savingsChip: {
+    minHeight: 28,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#e9f6db',
+    borderWidth: 1,
+    borderColor: 'rgba(49, 88, 44, 0.14)',
+    color: '#24451f',
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '900',
+  },
+  actionPriceBadge: {
+    minHeight: 28,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#fff4d9',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 139, 25, 0.16)',
+    color: '#7b530f',
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '900',
+  },
   metaWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   metaPill: { backgroundColor: '#efe8da', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   metaPillWide: { maxWidth: '100%', backgroundColor: '#e7f0da', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
@@ -2412,8 +2561,30 @@ const styles = StyleSheet.create({
   shoppingHeroTitle: { color: '#132014', fontSize: 22, lineHeight: 28, fontWeight: '900' },
   shoppingHeroText: { color: '#5f685e', fontSize: 14, lineHeight: 20 },
   shoppingHeroCount: { alignSelf: 'flex-start', backgroundColor: '#e9f6db', color: '#244320', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, fontSize: 12, lineHeight: 16, fontWeight: '900' },
+  shoppingCheck: {
+    backgroundColor: '#fffaf2',
+    borderRadius: 22,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(19, 32, 20, 0.08)',
+    shadowColor: '#2d2417',
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 2,
+  },
+  shoppingSaving: { gap: 5 },
+  shoppingSavingLabel: { color: '#31582c', fontSize: 12, lineHeight: 16, fontWeight: '900', textTransform: 'uppercase' },
+  shoppingSavingValue: { color: '#173118', fontSize: 28, lineHeight: 34, fontWeight: '900' },
+  shoppingSavingText: { color: '#4f594e', fontSize: 13, lineHeight: 19 },
+  shoppingFactWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  shoppingFact: { backgroundColor: '#eef6e5', color: '#244320', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, lineHeight: 16, fontWeight: '900' },
+  shoppingMarketWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  shoppingMarketPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, color: '#263523', fontSize: 12, lineHeight: 16, fontWeight: '800' },
+  shoppingTrustNote: { color: '#6a5b36', backgroundColor: '#fff6dd', borderRadius: 14, padding: 11, fontSize: 13, lineHeight: 18, fontWeight: '800' },
   shoppingHint: { color: '#7c520c', backgroundColor: '#fff6dd', borderRadius: 14, padding: 12, fontSize: 13, lineHeight: 18, fontWeight: '800' },
-  groupCard: { backgroundColor: '#fffaf2', borderRadius: 20, padding: 14, gap: 12, borderWidth: 1, borderColor: 'rgba(19, 32, 20, 0.08)' },
+  groupCard: { backgroundColor: '#fffaf2', borderRadius: 20, padding: 14, gap: 12, borderWidth: 1, borderLeftWidth: 4, borderColor: 'rgba(19, 32, 20, 0.08)' },
   groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   groupHeaderText: { flex: 1, gap: 2 },
   groupTitle: { color: '#132014', fontSize: 18, lineHeight: 24, fontWeight: '900' },
@@ -2429,6 +2600,9 @@ const styles = StyleSheet.create({
   listItemImageFallbackText: { color: '#31582c', fontSize: 11, fontWeight: '900', textAlign: 'center' },
   listItemBody: { flex: 1, gap: 7 },
   listItemTitle: { color: '#152315', fontSize: 15, lineHeight: 20, fontWeight: '800' },
+  listItemPriceBlock: { gap: 4, alignItems: 'flex-start' },
+  listItemSavingsKnown: { color: '#24451f', backgroundColor: '#e9f6db', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, fontSize: 12, lineHeight: 15, fontWeight: '900' },
+  listItemSavingsAction: { color: '#7b530f', backgroundColor: '#fff4d9', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, fontSize: 12, lineHeight: 15, fontWeight: '900' },
   listItemActions: { width: 116, gap: 8, alignSelf: 'stretch' },
   listItemActionsCompact: { width: '100%', flexDirection: 'row', alignItems: 'stretch' },
   removeButton: { backgroundColor: '#efe5da', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 11, minHeight: 46, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
