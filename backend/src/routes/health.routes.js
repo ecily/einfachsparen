@@ -1,6 +1,7 @@
 const express = require('express');
 const env = require('../config/env');
 const { getDatabaseState } = require('../config/mongodb');
+const { buildSafeBuildInfo } = require('../services/buildInfo');
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ router.get('/', (req, res) => {
     ok: true,
     status: 'ok',
     database,
+    build: buildSafeBuildInfo(),
     now: new Date().toISOString(),
     ...(env.NODE_ENV === 'production'
       ? {}
