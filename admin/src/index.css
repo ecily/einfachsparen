@@ -2131,33 +2131,11 @@ a {
   justify-self: start;
 }
 
-.shopping-list-hero__topline,
 .shopping-list-empty-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
-}
-
-.shopping-list-hero__topline {
-  justify-content: space-between;
-}
-
-.shopping-list-hero__topline .eyebrow {
-  margin: 0;
-}
-
-.shopping-list-hero__topline span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2rem;
-  padding: 0.34rem 0.68rem;
-  border-radius: 999px;
-  background: rgba(233, 247, 223, 0.9);
-  border: 1px solid rgba(49, 94, 42, 0.14);
-  color: #24451f;
-  font-size: 0.88rem;
-  font-weight: 850;
 }
 
 .shopping-list-hero--empty {
@@ -3364,12 +3342,6 @@ textarea:focus {
 }
 
 @media (max-width: 520px) {
-  .shopping-list-hero__topline {
-    align-items: flex-start;
-    display: grid;
-    justify-content: stretch;
-  }
-
   .shopping-list-empty-actions {
     display: grid;
     grid-template-columns: 1fr;

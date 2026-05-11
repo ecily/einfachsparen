@@ -90,10 +90,6 @@ function normalizeRetailerName(value) {
   return knownNames[normalized] || name
 }
 
-function getItemCountText(count) {
-  return `${count} ${count === 1 ? 'Angebot' : 'Angebote'}`
-}
-
 function getArticleCountText(count) {
   return `${count} ${count === 1 ? 'Artikel' : 'Artikel'}`
 }
@@ -394,17 +390,6 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
 
   return (
     <>
-      <SectionCard style={{ marginBottom: '1rem' }}>
-        <div className="shopping-list-hero">
-          <div className="shopping-list-hero__topline">
-            <p className="eyebrow">Einkaufsliste</p>
-            <span>{getItemCountText(shoppingListItems.length)} gemerkt</span>
-          </div>
-          <h1>Einkaufsliste</h1>
-          <p>Deine gemerkten Angebote für den nächsten Einkauf.</p>
-        </div>
-      </SectionCard>
-
       <section className="shopping-check" aria-labelledby="shopping-check-title">
         <div className="shopping-check__saving">
           <span id="shopping-check-title">{knownSavingsLabel}</span>
