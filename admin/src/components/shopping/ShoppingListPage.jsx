@@ -4,6 +4,7 @@ import { ProductImage } from '../layout/ProductImage'
 import { SectionCard } from '../layout/SectionCard'
 import { formatUnitPrice } from '../../utils/formatting'
 import { shouldDisplayUnitPrice } from '../../utils/offers'
+import { getRetailerTheme } from '../../utils/retailerColors'
 import {
   buildShareSnapshot,
   getRetailerGroupSummary,
@@ -93,6 +94,10 @@ function getItemCountText(count) {
   return `${count} ${count === 1 ? 'Angebot' : 'Angebote'}`
 }
 
+function getArticleCountText(count) {
+  return `${count} ${count === 1 ? 'Artikel' : 'Artikel'}`
+}
+
 function getQuantityText(item) {
   const rawValue = String(item?.quantityText || '').trim()
   const unknownPattern = new RegExp(['nicht', 'erkannt'].join(' '), 'i')
@@ -157,6 +162,28 @@ function getConditionText(item) {
   return ''
 }
 
+function normalizeFactText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function buildItemFacts({ conditionText, quantityText, rawConditionText, showUnitPrice, item, validityText }) {
+  const facts = []
+  const rawCondition = normalizeFactText(rawConditionText)
+  const displayCondition = rawCondition || conditionText
+
+  if (quantityText) facts.push({ key: 'quantity', label: quantityText, tone: 'neutral' })
+  if (showUnitPrice) facts.push({ key: 'unit-price', label: formatUnitPrice(item.normalizedUnitPrice), tone: 'neutral' })
+  if (validityText) facts.push({ key: 'validity', label: validityText, tone: 'date' })
+  if (displayCondition) facts.push({ key: 'condition', label: displayCondition, tone: 'condition' })
+  const seen = new Set()
+  return facts.filter((fact) => {
+    const normalized = normalizeFactText(fact.label).toLowerCase()
+    if (!normalized || seen.has(normalized)) return false
+    seen.add(normalized)
+    return true
+  })
+}
+
 function loadStoredQuantities() {
   if (typeof window === 'undefined') return {}
 
@@ -206,27 +233,67 @@ function getKnownSavingsTotal(items, quantities) {
   }, 0)
 }
 
+function getApproximateSavingsCount(items = []) {
+  return (items || []).filter((item) => {
+    const savings = getShoppingListItemSavingsInfo(item)
+    return savings.type === 'known' && savings.isApproximate
+  }).length
+}
+
+function getRetailerDistribution(groups = []) {
+  return groups.map((group) => ({
+    label: normalizeRetailerName(group.retailerName),
+    count: group.items.length,
+    theme: getRetailerTheme(group.retailerKey || group.retailerName),
+  }))
+}
+
+function getSavingsDisplayLabel({ approximateCount, knownSavingsTotal }) {
+  if (knownSavingsTotal <= 0) {
+    return 'Noch keine bekannte Ersparnis'
+  }
+
+  return approximateCount > 0 ? 'Bekannte Ersparnis ca.' : 'Bekannte Ersparnis'
+}
+
+function getMarketSummaryText({ groupSummary, knownSavingsTotal, approximateCount }) {
+  const articleText = getArticleCountText(groupSummary.itemCount)
+
+  if (knownSavingsTotal > 0) {
+    const savingsLabel = approximateCount > 0 ? 'bekannte Ersparnis ca.' : 'bekannte Ersparnis'
+    return `${articleText} · ${savingsLabel} ${formatPrice(knownSavingsTotal)}`
+  }
+
+  return `${articleText} · Aktionspreise`
+}
+
 function hasKnownCurrentPrice(items = []) {
   return (items || []).some((item) => Number.isFinite(Number(item?.priceCurrent?.amount)))
 }
 
-export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers }) {
+export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers, onNavigate }) {
   const [checkedItemIds, setCheckedItemIds] = useState(() => loadCheckedShoppingListItems())
   const [hideCompleted, setHideCompleted] = useState(false)
   const [shareState, setShareState] = useState({ status: 'idle', message: '' })
   const [quantities, setQuantities] = useState(() => loadStoredQuantities())
+  const [clearConfirmVisible, setClearConfirmVisible] = useState(false)
   const visibleItems = useMemo(
     () => (hideCompleted ? shoppingListItems.filter((item) => !checkedItemIds.has(getShoppingListItemId(item))) : shoppingListItems),
     [checkedItemIds, hideCompleted, shoppingListItems]
   )
   const groupedItems = useMemo(() => groupShoppingListByRetailer(visibleItems), [visibleItems])
-  const allRetailerCount = useMemo(() => groupShoppingListByRetailer(shoppingListItems).length, [shoppingListItems])
+  const allGroups = useMemo(() => groupShoppingListByRetailer(shoppingListItems), [shoppingListItems])
+  const allRetailerCount = allGroups.length
+  const retailerDistribution = useMemo(() => getRetailerDistribution(allGroups), [allGroups])
   const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
   const offerTotal = useMemo(() => getItemsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const canShowOfferTotal = useMemo(() => hasKnownCurrentPrice(shoppingListItems), [shoppingListItems])
   const canShowKnownSavings = summary.knownSavingsCount > 0 && knownSavingsTotal > 0
-  const knownSavingsLabel = summary.approximateSavingsCount > 0 ? 'Bekannte Ersparnis ca.' : 'Bekannte Ersparnis'
+  const knownSavingsLabel = getSavingsDisplayLabel({
+    approximateCount: summary.approximateSavingsCount,
+    knownSavingsTotal,
+  })
   const hasMissingSavings = summary.knownSavingsCount < shoppingListItems.length
 
   useEffect(() => {
@@ -261,6 +328,16 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
         [itemId]: Math.max(1, Math.min(nextQuantity, 99)),
       }
     })
+  }
+
+  function handleClearClick() {
+    if (!clearConfirmVisible) {
+      setClearConfirmVisible(true)
+      return
+    }
+
+    setClearConfirmVisible(false)
+    onClearList()
   }
 
   async function handleShareList() {
@@ -298,13 +375,18 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
   if (!shoppingListItems.length) {
     return (
       <SectionCard style={{ marginBottom: '1rem' }}>
-        <div className="shopping-list-hero">
+        <div className="shopping-list-hero shopping-list-hero--empty">
           <p className="eyebrow">Einkaufsliste</p>
-          <h1>Deine Einkaufsliste ist noch leer.</h1>
-          <p>Suche Angebote und merke sie dir für deinen Einkauf.</p>
-          <button type="button" className="primary-action-button" onClick={onGoToOffers}>
-            Angebote suchen
-          </button>
+          <h1>Noch keine Angebote gemerkt.</h1>
+          <p>Suche nach Produkten oder stöbere nach Märkten und füge Angebote deiner Einkaufsliste hinzu.</p>
+          <div className="shopping-list-empty-actions">
+            <button type="button" className="primary-action-button" onClick={onGoToOffers}>
+              Angebote suchen
+            </button>
+            <button type="button" className="ghost-button" onClick={() => onNavigate?.('search')}>
+              Märkte stöbern
+            </button>
+          </div>
         </div>
       </SectionCard>
     )
@@ -314,39 +396,61 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
     <>
       <SectionCard style={{ marginBottom: '1rem' }}>
         <div className="shopping-list-hero">
-          <p className="eyebrow">{getItemCountText(shoppingListItems.length)} gemerkt</p>
+          <div className="shopping-list-hero__topline">
+            <p className="eyebrow">Einkaufsliste</p>
+            <span>{getItemCountText(shoppingListItems.length)} gemerkt</span>
+          </div>
           <h1>Einkaufsliste</h1>
           <p>Deine gemerkten Angebote für den nächsten Einkauf.</p>
         </div>
       </SectionCard>
 
       <section className="shopping-check" aria-labelledby="shopping-check-title">
-        <div className="shopping-check__copy">
-          <h2 id="shopping-check-title">Einkaufscheck</h2>
-          <span>So ist dein Einkauf aktuell verteilt.</span>
+        <div className="shopping-check__saving">
+          <span id="shopping-check-title">{knownSavingsLabel}</span>
+          <strong>{canShowKnownSavings ? formatPrice(knownSavingsTotal) : 'Aktionspreise'}</strong>
           <p>
-            {allRetailerCount === 1
-              ? 'Deine Liste liegt aktuell bei einem Markt.'
-              : `Deine Liste ist auf ${allRetailerCount} Märkte verteilt.`}
+            {canShowKnownSavings
+              ? 'Wir zählen nur Ersparnisse, bei denen ein Vergleichspreis vorliegt.'
+              : 'Angebote ohne Vergleichspreis zählen wir nicht zur Ersparnis.'}
           </p>
-          {allRetailerCount === 1 ? <span>Das ist bereits einfach geplant.</span> : null}
         </div>
 
         <div className="shopping-check__facts">
-          <span>{shoppingListItems.length} Artikel gemerkt</span>
-          {canShowOfferTotal ? <span>Gemerkte Angebote ca. {formatPrice(offerTotal)}</span> : null}
-          {canShowKnownSavings ? <span>{knownSavingsLabel} {formatPrice(knownSavingsTotal)}</span> : null}
+          <span>{getArticleCountText(shoppingListItems.length)}</span>
+          <span>
+            {allRetailerCount} {allRetailerCount === 1 ? 'Markt' : 'Märkte'}
+          </span>
+          {summary.knownSavingsCount > 0 ? <span>{summary.knownSavingsCount} mit bekannter Ersparnis</span> : null}
+          {canShowOfferTotal ? <span>Aktionspreise ca. {formatPrice(offerTotal)}</span> : null}
         </div>
 
-        {canShowKnownSavings || hasMissingSavings ? (
-          <p className="shopping-check__soft-note">Die Summe berücksichtigt nur Angebote mit belastbarer Vergleichsbasis.</p>
+        {retailerDistribution.length > 0 ? (
+          <div className="shopping-check__markets" aria-label="Märkte auf deiner Liste">
+            {retailerDistribution.map((retailer) => (
+              <span
+                key={retailer.label}
+                style={{
+                  '--retailer-color': retailer.theme.color,
+                  '--retailer-border-color': retailer.theme.borderColor,
+                  '--retailer-soft-color': retailer.theme.softColor,
+                }}
+              >
+                {retailer.label} · {retailer.count}
+              </span>
+            ))}
+          </div>
         ) : null}
-        <p className="shopping-check__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
+
+        {canShowKnownSavings || hasMissingSavings ? (
+          <p className="shopping-check__soft-note">Angebote ohne Vergleichspreis zählen wir nicht zur Ersparnis.</p>
+        ) : null}
+        <p className="shopping-check__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine Preisgarantie.</p>
       </section>
 
       <div className="shopping-list-actions">
-        <button type="button" className="ghost-button" onClick={onGoToOffers}>
-          Angebote suchen
+        <button type="button" className="primary-action-button" onClick={onGoToOffers}>
+          Weitere Angebote suchen
         </button>
         <button type="button" className="ghost-button" onClick={handleShareList} disabled={shareState.status === 'loading'}>
           {shareState.status === 'loading' ? 'Liste wird geteilt ...' : 'Liste teilen'}
@@ -354,8 +458,8 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
         <button type="button" className="ghost-button" onClick={() => setHideCompleted((current) => !current)}>
           {hideCompleted ? 'Erledigte anzeigen' : 'Erledigte ausblenden'}
         </button>
-        <button type="button" className="ghost-button ghost-button--danger" onClick={onClearList}>
-          Liste leeren
+        <button type="button" className="ghost-button ghost-button--danger shopping-list-actions__danger" onClick={handleClearClick}>
+          {clearConfirmVisible ? 'Wirklich leeren?' : 'Liste leeren'}
         </button>
       </div>
 
@@ -364,22 +468,39 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
       ) : null}
 
       {hideCompleted && visibleItems.length === 0 ? (
-        <div className="shopping-list-note">Alle Angebote sind erledigt. Du kannst erledigte Angebote wieder anzeigen.</div>
+        <div className="shopping-list-note">Erledigte Angebote sind ausgeblendet. Du kannst sie jederzeit wieder anzeigen.</div>
       ) : null}
 
       <div className="shopping-market-groups">
         {groupedItems.map((group) => {
           const groupSummary = getRetailerGroupSummary(group.items)
-          const groupTotal = getItemsTotal(group.items, quantities)
+          const groupKnownSavingsTotal = getKnownSavingsTotal(group.items, quantities)
+          const groupApproximateSavingsCount = getApproximateSavingsCount(group.items)
+          const retailerTheme = getRetailerTheme(group.retailerKey || group.retailerName)
 
           return (
-            <section key={group.retailerKey} className="shopping-market-group">
+            <section
+              key={group.retailerKey}
+              className="shopping-market-group"
+              style={{
+                '--retailer-color': retailerTheme.color,
+                '--retailer-border-color': retailerTheme.borderColor,
+                '--retailer-soft-color': retailerTheme.softColor,
+                '--retailer-glow-color': retailerTheme.glowColor,
+              }}
+            >
               <div className="shopping-market-group__header">
-                <h2>{normalizeRetailerName(group.retailerName)}</h2>
-                <span>
-                  {getItemCountText(groupSummary.itemCount)}
-                  {groupTotal > 0 ? ` · Aktionspreise ca. ${formatPrice(groupTotal)}` : ''}
-                </span>
+                <div>
+                  <h2>{normalizeRetailerName(group.retailerName)}</h2>
+                  <span>Einkaufsabschnitt</span>
+                </div>
+                <strong>
+                  {getMarketSummaryText({
+                    groupSummary,
+                    knownSavingsTotal: groupKnownSavingsTotal,
+                    approximateCount: groupApproximateSavingsCount,
+                  })}
+                </strong>
               </div>
 
               <div className="shopping-list-items">
@@ -392,6 +513,14 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                   const conditionText = getConditionText(item)
                   const quantityText = getQuantityText(item)
                   const savingsInfo = getShoppingListItemSavingsInfo(item)
+                  const facts = buildItemFacts({
+                    conditionText,
+                    item,
+                    quantityText,
+                    rawConditionText: item.conditionsText,
+                    showUnitPrice,
+                    validityText,
+                  })
 
                   return (
                     <article key={itemId} className={`shopping-list-item${isChecked ? ' shopping-list-item--checked' : ''}`}>
@@ -410,62 +539,48 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                       <div className="shopping-list-item__content">
                         <div className="shopping-list-item__main">
                           <div>
-                            <p className="shopping-list-item__category">{item.categoryLabel || 'Angebot'}</p>
+                            <p className="shopping-list-item__category">
+                              {normalizeRetailerName(item.retailerName)} · {item.categoryLabel || 'Angebot'}
+                            </p>
                             <h3>{item.title}</h3>
                           </div>
 
-                          <strong className="shopping-list-item__price">
-                            {formatPrice(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
-                          </strong>
+                          <div className="shopping-list-item__price-block">
+                            <strong className="shopping-list-item__price">
+                              {formatPrice(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
+                            </strong>
+                            <span>
+                              {savingsInfo.type === 'known'
+                                ? `${savingsInfo.isApproximate ? 'Spart ca.' : 'Spart'} ${formatPrice(savingsInfo.amount)}`
+                                : 'Aktionspreis'}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="shopping-list-item__facts">
-                          {quantityText ? <span>{quantityText}</span> : null}
-                          {validityText ? <span>{validityText}</span> : null}
-                          {conditionText ? <span>{conditionText}</span> : null}
-                          {showUnitPrice ? <span>{formatUnitPrice(item.normalizedUnitPrice)}</span> : null}
-                          {savingsInfo.type === 'known' ? (
-                            <span>
-                              Spart {savingsInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsInfo.amount)}
+                          {facts.map((fact) => (
+                            <span key={fact.key} className={`shopping-list-item__fact shopping-list-item__fact--${fact.tone}`}>
+                              {fact.label}
                             </span>
-                          ) : (
-                            <span>Aktionspreis</span>
-                          )}
+                          ))}
                         </div>
 
-                        <div
-                          style={{
-                            alignItems: 'center',
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: '0.6rem',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <div
-                            aria-label={`Menge für ${item.title}`}
-                            style={{
-                              alignItems: 'center',
-                              display: 'inline-flex',
-                              gap: '0.45rem',
-                            }}
-                          >
+                        <div className="shopping-list-item__controls">
+                          <div className="shopping-list-item__quantity" aria-label={`Menge für ${item.title}`}>
                             <button
                               type="button"
-                              className="ghost-button"
+                              className="shopping-list-item__quantity-button"
                               aria-label="Menge verringern"
                               onClick={() => handleQuantityChange(itemId, 'decrease')}
-                              style={{ minHeight: '2.6rem', minWidth: '2.6rem', padding: 0 }}
                             >
                               -
                             </button>
-                            <strong style={{ minWidth: '2rem', textAlign: 'center' }}>{quantity}</strong>
+                            <strong>{quantity}</strong>
                             <button
                               type="button"
-                              className="ghost-button"
+                              className="shopping-list-item__quantity-button"
                               aria-label="Menge erhöhen"
                               onClick={() => handleQuantityChange(itemId, 'increase')}
-                              style={{ minHeight: '2.6rem', minWidth: '2.6rem', padding: 0 }}
                             >
                               +
                             </button>
