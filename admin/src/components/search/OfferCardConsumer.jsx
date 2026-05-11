@@ -240,6 +240,13 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
             <div className="user-card__price-row">
               <strong>{formatPrice(currentPriceAmount, currentPriceCurrency)}</strong>
               {hasSavings && savingsPercent > 0 ? <span className="user-card__discount-badge">-{savingsPercent} %</span> : null}
+              {hasSavings ? (
+                <span className="user-card__savings-chip">
+                  Spart {referenceInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsAmount, currentPriceCurrency)}
+                </span>
+              ) : (
+                <span className="user-card__action-price-badge">Aktionspreis</span>
+              )}
             </div>
             {referenceInfo.amount ? (
               <span className="user-card__reference-price">
@@ -250,25 +257,16 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
           </div>
         </div>
 
-        {hasSavings ? (
-          <div className="offer-savings-box offer-savings-box--known">
-            <strong>Spart {referenceInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsAmount, currentPriceCurrency)}</strong>
-          </div>
-        ) : (
-          <div className="offer-savings-box offer-savings-box--action">
-            <strong>Aktionspreis</strong>
-            <span>Preise und Bedingungen bitte im Markt prüfen.</span>
-          </div>
-        )}
-
-        <button
-          type="button"
-          className={`shopping-list-button ${isInShoppingList ? 'shopping-list-button--added' : ''}`}
-          onClick={() => onAddToShoppingList?.(offer)}
-          disabled={isInShoppingList}
-        >
-          {isInShoppingList ? 'Gemerkt' : 'Merken'}
-        </button>
+        <div className="user-card__actions">
+          <button
+            type="button"
+            className={`shopping-list-button ${isInShoppingList ? 'shopping-list-button--added' : ''}`}
+            onClick={() => onAddToShoppingList?.(offer)}
+            disabled={isInShoppingList}
+          >
+            {isInShoppingList ? 'Auf der Einkaufsliste' : 'Auf die Einkaufsliste'}
+          </button>
+        </div>
       </div>
     </article>
   )

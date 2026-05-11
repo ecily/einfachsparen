@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchKeywordOfferSearch } from '../../utils/apiBase'
 import { trackAnalyticsEvent } from '../../utils/analytics'
 import { flattenRankingOffers, getOfferStableId, getSavingsValue, normalizeRetailerKey } from '../../utils/offers'
@@ -117,6 +117,7 @@ function buildAvailableRetailers(retailers) {
 }
 
 export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListIds, onAddToShoppingList }) {
+  const resultsHeadingRef = useRef(null)
   const [queryInput, setQueryInput] = useState(() => getInitialKeywordQuery())
   const [submittedQuery, setSubmittedQuery] = useState(() => {
     const initialQuery = getInitialKeywordQuery().trim()
@@ -132,6 +133,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     const initialQuery = getInitialKeywordQuery().trim()
     return initialQuery.length === 1 ? 'Bitte mindestens 2 Zeichen eingeben.' : ''
   })
+  const [activeSearchScrollKey, setActiveSearchScrollKey] = useState(0)
   const offers = useMemo(() => flattenRankingOffers(ranking), [ranking])
   const availableRetailers = useMemo(() => buildAvailableRetailers(retailers), [retailers])
   const visibleOffers = useMemo(() => {
@@ -189,9 +191,22 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
       return
     }
 
+    setActiveSearchScrollKey((current) => current + 1)
     setHint('')
     setSubmittedQuery(nextQuery)
   }, [searchRequest])
+
+  useEffect(() => {
+    if (!activeSearchScrollKey || !submittedQuery || loading) return
+
+    const resultHeading = resultsHeadingRef.current
+    if (!resultHeading) return
+
+    window.requestAnimationFrame(() => {
+      resultHeading.focus({ preventScroll: true })
+      resultHeading.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [activeSearchScrollKey, loading, submittedQuery])
 
   useEffect(() => {
     if (!submittedQuery) return undefined
@@ -266,6 +281,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     }
 
     setSubmittedQuery(nextQuery)
+    setActiveSearchScrollKey((current) => current + 1)
 
     if (typeof window !== 'undefined') {
       window.history.replaceState({}, '', `/suche?q=${encodeURIComponent(nextQuery)}`)
@@ -425,7 +441,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         {!loading && !error && submittedQuery ? (
           <div className="results-section">
             <div className="panel__header">
-              <h2>Angebote für „{submittedQuery}“</h2>
+              <h2 ref={resultsHeadingRef} tabIndex="-1">Angebote für „{submittedQuery}“</h2>
               <p>{visibleOffers.length} Angebote gefunden</p>
             </div>
             <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>

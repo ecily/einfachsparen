@@ -1214,6 +1214,32 @@ a {
   white-space: nowrap;
 }
 
+.user-card__savings-chip,
+.user-card__action-price-badge {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  padding: 0.32rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 850 !important;
+  line-height: 1;
+  white-space: nowrap !important;
+}
+
+.user-card__savings-chip {
+  background: rgba(233, 247, 223, 0.9);
+  border: 1px solid rgba(49, 94, 42, 0.14);
+  color: #24451f !important;
+}
+
+.user-card__action-price-badge {
+  background: rgba(255, 244, 217, 0.74);
+  border: 1px solid rgba(201, 139, 25, 0.16);
+  color: #7b530f !important;
+}
+
 .user-card__price span {
   display: block;
   white-space: normal;
@@ -1311,61 +1337,38 @@ a {
   hyphens: auto;
 }
 
-.offer-savings-box {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.88rem 0.95rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(22, 33, 24, 0.08);
-}
-
-.offer-savings-box strong {
-  font-size: 1rem;
-}
-
-.offer-savings-box span {
-  color: var(--kk-muted);
-  line-height: 1.42;
-}
-
-.offer-savings-box--known {
-  background: rgba(233, 247, 223, 0.95);
-  border-color: rgba(49, 94, 42, 0.16);
-}
-
-.offer-savings-box--known strong {
-  color: #24451f;
-}
-
-.offer-savings-box--action {
-  background: rgba(255, 244, 217, 0.86);
-  border-color: rgba(201, 139, 25, 0.18);
-}
-
-.offer-savings-box--action strong {
-  color: #7b530f;
+.user-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 0.1rem;
 }
 
 .shopping-list-button {
   min-height: var(--kk-touch);
-  width: 100%;
-  border: 0;
+  width: auto;
+  max-width: 100%;
+  border: 1px solid rgba(49, 94, 42, 0.22);
   border-radius: 999px;
-  background: linear-gradient(135deg, #315e2a, #7ca452);
-  color: #fffdf7;
-  font-weight: 850;
-  padding: 0.9rem 1rem;
+  background: rgba(255, 252, 247, 0.86);
+  color: #315e2a;
+  font-weight: 820;
+  padding: 0.62rem 0.9rem;
   cursor: pointer;
-  box-shadow: 0 14px 28px rgba(49, 94, 42, 0.22);
+  box-shadow: none;
   transition:
     transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
     box-shadow 160ms ease,
     opacity 160ms ease;
 }
 
 .shopping-list-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 18px 36px rgba(49, 94, 42, 0.28);
+  background: rgba(242, 250, 234, 0.96);
+  border-color: rgba(49, 94, 42, 0.36);
+  box-shadow: 0 8px 18px rgba(49, 94, 42, 0.12);
 }
 
 .shopping-list-button--added {
@@ -1386,6 +1389,11 @@ a {
   display: grid;
   gap: 0.85rem;
   padding: clamp(0.9rem, 3vw, 1.45rem);
+  scroll-margin-top: 7rem;
+}
+
+.keyword-search-results .panel__header h2 {
+  scroll-margin-top: 7rem;
 }
 
 .keyword-search-hero__copy {
@@ -2357,6 +2365,15 @@ textarea:focus {
 
   .user-card__price span {
     font-size: 0.92rem;
+  }
+
+  .user-card__actions {
+    justify-content: stretch;
+  }
+
+  .shopping-list-button {
+    width: 100%;
+    padding-block: 0.7rem;
   }
 
   .user-card__facts {
