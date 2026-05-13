@@ -307,9 +307,18 @@ function buildUnitPriceFromLabel(label, currentPrice) {
     });
   }
 
-  const amount = parseNumericAmount(match[3]);
+  const basisQuantity = parseNumericAmount(match[1]);
+  let amount = parseNumericAmount(match[3]);
   const unit = normalizeUnitFromText(match[2]);
   const comparableUnit = unit === 'g' ? 'kg' : unit === 'ml' ? 'l' : unit;
+
+  if (amount && basisQuantity && unit === 'g') {
+    amount = Number((amount * (1000 / basisQuantity)).toFixed(2));
+  }
+
+  if (amount && basisQuantity && unit === 'ml') {
+    amount = Number((amount * (1000 / basisQuantity)).toFixed(2));
+  }
 
   return {
     amount,
@@ -337,7 +346,7 @@ function extractEuroPriceTexts(value) {
 
 function extractUnitPriceTextFromText(value) {
   const text = sanitizeWhitespace(value);
-  const match = text.match(/(?:100\s*(?:g|ml)|1\s*(?:kg|l|Stk|stueck|stuck|waschgang))\s+[\d,.]+/i);
+  const match = text.match(/(?:100\s*(?:g|ml)|1\s*(?:kg|l|Stk|stueck|stuck|waschgang))\s+\d+(?:[,.]\d+)/i);
   return sanitizeWhitespace(match?.[0] || '');
 }
 
@@ -695,6 +704,9 @@ function parseBipaTilePriceInfoV3(card) {
 
 function extractBipaValidityDate(html) {
   const now = new Date();
+  const startOfTomorrow = new Date(now);
+  startOfTomorrow.setUTCHours(0, 0, 0, 0);
+  startOfTomorrow.setUTCDate(startOfTomorrow.getUTCDate() + 1);
   const dates = [...String(html || '').matchAll(/(?:Gueltig bis|Gültig bis)\s+(\d{2}\.\d{2}\.\d{4})/gi)]
     .map((match) => parseDateWithWeekday(match[1]))
     .filter(Boolean)
@@ -703,7 +715,7 @@ function extractBipaValidityDate(html) {
       endOfDay.setUTCHours(23, 59, 59, 999);
       return endOfDay;
     })
-    .filter((date) => date >= now)
+    .filter((date) => date >= startOfTomorrow)
     .sort((left, right) => left.getTime() - right.getTime());
 
   return dates[0] || null;
@@ -743,7 +755,12 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
       priceText,
       unitPriceText,
     } = parseBipaTilePriceInfoV3(card);
-    const normalizedUnitPrice = buildUnitPriceFromLabel(unitPriceText, currentPrice);
+    const normalizedUnitPrice = unitPriceText
+      ? buildUnitPriceFromLabel(unitPriceText, currentPrice)
+      : buildOfficialNormalizedUnitPrice({
+        priceAmount: currentPrice,
+        quantityText,
+      });
     const categoryPrimary = determineOfferCategory({
       title,
       contextText: [brand, quantityText, unitPriceText].filter(Boolean).join(' '),

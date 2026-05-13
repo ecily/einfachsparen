@@ -133,6 +133,11 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
+    patterns: [/\b(eau de parfum|eau de toilette|parfum|fragrance|fragrances|duft)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Kosmetik & Make-up',
+  },
+  {
     patterns: [/\b(roestgemuese|rostgemuese|buttergemuese|buttergemuse|gemuese reindl|gemuse reindl|gemuese a la creme|gemuse a la creme|iglo gemuese|iglo gemuse|cremespinat|blattspinat|rotkraut)\b/],
     main: 'Lebensmittel',
     sub: 'Tiefkuehl- & Fertigprodukte',

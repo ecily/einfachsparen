@@ -65,6 +65,24 @@ test('keeps critical side hits out of misleading butter and rice categories', ()
   assert.equal(reiswaffeln.secondaryCategory, 'Suesswaren & Knabbereien');
 });
 
+test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', () => {
+  const cases = [
+    'Hugo Boss Deep Red Eau de Parfum 50ml',
+    'Hugo Boss Femme Eau de Parfum 30ml',
+    'Hugo Boss Ma Vie Pour Femme Eau de Parfum 30ml',
+    'Versace Bright Crystal Eau de Toilette 30ml',
+    'Calvin Klein One Eau de Toilette 100ml',
+    'Joop Le Bain Eau de Parfum 75ml',
+  ];
+
+  for (const title of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Drogerie / Hygiene', title);
+    assert.equal(decision.secondaryCategory, 'Kosmetik & Make-up', title);
+  }
+});
+
 test('does not treat HOFER or discount wording alone as a product category', () => {
   const decision = determineCategoryDecision({
     title: 'HOFER Diskont Vorteilspreis',
