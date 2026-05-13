@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const axios = require('axios');
 const { Types } = require('mongoose');
 const { __private } = require('../src/services/crawl/officialSourceCrawler');
 const { enrichOffersForStorage } = require('../src/services/crawl/offerAuditEnrichment');
@@ -248,15 +249,19 @@ function dmOfficialSource() {
 }
 
 test('dm product-search Ausverkauf parser stores current price, previous price, base price and quantity', () => {
+  const diagnostics = {};
   const offers = __private.parseDmSaleOffersFromProductSearchJson({
-    payload: { products: [dmProduct()] },
+    payload: { products: [dmProduct()], count: 1, currentPage: 0, pageSize: 48, totalPages: 1 },
     source: dmOfficialSource(),
     crawlJobId: new Types.ObjectId(),
     region: 'AT',
     pageUrl: 'https://www.dm.at/ausverkauf',
+    diagnostics,
   });
 
   assert.equal(offers.length, 1);
+  assert.equal(diagnostics.rawProducts, 1);
+  assert.equal(diagnostics.parsedOffers, 1);
   assert.equal(offers[0].brand, 'Sportness');
   assert.match(offers[0].title, /Proteinriegel/);
   assert.equal(offers[0].quantityText, '40 g');
@@ -265,6 +270,179 @@ test('dm product-search Ausverkauf parser stores current price, previous price, 
   assert.equal(offers[0].normalizedUnitPrice.amount, 20);
   assert.equal(offers[0].normalizedUnitPrice.unit, 'kg');
   assert.equal(offers[0].rawFacts.dmDan, 3087729);
+});
+
+test('dm content endpoint grid extraction finds nested DMSearchProductGrid sellout query', () => {
+  const payload = {
+    type: 'Page',
+    mainData: [
+      { type: 'DMText', data: { text: 'Ausverkauf' } },
+      {
+        type: 'Container',
+        data: {
+          children: [
+            {
+              type: 'DMSearchProductGrid',
+              query: {
+                queryTerms: '',
+                sort: 'rating',
+                filters: 'isSellout:true',
+                numberOfProducts: { desktop: 10, mobile: 10 },
+              },
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  const query = __private.extractDmSaleGridQuery(payload);
+
+  assert.equal(query.sort, 'rating');
+  assert.equal(query.filters, 'isSellout:true');
+});
+
+test('dm product-search URL uses zero-based currentPage pagination', () => {
+  const first = new URL(__private.buildDmSaleProductSearchUrl({ sort: 'rating', filters: 'isSellout:true' }, 0));
+  const second = new URL(__private.buildDmSaleProductSearchUrl({ sort: 'rating', filters: 'isSellout:true' }, 1));
+
+  assert.equal(first.searchParams.get('currentPage'), '0');
+  assert.equal(first.searchParams.get('page'), null);
+  assert.equal(second.searchParams.get('currentPage'), '1');
+  assert.equal(second.searchParams.get('pageSize'), '48');
+  assert.equal(second.searchParams.get('filters'), 'isSellout:true');
+});
+
+test('dm product-search pagination keeps already loaded pages when a later page is rate-limited', async () => {
+  const originalGet = axios.get;
+  const calls = [];
+
+  axios.get = async (url) => {
+    calls.push(url);
+
+    if (url.includes('rootpage-dm-shop-de-at/ausverkauf')) {
+      return {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        data: {
+          type: 'Page',
+          mainData: [{ type: 'DMSearchProductGrid', query: { sort: 'rating', filters: 'isSellout:true' } }],
+        },
+        config: { url },
+      };
+    }
+
+    if (url.includes('currentPage=0')) {
+      return {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        data: {
+          products: [dmProduct()],
+          count: 2,
+          currentPage: 0,
+          pageSize: 48,
+          totalPages: 2,
+        },
+        config: { url },
+      };
+    }
+
+    return {
+      status: 429,
+      headers: { 'content-type': 'application/json' },
+      data: { message: 'Too many requests' },
+      config: { url },
+    };
+  };
+
+  try {
+    const result = await __private.fetchDmSaleProductSearchPages({ sourceUrl: 'https://www.dm.at/ausverkauf' });
+
+    assert.equal(result.pages.length, 1);
+    assert.equal(result.pages[0].payload.products.length, 1);
+    assert.equal(result.diagnostics.productSearchPages.length, 2);
+    assert.equal(result.diagnostics.productSearchError.page, 1);
+    assert.equal(result.diagnostics.productSearchError.diagnostic.httpStatus, 429);
+    assert.ok(calls.some((url) => url.includes('currentPage=0')));
+    assert.ok(calls.some((url) => url.includes('currentPage=1')));
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('dm diagnostic message identifies product-search count=0', () => {
+  const message = __private.summarizeDmOfficialSaleMessage({
+    gridFound: true,
+    rawProducts: 0,
+    productSearchPages: [{ httpStatus: 200, isJson: true, count: 0, currentPage: 0, pageSize: 48, totalPages: 0, rawProducts: 0 }],
+    parsedBeforeEnrichment: 0,
+    enrichedBeforeDedupe: 0,
+  });
+
+  assert.equal(message, 'dm product search count=0.');
+});
+
+test('dm diagnostic message identifies non-json/html content response', () => {
+  const message = __private.summarizeDmOfficialSaleMessage({
+    error: 'dm endpoint returned non-json/html',
+    failureStage: 'dm content endpoint',
+    errorDiagnostic: {
+      httpStatus: 200,
+      isHtml: true,
+      bodyPreview: '<!DOCTYPE html><html><body>blocked</body></html>',
+    },
+  });
+
+  assert.match(message, /dm content endpoint failed: HTTP 200 html dm endpoint returned non-json\/html/);
+  assert.match(message, /preview="<!DOCTYPE html>/);
+});
+
+test('dm diagnostic message identifies product-search HTTP errors', () => {
+  const message = __private.summarizeDmOfficialSaleMessage({
+    error: 'dm endpoint returned HTTP 403',
+    failureStage: 'dm product search',
+    errorDiagnostic: {
+      httpStatus: 403,
+      isHtml: false,
+      bodyPreview: '{"message":"Forbidden"}',
+    },
+  });
+
+  assert.match(message, /dm product search failed: HTTP 403 dm endpoint returned HTTP 403/);
+});
+
+test('dm diagnostic message identifies all-product skip reasons', () => {
+  const diagnostics = {};
+  const offers = __private.parseDmSaleOffersFromProductSearchJson({
+    payload: {
+      products: [
+        dmProduct({
+          a11yLabel: 'Marke: Balea; Produktname: Duschgel 300 ml; Ausverkauf Grafik',
+          price: {
+            prefix: 'Einzelpreis',
+            price: { current: { value: '' } },
+            tileInfos: ['0,30 l'],
+          },
+        }),
+      ],
+    },
+    source: dmOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.dm.at/ausverkauf',
+    diagnostics,
+  });
+  const message = __private.summarizeDmOfficialSaleMessage({
+    rawProducts: diagnostics.rawProducts,
+    parsedBeforeEnrichment: offers.length,
+    enrichedBeforeDedupe: 0,
+    skipReasons: diagnostics.skipReasons,
+    productSearchPages: [{ httpStatus: 200, isJson: true, count: 1, currentPage: 0, pageSize: 48, totalPages: 1, rawProducts: 1 }],
+  });
+
+  assert.equal(offers.length, 0);
+  assert.equal(diagnostics.skipReasons['missing-current-price'], 1);
+  assert.match(message, /All dm products skipped: missing-current-price/);
 });
 
 test('dm product-search Ausverkauf parser keeps offers without validTo and labels validity conservatively', () => {

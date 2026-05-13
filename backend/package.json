@@ -31,6 +31,7 @@
     "diagnose:official-validity-coverage": "node scripts/diagnoseOfficialValidityCoverage.js",
     "diagnose:billa-official-validity": "node scripts/diagnoseBillaOfficialValidity.js",
     "diagnose:billa-algolia-hit-sample": "node scripts/diagnoseBillaAlgoliaHitSample.js",
+    "diagnose:dm-official-site": "node scripts/diagnoseDmOfficialSite.js",
     "diagnose:launch-coverage-audit": "node scripts/diagnoseLaunchCoverageAudit.js",
     "diagnose:coverage-live-readiness": "node scripts/diagnoseCoverageLiveReadiness.js",
     "diagnose:crawl-source-selection": "node scripts/diagnoseCrawlSourceSelection.js",

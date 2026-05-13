@@ -46,6 +46,61 @@ const DM_CONTENT_PATH = 'https://content.services.dmtech.com/rootpage-dm-shop-de
 const DM_PRODUCT_SEARCH_URL = 'https://product-search.services.dmtech.com/at/search';
 const DM_SALE_PAGE_SIZE = 48;
 const DM_SALE_MAX_PAGES = 20;
+const DM_SALE_PAGE_DELAY_MS = 300;
+
+function responseContentType(response = {}) {
+  return response.headers?.['content-type'] || response.headers?.['Content-Type'] || '';
+}
+
+function bodyPreview(value, limit = 300) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value || '');
+  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+function isHtmlPayload(payload, contentType = '') {
+  return /html/i.test(contentType) || (typeof payload === 'string' && /^\s*<!doctype html|^\s*<html[\s>]/i.test(payload));
+}
+
+function isJsonPayload(payload, contentType = '') {
+  return /json/i.test(contentType) && payload && typeof payload === 'object' && !Buffer.isBuffer(payload);
+}
+
+function buildDmEndpointDiagnostic({ url, response = {}, payload, canonicalUrl }) {
+  const contentType = responseContentType(response);
+
+  return {
+    url,
+    finalUrl: canonicalUrl || response.request?.res?.responseUrl || response.config?.url || url,
+    httpStatus: response.status ?? null,
+    contentType,
+    bodyPreview: bodyPreview(payload),
+    isJson: isJsonPayload(payload, contentType),
+    isHtml: isHtmlPayload(payload, contentType),
+  };
+}
+
+function buildDmNetworkDiagnostic(url, error) {
+  return {
+    url,
+    finalUrl: url,
+    httpStatus: error.response?.status ?? null,
+    contentType: responseContentType(error.response || {}),
+    bodyPreview: bodyPreview(error.response?.data || error.message),
+    isJson: isJsonPayload(error.response?.data, responseContentType(error.response || {})),
+    isHtml: isHtmlPayload(error.response?.data || '', responseContentType(error.response || {})),
+    error: error.message,
+  };
+}
+
+function createDmEndpointError(message, diagnostic) {
+  const error = new Error(message);
+  error.diagnostic = diagnostic;
+  return error;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -1233,9 +1288,19 @@ function parseDmSaleOffersFromHtml({ html, source, crawlJobId, region, pageUrl }
   return offers;
 }
 
-function parseDmSaleOffersFromProductSearchJson({ payload, source, crawlJobId, region, pageUrl }) {
+function addDmSkipReason(diagnostics, reason) {
+  if (!diagnostics) return;
+  diagnostics.skipReasons = diagnostics.skipReasons || {};
+  diagnostics.skipReasons[reason] = (diagnostics.skipReasons[reason] || 0) + 1;
+}
+
+function parseDmSaleOffersFromProductSearchJson({ payload, source, crawlJobId, region, pageUrl, diagnostics = null }) {
   const products = Array.isArray(payload?.products) ? payload.products : [];
   const offers = [];
+
+  if (diagnostics) {
+    diagnostics.rawProducts = (diagnostics.rawProducts || 0) + products.length;
+  }
 
   for (const product of products) {
     const price = product?.tileData?.price?.price || product?.price?.price || {};
@@ -1250,6 +1315,20 @@ function parseDmSaleOffersFromProductSearchJson({ payload, source, crawlJobId, r
     ].filter(Boolean).join(' '));
 
     if (!dmHasSaleContext(product, contextText)) {
+      addDmSkipReason(diagnostics, 'missing-sellout-context');
+      continue;
+    }
+
+    const title = sanitizeWhitespace(product?.title || product?.tileData?.title || '');
+    const priceText = sanitizeWhitespace(price?.current?.value || product?.tileData?.a11yLabel?.match(/Preis:\s*([^;]+)/i)?.[1] || '');
+
+    if (!title) {
+      addDmSkipReason(diagnostics, 'missing-title');
+      continue;
+    }
+
+    if (!parseNumericAmount(priceText)) {
+      addDmSkipReason(diagnostics, 'missing-current-price');
       continue;
     }
 
@@ -1259,8 +1338,8 @@ function parseDmSaleOffersFromProductSearchJson({ payload, source, crawlJobId, r
       region,
       pageUrl,
       brand: sanitizeWhitespace(product?.brandName || product?.tileData?.brand?.name || ''),
-      title: sanitizeWhitespace(product?.title || product?.tileData?.title || ''),
-      priceText: sanitizeWhitespace(price?.current?.value || product?.tileData?.a11yLabel?.match(/Preis:\s*([^;]+)/i)?.[1] || ''),
+      title,
+      priceText,
       referencePriceText: sanitizeWhitespace(price?.previous?.value || ''),
       basePriceText: sanitizeWhitespace(Array.isArray(tileInfos) ? tileInfos[0] : tileInfos),
       contextText,
@@ -1271,7 +1350,13 @@ function parseDmSaleOffersFromProductSearchJson({ payload, source, crawlJobId, r
 
     if (offer) {
       offers.push(offer);
+    } else {
+      addDmSkipReason(diagnostics, 'offer-normalization-failed');
     }
+  }
+
+  if (diagnostics) {
+    diagnostics.parsedOffers = (diagnostics.parsedOffers || 0) + offers.length;
   }
 
   return offers;
@@ -1415,28 +1500,81 @@ async function fetchHtml(url) {
 }
 
 async function fetchDmJson(url, { referer = 'https://www.dm.at/ausverkauf' } = {}) {
-  const response = await axios.get(url, {
-    timeout: 30000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-      Accept: 'application/json,text/plain,*/*',
-      'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
-      Origin: 'https://www.dm.at',
-      Referer: referer,
-    },
+  let response;
+
+  try {
+    response = await axios.get(url, {
+      timeout: 30000,
+      validateStatus: () => true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+        Accept: 'application/json,text/plain,*/*',
+        'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+        Origin: 'https://www.dm.at',
+        Referer: referer,
+      },
+    });
+  } catch (error) {
+    error.diagnostic = buildDmNetworkDiagnostic(url, error);
+    throw error;
+  }
+
+  const canonicalUrl = response.request?.res?.responseUrl || url;
+  const diagnostic = buildDmEndpointDiagnostic({
+    url,
+    response,
+    payload: response.data,
+    canonicalUrl,
   });
+
+  if (response.status < 200 || response.status >= 300) {
+    throw createDmEndpointError(`dm endpoint returned HTTP ${response.status}`, diagnostic);
+  }
+
+  if (!diagnostic.isJson || diagnostic.isHtml) {
+    throw createDmEndpointError(
+      diagnostic.isHtml ? 'dm endpoint returned non-json/html' : 'dm endpoint returned non-json response',
+      diagnostic
+    );
+  }
 
   return {
     response,
     payload: response.data,
-    canonicalUrl: response.request?.res?.responseUrl || url,
+    canonicalUrl,
+    diagnostic,
   };
 }
 
 function extractDmSaleGridQuery(contentPayload = {}) {
-  const modules = Array.isArray(contentPayload?.mainData) ? contentPayload.mainData : [];
+  const modules = collectDmContentModules(contentPayload);
   const grid = modules.find((item) => item?.type === 'DMSearchProductGrid' && /isSellout:true/i.test(String(item?.query?.filters || '')));
   return grid?.query || null;
+}
+
+function collectDmContentModules(value, modules = []) {
+  if (!value || typeof value !== 'object') {
+    return modules;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectDmContentModules(item, modules);
+    }
+    return modules;
+  }
+
+  if (value.type) {
+    modules.push(value);
+  }
+
+  for (const entry of Object.values(value)) {
+    if (entry && typeof entry === 'object') {
+      collectDmContentModules(entry, modules);
+    }
+  }
+
+  return modules;
 }
 
 function buildDmSaleProductSearchUrl(query = {}, page = 0) {
@@ -1456,16 +1594,51 @@ function buildDmSaleProductSearchUrl(query = {}, page = 0) {
 
 async function fetchDmSaleProductSearchPages({ sourceUrl }) {
   const content = await fetchDmJson(DM_CONTENT_PATH, { referer: sourceUrl });
-  const query = extractDmSaleGridQuery(content.payload) || {
+  const gridQuery = extractDmSaleGridQuery(content.payload);
+  const query = gridQuery || {
     sort: 'rating',
     filters: 'isSellout:true',
   };
   const pages = [];
+  const diagnostics = {
+    content: content.diagnostic,
+    gridFound: Boolean(gridQuery),
+    gridQuery: gridQuery || null,
+    productSearchPages: [],
+    productSearchPageMode: 'currentPage-zero-based',
+  };
   let totalPages = 1;
 
   for (let page = 0; page < Math.min(totalPages, DM_SALE_MAX_PAGES); page += 1) {
     const url = buildDmSaleProductSearchUrl(query, page);
-    const result = await fetchDmJson(url, { referer: sourceUrl });
+    let result;
+
+    try {
+      result = await fetchDmJson(url, { referer: sourceUrl });
+    } catch (error) {
+      const diagnostic = error.diagnostic || buildDmNetworkDiagnostic(url, error);
+      diagnostics.productSearchPages.push({
+        ...diagnostic,
+        count: null,
+        currentPage: page,
+        pageSize: DM_SALE_PAGE_SIZE,
+        totalPages,
+        rawProducts: null,
+        error: error.message,
+      });
+      diagnostics.productSearchError = {
+        page,
+        message: error.message,
+        diagnostic,
+      };
+
+      if (pages.length === 0) {
+        throw error;
+      }
+
+      break;
+    }
+
     const payload = result.payload || {};
 
     pages.push({
@@ -1473,6 +1646,15 @@ async function fetchDmSaleProductSearchPages({ sourceUrl }) {
       payload,
       httpStatus: result.response.status,
       contentType: result.response.headers?.['content-type'] || '',
+      diagnostic: result.diagnostic,
+    });
+    diagnostics.productSearchPages.push({
+      ...result.diagnostic,
+      count: payload.count ?? null,
+      currentPage: payload.currentPage ?? null,
+      pageSize: payload.pageSize ?? null,
+      totalPages: payload.totalPages ?? null,
+      rawProducts: Array.isArray(payload.products) ? payload.products.length : null,
     });
 
     totalPages = Math.max(1, Number(payload.totalPages || 1));
@@ -1480,12 +1662,17 @@ async function fetchDmSaleProductSearchPages({ sourceUrl }) {
     if (!Array.isArray(payload.products) || payload.products.length === 0) {
       break;
     }
+
+    if (page + 1 < Math.min(totalPages, DM_SALE_MAX_PAGES)) {
+      await delay(DM_SALE_PAGE_DELAY_MS);
+    }
   }
 
   return {
     content,
     query,
     pages,
+    diagnostics,
   };
 }
 
@@ -2452,6 +2639,185 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
   };
 }
 
+function compactDmSkipReasons(skipReasons = {}) {
+  return Object.entries(skipReasons || {})
+    .filter(([, count]) => Number(count) > 0)
+    .sort((left, right) => right[1] - left[1])
+    .map(([reason, count]) => ({ reason, count }));
+}
+
+function summarizeDmOfficialSaleMessage(report = {}) {
+  const productPages = Array.isArray(report.productSearchPages) ? report.productSearchPages : [];
+  const firstProductPage = productPages[0] || {};
+  const rawProducts = Number(report.rawProducts || 0);
+  const parsedOffers = Number(report.parsedBeforeEnrichment || report.parsedOffers || 0);
+  const storedOffers = Number(report.enrichedBeforeDedupe || report.storedOffers || 0);
+  const skipReasons = compactDmSkipReasons(report.skipReasons);
+  const topSkip = skipReasons[0];
+
+  if (storedOffers > 0) {
+    return `dm Ausverkauf product search stored ${storedOffers} offers from ${rawProducts} raw products (count=${firstProductPage.count ?? report.reportedTotalResults ?? 'unknown'}, pages=${report.pagesFetched ?? productPages.length}).`;
+  }
+
+  if (report.error) {
+    const diagnostic = report.errorDiagnostic || {};
+    const stage = report.failureStage || 'dm endpoint';
+    const status = diagnostic.httpStatus ? ` HTTP ${diagnostic.httpStatus}` : '';
+    const html = diagnostic.isHtml ? ' html' : '';
+    const preview = diagnostic.bodyPreview ? ` preview="${diagnostic.bodyPreview}"` : '';
+    return `${stage} failed:${status}${html} ${report.error}.${preview}`.trim();
+  }
+
+  if (report.content && report.content.isHtml) {
+    return 'dm content endpoint returned non-json/html.';
+  }
+
+  if (report.content && report.content.isJson === false) {
+    return 'dm content endpoint returned non-json response.';
+  }
+
+  if (firstProductPage.httpStatus && (firstProductPage.httpStatus < 200 || firstProductPage.httpStatus >= 300)) {
+    return `dm product search returned HTTP ${firstProductPage.httpStatus}.`;
+  }
+
+  if (firstProductPage.isHtml) {
+    return 'dm product search returned non-json/html.';
+  }
+
+  if (!report.gridFound && rawProducts === 0) {
+    return 'No DMSearchProductGrid found and product search returned no raw products.';
+  }
+
+  if (Number(firstProductPage.count) === 0) {
+    return 'dm product search count=0.';
+  }
+
+  if (rawProducts === 0) {
+    return 'No products parsed from dm product-search response shape.';
+  }
+
+  if (parsedOffers === 0 && rawProducts > 0) {
+    return topSkip
+      ? `All dm products skipped: ${topSkip.reason} (${topSkip.count}/${rawProducts}).`
+      : 'All dm products skipped before offer normalization.';
+  }
+
+  if (parsedOffers > 0 && storedOffers === 0) {
+    return `All parsed dm offers rejected during enrichment/current relevance (${parsedOffers}/${rawProducts}).`;
+  }
+
+  return 'dm Ausverkauf produced no offers; diagnostics did not identify a narrower reason.';
+}
+
+async function diagnoseDmOfficialSaleSource({ source, region = 'AT', crawlJobId = null } = {}) {
+  const effectiveSource = {
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    channel: 'official-site',
+    sourceUrl: 'https://www.dm.at/ausverkauf',
+    label: 'dm Ausverkauf',
+    sourceType: 'offers-page',
+    ...source,
+  };
+  const report = {
+    url: effectiveSource.sourceUrl,
+    region,
+    initialPage: null,
+    htmlParsedOffers: 0,
+    content: null,
+    gridFound: false,
+    extractedProductSearchUrl: '',
+    productSearchPages: [],
+    rawProducts: 0,
+    sampleRawProduct: null,
+    parsedOffers: 0,
+    sampleParsedOffer: null,
+    skipReasons: {},
+    message: '',
+  };
+
+  try {
+    const { response, html, canonicalUrl } = await fetchHtml(effectiveSource.sourceUrl);
+    report.initialPage = buildDmEndpointDiagnostic({
+      url: effectiveSource.sourceUrl,
+      response,
+      payload: html,
+      canonicalUrl,
+    });
+    report.htmlParsedOffers = parseDmSaleOffersFromHtml({
+      html,
+      source: effectiveSource,
+      crawlJobId,
+      region,
+      pageUrl: canonicalUrl || effectiveSource.sourceUrl,
+    }).length;
+
+    const productSearch = await fetchDmSaleProductSearchPages({ sourceUrl: canonicalUrl || effectiveSource.sourceUrl });
+    const parseDiagnostics = {};
+    const products = productSearch.pages.flatMap((page) => (
+      Array.isArray(page.payload?.products) ? page.payload.products : []
+    ));
+    const parsedOffers = productSearch.pages.flatMap((page) => parseDmSaleOffersFromProductSearchJson({
+      payload: page.payload,
+      source: effectiveSource,
+      crawlJobId,
+      region,
+      pageUrl: canonicalUrl || effectiveSource.sourceUrl,
+      diagnostics: parseDiagnostics,
+    }));
+
+    report.content = productSearch.diagnostics.content;
+    report.gridFound = productSearch.diagnostics.gridFound;
+    report.gridQuery = productSearch.diagnostics.gridQuery;
+    report.extractedProductSearchUrl = productSearch.pages[0]?.url || buildDmSaleProductSearchUrl(productSearch.query, 0);
+    report.productSearchPages = productSearch.diagnostics.productSearchPages;
+    report.productSearchError = productSearch.diagnostics.productSearchError || null;
+    report.rawProducts = products.length;
+    report.sampleRawProduct = products[0]
+      ? {
+        dan: products[0].dan || products[0]?.tileData?.dan || null,
+        brandName: products[0].brandName || products[0]?.tileData?.brand?.name || '',
+        title: products[0].title || products[0]?.tileData?.title || '',
+        price: products[0]?.tileData?.price || null,
+        eyecatchers: products[0]?.tileData?.eyecatchers || [],
+      }
+      : null;
+    report.parsedOffers = parsedOffers.length;
+    report.sampleParsedOffer = parsedOffers[0]
+      ? {
+        title: parsedOffers[0].title,
+        brand: parsedOffers[0].brand,
+        priceCurrent: parsedOffers[0].priceCurrent?.amount,
+        priceReference: parsedOffers[0].priceReference?.amount,
+        quantityText: parsedOffers[0].quantityText,
+        validTo: parsedOffers[0].validTo || null,
+        categoryPrimary: parsedOffers[0].categoryPrimary,
+        categorySecondary: parsedOffers[0].categorySecondary,
+      }
+      : null;
+    report.skipReasons = parseDiagnostics.skipReasons || {};
+    report.message = summarizeDmOfficialSaleMessage({
+      ...productSearch.diagnostics,
+      rawProducts: products.length,
+      parsedBeforeEnrichment: parsedOffers.length,
+      enrichedBeforeDedupe: parsedOffers.length,
+      skipReasons: parseDiagnostics.skipReasons || {},
+      productSearchPages: productSearch.diagnostics.productSearchPages,
+    });
+  } catch (error) {
+    const diagnostic = error.diagnostic || buildDmNetworkDiagnostic(report.extractedProductSearchUrl || DM_CONTENT_PATH, error);
+    report.error = error.message;
+    report.errorDiagnostic = diagnostic;
+    report.message = summarizeDmOfficialSaleMessage({
+      error: error.message,
+      failureStage: diagnostic.url === DM_CONTENT_PATH ? 'dm content endpoint' : 'dm product search',
+      errorDiagnostic: diagnostic,
+    });
+  }
+
+  return report;
+}
+
 async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, canonicalUrl }) {
   const pageUrl = canonicalUrl || source.sourceUrl;
   const htmlOffers = parseDmSaleOffersFromHtml({
@@ -2465,6 +2831,7 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
   let rawCandidateCount = htmlOffers.length;
   let rawDocuments = 0;
   let productSearchReport = null;
+  const productParseDiagnostics = {};
 
   try {
     const productSearch = await fetchDmSaleProductSearchPages({ sourceUrl: pageUrl });
@@ -2477,6 +2844,7 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
       crawlJobId,
       region,
       pageUrl,
+      diagnostics: productParseDiagnostics,
     }));
 
     if (apiOffers.length > 0 || products.length > 0) {
@@ -2485,6 +2853,7 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
     }
 
     productSearchReport = {
+      ...productSearch.diagnostics,
       contentPath: DM_CONTENT_PATH,
       productSearchUrl: DM_PRODUCT_SEARCH_URL,
       filters: productSearch.query?.filters || '',
@@ -2492,6 +2861,19 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
       pagesFetched: productSearch.pages.length,
       reportedTotalResults: productSearch.pages[0]?.payload?.count || 0,
       reportedTotalPages: productSearch.pages[0]?.payload?.totalPages || 0,
+      productSearchError: productSearch.diagnostics.productSearchError || null,
+      rawProducts: products.length,
+      parsedOffers: apiOffers.length,
+      skipReasons: productParseDiagnostics.skipReasons || {},
+      sampleRawProduct: products[0]
+        ? {
+          dan: products[0].dan || products[0]?.tileData?.dan || null,
+          brandName: products[0].brandName || products[0]?.tileData?.brand?.name || '',
+          title: products[0].title || products[0]?.tileData?.title || '',
+          price: products[0]?.tileData?.price || null,
+          eyecatchers: products[0]?.tileData?.eyecatchers || [],
+        }
+        : null,
     };
 
     await createCompactRawDocument({
@@ -2530,10 +2912,14 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
     });
     rawDocuments += 1;
   } catch (error) {
+    const diagnostic = error.diagnostic || buildDmNetworkDiagnostic(DM_PRODUCT_SEARCH_URL, error);
+    const isContentFailure = diagnostic.url === DM_CONTENT_PATH;
     productSearchReport = {
       contentPath: DM_CONTENT_PATH,
       productSearchUrl: DM_PRODUCT_SEARCH_URL,
       error: error.message,
+      errorDiagnostic: diagnostic,
+      failureStage: isContentFailure ? 'dm content endpoint' : 'dm product search',
       fallback: htmlOffers.length > 0 ? 'html-parser' : 'none',
     };
   }
@@ -2556,12 +2942,24 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
     rawDocuments,
     rawCandidateCount,
     refreshResult,
+    message: summarizeDmOfficialSaleMessage({
+      ...productSearchReport,
+      parsedBeforeEnrichment: normalizedOffers.length,
+      enrichedBeforeDedupe: offerDocuments.length,
+      storedOffers: offerDocuments.length,
+    }),
     diagnostics: {
       ...productSearchReport,
       parsedBeforeEnrichment: normalizedOffers.length,
       enrichedBeforeDedupe: offerDocuments.length,
       enrichedAfterDedupe: offerDocuments.length,
       rejectedByCurrentRelevance,
+      message: summarizeDmOfficialSaleMessage({
+        ...productSearchReport,
+        parsedBeforeEnrichment: normalizedOffers.length,
+        enrichedBeforeDedupe: offerDocuments.length,
+        storedOffers: offerDocuments.length,
+      }),
       sampleOffers: offerDocuments.slice(0, 5).map((offer) => ({
         title: offer.title,
         brand: offer.brand,
@@ -2811,6 +3209,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     let rawCandidateCount = links.length;
     const allStoredOffers = [];
     let parserDetails = {};
+    let sourceMessage = '';
 
     if (source.retailerKey === 'hofer' && source.channel === 'official-flyer') {
       const hoferResult = await crawlHoferOfficialPages({
@@ -2893,6 +3292,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       rawCandidateCount += dmOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...dmOfficialResult.offerDocuments);
       parserDetails.dmOfficialSale = dmOfficialResult.diagnostics || {};
+      sourceMessage = dmOfficialResult.message || dmOfficialResult.diagnostics?.message || '';
     } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
         source,
@@ -2918,6 +3318,9 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     }
 
     const status = offersStored > 0 || evidenceMatched > 0 || links.length > 0 ? 'success' : 'partial';
+    if (status === 'partial' && sourceMessage) {
+      warningMessages = warningMessages.concat(sourceMessage);
+    }
 
     await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
       status,
@@ -2960,6 +3363,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       evidenceMatched,
       discoveredLinks: links.length,
       sourceUrl: source.sourceUrl,
+      message: sourceMessage,
     };
   } catch (error) {
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
@@ -3000,5 +3404,10 @@ module.exports = {
     parseBipaOffersFromHtml,
     parseDmSaleOffersFromHtml,
     parseDmSaleOffersFromProductSearchJson,
+    extractDmSaleGridQuery,
+    buildDmSaleProductSearchUrl,
+    fetchDmSaleProductSearchPages,
+    summarizeDmOfficialSaleMessage,
+    diagnoseDmOfficialSaleSource,
   },
 };
