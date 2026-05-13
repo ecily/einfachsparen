@@ -624,3 +624,263 @@ test('dm Ausverkauf source is active official-site input for normal full crawl s
   assert.notEqual(dmOfficial.enabled, false);
   assert.equal(deriveSourceKey({ ...dmOfficial, sourceType: 'offers-page' }), 'dm-official-site');
 });
+
+function pennyOfficialSource(overrides = {}) {
+  return source({
+    retailerKey: 'penny',
+    retailerName: 'PENNY',
+    channel: 'official-site',
+    sourceUrl: 'https://www.penny.at/angebote',
+    label: 'PENNY Angebote',
+    sourceType: 'offers-page',
+    ...overrides,
+  });
+}
+
+function pennyCard({
+  href = '/produkte/auslese-klassisch-78114243',
+  titleLine = 'Auslese klassisch* • Jacobs',
+  quantity = '500 g Packung',
+  validFrom = 'von Mi 13.05.2026',
+  validTo = 'bis Mi 20.05.2026',
+  price = '5,99 €',
+  reference = '9,99 €',
+  basePrice = '1 kg 11,98 €',
+  image = '',
+} = {}) {
+  return `
+    <li class="ws-product-tile" data-test="product-tile">
+      <a href="${href}" data-test="product-tile-link">${titleLine.split('•')[0].trim()}</a>
+      ${image ? `<img data-srcset="${image} 1x, ${image.replace('140', '280')} 2x">` : '<img src="data:image/jpeg;base64,placeholder">'}
+      <h3 data-test="product-title">${titleLine}</h3>
+      <ul data-test="product-information-piece-description"><li>${quantity}</li></ul>
+      <div data-test="product-price-validity">
+        <div>${validFrom}</div>
+        ${validTo ? `<div>${validTo}</div>` : ''}
+      </div>
+      <div data-test="product-price">
+        <div data-test="product-price-type">
+          <div data-test="product-price-type-value">
+            <span class="ws-product-price-value__main">${price}</span>
+            ${reference ? `<span class="ws-product-price-strike" aria-label="${reference} - Streichpreis"><s>${reference}</s></span>` : ''}
+          </div>
+          ${basePrice ? `<div data-test="product-price-type-label">${basePrice}</div>` : ''}
+        </div>
+      </div>
+    </li>
+  `;
+}
+
+function pennyNuxtPayload(products = []) {
+  return `<script type="application/json" id="__NUXT_DATA__">${JSON.stringify(products)}</script>`;
+}
+
+function pennyProduct(overrides = {}) {
+  const slug = overrides.slug || 'auslese-klassisch-78114243';
+  const hasOverride = (key) => Object.prototype.hasOwnProperty.call(overrides, key);
+  return {
+    productId: overrides.productId || `product-${slug}`,
+    sku: overrides.sku || '78-114243',
+    slug,
+    name: overrides.name || 'Auslese klassisch*',
+    brand: overrides.brand === undefined ? { name: 'Jacobs', slug: 'jacobs' } : overrides.brand,
+    images: overrides.images || ['https://images.example.test/jacobs.jpg'],
+    amount: overrides.amount || '500',
+    volumeLabelShort: overrides.volumeLabelShort || 'g',
+    packageLabel: overrides.packageLabel || 'Packung',
+    category: overrides.category || 'Kaffee, Tee & Co.',
+    parentCategories: overrides.parentCategories || [[
+      { name: 'Getränke' },
+      { name: 'Kaffee, Tee & Co.' },
+      { name: 'Angebote ab 13.05.' },
+    ]],
+    price: {
+      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-13',
+      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-05-20',
+      crossed: overrides.crossed === undefined ? 999 : overrides.crossed,
+      regular: { value: overrides.priceCents || 599 },
+    },
+  };
+}
+
+function parsePennyFixture({ cards, products = [] }) {
+  return __private.parsePennyOffersFromHtml({
+    html: `<html><body><a href="/angebote?tab=angebote-ab-13-05">Angebote ab 13.05.</a>${cards.join('')}${pennyNuxtPayload(products)}</body></html>`,
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+  });
+}
+
+test('PENNY official parser extracts offer card core fields and Nuxt payload image', () => {
+  const offers = parsePennyFixture({
+    cards: [pennyCard()],
+    products: [pennyProduct()],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Auslese klassisch*');
+  assert.equal(offers[0].brand, 'Jacobs');
+  assert.equal(offers[0].quantityText, '500 g Packung');
+  assert.equal(offers[0].validFrom.toISOString(), '2026-05-13T12:00:00.000Z');
+  assert.equal(offers[0].validTo.toISOString(), '2026-05-20T23:59:59.999Z');
+  assert.equal(offers[0].priceCurrent.amount, 5.99);
+  assert.equal(offers[0].priceReference.amount, 9.99);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 11.98);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'kg');
+  assert.equal(offers[0].imageUrl, 'https://images.example.test/jacobs.jpg');
+  assert.equal(offers[0].availabilityScope, 'unknown');
+});
+
+test('PENNY official parser normalizes relative srcset image URLs', () => {
+  const offers = parsePennyFixture({
+    cards: [pennyCard({
+      href: '/produkte/cremereiniger-78107607',
+      titleLine: 'Cremereiniger • CIF',
+      quantity: '750 ml Flasche',
+      price: '1,99 €',
+      reference: '2,45 €',
+      basePrice: '1 Liter 2,65 €',
+      image: '/images/penny/cif-140.jpg',
+    })],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].imageUrl, 'https://www.penny.at/images/penny/cif-140.jpg');
+});
+
+test('PENNY official parser keeps offers without validTo and rejects expired validTo', () => {
+  const current = parsePennyFixture({
+    cards: [pennyCard({
+      titleLine: 'Kinder Pingui',
+      href: '/produkte/kinder-pingui-78102064',
+      quantity: '120 g Packung',
+      validTo: '',
+      price: '1,59 €',
+      reference: '',
+      basePrice: '1 kg 13,25 €',
+    })],
+    products: [pennyProduct({
+      slug: 'kinder-pingui-78102064',
+      name: 'Kinder Pingui',
+      brand: undefined,
+      images: [],
+      category: 'Süßwaren',
+      parentCategories: [[{ name: 'Süßes & Salziges' }, { name: 'Süßwaren' }]],
+      validityEnd: '',
+      crossed: null,
+      priceCents: 159,
+    })],
+  });
+  const expired = parsePennyFixture({
+    cards: [pennyCard({
+      validFrom: 'von Mi 01.01.2001',
+      validTo: 'bis Mi 02.01.2001',
+    })],
+  });
+
+  assert.equal(current.length, 1);
+  assert.equal(current[0].validTo, null);
+  assert.equal(expired.length, 0);
+});
+
+test('PENNY official parser classifies coffee, cleaner, sweets and alcohol conservatively', () => {
+  const offers = parsePennyFixture({
+    cards: [
+      pennyCard(),
+      pennyCard({
+        href: '/produkte/cremereiniger-78107607',
+        titleLine: 'Cremereiniger • CIF',
+        quantity: '750 ml Flasche',
+        price: '1,99 €',
+        reference: '2,45 €',
+        basePrice: '1 Liter 2,65 €',
+      }),
+      pennyCard({
+        href: '/produkte/naps-hauchzart-od-favourites-78112377',
+        titleLine: 'Naps*, Hauchzart* od. Favourites* • Milka',
+        quantity: '138 g Packung',
+        price: '3,49 €',
+        reference: '',
+        basePrice: '100 g 2,53 €',
+      }),
+      pennyCard({
+        href: '/produkte/bourbon-whiskey-78113169',
+        titleLine: 'Bourbon Whiskey • Jim Beam',
+        quantity: '0,7 liter Flasche',
+        validFrom: 'von Fr 15.05.2026',
+        validTo: 'bis Sa 16.05.2026',
+        price: '9,99 €',
+        reference: '',
+        basePrice: '1 Liter 14,27 €',
+      }),
+    ],
+    products: [
+      pennyProduct(),
+      pennyProduct({
+        slug: 'cremereiniger-78107607',
+        name: 'Cremereiniger',
+        brand: { name: 'CIF', slug: 'cif' },
+        category: 'Reinigen & Pflegen',
+        parentCategories: [[{ name: 'Haushalt' }, { name: 'Reinigen & Pflegen' }]],
+      }),
+      pennyProduct({
+        slug: 'naps-hauchzart-od-favourites-78112377',
+        name: 'Naps*, Hauchzart* od. Favourites*',
+        brand: { name: 'Milka', slug: 'milka' },
+        category: 'Schokolade',
+        parentCategories: [[{ name: 'Süßes & Salziges' }, { name: 'Schokolade' }]],
+        crossed: null,
+      }),
+      pennyProduct({
+        slug: 'bourbon-whiskey-78113169',
+        name: 'Bourbon Whiskey',
+        brand: { name: 'Jim Beam', slug: 'jim-beam' },
+        category: 'Spirituosen',
+        parentCategories: [[{ name: 'Getränke' }, { name: 'Spirituosen' }]],
+        crossed: null,
+      }),
+    ],
+  });
+  const byTitle = new Map(offers.map((offer) => [offer.title, offer]));
+
+  assert.equal(byTitle.get('Auslese klassisch*').categorySecondary, 'Kaffee & Tee');
+  assert.equal(byTitle.get('Cremereiniger').categoryPrimary, 'Haushalt');
+  assert.equal(byTitle.get('Cremereiniger').categorySecondary, 'Waschmittel & Reiniger');
+  assert.equal(byTitle.get('Naps*, Hauchzart* od. Favourites*').categorySecondary, 'Suesswaren & Knabbereien');
+  assert.equal(byTitle.get('Bourbon Whiskey').categorySecondary, 'Spirituosen');
+});
+
+test('PENNY official-site is the prioritized stable source key', () => {
+  const pennySources = RETAILER_DEFINITIONS.filter((definition) => definition.retailerKey === 'penny');
+  const officialSite = pennySources.find((definition) => definition.channel === 'official-site');
+
+  assert.equal(pennySources[0].channel, 'official-site');
+  assert.equal(officialSite.sourceUrl, 'https://www.penny.at/angebote');
+  assert.equal(officialSite.priority, 1);
+  assert.equal(deriveSourceKey({ ...officialSite, sourceType: 'offers-page' }), 'penny-official-site');
+});
+
+test('PENNY official-site diagnostic reports tabs, counts and expected effect', () => {
+  const html = `<html><body>
+    <a href="/angebote?tab=angebote-ab-13-05">Angebote ab 13.05.</a>
+    <a href="/angebote?tab=angebote/flugblaetter">Flugblätter</a>
+    <a href="/angebote?page=2">2</a>
+    ${pennyCard()}
+    ${pennyNuxtPayload([pennyProduct()])}
+  </body></html>`;
+  const report = __private.diagnosePennyOfficialSiteHtml({
+    html,
+    sourceUrl: 'https://www.penny.at/angebote',
+    response: { status: 200, headers: { 'content-type': 'text/html' } },
+  });
+
+  assert.equal(report.httpStatus, 200);
+  assert.equal(report.recognizedOfferCards, 1);
+  assert.equal(report.parsedRawOffers, 1);
+  assert.equal(report.withImageUrl, 1);
+  assert.equal(report.tabs.length, 2);
+  assert.equal(report.paginationLinks.length, 1);
+  assert.match(report.detailPagesOrApiNeeded, /Pagination/);
+});

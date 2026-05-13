@@ -33,6 +33,8 @@ function deriveSourceKey(source = {}) {
   if (url.includes('billa.at')) return `${format || 'billa'}-${source.channel || 'official'}-${source.sourceType || 'source'}`;
   if (url.includes('hofer.at')) return 'hofer-official-flyer';
   if (url.includes('lidl.at')) return 'lidl-official-flyer';
+  if (url.includes('penny.at/angebote/flugblaetter') || (url.includes('penny.at') && source.channel === 'official-flyer')) return 'penny-official-flyer';
+  if (url.includes('penny.at/angebote') || (url.includes('penny.at') && source.channel === 'official-site')) return 'penny-official-site';
   if (url.includes('penny.at')) return `penny-${source.channel || 'official'}-${source.sourceType || 'source'}`;
   if (url.includes('dm.at')) return 'dm-official-site';
   if (url.includes('bipa.at')) return 'bipa-official-site';

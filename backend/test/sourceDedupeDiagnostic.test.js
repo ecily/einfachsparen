@@ -112,6 +112,25 @@ test('PENNY OCR and PDF sources never win productively over official HTML', () =
   assert.ok(penny.risks.some((risk) => /OCR/.test(risk)));
 });
 
+test('PENNY official HTML wins over aggregator for comparable offers', () => {
+  const official = offer({
+    _id: 'penny-html',
+    retailerKey: 'penny',
+    retailerName: 'PENNY',
+    sourceType: 'penny-official-html',
+  });
+  const aggregator = offer({
+    _id: 'penny-aktionsfinder',
+    retailerKey: 'penny',
+    retailerName: 'PENNY',
+    sourceType: 'aktionsfinder-json',
+  });
+  const report = buildSourceDedupeDiagnostic({ offers: [aggregator, official] });
+  const penny = report.retailers.find((item) => item.retailerKey === 'penny');
+
+  assert.equal(penny.topDuplicateExamples[0].winningSourceType, 'penny-official-html');
+});
+
 test('same title, same price and same validity are a strong duplicate candidate', () => {
   const result = evaluatePair(
     offer({ _id: 'left', sourceType: 'billa-official-algolia' }),

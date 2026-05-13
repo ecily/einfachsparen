@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const crypto = require('node:crypto');
+const { Types } = require('mongoose');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
 const Offer = require('../../models/Offer');
@@ -423,6 +424,12 @@ function extractImageUrl(card) {
   ].find((value) => sanitizeWhitespace(value)) || '';
 }
 
+function extractNonPlaceholderImageUrl(card) {
+  const imageUrl = sanitizeWhitespace(extractImageUrl(card));
+
+  return /^data:/i.test(imageUrl) ? '' : imageUrl;
+}
+
 function decodeHtmlEntities(value) {
   return sanitizeWhitespace(cheerio.load(`<span>${String(value || '')}</span>`)('span').text());
 }
@@ -613,35 +620,290 @@ async function fetchLidlFlyerByIdentifier(identifier) {
   return response.data?.flyer || null;
 }
 
+function parseNuxtDataPayload(html) {
+  const $ = cheerio.load(html);
+  const rawPayload = $('#__NUXT_DATA__').html();
+
+  if (!rawPayload) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(rawPayload);
+  } catch (error) {
+    return [];
+  }
+}
+
+function hydrateNuxtIndex(payload, index, depth = 0) {
+  if (!Number.isInteger(index) || index < 0 || index >= payload.length || depth > 30) {
+    return null;
+  }
+
+  return hydrateNuxtValue(payload, payload[index], depth);
+}
+
+function hydrateNuxtValue(payload, value, depth = 0) {
+  if (depth > 30) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    if (typeof value[0] === 'string' && ['Reactive', 'ShallowReactive', 'Ref'].includes(value[0])) {
+      return hydrateNuxtIndex(payload, value[1], depth + 1);
+    }
+
+    if (typeof value[0] === 'string' && value[0] === 'EmptyRef') {
+      return null;
+    }
+
+    if (typeof value[0] === 'string' && value[0] === 'Set') {
+      return [];
+    }
+
+    return value.map((item) => typeof item === 'number'
+      ? hydrateNuxtIndex(payload, item, depth + 1)
+      : hydrateNuxtValue(payload, item, depth + 1));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        typeof item === 'number'
+          ? hydrateNuxtIndex(payload, item, depth + 1)
+          : hydrateNuxtValue(payload, item, depth + 1),
+      ])
+    );
+  }
+
+  return value;
+}
+
+function extractPennyNuxtProductsFromHtml(html) {
+  const payload = parseNuxtDataPayload(html);
+  const products = [];
+  const bySlug = new Map();
+  const byPath = new Map();
+
+  for (let index = 0; index < payload.length; index += 1) {
+    const raw = payload[index];
+
+    if (
+      raw
+      && typeof raw === 'object'
+      && !Array.isArray(raw)
+      && raw.productId !== undefined
+      && raw.price !== undefined
+      && raw.name !== undefined
+      && raw.slug !== undefined
+    ) {
+      const product = hydrateNuxtIndex(payload, index);
+      const slug = sanitizeWhitespace(product?.slug);
+
+      if (!slug || bySlug.has(slug)) {
+        continue;
+      }
+
+      products.push(product);
+      bySlug.set(slug, product);
+      byPath.set(`/produkte/${slug}`, product);
+    }
+  }
+
+  return { products, bySlug, byPath };
+}
+
+function parsePennyDateFromIso(value, endOfDay = false) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day] = match.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, endOfDay ? 23 : 12, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0));
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parsePennyDateFromText(value, endOfDay = false) {
+  const match = String(value || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, day, month, year] = match.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, endOfDay ? 23 : 12, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0));
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function extractPennyProductSlug(productUrl = '') {
+  const match = String(productUrl || '').match(/\/produkte\/([^/?#]+)/i);
+  return sanitizeWhitespace(match?.[1] || '');
+}
+
+function splitPennyTitleAndBrand(titleLine = '') {
+  const parts = sanitizeWhitespace(titleLine)
+    .split(/\s*(?:•|&bull;|â€¢)\s*/)
+    .map((value) => sanitizeWhitespace(value))
+    .filter(Boolean);
+
+  return {
+    title: parts[0] || '',
+    brand: parts.slice(1).join(' ') || '',
+  };
+}
+
+function centsToEuroAmount(value) {
+  const amount = Number(value);
+
+  return Number.isFinite(amount) ? Number((amount / 100).toFixed(2)) : null;
+}
+
+function buildPennyQuantityTextFromProduct(product = {}) {
+  return sanitizeWhitespace([product.amount, product.volumeLabelShort || product.volumeLabelLong, product.packageLabel].filter(Boolean).join(' '));
+}
+
+function extractPennySourceCategory(product = {}) {
+  product = product || {};
+  const categoryNames = [product.category];
+
+  for (const group of product.parentCategories || []) {
+    for (const category of Array.isArray(group) ? group : []) {
+      if (category?.name) {
+        categoryNames.push(category.name);
+      }
+    }
+  }
+
+  return [...new Set(categoryNames.map(sanitizeWhitespace).filter(Boolean))].join(' / ');
+}
+
+function extractPennyProductFromCard({ productUrl, nuxtProducts }) {
+  const slug = extractPennyProductSlug(productUrl);
+
+  try {
+    const path = new URL(productUrl).pathname;
+    return nuxtProducts.bySlug.get(slug) || nuxtProducts.byPath.get(path) || null;
+  } catch (error) {
+    return nuxtProducts.bySlug.get(slug) || null;
+  }
+}
+
+function extractPennyReferencePrice(card, product = {}) {
+  const referenceText = sanitizeWhitespace(
+    card.find('.ws-product-price-strike').first().attr('aria-label')
+    || card.find('.ws-product-price-strike s').first().text()
+    || card.find('s').first().text()
+  );
+  const referenceAmount = extractEuroPriceTexts(referenceText)[0]?.amount
+    || parseNumericAmount(referenceText)
+    || centsToEuroAmount(product?.price?.crossed);
+
+  return {
+    amount: referenceAmount,
+    originalText: referenceAmount ? (referenceText || `${referenceAmount.toFixed(2)} EUR`) : '',
+  };
+}
+
+function extractPennyTabsAndLinks(html, pageUrl = 'https://www.penny.at/angebote') {
+  const $ = cheerio.load(html);
+  const tabs = [];
+  const paginationLinks = [];
+  const seenTabs = new Set();
+  const seenPages = new Set();
+
+  $('a[href]').each((index, element) => {
+    const href = sanitizeWhitespace($(element).attr('href'));
+    const text = sanitizeWhitespace($(element).text());
+    const absoluteUrl = toAbsoluteUrl(href, pageUrl);
+
+    if (!absoluteUrl) {
+      return;
+    }
+
+    if (/\/angebote(?:\?|$)/i.test(absoluteUrl) && (/tab=/.test(absoluteUrl) || /angebote ab|flugbl/i.test(text))) {
+      const key = `${absoluteUrl}|${text}`;
+      if (!seenTabs.has(key)) {
+        seenTabs.add(key);
+        tabs.push({ label: text, url: absoluteUrl });
+      }
+    }
+
+    if (/\/angebote\?page=\d+/i.test(absoluteUrl) && !seenPages.has(absoluteUrl)) {
+      seenPages.add(absoluteUrl);
+      paginationLinks.push({ label: text, url: absoluteUrl });
+    }
+  });
+
+  return { tabs, paginationLinks };
+}
+
+function detectPennyScopeHint(html) {
+  const text = sanitizeWhitespace(cheerio.load(html)('body').text());
+
+  if (/filiale|filialfinder|verfuegbarkeit|verfügbarkeit|markt/i.test(text)) {
+    return {
+      type: 'unknown',
+      reason: 'Seite enthaelt Filial-/Markt-Kontext; keine belastbare österreichweite Gueltigkeit aus Parser ableitbar.',
+    };
+  }
+
+  return {
+    type: 'unknown',
+    reason: 'Keine explizite regionale oder österreichweite Angebotsgueltigkeit in der Angebotskarte erkannt.',
+  };
+}
+
 function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl }) {
   const $ = cheerio.load(html);
   const offers = [];
+  const seenOfferKeys = new Set();
+  const nuxtProducts = extractPennyNuxtProductsFromHtml(html);
+  const scopeHint = detectPennyScopeHint(html);
 
-  $('a[href*="/produkte/"]').each((index, element) => {
-    const card = $(element).closest('.ws-product-tile, li, article, div');
+  $('[data-test="product-tile"], .ws-product-tile').each((index, element) => {
+    const card = $(element);
+    const link = card.find('a[href*="/produkte/"]').first();
+    const productUrl = toAbsoluteUrl(link.attr('href'), pageUrl) || pageUrl;
+    const payloadProduct = extractPennyProductFromCard({ productUrl, nuxtProducts });
     const titleLine = sanitizeWhitespace(card.find('[data-test="product-title"]').first().text());
-    const [rawTitle, rawBrand] = titleLine.split('•').map((value) => sanitizeWhitespace(value));
-    const title = rawTitle || sanitizeWhitespace($(element).text());
-    const brand = rawBrand || '';
+    const splitTitle = splitPennyTitleAndBrand(titleLine);
+    const title = splitTitle.title || sanitizeWhitespace(link.text()) || sanitizeWhitespace(payloadProduct?.name);
+    const brand = splitTitle.brand || sanitizeWhitespace(payloadProduct?.brand?.name);
     const quantityText = sanitizeWhitespace(
       card.find('[data-test="product-information-piece-description"]').first().text()
-    );
+    ) || buildPennyQuantityTextFromProduct(payloadProduct);
     const validityNodes = card.find('[data-test="product-price-validity"] div');
-    const validFrom = parseDateWithWeekday(sanitizeWhitespace(validityNodes.eq(0).text()));
-    const validTo = parseDateWithWeekday(sanitizeWhitespace(validityNodes.eq(1).text()));
-    const currentPrice = parseNumericAmount(card.find('[data-test="product-price-type-value"]').first().text());
+    const validFrom = parsePennyDateFromText(sanitizeWhitespace(validityNodes.eq(0).text()))
+      || parsePennyDateFromIso(payloadProduct?.price?.validityStart);
+    const validTo = parsePennyDateFromText(sanitizeWhitespace(validityNodes.eq(1).text()), true)
+      || parsePennyDateFromIso(payloadProduct?.price?.validityEnd, true);
+    const currentPrice = parseNumericAmount(
+      card.find('.ws-product-price-value__main').first().text()
+      || card.find('[data-test="product-price-type-value"]').first().text()
+    );
     const unitPriceLabel = sanitizeWhitespace(card.find('[data-test="product-price-type-label"]').first().text());
     const normalizedUnitPrice = buildUnitPriceFromLabel(unitPriceLabel, currentPrice);
+    const priceReference = extractPennyReferencePrice(card, payloadProduct);
     const statusInfo = buildOfferStatus(validFrom, validTo);
+    const sourceCategory = extractPennySourceCategory(payloadProduct);
     const categoryPrimary = determineOfferCategory({
-      title,
-      contextText: [brand, quantityText, unitPriceLabel].filter(Boolean).join(' '),
+      title: sanitizeWhitespace(`${brand} ${title}`),
+      contextText: [brand, quantityText, unitPriceLabel, sourceCategory].filter(Boolean).join(' '),
+      sourceCategory,
     });
     const issues = [];
+    const offerKey = [productUrl, validFrom?.toISOString() || '', validTo?.toISOString() || '', currentPrice].join('|');
 
-    if (!title || !currentPrice) {
+    if (!title || !currentPrice || statusInfo.status === 'expired' || seenOfferKeys.has(offerKey)) {
       return;
     }
+
+    seenOfferKeys.add(offerKey);
 
     if (!normalizedUnitPrice.comparable) {
       issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
@@ -662,20 +924,24 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       categoryPrimary,
       categorySecondary: determineOfferSubcategory({
         primaryCategory: categoryPrimary,
-        fallbackLabel: categoryPrimary,
-        title,
-        contextText: [brand, quantityText, unitPriceLabel].filter(Boolean).join(' '),
+        sourceCategory,
+        fallbackLabel: sourceCategory || categoryPrimary,
+        title: sanitizeWhitespace(`${brand} ${title}`),
+        contextText: [brand, quantityText, unitPriceLabel, sourceCategory].filter(Boolean).join(' '),
       }),
       comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
       comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
       comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
       description: '',
-      sourceUrl: toAbsoluteUrl($(element).attr('href'), pageUrl) || pageUrl,
-      imageUrl: normalizeImageUrl(extractImageUrl(card), pageUrl),
+      sourceUrl: productUrl,
+      imageUrl: normalizeImageUrl(
+        extractNonPlaceholderImageUrl(card) || sanitizeWhitespace(payloadProduct?.images?.[0]),
+        productUrl
+      ),
       supportingSources: [
         buildSourceEvidence({
           source,
-          observedUrl: toAbsoluteUrl($(element).attr('href'), pageUrl) || pageUrl,
+          observedUrl: productUrl,
           matchType: 'primary',
         }),
       ],
@@ -684,19 +950,19 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       status: statusInfo.status,
       isActiveNow: statusInfo.isActiveNow,
       isActiveToday: statusInfo.isActiveToday,
-      benefitType: 'unknown',
+      benefitType: priceReference.amount ? 'price-cut' : 'unknown',
       conditionsText: '',
       customerProgramRequired: false,
-      availabilityScope: region || 'Grossraum Graz',
+      availabilityScope: 'unknown',
       priceCurrent: {
         amount: currentPrice,
         currency: 'EUR',
         originalText: `${currentPrice.toFixed(2)} EUR`,
       },
       priceReference: {
-        amount: null,
+        amount: priceReference.amount,
         currency: 'EUR',
-        originalText: '',
+        originalText: priceReference.originalText,
       },
       quantityText,
       normalizedUnitPrice,
@@ -708,8 +974,16 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       },
       rawFacts: {
         sourceType: 'penny-official-html',
+        sourceKind: 'official',
         validityText: sanitizeWhitespace(card.find('[data-test="product-price-validity"]').text()),
         infoText: unitPriceLabel,
+        sourceCategory,
+        productSlug: extractPennyProductSlug(productUrl),
+        productId: sanitizeWhitespace(payloadProduct?.productId),
+        sku: sanitizeWhitespace(payloadProduct?.sku),
+        imageSource: sanitizeWhitespace(payloadProduct?.images?.[0]) ? 'nuxt-payload' : '',
+        availabilityScope: scopeHint,
+        pageUrl,
         snapshotCurrent: false,
       },
       adminReview: {
@@ -726,6 +1000,79 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
   });
 
   return offers;
+}
+
+function diagnosePennyOfficialSiteHtml({ html, sourceUrl = 'https://www.penny.at/angebote', response = {}, fetchError = '' } = {}) {
+  const $ = cheerio.load(html || '');
+  const source = {
+    _id: new Types.ObjectId(),
+    retailerKey: 'penny',
+    retailerName: 'PENNY',
+    channel: 'official-site',
+    sourceUrl,
+    label: 'PENNY Angebote',
+    sourceType: 'offers-page',
+  };
+  const offers = parsePennyOffersFromHtml({
+    html,
+    source,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: sourceUrl,
+  });
+  const { products } = extractPennyNuxtProductsFromHtml(html || '');
+  const { tabs, paginationLinks } = extractPennyTabsAndLinks(html || '', sourceUrl);
+  const cardCount = $('[data-test="product-tile"], .ws-product-tile').length;
+  const skipRejectReasons = [];
+
+  if (fetchError) {
+    skipRejectReasons.push({ reason: 'fetch-error', count: 1, detail: fetchError });
+  }
+
+  const skippedCards = Math.max(0, cardCount - offers.length);
+  if (skippedCards > 0) {
+    skipRejectReasons.push({ reason: 'missing-title-price-expired-or-duplicate', count: skippedCards });
+  }
+
+  return {
+    sourceUrl,
+    httpStatus: response.status ?? null,
+    contentType: response.headers?.['content-type'] || '',
+    bodyPreview: bodyPreview($('body').text(), 500),
+    recognizedOfferCards: cardCount,
+    nuxtPayloadProducts: products.length,
+    parsedRawOffers: offers.length,
+    withPrice: offers.filter((offer) => offer.priceCurrent?.amount).length,
+    withValidFrom: offers.filter((offer) => offer.validFrom).length,
+    withValidTo: offers.filter((offer) => offer.validTo).length,
+    withStattpreis: offers.filter((offer) => offer.priceReference?.amount).length,
+    withGrundpreis: offers.filter((offer) => offer.normalizedUnitPrice?.amount).length,
+    withImageUrl: offers.filter((offer) => offer.imageUrl).length,
+    examples: offers.slice(0, 8).map((offer) => ({
+      title: offer.title,
+      brand: offer.brand,
+      quantityText: offer.quantityText,
+      priceCurrent: offer.priceCurrent?.amount ?? null,
+      priceReference: offer.priceReference?.amount ?? null,
+      basePrice: offer.normalizedUnitPrice?.amount ? `${offer.normalizedUnitPrice.amount}/${offer.normalizedUnitPrice.unit}` : '',
+      validFrom: offer.validFrom ? offer.validFrom.toISOString().slice(0, 10) : null,
+      validTo: offer.validTo ? offer.validTo.toISOString().slice(0, 10) : null,
+      categoryMain: offer.categoryPrimary,
+      categorySecondary: offer.categorySecondary,
+      imageUrl: Boolean(offer.imageUrl),
+      sourceUrl: offer.sourceUrl,
+    })),
+    skipRejectReasons,
+    tabs,
+    paginationLinks,
+    regionScopeHint: detectPennyScopeHint(html || ''),
+    detailPagesOrApiNeeded: paginationLinks.length > 0
+      ? 'Listing HTML enthaelt verwertbare Seite-1-Angebote und Nuxt-Payload-Bilder; weitere Pagination wird clientseitig verlinkt und sollte vor Production-Erweiterung separat gegen API/State-Endpunkte validiert werden.'
+      : 'Listing HTML reicht fuer erkannte Angebote; Detailseiten sind fuer diese Offers nicht noetig.',
+    expectedProductionEffect: offers.length > 18
+      ? `Targeted Crawl sollte mindestens ${offers.length} offizielle PENNY-HTML-Angebote speichern, sofern Production TLS/HTML identisch ist.`
+      : 'Erwarteter Effekt unter Ziel; Parser/Quelle erneut pruefen.',
+  };
 }
 
 function parseBipaTilePriceInfo(card) {
@@ -3406,6 +3753,10 @@ module.exports = {
   crawlOfficialSource,
   __private: {
     parseBipaOffersFromHtml,
+    parsePennyOffersFromHtml,
+    extractPennyNuxtProductsFromHtml,
+    extractPennyTabsAndLinks,
+    diagnosePennyOfficialSiteHtml,
     parseDmSaleOffersFromHtml,
     parseDmSaleOffersFromProductSearchJson,
     extractDmSaleGridQuery,

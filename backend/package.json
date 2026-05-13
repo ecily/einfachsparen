@@ -12,6 +12,7 @@
     "diagnose:penny-pdf-layout": "node scripts/diagnosePennyPdfLayout.js",
     "diagnose:penny-pdf-ocr": "node scripts/diagnosePennyPdfOcr.js",
     "diagnose:penny-pdf-ocr:runner": "python scripts/paddleOcrRunner.py",
+    "diagnose:penny-official-site": "node scripts/diagnosePennyOfficialSite.js",
     "diagnose:penny-sources": "node scripts/diagnosePennySources.js",
     "diagnose:source-dedupe": "node scripts/diagnoseSourceDedupe.js",
     "diagnose:validity-ingestion": "node scripts/diagnoseValidityIngestion.js",

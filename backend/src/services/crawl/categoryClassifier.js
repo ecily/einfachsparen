@@ -173,7 +173,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Suesswaren & Knabbereien',
   },
   {
-    patterns: [/\b(waschmittel|weichspuler|weichspueler|reiniger|putzmittel|spulmittel|spuelmittel|entkalker|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|duftspueler|duftspuler)\b/],
+    patterns: [/\b(waschmittel|weichspuler|weichspueler|reiniger|cremereiniger|putzmittel|spulmittel|spuelmittel|entkalker|wc reiniger|badreiniger|glasreiniger|allzweckreiniger|duftspueler|duftspuler)\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
   },
