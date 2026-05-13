@@ -5,6 +5,7 @@ const Offer = require('../models/Offer');
 const { offersRateLimit, basketRateLimit, imageProxyRateLimit } = require('../middleware/rateLimits');
 const { validateBasketQuery, validateRankingQuery } = require('../middleware/validators');
 const { buildOfferRanking, buildBasketSuggestions } = require('../services/offers/offerRankingService');
+const { buildImageRequestHeaders, normalizeImageUrl } = require('../services/images/imageUrl');
 
 const router = express.Router();
 
@@ -24,7 +25,8 @@ function isPrivateHostname(hostname) {
 
 function parseSafeImageUrl(value) {
   try {
-    const parsed = new URL(value);
+    const normalized = normalizeImageUrl(value);
+    const parsed = new URL(normalized);
 
     if (!['http:', 'https:'].includes(parsed.protocol) || isPrivateHostname(parsed.hostname)) {
       return null;
@@ -76,7 +78,7 @@ router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
       return res.status(400).json({ ok: false, message: 'Invalid offer id.' });
     }
 
-    const offer = await Offer.findById(req.params.offerId, { imageUrl: 1, title: 1, retailerName: 1 }).lean();
+    const offer = await Offer.findById(req.params.offerId, { imageUrl: 1, title: 1, retailerName: 1, sourceUrl: 1 }).lean();
 
     if (!offer) {
       return res.status(404).json({ ok: false, message: 'Offer not found' });
@@ -95,11 +97,8 @@ router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
     const response = await axios.get(imageUrl, {
       responseType: 'stream',
       timeout: 10000,
-      maxRedirects: 2,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-        Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-      },
+      maxRedirects: 5,
+      headers: buildImageRequestHeaders({ referer: offer.sourceUrl || '' }),
     });
     const contentType = String(response.headers['content-type'] || '').toLowerCase();
 
@@ -121,5 +120,9 @@ router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
     next(error);
   }
 });
+
+router.__private = {
+  parseSafeImageUrl,
+};
 
 module.exports = router;

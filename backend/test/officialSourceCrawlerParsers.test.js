@@ -65,6 +65,77 @@ test('BIPA official parser extracts current sale price, reference price and perf
   assert.equal(offers[0].rawFacts.availabilityScope.type, 'unknown');
 });
 
+test('BIPA official parser normalizes srcset-like image URLs from product cards', () => {
+  const offers = __private.parseBipaOffersFromHtml({
+    html: `
+      <html><body>
+        <a href="/p/calvin-klein-eternity/B3-123">
+          <img src="https://www.bipa.at/dw/image/v2/AAFT_PRD/original/123.png?sw=140 1x, https://www.bipa.at/dw/image/v2/AAFT_PRD/original/123.png?sw=280 2x">
+          <p>Calvin Klein</p>
+          <p>Eternity Eau de Parfum 50ml</p>
+          <p>50 ml</p>
+          <p>\u20ac 39,99</p>
+          <p>\u20ac 23,99</p>
+        </a>
+      </body></html>
+    `,
+    source: source(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/cp/aktionen',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].imageUrl, 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/123.png?sw=140');
+});
+
+test('BIPA official parser converts relative image URLs to absolute URLs', () => {
+  const offers = __private.parseBipaOffersFromHtml({
+    html: `
+      <html><body>
+        <a href="/p/nivea-shampoo/B3-456">
+          <img data-src="/dw/image/v2/AAFT_PRD/original/456.png?sw=140">
+          <p>Nivea</p>
+          <p>Pflege Shampoo 250ml</p>
+          <p>250 ml</p>
+          <p>\u20ac 4,99</p>
+          <p>\u20ac 2,99</p>
+        </a>
+      </body></html>
+    `,
+    source: source(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/cp/aktionen',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].imageUrl, 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/456.png?sw=140');
+});
+
+test('BIPA official parser keeps valid offers when product image is missing', () => {
+  const offers = __private.parseBipaOffersFromHtml({
+    html: `
+      <html><body>
+        <a href="/p/nivea-shampoo/B3-789">
+          <p>Nivea</p>
+          <p>Pflege Shampoo 250ml</p>
+          <p>250 ml</p>
+          <p>\u20ac 4,99</p>
+          <p>\u20ac 2,99</p>
+        </a>
+      </body></html>
+    `,
+    source: source(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/cp/aktionen',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].imageUrl, '');
+});
+
 test('BIPA official parser keeps snapshot offers when stale page-level validity text is present', () => {
   const html = `
     <html><body>

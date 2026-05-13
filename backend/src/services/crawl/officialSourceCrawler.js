@@ -39,6 +39,7 @@ const {
   extractIssuuDocumentsFromHtml,
   resolveIssuuOriginalPdfUrl,
 } = require('./issuuPdfResolver');
+const { normalizeImageUrl } = require('../images/imageUrl');
 const logger = require('../../lib/logger');
 
 const PARSER_VERSION = 'official-v3-coverage';
@@ -410,13 +411,16 @@ function extractUnitPriceTextFromText(value) {
 }
 
 function extractImageUrl(card) {
-  return (
-    card.find('.at-product-images_img').attr('data-src')
-    || card.find('.at-product-images_img').attr('src')
-    || card.find('img').attr('data-src')
-    || card.find('img').attr('src')
-    || ''
-  );
+  return [
+    card.find('.at-product-images_img').attr('data-src'),
+    card.find('.at-product-images_img').attr('data-srcset'),
+    card.find('.at-product-images_img').attr('srcset'),
+    card.find('.at-product-images_img').attr('src'),
+    card.find('img').attr('data-src'),
+    card.find('img').attr('data-srcset'),
+    card.find('img').attr('srcset'),
+    card.find('img').attr('src'),
+  ].find((value) => sanitizeWhitespace(value)) || '';
 }
 
 function decodeHtmlEntities(value) {
@@ -539,7 +543,7 @@ function normalizeLidlProductToOffer({
     comparisonCategoryKey: normalizeTitleForMatch(product?.wonCategoryPrimary || categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
     description,
     sourceUrl: product?.url || source.sourceUrl,
-    imageUrl: product?.image || '',
+    imageUrl: normalizeImageUrl(product?.image || '', product?.url || source.sourceUrl),
     supportingSources: [
       buildSourceEvidence({
         source,
@@ -667,7 +671,7 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
       description: '',
       sourceUrl: toAbsoluteUrl($(element).attr('href'), pageUrl) || pageUrl,
-      imageUrl: sanitizeWhitespace(card.find('img').first().attr('src') || ''),
+      imageUrl: normalizeImageUrl(extractImageUrl(card), pageUrl),
       supportingSources: [
         buildSourceEvidence({
           source,
@@ -858,7 +862,7 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
       comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
       description: '',
       sourceUrl: toAbsoluteUrl(card.attr('href'), pageUrl) || pageUrl,
-      imageUrl: sanitizeWhitespace(card.find('img').first().attr('src') || ''),
+      imageUrl: normalizeImageUrl(extractImageUrl(card), pageUrl || source.sourceUrl),
       supportingSources: [
         buildSourceEvidence({
           source,
@@ -1027,7 +1031,7 @@ function dmProductUrl(product, pageUrl) {
 function dmProductImageUrl(product) {
   const images = product?.tileData?.images || product?.images || [];
   const first = Array.isArray(images) ? images[0] : null;
-  return sanitizeWhitespace(first?.tileSrc || first?.src || first?.url || '');
+  return normalizeImageUrl(first?.tileSrc || first?.src || first?.url || '', 'https://www.dm.at/');
 }
 
 function dmHasSaleContext(product, contextText = '') {
@@ -1429,7 +1433,7 @@ function parseHoferOffersFromPage({
       comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
       description: '',
       sourceUrl: pageUrl,
-      imageUrl: extractImageUrl(card),
+      imageUrl: normalizeImageUrl(extractImageUrl(card), pageUrl),
       supportingSources: [
         buildSourceEvidence({
           source,
@@ -2038,7 +2042,7 @@ async function attachBillaOfficialEvidence({ source, crawlJobId, region }) {
             $addToSet: {
               supportingSources: evidence,
             },
-            ...(match.imageUrl ? {} : { $set: { imageUrl: hit.images?.[0] || '' } }),
+            ...(match.imageUrl ? {} : { $set: { imageUrl: normalizeImageUrl(hit.images?.[0] || '', source.sourceUrl) } }),
           },
         },
       });
@@ -2130,7 +2134,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
     comparisonCategoryKey: normalizeTitleForMatch(hit?.category || categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
     description: sanitizeWhitespace(hit?.descriptionShort || hit?.descriptionLong || ''),
     sourceUrl: observedUrl || source.sourceUrl,
-    imageUrl: hit?.images?.[0] || '',
+    imageUrl: normalizeImageUrl(hit?.images?.[0] || '', source.sourceUrl),
     supportingSources: [
       buildSourceEvidence({
         source,
@@ -3409,5 +3413,6 @@ module.exports = {
     fetchDmSaleProductSearchPages,
     summarizeDmOfficialSaleMessage,
     diagnoseDmOfficialSaleSource,
+    normalizeImageUrl,
   },
 };
