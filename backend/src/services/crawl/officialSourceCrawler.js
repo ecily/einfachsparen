@@ -42,6 +42,10 @@ const {
 const logger = require('../../lib/logger');
 
 const PARSER_VERSION = 'official-v3-coverage';
+const DM_CONTENT_PATH = 'https://content.services.dmtech.com/rootpage-dm-shop-de-at/ausverkauf';
+const DM_PRODUCT_SEARCH_URL = 'https://product-search.services.dmtech.com/at/search';
+const DM_SALE_PAGE_SIZE = 48;
+const DM_SALE_MAX_PAGES = 20;
 
 function toAbsoluteUrl(href, baseUrl) {
   try {
@@ -897,9 +901,17 @@ function buildDmSaleUnitPrice(basePriceText, currentPrice) {
   const perUnitMatch = text.match(/\(([\d,.]+)\s*\u20ac\s*je\s*1\s*(kg|l|St|Stk|stueck|stuck|100\s*ml|100\s*g)\)/i);
 
   if (perUnitMatch) {
-    const rawAmount = parseNumericAmount(perUnitMatch[1]);
+    let rawAmount = parseNumericAmount(perUnitMatch[1]);
     const rawUnit = perUnitMatch[2];
-    const unit = /kg/i.test(rawUnit) ? 'kg' : /l/i.test(rawUnit) ? 'l' : 'Stk';
+    let unit = /kg/i.test(rawUnit) ? 'kg' : /l/i.test(rawUnit) ? 'l' : 'Stk';
+
+    if (/100\s*ml/i.test(rawUnit)) {
+      rawAmount = rawAmount ? Number((rawAmount * 10).toFixed(2)) : rawAmount;
+      unit = 'l';
+    } else if (/100\s*g/i.test(rawUnit)) {
+      rawAmount = rawAmount ? Number((rawAmount * 10).toFixed(2)) : rawAmount;
+      unit = 'kg';
+    }
 
     return {
       amount: rawAmount,
@@ -924,6 +936,180 @@ function extractDmQuantityText(title, basePriceText) {
 
   const baseMatch = sanitizeWhitespace(basePriceText).match(/^\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|St|Stk|stueck|stuck)\b/i);
   return sanitizeWhitespace(baseMatch?.[0] || '');
+}
+
+function readNestedValue(source, paths = []) {
+  for (const path of paths) {
+    const value = String(path || '')
+      .split('.')
+      .reduce((current, key) => (current && current[key] !== undefined ? current[key] : undefined), source);
+
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function dmProductUrl(product, pageUrl) {
+  const rawSelf = readNestedValue(product, [
+    'tileData.self.href',
+    'tileData.self.url',
+    'tileData.self.path',
+    'tileData.self',
+    'self.href',
+    'self.url',
+  ]);
+
+  if (typeof rawSelf === 'string' && rawSelf.trim()) {
+    return toAbsoluteUrl(rawSelf, pageUrl || 'https://www.dm.at/ausverkauf') || pageUrl;
+  }
+
+  return pageUrl;
+}
+
+function dmProductImageUrl(product) {
+  const images = product?.tileData?.images || product?.images || [];
+  const first = Array.isArray(images) ? images[0] : null;
+  return sanitizeWhitespace(first?.tileSrc || first?.src || first?.url || '');
+}
+
+function dmHasSaleContext(product, contextText = '') {
+  const eyecatchers = product?.tileData?.eyecatchers || [];
+  const eyecatcherText = Array.isArray(eyecatchers)
+    ? eyecatchers.map((item) => item?.alt || item?.label || item?.type || '').join(' ')
+    : '';
+  const haystack = normalizeTitleForMatch([
+    contextText,
+    product?.tileData?.a11yLabel,
+    product?.context,
+    eyecatcherText,
+  ].filter(Boolean).join(' '));
+
+  return /\b(ausverkauf|sellout|sale)\b/.test(haystack);
+}
+
+function buildDmSaleOfferFromFields({
+  source,
+  crawlJobId,
+  region,
+  pageUrl,
+  brand,
+  title,
+  priceText,
+  referencePriceText,
+  basePriceText,
+  contextText,
+  imageUrl = '',
+  productUrl = '',
+  rawProduct = null,
+}) {
+  const currentPrice = parseNumericAmount(priceText);
+  const referencePrice = parseNumericAmount(referencePriceText);
+  const quantityText = extractDmQuantityText(title, basePriceText);
+  const normalizedUnitPrice = buildDmSaleUnitPrice(basePriceText, currentPrice);
+  const validFrom = new Date();
+  const statusInfo = buildOfferStatus(validFrom, null, true);
+  const categoryPrimary = determineOfferCategory({
+    title,
+    contextText: [brand, quantityText, basePriceText, contextText].filter(Boolean).join(' '),
+  });
+  const issues = ['Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar'];
+
+  if (!title || !currentPrice) {
+    return null;
+  }
+
+  if (!normalizedUnitPrice.comparable) {
+    issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+  }
+
+  if (!referencePrice || referencePrice <= currentPrice) {
+    issues.push('Vorheriger Preis aus offizieller Quelle nicht eindeutig ableitbar');
+  }
+
+  const observedUrl = productUrl || pageUrl;
+  const overrideResult = applyManualCategoryOverridesToOfferSync({
+    crawlJobId,
+    sourceId: source._id,
+    retailerKey: source.retailerKey,
+    retailerName: source.retailerName,
+    region,
+    title,
+    brand,
+    categoryPrimary,
+    categorySecondary: determineOfferSubcategory({
+      primaryCategory: categoryPrimary,
+      fallbackLabel: categoryPrimary,
+      title,
+      contextText: [brand, quantityText, basePriceText].filter(Boolean).join(' '),
+    }),
+    comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
+    comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+    comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+    description: 'Ausverkauf',
+    sourceUrl: observedUrl,
+    imageUrl,
+    supportingSources: [
+      buildSourceEvidence({
+        source,
+        observedUrl,
+        matchType: 'primary',
+      }),
+    ],
+    validFrom,
+    validTo: null,
+    status: statusInfo.status,
+    isActiveNow: statusInfo.isActiveNow,
+    isActiveToday: statusInfo.isActiveToday,
+    benefitType: referencePrice && referencePrice > currentPrice ? 'price-cut' : 'unknown',
+    conditionsText: 'Ausverkauf; nur solange der Vorrat reicht',
+    customerProgramRequired: false,
+    availabilityScope: 'online/filialabhaengig',
+    priceCurrent: {
+      amount: currentPrice,
+      currency: 'EUR',
+      originalText: priceText,
+    },
+    priceReference: {
+      amount: referencePrice && referencePrice > currentPrice ? referencePrice : null,
+      currency: 'EUR',
+      originalText: referencePrice && referencePrice > currentPrice ? referencePriceText : '',
+    },
+    quantityText,
+    normalizedUnitPrice,
+    quality: {
+      completenessScore: [currentPrice, title, categoryPrimary, quantityText].filter(Boolean).length / 4,
+      parsingConfidence: normalizedUnitPrice.comparable ? 0.86 : 0.74,
+      comparisonSafe: normalizedUnitPrice.comparable,
+      issues,
+    },
+    rawFacts: {
+      sourceType: 'dm-official-product-search',
+      validityText: 'Ausverkauf; nur solange der Vorrat reicht',
+      infoText: basePriceText,
+      availabilityText: sanitizeWhitespace(contextText.match(/Verf(?:ue|Ã¼|\u00fc)gbarkeit:\s*([^;]+)/i)?.[1] || ''),
+      availabilityScope: {
+        type: 'unknown',
+        country: 'AT',
+        label: 'dm Ausverkauf; Online-/Filialverfuegbarkeit produktabhaengig',
+        sourceEvidence: observedUrl,
+      },
+      snapshotCurrent: true,
+      dmDan: rawProduct?.dan || rawProduct?.tileData?.dan || null,
+      dmGtin: rawProduct?.gtin || rawProduct?.tileData?.gtin || null,
+      priceReferenceSource: referencePrice && referencePrice > currentPrice ? 'dm-product-search-previous-price' : '',
+    },
+    adminReview: {
+      status: issues.length > 0 ? 'pending' : 'reviewed',
+      note: '',
+      feedbackDigest: '',
+    },
+    scope: buildInclusiveScopeDecision(),
+  });
+
+  return overrideResult.offer || null;
 }
 
 function parseDmSaleOffersFromHtml({ html, source, crawlJobId, region, pageUrl }) {
@@ -1041,6 +1227,50 @@ function parseDmSaleOffersFromHtml({ html, source, crawlJobId, region, pageUrl }
 
     if (overrideResult.offer) {
       offers.push(overrideResult.offer);
+    }
+  }
+
+  return offers;
+}
+
+function parseDmSaleOffersFromProductSearchJson({ payload, source, crawlJobId, region, pageUrl }) {
+  const products = Array.isArray(payload?.products) ? payload.products : [];
+  const offers = [];
+
+  for (const product of products) {
+    const price = product?.tileData?.price?.price || product?.price?.price || {};
+    const tileInfos = product?.tileData?.price?.tileInfos || product?.tileData?.tileInfos || [];
+    const contextText = sanitizeWhitespace([
+      product?.tileData?.a11yLabel,
+      product?.tileData?.price?.prefix,
+      product?.tileData?.infoHint,
+      Array.isArray(product?.tileData?.eyecatchers)
+        ? product.tileData.eyecatchers.map((item) => item?.alt || '').join(' ')
+        : '',
+    ].filter(Boolean).join(' '));
+
+    if (!dmHasSaleContext(product, contextText)) {
+      continue;
+    }
+
+    const offer = buildDmSaleOfferFromFields({
+      source,
+      crawlJobId,
+      region,
+      pageUrl,
+      brand: sanitizeWhitespace(product?.brandName || product?.tileData?.brand?.name || ''),
+      title: sanitizeWhitespace(product?.title || product?.tileData?.title || ''),
+      priceText: sanitizeWhitespace(price?.current?.value || product?.tileData?.a11yLabel?.match(/Preis:\s*([^;]+)/i)?.[1] || ''),
+      referencePriceText: sanitizeWhitespace(price?.previous?.value || ''),
+      basePriceText: sanitizeWhitespace(Array.isArray(tileInfos) ? tileInfos[0] : tileInfos),
+      contextText,
+      imageUrl: dmProductImageUrl(product),
+      productUrl: dmProductUrl(product, pageUrl),
+      rawProduct: product,
+    });
+
+    if (offer) {
+      offers.push(offer);
     }
   }
 
@@ -1181,6 +1411,81 @@ async function fetchHtml(url) {
     response,
     html: String(response.data),
     canonicalUrl: response.request?.res?.responseUrl || url,
+  };
+}
+
+async function fetchDmJson(url, { referer = 'https://www.dm.at/ausverkauf' } = {}) {
+  const response = await axios.get(url, {
+    timeout: 30000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      Accept: 'application/json,text/plain,*/*',
+      'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+      Origin: 'https://www.dm.at',
+      Referer: referer,
+    },
+  });
+
+  return {
+    response,
+    payload: response.data,
+    canonicalUrl: response.request?.res?.responseUrl || url,
+  };
+}
+
+function extractDmSaleGridQuery(contentPayload = {}) {
+  const modules = Array.isArray(contentPayload?.mainData) ? contentPayload.mainData : [];
+  const grid = modules.find((item) => item?.type === 'DMSearchProductGrid' && /isSellout:true/i.test(String(item?.query?.filters || '')));
+  return grid?.query || null;
+}
+
+function buildDmSaleProductSearchUrl(query = {}, page = 0) {
+  const params = new URLSearchParams();
+  params.set('sort', query.sort || 'rating');
+  params.set('filters', query.filters || 'isSellout:true');
+  params.set('pageSize', String(DM_SALE_PAGE_SIZE));
+  params.set('currentPage', String(page));
+  params.set('enablePharmacy', 'false');
+
+  if (query.queryTerms) {
+    params.set('queryTerms', query.queryTerms);
+  }
+
+  return `${DM_PRODUCT_SEARCH_URL}?${params.toString()}`;
+}
+
+async function fetchDmSaleProductSearchPages({ sourceUrl }) {
+  const content = await fetchDmJson(DM_CONTENT_PATH, { referer: sourceUrl });
+  const query = extractDmSaleGridQuery(content.payload) || {
+    sort: 'rating',
+    filters: 'isSellout:true',
+  };
+  const pages = [];
+  let totalPages = 1;
+
+  for (let page = 0; page < Math.min(totalPages, DM_SALE_MAX_PAGES); page += 1) {
+    const url = buildDmSaleProductSearchUrl(query, page);
+    const result = await fetchDmJson(url, { referer: sourceUrl });
+    const payload = result.payload || {};
+
+    pages.push({
+      url,
+      payload,
+      httpStatus: result.response.status,
+      contentType: result.response.headers?.['content-type'] || '',
+    });
+
+    totalPages = Math.max(1, Number(payload.totalPages || 1));
+
+    if (!Array.isArray(payload.products) || payload.products.length === 0) {
+      break;
+    }
+  }
+
+  return {
+    content,
+    query,
+    pages,
   };
 }
 
@@ -2148,19 +2453,98 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
 }
 
 async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, canonicalUrl }) {
-  const normalizedOffers = parseDmSaleOffersFromHtml({
+  const pageUrl = canonicalUrl || source.sourceUrl;
+  const htmlOffers = parseDmSaleOffersFromHtml({
     html,
     source,
     crawlJobId,
     region,
-    pageUrl: canonicalUrl || source.sourceUrl,
+    pageUrl,
   });
+  let normalizedOffers = htmlOffers;
+  let rawCandidateCount = htmlOffers.length;
+  let rawDocuments = 0;
+  let productSearchReport = null;
+
+  try {
+    const productSearch = await fetchDmSaleProductSearchPages({ sourceUrl: pageUrl });
+    const products = productSearch.pages.flatMap((page) => (
+      Array.isArray(page.payload?.products) ? page.payload.products : []
+    ));
+    const apiOffers = productSearch.pages.flatMap((page) => parseDmSaleOffersFromProductSearchJson({
+      payload: page.payload,
+      source,
+      crawlJobId,
+      region,
+      pageUrl,
+    }));
+
+    if (apiOffers.length > 0 || products.length > 0) {
+      normalizedOffers = apiOffers;
+      rawCandidateCount = products.length;
+    }
+
+    productSearchReport = {
+      contentPath: DM_CONTENT_PATH,
+      productSearchUrl: DM_PRODUCT_SEARCH_URL,
+      filters: productSearch.query?.filters || '',
+      sort: productSearch.query?.sort || '',
+      pagesFetched: productSearch.pages.length,
+      reportedTotalResults: productSearch.pages[0]?.payload?.count || 0,
+      reportedTotalPages: productSearch.pages[0]?.payload?.totalPages || 0,
+    };
+
+    await createCompactRawDocument({
+      sourceId: source._id,
+      crawlJobId,
+      retailerKey: source.retailerKey,
+      region,
+      documentType: 'json',
+      sourceType: 'dm-official-product-search',
+      url: DM_PRODUCT_SEARCH_URL,
+      canonicalUrl: DM_PRODUCT_SEARCH_URL,
+      finalUrl: productSearch.pages[0]?.url || DM_PRODUCT_SEARCH_URL,
+      title: 'dm Ausverkauf Product Search',
+      httpStatus: productSearch.pages[0]?.httpStatus || null,
+      contentType: productSearch.pages[0]?.contentType || '',
+      downloadBytes: Buffer.byteLength(JSON.stringify(productSearch.pages.map((page) => page.payload || {})), 'utf8'),
+      contentHash: createHash(JSON.stringify(productSearch.pages.map((page) => page.payload || {}))),
+      contentSnippet: products.slice(0, 8).map((item) => item.title || item?.tileData?.title || '').filter(Boolean).join(' | '),
+      extractedPreview: products.slice(0, 12).map((item) => item.title || item?.tileData?.title || '').filter(Boolean),
+      foundRawItems: products.length,
+      parsedOffers: apiOffers.length,
+      rejectedOffers: Math.max(0, products.length - apiOffers.length),
+      parserVersion: PARSER_VERSION,
+      extractionConfidence: apiOffers.length > 0 ? 0.86 : 0.55,
+      rejectionReasons: products.length > apiOffers.length ? [{ reason: 'not-sellout-or-missing-price', count: products.length - apiOffers.length }] : [],
+      payload: {
+        ...productSearchReport,
+        sample: products.slice(0, 20).map((item) => ({
+          dan: item.dan || item?.tileData?.dan || null,
+          brandName: item.brandName || item?.tileData?.brand?.name || '',
+          title: item.title || item?.tileData?.title || '',
+          price: item?.tileData?.price || null,
+          eyecatchers: item?.tileData?.eyecatchers || [],
+        })),
+      },
+    });
+    rawDocuments += 1;
+  } catch (error) {
+    productSearchReport = {
+      contentPath: DM_CONTENT_PATH,
+      productSearchUrl: DM_PRODUCT_SEARCH_URL,
+      error: error.message,
+      fallback: htmlOffers.length > 0 ? 'html-parser' : 'none',
+    };
+  }
+
   const offerDocuments = enrichOffersForStorage(normalizedOffers, {
     source,
-    sourceType: 'dm-official-html',
+    sourceType: 'dm-official-product-search',
     parserVersion: PARSER_VERSION,
     normalizationVersion: NORMALIZATION_VERSION,
   });
+  const rejectedByCurrentRelevance = Math.max(0, normalizedOffers.length - offerDocuments.length);
 
   const refreshResult = await replaceOffersForSource({
     sourceId: source._id,
@@ -2169,9 +2553,24 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
 
   return {
     offerDocuments,
-    rawDocuments: 0,
-    rawCandidateCount: normalizedOffers.length,
+    rawDocuments,
+    rawCandidateCount,
     refreshResult,
+    diagnostics: {
+      ...productSearchReport,
+      parsedBeforeEnrichment: normalizedOffers.length,
+      enrichedBeforeDedupe: offerDocuments.length,
+      enrichedAfterDedupe: offerDocuments.length,
+      rejectedByCurrentRelevance,
+      sampleOffers: offerDocuments.slice(0, 5).map((offer) => ({
+        title: offer.title,
+        brand: offer.brand,
+        priceCurrent: offer.priceCurrent?.amount,
+        priceReference: offer.priceReference?.amount,
+        quantityText: offer.quantityText,
+        validTo: offer.validTo || null,
+      })),
+    },
   };
 }
 
@@ -2493,6 +2892,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += dmOfficialResult.rawDocuments;
       rawCandidateCount += dmOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...dmOfficialResult.offerDocuments);
+      parserDetails.dmOfficialSale = dmOfficialResult.diagnostics || {};
     } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
         source,
@@ -2599,5 +2999,6 @@ module.exports = {
   __private: {
     parseBipaOffersFromHtml,
     parseDmSaleOffersFromHtml,
+    parseDmSaleOffersFromProductSearchJson,
   },
 };
