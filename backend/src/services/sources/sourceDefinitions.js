@@ -361,10 +361,10 @@ const RETAILER_DEFINITIONS = [
     retailerKey: 'dm',
     retailerName: 'dm',
     channel: 'official-site',
-    label: 'dm Startseite',
-    sourceUrl: 'https://www.dm.at/',
+    label: 'dm Ausverkauf',
+    sourceUrl: 'https://www.dm.at/ausverkauf',
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
-    notes: 'Offizielle dm-Startseite als zusaetzliche Primaerquelle.',
+    notes: 'Offizielle dm-Ausverkaufseite als konservative Primaerquelle. Normale Sortimentsseiten werden nicht als Angebot gespeichert.',
   },
   {
     retailerKey: 'dm',

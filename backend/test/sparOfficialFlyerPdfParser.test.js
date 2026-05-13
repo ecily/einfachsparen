@@ -113,13 +113,15 @@ test('normalizes SPAR PDF candidates with source metadata and distinguishable re
     pdfSha256: 'abc123',
   });
 
-  const stored = enrichOfferForStorage(offers[0], {
+  const activeOffer = offers.find((offer) => offer.status === 'active');
+  const stored = enrichOfferForStorage(activeOffer, {
     source: source('interspar'),
     sourceType: SOURCE_TYPE,
     parserVersion: PARSER_VERSION,
   });
 
   assert.ok(offers.length >= 4);
+  assert.ok(activeOffer);
   assert.equal(stored.sourceType, 'spar-official-pdf');
   assert.equal(stored.retailerKey, 'spar');
   assert.equal(stored.sourceRetailerFormat, 'interspar');

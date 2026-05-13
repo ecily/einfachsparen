@@ -319,6 +319,28 @@ function buildUnitPriceFromLabel(label, currentPrice) {
   };
 }
 
+function extractEuroPriceTexts(value) {
+  const text = sanitizeWhitespace(value);
+  const matches = [];
+
+  for (const match of text.matchAll(/(?:\u20ac\s*(\d+(?:[,.]\d{1,2})?)|(\d+(?:[,.]\d{1,2})?)\s*\u20ac)/g)) {
+    const originalText = sanitizeWhitespace(match[0]);
+    const amount = parseNumericAmount(match[1] || match[2]);
+
+    if (amount) {
+      matches.push({ amount, originalText });
+    }
+  }
+
+  return matches;
+}
+
+function extractUnitPriceTextFromText(value) {
+  const text = sanitizeWhitespace(value);
+  const match = text.match(/(?:100\s*(?:g|ml)|1\s*(?:kg|l|Stk|stueck|stuck|waschgang))\s+[\d,.]+/i);
+  return sanitizeWhitespace(match?.[0] || '');
+}
+
 function extractImageUrl(card) {
   return (
     card.find('.at-product-images_img').attr('data-src')
@@ -646,6 +668,31 @@ function parseBipaTilePriceInfo(card) {
   };
 }
 
+function parseBipaTilePriceInfoV2(card) {
+  return parseBipaTilePriceInfoV3(card);
+}
+
+function parseBipaTilePriceInfoV3(card) {
+  const textNodes = card.find('p').map((index, element) => sanitizeWhitespace(card.find('p').eq(index).text())).get();
+  const cardText = sanitizeWhitespace(card.text());
+  const euroPrices = extractEuroPriceTexts(cardText);
+  const euroTextNodes = textNodes
+    .filter((value) => value.charCodeAt(0) === 8364 || value.startsWith('â'))
+    .map((value) => ({ amount: parseNumericAmount(value), originalText: value }))
+    .filter((value) => value.amount);
+  const priceCandidates = euroTextNodes.length > 0 ? euroTextNodes : euroPrices;
+  const priceText = priceCandidates.at(-1)?.originalText || '';
+  const unitPriceText = textNodes.find((value) => /\d+(?:[.,]\d+)?\s*(kg|l|Stk|waschgang|100 g|100 ml)/i.test(value));
+
+  return {
+    currentPrice: parseNumericAmount(priceText),
+    referencePrice: priceCandidates.length > 1 ? priceCandidates[0].amount : null,
+    referencePriceText: priceCandidates.length > 1 ? priceCandidates[0].originalText : '',
+    priceText,
+    unitPriceText: unitPriceText || extractUnitPriceTextFromText(cardText),
+  };
+}
+
 function extractBipaValidityDate(html) {
   const dates = [...String(html || '').matchAll(/(?:Gueltig bis|Gültig bis)\s+(\d{2}\.\d{2}\.\d{4})/gi)]
     .map((match) => parseDateWithWeekday(match[1]))
@@ -661,14 +708,34 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
   const validFrom = new Date();
   const validTo = validToHint || extractBipaValidityDate(html);
   const statusInfo = buildOfferStatus(validFrom, validTo, true);
+  const seenProductUrls = new Set();
 
-  $('a[data-testid^="product-tile-"][href*="/p/"]').each((index, element) => {
+  $('a[href*="/p/"]').each((index, element) => {
     const card = $(element);
+    const href = sanitizeWhitespace(card.attr('href') || '');
+    const productUrl = href ? new URL(href, pageUrl || source.sourceUrl).toString().split(/[?#]/)[0] : '';
+
+    if (productUrl && seenProductUrls.has(productUrl)) {
+      return;
+    }
+
+    if (productUrl) {
+      seenProductUrls.add(productUrl);
+    }
+
     const paragraphs = card.find('p').map((i, el) => sanitizeWhitespace($(el).text())).get().filter(Boolean);
-    const brand = paragraphs[0] || '';
-    const title = paragraphs[1] || sanitizeWhitespace(card.attr('title') || $(element).text());
-    const quantityText = paragraphs[2] || '';
-    const { currentPrice, priceText, unitPriceText } = parseBipaTilePriceInfo(card);
+    const cardText = sanitizeWhitespace(card.text());
+    const linkLabel = sanitizeWhitespace(card.attr('aria-label') || card.attr('title') || cardText);
+    const brand = paragraphs[0] || sanitizeWhitespace(linkLabel.split(/\s{2,}/)[0] || '');
+    const title = paragraphs[1] || sanitizeWhitespace(linkLabel.replace(brand, '').split(/\s+\d+\s*(?:ml|g|kg|Stk|stueck|stuck)\b/i)[0]);
+    const quantityText = paragraphs[2] || sanitizeWhitespace((linkLabel.match(/\d+(?:[.,]\d+)?\s*(?:ml|g|kg|l|Stk|stueck|stuck)\b/i) || [])[0] || '');
+    const {
+      currentPrice,
+      referencePrice,
+      referencePriceText,
+      priceText,
+      unitPriceText,
+    } = parseBipaTilePriceInfoV3(card);
     const normalizedUnitPrice = buildUnitPriceFromLabel(unitPriceText, currentPrice);
     const categoryPrimary = determineOfferCategory({
       title,
@@ -731,9 +798,9 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
         originalText: priceText || `${currentPrice.toFixed(2)} EUR`,
       },
       priceReference: {
-        amount: null,
+        amount: referencePrice && referencePrice > currentPrice ? referencePrice : null,
         currency: 'EUR',
-        originalText: '',
+        originalText: referencePrice && referencePrice > currentPrice ? referencePriceText : '',
       },
       quantityText,
       normalizedUnitPrice,
@@ -747,6 +814,12 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
         sourceType: 'bipa-official-html',
         validityText: validTo ? `bis ${validTo.toISOString().slice(0, 10)}` : '',
         infoText: unitPriceText,
+        availabilityScope: {
+          type: 'unknown',
+          country: 'AT',
+          label: 'offizielle BIPA-Aktionsseite; Online-/Filialgueltigkeit nicht eindeutig je Produkt extrahiert',
+          sourceEvidence: pageUrl,
+        },
         snapshotCurrent: true,
       },
       adminReview: {
@@ -793,6 +866,161 @@ function collectBipaPromotionLinks(html, baseUrl) {
   });
 
   return links.slice(0, 10);
+}
+
+function buildDmSaleUnitPrice(basePriceText, currentPrice) {
+  const text = sanitizeWhitespace(basePriceText);
+  const perUnitMatch = text.match(/\(([\d,.]+)\s*\u20ac\s*je\s*1\s*(kg|l|St|Stk|stueck|stuck|100\s*ml|100\s*g)\)/i);
+
+  if (perUnitMatch) {
+    const rawAmount = parseNumericAmount(perUnitMatch[1]);
+    const rawUnit = perUnitMatch[2];
+    const unit = /kg/i.test(rawUnit) ? 'kg' : /l/i.test(rawUnit) ? 'l' : 'Stk';
+
+    return {
+      amount: rawAmount,
+      unit,
+      comparable: Boolean(rawAmount && ['kg', 'l', 'Stk'].includes(unit)),
+      confidence: rawAmount ? 0.9 : 0,
+    };
+  }
+
+  return buildOfficialNormalizedUnitPrice({
+    priceAmount: currentPrice,
+    quantityText: text,
+  });
+}
+
+function extractDmQuantityText(title, basePriceText) {
+  const titleMatch = sanitizeWhitespace(title).match(/\b\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|St|Stk|stueck|stuck)\b/i);
+
+  if (titleMatch) {
+    return sanitizeWhitespace(titleMatch[0]);
+  }
+
+  const baseMatch = sanitizeWhitespace(basePriceText).match(/^\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|St|Stk|stueck|stuck)\b/i);
+  return sanitizeWhitespace(baseMatch?.[0] || '');
+}
+
+function parseDmSaleOffersFromHtml({ html, source, crawlJobId, region, pageUrl }) {
+  const $ = cheerio.load(html);
+  const bodyText = sanitizeWhitespace($('body').text());
+  const offers = [];
+  const validFrom = new Date();
+  const statusInfo = buildOfferStatus(validFrom, null, true);
+  const productPattern = /Marke:\s*([^;]+);\s*Produktname:\s*([^;]+);\s*Preis:\s*([^;]+);\s*Grundpreis:\s*([^;]+);([\s\S]*?)(?=Marke:\s*[^;]+;\s*Produktname:|Ende der Auflistung|$)/gi;
+
+  for (const match of bodyText.matchAll(productPattern)) {
+    const brand = sanitizeWhitespace(match[1]);
+    const title = sanitizeWhitespace(match[2]);
+    const priceText = sanitizeWhitespace(match[3]);
+    const basePriceText = sanitizeWhitespace(match[4]);
+    const contextText = sanitizeWhitespace(match[5]);
+    const currentPrice = parseNumericAmount(priceText);
+    const previousPriceMatch = contextText.match(/Vorheriger Preis:\s*([\d,.]+)\s*\u20ac/i);
+    const referencePrice = parseNumericAmount(previousPriceMatch?.[1]);
+    const quantityText = extractDmQuantityText(title, basePriceText);
+    const normalizedUnitPrice = buildDmSaleUnitPrice(basePriceText, currentPrice);
+    const categoryPrimary = determineOfferCategory({
+      title,
+      contextText: [brand, quantityText, basePriceText, contextText].filter(Boolean).join(' '),
+    });
+    const issues = ['Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar'];
+
+    if (!title || !currentPrice) {
+      continue;
+    }
+
+    if (!normalizedUnitPrice.comparable) {
+      issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+    }
+
+    if (!referencePrice || referencePrice <= currentPrice) {
+      issues.push('Vorheriger Preis aus offizieller Quelle nicht eindeutig ableitbar');
+    }
+
+    const overrideResult = applyManualCategoryOverridesToOfferSync({
+      crawlJobId,
+      sourceId: source._id,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      region,
+      title,
+      brand,
+      categoryPrimary,
+      categorySecondary: determineOfferSubcategory({
+        primaryCategory: categoryPrimary,
+        fallbackLabel: categoryPrimary,
+        title,
+        contextText: [brand, quantityText, basePriceText].filter(Boolean).join(' '),
+      }),
+      comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
+      comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+      comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+      description: 'Ausverkauf',
+      sourceUrl: pageUrl,
+      imageUrl: '',
+      supportingSources: [
+        buildSourceEvidence({
+          source,
+          observedUrl: pageUrl,
+          matchType: 'primary',
+        }),
+      ],
+      validFrom,
+      validTo: null,
+      status: statusInfo.status,
+      isActiveNow: statusInfo.isActiveNow,
+      isActiveToday: statusInfo.isActiveToday,
+      benefitType: referencePrice && referencePrice > currentPrice ? 'price-cut' : 'unknown',
+      conditionsText: 'Ausverkauf; nur solange der Vorrat reicht',
+      customerProgramRequired: false,
+      availabilityScope: 'online/filialabhaengig',
+      priceCurrent: {
+        amount: currentPrice,
+        currency: 'EUR',
+        originalText: priceText,
+      },
+      priceReference: {
+        amount: referencePrice && referencePrice > currentPrice ? referencePrice : null,
+        currency: 'EUR',
+        originalText: referencePrice && referencePrice > currentPrice ? previousPriceMatch[0] : '',
+      },
+      quantityText,
+      normalizedUnitPrice,
+      quality: {
+        completenessScore: [currentPrice, title, categoryPrimary, quantityText].filter(Boolean).length / 4,
+        parsingConfidence: normalizedUnitPrice.comparable ? 0.86 : 0.74,
+        comparisonSafe: normalizedUnitPrice.comparable,
+        issues,
+      },
+      rawFacts: {
+        sourceType: 'dm-official-html',
+        validityText: 'Ausverkauf; nur solange der Vorrat reicht',
+        infoText: basePriceText,
+        availabilityText: contextText.match(/Verfügbarkeit:\s*([^;]+)/i)?.[1] || '',
+        availabilityScope: {
+          type: 'unknown',
+          country: 'AT',
+          label: 'dm Ausverkauf; Online-/Filialverfuegbarkeit produktabhaengig',
+          sourceEvidence: pageUrl,
+        },
+        snapshotCurrent: true,
+      },
+      adminReview: {
+        status: issues.length > 0 ? 'pending' : 'reviewed',
+        note: '',
+        feedbackDigest: '',
+      },
+      scope: buildInclusiveScopeDecision(),
+    });
+
+    if (overrideResult.offer) {
+      offers.push(overrideResult.offer);
+    }
+  }
+
+  return offers;
 }
 
 function parseHoferOffersFromPage({
@@ -1895,6 +2123,34 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
   };
 }
 
+async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, canonicalUrl }) {
+  const normalizedOffers = parseDmSaleOffersFromHtml({
+    html,
+    source,
+    crawlJobId,
+    region,
+    pageUrl: canonicalUrl || source.sourceUrl,
+  });
+  const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+    source,
+    sourceType: 'dm-official-html',
+    parserVersion: PARSER_VERSION,
+    normalizationVersion: NORMALIZATION_VERSION,
+  });
+
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
+
+  return {
+    offerDocuments,
+    rawDocuments: 0,
+    rawCandidateCount: normalizedOffers.length,
+    refreshResult,
+  };
+}
+
 async function fetchNestedHtmlDocuments({ source, crawlJobId, region, links, limit = 4 }) {
   const baseHost = new URL(source.sourceUrl).host;
   const pageLinks = links
@@ -2200,6 +2456,19 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += lidlOfficialResult.rawDocuments;
       rawCandidateCount += lidlOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...lidlOfficialResult.offerDocuments);
+    } else if (source.retailerKey === 'dm' && source.sourceUrl.includes('dm.at/ausverkauf')) {
+      const dmOfficialResult = await crawlDmOfficialSaleOffers({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        html,
+        canonicalUrl,
+      });
+
+      offersStored += dmOfficialResult.offerDocuments.length;
+      extraRawDocuments += dmOfficialResult.rawDocuments;
+      rawCandidateCount += dmOfficialResult.rawCandidateCount || 0;
+      allStoredOffers.push(...dmOfficialResult.offerDocuments);
     } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
         source,
@@ -2303,4 +2572,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
 
 module.exports = {
   crawlOfficialSource,
+  __private: {
+    parseBipaOffersFromHtml,
+    parseDmSaleOffersFromHtml,
+  },
 };
