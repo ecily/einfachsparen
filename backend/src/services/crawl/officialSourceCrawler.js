@@ -694,9 +694,16 @@ function parseBipaTilePriceInfoV3(card) {
 }
 
 function extractBipaValidityDate(html) {
+  const now = new Date();
   const dates = [...String(html || '').matchAll(/(?:Gueltig bis|Gültig bis)\s+(\d{2}\.\d{2}\.\d{4})/gi)]
     .map((match) => parseDateWithWeekday(match[1]))
     .filter(Boolean)
+    .map((date) => {
+      const endOfDay = new Date(date);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      return endOfDay;
+    })
+    .filter((date) => date >= now)
     .sort((left, right) => left.getTime() - right.getTime());
 
   return dates[0] || null;
