@@ -219,6 +219,16 @@ function addDays(date, days) {
   return copy;
 }
 
+function endOfUtcDay(date) {
+  if (!date) {
+    return null;
+  }
+
+  const copy = new Date(date);
+  copy.setUTCHours(23, 59, 59, 999);
+  return copy;
+}
+
 function buildOfferStatus(validFrom, validTo, snapshotCurrent = false) {
   const now = new Date();
   const startOfToday = new Date(now);
@@ -362,7 +372,7 @@ function buildOfficialNormalizedUnitPrice({ priceAmount, quantityText }) {
 
 function buildUnitPriceFromLabel(label, currentPrice) {
   const text = sanitizeWhitespace(label);
-  const match = text.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|l|liter|ml|stuck|stueck|stk|waschgang)\s+([\d,.]+)/i);
+  const match = text.match(/(\d+(?:[.,]\d+)?)\s*(?:per\s+)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stuck|stueck|stk|waschgang)\s*(?:=|:)?\s*(?:€|eur)?\s*([\d,.]+)/i);
 
   if (!match) {
     return buildOfficialNormalizedUnitPrice({
@@ -425,6 +435,49 @@ function extractImageUrl(card) {
     card.find('img').attr('srcset'),
     card.find('img').attr('src'),
   ].find((value) => sanitizeWhitespace(value)) || '';
+}
+
+function extractHoferProductUrl(card, pageUrl) {
+  const href = sanitizeWhitespace(card.closest('a[href]').attr('href') || card.find('a[href]').first().attr('href'));
+  return href ? toAbsoluteUrl(href, pageUrl) : '';
+}
+
+function extractHoferAvailabilityDate(cardText) {
+  const match = String(cardText || '').match(/verf(?:\u00fc|ue)gbar\s+ab\s+(\d{2})\.(\d{2})\.(\d{4})/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const [day, month, year] = match.slice(1).map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function isHoferSoldOutCard(cardText) {
+  return /\bausverkauft\b/i.test(String(cardText || ''));
+}
+
+function isHoferOfferPageUrl(url) {
+  const value = String(url || '');
+  return /\/de\/angebote\/(?:d\.\d{2}-\d{2}-\d{4}|hofer-preiswochen|hofer-preis-dauerhaft-guenstiger)\.html/i.test(value);
+}
+
+function hoferPageOfferContext(url) {
+  const value = String(url || '');
+
+  if (/\/de\/angebote\/d\.\d{2}-\d{2}-\d{4}\.html/i.test(value)) {
+    return 'dated-offers';
+  }
+
+  if (/\/de\/angebote\/hofer-preiswochen\.html/i.test(value)) {
+    return 'hofer-preiswochen';
+  }
+
+  if (/\/de\/angebote\/hofer-preis-dauerhaft-guenstiger\.html/i.test(value)) {
+    return 'hofer-preis-dauerhaft-guenstiger';
+  }
+
+  return 'unknown';
 }
 
 function extractNonPlaceholderImageUrl(card) {
@@ -1961,10 +2014,19 @@ function parseHoferOffersFromPage({
   region,
   pageDate,
   nextPageDate,
+  diagnostics,
 }) {
   const $ = cheerio.load(html);
   const cards = $('.plp_product');
   const offers = [];
+  const pageContext = hoferPageOfferContext(pageUrl);
+  const isSnapshotOfferPage = !pageDate && pageContext !== 'unknown';
+
+  if (diagnostics) {
+    diagnostics.pages = diagnostics.pages || [];
+    diagnostics.skipReasons = diagnostics.skipReasons || {};
+    diagnostics.rawCards = (diagnostics.rawCards || 0) + cards.length;
+  }
 
   cards.each((index, element) => {
     const card = $(element);
@@ -1973,13 +2035,11 @@ function parseHoferOffersFromPage({
     const oldPrice = parseNumericAmount(card.find('.price_before').text());
     const additionalInfo = sanitizeWhitespace(card.find('.additional-product-info').text());
     const cardText = sanitizeWhitespace(card.text());
-    const validFrom = parseDateFromText(cardText) || pageDate;
-    const validTo = validFrom && nextPageDate ? addDays(nextPageDate, -1) : null;
+    const validFrom = extractHoferAvailabilityDate(cardText) || parseDateFromText(cardText) || pageDate || (isSnapshotOfferPage ? new Date() : null);
+    const validTo = validFrom && nextPageDate ? endOfUtcDay(addDays(nextPageDate, -1)) : null;
+    const statusInfo = buildOfferStatus(validFrom, validTo, isSnapshotOfferPage);
     const quantityText = additionalInfo || '';
-    const normalizedUnitPrice = buildOfficialNormalizedUnitPrice({
-      priceAmount: currentPrice,
-      quantityText,
-    });
+    const normalizedUnitPrice = buildUnitPriceFromLabel(quantityText, currentPrice);
     const brandAndTitle = title;
     const categoryPrimary = determineOfferCategory({
       title: brandAndTitle,
@@ -1988,7 +2048,23 @@ function parseHoferOffersFromPage({
     const scopeDecision = buildInclusiveScopeDecision();
     const issues = [];
 
-    if (!title || !currentPrice) {
+    if (!title) {
+      if (diagnostics) diagnostics.skipReasons['missing-title'] = (diagnostics.skipReasons['missing-title'] || 0) + 1;
+      return;
+    }
+
+    if (!currentPrice) {
+      if (diagnostics) diagnostics.skipReasons['missing-current-price'] = (diagnostics.skipReasons['missing-current-price'] || 0) + 1;
+      return;
+    }
+
+    if (isHoferSoldOutCard(cardText)) {
+      if (diagnostics) diagnostics.skipReasons['sold-out'] = (diagnostics.skipReasons['sold-out'] || 0) + 1;
+      return;
+    }
+
+    if (statusInfo.status === 'expired' || statusInfo.status === 'upcoming') {
+      if (diagnostics) diagnostics.skipReasons[`status-${statusInfo.status}`] = (diagnostics.skipReasons[`status-${statusInfo.status}`] || 0) + 1;
       return;
     }
 
@@ -1999,6 +2075,9 @@ function parseHoferOffersFromPage({
     if (!validTo) {
       issues.push('Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar');
     }
+
+    const conditionsText = validTo ? '' : 'Aktuell gefunden - bitte im Markt pruefen.';
+    const productUrl = extractHoferProductUrl(card, pageUrl);
 
     const overrideResult = applyManualCategoryOverridesToOfferSync({
       crawlJobId,
@@ -2019,7 +2098,7 @@ function parseHoferOffersFromPage({
       comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
       comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
       description: '',
-      sourceUrl: pageUrl,
+      sourceUrl: productUrl || pageUrl,
       imageUrl: normalizeImageUrl(extractImageUrl(card), pageUrl),
       supportingSources: [
         buildSourceEvidence({
@@ -2030,8 +2109,11 @@ function parseHoferOffersFromPage({
       ],
       validFrom,
       validTo,
+      status: statusInfo.status,
+      isActiveNow: statusInfo.isActiveNow,
+      isActiveToday: statusInfo.isActiveToday,
       benefitType: oldPrice && oldPrice > currentPrice ? 'price-cut' : 'unknown',
-      conditionsText: '',
+      conditionsText,
       customerProgramRequired: false,
       availabilityScope: region || 'Grossraum Graz',
       priceCurrent: {
@@ -2045,6 +2127,7 @@ function parseHoferOffersFromPage({
         originalText: oldPrice ? `${oldPrice.toFixed(2)} EUR` : '',
       },
       quantityText,
+      comparableUnit: normalizedUnitPrice.unit || '',
       normalizedUnitPrice,
       quality: {
         completenessScore: [currentPrice, validFrom, categoryPrimary].filter(Boolean).length / 3,
@@ -2055,11 +2138,16 @@ function parseHoferOffersFromPage({
       rawFacts: {
         sourceType: 'hofer-official-html',
         additionalInfo,
+        pageContext,
         pageUrl,
+        productUrl,
+        validityText: validTo
+          ? [validFrom?.toISOString?.().slice(0, 10), validTo.toISOString().slice(0, 10)].filter(Boolean).join(' - ')
+          : conditionsText,
       },
       adminReview: {
         status: issues.length > 0 ? 'pending' : 'reviewed',
-        note: '',
+        note: conditionsText,
         feedbackDigest: '',
       },
       scope: scopeDecision,
@@ -2069,6 +2157,16 @@ function parseHoferOffersFromPage({
       offers.push(overrideResult.offer);
     }
   });
+
+  if (diagnostics) {
+    diagnostics.parsedOffers = (diagnostics.parsedOffers || 0) + offers.length;
+    diagnostics.pages.push({
+      url: pageUrl,
+      pageContext,
+      rawCards: cards.length,
+      parsedOffers: offers.length,
+    });
+  }
 
   return offers;
 }
@@ -3762,12 +3860,31 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
     }))
     .filter((item) => item.pageDate)
     .sort((left, right) => left.pageDate.getTime() - right.pageDate.getTime());
+  const datedUrlSet = new Set(datedLinks.map((item) => item.url));
+  const offerLinks = [
+    ...datedLinks,
+    ...links
+      .filter((item) => isHoferOfferPageUrl(item.url) && !datedUrlSet.has(item.url))
+      .map((item) => ({
+        ...item,
+        pageDate: null,
+      })),
+  ];
   const allOffers = [];
   let rawDocumentCount = 0;
+  const diagnostics = {
+    pageCount: offerLinks.length,
+    rawCards: 0,
+    parsedOffers: 0,
+    skipReasons: {},
+    pages: [],
+  };
 
-  for (let index = 0; index < datedLinks.length; index += 1) {
-    const current = datedLinks[index];
-    const next = datedLinks[index + 1];
+  for (let index = 0; index < offerLinks.length; index += 1) {
+    const current = offerLinks[index];
+    const next = current.pageDate
+      ? datedLinks.find((item) => item.pageDate && item.pageDate.getTime() > current.pageDate.getTime())
+      : null;
     const { html, canonicalUrl } = await fetchHtml(current.url);
     const title = sanitizeWhitespace(cheerio.load(html)('title').text()) || current.label;
 
@@ -3802,6 +3919,7 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
       region,
       pageDate: current.pageDate,
       nextPageDate: next?.pageDate || null,
+      diagnostics,
     });
 
     allOffers.push(...pageOffers);
@@ -3822,7 +3940,9 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
   return {
     offerDocuments,
     rawDocumentCount,
-    rawCandidateCount: allOffers.length,
+    rawCandidateCount: diagnostics.rawCards || allOffers.length,
+    diagnostics,
+    rejectionReasons: Object.entries(diagnostics.skipReasons || {}).map(([reason, count]) => ({ reason, count })),
     refreshResult,
   };
 }
@@ -3939,6 +4059,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     const allStoredOffers = [];
     let parserDetails = {};
     let sourceMessage = '';
+    let extraRejectionReasons = [];
 
     if (source.retailerKey === 'hofer' && source.channel === 'official-flyer') {
       const hoferResult = await crawlHoferOfficialPages({
@@ -3952,6 +4073,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += hoferResult.rawDocumentCount;
       rawCandidateCount += hoferResult.rawCandidateCount || 0;
       allStoredOffers.push(...hoferResult.offerDocuments);
+      parserDetails.hoferOfficial = hoferResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(hoferResult.rejectionReasons || []);
     } else if (source.sourceUrl.includes('billa.at/unsere-aktionen/aktionen')) {
       const billaOfficialResult = await crawlBillaOfficialPromotions({
         source,
@@ -4065,6 +4188,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       httpLog,
       warningMessages,
       errorMessages: [],
+      extraRejectionReasons,
       metadata: {
         sourceLabel: source.label,
         sourceUrl: source.sourceUrl,
@@ -4146,6 +4270,8 @@ module.exports = {
     fetchDmSaleProductSearchPages,
     summarizeDmOfficialSaleMessage,
     diagnoseDmOfficialSaleSource,
+    parseHoferOffersFromPage,
+    isHoferOfferPageUrl,
     normalizeImageUrl,
   },
 };

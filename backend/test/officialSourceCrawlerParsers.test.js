@@ -615,6 +615,153 @@ test('dm product-search parser normalizes 100 ml base prices and classifies perf
   assert.equal(offers[0].categorySecondary, 'Kosmetik & Make-up');
 });
 
+function hoferOfficialSource() {
+  return source({
+    retailerKey: 'hofer',
+    retailerName: 'Hofer',
+    channel: 'official-flyer',
+    sourceUrl: 'https://www.hofer.at/de/angebote/aktuelle-flugblaetter-und-broschuren.html',
+    label: 'HOFER aktuelle Flugblaetter und Broschueren',
+  });
+}
+
+function hoferCard({
+  title = 'CUCINA Cantuccini, Klassik',
+  price = '\u20ac 1,69',
+  oldPrice = 'Statt \u20ac 2,49',
+  additionalInfo = 'per Packung (100 per Gramm = \u20ac 0,56 )',
+  href = '/de/p.cucina-cantuccini-klassik.000000000000700001.html',
+  image = '/is/image/aldi/202605070007',
+  extraText = '',
+} = {}) {
+  return `
+    <a href="${href}">
+      <div class="item plp_product">
+        <img class="at-product-images_img" data-srcset="${image} 1x, ${image.replace('0007', '0007-large')} 2x">
+        <h2 class="product-title">${title}</h2>
+        <span class="at-product-price_lbl">${price}</span>
+        ${oldPrice ? `<span class="price_before">${oldPrice}</span>` : ''}
+        <span class="additional-product-info">${additionalInfo}</span>
+        <span>${extraText}</span>
+      </div>
+    </a>
+  `;
+}
+
+function parseHoferFixture({ cards, pageUrl = 'https://www.hofer.at/de/angebote/hofer-preiswochen.html', pageDate = null, nextPageDate = null, diagnostics = {} }) {
+  return __private.parseHoferOffersFromPage({
+    html: `<html><body>${cards.join('')}</body></html>`,
+    source: hoferOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl,
+    pageDate,
+    nextPageDate,
+    diagnostics,
+  });
+}
+
+test('HOFER official parser extracts multiple offer cards with prices, unit prices and image URLs', () => {
+  const offers = parseHoferFixture({
+    cards: [
+      hoferCard(),
+      hoferCard({
+        title: 'AQUA+ Vitaminwater, Orange',
+        price: '\u20ac 0,49',
+        oldPrice: '',
+        additionalInfo: 'per Flasche (1 L = \u20ac 0,98 )',
+        href: '/de/p.aqua-vitaminwater-orange.000000000000700002.html',
+        image: 'https://s7g10.scene7.com/is/image/aldi/202603300450',
+      }),
+    ],
+  });
+
+  assert.equal(offers.length, 2);
+  assert.equal(offers[0].title, 'CUCINA Cantuccini, Klassik');
+  assert.equal(offers[0].priceCurrent.amount, 1.69);
+  assert.equal(offers[0].priceReference.amount, 2.49);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 5.6);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'kg');
+  assert.equal(offers[0].sourceUrl, 'https://www.hofer.at/de/p.cucina-cantuccini-klassik.000000000000700001.html');
+  assert.equal(offers[0].imageUrl, 'https://www.hofer.at/is/image/aldi/202605070007');
+  assert.equal(offers[1].normalizedUnitPrice.amount, 0.98);
+  assert.equal(offers[1].normalizedUnitPrice.unit, 'l');
+});
+
+test('HOFER official parser keeps current snapshot offers without validTo and labels them conservatively', () => {
+  const hoferSource = hoferOfficialSource();
+  const offers = parseHoferFixture({
+    cards: [hoferCard({ oldPrice: '', additionalInfo: 'per Packung (1 per Kilogramm = \u20ac 10,90 )' })],
+  });
+  const enriched = enrichOffersForStorage(offers, {
+    source: hoferSource,
+    sourceType: 'hofer-official-html',
+    parserVersion: 'official-v3-coverage',
+    normalizationVersion: 'v3-audit',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].validTo, null);
+  assert.equal(offers[0].status, 'active');
+  assert.equal(offers[0].isActiveNow, true);
+  assert.match(offers[0].conditionsText, /Aktuell gefunden - bitte im Markt pruefen/);
+  assert.equal(enriched.length, 1);
+  assert.equal(buildValidityLabel(enriched[0]), 'aktuell verfuegbar, Enddatum nicht erkannt');
+});
+
+test('HOFER official parser derives dated-page validTo as full previous day and rejects future offers', () => {
+  const today = new Date();
+  const pageDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1, 12, 0, 0));
+  const nextPageDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1, 12, 0, 0));
+  const expectedValidTo = new Date(nextPageDate);
+  expectedValidTo.setUTCDate(expectedValidTo.getUTCDate() - 1);
+  expectedValidTo.setUTCHours(23, 59, 59, 999);
+  const currentOffers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/de/angebote/d.13-05-2026.html',
+    pageDate,
+    nextPageDate,
+    cards: [hoferCard()],
+  });
+  const futureDiagnostics = {};
+  const futureOffers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/de/angebote/d.21-05-2026.html',
+    pageDate: new Date(Date.UTC(2099, 4, 21, 12, 0, 0)),
+    cards: [hoferCard({ extraText: 'verfuegbar ab 21.05.2099' })],
+    diagnostics: futureDiagnostics,
+  });
+
+  assert.equal(currentOffers.length, 1);
+  assert.equal(currentOffers[0].validTo.toISOString(), expectedValidTo.toISOString());
+  assert.equal(futureOffers.length, 0);
+  assert.equal(futureDiagnostics.skipReasons['status-upcoming'], 1);
+});
+
+test('HOFER official parser reports reject reasons for non-offer cards', () => {
+  const diagnostics = {};
+  const offers = parseHoferFixture({
+    diagnostics,
+    cards: [
+      hoferCard({ title: '', price: '\u20ac 1,99' }),
+      hoferCard({ title: 'Preisloses Produkt', price: '' }),
+      hoferCard({ title: 'Ausverkauftes Produkt', extraText: 'Ausverkauft' }),
+    ],
+  });
+
+  assert.equal(offers.length, 0);
+  assert.equal(diagnostics.rawCards, 3);
+  assert.equal(diagnostics.skipReasons['missing-title'], 1);
+  assert.equal(diagnostics.skipReasons['missing-current-price'], 1);
+  assert.equal(diagnostics.skipReasons['sold-out'], 1);
+});
+
+test('HOFER official source only treats explicit offer pages as additional HTML offer inputs', () => {
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/hofer-preiswochen.html'), true);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/hofer-preis-dauerhaft-guenstiger.html'), true);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/d.13-05-2026.html'), true);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/angebote-im-ueberblick.html'), false);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/sortiment/produktsortiment.html'), false);
+});
+
 test('dm Ausverkauf source is active official-site input for normal full crawl selection', () => {
   const dmOfficial = RETAILER_DEFINITIONS.find((definition) =>
     definition.retailerKey === 'dm' && definition.channel === 'official-site'
