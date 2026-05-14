@@ -1,5 +1,5 @@
 function sanitizeWhitespace(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  return String(value || '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function normalizeTitleForMatch(value) {

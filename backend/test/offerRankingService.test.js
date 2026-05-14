@@ -406,6 +406,37 @@ test('ranks real butter ahead of peanut butter cups and cosmetic butter hits', (
   assert.equal(sortedTitles.includes('NYX Buttermelt Highlighter'), false);
 });
 
+test('generic butter excludes facial and body butter while explicit cosmetic butter queries still work', () => {
+  const offers = [
+    offer({
+      title: 'Q10 Anti Falten Kollagen Experte Facial Butter Tag und Nacht',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      comparisonGroup: 'q10-facial-butter::1-Stk',
+    }),
+    offer({
+      title: 'Body Butter Shea',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'body-butter-shea::1-Stk',
+    }),
+    offer({
+      title: 'Ja Natuerlich Bio Butter 250 g',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'ja-natuerlich-bio-butter::0.25-kg',
+    }),
+  ];
+
+  const genericTitles = applyQueryMatch(offers, 'butter').map((item) => item.title);
+  const bodyButterTitles = applyQueryMatch(offers, 'body butter').map((item) => item.title);
+  const facialButterTitles = applyQueryMatch(offers, 'facial butter').map((item) => item.title);
+
+  assert.deepEqual(genericTitles, ['Ja Natuerlich Bio Butter 250 g']);
+  assert.equal(bodyButterTitles.includes('Body Butter Shea'), true);
+  assert.equal(facialButterTitles.includes('Q10 Anti Falten Kollagen Experte Facial Butter Tag und Nacht'), true);
+});
+
 test('does not keep buttergemuese or butter sweets as top butter results', () => {
   const offers = [
     offer({
@@ -469,6 +500,138 @@ test('excludes bakery dairy and seasoning side hits when no real butter exists',
   ];
 
   assert.deepEqual(applyQueryMatch(offers, 'butter'), []);
+});
+
+test('generic oil ranks food oil and excludes hair essential and cosmetic oils', () => {
+  const offers = [
+    offer({
+      title: 'Naehr-Shampoo EI-Oel 200 ml',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'naehr-shampoo-ei-oel::0.2-l',
+    }),
+    offer({
+      title: 'Aetherisches Oel Lavendel 10 ml',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'aetherisches-oel-lavendel::0.01-l',
+    }),
+    offer({
+      title: 'Bona Bona Oel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen, Oele & Gewuerze',
+      comparisonGroup: 'bona-bona-oel::1-l',
+    }),
+    offer({
+      title: 'Olivenoel Extra Vergine',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen, Oele & Gewuerze',
+      comparisonGroup: 'olivenoel-extra-vergine::0.75-l',
+    }),
+  ];
+
+  const genericTitles = applyQueryMatch(offers, 'oel').map((item) => item.title);
+  const umlautTitles = applyQueryMatch(offers, '\u00f6l').map((item) => item.title);
+
+  assert.deepEqual(genericTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
+  assert.deepEqual(umlautTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
+});
+
+test('explicit oil side-intent queries still find matching drogerie oils', () => {
+  const offers = [
+    offer({
+      title: 'Haaroel Argan 100 ml',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'haaroel-argan::0.1-l',
+    }),
+    offer({
+      title: 'Aetherisches Oel Lavendel 10 ml',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'aetherisches-oel-lavendel::0.01-l',
+    }),
+    offer({
+      title: 'Olivenoel Extra Vergine',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen, Oele & Gewuerze',
+      comparisonGroup: 'olivenoel-extra-vergine::0.75-l',
+    }),
+  ];
+
+  assert.equal(applyQueryMatch(offers, 'haar\u00f6l')[0].title, 'Haaroel Argan 100 ml');
+  assert.equal(
+    applyQueryMatch(offers, '\u00e4therisches \u00f6l').some((item) => item.title === 'Aetherisches Oel Lavendel 10 ml'),
+    true
+  );
+});
+
+test('generic joghurt ranks dairy joghurt and excludes shower gel sweets and baby bars', () => {
+  const offers = [
+    offer({
+      title: 'Fa Joghurt Aloe Vera Duschgel',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'fa-joghurt-duschgel::0.25-l',
+    }),
+    offer({
+      title: 'nimm2 Lachgummi Frucht & Joghurt',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'nimm2-lachgummi-joghurt::0.25-kg',
+    }),
+    offer({
+      title: 'HiPP Fruchtriegel Joghurt-Kirsch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Baby / Kinder',
+      comparisonGroup: 'hipp-fruchtriegel-joghurt::0.023-kg',
+    }),
+    offer({
+      title: 'Naturjoghurt 3,6%',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      comparisonGroup: 'naturjoghurt::0.5-kg',
+    }),
+    offer({
+      title: 'Gelatelli Frozen Joghurt',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Tiefkuehl',
+      comparisonGroup: 'gelatelli-frozen-joghurt::0.5-kg',
+    }),
+  ];
+
+  const titles = applyQueryMatch(offers, 'joghurt').map((item) => item.title);
+
+  assert.deepEqual(titles, ['Naturjoghurt 3,6%', 'Gelatelli Frozen Joghurt']);
+});
+
+test('generic katzenfutter ranks food and excludes cat litter while katzenstreu remains searchable', () => {
+  const offers = [
+    offer({
+      title: 'ZooRoyal Ultra Klumpstreu Pinienduft',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenstreu',
+      comparisonGroup: 'zooroyal-klumpstreu::5-l',
+    }),
+    offer({
+      title: 'Gourmet GOLD Katzenfutter-Dose',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'gourmet-gold-katzenfutter::0.085-kg',
+    }),
+    offer({
+      title: 'Whiskas Katzen-Trockenfutter',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'whiskas-katzen-trockenfutter::0.95-kg',
+    }),
+  ];
+
+  const foodTitles = applyQueryMatch(offers, 'katzenfutter').map((item) => item.title);
+  const litterTitles = applyQueryMatch(offers, 'katzenstreu').map((item) => item.title);
+
+  assert.deepEqual(foodTitles, ['Gourmet GOLD Katzenfutter-Dose', 'Whiskas Katzen-Trockenfutter']);
+  assert.equal(litterTitles[0], 'ZooRoyal Ultra Klumpstreu Pinienduft');
 });
 
 test('ranks real rice ahead of pasta sauce noodles beans and category-only conserve hits', () => {
@@ -1289,7 +1452,7 @@ test('does not rank cream ahead of drinking milk for milk search', () => {
   assert.equal(sortedTitles.includes('Sahne Dessert mit Milch'), false);
 });
 
-test('ranks real yoghurt ahead of dessert, bar and margarine context hits', () => {
+test('keeps generic yoghurt focused on real dairy yoghurt', () => {
   const offers = [
     offer({
       title: 'Joghurttorte Erdbeer',
@@ -1318,9 +1481,7 @@ test('ranks real yoghurt ahead of dessert, bar and margarine context hits', () =
   ];
   const sortedTitles = applyQueryMatch(offers, 'joghurt').map((item) => item.title);
 
-  assert.equal(sortedTitles[0], 'Naturjoghurt 3,5 Prozent');
-  assert.ok(sortedTitles.indexOf('Fruchtriegel Joghurt') > 0);
-  assert.ok(sortedTitles.indexOf('Rama mit Joghurt') > 0);
+  assert.deepEqual(sortedTitles, ['Naturjoghurt 3,5 Prozent']);
 });
 
 test('ranks cheese products ahead of meat products with cheese', () => {
