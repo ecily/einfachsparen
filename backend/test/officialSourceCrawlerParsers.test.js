@@ -648,6 +648,28 @@ function hoferCard({
   `;
 }
 
+function hoferActionCard({
+  title = 'HOFER MARKTPLATZ Gourmet Heidelbeeren, 200 g',
+  text = 'Klasse I per Packung \u20ac 1,84 statt 3,69 9,20/kg',
+  image = 'https://s7g10.scene7.com/is/image/aldi/852357_KW21_FrSa',
+  extraLink = '',
+} = {}) {
+  return `
+    <div class="wrapper">
+      <div class="item">
+        <img src="${image}">
+        <h3>${title}</h3>
+        <p>${text}</p>
+        ${extraLink ? `<a href="${extraLink}">Ausnahmen finden Sie hier.</a>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function formatHoferShortDate(date) {
+  return `${date.getUTCDate()}.${date.getUTCMonth() + 1}.`;
+}
+
 function parseHoferFixture({ cards, pageUrl = 'https://www.hofer.at/de/angebote/hofer-preiswochen.html', pageDate = null, nextPageDate = null, diagnostics = {} }) {
   return __private.parseHoferOffersFromPage({
     html: `<html><body>${cards.join('')}</body></html>`,
@@ -757,9 +779,93 @@ test('HOFER official parser reports reject reasons for non-offer cards', () => {
 test('HOFER official source only treats explicit offer pages as additional HTML offer inputs', () => {
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/hofer-preiswochen.html'), true);
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/hofer-preis-dauerhaft-guenstiger.html'), true);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/aktionen.html'), true);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/technik-und-haushalt.html'), true);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/handys-und-router.html'), true);
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/d.13-05-2026.html'), true);
-  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/angebote-im-ueberblick.html'), false);
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/angebote-im-ueberblick.html'), true);
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/sortiment/produktsortiment.html'), false);
+});
+
+test('HOFER official parser accepts offer overview product cards with product ids and conservative validity', () => {
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/de/angebote/angebote-im-ueberblick.html?productState=In+der+Filiale+erh%C3%A4ltlich',
+    cards: [hoferCard({
+      title: 'HISENSE 50 Zoll 4K Ultra HD Smart TV',
+      price: '\u20ac 349,00',
+      oldPrice: '',
+      additionalInfo: 'per Stück',
+      href: '/de/p.hisense---cm-k-ultra-hd-smart-tv.000000000000737290.html',
+      image: '/is/image/aldi/202605140001',
+    })],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].rawFacts.pageContext, 'offers-overview');
+  assert.equal(offers[0].rawFacts.productId, '000000000000737290');
+  assert.match(offers[0].dedupeKey, /000000000000737290/);
+  assert.match(offers[0].conditionsText, /Aktuell gefunden - bitte im Markt pruefen/);
+});
+
+test('HOFER official parser extracts Aktionen gallery cards with validity range, old price and image', () => {
+  const now = new Date();
+  const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12, 0, 0));
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 12, 0, 0));
+  const heading = `TIEFPREIS AKTIONEN - Wochenende: Fr. ${formatHoferShortDate(yesterday)} bis Sa. ${formatHoferShortDate(tomorrow)}`;
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/de/angebote/aktionen.html',
+    cards: [
+      `<h2>${heading}</h2><div class="gallery">${hoferActionCard({
+        extraLink: 'https://s7g10.scene7.com/is/content/aldi/Filialliste_04-2026',
+      })}</div>`,
+    ],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'HOFER MARKTPLATZ Gourmet Heidelbeeren, 200 g');
+  assert.equal(offers[0].priceCurrent.amount, 1.84);
+  assert.equal(offers[0].priceReference.amount, 3.69);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 9.2);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'kg');
+  assert.equal(offers[0].sourceUrl, 'https://www.hofer.at/de/angebote/aktionen.html');
+  assert.equal(offers[0].imageUrl, 'https://s7g10.scene7.com/is/image/aldi/852357_KW21_FrSa');
+  assert.equal(offers[0].rawFacts.pageContext, 'hofer-actions');
+  assert.match(offers[0].conditionsText, /Aktion nicht in allen Filialen|Aktuell gefunden|^$/);
+});
+
+test('HOFER official parser rejects future Aktionen gallery cards', () => {
+  const diagnostics = {};
+  const now = new Date();
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 12, 0, 0));
+  const dayAfter = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 2, 12, 0, 0));
+  const heading = `TIEFPREIS AKTIONEN - Wochenstart: Mo. ${formatHoferShortDate(tomorrow)} bis Do. ${formatHoferShortDate(dayAfter)}`;
+  const offers = parseHoferFixture({
+    diagnostics,
+    pageUrl: 'https://www.hofer.at/de/angebote/aktionen.html',
+    cards: [`<h2>${heading}</h2><div class="gallery">${hoferActionCard()}</div>`],
+  });
+
+  assert.equal(offers.length, 0);
+  assert.equal(diagnostics.skipReasons['status-upcoming'], 1);
+});
+
+test('HOFER official dedupe prefers dated offer evidence over overview duplicates', () => {
+  const overview = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/de/angebote/angebote-im-ueberblick.html',
+    cards: [hoferCard()],
+  })[0];
+  const dated = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/de/angebote/d.13-05-2026.html',
+    pageDate: new Date(Date.UTC(2026, 4, 13, 12, 0, 0)),
+    nextPageDate: new Date(Date.UTC(2026, 4, 15, 12, 0, 0)),
+    cards: [hoferCard()],
+  })[0];
+  const diagnostics = {};
+  const deduped = __private.dedupeHoferOffers([overview, dated], diagnostics);
+
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].rawFacts.pageContext, 'dated-offers');
+  assert.equal(diagnostics.skipReasons.duplicate, 1);
 });
 
 test('dm Ausverkauf source is active official-site input for normal full crawl selection', () => {
