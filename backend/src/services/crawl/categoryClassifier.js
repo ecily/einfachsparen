@@ -133,6 +133,19 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
+    patterns: [
+      /\b(felix|whiskas|gourmet gold|gourmet perle|purina one|sheba|zooroyal)\b.*\b(katze|katzen|katzenfutter|nassfutter|trockenfutter|futter|dose|schale|beutel)\b/,
+      /\b(katze|katzen|katzenfutter|nassfutter|trockenfutter|futter)\b.*\b(felix|whiskas|gourmet gold|gourmet perle|purina one|sheba|zooroyal)\b/,
+    ],
+    main: 'Tierbedarf',
+    sub: 'Katzenfutter',
+  },
+  {
+    patterns: [/\b(klumpstreu|katzenstreu|ultra klumpstreu)\b/],
+    main: 'Tierbedarf',
+    sub: 'Katzenstreu & Pflege',
+  },
+  {
     patterns: [/\b(eau de parfum|eau de toilette|parfum|fragrance|fragrances|duft)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Kosmetik & Make-up',
@@ -338,7 +351,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Gesundheit & Nahrungsergaenzung',
   },
   {
-    patterns: [/\b(perfect fit|gourmet perle|katzenfutter|katzensnack)\b/],
+    patterns: [/\b(perfect fit|gourmet perle|gourmet gold|katzenfutter|katzensnack)\b/],
     main: 'Tierbedarf',
     sub: 'Katzenfutter',
   },

@@ -38,6 +38,8 @@ const SYNONYMS = new Map([
   ['cafe', ['kaffee', 'caffe']],
   ['caffe', ['kaffee', 'cafe']],
   ['kaffee', ['cafe', 'caffe']],
+  ['katzenstreu', ['klumpstreu']],
+  ['klumpstreu', ['katzenstreu']],
   ['kase', ['kaese']],
   ['kaese', ['kase']],
   ['nudeln', ['nudel', 'pasta', 'spaghetti', 'penne', 'fusilli', 'makkaroni', 'maccheroni', 'teigwaren']],

@@ -83,6 +83,31 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
   }
 });
 
+test('classifies cat food brands as pet food instead of sauce or groceries', () => {
+  const cases = [
+    'Felix Katzenfutter-Beutel div. Sorten 85 g',
+    'Whiskas Katzen-Trockenfutter 950 g',
+    'Gourmet GOLD Katzenfutter-Dose 85 g',
+    'Purina One Katzenfutter-Beutel 4 Stueck',
+  ];
+
+  for (const title of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Tierbedarf', title);
+    assert.equal(decision.secondaryCategory, 'Katzenfutter', title);
+  }
+});
+
+test('classifies cat litter separately from cat food', () => {
+  const decision = determineCategoryDecision({
+    title: 'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter',
+  });
+
+  assert.equal(decision.primaryCategory, 'Tierbedarf');
+  assert.equal(decision.secondaryCategory, 'Katzenstreu & Pflege');
+});
+
 test('does not treat HOFER or discount wording alone as a product category', () => {
   const decision = determineCategoryDecision({
     title: 'HOFER Diskont Vorteilspreis',

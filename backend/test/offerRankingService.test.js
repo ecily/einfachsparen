@@ -437,6 +437,62 @@ test('generic butter excludes facial and body butter while explicit cosmetic but
   assert.equal(facialButterTitles.includes('Q10 Anti Falten Kollagen Experte Facial Butter Tag und Nacht'), true);
 });
 
+test('explicit body butter prefers body care and excludes food butter side hits', () => {
+  const offers = [
+    offer({
+      title: 'Erdnuss Butter Crunchy',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fruehstueck & Aufstriche',
+      comparisonGroup: 'erdnuss-butter-crunchy::0.35-kg',
+    }),
+    offer({
+      title: 'Protein Peanut Butter Cups',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'protein-peanut-butter-cups::0.04-kg',
+    }),
+    offer({
+      title: 'Butter Me Up Lippenbalsam',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      comparisonGroup: 'butter-me-up-lippenbalsam::1-Stk',
+    }),
+    offer({
+      title: 'Body Spray Coconut',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'body-spray-coconut::0.15-l',
+    }),
+    offer({
+      title: 'Body Butter Shea',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'body-butter-shea::1-Stk',
+    }),
+  ];
+
+  assert.deepEqual(applyQueryMatch(offers, 'body butter').map((item) => item.title), ['Body Butter Shea']);
+});
+
+test('explicit body butter returns no food replacement when no real body butter exists', () => {
+  const offers = [
+    offer({
+      title: 'Erdnuss Butter Crunchy',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fruehstueck & Aufstriche',
+      comparisonGroup: 'erdnuss-butter-crunchy::0.35-kg',
+    }),
+    offer({
+      title: 'Protein Peanut Butter Cups',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'protein-peanut-butter-cups::0.04-kg',
+    }),
+  ];
+
+  assert.deepEqual(applyQueryMatch(offers, 'body butter'), []);
+});
+
 test('does not keep buttergemuese or butter sweets as top butter results', () => {
   const offers = [
     offer({
@@ -564,6 +620,66 @@ test('explicit oil side-intent queries still find matching drogerie oils', () =>
     applyQueryMatch(offers, '\u00e4therisches \u00f6l').some((item) => item.title === 'Aetherisches Oel Lavendel 10 ml'),
     true
   );
+});
+
+test('explicit essential oil ranks aroma oils ahead of food and shampoo oil hits', () => {
+  const offers = [
+    offer({
+      title: 'Bona Bona Oel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen, Oele & Gewuerze',
+      comparisonGroup: 'bona-bona-oel::1-l',
+    }),
+    offer({
+      title: 'Thunfisch in Oel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'thunfisch-in-oel::0.16-kg',
+    }),
+    offer({
+      title: 'Frischkaese mit Oel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      comparisonGroup: 'frischkaese-mit-oel::0.15-kg',
+    }),
+    offer({
+      title: 'Naehr-Shampoo EI-Oel',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'naehr-shampoo-ei-oel::0.2-l',
+    }),
+    offer({
+      title: 'Aetherisches Oel Lavendel 10 ml',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'aetherisches-oel-lavendel::0.01-l',
+    }),
+  ];
+
+  assert.deepEqual(
+    applyQueryMatch(offers, '\u00e4therisches \u00f6l').map((item) => item.title),
+    ['Aetherisches Oel Lavendel 10 ml']
+  );
+});
+
+test('explicit hair oil remains findable without broadening generic oil', () => {
+  const offers = [
+    offer({
+      title: 'Haaroel Argan 100 ml',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'haaroel-argan::0.1-l',
+    }),
+    offer({
+      title: 'Olivenoel Extra Vergine',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen, Oele & Gewuerze',
+      comparisonGroup: 'olivenoel-extra-vergine::0.75-l',
+    }),
+  ];
+
+  assert.equal(applyQueryMatch(offers, 'haar\u00f6l')[0].title, 'Haaroel Argan 100 ml');
+  assert.deepEqual(applyQueryMatch(offers, '\u00f6l').map((item) => item.title), ['Olivenoel Extra Vergine']);
 });
 
 test('generic joghurt ranks dairy joghurt and excludes shower gel sweets and baby bars', () => {

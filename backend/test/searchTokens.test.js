@@ -39,6 +39,10 @@ test('does not broaden waschmittel query to cleaning accessories', () => {
   assert.deepEqual(buildQuerySearchTokens('waschmittel'), ['waschmittel']);
 });
 
+test('expands explicit cat litter query to current litter title tokens', () => {
+  assert.deepEqual(new Set(buildQuerySearchTokens('katzenstreu')), new Set(['katzenstreu', 'klumpstreu']));
+});
+
 test('expands nudeln query only to direct pasta product tokens', () => {
   assert.deepEqual(new Set(buildQuerySearchTokens('nudeln')), new Set([
     'fusilli',
