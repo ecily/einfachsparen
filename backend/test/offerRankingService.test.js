@@ -42,6 +42,10 @@ test('normalizes umlauts and tokenizes search text for query matching', () => {
   assert.equal(normalizeSearchText('Käse & Öl'), 'kaese oel');
   assert.deepEqual(tokenizeSearchText('Red Bull 4-Pack'), ['red', 'bull', '4', 'pack']);
   assert.equal(normalizeSearchText('K\u00e4se & \u00d6l'), 'kaese oel');
+  assert.equal(normalizeSearchText('\ufffdl'), 'oel');
+  assert.equal(normalizeSearchText('\u00c3\u00b6l'), 'oel');
+  assert.equal(normalizeSearchText('Haar\ufffdl'), 'haaroel');
+  assert.equal(normalizeSearchText('Haar\u00c3\u00b6l'), 'haaroel');
 });
 
 test('parses ranking category names containing commas as a single category', () => {
@@ -150,6 +154,32 @@ test('umlaut oil query stays tokenized and does not fall back to broad regex sea
     fallbackUsed: false,
     fallbackReason: '',
   });
+  assert.deepEqual(buildRankingCandidateQueryMetadata({ query: '\ufffdl' }), {
+    queryTokens: ['oel'],
+    candidateQueryMode: 'searchTokensOnly',
+    usesSearchTokens: true,
+    fallbackUsed: false,
+    fallbackReason: '',
+  });
+  assert.deepEqual(buildRankingCandidateQueryMetadata({ query: '\u00c3\u00b6l' }), {
+    queryTokens: ['oel'],
+    candidateQueryMode: 'searchTokensOnly',
+    usesSearchTokens: true,
+    fallbackUsed: false,
+    fallbackReason: '',
+  });
+});
+
+test('unicode hair oil query stays tokenized like ascii variants', () => {
+  for (const query of ['haar\u00f6l', 'haaroel', 'haarol', 'haar\ufffdl', 'haar\u00c3\u00b6l']) {
+    assert.deepEqual(buildRankingCandidateQueryMetadata({ query }), {
+      queryTokens: ['haaroel', 'haarol'],
+      candidateQueryMode: 'searchTokensOnly',
+      usesSearchTokens: true,
+      fallbackUsed: false,
+      fallbackReason: '',
+    });
+  }
 });
 
 test('separate regex fallback is not mixed into the searchTokens primary match', () => {
@@ -643,10 +673,14 @@ test('generic oil ranks food oil and excludes hair essential and cosmetic oils',
   const genericTitles = applyQueryMatch(offers, 'oel').map((item) => item.title);
   const umlautTitles = applyQueryMatch(offers, '\u00f6l').map((item) => item.title);
   const shortVariantTitles = applyQueryMatch(offers, 'ol').map((item) => item.title);
+  const replacementVariantTitles = applyQueryMatch(offers, '\ufffdl').map((item) => item.title);
+  const mojibakeVariantTitles = applyQueryMatch(offers, '\u00c3\u00b6l').map((item) => item.title);
 
   assert.deepEqual(genericTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
   assert.deepEqual(umlautTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
   assert.deepEqual(shortVariantTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
+  assert.deepEqual(replacementVariantTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
+  assert.deepEqual(mojibakeVariantTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
 });
 
 test('generic oil returns no broad side-hit replacements when no food oil exists', () => {
@@ -679,6 +713,8 @@ test('generic oil returns no broad side-hit replacements when no food oil exists
 
   assert.deepEqual(applyQueryMatch(offers, '\u00f6l'), []);
   assert.deepEqual(applyQueryMatch(offers, 'ol'), []);
+  assert.deepEqual(applyQueryMatch(offers, '\ufffdl'), []);
+  assert.deepEqual(applyQueryMatch(offers, '\u00c3\u00b6l'), []);
 });
 
 test('explicit oil side-intent queries still find matching drogerie oils', () => {
@@ -779,6 +815,10 @@ test('explicit hair oil remains findable without broadening generic oil', () => 
   ];
 
   assert.equal(applyQueryMatch(offers, 'haar\u00f6l')[0].title, 'Haaroel Argan 100 ml');
+  assert.equal(applyQueryMatch(offers, 'haaroel')[0].title, 'Haaroel Argan 100 ml');
+  assert.equal(applyQueryMatch(offers, 'haarol')[0].title, 'Haaroel Argan 100 ml');
+  assert.equal(applyQueryMatch(offers, 'haar\ufffdl')[0].title, 'Haaroel Argan 100 ml');
+  assert.equal(applyQueryMatch(offers, 'haar\u00c3\u00b6l')[0].title, 'Haaroel Argan 100 ml');
   assert.deepEqual(applyQueryMatch(offers, '\u00f6l').map((item) => item.title), ['Olivenoel Extra Vergine']);
 });
 
@@ -799,6 +839,10 @@ test('explicit hair oil returns no spray replacement when no hair oil exists', (
   ];
 
   assert.deepEqual(applyQueryMatch(offers, 'haar\u00f6l'), []);
+  assert.deepEqual(applyQueryMatch(offers, 'haaroel'), []);
+  assert.deepEqual(applyQueryMatch(offers, 'haarol'), []);
+  assert.deepEqual(applyQueryMatch(offers, 'haar\ufffdl'), []);
+  assert.deepEqual(applyQueryMatch(offers, 'haar\u00c3\u00b6l'), []);
 });
 
 test('generic joghurt ranks dairy joghurt and excludes shower gel sweets and baby bars', () => {

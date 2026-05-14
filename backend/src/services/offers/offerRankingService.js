@@ -3,7 +3,7 @@ const Category = require('../../models/Category');
 const Retailer = require('../../models/Retailer');
 const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
 const { computeOfferSavings } = require('./promotionMath');
-const { SEARCH_TOKEN_VERSION, buildQuerySearchTokens } = require('./searchTokens');
+const { SEARCH_TOKEN_VERSION, buildQuerySearchTokens, repairGermanSearchTextEncoding } = require('./searchTokens');
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
@@ -354,7 +354,7 @@ function selectDisplayCategory(offer) {
 }
 
 function normalizeSearchText(value) {
-  return String(value || '')
+  return repairGermanSearchTextEncoding(value)
     .toLowerCase()
     .replace(/ä/g, 'ae')
     .replace(/ö/g, 'oe')

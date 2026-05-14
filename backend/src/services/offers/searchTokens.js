@@ -70,9 +70,21 @@ const CONSERVATIVE_COMPOUND_TOKEN_ALIASES = new Map([
   ]],
 ]);
 
+function repairGermanSearchTextEncoding(value) {
+  return String(value || '')
+    .replace(/\u00c3\u00a4/g, '\u00e4')
+    .replace(/\u00c3\u00b6/g, '\u00f6')
+    .replace(/\u00c3\u00bc/g, '\u00fc')
+    .replace(/\u00c3\u009f/g, '\u00df')
+    .replace(/\ufffd(?=l\b)/gi, 'oe')
+    .replace(/\ufffd(?=le\b)/gi, 'oe')
+    .replace(/\ufffd(?=ther)/gi, 'ae')
+    .replace(/\ufffd(?=se\b)/gi, 'ae');
+}
+
 function normalizeSearchTokenText(value) {
   return normalizeTitleForMatch(
-    String(value || '')
+    repairGermanSearchTextEncoding(value)
       .toLowerCase()
       .replace(/\u00e4/g, 'ae')
       .replace(/\u00f6/g, 'oe')
@@ -182,5 +194,6 @@ module.exports = {
   buildQuerySearchTokens,
   hasCurrentSearchTokens,
   normalizeSearchTokenText,
+  repairGermanSearchTextEncoding,
   withOfferSearchTokens,
 };
