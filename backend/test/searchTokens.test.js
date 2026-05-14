@@ -19,6 +19,8 @@ test('normalizes kaese and oel variants conservatively', () => {
   assert.deepEqual(new Set(buildQuerySearchTokens('Käse')), new Set(['kaese', 'kase']));
   assert.deepEqual(new Set(buildQuerySearchTokens('Oel')), new Set(['oel']));
   assert.deepEqual(new Set(buildQuerySearchTokens('Öl')), new Set(['oel']));
+  assert.deepEqual(new Set(buildQuerySearchTokens('Ol')), new Set(['oel']));
+  assert.deepEqual(new Set(buildQuerySearchTokens('Haarol')), new Set(['haaroel', 'haarol']));
 });
 
 test('removes stopwords and non-dominant quantity tokens', () => {

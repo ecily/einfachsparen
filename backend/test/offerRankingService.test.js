@@ -41,6 +41,7 @@ function offer(overrides) {
 test('normalizes umlauts and tokenizes search text for query matching', () => {
   assert.equal(normalizeSearchText('Käse & Öl'), 'kaese oel');
   assert.deepEqual(tokenizeSearchText('Red Bull 4-Pack'), ['red', 'bull', '4', 'pack']);
+  assert.equal(normalizeSearchText('K\u00e4se & \u00d6l'), 'kaese oel');
 });
 
 test('parses ranking category names containing commas as a single category', () => {
@@ -131,6 +132,23 @@ test('query without useful tokens uses safe regex fallback metadata', () => {
     usesSearchTokens: false,
     fallbackUsed: true,
     fallbackReason: 'no-query-tokens',
+  });
+});
+
+test('umlaut oil query stays tokenized and does not fall back to broad regex search', () => {
+  assert.deepEqual(buildRankingCandidateQueryMetadata({ query: '\u00f6l' }), {
+    queryTokens: ['oel'],
+    candidateQueryMode: 'searchTokensOnly',
+    usesSearchTokens: true,
+    fallbackUsed: false,
+    fallbackReason: '',
+  });
+  assert.deepEqual(buildRankingCandidateQueryMetadata({ query: 'ol' }), {
+    queryTokens: ['oel'],
+    candidateQueryMode: 'searchTokensOnly',
+    usesSearchTokens: true,
+    fallbackUsed: false,
+    fallbackReason: '',
   });
 });
 
@@ -561,6 +579,42 @@ test('excludes bakery dairy and seasoning side hits when no real butter exists',
 test('generic oil ranks food oil and excludes hair essential and cosmetic oils', () => {
   const offers = [
     offer({
+      title: "L'Or Kapseln Espresso",
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'lor-kapseln-espresso::10-Stk',
+    }),
+    offer({
+      title: 'Egger Dose Bier',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Bier',
+      comparisonGroup: 'egger-dose-bier::0.5-l',
+    }),
+    offer({
+      title: 'Roemerquelle Mineralwasser',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Wasser',
+      comparisonGroup: 'roemerquelle-mineralwasser::1.5-l',
+    }),
+    offer({
+      title: 'Almdudler Limonade',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Limonaden',
+      comparisonGroup: 'almdudler-limonade::1-l',
+    }),
+    offer({
+      title: 'ZooRoyal Ultra Klumpstreu Pinienduft',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenstreu & Pflege',
+      comparisonGroup: 'zooroyal-klumpstreu::5-l',
+    }),
+    offer({
+      title: 'Haarspray Extra Stark',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'haarspray-extra-stark::0.25-l',
+    }),
+    offer({
       title: 'Naehr-Shampoo EI-Oel 200 ml',
       categoryPrimary: 'Drogerie / Hygiene',
       categorySecondary: 'Haarpflege',
@@ -588,9 +642,43 @@ test('generic oil ranks food oil and excludes hair essential and cosmetic oils',
 
   const genericTitles = applyQueryMatch(offers, 'oel').map((item) => item.title);
   const umlautTitles = applyQueryMatch(offers, '\u00f6l').map((item) => item.title);
+  const shortVariantTitles = applyQueryMatch(offers, 'ol').map((item) => item.title);
 
   assert.deepEqual(genericTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
   assert.deepEqual(umlautTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
+  assert.deepEqual(shortVariantTitles, ['Olivenoel Extra Vergine', 'Bona Bona Oel']);
+});
+
+test('generic oil returns no broad side-hit replacements when no food oil exists', () => {
+  const offers = [
+    offer({
+      title: "L'Or Kapseln Espresso",
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'lor-kapseln-espresso::10-Stk',
+    }),
+    offer({
+      title: 'Roemerquelle Mineralwasser',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Wasser',
+      comparisonGroup: 'roemerquelle-mineralwasser::1.5-l',
+    }),
+    offer({
+      title: 'ZooRoyal Ultra Klumpstreu Pinienduft',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenstreu & Pflege',
+      comparisonGroup: 'zooroyal-klumpstreu::5-l',
+    }),
+    offer({
+      title: 'Haarspray Extra Stark',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'haarspray-extra-stark::0.25-l',
+    }),
+  ];
+
+  assert.deepEqual(applyQueryMatch(offers, '\u00f6l'), []);
+  assert.deepEqual(applyQueryMatch(offers, 'ol'), []);
 });
 
 test('explicit oil side-intent queries still find matching drogerie oils', () => {
@@ -671,6 +759,18 @@ test('explicit hair oil remains findable without broadening generic oil', () => 
       comparisonGroup: 'haaroel-argan::0.1-l',
     }),
     offer({
+      title: 'Haarspray Extra Stark',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'haarspray-extra-stark::0.25-l',
+    }),
+    offer({
+      title: 'Haar- und Koerperspray Kokos',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'haar-und-koerperspray-kokos::0.15-l',
+    }),
+    offer({
       title: 'Olivenoel Extra Vergine',
       categoryPrimary: 'Lebensmittel',
       categorySecondary: 'Saucen, Oele & Gewuerze',
@@ -680,6 +780,25 @@ test('explicit hair oil remains findable without broadening generic oil', () => 
 
   assert.equal(applyQueryMatch(offers, 'haar\u00f6l')[0].title, 'Haaroel Argan 100 ml');
   assert.deepEqual(applyQueryMatch(offers, '\u00f6l').map((item) => item.title), ['Olivenoel Extra Vergine']);
+});
+
+test('explicit hair oil returns no spray replacement when no hair oil exists', () => {
+  const offers = [
+    offer({
+      title: 'Haarspray Extra Stark',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Haarpflege',
+      comparisonGroup: 'haarspray-extra-stark::0.25-l',
+    }),
+    offer({
+      title: 'Haar- und Koerperspray Kokos',
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Koerperpflege',
+      comparisonGroup: 'haar-und-koerperspray-kokos::0.15-l',
+    }),
+  ];
+
+  assert.deepEqual(applyQueryMatch(offers, 'haar\u00f6l'), []);
 });
 
 test('generic joghurt ranks dairy joghurt and excludes shower gel sweets and baby bars', () => {
@@ -728,6 +847,7 @@ test('generic katzenfutter ranks food and excludes cat litter while katzenstreu 
       categoryPrimary: 'Tierbedarf',
       categorySecondary: 'Katzenstreu',
       comparisonGroup: 'zooroyal-klumpstreu::5-l',
+      searchText: 'Tierbedarf Katze Katzenfutter Katzenstreu',
     }),
     offer({
       title: 'Gourmet GOLD Katzenfutter-Dose',

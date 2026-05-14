@@ -38,6 +38,8 @@ const SYNONYMS = new Map([
   ['cafe', ['kaffee', 'caffe']],
   ['caffe', ['kaffee', 'cafe']],
   ['kaffee', ['cafe', 'caffe']],
+  ['haaroel', ['haarol']],
+  ['haarol', ['haaroel']],
   ['katzenstreu', ['klumpstreu']],
   ['klumpstreu', ['katzenstreu']],
   ['kase', ['kaese']],
@@ -148,6 +150,11 @@ function buildQuerySearchTokens(query) {
   const tokens = new Set();
 
   for (const token of tokenizeValue(query)) {
+    if (token === 'ol') {
+      addTokenWithSynonyms(tokens, 'oel');
+      continue;
+    }
+
     addTokenWithSynonyms(tokens, token);
   }
 

@@ -419,6 +419,22 @@ const QUERY_CONTEXTS = [
     severeWeakContexts: ['lebensmittel', 'saucen', 'gewuerze', 'gewurze', 'thunfisch', 'frischkaese', 'speiseoel', 'speiseol', 'olivenoel', 'olivenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol'],
   },
   {
+    key: 'hair-oil',
+    tokens: ['haaroel', 'haarol'],
+    anyTokenSequences: [
+      ['hair', 'oil'],
+      ['haar', 'oel'],
+      ['haar', 'ol'],
+    ],
+    preferred: ['haaroel', 'haarol', 'hair', 'oil', 'haarpflege', 'drogerie'],
+    strongPreferred: ['haaroel', 'haarol', 'hair', 'oil', 'haarpflege'],
+    productIntent: ['haaroel', 'haarol', 'hairoil'],
+    exactProductIntent: ['haaroel', 'haarol', 'hairoil'],
+    productContext: ['haarpflege', 'drogerie'],
+    weakContexts: ['haarspray', 'spray', 'koerperspray', 'korperspray', 'body', 'coloration', 'haarfarbe', 'shampoo'],
+    severeWeakContexts: ['haarspray', 'spray', 'koerperspray', 'korperspray', 'body', 'lebensmittel'],
+  },
+  {
     key: 'butter',
     tokens: ['butter'],
     preferred: ['butter', 'milchprodukte', 'molkerei', 'milch', 'backen', 'lebensmittel'],
@@ -1220,6 +1236,53 @@ function scoreEssentialOilSearchIntent({ titleTokens, categoryTokens, comparison
   return adjustment;
 }
 
+function getHairOilOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const hairOil =
+    hasAnyTokenFamily(productTokens, ['haaroel', 'haarol', 'hairoil']) ||
+    (hasAnyTokenFamily(productTokens, ['hair']) && hasAnyTokenFamily(productTokens, ['oil'])) ||
+    (
+      hasAnyTokenFamily(productTokens, ['oel', 'ol', 'oil', 'elixier']) &&
+      hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['haarpflege'])
+    );
+  const sideHit = hasAnyTokenFamily(allTokens, [
+    'body',
+    'coloration',
+    'haarspray',
+    'koerperspray',
+    'korperspray',
+    'lebensmittel',
+    'shampoo',
+    'spray',
+  ]);
+
+  return {
+    hairOil,
+    sideHit,
+  };
+}
+
+function scoreHairOilSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const { hairOil, sideHit } = getHairOilOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (hairOil) {
+    adjustment += 5200;
+  }
+
+  if (sideHit) {
+    adjustment -= 6200;
+  }
+
+  return adjustment;
+}
+
 function getBodyButterOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
   const productTokens = titleTokens.concat(comparisonTokens);
   const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
@@ -1376,7 +1439,7 @@ function scoreCatFoodSearchIntent({ titleTokens, categoryTokens, comparisonToken
 function getCatLitterOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
   const productTokens = titleTokens.concat(categoryTokens, comparisonTokens);
   const litter = hasAnyTokenFamily(productTokens, ['katzenstreu', 'klumpstreu', 'streu']);
-  const foodSide = hasAnyTokenFamily(titleTokens.concat(comparisonTokens, aggregateTokens), [
+  const foodSide = hasAnyTokenFamily(titleTokens.concat(comparisonTokens), [
     'katzenfutter',
     'nassfutter',
     'trockenfutter',
@@ -1617,6 +1680,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const matchedAggregateTokens = countTokenMatches(aggregateTokens, queryTokens, { allowSubstring: true });
   const explicitBodyButterQuery = context?.key === 'body-butter';
   const explicitEssentialOilQuery = context?.key === 'essential-oil';
+  const explicitHairOilQuery = context?.key === 'hair-oil';
   const explicitCatLitterQuery = context?.key === 'cat-litter';
   const genericMilkQuery = context?.key === 'milch' && isGenericMilkQuery(queryTokens);
   const genericButterQuery = context?.key === 'butter' && queryTokens.length === 1 && queryTokens[0] === 'butter';
@@ -1745,6 +1809,15 @@ function scoreOfferAgainstQuery(offer, query) {
       });
     }
 
+    if (explicitHairOilQuery) {
+      score += scoreHairOilSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
     if (explicitBodyButterQuery) {
       score += scoreBodyButterSearchIntent({
         titleTokens,
@@ -1857,6 +1930,19 @@ function scoreOfferAgainstQuery(offer, query) {
     });
 
     if (!essentialOil || sideHit) {
+      return 0;
+    }
+  }
+
+  if (explicitHairOilQuery) {
+    const { hairOil, sideHit } = getHairOilOfferIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+    });
+
+    if (!hairOil || sideHit) {
       return 0;
     }
   }
