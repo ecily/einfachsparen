@@ -1272,3 +1272,228 @@ test('PENNY official API collector follows product-group pagination', async () =
   assert.equal(result.diagnostics.productsFetched, 2);
   assert.equal(result.offers.length, 2);
 });
+
+function lidlOfficialSource(overrides = {}) {
+  return source({
+    retailerKey: 'lidl',
+    retailerName: 'Lidl',
+    channel: 'official-flyer',
+    sourceUrl: 'https://www.lidl.at/c/flugblatt/s10012330',
+    label: 'Lidl Flugblatt',
+    sourceType: 'official-flyer',
+    ...overrides,
+  });
+}
+
+function unixSeconds(date) {
+  return Math.floor(date.getTime() / 1000);
+}
+
+function lidlCurrentWindow() {
+  const now = new Date();
+  return {
+    start: unixSeconds(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+    end: unixSeconds(new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000)),
+  };
+}
+
+function lidlCard(product = {}) {
+  const window = lidlCurrentWindow();
+  const payload = {
+    imageList_V1: [{ image: product.image || '/images/lidl/goesser.png' }],
+    title: product.title || 'Maerzen',
+    brand: product.brand === undefined ? { name: 'GOESSER', showBrand: true } : product.brand,
+    price: product.price === undefined ? {
+      price: 14.8,
+      oldPrice: 0,
+      basePrice: { text: 'Je 20x 0,5 l (0,5 l = 0.74)' },
+      discount: { discountText: 'Aktion' },
+      currencyCode: 'EUR',
+    } : product.price,
+    productId: product.productId || 10048907,
+    itemId: product.itemId || product.productId || 10048907,
+    erpNumber: product.erpNumber || '10048907',
+    canonicalUrl: product.canonicalUrl || '/p/goesser-maerzen/p10048907',
+    storeStartDate: Object.prototype.hasOwnProperty.call(product, 'storeStartDate') ? product.storeStartDate : window.start,
+    storeEndDate: Object.prototype.hasOwnProperty.call(product, 'storeEndDate') ? product.storeEndDate : window.end,
+    productType: product.productType || 'RETAIL',
+    productOrigin: product.productOrigin || 'progress_event',
+    ...product.extra,
+  };
+
+  return `<div class="AProductGridbox__GridTilePlaceholder" data-grid-data='${JSON.stringify(payload)}'></div>`;
+}
+
+function parseLidlFixture({ pageUrl, cards, diagnostics = {} }) {
+  return __private.parseLidlOfficialSiteOffersFromHtml({
+    html: `<html><body>${cards.join('')}</body></html>`,
+    source: lidlOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl,
+    diagnostics,
+  });
+}
+
+test('Lidl official site parser extracts multiple campaign cards from Aktion pages', () => {
+  const offers = parseLidlFixture({
+    pageUrl: 'https://www.lidl.at/c/aktion/a10094563',
+    cards: [
+      lidlCard(),
+      lidlCard({
+        title: 'Limonade',
+        brand: { name: 'COCA COLA', showBrand: true },
+        productId: 10048909,
+        canonicalUrl: '/p/coca-cola-limonade/p10048909',
+        image: '/images/lidl/coke.png',
+        price: {
+          price: 1.66,
+          oldPrice: 2.39,
+          basePrice: { text: 'Ab 6 Stk. je 1,5 l (1 l = 1.11)' },
+          discount: { discountText: '-30%' },
+          currencyCode: 'EUR',
+        },
+      }),
+    ],
+  });
+
+  assert.equal(offers.length, 2);
+  assert.equal(offers[0].title, 'Maerzen');
+  assert.equal(offers[0].priceCurrent.amount, 14.8);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 0.74);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
+  assert.equal(offers[1].brand, 'COCA COLA');
+  assert.equal(offers[1].priceReference.amount, 2.39);
+  assert.equal(offers[1].sourceUrl, 'https://www.lidl.at/p/coca-cola-limonade/p10048909');
+  assert.equal(offers[1].imageUrl, 'https://www.lidl.at/images/lidl/coke.png');
+});
+
+test('Lidl official site parser handles Mega Deals and missing validTo conservatively', () => {
+  const offers = parseLidlFixture({
+    pageUrl: 'https://www.lidl.at/c/mega-deals/s10091719',
+    cards: [lidlCard({
+      title: 'Akku-Multifunktionsfraese, 20 V',
+      brand: { name: 'PARKSIDE PERFORMANCE', showBrand: true },
+      productId: 10049106,
+      canonicalUrl: '/p/parkside-performance-akku-multifunktionsfraese-20-v/p10049106',
+      storeEndDate: undefined,
+      price: {
+        price: 49.99,
+        oldPrice: 59.99,
+        basePrice: { text: 'Je' },
+        discount: { discountText: '10.- billiger' },
+        currencyCode: 'EUR',
+      },
+    })],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].validTo, null);
+  assert.equal(offers[0].status, 'active');
+  assert.match(offers[0].conditionsText, /Aktuell gefunden - bitte im Markt pruefen/);
+  assert.equal(offers[0].rawFacts.productUrl, 'https://www.lidl.at/p/parkside-performance-akku-multifunktionsfraese-20-v/p10049106');
+});
+
+test('Lidl official site parser extracts Frische-Angebote quantities, base prices and multi-buy conditions', () => {
+  const offers = parseLidlFixture({
+    pageUrl: 'https://www.lidl.at/c/frische-angebote/a10094562',
+    cards: [lidlCard({
+      title: 'Grapefruit',
+      brand: { showBrand: false },
+      productId: 10048979,
+      canonicalUrl: '/p/grapefruit/p10048979',
+      price: {
+        price: 0.44,
+        oldPrice: 0,
+        basePrice: { text: 'Ab 2 Stk. je Stk.' },
+        discount: { discountText: '1+1 gratis' },
+        currencyCode: 'EUR',
+      },
+    })],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Grapefruit');
+  assert.equal(offers[0].benefitType, 'multi-buy');
+  assert.match(offers[0].conditionsText, /1\+1 gratis/);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 0.44);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'Stk');
+});
+
+test('Lidl official site parser rejects missing-price, expired and upcoming cards', () => {
+  const now = new Date();
+  const diagnostics = {};
+  const offers = parseLidlFixture({
+    pageUrl: 'https://www.lidl.at/c/aktion/a10094563',
+    diagnostics,
+    cards: [
+      lidlCard({ productId: 1, price: { basePrice: { text: 'Je 1 kg' }, currencyCode: 'EUR' } }),
+      lidlCard({
+        productId: 2,
+        storeStartDate: unixSeconds(new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)),
+        storeEndDate: unixSeconds(new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)),
+      }),
+      lidlCard({
+        productId: 3,
+        storeStartDate: unixSeconds(new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)),
+        storeEndDate: unixSeconds(new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000)),
+      }),
+    ],
+  });
+
+  assert.equal(offers.length, 0);
+  assert.equal(diagnostics.rawCards, 3);
+  assert.equal(diagnostics.skipReasons['missing-current-price'], 1);
+  assert.equal(diagnostics.skipReasons['status-expired'], 1);
+  assert.equal(diagnostics.skipReasons['status-upcoming'], 1);
+});
+
+test('Lidl official dedupe prevents duplicate campaign products across pages', () => {
+  const action = parseLidlFixture({
+    pageUrl: 'https://www.lidl.at/c/aktion/a10094563',
+    cards: [lidlCard({
+      productId: 10048977,
+      title: 'Spargelspitzen gruen',
+      canonicalUrl: '/p/spargelspitzen-gruen/p10048977',
+      price: {
+        price: 3.49,
+        oldPrice: 0,
+        basePrice: { text: 'Je 300 g (1 kg = 11.63)' },
+        discount: { discountText: 'Aktion' },
+        currencyCode: 'EUR',
+      },
+    })],
+  });
+  const frische = parseLidlFixture({
+    pageUrl: 'https://www.lidl.at/c/frische-angebote/a10094562',
+    cards: [lidlCard({
+      productId: 10048977,
+      title: 'Spargelspitzen gruen',
+      canonicalUrl: '/p/spargelspitzen-gruen/p10048977',
+      price: {
+        price: 3.49,
+        oldPrice: 4.99,
+        basePrice: { text: 'Je 300 g (1 kg = 11.63)' },
+        discount: { discountText: '-30%' },
+        currencyCode: 'EUR',
+      },
+    })],
+  });
+  const diagnostics = {};
+  const deduped = __private.dedupeLidlOffers([...action, ...frische], diagnostics);
+
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].priceReference.amount, 4.99);
+  assert.equal(diagnostics.skipReasons.duplicate, 1);
+});
+
+test('Lidl official campaign page allowlist includes offer themes and excludes risky assortment pages', () => {
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/mega-deals/s10091719'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/aktion/a10094563'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/frische-angebote/a10094562'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/echtes-streetfood-schmecken-lohnt-sich/a10094559'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10094560'));
+  assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/jeden-tag-deine-guenstigsten-preise/a10094561'), false);
+  assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/blumen-pflanzen/a10094558'), false);
+  assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/super-frische/s10013062'), false);
+});

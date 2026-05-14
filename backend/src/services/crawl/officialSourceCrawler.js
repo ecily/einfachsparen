@@ -60,6 +60,13 @@ const HOFER_OFFICIAL_OFFER_PAGES = [
   'https://www.hofer.at/de/angebote/technik-und-haushalt.html',
   'https://www.hofer.at/de/angebote/handys-und-router.html',
 ];
+const LIDL_OFFICIAL_CAMPAIGN_PAGES = [
+  'https://www.lidl.at/c/mega-deals/s10091719',
+  'https://www.lidl.at/c/aktion/a10094563',
+  'https://www.lidl.at/c/frische-angebote/a10094562',
+  'https://www.lidl.at/c/echtes-streetfood-schmecken-lohnt-sich/a10094559',
+  'https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10094560',
+];
 
 function responseContentType(response = {}) {
   return response.headers?.['content-type'] || response.headers?.['Content-Type'] || '';
@@ -793,6 +800,40 @@ function parseLidlFlyerDate(value) {
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 }
 
+function parseLidlStoreTimestamp(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 100000000000 ? numeric * 1000 : numeric)
+    : new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function buildLidlDedupeKey({ productId = '', productUrl = '', title = '', brand = '', quantityText = '', currentPrice = null }) {
+  const priceKey = Number(currentPrice || 0).toFixed(2);
+  const normalizedProductId = sanitizeWhitespace(productId);
+
+  if (normalizedProductId) {
+    return `lidl::product::${normalizeTitleForMatch(normalizedProductId)}::${priceKey}`;
+  }
+
+  if (productUrl) {
+    return `lidl::url::${normalizeTitleForMatch(productUrl)}::${priceKey}`;
+  }
+
+  return [
+    'lidl',
+    'title',
+    normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 10).join('-'),
+    normalizeTitleForMatch(quantityText).split(' ').slice(0, 8).join('-'),
+    priceKey,
+  ].join('::');
+}
+
 function buildLidlNormalizedUnitPrice(description, currentPrice) {
   const text = normalizeTitleForMatch(decodeHtmlEntities(description));
   const perUnitMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(eur|euro)?\s*\/\s*(kg|kilogramm|l|liter|stk|stueck|stuck)/i);
@@ -819,6 +860,369 @@ function extractLidlQuantityText(description) {
   );
 
   return sanitizeWhitespace(quantityMatch?.[1] || '');
+}
+
+function buildLidlSiteNormalizedUnitPrice(basePriceText, currentPrice) {
+  const text = sanitizeWhitespace(basePriceText);
+
+  if (/\bje\s+Stk\.?\b|\bje\s+Stueck\b|\bje\s+Stuck\b/i.test(text)) {
+    return {
+      amount: currentPrice,
+      unit: 'Stk',
+      comparable: Boolean(currentPrice),
+      confidence: currentPrice ? 0.84 : 0,
+    };
+  }
+
+  const explicitMatch = text.match(/\((?:\d+(?:[.,]\d+)?\s*)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stk|stueck|stuck)\s*=\s*(\d+(?:[.,]\d+)?)\)/i)
+    || text.match(/(?:\d+(?:[.,]\d+)?\s*)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stk|stueck|stuck)\s*=\s*(\d+(?:[.,]\d+)?)/i);
+
+  if (explicitMatch) {
+    const unit = normalizeUnitFromText(explicitMatch[1]);
+    const amount = parseNumericAmount(explicitMatch[2]);
+    const comparableUnit = unit === 'g' ? 'kg' : unit === 'ml' ? 'l' : unit;
+
+    return {
+      amount,
+      unit: comparableUnit || unit,
+      comparable: Boolean(amount && ['kg', 'l', 'Stk'].includes(comparableUnit || unit)),
+      confidence: amount ? 0.9 : 0,
+    };
+  }
+
+  return buildUnitPriceFromLabel(text, currentPrice);
+}
+
+function extractLidlSiteQuantityText(basePriceText) {
+  const text = sanitizeWhitespace(basePriceText);
+  const multiMatch = text.match(/(\d+\s*x\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl|stk|stueck|stuck))/i);
+  const singleMatch = text.match(/(?:Je|Z\.B\.:|je)\s*(\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl|stk|stueck|stuck))/i)
+    || text.match(/Ab\s+\d+\s*Stk\.\s*je\s*(\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl|stk|stueck|stuck))/i)
+    || text.match(/^(\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl|stk|stueck|stuck))/i);
+
+  return sanitizeWhitespace(multiMatch?.[1] || singleMatch?.[1] || '');
+}
+
+function parseLidlGridDataCardsFromHtml(html, pageUrl) {
+  const $ = cheerio.load(html);
+  const cards = [];
+
+  $('[data-grid-data]').each((index, element) => {
+    const raw = $(element).attr('data-grid-data');
+
+    try {
+      const product = JSON.parse(raw || '{}');
+      cards.push({
+        product,
+        pageUrl,
+      });
+    } catch (error) {
+      cards.push({
+        product: null,
+        pageUrl,
+        parseError: error.message,
+      });
+    }
+  });
+
+  return cards;
+}
+
+function normalizeLidlSiteProductToOffer({
+  product,
+  source,
+  crawlJobId,
+  region,
+  pageUrl,
+}) {
+  const currentPrice = parseNumericAmount(product?.price?.price);
+  const title = sanitizeWhitespace(product?.title || product?.fullTitle);
+  const brand = sanitizeWhitespace(product?.brand?.showBrand === false ? '' : product?.brand?.name);
+  const productUrl = product?.canonicalUrl ? toAbsoluteUrl(product.canonicalUrl, pageUrl || source.sourceUrl) : '';
+  const imageUrl = normalizeImageUrl(
+    product?.image || product?.imageList_V1?.[0]?.image || '',
+    productUrl || pageUrl || source.sourceUrl
+  );
+  const basePriceText = sanitizeWhitespace(product?.price?.basePrice?.text);
+  const discountText = sanitizeWhitespace(product?.price?.discount?.discountText);
+  const quantityText = extractLidlSiteQuantityText(basePriceText);
+  const normalizedUnitPrice = buildLidlSiteNormalizedUnitPrice(basePriceText || quantityText, currentPrice);
+  const validFrom = parseLidlStoreTimestamp(product?.storeStartDate);
+  const validTo = parseLidlStoreTimestamp(product?.storeEndDate);
+  const statusInfo = buildOfferStatus(validFrom, validTo, !validFrom && !validTo);
+  const customerProgramRequired = Boolean(product?.lidlPlus) || /lidl\s*plus/i.test(JSON.stringify(product || {}));
+  const productId = sanitizeWhitespace(product?.productId || product?.itemId || product?.erpNumber);
+  const conditions = [
+    discountText,
+    /^Ab\s+\d+/i.test(basePriceText) ? basePriceText : '',
+    customerProgramRequired ? 'Nur gueltig mit Lidl Plus' : '',
+    !validTo ? 'Aktuell gefunden - bitte im Markt pruefen.' : '',
+  ].filter(Boolean);
+  const conditionsText = sanitizeWhitespace([...new Set(conditions)].join('; '));
+  const sourceCategory = sanitizeWhitespace([
+    product?.productType,
+    product?.productOrigin,
+    pageUrl?.split('/c/')[1]?.split('/')[0],
+  ].filter(Boolean).join(' '));
+  const categoryPrimary = determineOfferCategory({
+    title: sanitizeWhitespace(`${brand} ${title}`),
+    contextText: [basePriceText, discountText, sourceCategory].filter(Boolean).join(' '),
+    sourceCategory,
+  });
+  const issues = [];
+
+  if (!title || !currentPrice) {
+    return null;
+  }
+
+  if (!normalizedUnitPrice.comparable) {
+    issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+  }
+
+  if (!validTo) {
+    issues.push('Gueltigkeitszeitraum unvollstaendig');
+  }
+
+  if (customerProgramRequired) {
+    issues.push('Angebot erfordert Kundenprogramm oder App');
+  }
+
+  const isMultiBuy = /(?:1\+1|2\s*fuer\s*1|gratis|ab\s+\d+\s*stk|\+\d+\s*(?:g|ml|kg|l)\s*gratis)/i.test(`${discountText} ${basePriceText}`);
+  const comparisonSignature = normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-');
+  const comparisonQuantityKey = quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '';
+  const comparisonCategoryKey = normalizeTitleForMatch(sourceCategory || categoryPrimary).replace(/[^a-z0-9]+/g, '-');
+
+  const overrideResult = applyManualCategoryOverridesToOfferSync({
+    crawlJobId,
+    sourceId: source._id,
+    retailerKey: source.retailerKey,
+    retailerName: source.retailerName,
+    region,
+    title,
+    brand,
+    categoryPrimary,
+    categorySecondary: determineOfferSubcategory({
+      primaryCategory: categoryPrimary,
+      sourceCategory,
+      fallbackLabel: categoryPrimary,
+      title,
+      contextText: `${basePriceText} ${discountText}`,
+    }),
+    comparisonSignature,
+    comparisonQuantityKey,
+    comparisonCategoryKey,
+    comparisonGroup: normalizedUnitPrice.comparable
+      ? `${comparisonCategoryKey}:${comparisonSignature}:${comparisonQuantityKey}`
+      : '',
+    description: sanitizeWhitespace([brand, title, basePriceText, discountText].filter(Boolean).join(' ')),
+    sourceUrl: productUrl || pageUrl || source.sourceUrl,
+    imageUrl,
+    supportingSources: [
+      buildSourceEvidence({
+        source,
+        observedUrl: productUrl || pageUrl || source.sourceUrl,
+        matchType: 'primary',
+      }),
+    ],
+    validFrom,
+    validTo,
+    status: statusInfo.status,
+    isActiveNow: statusInfo.isActiveNow,
+    isActiveToday: statusInfo.isActiveToday,
+    benefitType: customerProgramRequired ? 'conditional-price' : isMultiBuy ? 'multi-buy' : 'price-cut',
+    conditionsText,
+    customerProgramRequired,
+    availabilityScope: region || 'Grossraum Graz',
+    priceCurrent: {
+      amount: currentPrice,
+      currency: product?.price?.currencyCode || 'EUR',
+      originalText: `${currentPrice.toFixed(2)} EUR`,
+    },
+    priceReference: {
+      amount: parseNumericAmount(product?.price?.oldPrice || product?.price?.discount?.deletedPrice),
+      currency: product?.price?.currencyCode || 'EUR',
+      originalText: parseNumericAmount(product?.price?.oldPrice || product?.price?.discount?.deletedPrice)
+        ? `${parseNumericAmount(product?.price?.oldPrice || product?.price?.discount?.deletedPrice).toFixed(2)} EUR`
+        : '',
+    },
+    priceReferenceSource: product?.price?.oldPrice || product?.price?.discount?.deletedPrice ? 'prospect' : '',
+    priceReferenceConfidence: product?.price?.oldPrice || product?.price?.discount?.deletedPrice ? 0.95 : 0,
+    quantityText,
+    normalizedUnitPrice,
+    dedupeKey: buildLidlDedupeKey({
+      productId,
+      productUrl,
+      title,
+      brand,
+      quantityText,
+      currentPrice,
+    }),
+    quality: {
+      completenessScore: [currentPrice, validFrom, validTo, categoryPrimary].filter(Boolean).length / 4,
+      parsingConfidence: normalizedUnitPrice.comparable ? 0.88 : 0.76,
+      comparisonSafe: normalizedUnitPrice.comparable,
+      issues,
+    },
+    rawFacts: {
+      sourceType: 'lidl-official-html',
+      pageContext: 'lidl-campaign-page',
+      pageUrl,
+      validityText: [validFrom?.toISOString?.(), validTo?.toISOString?.()].filter(Boolean).join(' - '),
+      validityLabel: validTo ? '' : 'Aktuell gefunden - bitte im Markt pruefen.',
+      infoText: sanitizeWhitespace([basePriceText, discountText].filter(Boolean).join(' / ')),
+      basePriceText,
+      discountText,
+      productId,
+      itemId: sanitizeWhitespace(product?.itemId),
+      erpNumber: sanitizeWhitespace(product?.erpNumber),
+      productUrl,
+      snapshotCurrent: !validTo,
+    },
+    adminReview: {
+      status: issues.length > 0 ? 'pending' : 'reviewed',
+      note: conditionsText,
+      feedbackDigest: '',
+    },
+    scope: buildInclusiveScopeDecision(),
+  });
+
+  return overrideResult.offer || null;
+}
+
+function parseLidlOfficialSiteOffersFromHtml({
+  html,
+  source,
+  crawlJobId,
+  region,
+  pageUrl,
+  diagnostics,
+}) {
+  const cards = parseLidlGridDataCardsFromHtml(html, pageUrl);
+  const offers = [];
+  const skipReasons = {};
+
+  for (const card of cards) {
+    if (!card.product) {
+      skipReasons['invalid-grid-json'] = (skipReasons['invalid-grid-json'] || 0) + 1;
+      continue;
+    }
+
+    const currentPrice = parseNumericAmount(card.product?.price?.price);
+    const title = sanitizeWhitespace(card.product?.title || card.product?.fullTitle);
+    const validFrom = parseLidlStoreTimestamp(card.product?.storeStartDate);
+    const validTo = parseLidlStoreTimestamp(card.product?.storeEndDate);
+    const statusInfo = buildOfferStatus(validFrom, validTo, !validFrom && !validTo);
+
+    if (!title) {
+      skipReasons['missing-title'] = (skipReasons['missing-title'] || 0) + 1;
+      continue;
+    }
+
+    if (!currentPrice) {
+      skipReasons['missing-current-price'] = (skipReasons['missing-current-price'] || 0) + 1;
+      continue;
+    }
+
+    if (statusInfo.status === 'expired' || statusInfo.status === 'upcoming') {
+      skipReasons[`status-${statusInfo.status}`] = (skipReasons[`status-${statusInfo.status}`] || 0) + 1;
+      continue;
+    }
+
+    const offer = normalizeLidlSiteProductToOffer({
+      product: card.product,
+      source,
+      crawlJobId,
+      region,
+      pageUrl,
+    });
+
+    if (offer) {
+      offers.push(offer);
+    }
+  }
+
+  if (diagnostics) {
+    diagnostics.rawCards = (diagnostics.rawCards || 0) + cards.length;
+    diagnostics.parsedOffers = (diagnostics.parsedOffers || 0) + offers.length;
+    diagnostics.skipReasons = {
+      ...(diagnostics.skipReasons || {}),
+    };
+    Object.entries(skipReasons).forEach(([reason, count]) => {
+      diagnostics.skipReasons[reason] = (diagnostics.skipReasons[reason] || 0) + count;
+    });
+    diagnostics.pages = diagnostics.pages || [];
+    diagnostics.pages.push({
+      url: pageUrl,
+      rawCards: cards.length,
+      parsedOffers: offers.length,
+      skipReasons,
+    });
+  }
+
+  return offers;
+}
+
+function lidlOfferPreferenceScore(offer) {
+  let score = 0;
+
+  if (offer?.validTo) score += 20;
+  if (offer?.validFrom) score += 8;
+  if (offer?.priceReference?.amount) score += 8;
+  if (offer?.normalizedUnitPrice?.comparable) score += 6;
+  if (offer?.rawFacts?.productUrl || offer?.sourceUrl?.includes('/p/')) score += 5;
+  if (offer?.rawFacts?.sourceType === 'lidl-official-html') score += 4;
+
+  return score;
+}
+
+function dedupeLidlOffers(offers = [], diagnostics) {
+  const unique = [];
+  const keyToIndex = new Map();
+  let duplicateCount = 0;
+
+  offers.forEach((offer) => {
+    const key = offer?.dedupeKey || buildLidlDedupeKey({
+      productId: offer?.rawFacts?.productId,
+      productUrl: offer?.rawFacts?.productUrl || offer?.sourceUrl,
+      title: offer?.title,
+      brand: offer?.brand,
+      quantityText: offer?.quantityText,
+      currentPrice: offer?.priceCurrent?.amount,
+    });
+
+    if (!key) {
+      unique.push(offer);
+      return;
+    }
+
+    const duplicateIndex = keyToIndex.get(key);
+
+    if (duplicateIndex === undefined) {
+      keyToIndex.set(key, unique.length);
+      unique.push({
+        ...offer,
+        dedupeKey: key,
+      });
+      return;
+    }
+
+    duplicateCount += 1;
+
+    if (lidlOfferPreferenceScore(offer) > lidlOfferPreferenceScore(unique[duplicateIndex])) {
+      unique[duplicateIndex] = {
+        ...offer,
+        dedupeKey: key,
+      };
+    }
+  });
+
+  if (diagnostics && duplicateCount > 0) {
+    diagnostics.skipReasons = diagnostics.skipReasons || {};
+    diagnostics.skipReasons.duplicate = (diagnostics.skipReasons.duplicate || 0) + duplicateCount;
+    diagnostics.dedupedOffers = duplicateCount;
+  }
+
+  return unique;
 }
 
 function normalizeLidlProductToOffer({
@@ -911,6 +1315,14 @@ function normalizeLidlProductToOffer({
     },
     quantityText,
     normalizedUnitPrice,
+    dedupeKey: buildLidlDedupeKey({
+      productId: product?.productId,
+      productUrl: product?.url,
+      title,
+      brand,
+      quantityText,
+      currentPrice,
+    }),
     quality: {
       completenessScore: [currentPrice, validFrom, validTo, categoryPrimary].filter(Boolean).length / 4,
       parsingConfidence: normalizedUnitPrice.comparable ? 0.88 : 0.76,
@@ -2477,6 +2889,32 @@ async function fetchHtml(url) {
   };
 }
 
+async function fetchLidlOfficialPageHtml(url) {
+  try {
+    return await fetchHtml(url);
+  } catch (error) {
+    if (!/CERT|TLS|LEAF|certificate|unable to verify/i.test(error.code || error.message || '')) {
+      throw error;
+    }
+
+    const response = await axios.get(url, {
+      timeout: 30000,
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/json',
+        'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+      },
+    });
+
+    return {
+      response,
+      html: String(response.data),
+      canonicalUrl: response.request?.res?.responseUrl || url,
+    };
+  }
+}
+
 async function fetchPennyProductGroupProducts({ categorySlug, page, pageSize = PENNY_PRODUCT_GROUP_PAGE_SIZE, referer = 'https://www.penny.at/angebote' }) {
   const url = `https://www.penny.at/api/product-discovery/categories/${encodeURIComponent(categorySlug)}/products`;
   const requestConfig = {
@@ -3579,6 +4017,14 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
   const flyerIdentifiers = extractLidlFlyerIdentifiers(html);
   const collectedOffers = [];
   const seenFlyers = [];
+  const diagnostics = {
+    flyerIdentifiers: flyerIdentifiers.length,
+    flyerRawProducts: 0,
+    campaignPages: [],
+    campaignRawCards: 0,
+    campaignParsedOffers: 0,
+    skipReasons: {},
+  };
 
   for (const identifier of flyerIdentifiers.slice(0, 8)) {
     let flyer = null;
@@ -3603,7 +4049,10 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
       url: flyer.flyerUrlAbsolute,
     });
 
-    for (const product of Object.values(flyer.products)) {
+    const flyerProducts = Object.values(flyer.products);
+    diagnostics.flyerRawProducts += flyerProducts.length;
+
+    for (const product of flyerProducts) {
       const normalized = normalizeLidlProductToOffer({
         product,
         flyer,
@@ -3618,35 +4067,61 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     }
   }
 
-  const seen = new Set();
-  const offerDocuments = collectedOffers
+  for (const pageUrl of LIDL_OFFICIAL_CAMPAIGN_PAGES) {
+    try {
+      const page = await fetchLidlOfficialPageHtml(pageUrl);
+      const pageDiagnostics = {};
+      const pageOffers = parseLidlOfficialSiteOffersFromHtml({
+        html: page.html,
+        source,
+        crawlJobId,
+        region,
+        pageUrl: page.canonicalUrl || pageUrl,
+        diagnostics: pageDiagnostics,
+      });
+
+      diagnostics.campaignPages.push({
+        url: pageUrl,
+        finalUrl: page.canonicalUrl || pageUrl,
+        httpStatus: page.response?.status || null,
+        rawCards: pageDiagnostics.rawCards || 0,
+        parsedOffers: pageOffers.length,
+        skipReasons: pageDiagnostics.skipReasons || {},
+      });
+      diagnostics.campaignRawCards += pageDiagnostics.rawCards || 0;
+      diagnostics.campaignParsedOffers += pageOffers.length;
+      Object.entries(pageDiagnostics.skipReasons || {}).forEach(([reason, count]) => {
+        diagnostics.skipReasons[reason] = (diagnostics.skipReasons[reason] || 0) + count;
+      });
+      collectedOffers.push(...pageOffers);
+    } catch (error) {
+      diagnostics.campaignPages.push({
+        url: pageUrl,
+        finalUrl: pageUrl,
+        httpStatus: error.response?.status || null,
+        rawCards: 0,
+        parsedOffers: 0,
+        error: error.message,
+      });
+      diagnostics.skipReasons['campaign-page-fetch-failed'] = (diagnostics.skipReasons['campaign-page-fetch-failed'] || 0) + 1;
+    }
+  }
+
+  const dedupedOffers = dedupeLidlOffers(collectedOffers, diagnostics);
+  const offerDocuments = dedupedOffers
     .map((offer) => enrichOffersForStorage([offer], {
       source,
-      sourceType: 'lidl-official-flyer-api',
+      sourceType: offer.rawFacts?.sourceType || 'lidl-official-flyer-api',
       parserVersion: PARSER_VERSION,
       normalizationVersion: NORMALIZATION_VERSION,
     })[0])
-    .filter(Boolean)
-    .filter((offer) => {
-      const key = [
-        sanitizeWhitespace(offer.rawFacts?.productId || ''),
-        normalizeTitleForMatch(`${offer.brand || ''} ${offer.title || ''}`),
-        String(offer.priceCurrent?.amount ?? ''),
-        String(offer.validFrom?.toISOString?.() || ''),
-      ].join('::');
-
-      if (seen.has(key)) {
-        return false;
-      }
-
-      seen.add(key);
-      return true;
-    });
+    .filter(Boolean);
 
   const refreshResult = await replaceOffersForSource({
     sourceId: source._id,
     offerDocuments,
   });
+  const flyerParsedOffers = collectedOffers.filter((offer) => offer.rawFacts?.sourceType === 'lidl-official-flyer-api').length;
 
   await createCompactRawDocument({
     sourceId: source._id,
@@ -3660,24 +4135,51 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     finalUrl: source.sourceUrl,
     title: `${source.label} Flyer Snapshot`,
     contentHash: createHash(JSON.stringify(seenFlyers)),
-    contentSnippet: `Lidl official flyer API: ${seenFlyers.length} produktfaehige Flyer, ${offerDocuments.length} Offers.`,
+    contentSnippet: `Lidl official flyer API: ${seenFlyers.length} produktfaehige Flyer, ${flyerParsedOffers} Offers.`,
     extractedPreview: seenFlyers.slice(0, 5).map((item) => `${item.name} (${item.productCount})`),
-    foundRawItems: collectedOffers.length,
-    parsedOffers: offerDocuments.length,
-    rejectedOffers: Math.max(0, collectedOffers.length - offerDocuments.length),
+    foundRawItems: diagnostics.flyerRawProducts,
+    parsedOffers: flyerParsedOffers,
+    rejectedOffers: Math.max(0, diagnostics.flyerRawProducts - flyerParsedOffers),
     parserVersion: PARSER_VERSION,
     payload: {
       flyerCount: seenFlyers.length,
-      offerCount: offerDocuments.length,
+      offerCount: flyerParsedOffers,
       flyers: seenFlyers.slice(0, 6),
+    },
+  });
+
+  await createCompactRawDocument({
+    sourceId: source._id,
+    crawlJobId,
+    retailerKey: source.retailerKey,
+    region,
+    documentType: 'json',
+    sourceType: 'lidl-official-html',
+    url: source.sourceUrl,
+    canonicalUrl: source.sourceUrl,
+    finalUrl: source.sourceUrl,
+    title: 'Lidl official campaign pages snapshot',
+    contentHash: createHash(JSON.stringify(diagnostics.campaignPages)),
+    contentSnippet: `Lidl official campaign pages: ${diagnostics.campaignPages.length} Seiten, ${diagnostics.campaignRawCards} Karten, ${diagnostics.campaignParsedOffers} Offers vor Dedupe.`,
+    extractedPreview: diagnostics.campaignPages.map((item) => `${item.url} (${item.rawCards}/${item.parsedOffers})`).slice(0, 8),
+    foundRawItems: diagnostics.campaignRawCards,
+    parsedOffers: diagnostics.campaignParsedOffers,
+    rejectedOffers: Math.max(0, diagnostics.campaignRawCards - diagnostics.campaignParsedOffers),
+    parserVersion: PARSER_VERSION,
+    rejectionReasons: Object.entries(diagnostics.skipReasons).map(([reason, count]) => ({ reason, count })),
+    payload: {
+      campaignPages: diagnostics.campaignPages,
+      skipReasons: diagnostics.skipReasons,
+      dedupedOffers: diagnostics.dedupedOffers || 0,
     },
   });
 
   return {
     offerDocuments,
-    rawDocuments: 1,
-    rawCandidateCount: collectedOffers.length,
+    rawDocuments: 2,
+    rawCandidateCount: diagnostics.flyerRawProducts + diagnostics.campaignRawCards,
     refreshResult,
+    diagnostics,
   };
 }
 
@@ -4436,6 +4938,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += lidlOfficialResult.rawDocuments;
       rawCandidateCount += lidlOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...lidlOfficialResult.offerDocuments);
+      parserDetails.lidlOfficial = lidlOfficialResult.diagnostics || {};
     } else if (source.retailerKey === 'dm' && source.sourceUrl.includes('dm.at/ausverkauf')) {
       const dmOfficialResult = await crawlDmOfficialSaleOffers({
         source,
@@ -4578,6 +5081,9 @@ module.exports = {
     parseHoferOffersFromPage,
     dedupeHoferOffers,
     isHoferOfferPageUrl,
+    parseLidlOfficialSiteOffersFromHtml,
+    dedupeLidlOffers,
+    LIDL_OFFICIAL_CAMPAIGN_PAGES,
     normalizeImageUrl,
   },
 };
