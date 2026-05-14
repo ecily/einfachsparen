@@ -703,6 +703,30 @@ function pennyProduct(overrides = {}) {
   };
 }
 
+function pennyApiProduct(overrides = {}) {
+  const product = pennyProduct(overrides);
+  const hasOverride = (key) => Object.prototype.hasOwnProperty.call(overrides, key);
+
+  return {
+    ...product,
+    inPromotion: hasOverride('inPromotion') ? overrides.inPromotion : true,
+    price: {
+      baseUnitLong: overrides.baseUnitLong || 'Kilogramm',
+      baseUnitShort: overrides.baseUnitShort || 'kg',
+      basePriceFactor: hasOverride('basePriceFactor') ? overrides.basePriceFactor : '1',
+      crossed: hasOverride('crossed') ? overrides.crossed : 999,
+      discountPercentage: hasOverride('discountPercentage') ? overrides.discountPercentage : -40,
+      regular: {
+        perStandardizedQuantity: hasOverride('perStandardizedQuantity') ? overrides.perStandardizedQuantity : 1198,
+        tags: hasOverride('tags') ? overrides.tags : ['SO'],
+        value: overrides.priceCents || 599,
+      },
+      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-13',
+      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-05-20',
+    },
+  };
+}
+
 function parsePennyFixture({ cards, products = [] }) {
   return __private.parsePennyOffersFromHtml({
     html: `<html><body><a href="/angebote?tab=angebote-ab-13-05">Angebote ab 13.05.</a>${cards.join('')}${pennyNuxtPayload(products)}</body></html>`,
@@ -882,5 +906,116 @@ test('PENNY official-site diagnostic reports tabs, counts and expected effect', 
   assert.equal(report.withImageUrl, 1);
   assert.equal(report.tabs.length, 2);
   assert.equal(report.paginationLinks.length, 1);
-  assert.match(report.detailPagesOrApiNeeded, /Pagination/);
+  assert.match(report.detailPagesOrApiNeeded, /Product-Discovery-API/);
+});
+
+test('PENNY official parser discovers the visible product-group API slug', () => {
+  const html = `<html><body>
+    <script id="__NUXT_DATA__" type="application/json">["product-group-angebote-ab-1305-\\{\\"page\\":0,\\"pageSize\\":30}"]</script>
+    <a href="/angebote?tab=angebote-ab-13-05">Angebote ab 13.05.</a>
+    <a href="/kategorie/angebote-ab-2105">Angebote ab 21.05.</a>
+  </body></html>`;
+
+  const slugs = __private.extractPennyProductGroupSlugsFromHtml(html);
+
+  assert.deepEqual(slugs.slice(0, 2), ['angebote-ab-1305', 'angebote-ab-2105']);
+});
+
+test('PENNY official API normalizer keeps missing validTo offers and rejects normal products', () => {
+  const offers = __private.normalizePennyApiProductsToOffers({
+    products: [
+      pennyApiProduct({
+        slug: 'cremereiniger-78107607',
+        name: 'Cremereiniger',
+        brand: { name: 'CIF', slug: 'cif' },
+        amount: '750',
+        volumeLabelShort: 'ml',
+        packageLabel: 'Flasche',
+        baseUnitLong: 'Liter',
+        baseUnitShort: 'Liter',
+        perStandardizedQuantity: 265,
+        priceCents: 199,
+        crossed: 245,
+        images: ['/images/penny/cif-140.jpg'],
+      }),
+      pennyApiProduct({
+        slug: 'kinder-pingui-78102064',
+        name: 'Kinder Pingui',
+        brand: undefined,
+        amount: '120',
+        volumeLabelShort: 'g',
+        packageLabel: 'Packung',
+        validityEnd: '',
+        crossed: null,
+        priceCents: 159,
+        perStandardizedQuantity: 1325,
+        images: ['https://images.example.test/kinder.jpg'],
+      }),
+      {
+        slug: 'normalprodukt-78000001',
+        name: 'Normalprodukt',
+        price: { regular: { value: 299 } },
+        images: ['https://images.example.test/normal.jpg'],
+      },
+    ],
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-1305',
+  });
+
+  assert.equal(offers.length, 2);
+  assert.equal(offers[0].title, 'Cremereiniger');
+  assert.equal(offers[0].brand, 'CIF');
+  assert.equal(offers[0].priceCurrent.amount, 1.99);
+  assert.equal(offers[0].priceReference.amount, 2.45);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 2.65);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
+  assert.equal(offers[0].imageUrl, 'https://www.penny.at/images/penny/cif-140.jpg');
+  assert.equal(offers[1].validTo, null);
+  assert.match(offers[1].conditionsText, /Aktuell gefunden/);
+  assert.equal(offers[1].adminReview.status, 'pending');
+});
+
+test('PENNY official API collector follows product-group pagination', async () => {
+  const sourceDefinition = pennyOfficialSource();
+  const productsByPage = new Map([
+    [0, [pennyApiProduct({ slug: 'auslese-klassisch-78114243' })]],
+    [1, [pennyApiProduct({
+      slug: 'frizzante-78325401',
+      name: 'Frizzante',
+      brand: { name: 'La Torina', slug: 'la-torina' },
+      amount: '0.75',
+      volumeLabelShort: 'l',
+      packageLabel: 'Flasche',
+      baseUnitLong: 'Liter',
+      baseUnitShort: 'Liter',
+      priceCents: 199,
+      perStandardizedQuantity: 265,
+      crossed: null,
+    })]],
+  ]);
+  const requestedPages = [];
+
+  const result = await __private.collectPennyOfficialApiOffers({
+    html: 'product-group-angebote-ab-1305-\\{"page":0,"pageSize":30}',
+    source: sourceDefinition,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    fetchProductsPage: async ({ categorySlug, page, pageSize }) => {
+      requestedPages.push({ categorySlug, page, pageSize });
+      return {
+        total: 101,
+        results: productsByPage.get(page) || [],
+      };
+    },
+  });
+
+  assert.deepEqual(requestedPages.map((item) => item.page), [0, 1]);
+  assert.equal(requestedPages[0].categorySlug, 'angebote-ab-1305');
+  assert.equal(result.diagnostics.pagesFetched, 2);
+  assert.equal(result.diagnostics.productsFetched, 2);
+  assert.equal(result.offers.length, 2);
 });

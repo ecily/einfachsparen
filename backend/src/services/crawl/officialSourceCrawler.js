@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const crypto = require('node:crypto');
+const https = require('node:https');
 const { Types } = require('mongoose');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
@@ -49,6 +50,8 @@ const DM_PRODUCT_SEARCH_URL = 'https://product-search.services.dmtech.com/at/sea
 const DM_SALE_PAGE_SIZE = 48;
 const DM_SALE_MAX_PAGES = 20;
 const DM_SALE_PAGE_DELAY_MS = 300;
+const PENNY_PRODUCT_GROUP_PAGE_SIZE = 100;
+const PENNY_PRODUCT_GROUP_MAX_PAGES = 10;
 
 function responseContentType(response = {}) {
   return response.headers?.['content-type'] || response.headers?.['Content-Type'] || '';
@@ -782,6 +785,43 @@ function extractPennySourceCategory(product = {}) {
   return [...new Set(categoryNames.map(sanitizeWhitespace).filter(Boolean))].join(' / ');
 }
 
+function extractPennyProductGroupSlugsFromHtml(html) {
+  const slugs = [];
+  const seen = new Set();
+
+  function pushSlug(value) {
+    const slug = sanitizeWhitespace(value).toLowerCase();
+
+    if (!/^angebote-ab-\d{4}(?:-[a-z0-9-]+)?$/.test(slug) || seen.has(slug)) {
+      return;
+    }
+
+    seen.add(slug);
+    slugs.push(slug);
+  }
+
+  for (const match of String(html || '').matchAll(/product-group-([a-z0-9-]+)-\\?\{/gi)) {
+    pushSlug(match[1]);
+  }
+
+  const $ = cheerio.load(html || '');
+  $('a[href*="/angebote?tab=angebote-ab-"], a[href*="/kategorie/angebote-ab-"]').each((index, element) => {
+    const href = sanitizeWhitespace($(element).attr('href'));
+    const tabMatch = href.match(/tab=angebote-ab-(\d{2})-(\d{2})/i);
+    const categoryMatch = href.match(/\/kategorie\/(angebote-ab-\d{4}(?:-[a-z0-9-]+)?)/i);
+
+    if (tabMatch) {
+      pushSlug(`angebote-ab-${tabMatch[1]}${tabMatch[2]}`);
+    }
+
+    if (categoryMatch) {
+      pushSlug(categoryMatch[1]);
+    }
+  });
+
+  return slugs;
+}
+
 function extractPennyProductFromCard({ productUrl, nuxtProducts }) {
   const slug = extractPennyProductSlug(productUrl);
 
@@ -1002,6 +1042,202 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
   return offers;
 }
 
+function buildPennyApiUnitPrice(product = {}, currentPrice = null) {
+  const price = product?.price || {};
+  const unit = normalizeUnitFromText(price.baseUnitShort || price.baseUnitLong);
+  const basePriceFactor = parseNumericAmount(price.basePriceFactor);
+  const perStandardizedQuantity = centsToEuroAmount(price.regular?.perStandardizedQuantity);
+
+  if (perStandardizedQuantity && unit) {
+    if (unit === 'g' && basePriceFactor) {
+      return {
+        amount: Number((perStandardizedQuantity * (1000 / basePriceFactor)).toFixed(2)),
+        unit: 'kg',
+        comparable: true,
+        confidence: 0.92,
+      };
+    }
+
+    if (unit === 'ml' && basePriceFactor) {
+      return {
+        amount: Number((perStandardizedQuantity * (1000 / basePriceFactor)).toFixed(2)),
+        unit: 'l',
+        comparable: true,
+        confidence: 0.92,
+      };
+    }
+
+    if (['kg', 'l', 'Stk'].includes(unit)) {
+      return {
+        amount: perStandardizedQuantity,
+        unit,
+        comparable: true,
+        confidence: 0.92,
+      };
+    }
+  }
+
+  return buildOfficialNormalizedUnitPrice({
+    priceAmount: currentPrice,
+    quantityText: buildPennyQuantityTextFromProduct(product),
+  });
+}
+
+function hasPennyApiOfferSignal(product = {}) {
+  const price = product?.price || {};
+  const tags = Array.isArray(price.regular?.tags) ? price.regular.tags : [];
+
+  return Boolean(
+    product?.inPromotion
+    || price.validityStart
+    || price.validityEnd
+    || price.crossed
+    || price.discountPercentage
+    || tags.length > 0
+  );
+}
+
+function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, region, pageUrl, categorySlug = '' }) {
+  const offers = [];
+  const seenOfferKeys = new Set();
+  const scopeHint = {
+    type: 'unknown',
+    reason: 'Offizielle PENNY Product-Discovery-API; keine belastbare oesterreichweite Gueltigkeit aus API ableitbar.',
+  };
+
+  for (const product of products) {
+    const productSlug = sanitizeWhitespace(product?.slug);
+    const productUrl = toAbsoluteUrl(`/produkte/${productSlug}`, pageUrl || source.sourceUrl);
+    const title = sanitizeWhitespace(product?.name);
+    const brand = sanitizeWhitespace(product?.brand?.name);
+    const quantityText = buildPennyQuantityTextFromProduct(product);
+    const currentPrice = centsToEuroAmount(product?.price?.regular?.value);
+    const referencePrice = centsToEuroAmount(product?.price?.crossed);
+    const validFrom = parsePennyDateFromIso(product?.price?.validityStart);
+    const validTo = parsePennyDateFromIso(product?.price?.validityEnd, true);
+    const statusInfo = buildOfferStatus(validFrom, validTo);
+    const normalizedUnitPrice = buildPennyApiUnitPrice(product, currentPrice);
+    const sourceCategory = extractPennySourceCategory(product);
+    const categoryPrimary = determineOfferCategory({
+      title: sanitizeWhitespace(`${brand} ${title}`),
+      contextText: [brand, quantityText, sourceCategory].filter(Boolean).join(' '),
+      sourceCategory,
+    });
+    const issues = [];
+    const offerKey = [productUrl, validFrom?.toISOString() || '', validTo?.toISOString() || '', currentPrice].join('|');
+    const conditionsText = validTo ? '' : 'Aktuell gefunden - bitte im Markt pruefen.';
+
+    if (
+      !title
+      || !productSlug
+      || !currentPrice
+      || !hasPennyApiOfferSignal(product)
+      || statusInfo.status === 'expired'
+      || seenOfferKeys.has(offerKey)
+    ) {
+      continue;
+    }
+
+    seenOfferKeys.add(offerKey);
+
+    if (!normalizedUnitPrice.comparable) {
+      issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+    }
+
+    if (!validFrom || !validTo) {
+      issues.push('Gueltigkeitszeitraum unvollstaendig');
+    }
+
+    const overrideResult = applyManualCategoryOverridesToOfferSync({
+      crawlJobId,
+      sourceId: source._id,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      region,
+      title,
+      brand,
+      categoryPrimary,
+      categorySecondary: determineOfferSubcategory({
+        primaryCategory: categoryPrimary,
+        sourceCategory,
+        fallbackLabel: sourceCategory || categoryPrimary,
+        title: sanitizeWhitespace(`${brand} ${title}`),
+        contextText: [brand, quantityText, sourceCategory].filter(Boolean).join(' '),
+      }),
+      comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
+      comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+      comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+      description: sanitizeWhitespace(product?.descriptionShort || product?.descriptionLong),
+      sourceUrl: productUrl,
+      imageUrl: normalizeImageUrl(sanitizeWhitespace(product?.images?.[0]), productUrl),
+      supportingSources: [
+        buildSourceEvidence({
+          source,
+          observedUrl: productUrl,
+          matchType: 'primary',
+        }),
+      ],
+      validFrom,
+      validTo,
+      status: statusInfo.status,
+      isActiveNow: statusInfo.isActiveNow,
+      isActiveToday: statusInfo.isActiveToday,
+      benefitType: referencePrice && referencePrice > currentPrice ? 'price-cut' : 'unknown',
+      conditionsText,
+      customerProgramRequired: false,
+      availabilityScope: 'unknown',
+      priceCurrent: {
+        amount: currentPrice,
+        currency: 'EUR',
+        originalText: `${currentPrice.toFixed(2)} EUR`,
+      },
+      priceReference: {
+        amount: referencePrice && referencePrice > currentPrice ? referencePrice : null,
+        currency: 'EUR',
+        originalText: referencePrice && referencePrice > currentPrice ? `${referencePrice.toFixed(2)} EUR` : '',
+      },
+      priceReferenceSource: referencePrice && referencePrice > currentPrice ? 'penny-official-api-crossed' : '',
+      quantityText,
+      normalizedUnitPrice,
+      quality: {
+        completenessScore: [currentPrice, validFrom, validTo, categoryPrimary].filter(Boolean).length / 4,
+        parsingConfidence: normalizedUnitPrice.comparable ? 0.92 : 0.8,
+        comparisonSafe: normalizedUnitPrice.comparable,
+        issues,
+      },
+      rawFacts: {
+        sourceType: 'penny-official-html',
+        sourceKind: 'official',
+        extractionMethod: 'penny-product-discovery-api',
+        apiCategorySlug: categorySlug,
+        sourceCategory,
+        productSlug,
+        productId: sanitizeWhitespace(product?.productId),
+        sku: sanitizeWhitespace(product?.sku),
+        priceTags: Array.isArray(product?.price?.regular?.tags) ? product.price.regular.tags : [],
+        discountPercentage: product?.price?.discountPercentage ?? null,
+        baseUnitShort: sanitizeWhitespace(product?.price?.baseUnitShort),
+        basePriceFactor: sanitizeWhitespace(product?.price?.basePriceFactor),
+        availabilityScope: scopeHint,
+        pageUrl,
+        snapshotCurrent: false,
+      },
+      adminReview: {
+        status: issues.length > 0 ? 'pending' : 'reviewed',
+        note: conditionsText,
+        feedbackDigest: '',
+      },
+      scope: buildInclusiveScopeDecision(),
+    });
+
+    if (overrideResult.offer) {
+      offers.push(overrideResult.offer);
+    }
+  }
+
+  return offers;
+}
+
 function diagnosePennyOfficialSiteHtml({ html, sourceUrl = 'https://www.penny.at/angebote', response = {}, fetchError = '' } = {}) {
   const $ = cheerio.load(html || '');
   const source = {
@@ -1022,6 +1258,7 @@ function diagnosePennyOfficialSiteHtml({ html, sourceUrl = 'https://www.penny.at
   });
   const { products } = extractPennyNuxtProductsFromHtml(html || '');
   const { tabs, paginationLinks } = extractPennyTabsAndLinks(html || '', sourceUrl);
+  const productGroupSlugs = extractPennyProductGroupSlugsFromHtml(html || '');
   const cardCount = $('[data-test="product-tile"], .ws-product-tile').length;
   const skipRejectReasons = [];
 
@@ -1065,12 +1302,15 @@ function diagnosePennyOfficialSiteHtml({ html, sourceUrl = 'https://www.penny.at
     skipRejectReasons,
     tabs,
     paginationLinks,
+    productGroupSlugs,
     regionScopeHint: detectPennyScopeHint(html || ''),
     detailPagesOrApiNeeded: paginationLinks.length > 0
-      ? 'Listing HTML enthaelt verwertbare Seite-1-Angebote und Nuxt-Payload-Bilder; weitere Pagination wird clientseitig verlinkt und sollte vor Production-Erweiterung separat gegen API/State-Endpunkte validiert werden.'
+      ? 'Listing HTML enthaelt verwertbare Seite-1-Angebote und Nuxt-Payload-Bilder; weitere offizielle Offers liegen in der Product-Discovery-API des sichtbaren Product-Group-Slugs.'
       : 'Listing HTML reicht fuer erkannte Angebote; Detailseiten sind fuer diese Offers nicht noetig.',
-    expectedProductionEffect: offers.length > 18
-      ? `Targeted Crawl sollte mindestens ${offers.length} offizielle PENNY-HTML-Angebote speichern, sofern Production TLS/HTML identisch ist.`
+    expectedProductionEffect: productGroupSlugs.length
+      ? `Targeted Crawl sollte die offizielle PENNY Product-Discovery-API fuer ${productGroupSlugs[0]} seitenweise auslesen; HTML-Seite 1 bleibt Fallback.`
+      : offers.length > 18
+        ? `Targeted Crawl sollte mindestens ${offers.length} offizielle PENNY-HTML-Angebote speichern, sofern Production TLS/HTML identisch ist.`
       : 'Erwarteter Effekt unter Ziel; Parser/Quelle erneut pruefen.',
   };
 }
@@ -1850,6 +2090,44 @@ async function fetchHtml(url) {
   };
 }
 
+async function fetchPennyProductGroupProducts({ categorySlug, page, pageSize = PENNY_PRODUCT_GROUP_PAGE_SIZE, referer = 'https://www.penny.at/angebote' }) {
+  const url = `https://www.penny.at/api/product-discovery/categories/${encodeURIComponent(categorySlug)}/products`;
+  const requestConfig = {
+    timeout: 30000,
+    validateStatus: () => true,
+    params: { page, pageSize },
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      Accept: 'application/json,text/plain,*/*',
+      'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+      Referer: referer,
+    },
+  };
+
+  let response;
+
+  try {
+    response = await axios.get(url, requestConfig);
+  } catch (error) {
+    if (!/CERT|TLS|LEAF|certificate/i.test(error.code || error.message || '')) {
+      throw error;
+    }
+
+    response = await axios.get(url, {
+      ...requestConfig,
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+    });
+  }
+
+  if (response.status < 200 || response.status >= 300 || !response.data || typeof response.data !== 'object') {
+    const error = new Error(`PENNY product group API returned unusable payload (${response.status})`);
+    error.response = response;
+    throw error;
+  }
+
+  return response.data;
+}
+
 async function fetchDmJson(url, { referer = 'https://www.dm.at/ausverkauf' } = {}) {
   let response;
 
@@ -2593,14 +2871,113 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
   };
 }
 
+async function collectPennyOfficialApiOffers({
+  html,
+  source,
+  crawlJobId,
+  region,
+  pageUrl,
+  fetchProductsPage = fetchPennyProductGroupProducts,
+}) {
+  const categorySlugs = extractPennyProductGroupSlugsFromHtml(html).slice(0, 1);
+  const offers = [];
+  const diagnostics = {
+    categorySlugs,
+    pagesFetched: 0,
+    productsFetched: 0,
+    totalAvailable: 0,
+    errors: [],
+  };
+
+  for (const categorySlug of categorySlugs) {
+    let page = 0;
+    let total = 0;
+
+    while (page < PENNY_PRODUCT_GROUP_MAX_PAGES) {
+      let payload;
+
+      try {
+        payload = await fetchProductsPage({
+          categorySlug,
+          page,
+          pageSize: PENNY_PRODUCT_GROUP_PAGE_SIZE,
+          referer: pageUrl || source.sourceUrl,
+        });
+      } catch (error) {
+        diagnostics.errors.push({
+          categorySlug,
+          page,
+          message: error.message,
+          httpStatus: error.response?.status ?? null,
+        });
+        break;
+      }
+
+      const products = Array.isArray(payload?.results) ? payload.results : [];
+      total = Number(payload?.total || products.length || 0);
+      diagnostics.pagesFetched += 1;
+      diagnostics.productsFetched += products.length;
+      diagnostics.totalAvailable = Math.max(diagnostics.totalAvailable, total);
+
+      offers.push(...normalizePennyApiProductsToOffers({
+        products,
+        source,
+        crawlJobId,
+        region,
+        pageUrl,
+        categorySlug,
+      }));
+
+      page += 1;
+
+      if (!products.length || page >= Math.ceil(total / PENNY_PRODUCT_GROUP_PAGE_SIZE)) {
+        break;
+      }
+
+      await delay(150);
+    }
+  }
+
+  return {
+    offers,
+    diagnostics,
+  };
+}
+
 async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
-  const normalizedOffers = parsePennyOffersFromHtml({
+  const htmlOffers = parsePennyOffersFromHtml({
     html,
     source,
     crawlJobId,
     region,
     pageUrl: canonicalUrl || source.sourceUrl,
   });
+  const apiResult = await collectPennyOfficialApiOffers({
+    html,
+    source,
+    crawlJobId,
+    region,
+    pageUrl: canonicalUrl || source.sourceUrl,
+  });
+  const seen = new Set();
+  const normalizedOffers = [];
+
+  for (const offer of [...apiResult.offers, ...htmlOffers]) {
+    const key = [
+      offer.sourceUrl,
+      offer.validFrom?.toISOString?.() || '',
+      offer.validTo?.toISOString?.() || '',
+      offer.priceCurrent?.amount || '',
+    ].join('|');
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalizedOffers.push(offer);
+  }
+
   const offerDocuments = enrichOffersForStorage(normalizedOffers, {
     source,
     sourceType: 'penny-official-html',
@@ -2616,7 +2993,8 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
   return {
     offerDocuments,
     rawDocuments: 0,
-    rawCandidateCount: normalizedOffers.length,
+    rawCandidateCount: htmlOffers.length + apiResult.diagnostics.productsFetched,
+    diagnostics: apiResult.diagnostics,
     refreshResult,
   };
 }
@@ -3617,6 +3995,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += pennyOfficialResult.rawDocuments;
       rawCandidateCount += pennyOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...pennyOfficialResult.offerDocuments);
+      parserDetails.pennyOfficialSite = pennyOfficialResult.diagnostics || {};
     } else if (source.retailerKey === 'lidl' && source.sourceUrl.includes('lidl.at/c/flugblatt')) {
       const lidlOfficialResult = await crawlLidlOfficialFlyers({
         source,
@@ -3756,6 +4135,9 @@ module.exports = {
     parsePennyOffersFromHtml,
     extractPennyNuxtProductsFromHtml,
     extractPennyTabsAndLinks,
+    extractPennyProductGroupSlugsFromHtml,
+    normalizePennyApiProductsToOffers,
+    collectPennyOfficialApiOffers,
     diagnosePennyOfficialSiteHtml,
     parseDmSaleOffersFromHtml,
     parseDmSaleOffersFromProductSearchJson,
