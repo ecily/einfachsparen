@@ -76,13 +76,14 @@ const OFFER_RANKING_FIELD_LIST = [
 ];
 const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
-const RANKING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v3-search-token-v${SEARCH_TOKEN_VERSION}`;
+const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v4-search-token-v${SEARCH_TOKEN_VERSION}`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
 const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
 const rankingResponseCache = new Map();
+const rankingResultBaseCache = new Map();
 
 function nowMs() {
   return Number(process.hrtime.bigint()) / 1e6;
@@ -264,34 +265,70 @@ function buildRankingCacheKey({
   });
 }
 
-function getCachedRankingResponse(cacheKey) {
-  const entry = rankingResponseCache.get(cacheKey);
+function buildRankingBaseCacheKey({
+  categories = '',
+  query = '',
+  unit = 'all',
+  retailers = '',
+  programRetailers = '',
+  onlyWithoutProgram = false,
+}) {
+  return JSON.stringify({
+    cacheSchemaVersion: RANKING_CACHE_SCHEMA_VERSION,
+    categories: normalizeStringList(categories).sort(),
+    query: String(query || '').trim().toLowerCase(),
+    unit: String(unit || 'all').trim().toLowerCase(),
+    retailers: normalizeRetailerList(retailers).sort(),
+    programRetailers: normalizeProgramRetailers(programRetailers).sort(),
+    onlyWithoutProgram: normalizeBoolean(onlyWithoutProgram),
+  });
+}
+
+function getCachedRankingEntry(cache, cacheKey) {
+  const entry = cache.get(cacheKey);
 
   if (!entry) {
     return null;
   }
 
   if (Date.now() - entry.createdAt > RANKING_CACHE_TTL_MS) {
-    rankingResponseCache.delete(cacheKey);
+    cache.delete(cacheKey);
     return null;
   }
 
   return entry.value;
 }
 
-function setCachedRankingResponse(cacheKey, value) {
-  rankingResponseCache.set(cacheKey, {
+function setCachedRankingEntry(cache, cacheKey, value) {
+  cache.set(cacheKey, {
     createdAt: Date.now(),
     value,
   });
 }
 
+function getCachedRankingResponse(cacheKey) {
+  return getCachedRankingEntry(rankingResponseCache, cacheKey);
+}
+
+function setCachedRankingResponse(cacheKey, value) {
+  setCachedRankingEntry(rankingResponseCache, cacheKey, value);
+}
+
+function getCachedRankingResultBase(cacheKey) {
+  return getCachedRankingEntry(rankingResultBaseCache, cacheKey);
+}
+
+function setCachedRankingResultBase(cacheKey, value) {
+  setCachedRankingEntry(rankingResultBaseCache, cacheKey, value);
+}
+
 function clearRankingResponseCache() {
   rankingResponseCache.clear();
+  rankingResultBaseCache.clear();
 }
 
 function getRankingResponseCacheSize() {
-  return rankingResponseCache.size;
+  return rankingResponseCache.size + rankingResultBaseCache.size;
 }
 
 function summarizeDebugRankingOffer(offer, { query = '' } = {}) {
@@ -4225,6 +4262,81 @@ async function buildBasketSuggestions({
   };
 }
 
+function buildRankingResponseFromBase({
+  base,
+  query = '',
+  unit = 'all',
+  selectedCategories = [],
+  selectedRetailers = [],
+  selectedProgramRetailers = [],
+  withoutProgram = false,
+  safeLimit = 30,
+  safeOffset = 0,
+  showAllMatching = false,
+}) {
+  const visibleOffers = Array.isArray(base?.visibleOffers) ? base.visibleOffers : [];
+  const pagination = paginateVisibleRankingOffers(visibleOffers, {
+    limit: safeLimit || visibleOffers.length,
+    offset: safeOffset,
+    showAllMatching,
+  });
+  const offers = pagination.offers;
+  const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
+  const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
+  const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
+  const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
+  const categoryDocuments = Array.isArray(base?.categoryDocuments) ? base.categoryDocuments : [];
+  const retailerOptions = Array.isArray(base?.retailerOptions) ? base.retailerOptions : [];
+
+  return {
+    generatedAt: new Date().toISOString(),
+    filters: {
+      categories: selectedCategories,
+      query,
+      unit,
+      retailers: selectedRetailers,
+      programRetailers: selectedProgramRetailers,
+      onlyWithoutProgram: withoutProgram,
+      limit: showAllMatching ? 'all' : safeLimit,
+      offset: safeOffset,
+    },
+    categories: buildCategoryLabelsFromDocuments(categoryDocuments),
+    retailers: retailerOptions.map((item) => ({
+      key: item.retailerKey,
+      retailerKey: item.retailerKey,
+      retailerName: item.retailerName,
+      offerCount: item.activeOfferCount || 0,
+    })),
+    units: Array.isArray(base?.units) ? base.units : [],
+    summary: {
+      resultCount: base?.resultCount || 0,
+      displayedCount: rankedOffers.length,
+      requestedDisplay: showAllMatching ? 'all' : safeLimit,
+      totalCount: pagination.totalCount,
+      offset: pagination.offset,
+      limit: pagination.limit,
+      hasMore: pagination.hasMore,
+      nextOffset: pagination.nextOffset,
+      completeResultSetVisible:
+        (base?.candidateCount || 0) < (base?.candidateLimit || 0) &&
+        !pagination.hasMore &&
+        pagination.offset === 0 &&
+        rankedOffers.length === pagination.totalCount,
+      candidateCount: base?.candidateCount || 0,
+      candidateLimit: base?.candidateLimit || 0,
+      bestUnitPrice,
+      worstUnitPrice,
+      spreadPercent:
+        bestUnitPrice && worstUnitPrice
+          ? Number((((worstUnitPrice - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
+          : 0,
+    },
+    retailerDistribution: buildRetailerDistribution(rankedOffers),
+    rankedGroups: buildGroupedRankings(rankedOffers, { query }),
+    rankedOffers,
+  };
+}
+
 async function buildOfferRanking({
   categories = '',
   query = '',
@@ -4274,6 +4386,14 @@ async function buildOfferRanking({
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
   const rawCategories = normalizeStringList(categories);
+  const earlyBaseCacheKey = rawCategories.length === 0 ? buildRankingBaseCacheKey({
+    categories: [],
+    query,
+    unit,
+    retailers,
+    programRetailers,
+    onlyWithoutProgram,
+  }) : '';
   const earlyCacheKey = rawCategories.length === 0 ? buildRankingCacheKey({
     categories: [],
     query,
@@ -4286,8 +4406,26 @@ async function buildOfferRanking({
     offsetExplicit,
   }) : '';
   const cacheLookupStartedAt = nowMs();
+  const earlyCachedBase = !diagnostics && offsetExplicit && earlyBaseCacheKey
+    ? getCachedRankingResultBase(earlyBaseCacheKey)
+    : null;
   const earlyCachedResponse = !diagnostics && earlyCacheKey ? getCachedRankingResponse(earlyCacheKey) : null;
   timings.cacheLookupMs += nowMs() - cacheLookupStartedAt;
+
+  if (earlyCachedBase) {
+    return buildRankingResponseFromBase({
+      base: earlyCachedBase,
+      query,
+      unit,
+      selectedCategories: [],
+      selectedRetailers,
+      selectedProgramRetailers,
+      withoutProgram,
+      safeLimit,
+      safeOffset,
+      showAllMatching,
+    });
+  }
 
   if (earlyCachedResponse) {
     return earlyCachedResponse;
@@ -4311,9 +4449,35 @@ async function buildOfferRanking({
     offset: safeOffset,
     offsetExplicit,
   });
+  const baseCacheKey = earlyBaseCacheKey || buildRankingBaseCacheKey({
+    categories: selectedCategories,
+    query,
+    unit,
+    retailers,
+    programRetailers,
+    onlyWithoutProgram,
+  });
   const lateCacheLookupStartedAt = nowMs();
+  const cachedBase = !diagnostics && offsetExplicit && !earlyBaseCacheKey
+    ? getCachedRankingResultBase(baseCacheKey)
+    : null;
   const cachedResponse = diagnostics || earlyCacheKey ? null : getCachedRankingResponse(cacheKey);
   timings.cacheLookupMs += nowMs() - lateCacheLookupStartedAt;
+
+  if (cachedBase) {
+    return buildRankingResponseFromBase({
+      base: cachedBase,
+      query,
+      unit,
+      selectedCategories,
+      selectedRetailers,
+      selectedProgramRetailers,
+      withoutProgram,
+      safeLimit,
+      safeOffset,
+      showAllMatching,
+    });
+  }
 
   if (cachedResponse) {
     return cachedResponse;
@@ -4638,6 +4802,18 @@ async function buildOfferRanking({
     };
   }
 
+  if (offsetExplicit) {
+    setCachedRankingResultBase(baseCacheKey, {
+      categoryDocuments,
+      retailerOptions,
+      units: [...new Set(candidateOffers.map((offer) => offer?.normalizedUnitPrice?.unit).filter(Boolean))].sort(),
+      candidateCount: candidateOffers.length,
+      candidateLimit,
+      resultCount: fullyFilteredOffers.length,
+      visibleOffers: visibleDedupeResult.offers,
+    });
+  }
+
   setCachedRankingResponse(cacheKey, response);
   return response;
 }
@@ -4662,11 +4838,13 @@ module.exports = {
   prepareQueryOffersForResponse,
   parseRankingCategories,
   buildKnownCategoryLabelMap,
+  buildRankingBaseCacheKey,
   buildRankingCandidateLimit,
   buildRankingCandidateMatch,
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateQueryMetadata,
   paginateVisibleRankingOffers,
+  buildRankingResponseFromBase,
   normalizeSearchText,
   normalizeRetailerKey,
   normalizeRetailerList,

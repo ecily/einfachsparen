@@ -10,11 +10,13 @@ const {
   buildValidityLabel,
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
+  buildRankingBaseCacheKey,
   dedupeFinalResponseOffers,
   dedupeQueryOffers,
   dedupeResponseOffers,
   dedupeVisibleCardResponseOffers,
   buildRankingCandidateQueryMetadata,
+  buildRankingResponseFromBase,
   normalizeSearchText,
   normalizeRetailerList,
   paginateVisibleRankingOffers,
@@ -3005,4 +3007,91 @@ test('ranking pagination defaults offset to zero for backwards compatibility', (
   );
   assert.equal(page.hasMore, true);
   assert.equal(page.nextOffset, 60);
+});
+
+test('ranking base cache key ignores pagination and separates ranking filters', () => {
+  const firstPageKey = buildRankingBaseCacheKey({
+    query: 'Waschmittel',
+    retailers: 'dm,bipa',
+    categories: ['Drogerie / Hygiene'],
+    programRetailers: 'bipa,dm',
+    unit: 'Stk',
+    limit: 60,
+    offset: 0,
+  });
+  const secondPageKey = buildRankingBaseCacheKey({
+    query: 'waschmittel',
+    retailers: 'bipa,dm',
+    categories: ['Drogerie / Hygiene'],
+    programRetailers: 'dm,bipa',
+    unit: 'stk',
+    limit: 60,
+    offset: 60,
+  });
+
+  assert.equal(firstPageKey, secondPageKey);
+  assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'kaffee', retailers: 'dm,bipa', categories: ['Drogerie / Hygiene'], programRetailers: 'bipa,dm', unit: 'Stk' }));
+  assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm', categories: ['Drogerie / Hygiene'], programRetailers: 'bipa,dm', unit: 'Stk' }));
+  assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm,bipa', categories: ['Haushalt'], programRetailers: 'bipa,dm', unit: 'Stk' }));
+  assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm,bipa', categories: ['Drogerie / Hygiene'], programRetailers: 'dm', unit: 'Stk' }));
+  assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm,bipa', categories: ['Drogerie / Hygiene'], programRetailers: 'bipa,dm', unit: 'kg' }));
+  assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm,bipa', categories: ['Drogerie / Hygiene'], programRetailers: 'bipa,dm', unit: 'Stk', onlyWithoutProgram: true }));
+});
+
+test('ranking response base slices cache hits without changing order or overlap', () => {
+  const visibleOffers = Array.from({ length: 125 }, (_, index) => offer({
+    _id: `offer-${index}`,
+    title: `Waschmittel ${index}`,
+    retailerKey: index % 2 ? 'bipa' : 'dm',
+    retailerName: index % 2 ? 'BIPA' : 'dm',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Waschmittel',
+    priceCurrent: { amount: 1 + index / 100, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 1 + index / 100, unit: 'Stk', comparable: true },
+    quality: { comparisonSafe: true },
+  }));
+  const base = {
+    categoryDocuments: [],
+    retailerOptions: [
+      { retailerKey: 'dm', retailerName: 'dm', activeOfferCount: 70 },
+      { retailerKey: 'bipa', retailerName: 'BIPA', activeOfferCount: 55 },
+    ],
+    units: ['Stk'],
+    candidateCount: 140,
+    candidateLimit: 1000,
+    resultCount: 130,
+    visibleOffers,
+  };
+  const firstPage = buildRankingResponseFromBase({
+    base,
+    query: 'waschmittel',
+    unit: 'all',
+    selectedCategories: [],
+    selectedRetailers: ['dm', 'bipa'],
+    selectedProgramRetailers: ['dm', 'bipa'],
+    safeLimit: 60,
+    safeOffset: 0,
+  });
+  const secondPage = buildRankingResponseFromBase({
+    base,
+    query: 'waschmittel',
+    unit: 'all',
+    selectedCategories: [],
+    selectedRetailers: ['dm', 'bipa'],
+    selectedProgramRetailers: ['dm', 'bipa'],
+    safeLimit: 60,
+    safeOffset: 60,
+  });
+  const firstIds = firstPage.rankedOffers.map((item) => item.id);
+  const secondIds = secondPage.rankedOffers.map((item) => item.id);
+
+  assert.deepEqual(firstIds, visibleOffers.slice(0, 60).map((item) => item._id));
+  assert.deepEqual(secondIds, visibleOffers.slice(60, 120).map((item) => item._id));
+  assert.equal(firstIds.some((id) => secondIds.includes(id)), false);
+  assert.equal(firstPage.summary.hasMore, true);
+  assert.equal(firstPage.summary.nextOffset, 60);
+  assert.equal(secondPage.summary.hasMore, true);
+  assert.equal(secondPage.summary.nextOffset, 120);
+  assert.equal(firstPage.rankedOffers[0].title, 'Waschmittel 0');
+  assert.equal(secondPage.rankedOffers[0].title, 'Waschmittel 60');
 });
