@@ -137,6 +137,241 @@ export function isDuplicateMinimumCondition(value, offer) {
   )
 }
 
+function normalizeConditionWhitespace(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function normalizeConditionParseText(value) {
+  return normalizeConditionWhitespace(value)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function normalizeDisplayConditionKey(value) {
+  return normalizeConditionParseText(value)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(?:bedingung|aktion|angebot|nur|mit|bei)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function flattenConditionValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(flattenConditionValue).filter(Boolean).join(' ')
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value).map(flattenConditionValue).filter(Boolean).join(' ')
+  }
+
+  return String(value || '')
+}
+
+function getConditionSourceTexts(offer) {
+  return [
+    offer?.conditionsText,
+    offer?.conditionLabel,
+    offer?.effectiveDiscountType,
+    offer?.discountMechanic,
+    offer?.discountType,
+    offer?.rawFacts,
+  ]
+    .map(flattenConditionValue)
+    .map(normalizeConditionWhitespace)
+    .filter(Boolean)
+}
+
+function getExplicitMinimumQuantity(offer) {
+  const quantity = Number(
+    offer?.minimumPurchaseQty ||
+      offer?.minimumPurchaseQuantity ||
+      offer?.minQuantity ||
+      offer?.minimumQuantity ||
+      offer?.minimumOrderQuantity ||
+      offer?.minimumPurchase?.quantity ||
+      offer?.discount?.minimumQuantity ||
+      0
+  )
+
+  return Number.isFinite(quantity) && quantity > 1 ? Math.round(quantity) : 0
+}
+
+const minimumUnitPattern = '(stuck|stueck|stk\\.?|st\\.?|packungen?|pkg\\.?|pckg\\.?)'
+
+function isPackUnit(value) {
+  return /\b(?:packungen?|pkg\.?|pckg\.?)\b/i.test(normalizeConditionParseText(value))
+}
+
+function getMinimumConditionInfoFromText(value) {
+  const text = normalizeConditionParseText(value)
+  const patterns = [
+    new RegExp(`\\b(?:gilt\\s*)?ab\\s*(\\d+)\\s*${minimumUnitPattern}\\b`),
+    new RegExp(`\\bmindestens\\s*(\\d+)\\s*${minimumUnitPattern}\\b`),
+    new RegExp(`\\bmindest(?:menge|kauf)?\\s*:?\\s*(\\d+)\\s*${minimumUnitPattern}\\b`),
+    new RegExp(`\\bbei\\s*(\\d+)\\s*${minimumUnitPattern}\\b`),
+    new RegExp(`\\b(\\d+)\\s*${minimumUnitPattern}\\s+je\\b`),
+  ]
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    const quantity = Number(match?.[1])
+
+    if (Number.isFinite(quantity) && quantity > 1) {
+      const unit = match?.[2] || ''
+
+      return {
+        quantity: Math.round(quantity),
+        unit: isPackUnit(unit) ? 'pack' : 'piece',
+      }
+    }
+  }
+
+  return null
+}
+
+function getDisplayMinimumConditionInfo(offer) {
+  const sourceTexts = getConditionSourceTexts(offer)
+  const explicitQuantity = getExplicitMinimumQuantity(offer)
+  const parsedInfos = sourceTexts.map(getMinimumConditionInfoFromText).filter(Boolean)
+
+  if (explicitQuantity) {
+    return {
+      quantity: explicitQuantity,
+      unit: parsedInfos.some((info) => info.quantity === explicitQuantity && info.unit === 'pack') ||
+        sourceTexts.some(isPackUnit)
+        ? 'pack'
+        : 'piece',
+    }
+  }
+
+  const firstInfo = parsedInfos[0]
+  if (!firstInfo) return null
+
+  return {
+    quantity: firstInfo.quantity,
+    unit: parsedInfos.some((info) => info.quantity === firstInfo.quantity && info.unit === 'pack') ? 'pack' : firstInfo.unit,
+  }
+}
+
+function formatMinimumDisplayCondition(info) {
+  if (!info?.quantity) return ''
+
+  return `Gilt ab ${info.quantity} ${info.unit === 'pack' ? 'Packungen' : 'Stück'}`
+}
+
+function hasAdditionalConditionSignal(value) {
+  return /\b(?:app|kundenkarte|karte|joe|jo|online|vorrat|sorten?|ausnahmen?|ausgenommen|rabattmark|pickerl|konto|club|nicht\s+kombinierbar|regional)\b/.test(
+    normalizeConditionParseText(value)
+  )
+}
+
+function isStandaloneMinimumCondition(value, minimumInfo) {
+  if (!minimumInfo?.quantity) return false
+
+  const parsedInfo = getMinimumConditionInfoFromText(value)
+  if (!parsedInfo || parsedInfo.quantity !== minimumInfo.quantity) return false
+  if (hasAdditionalConditionSignal(value)) return false
+
+  const text = normalizeConditionParseText(value)
+  const quantity = minimumInfo.quantity
+  const priceTail = '(?:\\s*(?:je|um|nur|=)?\\s*(?:eur|€)?\\s*\\d+(?:[,.]\\d+)?\\s*(?:eur|€)?)?'
+  const patterns = [
+    new RegExp(`^(?:gilt\\s*)?ab\\s*${quantity}\\s*${minimumUnitPattern}\\.?$`),
+    new RegExp(`^mindestens\\s*${quantity}\\s*${minimumUnitPattern}\\.?$`),
+    new RegExp(`^mindest(?:menge|kauf)?\\s*:?\\s*${quantity}\\s*${minimumUnitPattern}\\.?$`),
+    new RegExp(`^bei\\s*${quantity}\\s*${minimumUnitPattern}${priceTail}\\.?$`),
+    new RegExp(`^bei\\s*${quantity}\\s*${minimumUnitPattern}\\s+je(?:\\s+.*)?$`),
+    new RegExp(`^${quantity}\\s*${minimumUnitPattern}\\s+je(?:\\s+.*)?$`),
+  ]
+
+  return patterns.some((pattern) => pattern.test(text))
+}
+
+function conditionIncludesDisplayText(text, candidate) {
+  const normalizedText = normalizeDisplayConditionKey(text)
+  const normalizedCandidate = normalizeDisplayConditionKey(candidate)
+
+  return Boolean(normalizedText && normalizedCandidate && normalizedText.includes(normalizedCandidate))
+}
+
+function isRedundantDisplayCondition(candidate, existingConditions) {
+  const candidateKey = normalizeDisplayConditionKey(candidate)
+
+  if (!candidateKey) return true
+
+  return existingConditions.some((existingCondition) => {
+    const existingKey = normalizeDisplayConditionKey(existingCondition)
+
+    return (
+      existingKey === candidateKey ||
+      existingKey.includes(candidateKey) ||
+      candidateKey.includes(existingKey)
+    )
+  })
+}
+
+function getMultiBuyDisplayText(offer) {
+  const parts = getConditionSourceTexts(offer).join(' ')
+
+  const plusMatch = parts.match(/\b(\d+)\s*\+\s*(\d+)\b/)
+  if (plusMatch) {
+    return `${plusMatch[1]}+${plusMatch[2]} gratis`
+  }
+
+  const forMatch = parts.match(/\b(\d+)\s*f(?:ü|ue|u)r\s*(\d+)\b/i)
+  if (forMatch && Number(forMatch[1]) > Number(forMatch[2])) {
+    return `${forMatch[1]} für ${forMatch[2]}`
+  }
+
+  return offer?.isMultiBuy ? 'Mehrkauf-Angebot' : ''
+}
+
+function getProgramDisplayText(offer) {
+  const text = getConditionSourceTexts(offer).join(' ').toLowerCase()
+
+  if (text.includes('app')) {
+    return 'Nur mit App'
+  }
+
+  if (offer?.customerProgramRequired || text.includes('kundenkarte') || text.includes('jö') || text.includes('j ö')) {
+    return 'Nur mit Kundenkarte'
+  }
+
+  return ''
+}
+
+export function getDisplayConditionLabels(offer) {
+  const rawConditions = [
+    normalizeConditionWhitespace(offer?.conditionsText),
+    normalizeConditionWhitespace(offer?.conditionLabel),
+  ].filter(Boolean)
+  const minimumInfo = getDisplayMinimumConditionInfo(offer)
+  const minimumCondition = formatMinimumDisplayCondition(minimumInfo)
+  const multiBuyCondition = getMultiBuyDisplayText(offer)
+  const programCondition = getProgramDisplayText(offer)
+  const derivedConditions = [
+    minimumCondition,
+    minimumCondition ? '' : multiBuyCondition,
+    programCondition,
+  ].filter(Boolean)
+  const conditions = []
+
+  for (const condition of derivedConditions) {
+    if (!isRedundantDisplayCondition(condition, conditions)) {
+      conditions.push(condition)
+    }
+  }
+
+  for (const condition of rawConditions) {
+    if (minimumInfo && isStandaloneMinimumCondition(condition, minimumInfo)) continue
+    if (rawConditions.some((rawCondition) => rawCondition !== condition && conditionIncludesDisplayText(rawCondition, condition))) continue
+    if (!isRedundantDisplayCondition(condition, conditions)) conditions.push(condition)
+  }
+
+  return conditions
+}
+
 export function getDisplayConditionInfo(offer) {
   const items = []
 

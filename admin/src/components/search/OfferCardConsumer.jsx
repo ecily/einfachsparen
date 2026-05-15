@@ -1,5 +1,12 @@
 import { ProductImage } from '../layout/ProductImage'
-import { getOfferCategoryLabel, getReadableQuantityText, getSavingsValue, normalizeRetailerKey, shouldDisplayUnitPrice } from '../../utils/offers'
+import {
+  getDisplayConditionLabels,
+  getOfferCategoryLabel,
+  getReadableQuantityText,
+  getSavingsValue,
+  normalizeRetailerKey,
+  shouldDisplayUnitPrice,
+} from '../../utils/offers'
 import { formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
 import { getRetailerTheme } from '../../utils/retailerColors'
 
@@ -114,120 +121,6 @@ function getSavingsPercent(offer) {
   return Number.isFinite(percent) && percent > 0 ? Math.round(percent) : 0
 }
 
-function getMinimumQuantityText(offer) {
-  const quantity = Number(
-    offer?.minimumPurchaseQty ||
-      offer?.minimumPurchaseQuantity ||
-      offer?.minQuantity ||
-      offer?.minimumQuantity ||
-      offer?.minimumOrderQuantity ||
-      offer?.minimumPurchase?.quantity ||
-      offer?.discount?.minimumQuantity ||
-      0
-  )
-
-  if (Number.isFinite(quantity) && quantity > 1) {
-    return `Gilt ab ${Math.round(quantity)} Stück`
-  }
-
-  return ''
-}
-
-function getMultiBuyText(offer) {
-  const parts = [
-    offer?.conditionsText,
-    offer?.conditionLabel,
-    offer?.effectiveDiscountType,
-    offer?.discountMechanic,
-    offer?.discountType,
-  ]
-    .filter(Boolean)
-    .join(' ')
-
-  const plusMatch = parts.match(/\b(\d+)\s*\+\s*(\d+)\b/)
-  if (plusMatch) {
-    return `${plusMatch[1]}+${plusMatch[2]} gratis`
-  }
-
-  const forMatch = parts.match(/\b(\d+)\s*f(?:ü|ue|u)r\s*(\d+)\b/i)
-  if (forMatch && Number(forMatch[1]) > Number(forMatch[2])) {
-    return `${forMatch[1]} für ${forMatch[2]}`
-  }
-
-  return offer?.isMultiBuy ? 'Mehrkauf-Angebot' : ''
-}
-
-function getProgramText(offer) {
-  const text = String([offer?.conditionsText, offer?.conditionLabel].filter(Boolean).join(' ')).toLowerCase()
-
-  if (text.includes('app')) {
-    return 'Nur mit App'
-  }
-
-  if (offer?.customerProgramRequired || text.includes('kundenkarte') || text.includes('jö') || text.includes('j ö')) {
-    return 'Nur mit Kundenkarte'
-  }
-
-  return ''
-}
-
-function normalizeConditionKey(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\b(?:bedingung|aktion|angebot|nur|mit|bei)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function conditionIncludesText(text, candidate) {
-  const normalizedText = normalizeConditionKey(text)
-  const normalizedCandidate = normalizeConditionKey(candidate)
-
-  return Boolean(normalizedText && normalizedCandidate && normalizedText.includes(normalizedCandidate))
-}
-
-function isRedundantCondition(candidate, existingConditions) {
-  const candidateKey = normalizeConditionKey(candidate)
-
-  if (!candidateKey) return true
-
-  return existingConditions.some((existingCondition) => {
-    const existingKey = normalizeConditionKey(existingCondition)
-
-    return (
-      existingKey === candidateKey ||
-      existingKey.includes(candidateKey) ||
-      candidateKey.includes(existingKey)
-    )
-  })
-}
-
-function getConditionTexts(offer) {
-  const rawCondition = String(offer?.conditionsText || '').replace(/\s+/g, ' ').trim()
-  const rawLabel = String(offer?.conditionLabel || '').replace(/\s+/g, ' ').trim()
-  const derivedConditions = [
-    getProgramText(offer),
-    getMultiBuyText(offer),
-    getMinimumQuantityText(offer),
-  ].filter(Boolean)
-  const conditions = []
-
-  for (const condition of derivedConditions) {
-    if (rawCondition && conditionIncludesText(rawCondition, condition)) continue
-    if (rawLabel && conditionIncludesText(rawLabel, condition)) continue
-    if (!isRedundantCondition(condition, conditions)) conditions.push(condition)
-  }
-
-  for (const condition of [rawCondition, rawLabel]) {
-    if (condition && !isRedundantCondition(condition, conditions)) conditions.push(condition)
-  }
-
-  return conditions
-}
-
 function getCompactConditionText(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
 
@@ -239,8 +132,19 @@ function getCompactConditionText(value) {
 }
 
 function getVisibleConditionInfo(conditions) {
-  const visibleConditions = conditions.slice(0, 1)
-  const hiddenConditions = conditions.slice(1)
+  const visibleConditions = []
+  const hiddenConditions = []
+
+  for (const condition of conditions) {
+    const compactCondition = getCompactConditionText(condition)
+
+    if (visibleConditions.length < 2 && compactCondition === condition) {
+      visibleConditions.push(condition)
+    } else {
+      hiddenConditions.push(condition)
+    }
+  }
+
   const hiddenConditionsLabel = hiddenConditions.length === 1 ? 'Weitere Bedingung anzeigen' : 'Bedingungen anzeigen'
 
   return {
@@ -255,7 +159,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const showUnitPrice = shouldDisplayUnitPrice(offer)
   const category = getShortCategory(offer)
   const validity = formatValidityLabel(offer)
-  const conditions = getConditionTexts(offer)
+  const conditions = getDisplayConditionLabels(offer)
   const { visibleConditions, hiddenConditions, hiddenConditionsLabel, fullText: fullConditionText } = getVisibleConditionInfo(conditions)
   const quantityText = getReadableQuantityText(offer)
   const savingsAmount = getSavingsValue(offer)
@@ -300,7 +204,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
         </div>
 
         <div className="user-card__decision">
-          {visibleConditions.length > 0 ? (
+          {visibleConditions.length > 0 || hiddenConditions.length > 0 ? (
             <div className="user-card__conditions" aria-label={`Wichtige Angebotsbedingungen: ${fullConditionText}`}>
               {visibleConditions.map((condition) => (
                 <span className="user-card__condition-chip" key={condition} title={condition} aria-label={`Bedingung: ${condition}`}>
