@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createSharedShoppingList } from '../../api'
-import { ProductImage } from '../layout/ProductImage'
 import { SectionCard } from '../layout/SectionCard'
-import { formatUnitPrice } from '../../utils/formatting'
-import { shouldDisplayUnitPrice } from '../../utils/offers'
+import { OfferCardConsumer } from '../search/OfferCardConsumer'
 import { getRetailerTheme } from '../../utils/retailerColors'
 import {
   buildShareSnapshot,
@@ -60,42 +58,6 @@ function formatPrice(amount, currency = 'EUR') {
   }).format(numericAmount)
 }
 
-function formatShortDate(value) {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  return new Intl.DateTimeFormat('de-AT', {
-    day: '2-digit',
-    month: '2-digit',
-  }).format(date)
-}
-
-function isSameDay(left, right) {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  )
-}
-
-function getValidityText(item) {
-  const validTo = item?.validTo || item?.validUntil
-  const date = validTo ? new Date(validTo) : null
-
-  if (date && !Number.isNaN(date.getTime())) {
-    if (isSameDay(date, new Date())) {
-      return 'Heute gültig'
-    }
-
-    return `Gültig bis ${formatShortDate(date)}`
-  }
-
-  return ''
-}
-
 function normalizeRetailerName(value) {
   const name = String(value || '').trim()
 
@@ -121,92 +83,6 @@ function normalizeRetailerName(value) {
 
 function getArticleCountText(count) {
   return `${count} ${count === 1 ? 'Artikel' : 'Artikel'}`
-}
-
-function getQuantityText(item) {
-  const rawValue = String(item?.quantityText || '').trim()
-  const unknownPattern = new RegExp(['nicht', 'erkannt'].join(' '), 'i')
-  const brokenChocolatePattern = new RegExp(`^\\s*${['men', 'ge'].join('')}:\\s*1\\s*ta\\.?\\s*$`, 'i')
-
-  if (!rawValue || unknownPattern.test(rawValue) || brokenChocolatePattern.test(rawValue)) {
-    return ''
-  }
-
-  const value = rawValue.replace(/^menge:\s*/i, '').replace(/\s+/g, ' ').trim()
-
-  if (!value || unknownPattern.test(value) || /\bta\./i.test(value)) {
-    return ''
-  }
-
-  return value.replace(/\bst\.?$/i, 'Stück')
-}
-
-function getMinimumQuantityText(item) {
-  const quantity = Number(
-    item?.minimumPurchaseQty ||
-      item?.minimumPurchaseQuantity ||
-      item?.minQuantity ||
-      item?.minimumQuantity ||
-      item?.minimumOrderQuantity ||
-      0
-  )
-
-  if (Number.isFinite(quantity) && quantity > 1) {
-    return `Gilt ab ${Math.round(quantity)} Stück`
-  }
-
-  return ''
-}
-
-function getConditionText(item) {
-  const rawText = String(item?.conditionsText || '').trim()
-  const lowerText = rawText.toLowerCase()
-
-  if (lowerText.includes('app')) {
-    return 'Nur mit App'
-  }
-
-  if (item?.customerProgramRequired || lowerText.includes('kundenkarte') || lowerText.includes('jö')) {
-    return 'Nur mit Kundenkarte'
-  }
-
-  const plusMatch = rawText.match(/\b(\d+)\s*\+\s*(\d+)\b/)
-  if (plusMatch) {
-    return `${plusMatch[1]}+${plusMatch[2]} gratis`
-  }
-
-  const minimumQuantity = getMinimumQuantityText(item)
-  if (minimumQuantity) {
-    return minimumQuantity
-  }
-
-  if (item?.isMultiBuy) {
-    return 'Mehrkauf-Angebot'
-  }
-
-  return ''
-}
-
-function normalizeFactText(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim()
-}
-
-function buildItemFacts({ conditionText, quantityText, rawConditionText, showUnitPrice, item, validityText }) {
-  const facts = []
-  const rawCondition = normalizeFactText(rawConditionText)
-  const displayCondition = rawCondition || conditionText
-
-  if (quantityText) facts.push({ key: 'quantity', label: quantityText, tone: 'neutral' })
-  if (showUnitPrice) facts.push({ key: 'unit-price', label: formatUnitPrice(item.normalizedUnitPrice), tone: 'neutral' })
-  if (validityText) facts.push({ key: 'validity', label: validityText, tone: 'date' })
-  if (displayCondition) facts.push({ key: 'condition', label: displayCondition, tone: 'condition' })
-  const seen = new Set()
-  return facts.filter((fact) => {
-    const normalized = normalizeFactText(fact.label).toLowerCase()
-    if (!normalized || seen.has(normalized)) return false
-    seen.add(normalized)
-    return true
-  })
 }
 
 function loadStoredQuantities() {
@@ -286,6 +162,22 @@ function getMarketSummaryText({ groupSummary, knownSavingsTotal, approximateCoun
 
 function hasKnownCurrentPrice(items = []) {
   return (items || []).some((item) => Number.isFinite(Number(item?.priceCurrent?.amount)))
+}
+
+function buildShoppingListOffer(item) {
+  const itemId = getShoppingListItemId(item)
+
+  return {
+    ...item,
+    id: itemId,
+    offerId: item?.offerId || itemId,
+    displayCategory: item?.categoryLabel || item?.displayCategory || item?.categoryPrimary,
+    referencePrice: item?.referencePrice || null,
+    savings: item?.savings || {
+      amount: item?.savingsAmount,
+      isApproximate: Boolean(item?.savingsIsApproximate),
+    },
+  }
 }
 
 export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList, onGoToOffers, onNavigate }) {
@@ -498,65 +390,28 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                 {group.items.map((item) => {
                   const itemId = getShoppingListItemId(item)
                   const isChecked = checkedItemIds.has(itemId)
-                  const showUnitPrice = shouldDisplayUnitPrice(item)
                   const quantity = getItemQuantity(quantities, itemId)
-                  const validityText = getValidityText(item)
-                  const conditionText = getConditionText(item)
-                  const quantityText = getQuantityText(item)
-                  const savingsInfo = getShoppingListItemSavingsInfo(item)
-                  const facts = buildItemFacts({
-                    conditionText,
-                    item,
-                    quantityText,
-                    rawConditionText: item.conditionsText,
-                    showUnitPrice,
-                    validityText,
-                  })
+                  const offer = buildShoppingListOffer(item)
 
                   return (
-                    <article key={itemId} className={`shopping-list-item${isChecked ? ' shopping-list-item--checked' : ''}`}>
-                      <label className="shopping-list-item__check">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          aria-label={`${item.title} als erledigt markieren`}
-                          onChange={() => handleToggleItem(itemId)}
-                        />
-                        <span aria-hidden="true" />
-                      </label>
+                    <OfferCardConsumer
+                      key={itemId}
+                      offer={offer}
+                      showShoppingListAction={false}
+                      className={`user-card--shopping-list${isChecked ? ' user-card--checked' : ''}`}
+                      actionSlot={
+                        <div className="shopping-list-card-actions">
+                          <label className="shopping-list-card-check">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              aria-label={`${item.title} als erledigt markieren`}
+                              onChange={() => handleToggleItem(itemId)}
+                            />
+                            <span aria-hidden="true" />
+                            <strong>{isChecked ? 'Erledigt' : 'Offen'}</strong>
+                          </label>
 
-                      <ProductImage offerId={item.offerId} src={item.imageUrl} alt={item.title} compact />
-
-                      <div className="shopping-list-item__content">
-                        <div className="shopping-list-item__main">
-                          <div>
-                            <p className="shopping-list-item__category">
-                              {normalizeRetailerName(item.retailerName)} · {item.categoryLabel || 'Angebot'}
-                            </p>
-                            <h3>{item.title}</h3>
-                          </div>
-
-                          <div className="shopping-list-item__price-block">
-                            <strong className="shopping-list-item__price">
-                              {formatPrice(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
-                            </strong>
-                            <span>
-                              {savingsInfo.type === 'known'
-                                ? `${savingsInfo.isApproximate ? 'Spart ca.' : 'Spart'} ${formatPrice(savingsInfo.amount)}`
-                                : 'Aktionspreis'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="shopping-list-item__facts">
-                          {facts.map((fact) => (
-                            <span key={fact.key} className={`shopping-list-item__fact shopping-list-item__fact--${fact.tone}`}>
-                              {fact.label}
-                            </span>
-                          ))}
-                        </div>
-
-                        <div className="shopping-list-item__controls">
                           <div className="shopping-list-item__quantity" aria-label={`Menge für ${item.title}`}>
                             <button
                               type="button"
@@ -581,8 +436,8 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                             Entfernen
                           </button>
                         </div>
-                      </div>
-                    </article>
+                      }
+                    />
                   )
                 })}
               </div>

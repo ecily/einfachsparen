@@ -37,6 +37,25 @@ export function buildSubSelectionToken(mainCategoryKey, subcategoryKey) {
   return `sub:${mainCategoryKey}:${subcategoryKey}`
 }
 
+export function buildAllCategorySelectionTokens(categories = []) {
+  const tokens = []
+
+  for (const group of categories || []) {
+    const subcategoryTokens = (group.subcategories || []).map((subcategory) =>
+      buildSubSelectionToken(group.mainCategoryKey, subcategory.subcategoryKey)
+    )
+
+    if (subcategoryTokens.length > 0) {
+      tokens.push(...subcategoryTokens)
+      continue
+    }
+
+    tokens.push(buildMainSelectionToken(group.mainCategoryKey))
+  }
+
+  return tokens
+}
+
 export function getGroupSelectionState(group, selectionTokens = []) {
   const mainToken = buildMainSelectionToken(group.mainCategoryKey)
   const allSubcategoryKeys = (group.subcategories || []).map((subcategory) => subcategory.subcategoryKey)
@@ -51,6 +70,16 @@ export function getGroupSelectionState(group, selectionTokens = []) {
     partialSelected,
     selectedSubcategoryKeys,
   }
+}
+
+export function areAllCategoryGroupsSelected(selectionTokens = [], categories = []) {
+  const categoryGroups = categories || []
+
+  if (categoryGroups.length === 0) {
+    return false
+  }
+
+  return categoryGroups.every((group) => getGroupSelectionState(group, selectionTokens).mainSelected)
 }
 
 export function pruneSelectionTokens(selectionTokens = [], categories = []) {
@@ -68,6 +97,10 @@ export function pruneSelectionTokens(selectionTokens = [], categories = []) {
 }
 
 export function buildSelectedCategoryQueryLabels(selectionTokens = [], categories = []) {
+  if (areAllCategoryGroupsSelected(selectionTokens, categories)) {
+    return []
+  }
+
   const labels = []
 
   for (const group of categories || []) {
@@ -97,6 +130,7 @@ export function filterVisibleOffers(offers, filters, retailers, categories) {
   const selectedRetailers = new Set(filters.selectedRetailers)
   const categoryGroups = categories || []
   const hasCategorySelection = filters.selectedCategoryTokens.length > 0
+  const allCategoriesSelected = areAllCategoryGroupsSelected(filters.selectedCategoryTokens, categoryGroups)
 
   return (offers || []).filter((offer) => {
     const retailerKey = getOfferRetailerKey(offer, retailers)
@@ -105,7 +139,7 @@ export function filterVisibleOffers(offers, filters, retailers, categories) {
 
     if (!selectedRetailers.has(retailerKey)) return false
 
-    if (!hasCategorySelection) {
+    if (!hasCategorySelection || allCategoriesSelected) {
       return true
     }
 

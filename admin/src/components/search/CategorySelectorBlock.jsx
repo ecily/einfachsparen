@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { getGroupSelectionState } from '../../utils/categories'
+import { areAllCategoryGroupsSelected, getGroupSelectionState } from '../../utils/categories'
 import { SectionCard } from '../layout/SectionCard'
 
 export function CategorySelectorBlock({
@@ -7,13 +7,14 @@ export function CategorySelectorBlock({
   selectedCategoryTokens,
   onToggleMainCategory,
   onToggleSubcategory,
-  onClearCategories,
+  onSelectAllCategories,
   loading,
   disabled,
 }) {
   const [openCategoryKeys, setOpenCategoryKeys] = useState([])
 
   const openCategoryKeySet = useMemo(() => new Set(openCategoryKeys), [openCategoryKeys])
+  const allCategoriesSelected = areAllCategoryGroupsSelected(selectedCategoryTokens, categories)
 
   function handleToggleOpenCategory(mainCategoryKey) {
     setOpenCategoryKeys((current) => {
@@ -41,7 +42,12 @@ export function CategorySelectorBlock({
         ) : (
           <div className="category-list">
             <div className="quick-action-row">
-              <button type="button" className="ghost-button" onClick={onClearCategories}>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={onSelectAllCategories}
+                aria-pressed={allCategoriesSelected}
+              >
                 Alle Kategorien anzeigen
               </button>
             </div>
@@ -86,6 +92,7 @@ export function CategorySelectorBlock({
                       className="ghost-button ghost-button--small category-card__toggle-all"
                       onClick={() => onToggleMainCategory(group)}
                       aria-label={`${allButtonLabel} Produkte in ${group.mainCategoryLabel}`}
+                      aria-pressed={isMainSelected}
                     >
                       {allButtonLabel}
                     </button>
@@ -105,6 +112,7 @@ export function CategorySelectorBlock({
                               type="button"
                               className={`chip chip--subtle ${isSelected ? 'chip--active' : ''}`}
                               onClick={() => onToggleSubcategory(group, subcategory)}
+                              aria-pressed={isSelected}
                             >
                               {subcategory.subcategoryLabel} {subcategory.offerCount ? `(${subcategory.offerCount})` : ''}
                             </button>

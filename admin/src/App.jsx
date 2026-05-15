@@ -27,6 +27,7 @@ import {
 } from './utils/apiBase'
 import { trackAnalyticsEvent } from './utils/analytics'
 import {
+  buildAllCategorySelectionTokens,
   buildMainSelectionToken,
   buildSelectedCategoryQueryLabels,
   buildSubSelectionToken,
@@ -656,8 +657,8 @@ function App() {
     setDraftSelectedCategoryLabels([])
   }
 
-  function handleClearDraftCategories() {
-    setDraftSelectedCategoryLabels([])
+  function handleSelectAllDraftCategories() {
+    setDraftSelectedCategoryLabels(buildAllCategorySelectionTokens(categories))
   }
 
   function handleToggleDraftMainCategory(group) {
@@ -925,7 +926,7 @@ function App() {
             onClearRetailers={handleClearRetailers}
             onToggleDraftMainCategory={handleToggleDraftMainCategory}
             onToggleDraftSubcategory={handleToggleDraftSubcategory}
-            onClearDraftCategories={handleClearDraftCategories}
+            onSelectAllDraftCategories={handleSelectAllDraftCategories}
             onApplySearch={handleApplySearch}
             onResetAll={handleResetAll}
             onAddToShoppingList={handleAddToShoppingList}

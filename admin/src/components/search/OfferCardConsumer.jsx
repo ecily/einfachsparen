@@ -155,7 +155,14 @@ function getVisibleConditionInfo(conditions) {
   }
 }
 
-export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList = false }) {
+export function OfferCardConsumer({
+  offer,
+  onAddToShoppingList,
+  isInShoppingList = false,
+  showShoppingListAction = true,
+  actionSlot = null,
+  className = '',
+}) {
   const showUnitPrice = shouldDisplayUnitPrice(offer)
   const category = getShortCategory(offer)
   const validity = formatValidityLabel(offer)
@@ -165,15 +172,25 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const savingsAmount = getSavingsValue(offer)
   const referenceInfo = getReferenceInfo(offer)
   const savingsPercent = getSavingsPercent(offer)
-  const hasSavings = savingsAmount > 0 && referenceInfo.amount > 0
+  const snapshotSavingsAmount = Number(offer?.savingsAmount)
+  const snapshotHasSavings = offer?.hasKnownSavings === true && Number.isFinite(snapshotSavingsAmount) && snapshotSavingsAmount > 0
+  const displaySavingsAmount = savingsAmount > 0 ? savingsAmount : snapshotHasSavings ? snapshotSavingsAmount : 0
+  const displaySavingsIsApproximate = savingsAmount > 0 ? referenceInfo.isApproximate : Boolean(offer?.savingsIsApproximate)
+  const hasSavings = displaySavingsAmount > 0 && (referenceInfo.amount > 0 || snapshotHasSavings)
   const currentPriceAmount = getNumericAmount(offer?.priceCurrent ?? offer?.price)
   const currentPriceCurrency = getPriceCurrency(offer?.priceCurrent) || getPriceCurrency(offer?.price) || 'EUR'
   const unitPriceText = showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : ''
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
+  const cardClassName = [
+    'user-card',
+    hasSavings ? 'user-card--known-savings' : 'user-card--action-price',
+    className,
+  ].filter(Boolean).join(' ')
+  const hasActions = actionSlot || (showShoppingListAction && onAddToShoppingList)
 
   return (
     <article
-      className={`user-card ${hasSavings ? 'user-card--known-savings' : 'user-card--action-price'}`}
+      className={cardClassName}
       style={{
         '--retailer-color': retailerTheme.color,
         '--retailer-text-color': retailerTheme.textColor,
@@ -232,7 +249,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
               {hasSavings && savingsPercent > 0 ? <span className="user-card__discount-badge">-{savingsPercent} %</span> : null}
               {hasSavings ? (
                 <span className="user-card__savings-chip">
-                  Spart {referenceInfo.isApproximate ? 'ca. ' : ''}{formatPrice(savingsAmount, currentPriceCurrency)}
+                  Spart {displaySavingsIsApproximate ? 'ca. ' : ''}{formatPrice(displaySavingsAmount, currentPriceCurrency)}
                 </span>
               ) : (
                 <span className="user-card__action-price-badge">Aktionspreis</span>
@@ -247,16 +264,21 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
           </div>
         </div>
 
-        <div className="user-card__actions">
-          <button
-            type="button"
-            className={`shopping-list-button ${isInShoppingList ? 'shopping-list-button--added' : ''}`}
-            onClick={() => onAddToShoppingList?.(offer)}
-            disabled={isInShoppingList}
-          >
-            {isInShoppingList ? 'Auf der Einkaufsliste' : 'Auf die Einkaufsliste'}
-          </button>
-        </div>
+        {hasActions ? (
+          <div className="user-card__actions">
+            {showShoppingListAction && onAddToShoppingList ? (
+              <button
+                type="button"
+                className={`shopping-list-button ${isInShoppingList ? 'shopping-list-button--added' : ''}`}
+                onClick={() => onAddToShoppingList?.(offer)}
+                disabled={isInShoppingList}
+              >
+                {isInShoppingList ? 'Auf der Einkaufsliste' : 'Auf die Einkaufsliste'}
+              </button>
+            ) : null}
+            {actionSlot}
+          </div>
+        ) : null}
       </div>
     </article>
   )

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { filterVisibleOffers } from '../../utils/categories'
+import { areAllCategoryGroupsSelected, filterVisibleOffers } from '../../utils/categories'
 import { flattenRankingOffers, splitRankingOffers } from '../../utils/offers'
 import { SectionCard } from '../layout/SectionCard'
 import { HeroLoaderModal } from '../layout/HeroLoaderModal'
@@ -26,7 +26,7 @@ export function SearchPage({
   onClearRetailers,
   onToggleDraftMainCategory,
   onToggleDraftSubcategory,
-  onClearDraftCategories,
+  onSelectAllDraftCategories,
   onApplySearch,
   onResetAll,
   onAddToShoppingList,
@@ -35,6 +35,7 @@ export function SearchPage({
   const hasAppliedRetailerScope = appliedRetailers.length > 0
   const hasDraftSelection = draftRetailers.length > 0 || draftCategoryLabels.length > 0
   const shouldShowBrowseResults = hasAppliedRetailerScope
+  const allDraftCategoriesSelected = areAllCategoryGroupsSelected(draftCategoryLabels, categories)
   const [activeBrowseScrollKey, setActiveBrowseScrollKey] = useState(0)
   const resultsRef = useRef(null)
 
@@ -95,7 +96,7 @@ export function SearchPage({
         selectedCategoryTokens={draftCategoryLabels}
         onToggleMainCategory={onToggleDraftMainCategory}
         onToggleSubcategory={onToggleDraftSubcategory}
-        onClearCategories={onClearDraftCategories}
+        onSelectAllCategories={onSelectAllDraftCategories}
         loading={filtersLoading}
         disabled={!draftRetailers.length}
       />
@@ -104,7 +105,7 @@ export function SearchPage({
         <ActionBlock
           canSearch={draftRetailers.length > 0}
           selectedRetailerCount={draftRetailers.length}
-          selectedCategoryCount={draftCategoryLabels.length}
+          selectedCategoryCount={allDraftCategoriesSelected ? 0 : draftCategoryLabels.length}
           onApplySearch={handleApplyBrowseSelection}
           onReset={onResetAll}
           hasPendingChanges={hasPendingChanges}
