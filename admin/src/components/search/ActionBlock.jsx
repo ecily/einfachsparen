@@ -6,7 +6,6 @@ export function ActionBlock({
   selectedCategoryCount,
   onApplySearch,
   onReset,
-  hasPendingChanges,
   searching,
 }) {
   return (
@@ -18,7 +17,7 @@ export function ActionBlock({
           <p>M&auml;rkte reichen aus. Kategorien sind optional und grenzen die Treffer ein.</p>
         </div>
 
-        <div className="selection-summary-grid">
+        <div className="selection-summary-grid selection-summary-grid--compact">
           <div className="selection-summary-card">
             <strong>M&auml;rkte</strong>
             <span>{selectedRetailerCount > 0 ? `${selectedRetailerCount} ausgewählt` : 'Keine Auswahl'}</span>
@@ -27,11 +26,6 @@ export function ActionBlock({
           <div className="selection-summary-card">
             <strong>Kategorien</strong>
             <span>{selectedCategoryCount > 0 ? `${selectedCategoryCount} ausgewählt` : 'Alle Kategorien'}</span>
-          </div>
-
-          <div className={`selection-summary-card ${hasPendingChanges ? 'selection-summary-card--ready' : ''}`}>
-            <strong>Status</strong>
-            <span>{hasPendingChanges ? 'Neue Auswahl bereit' : 'Aktuelle Auswahl geladen'}</span>
           </div>
         </div>
 

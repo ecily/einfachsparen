@@ -18,6 +18,35 @@ import {
 
 const SHOPPING_LIST_QUANTITY_STORAGE_KEY = 'kaufklug.shoppingList.quantities.v1'
 
+function SearchIcon() {
+  return (
+    <svg className="button-icon" aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m16.2 16.2 4.3 4.3" />
+    </svg>
+  )
+}
+
+function ShareIcon() {
+  return (
+    <svg className="button-icon" aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 10.6 6.8-4.2" />
+      <path d="m8.6 13.4 6.8 4.2" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg className="button-icon" aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
 function formatPrice(amount, currency = 'EUR') {
   const numericAmount = Number(amount)
 
@@ -123,7 +152,7 @@ function getMinimumQuantityText(item) {
   )
 
   if (Number.isFinite(quantity) && quantity > 1) {
-    return `Ab ${Math.round(quantity)} Stück`
+    return `Gilt ab ${Math.round(quantity)} Stück`
   }
 
   return ''
@@ -236,14 +265,6 @@ function getApproximateSavingsCount(items = []) {
   }).length
 }
 
-function getRetailerDistribution(groups = []) {
-  return groups.map((group) => ({
-    label: normalizeRetailerName(group.retailerName),
-    count: group.items.length,
-    theme: getRetailerTheme(group.retailerKey || group.retailerName),
-  }))
-}
-
 function getSavingsDisplayLabel({ approximateCount, knownSavingsTotal }) {
   if (knownSavingsTotal <= 0) {
     return 'Noch keine bekannte Ersparnis'
@@ -280,7 +301,6 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
   const groupedItems = useMemo(() => groupShoppingListByRetailer(visibleItems), [visibleItems])
   const allGroups = useMemo(() => groupShoppingListByRetailer(shoppingListItems), [shoppingListItems])
   const allRetailerCount = allGroups.length
-  const retailerDistribution = useMemo(() => getRetailerDistribution(allGroups), [allGroups])
   const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
   const offerTotal = useMemo(() => getItemsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
@@ -410,23 +430,6 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
           {canShowOfferTotal ? <span>Aktionspreise ca. {formatPrice(offerTotal)}</span> : null}
         </div>
 
-        {retailerDistribution.length > 0 ? (
-          <div className="shopping-check__markets" aria-label="Märkte auf deiner Liste">
-            {retailerDistribution.map((retailer) => (
-              <span
-                key={retailer.label}
-                style={{
-                  '--retailer-color': retailer.theme.color,
-                  '--retailer-border-color': retailer.theme.borderColor,
-                  '--retailer-soft-color': retailer.theme.softColor,
-                }}
-              >
-                {retailer.label} · {retailer.count}
-              </span>
-            ))}
-          </div>
-        ) : null}
-
         {canShowKnownSavings || hasMissingSavings ? (
           <p className="shopping-check__soft-note">Angebote ohne Vergleichspreis zählen wir nicht zur Ersparnis.</p>
         ) : null}
@@ -435,12 +438,15 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
 
       <div className="shopping-list-actions">
         <button type="button" className="primary-action-button" onClick={onGoToOffers}>
+          <SearchIcon />
           Weitere Angebote suchen
         </button>
         <button type="button" className="ghost-button" onClick={handleShareList} disabled={shareState.status === 'loading'}>
+          <ShareIcon />
           {shareState.status === 'loading' ? 'Liste wird geteilt ...' : 'Liste teilen'}
         </button>
         <button type="button" className="ghost-button" onClick={() => setHideCompleted((current) => !current)}>
+          <CheckIcon />
           {hideCompleted ? 'Erledigte anzeigen' : 'Erledigte ausblenden'}
         </button>
         <button type="button" className="ghost-button ghost-button--danger shopping-list-actions__danger" onClick={handleClearClick}>

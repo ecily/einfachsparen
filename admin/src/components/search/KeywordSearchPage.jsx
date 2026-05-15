@@ -321,9 +321,6 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         </div>
 
         <form className="keyword-search-form" onSubmit={handleSubmit}>
-          <label className="keyword-search-form__label" htmlFor="keyword-search-input">
-            Produkt suchen
-          </label>
           <div className="keyword-search-form__row">
             <div
               className="keyword-search-form__input-wrap"

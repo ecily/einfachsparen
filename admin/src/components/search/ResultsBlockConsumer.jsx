@@ -46,7 +46,6 @@ export function ResultsBlockConsumer({
                 {safeOffers.length} mit bekannter Ersparnis, {actionOffers.length} weitere aktuelle Aktionen.
               </span>
             </div>
-            <p className="market-check-note">Preise, Verf&uuml;gbarkeit und Bedingungen bitte im Markt pr&uuml;fen.</p>
 
             <ResultsSection
               title="Angebote mit bekannter Ersparnis"

@@ -31,7 +31,7 @@ const FAQ_ITEMS = [
 const TAB_TITLE = 'einfach sparen'
 const SEO_TITLE = 'kaufklug.at – Aktuelle Angebote finden und beim Einkauf sparen'
 const BASE_DESCRIPTION =
-  'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Suche nach Produkten, vergleiche Aktionen und merke Angebote für deine Einkaufsliste.'
+  'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Suche nach Produkten und Marken, prüfe Aktionen und merke Angebote für deine Einkaufsliste.'
 
 export function getPageMeta(activePage) {
   const pages = {

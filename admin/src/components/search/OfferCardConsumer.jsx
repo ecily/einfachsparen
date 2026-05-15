@@ -127,7 +127,7 @@ function getMinimumQuantityText(offer) {
   )
 
   if (Number.isFinite(quantity) && quantity > 1) {
-    return `Ab ${Math.round(quantity)} Stück`
+    return `Gilt ab ${Math.round(quantity)} Stück`
   }
 
   return ''
@@ -241,10 +241,12 @@ function getCompactConditionText(value) {
 function getVisibleConditionInfo(conditions) {
   const visibleConditions = conditions.slice(0, 1)
   const hiddenConditions = conditions.slice(1)
+  const hiddenConditionsLabel = hiddenConditions.length === 1 ? 'Weitere Bedingung anzeigen' : 'Bedingungen anzeigen'
 
   return {
     visibleConditions,
     hiddenConditions,
+    hiddenConditionsLabel,
     fullText: conditions.join(' / '),
   }
 }
@@ -254,7 +256,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const category = getShortCategory(offer)
   const validity = formatValidityLabel(offer)
   const conditions = getConditionTexts(offer)
-  const { visibleConditions, hiddenConditions, fullText: fullConditionText } = getVisibleConditionInfo(conditions)
+  const { visibleConditions, hiddenConditions, hiddenConditionsLabel, fullText: fullConditionText } = getVisibleConditionInfo(conditions)
   const quantityText = getReadableQuantityText(offer)
   const savingsAmount = getSavingsValue(offer)
   const referenceInfo = getReferenceInfo(offer)
@@ -263,7 +265,6 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
   const currentPriceAmount = getNumericAmount(offer?.priceCurrent ?? offer?.price)
   const currentPriceCurrency = getPriceCurrency(offer?.priceCurrent) || getPriceCurrency(offer?.price) || 'EUR'
   const unitPriceText = showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : ''
-  const quantityUnitText = [quantityText, unitPriceText].filter(Boolean).join(' · ')
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
 
   return (
@@ -286,12 +287,15 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
               <span className="user-card__retailer-badge">{normalizeRetailerName(offer.retailerName)}</span>
             </div>
 
+            <h3>
+              <span>{offer.title}</span>
+              {quantityText ? <span className="user-card__title-quantity"> · {quantityText}</span> : null}
+            </h3>
+
             <div className="user-card__facts" aria-label="Angebotsdetails">
               {category ? <span>{category}</span> : null}
               {validity ? <span>{validity}</span> : null}
             </div>
-
-            <h3>{offer.title}</h3>
           </div>
         </div>
 
@@ -304,13 +308,16 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
                 </span>
               ))}
               {hiddenConditions.length > 0 ? (
-                <span
-                  className="user-card__condition-chip user-card__condition-chip--more"
-                  title={hiddenConditions.join(' / ')}
-                  aria-label={`Weitere Bedingungen: ${hiddenConditions.join(' / ')}`}
-                >
-                  +{hiddenConditions.length} weitere
-                </span>
+                <details className="user-card__condition-details">
+                  <summary>{hiddenConditionsLabel}</summary>
+                  <div className="user-card__condition-details-list">
+                    {hiddenConditions.map((condition) => (
+                      <span className="user-card__condition-chip" key={condition} title={condition}>
+                        {condition}
+                      </span>
+                    ))}
+                  </div>
+                </details>
               ) : null}
             </div>
           ) : null}
@@ -332,7 +339,7 @@ export function OfferCardConsumer({ offer, onAddToShoppingList, isInShoppingList
                 {referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}
               </span>
             ) : null}
-            {quantityUnitText ? <span className="user-card__quantity-unit">{quantityUnitText}</span> : null}
+            {unitPriceText ? <span className="user-card__unit-price-badge">{unitPriceText}</span> : null}
           </div>
         </div>
 

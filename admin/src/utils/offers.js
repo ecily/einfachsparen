@@ -176,6 +176,7 @@ export function getReadableQuantityText(offer) {
   if (!simpleQuantity.test(normalizedValue) && !multiPackQuantity.test(normalizedValue)) return ''
 
   return normalizedValue
+    .replace(/(\d+)\.(\d+)(?=\s*(?:kg|g|dag|l|ml|cl|stk|st\.?|stück|stücke|packung|packungen|flasche|flaschen|dose|dosen|tafel|tafeln)\b)/gi, '$1,$2')
     .replace(/\bx\b/g, '×')
     .replace(/\bst\.?$/i, 'Stück')
     .replace(/\bstueck(e)?\b/gi, 'Stück')

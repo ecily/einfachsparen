@@ -130,7 +130,7 @@ function SearchLandingHero() {
               maxWidth: '46rem',
             }}
           >
-            Angebote finden. Merken. <span className="hero-headline-accent">Geld sparen.</span>
+            Angebote finden. <span className="hero-headline-accent">Geld sparen.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
             Suche aktuelle Angebote aus österreichischen Märkten und merke sie für deinen Einkauf.
@@ -878,8 +878,9 @@ function App() {
           <button
             className={`page-nav__button${activePage === 'shopping-list' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('shopping-list')}
+            aria-label="Einkaufsliste"
           >
-            Einkaufsliste
+            Liste
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
           </button>
         </div>
@@ -888,8 +889,8 @@ function App() {
           <input
             type="search"
             value={navSearchQuery}
-            placeholder="Produkt suchen..."
-            aria-label="Produkt suchen"
+            placeholder="Produkt oder Marke suchen"
+            aria-label="Produkt oder Marke suchen"
             onChange={(event) => setNavSearchQuery(event.target.value)}
           />
           <button type="submit" className="page-nav__search-button">
