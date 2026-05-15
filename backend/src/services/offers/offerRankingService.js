@@ -247,6 +247,8 @@ function buildRankingCacheKey({
   programRetailers = '',
   onlyWithoutProgram = false,
   limit = 30,
+  offset = 0,
+  offsetExplicit = false,
 }) {
   return JSON.stringify({
     cacheSchemaVersion: RANKING_CACHE_SCHEMA_VERSION,
@@ -257,6 +259,8 @@ function buildRankingCacheKey({
     programRetailers: normalizeProgramRetailers(programRetailers).sort(),
     onlyWithoutProgram: normalizeBoolean(onlyWithoutProgram),
     limit: String(limit || '30').trim().toLowerCase(),
+    offset: Math.max(0, Number(offset) || 0),
+    paginated: Boolean(offsetExplicit),
   });
 }
 
@@ -3908,6 +3912,25 @@ function buildRankingCandidateLimit({ safeLimit = 30, showAllMatching = false, h
   return Math.min(RANKING_CANDIDATE_CAP, Math.max(20, safeLimit * 20));
 }
 
+function paginateVisibleRankingOffers(offers = [], { limit = 30, offset = 0, showAllMatching = false } = {}) {
+  const visibleOffers = Array.isArray(offers) ? offers : [];
+  const safeOffset = showAllMatching ? 0 : Math.max(0, Number(offset) || 0);
+  const safeLimit = showAllMatching ? visibleOffers.length : Math.max(1, Math.min(Number(limit) || 30, 500));
+  const totalCount = visibleOffers.length;
+  const pageOffers = showAllMatching ? visibleOffers : visibleOffers.slice(safeOffset, safeOffset + safeLimit);
+  const nextOffset = safeOffset + pageOffers.length;
+  const hasMore = !showAllMatching && nextOffset < totalCount;
+
+  return {
+    offers: pageOffers,
+    totalCount,
+    offset: safeOffset,
+    limit: showAllMatching ? 'all' : safeLimit,
+    hasMore,
+    nextOffset: hasMore ? nextOffset : null,
+  };
+}
+
 async function findRankingCandidateOffers({
   selectedRetailers = [],
   selectedCategories = [],
@@ -4210,6 +4233,8 @@ async function buildOfferRanking({
   programRetailers = '',
   onlyWithoutProgram = false,
   limit = 30,
+  offset = 0,
+  offsetExplicit = false,
   diagnostics = false,
   debugCandidates = false,
 }) {
@@ -4242,6 +4267,7 @@ async function buildOfferRanking({
   const limitValue = String(limit || '30').trim().toLowerCase();
   const showAllMatching = limitValue === 'all';
   const safeLimit = showAllMatching ? null : Math.max(1, Math.min(Number(limit) || 30, 500));
+  const safeOffset = showAllMatching ? 0 : Math.max(0, Number(offset) || 0);
   const queryTokens = tokenizeSearchText(query);
   const hasQuery = queryTokens.length > 0;
   const selectedRetailers = normalizeRetailerList(retailers);
@@ -4256,6 +4282,8 @@ async function buildOfferRanking({
     programRetailers,
     onlyWithoutProgram,
     limit,
+    offset: safeOffset,
+    offsetExplicit,
   }) : '';
   const cacheLookupStartedAt = nowMs();
   const earlyCachedResponse = !diagnostics && earlyCacheKey ? getCachedRankingResponse(earlyCacheKey) : null;
@@ -4280,6 +4308,8 @@ async function buildOfferRanking({
     programRetailers,
     onlyWithoutProgram,
     limit,
+    offset: safeOffset,
+    offsetExplicit,
   });
   const lateCacheLookupStartedAt = nowMs();
   const cachedResponse = diagnostics || earlyCacheKey ? null : getCachedRankingResponse(cacheKey);
@@ -4293,7 +4323,7 @@ async function buildOfferRanking({
     ? { isActive: true, retailerKey: { $in: selectedRetailers } }
     : { isActive: true };
   const candidateLimit = buildRankingCandidateLimit({
-    safeLimit: safeLimit || 30,
+    safeLimit: showAllMatching || offsetExplicit ? RANKING_CANDIDATE_CAP : safeOffset + safeLimit,
     showAllMatching,
     hasQuery,
   });
@@ -4451,17 +4481,19 @@ async function buildOfferRanking({
   const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query);
   timings.responsePreparationMs = nowMs() - responsePreparationStartedAt;
   const finalDedupeStartedAt = nowMs();
-  const finalResponseOffers = dedupeFinalResponseOffers(
-    responseCandidateOffers.slice(0, showAllMatching ? fullyFilteredOffers.length : safeLimit),
-    query
-  );
+  const finalResponseOffers = dedupeFinalResponseOffers(responseCandidateOffers, query);
   timings.finalDedupeMs = nowMs() - finalDedupeStartedAt;
   const visibleDedupeStartedAt = nowMs();
   const visibleDedupeResult = dedupeVisibleCardResponseOffers(finalResponseOffers, query, {
     collectDiagnostics: Boolean(debugStages),
   });
   timings.visibleDedupeMs = nowMs() - visibleDedupeStartedAt;
-  const offers = visibleDedupeResult.offers;
+  const pagination = paginateVisibleRankingOffers(visibleDedupeResult.offers, {
+    limit: safeLimit || visibleDedupeResult.offers.length,
+    offset: safeOffset,
+    showAllMatching,
+  });
+  const offers = pagination.offers;
 
   if (debugStages) {
     const sortedIds = new Set(sortedOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
@@ -4476,11 +4508,11 @@ async function buildOfferRanking({
       reason: 'prepareQueryOffersForResponse',
     }));
     debugStages.push(buildDebugRankingStage({
-      stage: 'after-limit-and-final-dedupe',
+      stage: 'after-final-dedupe',
       offers: finalResponseOffers,
       query,
       previousIds: responseCandidateIds,
-      reason: 'limit-or-final-dedupe',
+      reason: 'final-dedupe',
     }));
     debugStages.push(buildDebugRankingStage({
       stage: 'final-api-like-results',
@@ -4513,6 +4545,7 @@ async function buildOfferRanking({
       programRetailers: selectedProgramRetailers,
       onlyWithoutProgram: withoutProgram,
       limit: showAllMatching ? 'all' : safeLimit,
+      offset: safeOffset,
     },
     categories: buildCategoryLabelsFromDocuments(categoryDocuments),
     retailers: retailerOptions.map((item) => ({
@@ -4526,7 +4559,16 @@ async function buildOfferRanking({
       resultCount: fullyFilteredOffers.length,
       displayedCount: rankedOffers.length,
       requestedDisplay: showAllMatching ? 'all' : safeLimit,
-      completeResultSetVisible: candidateOffers.length < candidateLimit && rankedOffers.length === fullyFilteredOffers.length,
+      totalCount: pagination.totalCount,
+      offset: pagination.offset,
+      limit: pagination.limit,
+      hasMore: pagination.hasMore,
+      nextOffset: pagination.nextOffset,
+      completeResultSetVisible:
+        candidateOffers.length < candidateLimit &&
+        !pagination.hasMore &&
+        pagination.offset === 0 &&
+        rankedOffers.length === pagination.totalCount,
       candidateCount: candidateOffers.length,
       candidateLimit,
       bestUnitPrice,
@@ -4624,6 +4666,7 @@ module.exports = {
   buildRankingCandidateMatch,
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateQueryMetadata,
+  paginateVisibleRankingOffers,
   normalizeSearchText,
   normalizeRetailerKey,
   normalizeRetailerList,

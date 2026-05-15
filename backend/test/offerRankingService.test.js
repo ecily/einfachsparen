@@ -17,6 +17,7 @@ const {
   buildRankingCandidateQueryMetadata,
   normalizeSearchText,
   normalizeRetailerList,
+  paginateVisibleRankingOffers,
   parseRankingCategories,
   prepareQueryOffersForResponse,
   scoreOfferAgainstQuery,
@@ -2965,4 +2966,43 @@ test('validity label includes concrete date when validTo is present', () => {
     }),
     'gueltig bis 2026-05-12'
   );
+});
+
+test('paginates visible ranking offers by limit and offset without overlap', () => {
+  const visibleOffers = Array.from({ length: 125 }, (_, index) => ({ _id: `offer-${index}` }));
+  const firstPage = paginateVisibleRankingOffers(visibleOffers, { limit: 60, offset: 0 });
+  const secondPage = paginateVisibleRankingOffers(visibleOffers, { limit: 60, offset: 60 });
+  const finalPage = paginateVisibleRankingOffers(visibleOffers, { limit: 60, offset: 120 });
+
+  assert.equal(firstPage.offers.length, 60);
+  assert.equal(firstPage.totalCount, 125);
+  assert.equal(firstPage.offset, 0);
+  assert.equal(firstPage.limit, 60);
+  assert.equal(firstPage.hasMore, true);
+  assert.equal(firstPage.nextOffset, 60);
+
+  assert.equal(secondPage.offers.length, 60);
+  assert.equal(secondPage.hasMore, true);
+  assert.equal(secondPage.nextOffset, 120);
+
+  const firstIds = new Set(firstPage.offers.map((item) => item._id));
+  const secondIds = new Set(secondPage.offers.map((item) => item._id));
+  assert.equal([...firstIds].some((id) => secondIds.has(id)), false);
+
+  assert.equal(finalPage.offers.length, 5);
+  assert.equal(finalPage.hasMore, false);
+  assert.equal(finalPage.nextOffset, null);
+});
+
+test('ranking pagination defaults offset to zero for backwards compatibility', () => {
+  const visibleOffers = Array.from({ length: 80 }, (_, index) => ({ _id: `offer-${index}` }));
+  const page = paginateVisibleRankingOffers(visibleOffers, { limit: 60 });
+
+  assert.equal(page.offset, 0);
+  assert.deepEqual(
+    page.offers.map((item) => item._id),
+    visibleOffers.slice(0, 60).map((item) => item._id)
+  );
+  assert.equal(page.hasMore, true);
+  assert.equal(page.nextOffset, 60);
 });

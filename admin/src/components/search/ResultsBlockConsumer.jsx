@@ -3,17 +3,21 @@ import { ResultsSection } from './ResultsSection'
 
 export function ResultsBlockConsumer({
   rankingLoading,
+  rankingLoadingMore,
+  pagination,
   hasAppliedRetailerScope,
   safeOffers,
   actionOffers,
   onAddToShoppingList,
+  onLoadMoreOffers,
   shoppingListIds,
 }) {
   const visibleOfferCount = safeOffers.length + actionOffers.length
+  const totalCount = pagination?.totalCount || 0
 
   return (
     <SectionCard>
-      <div className="results-block" aria-busy={rankingLoading ? 'true' : 'false'}>
+      <div className="results-block" aria-busy={rankingLoading || rankingLoadingMore ? 'true' : 'false'}>
         <div className="panel__header">
           <h2>Angebote aus deiner Auswahl</h2>
           <p>Aktuelle Treffer aus den gew&auml;hlten M&auml;rkten und Kategorien.</p>
@@ -44,7 +48,11 @@ export function ResultsBlockConsumer({
         ) : (
           <>
             <div className="results-count-box">
-              <strong>{visibleOfferCount} aktuelle Angebote gefunden.</strong>
+              <strong>
+                {totalCount > visibleOfferCount
+                  ? `${visibleOfferCount} von ${totalCount} aktuellen Angeboten angezeigt.`
+                  : `${visibleOfferCount} aktuelle Angebote gefunden.`}
+              </strong>
               <span>
                 {safeOffers.length} mit bekannter Ersparnis, {actionOffers.length} weitere aktuelle Aktionen.
               </span>
@@ -67,6 +75,27 @@ export function ResultsBlockConsumer({
               onAddToShoppingList={onAddToShoppingList}
               shoppingListIds={shoppingListIds}
             />
+
+            {pagination?.hasMore ? (
+              <div className="load-more-results" role="status" aria-live="polite">
+                <button
+                  type="button"
+                  className="load-more-results__button"
+                  onClick={onLoadMoreOffers}
+                  disabled={rankingLoadingMore}
+                  aria-busy={rankingLoadingMore ? 'true' : 'false'}
+                >
+                  {rankingLoadingMore ? (
+                    <>
+                      <span className="browse-loading-status__spinner" aria-hidden="true" />
+                      <span>Weitere Angebote werden geladen &hellip;</span>
+                    </>
+                  ) : (
+                    'Weitere Angebote laden'
+                  )}
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </div>

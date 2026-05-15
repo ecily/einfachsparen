@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { areAllCategoryGroupsSelected, filterVisibleOffers } from '../../utils/categories'
-import { flattenRankingOffers, splitRankingOffers } from '../../utils/offers'
+import { flattenRankingOffers, getRankingPagination, splitRankingOffers } from '../../utils/offers'
 import { SectionCard } from '../layout/SectionCard'
 import { HeroLoaderModal } from '../layout/HeroLoaderModal'
 import { RetailerSelectorBlock } from './RetailerSelectorBlock'
@@ -14,6 +14,7 @@ export function SearchPage({
   filtersLoading,
   ranking,
   rankingLoading,
+  rankingLoadingMore,
   draftRetailers,
   draftCategoryLabels,
   appliedRetailers,
@@ -29,6 +30,7 @@ export function SearchPage({
   onSelectAllDraftCategories,
   onClearDraftCategories,
   onApplySearch,
+  onLoadMoreOffers,
   onResetAll,
   onAddToShoppingList,
 }) {
@@ -53,6 +55,7 @@ export function SearchPage({
     )
   }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, categories])
   const { bestComparableOffers, actionOffers } = useMemo(() => splitRankingOffers(visibleOffers), [visibleOffers])
+  const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
 
   useEffect(() => {
     if (!activeBrowseScrollKey || rankingLoading || !hasAppliedRetailerScope) return
@@ -119,10 +122,13 @@ export function SearchPage({
         <div ref={resultsRef} className="browse-results-anchor">
           <ResultsBlockConsumer
             rankingLoading={rankingLoading}
+            rankingLoadingMore={rankingLoadingMore}
+            pagination={pagination}
             hasAppliedRetailerScope={hasAppliedRetailerScope}
             safeOffers={bestComparableOffers}
             actionOffers={actionOffers}
             onAddToShoppingList={onAddToShoppingList}
+            onLoadMoreOffers={onLoadMoreOffers}
             shoppingListIds={shoppingListIds}
           />
         </div>

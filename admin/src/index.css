@@ -1243,6 +1243,40 @@ a {
   }
 }
 
+.load-more-results {
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0 0.1rem;
+}
+
+.load-more-results__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: min(100%, 22rem);
+  min-height: var(--kk-touch);
+  padding: 0.72rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(49, 94, 42, 0.24);
+  background: #f2faea;
+  color: #24451f;
+  cursor: pointer;
+  font-weight: 850;
+  line-height: 1.25;
+  box-shadow: 0 10px 24px rgba(49, 94, 42, 0.08);
+}
+
+.load-more-results__button:hover:not(:disabled) {
+  background: #e5f4da;
+  border-color: rgba(49, 94, 42, 0.36);
+}
+
+.load-more-results__button:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
 .results-section .panel__header {
   margin-bottom: 0;
 }

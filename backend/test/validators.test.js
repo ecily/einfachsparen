@@ -94,11 +94,32 @@ test('accepts normal search query with limit 60', () => {
   const { req, error } = runRankingValidator({
     q: 'butter',
     limit: '60',
+    offset: '60',
   });
 
   assert.equal(error, null);
   assert.equal(req.query.q, 'butter');
   assert.equal(req.query.limit, 60);
+  assert.equal(req.query.offset, 60);
+  assert.equal(req.query.offsetExplicit, true);
+});
+
+test('defaults ranking offset to zero and rejects invalid offsets', () => {
+  const defaulted = runRankingValidator({
+    q: 'kaffee',
+    limit: '60',
+  });
+  const invalid = runRankingValidator({
+    q: 'kaffee',
+    limit: '60',
+    offset: '-1',
+  });
+
+  assert.equal(defaulted.error, null);
+  assert.equal(defaulted.req.query.offset, 0);
+  assert.equal(defaulted.req.query.offsetExplicit, false);
+  assert.equal(invalid.error?.statusCode, 400);
+  assert.match(invalid.error?.message, /offset ist ungueltig/);
 });
 
 test('accepts multiple retailers and program retailers but caps oversized limit', () => {

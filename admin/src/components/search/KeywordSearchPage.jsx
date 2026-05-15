@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchKeywordOfferSearch } from '../../utils/apiBase'
 import { trackAnalyticsEvent } from '../../utils/analytics'
-import { flattenRankingOffers, getOfferStableId, getSavingsValue, normalizeRetailerKey } from '../../utils/offers'
+import {
+  flattenRankingOffers,
+  getOfferStableId,
+  getRankingPagination,
+  getSavingsValue,
+  mergePaginatedRankingResults,
+  normalizeRetailerKey,
+} from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
 
 const KEYWORD_SEARCH_LIMIT = 60
@@ -118,6 +125,7 @@ function buildAvailableRetailers(retailers) {
 
 export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListIds, onAddToShoppingList }) {
   const resultsHeadingRef = useRef(null)
+  const requestIdRef = useRef(0)
   const [queryInput, setQueryInput] = useState(() => getInitialKeywordQuery())
   const [submittedQuery, setSubmittedQuery] = useState(() => {
     const initialQuery = getInitialKeywordQuery().trim()
@@ -125,7 +133,9 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
   })
   const [ranking, setRanking] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [loadMoreError, setLoadMoreError] = useState('')
   const [marketFilterEnabled, setMarketFilterEnabled] = useState(false)
   const [selectedRetailerKeys, setSelectedRetailerKeys] = useState([])
   const [sortMode, setSortMode] = useState(SORT_OPTIONS.best)
@@ -170,6 +180,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
   }, [marketFilterEnabled, offers, selectedRetailerKeys, sortMode])
   const needsMarketSelection = marketFilterEnabled && selectedRetailerKeys.length === 0
   const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
+  const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
 
   useEffect(() => {
     if (!searchRequest?.nonce) return
@@ -177,17 +188,24 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     const nextQuery = String(searchRequest.query || '').trim()
     setQueryInput(nextQuery)
     setError('')
+    setLoadMoreError('')
 
     if (!nextQuery) {
+      requestIdRef.current += 1
       setSubmittedQuery('')
       setRanking(null)
+      setLoadingMore(false)
+      setLoadMoreError('')
       setHint('')
       return
     }
 
     if (nextQuery.length < 2) {
+      requestIdRef.current += 1
       setSubmittedQuery('')
       setRanking(null)
+      setLoadingMore(false)
+      setLoadMoreError('')
       setHint('Bitte mindestens 2 Zeichen eingeben.')
       return
     }
@@ -213,11 +231,15 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     if (!submittedQuery) return undefined
 
     let active = true
+    const requestId = requestIdRef.current + 1
+    requestIdRef.current = requestId
 
     async function loadKeywordResults() {
       try {
         setLoading(true)
+        setLoadingMore(false)
         setError('')
+        setLoadMoreError('')
         setHint('')
 
         trackAnalyticsEvent('offer_search_started', {
@@ -225,9 +247,9 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
           selectedCategoryCount: 0,
         })
 
-        const rankingResult = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT)
+        const rankingResult = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, 0)
 
-        if (!active) return
+        if (!active || requestId !== requestIdRef.current) return
 
         const resultCount = flattenRankingOffers(rankingResult).length
         setRanking(rankingResult)
@@ -240,11 +262,11 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
           selectedCategoryCount: 0,
         })
       } catch {
-        if (!active) return
+        if (!active || requestId !== requestIdRef.current) return
         setRanking(null)
         setError('Die Suche konnte nicht geladen werden.')
       } finally {
-        if (active) setLoading(false)
+        if (active && requestId === requestIdRef.current) setLoading(false)
       }
     }
 
@@ -263,8 +285,11 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     if (!nextQuery) {
       setSubmittedQuery('')
       setRanking(null)
+      setLoadingMore(false)
       setError('')
+      setLoadMoreError('')
       setHint('')
+      requestIdRef.current += 1
 
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/suche')
@@ -276,8 +301,11 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     if (nextQuery.length < 2) {
       setSubmittedQuery('')
       setRanking(null)
+      setLoadingMore(false)
       setError('')
+      setLoadMoreError('')
       setHint('Bitte mindestens 2 Zeichen eingeben.')
+      requestIdRef.current += 1
       return
     }
 
@@ -297,6 +325,28 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     if (!submittedQuery) return
     setSubmittedQuery('')
     window.setTimeout(() => setSubmittedQuery(submittedQuery), 0)
+  }
+
+  async function handleLoadMoreOffers() {
+    if (!submittedQuery || loading || loadingMore || !pagination.hasMore || pagination.nextOffset === null) return
+
+    const requestId = requestIdRef.current + 1
+    requestIdRef.current = requestId
+
+    try {
+      setLoadingMore(true)
+      setLoadMoreError('')
+      const nextRanking = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, pagination.nextOffset)
+
+      if (requestId !== requestIdRef.current) return
+
+      setRanking((currentRanking) => mergePaginatedRankingResults(currentRanking, nextRanking))
+    } catch {
+      if (requestId !== requestIdRef.current) return
+      setLoadMoreError('Weitere Angebote konnten gerade nicht geladen werden.')
+    } finally {
+      if (requestId === requestIdRef.current) setLoadingMore(false)
+    }
   }
 
   function handleResetMarkets() {
@@ -420,7 +470,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
       </section>
 
       {showResultsPanel ? (
-        <section className="panel keyword-search-results">
+        <section className="panel keyword-search-results" aria-busy={loading || loadingMore ? 'true' : 'false'}>
         {hint ? <p className="status">{hint}</p> : null}
         {loading ? <p className="status">Angebote werden gesucht ...</p> : null}
         {error ? (
@@ -432,6 +482,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
             </button>
           </div>
         ) : null}
+        {loadMoreError ? <p className="status status--error">{loadMoreError}</p> : null}
         {submittedQuery && needsMarketSelection ? (
           <p className="status">Wähle mindestens einen Markt aus oder suche ohne Marktfilter.</p>
         ) : null}
@@ -442,21 +493,47 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
               <h2 ref={resultsHeadingRef} className="search-results-heading" tabIndex="-1">
                 Angebote für „{submittedQuery}“
               </h2>
-              <p>{visibleOffers.length} Angebote gefunden</p>
+              <p>
+                {pagination.totalCount && pagination.totalCount > visibleOffers.length
+                  ? `${visibleOffers.length} von ${pagination.totalCount} Angeboten angezeigt`
+                  : `${visibleOffers.length} Angebote gefunden`}
+              </p>
             </div>
             <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
 
             {visibleOffers.length > 0 ? (
-              <div className="user-results">
-                {visibleOffers.map((offer) => (
-                  <OfferCardConsumer
-                    key={offer.id}
-                    offer={offer}
-                    onAddToShoppingList={onAddToShoppingList}
-                    isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="user-results">
+                  {visibleOffers.map((offer) => (
+                    <OfferCardConsumer
+                      key={offer.id}
+                      offer={offer}
+                      onAddToShoppingList={onAddToShoppingList}
+                      isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
+                    />
+                  ))}
+                </div>
+                {pagination.hasMore ? (
+                  <div className="load-more-results" role="status" aria-live="polite">
+                    <button
+                      type="button"
+                      className="load-more-results__button"
+                      onClick={handleLoadMoreOffers}
+                      disabled={loadingMore}
+                      aria-busy={loadingMore ? 'true' : 'false'}
+                    >
+                      {loadingMore ? (
+                        <>
+                          <span className="browse-loading-status__spinner" aria-hidden="true" />
+                          <span>Weitere Angebote werden geladen &hellip;</span>
+                        </>
+                      ) : (
+                        'Weitere Angebote laden'
+                      )}
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : needsMarketSelection ? null : (
               <div className="empty-state">
                 <h3>Aktuell kein passendes Angebot gefunden.</h3>

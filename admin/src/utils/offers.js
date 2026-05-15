@@ -465,6 +465,47 @@ export function flattenRankingOffers(ranking) {
   return offers
 }
 
+export function mergePaginatedRankingResults(currentRanking, nextRanking) {
+  const mergedOffers = []
+  const seen = new Set()
+
+  for (const offer of [...flattenRankingOffers(currentRanking), ...flattenRankingOffers(nextRanking)]) {
+    const offerId = getOfferStableId(offer)
+
+    if (!offerId || seen.has(offerId)) continue
+
+    seen.add(offerId)
+    mergedOffers.push({
+      ...offer,
+      id: offerId,
+    })
+  }
+
+  return {
+    ...(currentRanking || {}),
+    ...(nextRanking || {}),
+    rankedGroups: [],
+    rankedOffers: mergedOffers,
+    summary: {
+      ...(currentRanking?.summary || {}),
+      ...(nextRanking?.summary || {}),
+      displayedCount: mergedOffers.length,
+    },
+  }
+}
+
+export function getRankingPagination(ranking) {
+  const summary = ranking?.summary || {}
+  const nextOffset = Number(summary.nextOffset)
+  const totalCount = Number(summary.totalCount)
+
+  return {
+    hasMore: summary.hasMore === true,
+    nextOffset: Number.isFinite(nextOffset) && nextOffset >= 0 ? nextOffset : null,
+    totalCount: Number.isFinite(totalCount) && totalCount >= 0 ? totalCount : null,
+  }
+}
+
 export function splitRankingOffers(offers = []) {
   const bestComparableOffers = []
   const actionOffers = []

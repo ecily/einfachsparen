@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './index.css'
 import {
   fetchHealth,
@@ -35,7 +35,7 @@ import {
   normalizeCategoryDocuments,
   pruneSelectionTokens,
 } from './utils/categories'
-import { areStringSetsEqual, flattenRankingOffers } from './utils/offers'
+import { areStringSetsEqual, flattenRankingOffers, getRankingPagination, mergePaginatedRankingResults } from './utils/offers'
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 import { getRetailerTheme } from './utils/retailerColors'
@@ -269,6 +269,7 @@ function App() {
   const initialPage =
     isDiagnosticsPath ? 'diagnostics' : routedInitialPage === 'search' && pathname === '/' ? 'product-search' : routedInitialPage
   const initialSharedListId = getSharedListIdFromPathname(rawPathname)
+  const rankingRequestIdRef = useRef(0)
 
   const [activePage, setActivePage] = useState(initialPage)
   const [sharedListId, setSharedListId] = useState(initialSharedListId)
@@ -289,6 +290,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [filtersLoading, setFiltersLoading] = useState(true)
   const [rankingLoading, setRankingLoading] = useState(false)
+  const [rankingLoadingMore, setRankingLoadingMore] = useState(false)
   const [qualityLoading, setQualityLoading] = useState(false)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [qualitySavingKey, setQualitySavingKey] = useState('')
@@ -508,16 +510,20 @@ function App() {
 
   useEffect(() => {
     let active = true
+    const requestId = rankingRequestIdRef.current + 1
+    rankingRequestIdRef.current = requestId
 
     async function loadRanking() {
       if (!appliedSelectedRetailers.length) {
         setRanking(null)
         setRankingLoading(false)
+        setRankingLoadingMore(false)
         return
       }
 
       try {
         setRankingLoading(true)
+        setRankingLoadingMore(false)
 
         const rankingResult = await fetchOfferRankingDirect({
           categories: appliedCategoryQueryLabels.join(','),
@@ -526,9 +532,10 @@ function App() {
           unit: 'all',
           q: '',
           limit: 60,
+          offset: 0,
         })
 
-        if (!active) return
+        if (!active || requestId !== rankingRequestIdRef.current) return
 
         const resultCount = flattenRankingOffers(rankingResult).length
 
@@ -541,7 +548,7 @@ function App() {
           resultCount,
         })
       } catch (rankingError) {
-        if (!active) return
+        if (!active || requestId !== rankingRequestIdRef.current) return
         setRanking(null)
         setError(
           getFriendlyErrorMessage(
@@ -550,7 +557,7 @@ function App() {
           )
         )
       } finally {
-        if (active) setRankingLoading(false)
+        if (active && requestId === rankingRequestIdRef.current) setRankingLoading(false)
       }
     }
 
@@ -710,12 +717,60 @@ function App() {
     setAppliedSelectedCategoryLabels([...draftSelectedCategoryLabels])
   }
 
+  async function handleLoadMoreBrowseOffers() {
+    const pagination = getRankingPagination(ranking)
+
+    if (
+      rankingLoading ||
+      rankingLoadingMore ||
+      !pagination.hasMore ||
+      pagination.nextOffset === null ||
+      !appliedSelectedRetailers.length
+    ) {
+      return
+    }
+
+    const requestId = rankingRequestIdRef.current + 1
+    rankingRequestIdRef.current = requestId
+
+    try {
+      setRankingLoadingMore(true)
+      setError('')
+
+      const nextRanking = await fetchOfferRankingDirect({
+        categories: appliedCategoryQueryLabels.join(','),
+        retailers: appliedSelectedRetailers.join(','),
+        programRetailers: appliedSelectedRetailers.join(','),
+        unit: 'all',
+        q: '',
+        limit: 60,
+        offset: pagination.nextOffset,
+      })
+
+      if (requestId !== rankingRequestIdRef.current) return
+
+      setRanking((currentRanking) => mergePaginatedRankingResults(currentRanking, nextRanking))
+    } catch (rankingError) {
+      if (requestId !== rankingRequestIdRef.current) return
+      setError(
+        getFriendlyErrorMessage(
+          rankingError,
+          'Weitere Angebote konnten gerade nicht geladen werden. Bitte versuche es erneut.'
+        )
+      )
+    } finally {
+      if (requestId === rankingRequestIdRef.current) setRankingLoadingMore(false)
+    }
+  }
+
   function handleResetAll() {
+    rankingRequestIdRef.current += 1
     setDraftSelectedRetailers([])
     setDraftSelectedCategoryLabels([])
     setAppliedSelectedRetailers([])
     setAppliedSelectedCategoryLabels([])
     setRanking(null)
+    setRankingLoadingMore(false)
   }
 
   function handleAddToShoppingList(offer) {
@@ -918,6 +973,7 @@ function App() {
             filtersLoading={filtersLoading}
             ranking={ranking}
             rankingLoading={rankingLoading}
+            rankingLoadingMore={rankingLoadingMore}
             draftRetailers={draftSelectedRetailers}
             draftCategoryLabels={draftSelectedCategoryLabels}
             appliedRetailers={appliedSelectedRetailers}
@@ -933,6 +989,7 @@ function App() {
             onSelectAllDraftCategories={handleSelectAllDraftCategories}
             onClearDraftCategories={handleClearDraftCategories}
             onApplySearch={handleApplySearch}
+            onLoadMoreOffers={handleLoadMoreBrowseOffers}
             onResetAll={handleResetAll}
             onAddToShoppingList={handleAddToShoppingList}
           />

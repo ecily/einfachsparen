@@ -1,4 +1,5 @@
 const MAX_RANKING_LIMIT = 60;
+const MAX_RANKING_OFFSET = 5000;
 const MAX_QUERY_LENGTH = 80;
 const MAX_LIST_VALUE_LENGTH = 60;
 const MAX_LIST_VALUES = 20;
@@ -181,6 +182,7 @@ function validatePublicPayloadSize(req, res, next) {
 
 function validateRankingQuery(req, res, next) {
   try {
+    const hasExplicitOffset = Object.prototype.hasOwnProperty.call(req.query, 'offset');
     const rawLimit = String(req.query.limit || '30').trim().toLowerCase();
 
     if (rawLimit === 'all') {
@@ -194,6 +196,15 @@ function validateRankingQuery(req, res, next) {
     }
 
     req.query.limit = Math.min(parsedLimit, MAX_RANKING_LIMIT);
+    const rawOffset = String(req.query.offset || '0').trim();
+    const parsedOffset = Number(rawOffset);
+
+    if (!Number.isInteger(parsedOffset) || parsedOffset < 0 || parsedOffset > MAX_RANKING_OFFSET) {
+      rejectBadRequest('offset ist ungueltig.');
+    }
+
+    req.query.offset = parsedOffset;
+    req.query.offsetExplicit = hasExplicitOffset;
     req.query.q = normalizeString(req.query.q || '', { field: 'q', maxLength: MAX_QUERY_LENGTH });
     req.query.categories = normalizeFlexibleStringList(req.query.categories, {
       field: 'categories',
