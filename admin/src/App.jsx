@@ -661,6 +661,10 @@ function App() {
     setDraftSelectedCategoryLabels(buildAllCategorySelectionTokens(categories))
   }
 
+  function handleClearDraftCategories() {
+    setDraftSelectedCategoryLabels([])
+  }
+
   function handleToggleDraftMainCategory(group) {
     const mainToken = buildMainSelectionToken(group.mainCategoryKey)
     const subcategoryTokens = (group.subcategories || []).map((item) => buildSubSelectionToken(group.mainCategoryKey, item.subcategoryKey))
@@ -927,6 +931,7 @@ function App() {
             onToggleDraftMainCategory={handleToggleDraftMainCategory}
             onToggleDraftSubcategory={handleToggleDraftSubcategory}
             onSelectAllDraftCategories={handleSelectAllDraftCategories}
+            onClearDraftCategories={handleClearDraftCategories}
             onApplySearch={handleApplySearch}
             onResetAll={handleResetAll}
             onAddToShoppingList={handleAddToShoppingList}

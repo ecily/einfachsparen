@@ -8,6 +8,7 @@ export function CategorySelectorBlock({
   onToggleMainCategory,
   onToggleSubcategory,
   onSelectAllCategories,
+  onClearCategories,
   loading,
   disabled,
 }) {
@@ -15,6 +16,7 @@ export function CategorySelectorBlock({
 
   const openCategoryKeySet = useMemo(() => new Set(openCategoryKeys), [openCategoryKeys])
   const allCategoriesSelected = areAllCategoryGroupsSelected(selectedCategoryTokens, categories)
+  const globalCategoryActionLabel = allCategoriesSelected ? 'Zur\u00fccksetzen' : 'Alle Kategorien anzeigen'
 
   function handleToggleOpenCategory(mainCategoryKey) {
     setOpenCategoryKeys((current) => {
@@ -24,6 +26,15 @@ export function CategorySelectorBlock({
 
       return [...current, mainCategoryKey]
     })
+  }
+
+  function handleGlobalCategoryAction() {
+    if (allCategoriesSelected) {
+      onClearCategories?.()
+      return
+    }
+
+    onSelectAllCategories?.()
   }
 
   return (
@@ -45,10 +56,10 @@ export function CategorySelectorBlock({
               <button
                 type="button"
                 className="ghost-button"
-                onClick={onSelectAllCategories}
+                onClick={handleGlobalCategoryAction}
                 aria-pressed={allCategoriesSelected}
               >
-                Alle Kategorien anzeigen
+                {globalCategoryActionLabel}
               </button>
             </div>
 

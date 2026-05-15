@@ -27,6 +27,7 @@ export function SearchPage({
   onToggleDraftMainCategory,
   onToggleDraftSubcategory,
   onSelectAllDraftCategories,
+  onClearDraftCategories,
   onApplySearch,
   onResetAll,
   onAddToShoppingList,
@@ -97,6 +98,7 @@ export function SearchPage({
         onToggleMainCategory={onToggleDraftMainCategory}
         onToggleSubcategory={onToggleDraftSubcategory}
         onSelectAllCategories={onSelectAllDraftCategories}
+        onClearCategories={onClearDraftCategories}
         loading={filtersLoading}
         disabled={!draftRetailers.length}
       />
