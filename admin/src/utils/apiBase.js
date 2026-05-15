@@ -232,11 +232,12 @@ export async function fetchOfferRankingDirect(params = {}) {
   return fetchJson(`/offers/ranking${suffix}`)
 }
 
-export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0) {
+export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0, resultSetToken = '') {
   const searchParams = new URLSearchParams()
   searchParams.set('q', String(query || '').trim())
   searchParams.set('limit', String(limit))
   searchParams.set('offset', String(offset))
+  if (resultSetToken) searchParams.set('resultSetToken', String(resultSetToken))
 
   return fetchJson(`/offers/ranking?${searchParams.toString()}`)
 }

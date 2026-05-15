@@ -2,6 +2,8 @@ const Offer = require('../../models/Offer');
 const Category = require('../../models/Category');
 const Retailer = require('../../models/Retailer');
 const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCache');
+const RankingResultCache = require('../../models/RankingResultCache');
+const crypto = require('node:crypto');
 const { computeOfferSavings } = require('./promotionMath');
 const { SEARCH_TOKEN_VERSION, buildQuerySearchTokens, repairGermanSearchTextEncoding } = require('./searchTokens');
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
@@ -77,6 +79,7 @@ const OFFER_RANKING_FIELD_LIST = [
 const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
+const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
 const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v4-search-token-v${SEARCH_TOKEN_VERSION}`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
@@ -84,6 +87,7 @@ const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOK
 const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
 const rankingResponseCache = new Map();
 const rankingResultBaseCache = new Map();
+const INSTANCE_MARKER = `${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
 
 function nowMs() {
   return Number(process.hrtime.bigint()) / 1e6;
@@ -282,6 +286,14 @@ function buildRankingBaseCacheKey({
     programRetailers: normalizeProgramRetailers(programRetailers).sort(),
     onlyWithoutProgram: normalizeBoolean(onlyWithoutProgram),
   });
+}
+
+function hashRankingCacheKey(cacheKey) {
+  return crypto.createHash('sha256').update(String(cacheKey || '')).digest('hex').slice(0, 32);
+}
+
+function createResultSetToken() {
+  return crypto.randomBytes(18).toString('base64url');
 }
 
 function getCachedRankingEntry(cache, cacheKey) {
@@ -3968,6 +3980,267 @@ function paginateVisibleRankingOffers(offers = [], { limit = 30, offset = 0, sho
   };
 }
 
+function roundTiming(value) {
+  return Number((Number(value) || 0).toFixed(1));
+}
+
+function buildCacheDebugTiming({
+  cacheKeyHash = '',
+  cacheHit = false,
+  cacheSource = 'none',
+  resultSetToken = '',
+  safeLimit = 30,
+  safeOffset = 0,
+  query = '',
+  selectedRetailers = [],
+  selectedCategories = [],
+  candidateCount = 0,
+  resultCount = 0,
+  finalVisibleCount = 0,
+  timings = {},
+} = {}) {
+  return {
+    instanceMarker: INSTANCE_MARKER,
+    processUptimeSec: Math.round(process.uptime()),
+    memoryCacheSize: getRankingResponseCacheSize(),
+    cacheKeyHash,
+    cacheHit,
+    cacheSource,
+    resultSetToken: resultSetToken ? `${String(resultSetToken).slice(0, 8)}...` : '',
+    offset: safeOffset,
+    limit: safeLimit,
+    qPresent: Boolean(String(query || '').trim()),
+    retailersCount: selectedRetailers.length,
+    categoriesCount: selectedCategories.length,
+    path: String(query || '').trim() ? 'keyword' : 'browse/filter',
+    mongoQueryMs: roundTiming(timings.candidateFindMs || timings.mongoQueryMs),
+    candidateCount,
+    resultCount,
+    finalVisibleCount,
+    rankingMs: roundTiming(timings.rankingMs),
+    dedupeMs: roundTiming((timings.dedupeMs || 0) + (timings.finalDedupeMs || 0) + (timings.visibleDedupeMs || 0)),
+    sliceMs: roundTiming(timings.sliceMs),
+    hydrateMs: roundTiming(timings.hydrateMs || timings.responseHydrationMs),
+    responseBuildMs: roundTiming(timings.responseBuildMs || timings.responseMappingMs),
+    mongoResultCacheMs: roundTiming(timings.mongoResultCacheMs),
+    cacheWriteMs: roundTiming(timings.cacheWriteMs),
+    totalMs: roundTiming(timings.totalMs),
+  };
+}
+
+async function readRankingResultCache({ baseCacheKey = '', resultSetToken = '', expectedKeyHash = '' } = {}) {
+  const now = new Date();
+  const keyHash = expectedKeyHash || (baseCacheKey ? hashRankingCacheKey(baseCacheKey) : '');
+  const token = String(resultSetToken || '').trim();
+
+  if (token) {
+    const tokenEntry = await RankingResultCache.findOne({
+      resultSetToken: token,
+      expiresAt: { $gt: now },
+    }).lean();
+
+    if (tokenEntry && (!keyHash || tokenEntry.keyHash === keyHash)) {
+      return { entry: tokenEntry, source: 'mongo-token' };
+    }
+  }
+
+  if (!keyHash) {
+    return { entry: null, source: 'none' };
+  }
+
+  const keyEntry = await RankingResultCache.findOne({
+    keyHash,
+    expiresAt: { $gt: now },
+  }).lean();
+
+  return keyEntry ? { entry: keyEntry, source: 'mongo-base-key' } : { entry: null, source: 'none' };
+}
+
+async function writeRankingResultCache({
+  baseCacheKey,
+  query = '',
+  unit = 'all',
+  selectedCategories = [],
+  selectedRetailers = [],
+  selectedProgramRetailers = [],
+  withoutProgram = false,
+  candidateCount = 0,
+  candidateLimit = 0,
+  resultCount = 0,
+  units = [],
+  visibleOffers = [],
+} = {}) {
+  if (!baseCacheKey || !Array.isArray(visibleOffers) || visibleOffers.length === 0) {
+    return '';
+  }
+
+  const offerIds = visibleOffers.map((offer) => offer?._id || offer?.id).filter(Boolean);
+
+  if (offerIds.length === 0) {
+    return '';
+  }
+
+  const resultSetToken = createResultSetToken();
+  const now = new Date();
+  const keyHash = hashRankingCacheKey(baseCacheKey);
+
+  await RankingResultCache.updateOne(
+    { keyHash },
+    {
+      $set: {
+        keyHash,
+        resultSetToken,
+        normalizedKey: baseCacheKey,
+        offerIds,
+        filters: {
+          query: String(query || '').trim().toLowerCase(),
+          unit: String(unit || 'all').trim().toLowerCase(),
+          categories: selectedCategories,
+          retailers: selectedRetailers,
+          programRetailers: selectedProgramRetailers,
+          onlyWithoutProgram: Boolean(withoutProgram),
+        },
+        summaryBasis: {
+          resultCount,
+          candidateCount,
+          candidateLimit,
+          units,
+        },
+        expiresAt: new Date(now.getTime() + RANKING_RESULT_CACHE_TTL_MS),
+      },
+    },
+    { upsert: true }
+  );
+
+  return resultSetToken;
+}
+
+async function buildRankingResponseFromStoredResultCache({
+  cacheEntry,
+  query = '',
+  unit = 'all',
+  selectedCategories = [],
+  selectedRetailers = [],
+  selectedProgramRetailers = [],
+  withoutProgram = false,
+  safeLimit = 30,
+  safeOffset = 0,
+  showAllMatching = false,
+  debugTiming = false,
+  cacheKeyHash = '',
+  cacheSource = 'mongo-base-key',
+} = {}) {
+  const totalStartedAt = nowMs();
+  const timings = { sliceMs: 0, hydrateMs: 0, responseBuildMs: 0, totalMs: 0 };
+  const offerIds = Array.isArray(cacheEntry?.offerIds) ? cacheEntry.offerIds : [];
+  const sliceStartedAt = nowMs();
+  const pagination = paginateVisibleRankingOffers(offerIds, {
+    limit: safeLimit || offerIds.length,
+    offset: safeOffset,
+    showAllMatching,
+  });
+  timings.sliceMs = nowMs() - sliceStartedAt;
+
+  const hydrateStartedAt = nowMs();
+  const retailerMatch = selectedRetailers.length > 0
+    ? { isActive: true, retailerKey: { $in: selectedRetailers } }
+    : { isActive: true };
+  const [hydratedOffers, categoryDocuments, retailerOptions] = await Promise.all([
+    Offer.find({ _id: { $in: pagination.offers } })
+      .select(OFFER_RANKING_FIELDS)
+      .lean(),
+    Category.find({ isActive: true })
+      .select('mainCategoryLabel offerCount subcategories')
+      .lean(),
+    Retailer.find(retailerMatch)
+      .select('retailerKey retailerName activeOfferCount')
+      .sort({ sortOrder: 1, retailerName: 1 })
+      .lean(),
+  ]);
+  const hydratedById = new Map(hydratedOffers.map((offer) => [String(offer._id), offer]));
+  const offers = pagination.offers
+    .map((id) => hydratedById.get(String(id)))
+    .filter(Boolean);
+  timings.hydrateMs = nowMs() - hydrateStartedAt;
+
+  const responseStartedAt = nowMs();
+  const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
+  const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
+  const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
+  const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
+  const summaryBasis = cacheEntry?.summaryBasis || {};
+  const response = {
+    generatedAt: new Date().toISOString(),
+    filters: {
+      categories: selectedCategories,
+      query,
+      unit,
+      retailers: selectedRetailers,
+      programRetailers: selectedProgramRetailers,
+      onlyWithoutProgram: withoutProgram,
+      limit: showAllMatching ? 'all' : safeLimit,
+      offset: safeOffset,
+    },
+    categories: buildCategoryLabelsFromDocuments(categoryDocuments),
+    retailers: retailerOptions.map((item) => ({
+      key: item.retailerKey,
+      retailerKey: item.retailerKey,
+      retailerName: item.retailerName,
+      offerCount: item.activeOfferCount || 0,
+    })),
+    units: Array.isArray(summaryBasis.units) ? summaryBasis.units : [],
+    summary: {
+      resultCount: summaryBasis.resultCount || 0,
+      displayedCount: rankedOffers.length,
+      requestedDisplay: showAllMatching ? 'all' : safeLimit,
+      totalCount: pagination.totalCount,
+      offset: pagination.offset,
+      limit: pagination.limit,
+      hasMore: pagination.hasMore,
+      nextOffset: pagination.nextOffset,
+      completeResultSetVisible:
+        (summaryBasis.candidateCount || 0) < (summaryBasis.candidateLimit || 0) &&
+        !pagination.hasMore &&
+        pagination.offset === 0 &&
+        rankedOffers.length === pagination.totalCount,
+      candidateCount: summaryBasis.candidateCount || 0,
+      candidateLimit: summaryBasis.candidateLimit || 0,
+      resultSetToken: cacheEntry.resultSetToken || '',
+      bestUnitPrice,
+      worstUnitPrice,
+      spreadPercent:
+        bestUnitPrice && worstUnitPrice
+          ? Number((((worstUnitPrice - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
+          : 0,
+    },
+    retailerDistribution: buildRetailerDistribution(rankedOffers),
+    rankedGroups: buildGroupedRankings(rankedOffers, { query }),
+    rankedOffers,
+  };
+  timings.responseBuildMs = nowMs() - responseStartedAt;
+  timings.totalMs = nowMs() - totalStartedAt;
+
+  if (debugTiming) {
+    response.summary.debugTiming = buildCacheDebugTiming({
+      cacheKeyHash,
+      cacheHit: true,
+      cacheSource,
+      resultSetToken: cacheEntry.resultSetToken || '',
+      safeLimit,
+      safeOffset,
+      query,
+      selectedRetailers,
+      selectedCategories,
+      candidateCount: summaryBasis.candidateCount || 0,
+      resultCount: summaryBasis.resultCount || 0,
+      finalVisibleCount: pagination.totalCount,
+      timings,
+    });
+  }
+
+  return response;
+}
+
 async function findRankingCandidateOffers({
   selectedRetailers = [],
   selectedCategories = [],
@@ -4324,6 +4597,7 @@ function buildRankingResponseFromBase({
         rankedOffers.length === pagination.totalCount,
       candidateCount: base?.candidateCount || 0,
       candidateLimit: base?.candidateLimit || 0,
+      resultSetToken: base?.resultSetToken || '',
       bestUnitPrice,
       worstUnitPrice,
       spreadPercent:
@@ -4347,6 +4621,8 @@ async function buildOfferRanking({
   limit = 30,
   offset = 0,
   offsetExplicit = false,
+  resultSetToken = '',
+  debugTiming = false,
   diagnostics = false,
   debugCandidates = false,
 }) {
@@ -4374,6 +4650,8 @@ async function buildOfferRanking({
     dbLoadMs: 0,
     rankingMs: 0,
     responseMappingMs: 0,
+    mongoResultCacheMs: 0,
+    cacheWriteMs: 0,
     totalMs: 0,
   };
   const limitValue = String(limit || '30').trim().toLowerCase();
@@ -4386,6 +4664,7 @@ async function buildOfferRanking({
   const selectedProgramRetailers = normalizeProgramRetailers(programRetailers);
   const withoutProgram = normalizeBoolean(onlyWithoutProgram);
   const rawCategories = normalizeStringList(categories);
+  const normalizedResultSetToken = String(resultSetToken || '').trim();
   const earlyBaseCacheKey = rawCategories.length === 0 ? buildRankingBaseCacheKey({
     categories: [],
     query,
@@ -4409,11 +4688,11 @@ async function buildOfferRanking({
   const earlyCachedBase = !diagnostics && offsetExplicit && earlyBaseCacheKey
     ? getCachedRankingResultBase(earlyBaseCacheKey)
     : null;
-  const earlyCachedResponse = !diagnostics && earlyCacheKey ? getCachedRankingResponse(earlyCacheKey) : null;
+  const earlyCachedResponse = !diagnostics && !debugTiming && earlyCacheKey ? getCachedRankingResponse(earlyCacheKey) : null;
   timings.cacheLookupMs += nowMs() - cacheLookupStartedAt;
 
   if (earlyCachedBase) {
-    return buildRankingResponseFromBase({
+    const response = buildRankingResponseFromBase({
       base: earlyCachedBase,
       query,
       unit,
@@ -4425,10 +4704,56 @@ async function buildOfferRanking({
       safeOffset,
       showAllMatching,
     });
+    if (debugTiming) {
+      response.summary.debugTiming = buildCacheDebugTiming({
+        cacheKeyHash: hashRankingCacheKey(earlyBaseCacheKey),
+        cacheHit: true,
+        cacheSource: 'memory-base',
+        resultSetToken: earlyCachedBase.resultSetToken || '',
+        safeLimit,
+        safeOffset,
+        query,
+        selectedRetailers,
+        selectedCategories: [],
+        candidateCount: earlyCachedBase.candidateCount || 0,
+        resultCount: earlyCachedBase.resultCount || 0,
+        finalVisibleCount: Array.isArray(earlyCachedBase.visibleOffers) ? earlyCachedBase.visibleOffers.length : 0,
+        timings: { totalMs: nowMs() - totalStartedAt },
+      });
+    }
+    return response;
   }
 
   if (earlyCachedResponse) {
     return earlyCachedResponse;
+  }
+
+  if (!diagnostics && offsetExplicit && earlyBaseCacheKey) {
+    const mongoCacheStartedAt = nowMs();
+    const mongoCacheResult = await readRankingResultCache({
+      baseCacheKey: earlyBaseCacheKey,
+      resultSetToken: normalizedResultSetToken,
+      expectedKeyHash: hashRankingCacheKey(earlyBaseCacheKey),
+    });
+    timings.mongoResultCacheMs += nowMs() - mongoCacheStartedAt;
+
+    if (mongoCacheResult.entry) {
+      return buildRankingResponseFromStoredResultCache({
+        cacheEntry: mongoCacheResult.entry,
+        query,
+        unit,
+        selectedCategories: [],
+        selectedRetailers,
+        selectedProgramRetailers,
+        withoutProgram,
+        safeLimit,
+        safeOffset,
+        showAllMatching,
+        debugTiming,
+        cacheKeyHash: hashRankingCacheKey(earlyBaseCacheKey),
+        cacheSource: mongoCacheResult.source,
+      });
+    }
   }
 
   const categoryLoadStartedAt = nowMs();
@@ -4461,11 +4786,11 @@ async function buildOfferRanking({
   const cachedBase = !diagnostics && offsetExplicit && !earlyBaseCacheKey
     ? getCachedRankingResultBase(baseCacheKey)
     : null;
-  const cachedResponse = diagnostics || earlyCacheKey ? null : getCachedRankingResponse(cacheKey);
+  const cachedResponse = diagnostics || debugTiming || earlyCacheKey ? null : getCachedRankingResponse(cacheKey);
   timings.cacheLookupMs += nowMs() - lateCacheLookupStartedAt;
 
   if (cachedBase) {
-    return buildRankingResponseFromBase({
+    const response = buildRankingResponseFromBase({
       base: cachedBase,
       query,
       unit,
@@ -4477,10 +4802,56 @@ async function buildOfferRanking({
       safeOffset,
       showAllMatching,
     });
+    if (debugTiming) {
+      response.summary.debugTiming = buildCacheDebugTiming({
+        cacheKeyHash: hashRankingCacheKey(baseCacheKey),
+        cacheHit: true,
+        cacheSource: 'memory-base',
+        resultSetToken: cachedBase.resultSetToken || '',
+        safeLimit,
+        safeOffset,
+        query,
+        selectedRetailers,
+        selectedCategories,
+        candidateCount: cachedBase.candidateCount || 0,
+        resultCount: cachedBase.resultCount || 0,
+        finalVisibleCount: Array.isArray(cachedBase.visibleOffers) ? cachedBase.visibleOffers.length : 0,
+        timings: { totalMs: nowMs() - totalStartedAt },
+      });
+    }
+    return response;
   }
 
   if (cachedResponse) {
     return cachedResponse;
+  }
+
+  if (!diagnostics && offsetExplicit) {
+    const mongoCacheStartedAt = nowMs();
+    const mongoCacheResult = await readRankingResultCache({
+      baseCacheKey,
+      resultSetToken: normalizedResultSetToken,
+      expectedKeyHash: hashRankingCacheKey(baseCacheKey),
+    });
+    timings.mongoResultCacheMs += nowMs() - mongoCacheStartedAt;
+
+    if (mongoCacheResult.entry) {
+      return buildRankingResponseFromStoredResultCache({
+        cacheEntry: mongoCacheResult.entry,
+        query,
+        unit,
+        selectedCategories,
+        selectedRetailers,
+        selectedProgramRetailers,
+        withoutProgram,
+        safeLimit,
+        safeOffset,
+        showAllMatching,
+        debugTiming,
+        cacheKeyHash: hashRankingCacheKey(baseCacheKey),
+        cacheSource: mongoCacheResult.source,
+      });
+    }
   }
 
   const retailerMatch = selectedRetailers.length > 0
@@ -4803,6 +5174,35 @@ async function buildOfferRanking({
   }
 
   if (offsetExplicit) {
+    let persistedResultSetToken = '';
+    const cacheWriteStartedAt = nowMs();
+    try {
+      persistedResultSetToken = await writeRankingResultCache({
+        baseCacheKey,
+        query,
+        unit,
+        selectedCategories,
+        selectedRetailers,
+        selectedProgramRetailers,
+        withoutProgram,
+        candidateCount: candidateOffers.length,
+        candidateLimit,
+        resultCount: fullyFilteredOffers.length,
+        units: response.units,
+        visibleOffers: visibleDedupeResult.offers,
+      });
+    } catch (error) {
+      persistedResultSetToken = '';
+      if (process.env.RANKING_TIMING_LOGS === 'true') {
+        console.warn('[ranking-result-cache] write failed', {
+          cacheKeyHash: hashRankingCacheKey(baseCacheKey),
+          error: error?.message || 'unknown',
+        });
+      }
+    } finally {
+      timings.cacheWriteMs = nowMs() - cacheWriteStartedAt;
+    }
+    response.summary.resultSetToken = persistedResultSetToken;
     setCachedRankingResultBase(baseCacheKey, {
       categoryDocuments,
       retailerOptions,
@@ -4810,11 +5210,33 @@ async function buildOfferRanking({
       candidateCount: candidateOffers.length,
       candidateLimit,
       resultCount: fullyFilteredOffers.length,
+      resultSetToken: persistedResultSetToken,
       visibleOffers: visibleDedupeResult.offers,
     });
   }
 
-  setCachedRankingResponse(cacheKey, response);
+  timings.totalMs = nowMs() - totalStartedAt;
+  if (debugTiming) {
+    response.summary.debugTiming = buildCacheDebugTiming({
+      cacheKeyHash: hashRankingCacheKey(baseCacheKey),
+      cacheHit: false,
+      cacheSource: 'computed',
+      resultSetToken: response.summary.resultSetToken || '',
+      safeLimit,
+      safeOffset,
+      query,
+      selectedRetailers,
+      selectedCategories,
+      candidateCount: candidateOffers.length,
+      resultCount: fullyFilteredOffers.length,
+      finalVisibleCount: visibleDedupeResult.offers.length,
+      timings,
+    });
+  }
+
+  if (!debugTiming) {
+    setCachedRankingResponse(cacheKey, response);
+  }
   return response;
 }
 
@@ -4839,11 +5261,14 @@ module.exports = {
   parseRankingCategories,
   buildKnownCategoryLabelMap,
   buildRankingBaseCacheKey,
+  hashRankingCacheKey,
+  createResultSetToken,
   buildRankingCandidateLimit,
   buildRankingCandidateMatch,
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateQueryMetadata,
   paginateVisibleRankingOffers,
+  buildRankingResponseFromStoredResultCache,
   buildRankingResponseFromBase,
   normalizeSearchText,
   normalizeRetailerKey,

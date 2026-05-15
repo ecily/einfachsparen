@@ -95,6 +95,8 @@ test('accepts normal search query with limit 60', () => {
     q: 'butter',
     limit: '60',
     offset: '60',
+    resultSetToken: 'abc_DEF-123',
+    debugTiming: 'true',
   });
 
   assert.equal(error, null);
@@ -102,6 +104,8 @@ test('accepts normal search query with limit 60', () => {
   assert.equal(req.query.limit, 60);
   assert.equal(req.query.offset, 60);
   assert.equal(req.query.offsetExplicit, true);
+  assert.equal(req.query.resultSetToken, 'abc_DEF-123');
+  assert.equal(req.query.debugTiming, true);
 });
 
 test('defaults ranking offset to zero and rejects invalid offsets', () => {

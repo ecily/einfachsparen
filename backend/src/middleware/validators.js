@@ -8,6 +8,7 @@ const MAX_RANKING_RETAILER_VALUES = 30;
 const MAX_RANKING_CATEGORIES_LENGTH = 5000;
 const MAX_RANKING_RETAILERS_LENGTH = 1500;
 const MAX_UNIT_LENGTH = 20;
+const MAX_RESULT_SET_TOKEN_LENGTH = 80;
 const MAX_BASKET_ITEMS = 20;
 const MAX_BASKET_ITEM_LENGTH = 80;
 const MAX_SHARE_ITEMS = 120;
@@ -225,6 +226,11 @@ function validateRankingQuery(req, res, next) {
       maxTotalLength: MAX_RANKING_RETAILERS_LENGTH,
     });
     req.query.unit = normalizeString(req.query.unit || 'all', { field: 'unit', maxLength: MAX_UNIT_LENGTH }) || 'all';
+    req.query.resultSetToken = normalizeString(req.query.resultSetToken || '', {
+      field: 'resultSetToken',
+      maxLength: MAX_RESULT_SET_TOKEN_LENGTH,
+    });
+    req.query.debugTiming = normalizeBooleanString(req.query.debugTiming);
 
     const sort = normalizeString(req.query.sort || '', { field: 'sort', maxLength: 20 });
     if (!allowedSortValues.has(sort)) {

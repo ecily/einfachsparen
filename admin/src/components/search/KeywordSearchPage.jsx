@@ -336,7 +336,12 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     try {
       setLoadingMore(true)
       setLoadMoreError('')
-      const nextRanking = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, pagination.nextOffset)
+      const nextRanking = await fetchKeywordOfferSearch(
+        submittedQuery,
+        KEYWORD_SEARCH_LIMIT,
+        pagination.nextOffset,
+        ranking?.summary?.resultSetToken || ''
+      )
 
       if (requestId !== requestIdRef.current) return
 

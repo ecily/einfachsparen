@@ -745,6 +745,7 @@ function App() {
         q: '',
         limit: 60,
         offset: pagination.nextOffset,
+        resultSetToken: ranking?.summary?.resultSetToken || '',
       })
 
       if (requestId !== rankingRequestIdRef.current) return

@@ -50,6 +50,8 @@ router.get('/ranking', offersRateLimit, validateRankingQuery, async (req, res, n
       limit: req.query.limit || 30,
       offset: req.query.offset || 0,
       offsetExplicit: req.query.offsetExplicit === true,
+      resultSetToken: req.query.resultSetToken || '',
+      debugTiming: req.query.debugTiming === true,
     });
 
     res.json(ranking);

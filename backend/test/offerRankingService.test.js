@@ -11,11 +11,13 @@ const {
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
   buildRankingBaseCacheKey,
+  createResultSetToken,
   dedupeFinalResponseOffers,
   dedupeQueryOffers,
   dedupeResponseOffers,
   dedupeVisibleCardResponseOffers,
   buildRankingCandidateQueryMetadata,
+  hashRankingCacheKey,
   buildRankingResponseFromBase,
   normalizeSearchText,
   normalizeRetailerList,
@@ -3036,6 +3038,31 @@ test('ranking base cache key ignores pagination and separates ranking filters', 
   assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm,bipa', categories: ['Drogerie / Hygiene'], programRetailers: 'dm', unit: 'Stk' }));
   assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm,bipa', categories: ['Drogerie / Hygiene'], programRetailers: 'bipa,dm', unit: 'kg' }));
   assert.notEqual(firstPageKey, buildRankingBaseCacheKey({ query: 'waschmittel', retailers: 'dm,bipa', categories: ['Drogerie / Hygiene'], programRetailers: 'bipa,dm', unit: 'Stk', onlyWithoutProgram: true }));
+});
+
+test('ranking result cache token is opaque and cache key hash is stable', () => {
+  const cacheKey = buildRankingBaseCacheKey({
+    query: 'Waschmittel',
+    retailers: 'dm,bipa',
+    categories: ['Drogerie / Hygiene'],
+    programRetailers: 'bipa,dm',
+    unit: 'Stk',
+  });
+  const sameCacheKey = buildRankingBaseCacheKey({
+    query: 'waschmittel',
+    retailers: 'bipa,dm',
+    categories: ['Drogerie / Hygiene'],
+    programRetailers: 'dm,bipa',
+    unit: 'stk',
+    limit: 60,
+    offset: 60,
+  });
+  const token = createResultSetToken();
+
+  assert.equal(hashRankingCacheKey(cacheKey), hashRankingCacheKey(sameCacheKey));
+  assert.match(hashRankingCacheKey(cacheKey), /^[a-f0-9]{32}$/);
+  assert.match(token, /^[A-Za-z0-9_-]{20,80}$/);
+  assert.equal(token.includes('Waschmittel'), false);
 });
 
 test('ranking response base slices cache hits without changing order or overlap', () => {
