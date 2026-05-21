@@ -2449,6 +2449,22 @@ test('fresh active filter removes low-confidence Aktionsfinder ppcv offers witho
   );
 });
 
+test('fresh active filter removes soft-deactivated replacement offers', () => {
+  const inactiveOffer = offer({
+    _id: 'source-replaced-offer',
+    title: 'Kaffee 500 g',
+    sourceType: 'spar-official-pdf',
+    sourceUrl: 'https://flugblatt.spar.at/test/getPdf.ashx',
+    status: 'inactive',
+    isActiveNow: false,
+    isActiveToday: false,
+    deactivatedAt: new Date('2026-05-21T10:00:00.000Z'),
+    deactivationReason: 'source-replacement-not-seen',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([inactiveOffer]), []);
+});
+
 test('fresh active filter keeps Aktionsfinder ppcv only when offer-level validity evidence exists', () => {
   const now = new Date('2026-05-21T13:00:00.000Z');
   const withValidity = offer({

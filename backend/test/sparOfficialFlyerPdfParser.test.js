@@ -89,21 +89,19 @@ test('rejects unclear product blocks without price', () => {
 });
 
 test('normalizes SPAR PDF candidates with source metadata and distinguishable retailer formats', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-20T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
   const pages = fixture.pages.filter((page) => page.sourceRetailerFormat === 'interspar');
   const candidates = extractSparPdfCandidates({
     pages,
     sourceRetailerFormat: 'interspar',
-    validity: {
-      validFrom: new Date(fixture.validity.validFrom),
-      validTo: new Date(fixture.validity.validTo),
-    },
+    validity: currentValidity,
   });
   const offers = normalizeSparPdfCandidatesToOffers({
     pdfReference: {
-      validity: {
-        validFrom: new Date(fixture.validity.validFrom),
-        validTo: new Date(fixture.validity.validTo),
-      },
+      validity: currentValidity,
       candidates,
     },
     source: source('interspar'),

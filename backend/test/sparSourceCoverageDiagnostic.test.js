@@ -45,6 +45,17 @@ test('SPAR source definitions include active aggregators, active PDF flyers and 
   assert.match(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').parserOrAdapter, /text-layer/i);
 });
 
+test('SPAR official PDF source definitions carry current KW 21 validity and format metadata', () => {
+  const sources = getSparCodeSources().filter((source) => /official-flyer-pdf/.test(source.sourceKey));
+
+  assert.equal(sources.length, 3);
+  assert.deepEqual(
+    sources.map((source) => source.sourceRetailerFormat).sort(),
+    ['eurospar', 'interspar', 'spar']
+  );
+  assert.ok(sources.every((source) => /kw-21|kw21/i.test(source.sourceUrl)));
+});
+
 test('official SPAR Steiermark reference is recognized as missing exact URL but covered by generic actions entry', () => {
   const coverage = assessOfficialSparSteiermarkCoverage(getSparCodeSources());
 

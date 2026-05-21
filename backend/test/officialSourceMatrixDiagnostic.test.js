@@ -16,6 +16,8 @@ test('official retailer configuration covers requested source matrix targets', (
 
   assert.deepEqual(keys, [
     'spar',
+    'eurospar',
+    'interspar',
     'billa',
     'billa-plus',
     'hofer',
@@ -24,6 +26,7 @@ test('official retailer configuration covers requested source matrix targets', (
     'lidl',
     'pagro',
     'penny',
+    'adeg',
   ]);
   assert.ok(OFFICIAL_RETAILERS.find((retailer) => retailer.retailerKey === 'spar').officialUrls.includes('https://www.spar.at/aktionen/steiermark'));
   assert.ok(OFFICIAL_RETAILERS.find((retailer) => retailer.retailerKey === 'pagro').officialUrls.includes('https://www.pagro.at/angebote'));
@@ -101,6 +104,6 @@ test('structure assessment uses code and reachability hints conservatively', () 
 
   assert.equal(assessment.blockedLikely, true);
   assert.equal(assessment.pdfFlyerLikely, true);
-  assert.equal(assessment.existingParserCoverage, 'fixture-only');
-  assert.equal(assessment.confidence, 'medium');
+  assert.equal(assessment.existingParserCoverage, 'active');
+  assert.equal(assessment.confidence, 'high');
 });

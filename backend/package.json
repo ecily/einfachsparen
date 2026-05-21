@@ -37,6 +37,7 @@
     "diagnose:offer-images": "node scripts/diagnoseOfferImages.js",
     "diagnose:launch-coverage-audit": "node scripts/diagnoseLaunchCoverageAudit.js",
     "diagnose:coverage-live-readiness": "node scripts/diagnoseCoverageLiveReadiness.js",
+    "diagnose:search-coverage": "node scripts/diagnoseSearchCoverage.js",
     "diagnose:crawl-source-selection": "node scripts/diagnoseCrawlSourceSelection.js",
     "fetch:spar-official-snapshot": "node scripts/fetchSparOfficialSnapshot.js",
     "quality:duplicates": "node scripts/analyzeOfferDuplicates.js",

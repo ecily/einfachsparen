@@ -38,6 +38,10 @@ async function replaceOffersForSource({
   offerDocuments = [],
   crawlJobId: explicitCrawlJobId = null,
   allowEmptyReplacement = false,
+  emptyReplacementVerified = false,
+  sourceRunStatus = 'success',
+  replacementQuality = 'complete',
+  deactivationReason = 'source-replacement-not-seen',
   OfferModel = Offer,
 } = {}) {
   const documents = Array.isArray(offerDocuments) ? offerDocuments.filter(Boolean) : [];
@@ -47,11 +51,49 @@ async function replaceOffersForSource({
     throw new Error('replaceOffersForSource requires sourceId.');
   }
 
+  if (sourceRunStatus !== 'success') {
+    return {
+      insertedOffers: 0,
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
+      skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
+      reason: `source-run-${sourceRunStatus || 'not-success'}`,
+      transactional: false,
+    };
+  }
+
+  if (replacementQuality !== 'complete') {
+    return {
+      insertedOffers: 0,
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
+      skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
+      reason: `replacement-${replacementQuality || 'not-complete'}`,
+      transactional: false,
+    };
+  }
+
+  if (documents.length === 0 && allowEmptyReplacement && !emptyReplacementVerified) {
+    return {
+      insertedOffers: 0,
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
+      skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
+      reason: 'empty-replacement-not-verified',
+      transactional: false,
+    };
+  }
+
   if ((documents.length === 0 && !allowEmptyReplacement) || !crawlJobId) {
     return {
       insertedOffers: 0,
       removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
       skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
       reason: documents.length === 0 ? 'no-new-offers' : 'missing-crawl-job-id',
       transactional: false,
     };
@@ -59,28 +101,54 @@ async function replaceOffersForSource({
 
   return runWithOptionalTransaction(async (session) => {
     const options = session ? { ordered: false, session } : { ordered: false };
-    const deleteOptions = session ? { session } : {};
+    const updateOptions = session ? { session } : {};
+    const now = new Date();
+    const crawlJobIdString = String(crawlJobId || '');
     const inserted = documents.length > 0
       ? await OfferModel.insertMany(
         documents.map((document) => ({
           ...(hasCurrentSearchTokens(document) ? document : withOfferSearchTokens(document)),
           sourceId: document.sourceId || sourceId,
+          lastSeenRunId: document.lastSeenRunId || crawlJobIdString,
+          lastSeenSourceRunId: document.lastSeenSourceRunId || crawlJobIdString,
         })),
         options
       )
       : [];
-    const deleteResult = await OfferModel.deleteMany(
+    const deactivateResult = await OfferModel.updateMany(
       {
         sourceId,
         crawlJobId: { $ne: crawlJobId },
+        $or: [
+          { status: 'active' },
+          { isActiveNow: true },
+          { isActiveToday: true },
+        ],
       },
-      deleteOptions
+      {
+        $set: {
+          status: 'inactive',
+          isActiveNow: false,
+          isActiveToday: false,
+          deactivatedAt: now,
+          deactivationReason,
+          'rawFacts.deactivationMetadata': {
+            reason: deactivationReason,
+            replacementCrawlJobId: crawlJobIdString,
+            sourceId: String(sourceId || ''),
+            deactivatedAt: now.toISOString(),
+          },
+        },
+      },
+      updateOptions
     );
 
     return {
       insertedOffers: Array.isArray(inserted) ? inserted.length : documents.length,
-      removedPreviousOffers: Number(deleteResult?.deletedCount || 0),
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: Number(deactivateResult?.modifiedCount ?? deactivateResult?.matchedCount ?? 0),
       skippedPreviousOfferRemoval: false,
+      skippedPreviousOfferDeactivation: false,
       reason: '',
       transactional: Boolean(session),
     };

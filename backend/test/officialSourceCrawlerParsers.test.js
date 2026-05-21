@@ -855,9 +855,9 @@ test('HOFER official dedupe prefers dated offer evidence over overview duplicate
     cards: [hoferCard()],
   })[0];
   const dated = parseHoferFixture({
-    pageUrl: 'https://www.hofer.at/de/angebote/d.13-05-2026.html',
-    pageDate: new Date(Date.UTC(2026, 4, 13, 12, 0, 0)),
-    nextPageDate: new Date(Date.UTC(2026, 4, 15, 12, 0, 0)),
+    pageUrl: 'https://www.hofer.at/de/angebote/d.20-05-2026.html',
+    pageDate: new Date(Date.UTC(2026, 4, 20, 12, 0, 0)),
+    nextPageDate: new Date(Date.UTC(2026, 5, 2, 12, 0, 0)),
     cards: [hoferCard()],
   })[0];
   const diagnostics = {};
@@ -894,8 +894,8 @@ function pennyCard({
   href = '/produkte/auslese-klassisch-78114243',
   titleLine = 'Auslese klassisch* • Jacobs',
   quantity = '500 g Packung',
-  validFrom = 'von Mi 13.05.2026',
-  validTo = 'bis Mi 20.05.2026',
+  validFrom = 'von Mi 20.05.2026',
+  validTo = 'bis Di 02.06.2026',
   price = '5,99 €',
   reference = '9,99 €',
   basePrice = '1 kg 11,98 €',
@@ -948,8 +948,8 @@ function pennyProduct(overrides = {}) {
       { name: 'Angebote ab 13.05.' },
     ]],
     price: {
-      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-13',
-      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-05-20',
+      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-20',
+      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-06-02',
       crossed: overrides.crossed === undefined ? 999 : overrides.crossed,
       regular: { value: overrides.priceCents || 599 },
     },
@@ -974,8 +974,8 @@ function pennyApiProduct(overrides = {}) {
         tags: hasOverride('tags') ? overrides.tags : ['SO'],
         value: overrides.priceCents || 599,
       },
-      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-13',
-      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-05-20',
+      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-20',
+      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-06-02',
     },
   };
 }
@@ -1000,8 +1000,8 @@ test('PENNY official parser extracts offer card core fields and Nuxt payload ima
   assert.equal(offers[0].title, 'Auslese klassisch*');
   assert.equal(offers[0].brand, 'Jacobs');
   assert.equal(offers[0].quantityText, '500 g Packung');
-  assert.equal(offers[0].validFrom.toISOString(), '2026-05-13T12:00:00.000Z');
-  assert.equal(offers[0].validTo.toISOString(), '2026-05-20T23:59:59.999Z');
+  assert.equal(offers[0].validFrom.toISOString(), '2026-05-20T12:00:00.000Z');
+  assert.equal(offers[0].validTo.toISOString(), '2026-06-02T23:59:59.999Z');
   assert.equal(offers[0].priceCurrent.amount, 5.99);
   assert.equal(offers[0].priceReference.amount, 9.99);
   assert.equal(offers[0].normalizedUnitPrice.amount, 11.98);
@@ -1086,8 +1086,8 @@ test('PENNY official parser classifies coffee, cleaner, sweets and alcohol conse
         href: '/produkte/bourbon-whiskey-78113169',
         titleLine: 'Bourbon Whiskey • Jim Beam',
         quantity: '0,7 liter Flasche',
-        validFrom: 'von Fr 15.05.2026',
-        validTo: 'bis Sa 16.05.2026',
+        validFrom: 'von Mi 20.05.2026',
+        validTo: 'bis Di 02.06.2026',
         price: '9,99 €',
         reference: '',
         basePrice: '1 Liter 14,27 €',

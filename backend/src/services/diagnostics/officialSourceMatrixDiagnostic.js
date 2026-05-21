@@ -9,8 +9,27 @@ const OFFICIAL_RETAILERS = [
     displayName: 'SPAR',
     officialUrls: ['https://www.spar.at/aktionen/steiermark', 'https://www.spar.at/aktionen'],
     retailerKeysForDb: ['spar'],
-    expectedOfficialSourceTypes: ['spar-official-html', 'spar-official-flyer'],
-    parserNotes: ['SPAR official flyer parser is fixture-only; source definition exists but remains disabled.'],
+    sourceRetailerFormatsForDb: ['spar'],
+    expectedOfficialSourceTypes: ['spar-official-pdf', 'spar-official-flyer'],
+    parserNotes: ['SPAR official overview is useful for discovery; productive ingestion uses direct official PDF snapshots.'],
+  },
+  {
+    retailerKey: 'eurospar',
+    displayName: 'EUROSPAR',
+    officialUrls: ['https://www.spar.at/aktionen/steiermark'],
+    retailerKeysForDb: ['spar'],
+    sourceRetailerFormatsForDb: ['eurospar'],
+    expectedOfficialSourceTypes: ['spar-official-pdf', 'spar-official-flyer'],
+    parserNotes: ['EUROSPAR official PDF source is kept as sourceRetailerFormat=eurospar under retailerKey=spar.'],
+  },
+  {
+    retailerKey: 'interspar',
+    displayName: 'INTERSPAR',
+    officialUrls: ['https://www.spar.at/aktionen/steiermark'],
+    retailerKeysForDb: ['spar'],
+    sourceRetailerFormatsForDb: ['interspar'],
+    expectedOfficialSourceTypes: ['spar-official-pdf', 'spar-official-flyer'],
+    parserNotes: ['INTERSPAR official PDF source is kept as sourceRetailerFormat=interspar under retailerKey=spar.'],
   },
   {
     retailerKey: 'billa',
@@ -41,8 +60,8 @@ const OFFICIAL_RETAILERS = [
     displayName: 'dm',
     officialUrls: ['https://www.dm.at/search?query=angebote&searchProviderType=dm-products&currentPage=2&loadPrev=false'],
     retailerKeysForDb: ['dm'],
-    expectedOfficialSourceTypes: ['dm-official-html'],
-    parserNotes: ['Source definition points at dm.at start page; offer search URL is not registered as a dedicated source.'],
+    expectedOfficialSourceTypes: ['dm-official-product-search'],
+    parserNotes: ['officialSourceCrawler has dm Ausverkauf product-search handling.'],
   },
   {
     retailerKey: 'bipa',
@@ -66,7 +85,7 @@ const OFFICIAL_RETAILERS = [
     officialUrls: ['https://www.pagro.at/angebote'],
     retailerKeysForDb: ['pagro'],
     expectedOfficialSourceTypes: ['pagro-official-html'],
-    parserNotes: ['No official PAGRO source is currently registered in sourceDefinitions.'],
+    parserNotes: ['Official PAGRO source is registered disabled because local Node fetches hit Cloudflare challenge.'],
   },
   {
     retailerKey: 'penny',
@@ -75,6 +94,14 @@ const OFFICIAL_RETAILERS = [
     retailerKeysForDb: ['penny'],
     expectedOfficialSourceTypes: ['penny-official-html', 'penny-official-pdf'],
     parserNotes: ['officialSourceCrawler has PENNY HTML and PDF/flyer handling; OCR diagnostics exist separately.'],
+  },
+  {
+    retailerKey: 'adeg',
+    displayName: 'ADEG',
+    officialUrls: ['https://www.adeg.at/flugblatt-aktionen/adeg-flugblatt'],
+    retailerKeysForDb: ['adeg'],
+    expectedOfficialSourceTypes: ['adeg-official-pdf', 'adeg-official-html'],
+    parserNotes: ['ADEG official flyer source is registered disabled; no reliable item-level parser is active.'],
   },
 ];
 
@@ -94,7 +121,7 @@ function pct(part, total) {
 function classifySourceKind(source = {}) {
   const haystack = `${source.channel || ''} ${source.sourceType || ''} ${source.sourceUrl || ''} ${source.label || ''}`.toLowerCase();
 
-  if (/official|billa\.at|hofer\.at|dm\.at|bipa\.at|lidl\.at|penny\.at|spar\.at|pagro\.at/.test(haystack)) return 'official';
+  if (/official|billa\.at|hofer\.at|dm\.at|bipa\.at|lidl\.at|penny\.at|spar\.at|pagro\.at|adeg\.at/.test(haystack)) return 'official';
   if (/aktionsfinder|wogibtswas/.test(haystack)) return 'aggregator';
   if (/marktguru/.test(haystack)) return 'marketplace';
   return 'unknown';
@@ -107,6 +134,9 @@ function deriveSourceKey(source = {}) {
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
+  if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
   if (url.includes('spar.at')) return 'spar-official-flyer';
   if (url.includes('billa.at')) return `${source.retailerKey || 'billa'}-official`;
   if (url.includes('hofer.at')) return 'hofer-official-flyer';
@@ -115,6 +145,7 @@ function deriveSourceKey(source = {}) {
   if (url.includes('lidl.at')) return 'lidl-official-flyer';
   if (url.includes('penny.at')) return source.channel === 'official-flyer' ? 'penny-official-flyer' : 'penny-official-site';
   if (url.includes('pagro.at')) return 'pagro-official-site';
+  if (url.includes('adeg.at')) return 'adeg-official-flyer';
 
   return uniqueCompact([source.channel, source.retailerKey, format]).join('-') || 'unknown';
 }
@@ -130,9 +161,12 @@ function inferParserHints(source = {}) {
   if (url.includes('lidl.at/c/flugblatt')) hints.push('lidl-official-flyer-api');
   if (url.includes('penny.at/angebote/flugblaetter')) hints.push('penny-official-pdf-branch');
   if (url.includes('spar.at/aktionen')) hints.push('spar-official-parser-fixture-only');
+  if (url.includes('flugblatt.spar.at') || url.includes('flugblatt.interspar.at')) hints.push('spar-official-pdf');
   if (url.includes('billa.at')) hints.push('billa-official-algolia');
   if (url.includes('bipa.at')) hints.push('bipa-official-html');
   if (url.includes('hofer.at')) hints.push('hofer-official-html');
+  if (url.includes('pagro.at')) hints.push('pagro-official-html-disabled');
+  if (url.includes('adeg.at')) hints.push('adeg-official-disabled');
 
   return uniqueCompact(hints);
 }
@@ -174,8 +208,10 @@ function getRetailerConfigs() {
     ...retailer,
     codeSources: RETAILER_DEFINITIONS
       .filter((definition) => {
+        const retailerKeys = retailer.retailerKeysForDb || [retailer.retailerKey];
+        const formatKeys = retailer.sourceRetailerFormatsForDb || [];
         const keys = [definition.retailerKey, definition.sourceRetailerFormat, ...(definition.appliesToRetailerFormats || [])];
-        return keys.some((key) => retailer.retailerKeysForDb.includes(key));
+        return keys.some((key) => retailerKeys.includes(key) || formatKeys.includes(key));
       })
       .map((definition) => normalizeCodeSource(definition)),
   }));
@@ -259,7 +295,17 @@ async function fetchDbCoverageForRetailer({ Offer, retailer, limit = DEFAULT_LIM
   if (!Offer) return emptyDbCoverage();
 
   const retailerKeys = retailer.retailerKeysForDb || [retailer.retailerKey];
-  const match = { retailerKey: { $in: retailerKeys } };
+  const formatKeys = retailer.sourceRetailerFormatsForDb || [];
+  const match = formatKeys.length > 0
+    ? {
+        retailerKey: { $in: retailerKeys },
+        $or: [
+          { sourceRetailerFormat: { $in: formatKeys } },
+          { appliesToRetailerFormats: { $in: formatKeys } },
+          { retailerFormats: { $in: formatKeys } },
+        ],
+      }
+    : { retailerKey: { $in: retailerKeys } };
   const boundedLimit = Math.max(5, Math.min(Number(limit || DEFAULT_LIMIT), 50));
 
   const [
@@ -411,7 +457,7 @@ function assessExistingParserCoverage({ retailer, codeSources = [], dbCoverage =
   const disabledOfficialCode = codeSources.some((source) => source.sourceKind === 'official' && !source.active);
   const hasOfficialDbOffers = (dbCoverage.sourceBreakdown || []).some((row) => sourceTypeIsOfficial(row.sourceType));
 
-  if (retailer?.retailerKey === 'spar' && disabledOfficialCode) return 'fixture-only';
+  if (['spar', 'eurospar', 'interspar'].includes(retailer?.retailerKey) && disabledOfficialCode && !activeOfficialCode) return 'fixture-only';
   if (hasOfficialDbOffers || activeOfficialCode) return 'active';
   if (disabledOfficialCode || codeSources.some((source) => source.sourceKind === 'official')) return 'partial';
   return 'none';
@@ -444,7 +490,7 @@ function assessRisks({ retailer, structureAssessment, dbCoverage = emptyDbCovera
   if (officialRows.length === 0 && aggregatorRows.length > 0) risks.push('Official source would supplement existing aggregator coverage, not replace it.');
   if ((dbCoverage.priceCoverageApprox?.priceCurrentPresent?.pct || 0) < 70) risks.push('Low price coverage can make official-source dedupe unsafe if price-less items win.');
   if ((dbCoverage.validityCoverageApprox?.validToPresent?.pct || 0) < 70) risks.push('Weak validity coverage can hide currentness and expiry risk.');
-  if (['spar', 'billa', 'billa-plus'].includes(retailer?.retailerKey)) risks.push('Retailer-scope mapping must not merge market formats or BILLA/BILLA PLUS variants.');
+  if (['spar', 'eurospar', 'interspar', 'billa', 'billa-plus'].includes(retailer?.retailerKey)) risks.push('Retailer-scope mapping must not merge market formats or BILLA/BILLA PLUS variants.');
   if ((dbCoverage.quantityCoverageApprox?.quantityTextPresent?.pct || 0) < 60) risks.push('Weak quantity coverage increases unsafe unit-price comparison risk.');
 
   return uniqueCompact(risks);
@@ -454,7 +500,7 @@ function recommendNextAction({ retailer, structureAssessment, codeSources = [], 
   const officialCode = codeSources.filter((source) => source.sourceKind === 'official');
   const hasOfficialDbOffers = (dbCoverage.sourceBreakdown || []).some((row) => sourceTypeIsOfficial(row.sourceType));
 
-  if (retailer?.retailerKey === 'spar') {
+  if (['spar', 'eurospar', 'interspar'].includes(retailer?.retailerKey)) {
     return 'Keep aggregators active; harden SPAR official via manual snapshots or permitted structured evidence before any productive activation.';
   }
 

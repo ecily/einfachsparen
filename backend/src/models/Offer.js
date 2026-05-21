@@ -90,7 +90,7 @@ const offerSchema = new mongoose.Schema(
     validTo: { type: Date, default: null, index: true },
     status: {
       type: String,
-      enum: ['active', 'upcoming', 'expired', 'unknown'],
+      enum: ['active', 'upcoming', 'expired', 'inactive', 'unknown'],
       default: 'unknown',
       index: true,
     },
