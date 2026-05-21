@@ -72,7 +72,25 @@ test('does not broaden waschmittel query to cleaning accessories', () => {
 });
 
 test('expands explicit cat litter query to current litter title tokens', () => {
-  assert.deepEqual(new Set(buildQuerySearchTokens('katzenstreu')), new Set(['katzenstreu', 'klumpstreu']));
+  assert.deepEqual(new Set(buildQuerySearchTokens('katzenstreu')), new Set(['katzenstreu', 'klumpstreu', 'streu']));
+});
+
+test('expands pet food and S-Budget query aliases without relying on broad substrings', () => {
+  assert.deepEqual(new Set(buildQuerySearchTokens('hundefutter')), new Set([
+    'biscrok',
+    'hundefutter',
+    'hundenahrung',
+    'hundesnack',
+    'pedigree',
+    'schmackos',
+    'tierfutter',
+    'tiernahrung',
+  ]));
+  assert.equal(buildQuerySearchTokens('tiernahrung').includes('pedigree'), true);
+  assert.equal(buildQuerySearchTokens('tiernahrung').includes('fruchtbar'), false);
+  assert.deepEqual(new Set(buildQuerySearchTokens('sbudget')), new Set(['budget', 'sbudget']));
+  assert.deepEqual(buildQuerySearchTokens('s-budget'), ['budget']);
+  assert.deepEqual(buildQuerySearchTokens('s budget'), ['budget']);
 });
 
 test('expands nudeln query only to direct pasta product tokens', () => {

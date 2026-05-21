@@ -85,7 +85,7 @@ const CATEGORY_TAXONOMY = [
     main: 'Tierbedarf',
     patterns: [/(tier|haustier|hund|katze|tierbedarf)/],
     subcategories: [
-      { label: 'Tiernahrung', patterns: [/(tiernahrung|tierfutter|haustierfutter|nassfutter|trockenfutter|snack|leckerli)/] },
+      { label: 'Tiernahrung', patterns: [/(tiernahrung|tierfutter|haustierfutter|nassfutter|trockenfutter|tiersnack|hundesnack|katzensnack|leckerli)/] },
       { label: 'Hundefutter', patterns: [/(hund|hundefutter|hundesnack)/] },
       { label: 'Katzenfutter', patterns: [/(katze|katzenfutter|katzensnack|perfect fit|gourmet perle)/] },
       { label: 'Katzenstreu & Pflege', patterns: [/(katzenstreu|katzenpflege)/] },
@@ -147,6 +147,11 @@ const CATEGORY_TAXONOMY = [
 ];
 
 const HARD_CATEGORY_OVERRIDES = [
+  {
+    patterns: [/\b(pedigree|schmackos|biscrok)\b/],
+    main: 'Tierbedarf',
+    sub: 'Hundefutter',
+  },
   {
     patterns: [
       /\b(felix|whiskas|gourmet gold|gourmet perle|purina one|sheba|zooroyal)\b.*\b(katze|katzen|katzenfutter|nassfutter|trockenfutter|futter|dose|schale|beutel)\b/,

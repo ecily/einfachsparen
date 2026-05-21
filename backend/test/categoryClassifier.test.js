@@ -126,6 +126,24 @@ test('classifies official resource-matrix non-food categories without polluting 
   }
 });
 
+test('classifies dog food brands as pet food and does not let generic snacks become pet food', () => {
+  for (const title of [
+    'Pedigree Hundefutter 2 kg',
+    'Pedigree Schmackos Hunde Snack',
+    'Pedigree Biscrok Hundekeks',
+  ]) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Tierbedarf', title);
+    assert.equal(decision.secondaryCategory, 'Hundefutter', title);
+  }
+
+  const babyFood = determineCategoryDecision({ title: 'Fruchtbar Bio Herznudeln Snack 125 g' });
+
+  assert.notEqual(babyFood.primaryCategory, 'Tierbedarf');
+  assert.notEqual(babyFood.secondaryCategory, 'Tiernahrung');
+});
+
 test('does not treat HOFER or discount wording alone as a product category', () => {
   const decision = determineCategoryDecision({
     title: 'HOFER Diskont Vorteilspreis',

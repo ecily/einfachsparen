@@ -654,6 +654,136 @@ test('explicit lip butter query keeps lip butter searchable', () => {
   ]);
 });
 
+test('explicit lip butter query ranks lip care before food butter and generic butter excludes lip butter', () => {
+  const lipButter = offer({
+    title: 'pure Softening Lip Butter',
+    brand: 'LOOK BY BIPA',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Kosmetik & Make-up',
+    comparisonGroup: 'pure-softening-lip-butter::1-Stk',
+  });
+  const foodButter = offer({
+    title: 'Schaerdinger Oesterreichische Teebutter 250 g',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    comparisonGroup: 'schaerdinger-oesterreichische-teebutter::0.25-kg',
+  });
+
+  assert.deepEqual(applyQueryMatch([foodButter, lipButter], 'lip butter').map((item) => item.title), [
+    'pure Softening Lip Butter',
+  ]);
+  assert.deepEqual(applyQueryMatch([foodButter, lipButter], 'butter').map((item) => item.title), [
+    'Schaerdinger Oesterreichische Teebutter 250 g',
+  ]);
+});
+
+test('pet food intent finds dog food products and excludes Fruchtbar baby food false positives', () => {
+  const babyFood = offer({
+    title: 'Fruchtbar Bio Herznudeln',
+    brand: 'Fruchtbar',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Tiernahrung',
+    searchText: 'fruchtbar bio herznudeln baby nudeln lebensmittel tiernahrung',
+  });
+  const pedigree = offer({
+    title: 'Pedigree Schmackos Hunde Snack',
+    brand: 'Pedigree',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Hundefutter',
+    searchText: 'pedigree schmackos hundesnack tierbedarf',
+  });
+
+  assert.deepEqual(applyQueryMatch([babyFood, pedigree], 'tiernahrung').map((item) => item.title), [
+    'Pedigree Schmackos Hunde Snack',
+  ]);
+  assert.deepEqual(applyQueryMatch([babyFood, pedigree], 'hundefutter').map((item) => item.title), [
+    'Pedigree Schmackos Hunde Snack',
+  ]);
+});
+
+test('cat litter intent finds litter and excludes cat food', () => {
+  const litter = offer({
+    title: 'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenstreu & Pflege',
+    comparisonGroup: 'zooroyal-ultra-klumpstreu::5-l',
+  });
+  const catFood = offer({
+    title: 'Felix Katzenfutter Beutel',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenfutter',
+    comparisonGroup: 'felix-katzenfutter::0.085-kg',
+  });
+
+  assert.deepEqual(applyQueryMatch([catFood, litter], 'katzenstreu').map((item) => item.title), [
+    'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter',
+  ]);
+});
+
+test('S-Budget aliases score current offer tokens consistently', () => {
+  const semmel = offer({
+    title: 'S-Budget Semmel',
+    brand: 'S-Budget',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    searchText: 's budget semmel spar',
+  });
+
+  for (const query of ['s-budget', 's budget', 'sbudget']) {
+    assert.deepEqual(applyQueryMatch([semmel], query).map((item) => item.title), ['S-Budget Semmel'], query);
+  }
+});
+
+test('multi-term search prioritizes offers covering all query tokens before partial matches', () => {
+  const sixPackBeer = offer({
+    title: 'Goesser Bier 6 Dosen',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    searchText: 'goesser bier 6 dosen 6er pack',
+  });
+  const beer = offer({
+    title: 'Wieselburger Bier 0,5 l',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    searchText: 'wieselburger bier',
+  });
+  const sixPackWater = offer({
+    title: 'Mineralwasser 6er Traeger',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wasser',
+    searchText: 'mineralwasser 6er traeger',
+  });
+
+  assert.deepEqual(applyQueryMatch([beer, sixPackWater, sixPackBeer], '6er bier').map((item) => item.title), [
+    'Goesser Bier 6 Dosen',
+    'Wieselburger Bier 0,5 l',
+    'Mineralwasser 6er Traeger',
+  ]);
+});
+
+test('default browsing ranking gives official evidence a visible tie-break over aggregator JSON', () => {
+  const aggregator = offer({
+    title: 'Aggregator Kaffee',
+    sourceType: 'aktionsfinder-json',
+    normalizedUnitPrice: { amount: 4, unit: 'kg', comparable: true },
+    comparableUnit: 'kg',
+    quality: { comparisonSafe: true },
+    comparisonGroup: 'kaffee::1-kg',
+  });
+  const official = offer({
+    title: 'Official Kaffee',
+    sourceType: 'spar-official-html',
+    normalizedUnitPrice: { amount: 4, unit: 'kg', comparable: true },
+    comparableUnit: 'kg',
+    quality: { comparisonSafe: true },
+    comparisonGroup: 'kaffee-official::1-kg',
+  });
+
+  const titles = buildGroupedRankings([aggregator, official]).flatMap((group) => group.offers).map((item) => item.title);
+
+  assert.deepEqual(titles, ['Official Kaffee', 'Aggregator Kaffee']);
+});
+
 test('explicit body butter prefers body care and excludes food butter side hits', () => {
   const offers = [
     offer({
@@ -3351,7 +3481,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2-oil-recall-v2-butter-intent-v1-category-promo-v1',
+    schemaVersion: 'ranking-cache-v7-source-quality-search-token-v2-pet-food-lip-butter-v1-multiterm-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

@@ -102,7 +102,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v6-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-oil-recall-v2-butter-intent-v1-category-promo-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v7-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v1-multiterm-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -458,6 +458,16 @@ function tokenizeSearchText(value) {
   return normalizeSearchText(value).split(/\s+/).filter(Boolean);
 }
 
+function expandScoringQueryTokens(tokens = []) {
+  const expanded = new Set(tokens);
+
+  if (expanded.has('sbudget')) {
+    expanded.add('budget');
+  }
+
+  return [...expanded];
+}
+
 function buildWordString(value) {
   const tokens = tokenizeSearchText(value);
   return tokens.length > 0 ? ` ${tokens.join(' ')} ` : ' ';
@@ -472,6 +482,22 @@ function hasPhrase(wordString, queryTokens) {
 }
 
 const QUERY_CONTEXTS = [
+  {
+    key: 'lip-butter',
+    tokens: ['lipbutter', 'lippenbutter'],
+    anyTokenSequences: [
+      ['lip', 'butter'],
+      ['lippen', 'butter'],
+    ],
+    phraseOnly: true,
+    preferred: ['lipbutter', 'lippenbutter', 'lip', 'lippen', 'butter', 'lippenbalsam', 'lippenpflege', 'kosmetik', 'pflege'],
+    strongPreferred: ['lipbutter', 'lippenbutter', 'lippenbalsam', 'lippenpflege', 'kosmetik'],
+    productIntent: ['lipbutter', 'lippenbutter', 'lip', 'lippen', 'butter', 'lippenbalsam', 'lippenpflege'],
+    exactProductIntent: ['lipbutter', 'lippenbutter', 'lippenbalsam', 'lippenpflege'],
+    productContext: ['kosmetik', 'pflege', 'lippenbalsam', 'lippenpflege'],
+    weakContexts: ['body', 'facial', 'cream', 'lotion'],
+    severeWeakContexts: ['lebensmittel', 'milchprodukte', 'molkerei', 'teebutter', 'erdnussbutter', 'peanut'],
+  },
   {
     key: 'body-butter',
     tokens: ['body', 'butter', 'bodybutter', 'koerperbutter', 'korperbutter', 'facial', 'cream', 'lotion'],
@@ -802,6 +828,28 @@ const QUERY_CONTEXTS = [
     strongPreferred: ['windeln', 'babyhygiene', 'baby'],
   },
   {
+    key: 'tiernahrung',
+    tokens: ['tiernahrung', 'tierfutter'],
+    preferred: ['tiernahrung', 'tierfutter', 'futter', 'nassfutter', 'trockenfutter', 'hund', 'katze', 'tierbedarf'],
+    strongPreferred: ['tiernahrung', 'tierfutter', 'nassfutter', 'trockenfutter', 'tierbedarf'],
+    productIntent: ['tiernahrung', 'tierfutter', 'haustierfutter', 'nassfutter', 'trockenfutter', 'hundefutter', 'katzenfutter', 'hundesnack', 'katzensnack', 'pedigree', 'schmackos', 'biscrok', 'whiskas', 'sheba', 'felix'],
+    exactProductIntent: ['hundefutter', 'katzenfutter', 'pedigree', 'schmackos', 'biscrok', 'whiskas', 'sheba', 'felix'],
+    productContext: ['tierbedarf', 'tiernahrung', 'hundefutter', 'katzenfutter'],
+    weakContexts: ['katzenstreu', 'klumpstreu', 'streu', 'zubehoer', 'zubehor'],
+    severeWeakContexts: ['baby', 'babynahrung', 'babyfood', 'fruchtbar', 'lebensmittel', 'nudeln', 'pasta', 'herznudeln'],
+  },
+  {
+    key: 'hundefutter',
+    tokens: ['hundefutter'],
+    preferred: ['hundefutter', 'hundesnack', 'hundenahrung', 'tierfutter', 'tiernahrung', 'tierbedarf'],
+    strongPreferred: ['hundefutter', 'hundesnack', 'hundenahrung', 'tierbedarf'],
+    productIntent: ['hundefutter', 'hundenahrung', 'hundesnack', 'hundekeks', 'hundeleckerli', 'pedigree', 'schmackos', 'biscrok'],
+    exactProductIntent: ['hundefutter', 'pedigree', 'schmackos', 'biscrok'],
+    productContext: ['hundefutter', 'tierbedarf', 'tiernahrung'],
+    weakContexts: ['katzenfutter', 'katze', 'katzen', 'katzenstreu', 'klumpstreu', 'streu'],
+    severeWeakContexts: ['baby', 'babynahrung', 'babyfood', 'fruchtbar', 'lebensmittel', 'nudeln', 'pasta', 'herznudeln'],
+  },
+  {
     key: 'cat-litter',
     tokens: ['katzenstreu', 'klumpstreu'],
     preferred: ['katzenstreu', 'klumpstreu', 'streu', 'tierbedarf', 'hygiene'],
@@ -841,6 +889,29 @@ function countTokenMatches(fieldTokens, queryTokens, { allowPrefix = false, allo
   }
 
   return matches;
+}
+
+function tokenMatchesQueryToken(fieldToken, queryToken, { allowPrefix = false, allowSubstring = false } = {}) {
+  if (fieldToken === queryToken) {
+    return true;
+  }
+
+  if (/^\d+er$/.test(queryToken) && fieldToken === queryToken.replace(/er$/, '')) {
+    return true;
+  }
+
+  if (/^\d+$/.test(queryToken) && fieldToken === `${queryToken}er`) {
+    return true;
+  }
+
+  return (allowPrefix && fieldToken.startsWith(queryToken)) ||
+    (allowSubstring && fieldToken.includes(queryToken));
+}
+
+function countCoveredQueryTokens(fieldTokens, queryTokens, options = {}) {
+  return queryTokens.filter((queryToken) =>
+    fieldTokens.some((fieldToken) => tokenMatchesQueryToken(fieldToken, queryToken, options))
+  ).length;
 }
 
 function countAnyTokenMatches(fieldTokens, expectedTokens = []) {
@@ -1384,6 +1455,55 @@ function scoreHairOilSearchIntent({ titleTokens, categoryTokens, comparisonToken
   return adjustment;
 }
 
+function getLipButterOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const careContext = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), [
+    'kosmetik',
+    'lippenbalsam',
+    'lippenpflege',
+    'pflege',
+  ]);
+  const lipButter =
+    hasAnyTokenFamily(productTokens, ['lipbutter', 'lippenbutter']) ||
+    (hasAnyTokenFamily(productTokens, ['lip', 'lippen']) && hasAnyTokenFamily(productTokens, ['butter'])) ||
+    (hasAnyTokenFamily(productTokens, ['butter']) && careContext);
+  const foodSide = hasAnyTokenFamily(allTokens, [
+    'erdnuss',
+    'erdnussbutter',
+    'lebensmittel',
+    'milchprodukte',
+    'molkerei',
+    'peanut',
+    'teebutter',
+  ]);
+
+  return {
+    foodSide: foodSide && !lipButter,
+    lipButter,
+  };
+}
+
+function scoreLipButterSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const { foodSide, lipButter } = getLipButterOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (lipButter) {
+    adjustment += 5600;
+  }
+
+  if (foodSide) {
+    adjustment -= 6800;
+  }
+
+  return adjustment;
+}
+
 function getBodyButterOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
   const productTokens = titleTokens.concat(comparisonTokens);
   const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
@@ -1498,6 +1618,91 @@ function scoreJoghurtSearchIntent({ titleTokens, categoryTokens, comparisonToken
     adjustment -= 6500;
   } else if (softSide) {
     adjustment -= 2800;
+  }
+
+  return adjustment;
+}
+
+function getPetFoodOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens, dogOnly = false }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const petCategory = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), [
+    'hundefutter',
+    'katzenfutter',
+    'tierbedarf',
+    'tierfutter',
+    'tiernahrung',
+  ]);
+  const dogFood = hasAnyTokenFamily(productTokens, [
+    'biscrok',
+    'hundefutter',
+    'hundenahrung',
+    'hundesnack',
+    'hundekeks',
+    'hundeleckerli',
+    'pedigree',
+    'schmackos',
+  ]);
+  const petFood = dogFood || hasAnyTokenFamily(productTokens, [
+    'felix',
+    'haustierfutter',
+    'katzenfutter',
+    'katzensnack',
+    'nassfutter',
+    'sheba',
+    'tierfutter',
+    'tiernahrung',
+    'trockenfutter',
+    'whiskas',
+  ]);
+  const litter = hasAnyTokenFamily(productTokens, ['katzenstreu', 'klumpstreu', 'streu']);
+  const babyFoodSide = hasAnyTokenFamily(allTokens, [
+    'baby',
+    'babyfood',
+    'babynahrung',
+    'fruchtbar',
+    'herznudeln',
+  ]);
+  const humanFoodSide = hasAnyTokenFamily(allTokens, [
+    'lebensmittel',
+    'nudeln',
+    'pasta',
+  ]) && !petFood;
+  const relevant = dogOnly ? dogFood : (petFood || (petCategory && !babyFoodSide && !humanFoodSide));
+
+  return {
+    babyFoodSide,
+    humanFoodSide,
+    litter,
+    petFood: relevant && !litter,
+  };
+}
+
+function scorePetFoodSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens, dogOnly = false }) {
+  const {
+    babyFoodSide,
+    humanFoodSide,
+    litter,
+    petFood,
+  } = getPetFoodOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+    dogOnly,
+  });
+  let adjustment = 0;
+
+  if (petFood) {
+    adjustment += dogOnly ? 5200 : 4700;
+  }
+
+  if (babyFoodSide || humanFoodSide) {
+    adjustment -= 7200;
+  }
+
+  if (litter && dogOnly) {
+    adjustment -= 6200;
   }
 
   return adjustment;
@@ -1694,7 +1899,7 @@ function scoreFieldAgainstQuery(value, queryTokens, weights) {
 }
 
 function scoreOfferAgainstQuery(offer, query) {
-  const queryTokens = tokenizeSearchText(query);
+  const queryTokens = expandScoringQueryTokens(tokenizeSearchText(query));
 
   if (queryTokens.length === 0) {
     return 1;
@@ -1779,7 +1984,11 @@ function scoreOfferAgainstQuery(offer, query) {
 
   const matchedStructuredTokens = countTokenMatches(structuredTokens, queryTokens, { allowPrefix: true });
   const matchedAggregateTokens = countTokenMatches(aggregateTokens, queryTokens, { allowSubstring: true });
+  const coveredStructuredQueryTokens = countCoveredQueryTokens(structuredTokens, queryTokens, { allowPrefix: true });
+  const coveredAggregateQueryTokens = countCoveredQueryTokens(aggregateTokens, queryTokens, { allowPrefix: true });
+  const coveredAnyQueryTokens = Math.max(coveredStructuredQueryTokens, coveredAggregateQueryTokens);
   const explicitBodyButterQuery = context?.key === 'body-butter';
+  const explicitLipButterQuery = context?.key === 'lip-butter';
   const explicitEssentialOilQuery = context?.key === 'essential-oil';
   const explicitHairOilQuery = context?.key === 'hair-oil';
   const explicitCatLitterQuery = context?.key === 'cat-litter';
@@ -1788,6 +1997,8 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericOilQuery = context?.key === 'oel' && queryTokens.length === 1 && ['oel', 'ol'].includes(queryTokens[0]);
   const genericJoghurtQuery = context?.key === 'joghurt' && queryTokens.length === 1 && queryTokens[0] === 'joghurt';
   const genericCatFoodQuery = context?.key === 'katzenfutter' && queryTokens.length === 1 && queryTokens[0] === 'katzenfutter';
+  const genericPetFoodQuery = context?.key === 'tiernahrung' && queryTokens.length === 1 && ['tiernahrung', 'tierfutter'].includes(queryTokens[0]);
+  const genericDogFoodQuery = context?.key === 'hundefutter' && queryTokens.length === 1 && queryTokens[0] === 'hundefutter';
   const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
   const genericBeerQuery = context?.key === 'bier' && queryTokens.length === 1 && queryTokens[0] === 'bier';
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
@@ -1831,6 +2042,14 @@ function scoreOfferAgainstQuery(offer, query) {
 
   if (queryTokens.length > 1 && matchedStructuredTokens > 1) {
     score += matchedStructuredTokens * 32;
+  }
+
+  if (queryTokens.length > 1) {
+    if (coveredAnyQueryTokens === queryTokens.length) {
+      score += 1200 + coveredStructuredQueryTokens * 160;
+    } else if (coveredAnyQueryTokens > 0) {
+      score += coveredAnyQueryTokens * 20;
+    }
   }
 
   if (context && (matchedStructuredTokens > 0 || matchedAggregateTokens > 0 || productIntentMatched)) {
@@ -1929,6 +2148,15 @@ function scoreOfferAgainstQuery(offer, query) {
       });
     }
 
+    if (explicitLipButterQuery) {
+      score += scoreLipButterSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
     if (genericJoghurtQuery) {
       score += scoreJoghurtSearchIntent({
         titleTokens,
@@ -1944,6 +2172,16 @@ function scoreOfferAgainstQuery(offer, query) {
         categoryTokens,
         comparisonTokens,
         aggregateTokens,
+      });
+    }
+
+    if (genericPetFoodQuery || genericDogFoodQuery) {
+      score += scorePetFoodSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+        dogOnly: genericDogFoodQuery,
       });
     }
 
@@ -2070,6 +2308,19 @@ function scoreOfferAgainstQuery(offer, query) {
     }
   }
 
+  if (explicitLipButterQuery) {
+    const { foodSide, lipButter } = getLipButterOfferIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+    });
+
+    if (!lipButter || foodSide) {
+      return 0;
+    }
+  }
+
   if (genericJoghurtQuery) {
     const { hardSide, realJoghurt } = getGenericJoghurtOfferIntent({
       titleTokens,
@@ -2092,6 +2343,24 @@ function scoreOfferAgainstQuery(offer, query) {
     });
 
     if (!catFood || litter) {
+      return 0;
+    }
+  }
+
+  if (genericPetFoodQuery || genericDogFoodQuery) {
+    const {
+      babyFoodSide,
+      humanFoodSide,
+      petFood,
+    } = getPetFoodOfferIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+      dogOnly: genericDogFoodQuery,
+    });
+
+    if (!petFood || babyFoodSide || humanFoodSide) {
       return 0;
     }
   }
@@ -2579,9 +2848,9 @@ function buildSourceQualityScore(offer) {
 
   if (quality.isLowConfidenceAggregator) return -500;
 
-  if (rank === 1) return 45;
-  if (rank === 2) return 35;
-  if (rank === 3) return 30;
+  if (rank === 1) return 220;
+  if (rank === 2) return 180;
+  if (rank === 3) return 140;
   if (rank === 5) return 0;
   if (rank === 8) return -10;
   if (rank >= 90) return -30;

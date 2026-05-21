@@ -73,6 +73,26 @@ const SYNONYMS = new Map([
   ['susswaren', ['suesswaren']],
 ]);
 
+const QUERY_SYNONYMS = new Map([
+  ['hundefutter', ['pedigree', 'schmackos', 'biscrok', 'hundesnack', 'hundenahrung', 'tierfutter', 'tiernahrung']],
+  ['katzenstreu', ['klumpstreu', 'streu']],
+  ['sbudget', ['budget']],
+  ['tiernahrung', [
+    'biscrok',
+    'felix',
+    'hundefutter',
+    'hundesnack',
+    'katzenfutter',
+    'katzenstreu',
+    'pedigree',
+    'schmackos',
+    'sheba',
+    'streu',
+    'tierfutter',
+    'whiskas',
+  ]],
+]);
+
 const COMPOUND_PRODUCT_TOKENS = new Set([
   'milch',
   'reis',
@@ -126,6 +146,14 @@ function addTokenWithSynonyms(tokens, token) {
     if (synonym.length >= 3 && !STOPWORDS.has(synonym)) {
       tokens.add(synonym);
     }
+  }
+}
+
+function addQueryTokenWithSynonyms(tokens, token) {
+  addTokenWithSynonyms(tokens, token);
+
+  for (const synonym of QUERY_SYNONYMS.get(token) || []) {
+    addTokenWithSynonyms(tokens, synonym);
   }
 }
 
@@ -198,11 +226,11 @@ function buildQuerySearchTokens(query) {
   for (const token of tokenizeValue(query)) {
     const normalizedToken = token === 'ol' ? 'oel' : token;
 
-    addTokenWithSynonyms(tokens, normalizedToken);
+    addQueryTokenWithSynonyms(tokens, normalizedToken);
 
     if (normalizedToken === 'oel') {
       for (const oilToken of FOOD_OIL_PRODUCT_TOKENS) {
-        addTokenWithSynonyms(tokens, oilToken);
+        addQueryTokenWithSynonyms(tokens, oilToken);
       }
 
       continue;
