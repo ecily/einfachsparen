@@ -102,7 +102,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v7-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-multiterm-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v7-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -1735,7 +1735,9 @@ function getGenericCatFoodOfferIntent({ titleTokens, categoryTokens, comparisonT
   const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
   const foodTokens = ['katzenfutter', 'nassfutter', 'trockenfutter', 'futter', 'tiernahrung'];
   const litterTokens = ['katzenstreu', 'klumpstreu', 'streu', 'sand', 'hygiene', 'zubehoer', 'zubehor'];
-  const catFood = hasAnyTokenFamily(productTokens, foodTokens);
+  const catFood =
+    hasAnyTokenFamily(productTokens, foodTokens) ||
+    hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['katzenfutter']);
   const litter = hasAnyTokenFamily(allTokens, litterTokens);
 
   return {

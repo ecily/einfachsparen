@@ -757,6 +757,25 @@ test('cat litter intent finds litter and excludes cat food', () => {
   ]);
 });
 
+test('cat food query accepts category-labeled cat food without literal food token in title', () => {
+  const catFood = offer({
+    title: 'ZooRoyal Moon Ranger Ente',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenfutter',
+    comparisonGroup: 'zooroyal-moon-ranger-ente::0.085-kg',
+  });
+  const litter = offer({
+    title: 'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenstreu & Pflege',
+    comparisonGroup: 'zooroyal-ultra-klumpstreu::5-l',
+  });
+
+  assert.deepEqual(applyQueryMatch([catFood, litter], 'katzenfutter').map((item) => item.title), [
+    'ZooRoyal Moon Ranger Ente',
+  ]);
+});
+
 test('S-Budget aliases score current offer tokens consistently', () => {
   const semmel = offer({
     title: 'S-Budget Semmel',
@@ -3518,7 +3537,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v7-source-quality-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-multiterm-v1',
+    schemaVersion: 'ranking-cache-v7-source-quality-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
