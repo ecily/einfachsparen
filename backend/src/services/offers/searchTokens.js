@@ -160,6 +160,13 @@ function buildOfferSearchTokens(offer = {}) {
     offer.manufacturer,
     offer.productName,
     offer.normalizedName,
+    offer.description,
+    offer.searchText,
+    offer.conditionsText,
+    offer.offerType,
+    offer.promotionScope,
+    offer.appliesToCategory,
+    offer.regionScope,
     offer.categoryPrimary,
     offer.categorySecondary,
     offer.categoryKey,
@@ -168,6 +175,11 @@ function buildOfferSearchTokens(offer = {}) {
     offer.comparisonGroup,
     offer.retailerKey,
     offer.retailerName,
+    offer.rawFacts?.promotionScope,
+    offer.rawFacts?.appliesToCategory,
+    offer.rawFacts?.regionScope,
+    offer.rawFacts?.evidenceText,
+    offer.rawFacts?.sourceText,
   ];
 
   for (const value of weightedSources) {

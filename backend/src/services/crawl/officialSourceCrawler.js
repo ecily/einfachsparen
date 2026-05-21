@@ -38,6 +38,12 @@ const {
   summarizeRejections: summarizeSparPdfRejections,
 } = require('./sparOfficialFlyerPdfParser');
 const {
+  PARSER_VERSION: CATEGORY_PROMOTION_PARSER_VERSION,
+  SOURCE_TYPE: CATEGORY_PROMOTION_SOURCE_TYPE,
+  extractAndNormalizeOfficialCategoryPromotions,
+  sourceKeyForActionSource,
+} = require('./officialCategoryPromotionParser');
+const {
   extractIssuuDocumentsFromHtml,
   resolveIssuuOriginalPdfUrl,
 } = require('./issuuPdfResolver');
@@ -3151,7 +3157,8 @@ async function fetchBinary(url, accept = 'application/pdf,*/*', { timeoutMs = 45
 
 function isSparOfficialPdfSource(source = {}) {
   const url = String(source.sourceUrl || '');
-  return source.retailerKey === 'spar'
+  const sourceRetailerFormat = String(source.sourceRetailerFormat || '').toLowerCase();
+  return ['spar', 'eurospar', 'interspar'].includes(sourceRetailerFormat)
     && (source.sourceType === 'pdf' || /\/(?:getPdf|ViewPdf)\.ashx$/i.test(url))
     && /https:\/\/flugblatt\.(?:spar|interspar)\.at\//i.test(url);
 }
@@ -4867,6 +4874,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
     let parserDetails = {};
     let sourceMessage = '';
     let extraRejectionReasons = [];
+    let forcePartialStatus = false;
 
     if (source.retailerKey === 'hofer' && source.channel === 'official-flyer') {
       const hoferResult = await crawlHoferOfficialPages({
@@ -4926,6 +4934,49 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       rawCandidateCount += pennyOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...pennyOfficialResult.offerDocuments);
       parserDetails.pennyOfficialSite = pennyOfficialResult.diagnostics || {};
+    } else if (source.parserHint === 'official-category-actions') {
+      const promotionResult = extractAndNormalizeOfficialCategoryPromotions({
+        html,
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+      });
+      const seenPromotionKeys = new Set();
+      const offerDocuments = enrichOffersForStorage(promotionResult.offers, {
+        source,
+        sourceType: CATEGORY_PROMOTION_SOURCE_TYPE,
+        parserVersion: CATEGORY_PROMOTION_PARSER_VERSION,
+        normalizationVersion: NORMALIZATION_VERSION,
+      })
+        .filter((offer) => {
+          const key = offer.dedupeKey || offer.offerKey || offer.title;
+          if (seenPromotionKeys.has(key)) return false;
+          seenPromotionKeys.add(key);
+          return true;
+        });
+      const refreshResult = await replaceOffersForSource({
+        sourceId: source._id,
+        offerDocuments,
+        crawlJobId: crawlJob._id,
+        sourceRunStatus: offerDocuments.length > 0 ? 'success' : 'partial',
+        replacementQuality: offerDocuments.length > 0 ? 'complete' : 'partial',
+      });
+
+      offersStored += offerDocuments.length;
+      rawCandidateCount += promotionResult.candidates.length || 0;
+      allStoredOffers.push(...offerDocuments);
+      parserDetails.officialCategoryPromotions = {
+        parserVersion: CATEGORY_PROMOTION_PARSER_VERSION,
+        sourceKey: sourceKeyForActionSource(source),
+        rawCandidateCount: promotionResult.candidates.length,
+        parsedOffers: offerDocuments.length,
+        refreshResult,
+      };
+
+      if (offerDocuments.length === 0) {
+        forcePartialStatus = true;
+        sourceMessage = 'Official category action source fetched but no trusted category promotions were parsed.';
+      }
     } else if (source.retailerKey === 'lidl' && source.sourceUrl.includes('lidl.at/c/flugblatt')) {
       const lidlOfficialResult = await crawlLidlOfficialFlyers({
         source,
@@ -4978,7 +5029,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += nestedDocuments.filter((item) => item && !item.error).length;
     }
 
-    const status = offersStored > 0 || evidenceMatched > 0 || links.length > 0 ? 'success' : 'partial';
+    const status = forcePartialStatus ? 'partial' : (offersStored > 0 || evidenceMatched > 0 || links.length > 0 ? 'success' : 'partial');
     if (status === 'partial' && sourceMessage) {
       warningMessages = warningMessages.concat(sourceMessage);
     }

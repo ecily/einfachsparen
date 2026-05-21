@@ -121,6 +121,33 @@ function getSavingsPercent(offer) {
   return Number.isFinite(percent) && percent > 0 ? Math.round(percent) : 0
 }
 
+function getPromotionPercentLabel(offer) {
+  const upToPercent = Number(offer?.discountUpToPercent)
+  const discountPercent = Number(offer?.discountPercent)
+
+  if (Number.isFinite(upToPercent) && upToPercent > 0) {
+    return `bis zu -${Math.round(upToPercent)} %`
+  }
+
+  if (Number.isFinite(discountPercent) && discountPercent > 0) {
+    return `-${Math.round(discountPercent)} %`
+  }
+
+  return ''
+}
+
+function isPriceOptionalPromotion(offer, currentPriceAmount) {
+  const offerType = String(offer?.offerType || '')
+  return (
+    ['category-promotion', 'percent-promotion'].includes(offerType) ||
+    (getPromotionPercentLabel(offer) && !Number.isFinite(currentPriceAmount))
+  )
+}
+
+function getPromotionScopeLabel(offer) {
+  return String(offer?.promotionScope || offer?.appliesToCategory || '').replace(/-/g, ' ').trim()
+}
+
 function getCompactConditionText(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
 
@@ -179,6 +206,9 @@ export function OfferCardConsumer({
   const hasSavings = displaySavingsAmount > 0 && (referenceInfo.amount > 0 || snapshotHasSavings)
   const currentPriceAmount = getNumericAmount(offer?.priceCurrent ?? offer?.price)
   const currentPriceCurrency = getPriceCurrency(offer?.priceCurrent) || getPriceCurrency(offer?.price) || 'EUR'
+  const promotionPercentLabel = getPromotionPercentLabel(offer)
+  const priceOptionalPromotion = isPriceOptionalPromotion(offer, currentPriceAmount)
+  const promotionScopeLabel = getPromotionScopeLabel(offer)
   const unitPriceText = showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : ''
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
   const cardClassName = [
@@ -243,25 +273,35 @@ export function OfferCardConsumer({
             </div>
           ) : null}
 
-          <div className="user-card__price">
-            <div className="user-card__price-row">
-              <strong>{formatPrice(currentPriceAmount, currentPriceCurrency)}</strong>
-              {hasSavings && savingsPercent > 0 ? <span className="user-card__discount-badge">-{savingsPercent} %</span> : null}
-              {hasSavings ? (
-                <span className="user-card__savings-chip">
-                  Spart {displaySavingsIsApproximate ? 'ca. ' : ''}{formatPrice(displaySavingsAmount, currentPriceCurrency)}
-                </span>
-              ) : (
-                <span className="user-card__action-price-badge">Aktionspreis</span>
-              )}
+          {priceOptionalPromotion ? (
+            <div className="user-card__price user-card__price--promotion">
+              <div className="user-card__price-row">
+                <strong>{promotionPercentLabel || 'Prozentaktion'}</strong>
+                <span className="user-card__action-price-badge">Kategorieaktion</span>
+              </div>
+              {promotionScopeLabel ? <span className="user-card__reference-price">{promotionScopeLabel}</span> : null}
             </div>
-            {referenceInfo.amount ? (
-              <span className="user-card__reference-price">
-                {referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}
-              </span>
-            ) : null}
-            {unitPriceText ? <span className="user-card__unit-price-badge">{unitPriceText}</span> : null}
-          </div>
+          ) : (
+            <div className="user-card__price">
+              <div className="user-card__price-row">
+                <strong>{formatPrice(currentPriceAmount, currentPriceCurrency)}</strong>
+                {hasSavings && savingsPercent > 0 ? <span className="user-card__discount-badge">-{savingsPercent} %</span> : null}
+                {hasSavings ? (
+                  <span className="user-card__savings-chip">
+                    Spart {displaySavingsIsApproximate ? 'ca. ' : ''}{formatPrice(displaySavingsAmount, currentPriceCurrency)}
+                  </span>
+                ) : (
+                  <span className="user-card__action-price-badge">Aktionspreis</span>
+                )}
+              </div>
+              {referenceInfo.amount ? (
+                <span className="user-card__reference-price">
+                  {referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}
+                </span>
+              ) : null}
+              {unitPriceText ? <span className="user-card__unit-price-badge">{unitPriceText}</span> : null}
+            </div>
+          )}
         </div>
 
         {hasActions ? (

@@ -147,3 +147,19 @@ test('adds search token metadata to offer documents', () => {
   assert.ok(offer.searchTokens.includes('caffe'));
   assert.ok(offer.searchTokens.includes('lavazza'));
 });
+
+test('indexes category promotion scope, conditions and explicit search keywords', () => {
+  const tokens = buildOfferSearchTokens({
+    offerType: 'category-promotion',
+    title: 'bis zu -25% auf alle Waschmittel, Fein- & Spezialwaschmittel inkl. Weichspueler',
+    promotionScope: 'waschmittel',
+    appliesToCategory: 'waschmittel',
+    conditionsText: 'gilt auch fuer Feinwaschmittel und Spezialwaschmittel inkl. Weichspueler',
+    categorySecondary: 'Waschmittel & Reiniger',
+    searchText: 'waschmittel weichspueler feinwaschmittel spezialwaschmittel',
+  });
+
+  for (const token of ['waschmittel', 'weichspueler', 'feinwaschmittel', 'spezialwaschmittel']) {
+    assert.equal(tokens.includes(token), true);
+  }
+});
