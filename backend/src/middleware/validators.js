@@ -183,8 +183,9 @@ function validatePublicPayloadSize(req, res, next) {
 
 function validateRankingQuery(req, res, next) {
   try {
-    const hasExplicitOffset = Object.prototype.hasOwnProperty.call(req.query, 'offset');
-    const rawLimit = String(req.query.limit || '30').trim().toLowerCase();
+    const rawQuery = req.query || {};
+    const hasExplicitOffset = Object.prototype.hasOwnProperty.call(rawQuery, 'offset');
+    const rawLimit = String(rawQuery.limit || '30').trim().toLowerCase();
 
     if (rawLimit === 'all') {
       rejectBadRequest('limit=all ist oeffentlich nicht erlaubt.');
@@ -196,49 +197,63 @@ function validateRankingQuery(req, res, next) {
       rejectBadRequest('limit ist ungueltig.');
     }
 
-    req.query.limit = Math.min(parsedLimit, MAX_RANKING_LIMIT);
-    const rawOffset = String(req.query.offset || '0').trim();
+    const limit = Math.min(parsedLimit, MAX_RANKING_LIMIT);
+    const rawOffset = String(rawQuery.offset || '0').trim();
     const parsedOffset = Number(rawOffset);
 
     if (!Number.isInteger(parsedOffset) || parsedOffset < 0 || parsedOffset > MAX_RANKING_OFFSET) {
       rejectBadRequest('offset ist ungueltig.');
     }
 
-    req.query.offset = parsedOffset;
-    req.query.offsetExplicit = hasExplicitOffset;
-    req.query.q = normalizeString(req.query.q || '', { field: 'q', maxLength: MAX_QUERY_LENGTH });
-    req.query.categories = normalizeFlexibleStringList(req.query.categories, {
+    const offset = parsedOffset;
+    const q = normalizeString(rawQuery.q || '', { field: 'q', maxLength: MAX_QUERY_LENGTH });
+    const categories = normalizeFlexibleStringList(rawQuery.categories, {
       field: 'categories',
       maxValues: MAX_RANKING_CATEGORY_VALUES,
       maxLength: MAX_LIST_VALUE_LENGTH,
       maxTotalLength: MAX_RANKING_CATEGORIES_LENGTH,
     });
-    req.query.retailers = normalizeStringList(req.query.retailers, {
+    const retailers = normalizeStringList(rawQuery.retailers, {
       field: 'retailers',
       maxValues: MAX_RANKING_RETAILER_VALUES,
       maxLength: MAX_LIST_VALUE_LENGTH,
       maxTotalLength: MAX_RANKING_RETAILERS_LENGTH,
     });
-    req.query.programRetailers = normalizeStringList(req.query.programRetailers, {
+    const programRetailers = normalizeStringList(rawQuery.programRetailers, {
       field: 'programRetailers',
       maxValues: MAX_RANKING_RETAILER_VALUES,
       maxLength: MAX_LIST_VALUE_LENGTH,
       maxTotalLength: MAX_RANKING_RETAILERS_LENGTH,
     });
-    req.query.unit = normalizeString(req.query.unit || 'all', { field: 'unit', maxLength: MAX_UNIT_LENGTH }) || 'all';
-    req.query.resultSetToken = normalizeString(req.query.resultSetToken || '', {
+    const unit = normalizeString(rawQuery.unit || 'all', { field: 'unit', maxLength: MAX_UNIT_LENGTH }) || 'all';
+    const resultSetToken = normalizeString(rawQuery.resultSetToken || '', {
       field: 'resultSetToken',
       maxLength: MAX_RESULT_SET_TOKEN_LENGTH,
     });
-    req.query.debugTiming = normalizeBooleanString(req.query.debugTiming);
+    const debugTiming = normalizeBooleanString(rawQuery.debugTiming);
 
-    const sort = normalizeString(req.query.sort || '', { field: 'sort', maxLength: 20 });
+    const sort = normalizeString(rawQuery.sort || '', { field: 'sort', maxLength: 20 });
     if (!allowedSortValues.has(sort)) {
       rejectBadRequest('sort ist ungueltig.');
     }
 
-    req.query.sort = sort;
-    req.query.onlyWithoutProgram = normalizeBooleanString(req.query.onlyWithoutProgram);
+    const onlyWithoutProgram = normalizeBooleanString(rawQuery.onlyWithoutProgram);
+    req.validatedRankingQuery = {
+      limit,
+      offset,
+      offsetExplicit: hasExplicitOffset,
+      q,
+      categories,
+      retailers,
+      programRetailers,
+      unit,
+      resultSetToken,
+      debugTiming,
+      sort,
+      onlyWithoutProgram,
+    };
+
+    Object.assign(req.query, req.validatedRankingQuery);
     return next();
   } catch (error) {
     return next(error);

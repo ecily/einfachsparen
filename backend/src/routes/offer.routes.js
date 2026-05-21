@@ -40,18 +40,19 @@ function parseSafeImageUrl(value) {
 
 router.get('/ranking', offersRateLimit, validateRankingQuery, async (req, res, next) => {
   try {
+    const query = req.validatedRankingQuery || req.query;
     const ranking = await buildOfferRanking({
-      categories: req.query.categories || '',
-      query: req.query.q || '',
-      unit: req.query.unit || 'all',
-      retailers: req.query.retailers || '',
-      programRetailers: req.query.programRetailers || '',
-      onlyWithoutProgram: req.query.onlyWithoutProgram || false,
-      limit: req.query.limit || 30,
-      offset: req.query.offset || 0,
-      offsetExplicit: req.query.offsetExplicit === true,
-      resultSetToken: req.query.resultSetToken || '',
-      debugTiming: req.query.debugTiming === true,
+      categories: query.categories || '',
+      query: query.q || '',
+      unit: query.unit || 'all',
+      retailers: query.retailers || '',
+      programRetailers: query.programRetailers || '',
+      onlyWithoutProgram: query.onlyWithoutProgram || false,
+      limit: query.limit || 30,
+      offset: query.offset || 0,
+      offsetExplicit: query.offsetExplicit === true,
+      resultSetToken: query.resultSetToken || '',
+      debugTiming: query.debugTiming === true,
     });
 
     res.json(ranking);

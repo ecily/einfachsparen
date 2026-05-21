@@ -106,6 +106,20 @@ test('accepts normal search query with limit 60', () => {
   assert.equal(req.query.offsetExplicit, true);
   assert.equal(req.query.resultSetToken, 'abc_DEF-123');
   assert.equal(req.query.debugTiming, true);
+  assert.deepEqual(req.validatedRankingQuery, {
+    q: 'butter',
+    limit: 60,
+    offset: 60,
+    offsetExplicit: true,
+    categories: '',
+    retailers: '',
+    programRetailers: '',
+    unit: 'all',
+    resultSetToken: 'abc_DEF-123',
+    debugTiming: true,
+    sort: '',
+    onlyWithoutProgram: false,
+  });
 });
 
 test('defaults ranking offset to zero and rejects invalid offsets', () => {
