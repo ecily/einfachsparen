@@ -10,6 +10,7 @@ import {
   loadCheckedShoppingListItems,
   storeCheckedShoppingListItems,
 } from '../../utils/shoppingList'
+import { formatRetailerName } from '../../utils/retailers'
 
 function formatPrice(amount, currency = 'EUR') {
   const numericAmount = Number(amount)
@@ -61,26 +62,7 @@ function getValidityText(item) {
 }
 
 function normalizeRetailerName(value) {
-  const name = String(value || '').trim()
-
-  if (!name) {
-    return 'Markt'
-  }
-
-  const knownNames = {
-    adeg: 'ADEG',
-    billa: 'BILLA',
-    'billa plus': 'BILLA PLUS',
-    billaplus: 'BILLA PLUS',
-    eurospar: 'EUROSPAR',
-    hofer: 'HOFER',
-    interspar: 'INTERSPAR',
-    lidl: 'LIDL',
-    spar: 'SPAR',
-  }
-  const normalized = name.toLowerCase().replace(/[^a-zäöüß]+/g, ' ').trim()
-
-  return knownNames[normalized] || name
+  return formatRetailerName(value)
 }
 
 function getOfferCountText(count) {

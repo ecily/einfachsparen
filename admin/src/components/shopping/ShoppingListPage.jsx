@@ -3,6 +3,7 @@ import { createSharedShoppingList } from '../../api'
 import { SectionCard } from '../layout/SectionCard'
 import { OfferCardConsumer } from '../search/OfferCardConsumer'
 import { getRetailerTheme } from '../../utils/retailerColors'
+import { formatRetailerName } from '../../utils/retailers'
 import {
   buildShareSnapshot,
   getRetailerGroupSummary,
@@ -59,26 +60,7 @@ function formatPrice(amount, currency = 'EUR') {
 }
 
 function normalizeRetailerName(value) {
-  const name = String(value || '').trim()
-
-  if (!name) {
-    return 'Markt'
-  }
-
-  const knownNames = {
-    adeg: 'ADEG',
-    billa: 'BILLA',
-    'billa plus': 'BILLA PLUS',
-    billaplus: 'BILLA PLUS',
-    eurospar: 'EUROSPAR',
-    hofer: 'HOFER',
-    interspar: 'INTERSPAR',
-    lidl: 'LIDL',
-    spar: 'SPAR',
-  }
-  const normalized = name.toLowerCase().replace(/[^a-zäöüß]+/g, ' ').trim()
-
-  return knownNames[normalized] || name
+  return formatRetailerName(value)
 }
 
 function getArticleCountText(count) {

@@ -9,6 +9,7 @@ import {
 } from '../../utils/offers'
 import { formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
 import { getRetailerTheme } from '../../utils/retailerColors'
+import { formatRetailerName } from '../../utils/retailers'
 
 function formatPrice(amount, currency = 'EUR') {
   if (amount === null || amount === undefined || amount === '') {
@@ -45,26 +46,7 @@ function getRetailerColorKey(offer) {
 }
 
 function normalizeRetailerName(value) {
-  const name = String(value || '').trim()
-
-  if (!name) {
-    return 'Markt'
-  }
-
-  const knownNames = {
-    adeg: 'ADEG',
-    billa: 'BILLA',
-    'billa plus': 'BILLA PLUS',
-    billaplus: 'BILLA PLUS',
-    eurospar: 'EUROSPAR',
-    hofer: 'HOFER',
-    interspar: 'INTERSPAR',
-    lidl: 'LIDL',
-    spar: 'SPAR',
-  }
-  const normalized = name.toLowerCase().replace(/[^a-zäöüß]+/g, ' ').trim()
-
-  return knownNames[normalized] || name
+  return formatRetailerName(value)
 }
 
 function getShortCategory(offer) {

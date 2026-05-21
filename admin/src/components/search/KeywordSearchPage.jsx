@@ -10,6 +10,7 @@ import {
   normalizeRetailerKey,
 } from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
+import { formatRetailerName } from '../../utils/retailers'
 
 const KEYWORD_SEARCH_LIMIT = 60
 
@@ -30,7 +31,7 @@ function normalizeKey(value) {
 }
 
 function getRetailerLabel(retailer) {
-  return String(
+  const label = String(
     retailer?.label ||
       retailer?.name ||
       retailer?.retailerLabel ||
@@ -39,6 +40,8 @@ function getRetailerLabel(retailer) {
       retailer?.key ||
       ''
   ).trim()
+
+  return formatRetailerName(label, '')
 }
 
 function getRetailerKey(retailer) {
@@ -54,7 +57,7 @@ function getOfferRetailerLabel(offer) {
   const marketObject = typeof offer?.market === 'object' ? offer.market : null
   const shopObject = typeof offer?.shop === 'object' ? offer.shop : null
 
-  return String(
+  const label = String(
     offer?.retailerLabel ||
       offer?.retailerName ||
       offer?.providerLabel ||
@@ -74,6 +77,8 @@ function getOfferRetailerLabel(offer) {
       (typeof offer?.shop === 'string' ? offer.shop : '') ||
       ''
   ).trim()
+
+  return formatRetailerName(label, '')
 }
 
 function getOfferRetailerKey(offer) {
@@ -146,10 +151,14 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
   const [activeSearchScrollKey, setActiveSearchScrollKey] = useState(0)
   const offers = useMemo(() => flattenRankingOffers(ranking), [ranking])
   const availableRetailers = useMemo(() => buildAvailableRetailers(retailers), [retailers])
+  const activeRetailerKeys = useMemo(
+    () => (marketFilterEnabled ? selectedRetailerKeys : []),
+    [marketFilterEnabled, selectedRetailerKeys]
+  )
   const visibleOffers = useMemo(() => {
-    if (marketFilterEnabled && selectedRetailerKeys.length === 0) return []
+    if (marketFilterEnabled && activeRetailerKeys.length === 0) return []
 
-    const selectedRetailers = new Set(selectedRetailerKeys)
+    const selectedRetailers = new Set(activeRetailerKeys)
 
     return offers
       .map((offer, index) => ({
@@ -177,7 +186,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         return left.index - right.index
       })
       .map((item) => item.offer)
-  }, [marketFilterEnabled, offers, selectedRetailerKeys, sortMode])
+  }, [activeRetailerKeys, marketFilterEnabled, offers, sortMode])
   const needsMarketSelection = marketFilterEnabled && selectedRetailerKeys.length === 0
   const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
@@ -230,6 +239,13 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
   useEffect(() => {
     if (!submittedQuery) return undefined
 
+    if (marketFilterEnabled && activeRetailerKeys.length === 0) {
+      setLoading(false)
+      setLoadingMore(false)
+      setLoadMoreError('')
+      return undefined
+    }
+
     let active = true
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
@@ -243,11 +259,13 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         setHint('')
 
         trackAnalyticsEvent('offer_search_started', {
-          selectedRetailerCount: 0,
+          selectedRetailerCount: activeRetailerKeys.length,
           selectedCategoryCount: 0,
         })
 
-        const rankingResult = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, 0)
+        const rankingResult = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, 0, '', {
+          retailers: activeRetailerKeys,
+        })
 
         if (!active || requestId !== requestIdRef.current) return
 
@@ -258,7 +276,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
           resultCount,
           safeOfferCount: 0,
           actionOfferCount: resultCount,
-          selectedRetailerCount: 0,
+          selectedRetailerCount: activeRetailerKeys.length,
           selectedCategoryCount: 0,
         })
       } catch {
@@ -275,7 +293,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     return () => {
       active = false
     }
-  }, [submittedQuery])
+  }, [activeRetailerKeys, marketFilterEnabled, submittedQuery])
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -340,7 +358,10 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         submittedQuery,
         KEYWORD_SEARCH_LIMIT,
         pagination.nextOffset,
-        ranking?.summary?.resultSetToken || ''
+        ranking?.summary?.resultSetToken || '',
+        {
+          retailers: activeRetailerKeys,
+        }
       )
 
       if (requestId !== requestIdRef.current) return

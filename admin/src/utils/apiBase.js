@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../api'
 import { SITE_URL } from '../config/constants'
 import { normalizeRetailerKey } from './offers'
+import { formatRetailerName } from './retailers'
 
 export const ADMIN_API_KEY_STORAGE_KEY = 'kaufklug.adminApiKey.v1'
 
@@ -194,7 +195,10 @@ export async function fetchFilterRetailers() {
     .filter((item) => item && typeof item === 'object')
     .map((item, index) => ({
       retailerKey: item.retailerKey || normalizeRetailerKey(item.retailerName || `retailer-${index}`),
-      retailerName: item.retailerName || item.name || item.retailerKey || `Supermarkt ${index + 1}`,
+      retailerName: formatRetailerName(
+        item.retailerName || item.name || item.retailerKey,
+        `Supermarkt ${index + 1}`
+      ),
       offerCount: Number(item.offerCount || 0),
       activeOfferCount: Number(item.activeOfferCount || item.offerCount || 0),
       totalOffers: Number(item.totalOffers || item.offerCount || 0),
@@ -232,12 +236,24 @@ export async function fetchOfferRankingDirect(params = {}) {
   return fetchJson(`/offers/ranking${suffix}`)
 }
 
-export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0, resultSetToken = '') {
+export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0, resultSetToken = '', options = {}) {
   const searchParams = new URLSearchParams()
   searchParams.set('q', String(query || '').trim())
   searchParams.set('limit', String(limit))
   searchParams.set('offset', String(offset))
   if (resultSetToken) searchParams.set('resultSetToken', String(resultSetToken))
+
+  const retailerKeys = Array.isArray(options?.retailers)
+    ? options.retailers
+    : String(options?.retailers || '').split(',')
+
+  const scopedRetailers = retailerKeys
+    .map((retailerKey) => String(retailerKey || '').trim())
+    .filter(Boolean)
+
+  if (scopedRetailers.length > 0) {
+    searchParams.set('retailers', scopedRetailers.join(','))
+  }
 
   return fetchJson(`/offers/ranking?${searchParams.toString()}`)
 }

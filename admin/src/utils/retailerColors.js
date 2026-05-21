@@ -1,4 +1,4 @@
-import { normalizeRetailerKey } from './offers'
+import { normalizeRetailerFormatKey } from './retailers'
 
 const RETAILER_COLORS = {
   bipa: '#ec4f86',
@@ -19,11 +19,7 @@ const RETAILER_TEXT_COLORS = {
 }
 
 function normalizeColorKey(value) {
-  const key = normalizeRetailerKey(value).replace(/_/g, '-')
-
-  if (key === 'billaplus' || key === 'billa-plus-markt') return 'billa-plus'
-
-  return key
+  return normalizeRetailerFormatKey(value)
 }
 
 function hexToRgb(hexColor) {
