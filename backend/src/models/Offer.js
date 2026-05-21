@@ -148,6 +148,10 @@ const offerSchema = new mongoose.Schema(
     rawFacts: { type: mongoose.Schema.Types.Mixed, default: {} },
     firstSeenAt: { type: Date, default: Date.now, index: true },
     lastSeenAt: { type: Date, default: Date.now, index: true },
+    lastSeenRunId: { type: String, default: '', index: true },
+    lastSeenSourceRunId: { type: String, default: '', index: true },
+    deactivatedAt: { type: Date, default: null, index: true },
+    deactivationReason: { type: String, default: '', index: true },
     needsReview: { type: Boolean, default: false, index: true },
     reviewReasons: [{ type: String }],
     adminReview: {

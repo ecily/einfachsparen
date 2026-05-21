@@ -2404,6 +2404,20 @@ test('fresh active filter removes expired and stale offers but keeps recent miss
   );
 });
 
+test('fresh active filter removes soft-deactivated repair offers', () => {
+  const repaired = offer({
+    title: 'Repair deaktiviert',
+    status: 'expired',
+    isActiveNow: false,
+    validTo: null,
+    sourceType: 'aktionsfinder-json',
+    deactivatedAt: new Date('2026-05-21T12:00:00.000Z'),
+    deactivationReason: 'freshness-repair-stale-aktionsfinder',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([repaired], new Date('2026-05-21T13:00:00.000Z')), []);
+});
+
 test('response dedupe keeps priced aggregator when official duplicate has no usable price', () => {
   const aggregator = offer({
     _id: 'priced-aggregator',
