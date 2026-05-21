@@ -102,7 +102,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v7-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v1-multiterm-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v7-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-multiterm-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -693,7 +693,23 @@ const QUERY_CONTEXTS = [
     exactProductIntent: ['maerzen', 'marzen', 'pils', 'radler'],
     productContext: ['bier', 'getraenke', 'getranke'],
     weakContexts: ['bierwurst', 'bierschinken'],
-    severeWeakContexts: ['shorts', 'bekleidung', 'textil', 'kleinkinder', 'kinderbekleidung', 'damenbekleidung', 'herrenbekleidung'],
+    severeWeakContexts: [
+      'balsam',
+      'bekleidung',
+      'colorin',
+      'damenbekleidung',
+      'haarpflege',
+      'herrenbekleidung',
+      'kleinkinder',
+      'kinderbekleidung',
+      'koerperpflege',
+      'korperpflege',
+      'kosmetik',
+      'pflege',
+      'shampoo',
+      'shorts',
+      'textil',
+    ],
   },
   {
     key: 'reis',
@@ -1464,10 +1480,16 @@ function getLipButterOfferIntent({ titleTokens, categoryTokens, comparisonTokens
     'lippenpflege',
     'pflege',
   ]);
+  const hardFoodProductSide = hasAnyTokenFamily(productTokens, [
+    'erdnuss',
+    'erdnussbutter',
+    'peanut',
+    'teebutter',
+  ]);
   const lipButter =
     hasAnyTokenFamily(productTokens, ['lipbutter', 'lippenbutter']) ||
     (hasAnyTokenFamily(productTokens, ['lip', 'lippen']) && hasAnyTokenFamily(productTokens, ['butter'])) ||
-    (hasAnyTokenFamily(productTokens, ['butter']) && careContext);
+    (hasAnyTokenFamily(productTokens, ['butter']) && careContext && !hardFoodProductSide);
   const foodSide = hasAnyTokenFamily(allTokens, [
     'erdnuss',
     'erdnussbutter',
@@ -1479,7 +1501,7 @@ function getLipButterOfferIntent({ titleTokens, categoryTokens, comparisonTokens
   ]);
 
   return {
-    foodSide: foodSide && !lipButter,
+    foodSide: hardFoodProductSide || (foodSide && !lipButter),
     lipButter,
   };
 }

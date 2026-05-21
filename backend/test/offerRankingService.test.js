@@ -170,6 +170,37 @@ test('beer query keeps beverage radler but rejects Radler shorts side hits', () 
   assert.equal(scoreOfferAgainstQuery(shorts, 'bier'), 0);
 });
 
+test('beer query rejects hair care weizen false positives even when category is misclassified', () => {
+  const beer = offer({
+    title: 'Hadmar Bio Bier 6x0,5l',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    searchText: 'hadmar bio bier getraenke',
+  });
+  const balsam = offer({
+    title: 'Glem Vital Balsam Weizen',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    searchText: 'glem vital balsam weizen bier',
+  });
+  const shampoo = offer({
+    title: 'Glem Vital Pflege Shampoo Weizen & Colorin',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    searchText: 'glem vital pflege shampoo weizen colorin bier',
+  });
+
+  assert.deepEqual(applyQueryMatch([balsam, beer, shampoo], 'bier').map((item) => item.title), [
+    'Hadmar Bio Bier 6x0,5l',
+  ]);
+});
+
 test('umlaut oil query stays tokenized and does not fall back to broad regex search', () => {
   const oilQueryTokens = ['oel', ...FOOD_OIL_PRODUCT_TOKENS].sort();
 
@@ -668,8 +699,14 @@ test('explicit lip butter query ranks lip care before food butter and generic bu
     categorySecondary: 'Milchprodukte',
     comparisonGroup: 'schaerdinger-oesterreichische-teebutter::0.25-kg',
   });
+  const misclassifiedPeanutButter = offer({
+    title: 'Bonne Maman Erdnuss Butter Creme Crunchy',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Koerperpflege',
+    comparisonGroup: 'bonne-maman-erdnuss-butter-creme-crunchy::0.35-kg',
+  });
 
-  assert.deepEqual(applyQueryMatch([foodButter, lipButter], 'lip butter').map((item) => item.title), [
+  assert.deepEqual(applyQueryMatch([foodButter, lipButter, misclassifiedPeanutButter], 'lip butter').map((item) => item.title), [
     'pure Softening Lip Butter',
   ]);
   assert.deepEqual(applyQueryMatch([foodButter, lipButter], 'butter').map((item) => item.title), [
@@ -3481,7 +3518,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v7-source-quality-search-token-v2-pet-food-lip-butter-v1-multiterm-v1',
+    schemaVersion: 'ranking-cache-v7-source-quality-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-multiterm-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
