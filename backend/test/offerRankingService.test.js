@@ -213,6 +213,39 @@ test('generic oil candidate search recalls explicit food oil tokens without side
   assert.doesNotMatch(serialized, /haaroel|duftoel|motoroel|pflegeoel/);
 });
 
+test('generic oil query recalls Bellasan rapeseed oil without broad substring fallback', () => {
+  const offerDocument = offer({
+    title: 'BELLASAN Raps\u00f6l*, 1 l',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Saucen, Oele & Gewuerze',
+    comparisonGroup: 'bellasan-rapsoel::1-l',
+    searchText: 'bellasan rapsoel saucen oele gewuerze hofer',
+    searchTokens: ['bellasan', 'gewuerze', 'hofer', 'lebensmittel', 'oel', 'rapsoel', 'saucen'],
+    searchTokenVersion: 2,
+  });
+  const sideHit = offer({
+    title: 'Naehr-Shampoo EI-Oel 200 ml',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Haarpflege',
+    comparisonGroup: 'naehr-shampoo-ei-oel::0.2-l',
+    searchText: 'naehr shampoo ei oel haarpflege',
+    searchTokens: ['ei', 'haarpflege', 'naehr', 'oel', 'shampoo'],
+    searchTokenVersion: 2,
+  });
+  const match = buildRankingCandidateMatch({ query: 'oel' });
+
+  assert.equal(match.$and[0].searchTokens.$in.includes('rapsoel'), true);
+  assert.equal(buildRankingCandidateQueryMetadata({ query: 'oel' }).candidateQueryMode, 'searchTokensOnly');
+  assert.deepEqual(applyQueryMatch([sideHit, offerDocument], '\u00f6l').map((item) => item.title), [
+    'BELLASAN Raps\u00f6l*, 1 l',
+  ]);
+  assert.deepEqual(applyQueryMatch([sideHit, offerDocument], 'oel').map((item) => item.title), [
+    'BELLASAN Raps\u00f6l*, 1 l',
+  ]);
+  assert.equal(scoreOfferAgainstQuery(offerDocument, 'rapsoel') > 0, true);
+  assert.equal(scoreOfferAgainstQuery(offerDocument, 'Rapsoel') > 0, true);
+});
+
 test('unicode hair oil query stays tokenized like ascii variants', () => {
   for (const query of ['haar\u00f6l', 'haaroel', 'haarol', 'haar\ufffdl', 'haar\u00c3\u00b6l']) {
     assert.deepEqual(buildRankingCandidateQueryMetadata({ query }), {
@@ -3223,7 +3256,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2-oil-recall-v1',
+    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2-oil-recall-v2',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
