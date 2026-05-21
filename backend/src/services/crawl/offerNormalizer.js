@@ -6,6 +6,11 @@ const {
 } = require('./categoryClassifier');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
+const {
+  buildOfferStatus,
+  hasExplicitExpiredEvidence,
+  parseAktionsfinderDateRange,
+} = require('../offers/offerFreshness');
 
 function parseNumericAmount(value) {
   if (value === null || value === undefined || value === '$undefined') {
@@ -109,31 +114,13 @@ function isValidDateValue(value) {
   return !Number.isNaN(date.getTime());
 }
 
-function parseAktionsfinderLeafletRange(value) {
-  const match = String(value || '').match(/-(\d{2})-(\d{2})-(\d{4})-(\d{2})-(\d{2})-(\d{4})\/?$/);
-
-  if (!match) {
-    return {
-      validFrom: null,
-      validTo: null,
-    };
-  }
-
-  const [, fromDay, fromMonth, fromYear, toDay, toMonth, toYear] = match.map(Number);
-
-  return {
-    validFrom: new Date(Date.UTC(fromYear, fromMonth - 1, fromDay, 12, 0, 0)),
-    validTo: new Date(Date.UTC(toYear, toMonth - 1, toDay, 12, 0, 0)),
-  };
-}
-
 function buildSafeOfferValidityEvidence(promotion = {}) {
   const explicitFrom = isValidDateValue(promotion.validFrom) ? new Date(promotion.validFrom) : null;
   const explicitTo = isValidDateValue(promotion.validTo) ? new Date(promotion.validTo) : null;
   const directLeafletHref = sanitizeWhitespace(promotion.leafletHref || promotion.leaflet?.href || '');
   const directClickoutUrl = sanitizeWhitespace(promotion.clickoutUrl || '');
-  const leafletRange = parseAktionsfinderLeafletRange(directLeafletHref);
-  const clickoutRange = parseAktionsfinderLeafletRange(directClickoutUrl);
+  const leafletRange = parseAktionsfinderDateRange(directLeafletHref);
+  const clickoutRange = parseAktionsfinderDateRange(directClickoutUrl);
 
   if (explicitFrom && explicitTo) {
     return {
@@ -430,37 +417,6 @@ function determineEffectiveDiscountType({ benefitType, customerProgramRequired, 
   return 'unknown';
 }
 
-function buildOfferStatus(validFrom, validTo, snapshotCurrent = false) {
-  const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
-  const hasStarted = validFrom ? validFrom <= now : false;
-  const hasNotEnded = validTo ? validTo >= now : false;
-  const overlapsToday =
-    (!validFrom || validFrom <= endOfToday) &&
-    (!validTo || validTo >= startOfToday);
-
-  let status = 'unknown';
-
-  if (snapshotCurrent) {
-    status = 'active';
-  } else if (validFrom && validFrom > now) {
-    status = 'upcoming';
-  } else if (validTo && validTo < now) {
-    status = 'expired';
-  } else if ((validFrom || validTo) && (hasStarted || !validFrom) && (hasNotEnded || !validTo)) {
-    status = 'active';
-  }
-
-  return {
-    status,
-    isActiveNow: status === 'active',
-    isActiveToday: overlapsToday,
-  };
-}
-
 function buildSearchText({
   retailerName = '',
   brand = '',
@@ -536,7 +492,7 @@ function buildNormalizedUnitPrice(promotion) {
   };
 }
 
-function buildCompactRawFacts({ promotion, requirement, validityEvidence, conditionsText }) {
+function buildCompactRawFacts({ promotion, requirement, validityEvidence, conditionsText, explicitExpired }) {
   const tags = Array.isArray(promotion?.tags) ? promotion.tags.slice(0, 5).map((tag) => sanitizeWhitespace(tag)) : [];
   const infoParts = [promotion?.description, conditionsText].map((value) => sanitizeWhitespace(value)).filter(Boolean);
   const compact = {
@@ -548,6 +504,7 @@ function buildCompactRawFacts({ promotion, requirement, validityEvidence, condit
     clickoutUrl: validityEvidence?.clickoutUrl || '',
     promotionId: validityEvidence?.promotionId || '',
     validitySource: validityEvidence?.isSafe ? validityEvidence.validitySource : '',
+    explicitExpired: Boolean(explicitExpired),
     infoText: infoParts.join(' / '),
     discountPercentage: parseNumericAmount(promotion?.discountPercentage),
     minimalAcceptance: parseNumericAmount(promotion?.minimalAcceptance),
@@ -594,6 +551,10 @@ function buildCompactRawFacts({ promotion, requirement, validityEvidence, condit
 
   if (!compact.validitySource) {
     delete compact.validitySource;
+  }
+
+  if (!compact.explicitExpired) {
+    delete compact.explicitExpired;
   }
 
   if (compact.minimumPurchaseQuantity <= 1) {
@@ -673,6 +634,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   });
   const structuredQuantityFields = buildStructuredQuantityFields(product, quantityText, comparableBase);
   const validityEvidence = buildSafeOfferValidityEvidence(promotion);
+  const explicitExpired = hasExplicitExpiredEvidence(promotion);
   const safeClickoutUrl =
     typeof promotion.clickoutUrl === 'string' && promotion.clickoutUrl && promotion.clickoutUrl !== '$undefined'
       ? promotion.clickoutUrl
@@ -707,7 +669,8 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
   const statusInfo = buildOfferStatus(
     validityEvidence.validFrom,
     validityEvidence.validTo,
-    Boolean(promotion.snapshotCurrent)
+    Boolean(promotion.snapshotCurrent),
+    explicitExpired
   );
   const hasConditions = Boolean(conditionsText || customerProgramRequired || (requirement?.requiredQuantity || 1) > 1);
   const isMultiBuy = ['x-plus-y', 'x-for-y', 'multi-buy'].includes(requirement?.mechanic);
@@ -847,6 +810,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
         requirement,
         validityEvidence,
         conditionsText,
+        explicitExpired,
       }),
       categoryConfidence: categoryDecision.categoryConfidence,
       subcategoryConfidence: categoryDecision.subcategoryConfidence,

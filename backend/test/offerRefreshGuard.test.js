@@ -34,6 +34,28 @@ test('replaceOffersForSource keeps existing live offers when a source produced n
   assert.equal(calls.deleteMany.length, 0);
 });
 
+test('replaceOffersForSource can clear a successful empty source snapshot when explicitly allowed', async () => {
+  const calls = { insertMany: [], deleteMany: [] };
+
+  const result = await replaceOffersForSource({
+    sourceId: 'source-1',
+    crawlJobId: 'job-3',
+    offerDocuments: [],
+    allowEmptyReplacement: true,
+    OfferModel: buildOfferModel(calls),
+  });
+
+  assert.equal(result.insertedOffers, 0);
+  assert.equal(result.removedPreviousOffers, 2);
+  assert.equal(result.skippedPreviousOfferRemoval, false);
+  assert.equal(calls.insertMany.length, 0);
+  assert.equal(calls.deleteMany.length, 1);
+  assert.deepEqual(calls.deleteMany[0].filter, {
+    sourceId: 'source-1',
+    crawlJobId: { $ne: 'job-3' },
+  });
+});
+
 test('replaceOffersForSource inserts the new source snapshot before removing previous source offers', async () => {
   const calls = { insertMany: [], deleteMany: [] };
   const result = await replaceOffersForSource({

@@ -52,11 +52,11 @@ test('direct offer-level leafletHref range maps to validFrom and validTo', () =>
   });
 
   assert.equal(offer.validFrom.toISOString(), '2026-04-30T12:00:00.000Z');
-  assert.equal(offer.validTo.toISOString(), '2026-05-27T12:00:00.000Z');
+  assert.equal(offer.validTo.toISOString(), '2026-05-27T23:59:59.999Z');
   assert.equal(offer.rawFacts.validitySource, 'aktionsfinder-leaflet-range');
   assert.equal(offer.rawFacts.validityText, 'ab 2026-04-30 bis 2026-05-27');
   assert.equal(offer.rawFacts.validFrom, '2026-04-30T12:00:00.000Z');
-  assert.equal(offer.rawFacts.validTo, '2026-05-27T12:00:00.000Z');
+  assert.equal(offer.rawFacts.validTo, '2026-05-27T23:59:59.999Z');
   assert.equal(offer.rawFacts.leafletHref, '/l/penny-flugblatt-30-04-2026-27-05-2026/');
   assert.equal(offer.rawFacts.clickoutUrl, 'https://www.aktionsfinder.at/l/penny-flugblatt-30-04-2026-27-05-2026/');
   assert.equal(offer.rawFacts.promotionId, 'aktionsfinder-penny-123');
@@ -109,9 +109,66 @@ test('other retailers only get validity with the same direct offer-level proof',
   }, 'billa');
 
   assert.equal(safeBilla.validFrom.toISOString(), '2026-04-30T12:00:00.000Z');
-  assert.equal(safeBilla.validTo.toISOString(), '2026-05-27T12:00:00.000Z');
+  assert.equal(safeBilla.validTo.toISOString(), '2026-05-27T23:59:59.999Z');
   assert.equal(safeBilla.rawFacts.validitySource, 'aktionsfinder-leaflet-range');
   assert.equal(unsafeBilla.validFrom, null);
   assert.equal(unsafeBilla.validTo, null);
   assert.equal(unsafeBilla.rawFacts.validitySource, undefined);
+});
+
+test('Aktionsfinder URL ranges parse requested date formats until end of day', () => {
+  const first = buildSafeOfferValidityEvidence({
+    clickoutUrl: 'https://www.aktionsfinder.at/l/spar-flugblatt-16-04-2026-06-05-2026/',
+  });
+  const second = buildSafeOfferValidityEvidence({
+    clickoutUrl: 'https://www.aktionsfinder.at/l/spar-flugblatt-26-02-2026-11-03-2026/',
+  });
+
+  assert.equal(first.validFrom.toISOString(), '2026-04-16T12:00:00.000Z');
+  assert.equal(first.validTo.toISOString(), '2026-05-06T23:59:59.999Z');
+  assert.equal(second.validFrom.toISOString(), '2026-02-26T12:00:00.000Z');
+  assert.equal(second.validTo.toISOString(), '2026-03-11T23:59:59.999Z');
+});
+
+test('explicit expired status overrides missing validTo and snapshotCurrent', () => {
+  const offer = normalize({
+    id: 'aktionsfinder-spar-goesser-expired',
+    title: 'Goesser Maerzen SPAR 0.50 Liter 20 Stueck',
+    fullDisplayName: 'Goesser Maerzen SPAR 0.50 Liter 20 Stueck',
+    clickoutUrl: 'https://www.aktionsfinder.at/pv/spar/',
+    status: 'abgelaufen',
+    snapshotCurrent: true,
+  }, 'spar');
+
+  assert.equal(offer.status, 'expired');
+  assert.equal(offer.isActiveNow, false);
+  assert.equal(offer.rawFacts.explicitExpired, true);
+  assert.equal(offer.isMultiBuy, false);
+  assert.equal(offer.minimumPurchaseQty, 1);
+});
+
+test('past Aktionsfinder URL validity is stored as expired and not active', () => {
+  const offer = normalize({
+    id: 'aktionsfinder-spar-goesser-past-range',
+    title: 'Goesser Maerzen EUROSPAR 0.50 Liter 20 Stueck',
+    fullDisplayName: 'Goesser Maerzen EUROSPAR 0.50 Liter 20 Stueck',
+    clickoutUrl: 'https://www.aktionsfinder.at/l/spar-flugblatt-26-02-2026-11-03-2026/',
+  }, 'spar');
+
+  assert.equal(offer.validTo.toISOString(), '2026-03-11T23:59:59.999Z');
+  assert.equal(offer.status, 'expired');
+  assert.equal(offer.isActiveNow, false);
+  assert.equal(offer.isMultiBuy, false);
+  assert.equal(offer.minimumPurchaseQty, 1);
+});
+
+test('missing validTo without expiry evidence remains active for current source snapshots', () => {
+  const offer = normalize({
+    clickoutUrl: 'https://www.aktionsfinder.at/pv/billa/',
+    snapshotCurrent: true,
+  }, 'billa');
+
+  assert.equal(offer.validTo, null);
+  assert.equal(offer.status, 'active');
+  assert.equal(offer.isActiveNow, true);
 });

@@ -19,6 +19,7 @@ const {
   buildRankingCandidateQueryMetadata,
   hashRankingCacheKey,
   buildRankingResponseFromBase,
+  filterFreshActiveOffers,
   getRankingCacheCapabilities,
   normalizeSearchText,
   normalizeRetailerList,
@@ -2366,6 +2367,43 @@ test('response dedupe applies official source priority conservatively for BILLA 
   assert.deepEqual(prepared.map((item) => item._id).sort(), ['billa-official', 'lidl-official']);
 });
 
+test('fresh active filter removes expired and stale offers but keeps recent missing-validTo snapshots', () => {
+  const now = new Date('2026-05-21T12:00:00.000Z');
+  const current = offer({
+    title: 'BILLA Snapshot aktuell',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+  });
+  const expiredByDate = offer({
+    title: 'Abgelaufen nach validTo',
+    status: 'active',
+    isActiveNow: true,
+    validTo: new Date('2026-05-20T23:59:59.999Z'),
+  });
+  const expiredByUrl = offer({
+    title: 'Abgelaufen nach Aktionsfinder URL',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    sourceUrl: 'https://www.aktionsfinder.at/l/spar-flugblatt-26-02-2026-11-03-2026/',
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+  });
+  const staleSnapshot = offer({
+    title: 'Alter Snapshot ohne Enddatum',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-01T08:00:00.000Z'),
+  });
+
+  assert.deepEqual(
+    filterFreshActiveOffers([current, expiredByDate, expiredByUrl, staleSnapshot], now).map((item) => item.title),
+    ['BILLA Snapshot aktuell']
+  );
+});
+
 test('response dedupe keeps priced aggregator when official duplicate has no usable price', () => {
   const aggregator = offer({
     _id: 'priced-aggregator',
@@ -3068,7 +3106,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v4-search-token-v2',
+    schemaVersion: 'ranking-cache-v5-freshness-search-token-v2',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

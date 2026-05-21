@@ -36,16 +36,18 @@ async function runWithOptionalTransaction(work) {
 async function replaceOffersForSource({
   sourceId,
   offerDocuments = [],
+  crawlJobId: explicitCrawlJobId = null,
+  allowEmptyReplacement = false,
   OfferModel = Offer,
 } = {}) {
   const documents = Array.isArray(offerDocuments) ? offerDocuments.filter(Boolean) : [];
-  const crawlJobId = documents.find((document) => document?.crawlJobId)?.crawlJobId || null;
+  const crawlJobId = documents.find((document) => document?.crawlJobId)?.crawlJobId || explicitCrawlJobId || null;
 
   if (!sourceId) {
     throw new Error('replaceOffersForSource requires sourceId.');
   }
 
-  if (documents.length === 0 || !crawlJobId) {
+  if ((documents.length === 0 && !allowEmptyReplacement) || !crawlJobId) {
     return {
       insertedOffers: 0,
       removedPreviousOffers: 0,
@@ -58,13 +60,15 @@ async function replaceOffersForSource({
   return runWithOptionalTransaction(async (session) => {
     const options = session ? { ordered: false, session } : { ordered: false };
     const deleteOptions = session ? { session } : {};
-    const inserted = await OfferModel.insertMany(
-      documents.map((document) => ({
-        ...(hasCurrentSearchTokens(document) ? document : withOfferSearchTokens(document)),
-        sourceId: document.sourceId || sourceId,
-      })),
-      options
-    );
+    const inserted = documents.length > 0
+      ? await OfferModel.insertMany(
+        documents.map((document) => ({
+          ...(hasCurrentSearchTokens(document) ? document : withOfferSearchTokens(document)),
+          sourceId: document.sourceId || sourceId,
+        })),
+        options
+      )
+      : [];
     const deleteResult = await OfferModel.deleteMany(
       {
         sourceId,

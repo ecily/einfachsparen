@@ -9,6 +9,7 @@ const { SEARCH_TOKEN_VERSION, buildQuerySearchTokens, repairGermanSearchTextEnco
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
+const { isOfferFreshForActiveUse } = require('./offerFreshness');
 
 const OFFER_RANKING_FIELD_LIST = [
   '_id',
@@ -62,9 +63,17 @@ const OFFER_RANKING_FIELD_LIST = [
   'sortScoreDefault',
   'minimumPurchaseQty',
   'sourceType',
+  'sourceUrl',
+  'sourceUrls',
   'sourceTypes',
   'evidenceUrls',
+  'lastSeenAt',
+  'updatedAt',
   'reviewReasons',
+  'rawFacts.explicitExpired',
+  'rawFacts.clickoutUrl',
+  'rawFacts.leafletHref',
+  'rawFacts.validitySource',
   'rawFacts.discountPercentage',
   'rawFacts.discountPercent',
   'rawFacts.discountScope',
@@ -80,7 +89,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v4-search-token-v${SEARCH_TOKEN_VERSION}`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v5-freshness-search-token-v${SEARCH_TOKEN_VERSION}`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -386,6 +395,10 @@ function buildCurrentAvailabilityMatch() {
     status: 'active',
     isActiveNow: true,
   };
+}
+
+function filterFreshActiveOffers(offers, now = new Date()) {
+  return offers.filter((offer) => isOfferFreshForActiveUse(offer, now));
 }
 
 function isUsefulCategory(category) {
@@ -4477,7 +4490,7 @@ async function buildBasketSuggestions({
     .sort({ 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 })
     .limit(500)
     .lean();
-  const eligibleOffers = applyProgramEligibility(baseOffers, {
+  const eligibleOffers = applyProgramEligibility(filterFreshActiveOffers(baseOffers), {
     programRetailers: selectedProgramRetailers,
     onlyWithoutProgram: withoutProgram,
   });
@@ -4912,7 +4925,7 @@ async function buildOfferRanking({
 
   const rankingStartedAt = nowMs();
   const activeFilterStartedAt = nowMs();
-  const activeCandidateOffers = candidateOffers.filter((offer) => offer?.status === 'active' && offer?.isActiveNow);
+  const activeCandidateOffers = filterFreshActiveOffers(candidateOffers);
   timings.activeFilterMs = nowMs() - activeFilterStartedAt;
   const programFilterStartedAt = nowMs();
   const programEligibleOffers = applyProgramEligibility(
@@ -5257,6 +5270,7 @@ module.exports = {
   getRankingResponseCacheSize,
   scoreOfferAgainstQuery,
   applyQueryMatch,
+  filterFreshActiveOffers,
   buildValidityLabel,
   buildGroupedRankings,
   dedupeQueryOffers,

@@ -15,6 +15,7 @@ const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
 const { replaceOffersForSource } = require('./offerRefreshGuard');
+const { parseAktionsfinderDateRange } = require('../offers/offerFreshness');
 
 const PARSER_VERSION = 'aktionsfinder-v3-coverage';
 
@@ -121,21 +122,7 @@ function buildProductFromCardTitle(title) {
 }
 
 function parseDatesFromLeafletHref(href) {
-  const match = String(href || '').match(/-(\d{2})-(\d{2})-(\d{4})-(\d{2})-(\d{2})-(\d{4})\/?$/);
-
-  if (!match) {
-    return {
-      validFrom: null,
-      validTo: null,
-    };
-  }
-
-  const [, fromDay, fromMonth, fromYear, toDay, toMonth, toYear] = match.map(Number);
-
-  return {
-    validFrom: new Date(Date.UTC(fromYear, fromMonth - 1, fromDay, 12, 0, 0)),
-    validTo: new Date(Date.UTC(toYear, toMonth - 1, toDay, 12, 0, 0)),
-  };
+  return parseAktionsfinderDateRange(href);
 }
 
 function extractCategoryPageLinks(html, sourceUrl) {
@@ -445,6 +432,8 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     const refreshResult = await replaceOffersForSource({
       sourceId: source._id,
       offerDocuments,
+      crawlJobId: crawlJob._id,
+      allowEmptyReplacement: normalizedOffers.length > 0,
     });
 
     const essence = buildEssence({
@@ -455,8 +444,10 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       categoryPagePromotions: categoryPagePromotions.length,
     });
 
+    const status = normalizedOffers.length > 0 ? 'success' : offerDocuments.length > 0 ? 'success' : 'partial';
+
     await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
-      status: offerDocuments.length > 0 ? 'success' : 'partial',
+      status,
       discoveredPages: 1 + categoryPageLinks.length,
       rawDocuments: 1,
       rawCandidateCount: promotions.length,
@@ -479,8 +470,6 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         fallbackOfficial,
       },
     }));
-
-    const status = offerDocuments.length > 0 ? 'success' : 'partial';
 
     await Source.findByIdAndUpdate(source._id, {
       latestRunAt: new Date(),

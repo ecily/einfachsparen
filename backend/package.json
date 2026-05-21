@@ -17,6 +17,7 @@
     "diagnose:source-dedupe": "node scripts/diagnoseSourceDedupe.js",
     "diagnose:validity-ingestion": "node scripts/diagnoseValidityIngestion.js",
     "diagnose:validity-coverage": "node scripts/diagnoseValidityCoverage.js",
+    "diagnose:freshness-risk": "node scripts/diagnoseFreshnessRisk.js",
     "diagnose:retailer-readiness": "node scripts/diagnoseRetailerReadiness.js",
     "diagnose:sources-ladder": "node scripts/diagnoseSourcesLadder.js",
     "diagnose:ranking-performance": "node scripts/rankingPerformanceSmoke.js",
