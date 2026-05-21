@@ -99,6 +99,7 @@ test('normalizes ranking retailer filters case-insensitively', () => {
   assert.deepEqual(normalizeRetailerList('PENNY'), ['penny']);
   assert.deepEqual(normalizeRetailerList('Penny,penny,BILLA PLUS'), ['penny', 'billa-plus']);
   assert.deepEqual(normalizeRetailerList(['PENNY', 'Billa-Plus']), ['penny', 'billa-plus']);
+  assert.deepEqual(normalizeRetailerList('SPAR,EUROSPAR,INTERSPAR'), ['spar', 'eurospar', 'interspar']);
 });
 
 test('builds bounded ranking candidate limits for small result requests', () => {

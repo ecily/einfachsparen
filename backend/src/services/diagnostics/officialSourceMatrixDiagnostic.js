@@ -1,4 +1,10 @@
 const { RETAILER_DEFINITIONS } = require('../sources/sourceDefinitions');
+const {
+  OFFICIAL_RESOURCE_MATRIX,
+  getOfficialResourceMatrixForRetailer,
+  getOfficialResourceUrlsForRetailer,
+  summarizeOfficialResourceMatrix,
+} = require('../sources/officialResourceMatrix');
 
 const QUERY_MAX_TIME_MS = 1500;
 const DEFAULT_LIMIT = 20;
@@ -121,7 +127,7 @@ function pct(part, total) {
 function classifySourceKind(source = {}) {
   const haystack = `${source.channel || ''} ${source.sourceType || ''} ${source.sourceUrl || ''} ${source.label || ''}`.toLowerCase();
 
-  if (/official|billa\.at|hofer\.at|dm\.at|bipa\.at|lidl\.at|penny\.at|spar\.at|pagro\.at|adeg\.at/.test(haystack)) return 'official';
+  if (/official|billa\.at|hofer\.at|dm\.at|bipa\.at|lidl\.at|penny\.at|spar\.at|interspar\.at|pagro\.at|adeg\.at|joe-club\.at/.test(haystack)) return 'official';
   if (/aktionsfinder|wogibtswas/.test(haystack)) return 'aggregator';
   if (/marktguru/.test(haystack)) return 'marketplace';
   return 'unknown';
@@ -134,6 +140,8 @@ function deriveSourceKey(source = {}) {
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
+  if (url.includes('spar.at/aktionen/steiermark/eurospar') || (url.includes('spar.at/aktionen/steiermark') && format === 'eurospar')) return 'eurospar-official-actions-steiermark';
+  if (url.includes('spar.at/aktionen/steiermark/interspar') || url.includes('interspar.at/aktionen/steiermark') || (url.includes('spar.at/aktionen/steiermark') && format === 'interspar')) return 'interspar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
   if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
   if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
@@ -142,10 +150,15 @@ function deriveSourceKey(source = {}) {
   if (url.includes('spar.at')) return 'spar-official-flyer';
   if (url.includes('billa.at')) return `${source.retailerKey || 'billa'}-official`;
   if (url.includes('hofer.at')) return 'hofer-official-flyer';
+  if (url.includes('dm.at/services/kundenprogramme-services/immerguenstig')) return 'dm-official-immerguenstig';
   if (url.includes('dm.at')) return 'dm-official-site';
+  if (url.includes('bipa.at/cp/onlineonly')) return 'bipa-official-onlineonly';
+  if (url.includes('bipa.at/cp/joe-bonusclub')) return 'bipa-official-joe-bonusclub';
   if (url.includes('bipa.at')) return 'bipa-official-site';
   if (url.includes('lidl.at')) return 'lidl-official-flyer';
+  if (url.includes('penny.at/sortiment/dauer-guenstig')) return 'penny-official-dauer-guenstig';
   if (url.includes('penny.at')) return source.channel === 'official-flyer' ? 'penny-official-flyer' : 'penny-official-site';
+  if (url.includes('pagro.at/cms/flugblatt')) return 'pagro-official-flyer';
   if (url.includes('pagro.at')) return 'pagro-official-site';
   if (url.includes('adeg.at')) return 'adeg-official-flyer';
 
@@ -206,17 +219,27 @@ function normalizeCodeSource(definition = {}, file = 'src/services/sources/sourc
 }
 
 function getRetailerConfigs() {
-  return OFFICIAL_RETAILERS.map((retailer) => ({
-    ...retailer,
-    codeSources: RETAILER_DEFINITIONS
-      .filter((definition) => {
-        const retailerKeys = retailer.retailerKeysForDb || [retailer.retailerKey];
-        const formatKeys = retailer.sourceRetailerFormatsForDb || [];
-        const keys = [definition.retailerKey, definition.sourceRetailerFormat, ...(definition.appliesToRetailerFormats || [])];
-        return keys.some((key) => retailerKeys.includes(key) || formatKeys.includes(key));
-      })
-      .map((definition) => normalizeCodeSource(definition)),
-  }));
+  return OFFICIAL_RETAILERS.map((retailer) => {
+    const officialResourceMatrix = getOfficialResourceMatrixForRetailer(retailer.retailerKey);
+    const officialUrls = uniqueCompact([
+      ...(retailer.officialUrls || []),
+      ...getOfficialResourceUrlsForRetailer(retailer.retailerKey),
+    ]);
+
+    return {
+      ...retailer,
+      officialUrls,
+      officialResourceMatrix,
+      codeSources: RETAILER_DEFINITIONS
+        .filter((definition) => {
+          const retailerKeys = retailer.retailerKeysForDb || [retailer.retailerKey];
+          const formatKeys = retailer.sourceRetailerFormatsForDb || [];
+          const keys = [definition.retailerKey, definition.sourceRetailerFormat, ...(definition.appliesToRetailerFormats || [])];
+          return keys.some((key) => retailerKeys.includes(key) || formatKeys.includes(key));
+        })
+        .map((definition) => normalizeCodeSource(definition)),
+    };
+  });
 }
 
 function ratioObject(count, total) {
@@ -498,6 +521,74 @@ function assessRisks({ retailer, structureAssessment, dbCoverage = emptyDbCovera
   return uniqueCompact(risks);
 }
 
+function buildOfficialResourceAudit({ retailer, codeSources = [], dbCoverage = emptyDbCoverage() } = {}) {
+  const resources = retailer?.officialResourceMatrix || [];
+  const codeSourceUrls = new Set(codeSources.map((source) => String(source.sourceUrl || '').replace(/\/$/, '')));
+  const existingSourceKeys = uniqueCompact(codeSources.map((source) => source.sourceKey));
+  const activeOfficialSourceKeys = uniqueCompact(
+    codeSources
+      .filter((source) => source.sourceKind === 'official' && source.active)
+      .map((source) => source.sourceKey)
+  );
+  const plannedResources = resources.filter((resource) => /^planned/.test(resource.status));
+  const blockedOrUnclearResources = resources.filter((resource) => ['blocked', 'unclear'].includes(resource.crawlable));
+  const matrixResourcesAlreadyInSourceDefinitions = resources.filter((resource) =>
+    codeSourceUrls.has(String(resource.url || '').replace(/\/$/, ''))
+  );
+  const matrixResourcesMissingInSourceDefinitions = resources.filter((resource) =>
+    !codeSourceUrls.has(String(resource.url || '').replace(/\/$/, ''))
+  );
+  const categoryCoverage = uniqueCompact(resources.flatMap((resource) => resource.categoryCoverage || []));
+  const officialDbSourceTypes = uniqueCompact(
+    (dbCoverage.sourceBreakdown || [])
+      .filter((row) => sourceTypeIsOfficial(row.sourceType))
+      .map((row) => row.sourceType)
+  );
+  const aggregatorDbSourceTypes = uniqueCompact(
+    (dbCoverage.sourceBreakdown || [])
+      .filter((row) => sourceTypeIsAggregator(row.sourceType) || /aktionsfinder|wogibtswas|marktguru/i.test(row.sourceUrl))
+      .map((row) => row.sourceType || row.sourceUrl)
+  );
+
+  return {
+    existingSourceKeys,
+    activeOfficialSourceKeys,
+    officialDbSourceTypes,
+    aggregatorDbSourceTypes,
+    resourceCount: resources.length,
+    matrixResources: resources,
+    matrixResourcesAlreadyInSourceDefinitions: matrixResourcesAlreadyInSourceDefinitions.map((resource) => resource.url),
+    matrixResourcesMissingInSourceDefinitions: matrixResourcesMissingInSourceDefinitions.map((resource) => ({
+      url: resource.url,
+      sourceClass: resource.sourceClass,
+      status: resource.status,
+      crawlable: resource.crawlable,
+      fetchRisk: resource.fetchRisk,
+      nextLever: resource.nextLever,
+    })),
+    plannedResources: plannedResources.map((resource) => resource.url),
+    blockedOrUnclearResources: blockedOrUnclearResources.map((resource) => ({
+      url: resource.url,
+      crawlable: resource.crawlable,
+      fetchRisk: resource.fetchRisk,
+      nextLever: resource.nextLever,
+    })),
+    categoryCoverage,
+    biggestRisk: uniqueCompact(resources.map((resource) => resource.biggestRisk))[0] || '',
+    concreteNextLever: uniqueCompact(resources.map((resource) => resource.nextLever))[0] || '',
+    officialFirstDecision:
+      activeOfficialSourceKeys.length > 0 || officialDbSourceTypes.length > 0
+        ? 'official-source-present'
+        : plannedResources.length > 0
+          ? 'official-resource-planned'
+          : 'official-resource-missing',
+    aggregatorPolicy:
+      aggregatorDbSourceTypes.length > 0
+        ? 'aggregator-supplement-only; official resources must override comparable aggregator offers'
+        : 'no active aggregator evidence detected in sampled DB coverage',
+  };
+}
+
 function recommendNextAction({ retailer, structureAssessment, codeSources = [], dbCoverage = emptyDbCoverage() } = {}) {
   const officialCode = codeSources.filter((source) => source.sourceKind === 'official');
   const hasOfficialDbOffers = (dbCoverage.sourceBreakdown || []).some((row) => sourceTypeIsOfficial(row.sourceType));
@@ -602,15 +693,22 @@ async function buildOfficialSourceMatrix({
       reachability,
     });
     const riskAssessment = assessRisks({ retailer, structureAssessment, dbCoverage });
+    const resourceAudit = buildOfficialResourceAudit({
+      retailer,
+      codeSources: retailer.codeSources,
+      dbCoverage,
+    });
 
     retailers.push({
       retailerKey: retailer.retailerKey,
       displayName: retailer.displayName,
       officialUrls: retailer.officialUrls,
+      officialResourceMatrix: retailer.officialResourceMatrix,
       codeSources: retailer.codeSources,
       dbCoverage,
       reachability,
       structureAssessment,
+      resourceAudit,
       riskAssessment,
       recommendedNextAction: recommendNextAction({
         retailer,
@@ -633,6 +731,16 @@ async function buildOfficialSourceMatrix({
   const missingOfficialParsers = retailers
     .filter((retailer) => ['none', 'fixture-only'].includes(retailer.structureAssessment.existingParserCoverage))
     .map((retailer) => retailer.retailerKey);
+  const officialResourceMatrixSummary = summarizeOfficialResourceMatrix();
+  const resourceMatrixBlockedOrUnclear = retailers.flatMap((retailer) =>
+    (retailer.resourceAudit?.blockedOrUnclearResources || []).map((resource) => ({
+      retailerKey: retailer.retailerKey,
+      url: resource.url,
+      crawlable: resource.crawlable,
+      fetchRisk: resource.fetchRisk,
+      nextLever: resource.nextLever,
+    }))
+  );
 
   return {
     generatedAt: generatedAt instanceof Date ? generatedAt.toISOString() : generatedAt,
@@ -648,6 +756,8 @@ async function buildOfficialSourceMatrix({
         .slice(0, 5)
         .map((retailer) => retailer.retailerKey),
       blockedSources,
+      resourceMatrix: officialResourceMatrixSummary,
+      resourceMatrixBlockedOrUnclear,
       sourcesAlreadyActive,
       sourcesPresentButDisabled,
       missingOfficialParsers,
@@ -660,6 +770,7 @@ module.exports = {
   DEFAULT_LIMIT,
   OFFICIAL_RETAILERS,
   assessExistingParserCoverage,
+  buildOfficialResourceAudit,
   assessRisks,
   assessStructure,
   buildCoverageRatios,
@@ -670,6 +781,7 @@ module.exports = {
   getRetailerConfigs,
   isBlockedLikely,
   normalizeCodeSource,
+  OFFICIAL_RESOURCE_MATRIX,
   pct,
   recommendNextAction,
 };

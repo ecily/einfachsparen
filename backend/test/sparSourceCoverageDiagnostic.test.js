@@ -40,13 +40,14 @@ test('SPAR source definitions include separated aggregators, PDF flyers and reso
   assert.ok(keys.includes('eurospar-official-flyer-pdf'));
   assert.ok(keys.includes('interspar-official-flyer-pdf'));
   assert.ok(keys.includes('spar-official-actions-steiermark'));
-  assert.ok(keys.includes('interspar-official-actions'));
+  assert.ok(keys.includes('eurospar-official-actions-steiermark'));
+  assert.ok(keys.includes('interspar-official-actions-steiermark'));
   assert.equal(sources.find((source) => source.sourceKey === 'spar-official-actions-steiermark').appearsActive, false);
   assert.match(
     sources.find((source) => source.sourceKey === 'spar-official-actions-steiermark').disabledReason,
     /resource-required/
   );
-  assert.equal(sources.find((source) => source.sourceKey === 'interspar-official-actions').appearsActive, false);
+  assert.equal(sources.find((source) => source.sourceKey === 'interspar-official-actions-steiermark').appearsActive, false);
   assert.equal(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').appearsActive, true);
   assert.match(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').parserOrAdapter, /text-layer/i);
 });

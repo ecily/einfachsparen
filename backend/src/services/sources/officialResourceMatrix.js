@@ -1,0 +1,490 @@
+const DATA_FIELDS = [
+  'title',
+  'price',
+  'priceReference',
+  'discount',
+  'image',
+  'conditions',
+  'validFrom',
+  'validTo',
+  'lastSeenSourceRun',
+  'regionFormat',
+];
+
+function dataQuality(overrides = {}) {
+  return Object.fromEntries(DATA_FIELDS.map((field) => [field, overrides[field] || 'unknown']));
+}
+
+const OFFICIAL_RESOURCE_MATRIX = [
+  {
+    retailerKey: 'spar',
+    displayName: 'SPAR',
+    resources: [
+      {
+        url: 'https://www.spar.at/produktwelt/bier?inAngebot=true&page=1',
+        sourceClass: 'official-category',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'TLS/403-or-JS-only',
+        dataQuality: dataQuality({
+          title: 'likely',
+          price: 'likely',
+          image: 'likely',
+          validTo: 'unclear',
+          lastSeenSourceRun: 'required',
+          regionFormat: 'category-page',
+        }),
+        categoryCoverage: ['Bier'],
+        biggestRisk: 'Product-world HTML may require JS or protected structured data.',
+        nextLever: 'Find official JSON/API/asset payload or use official flyer PDF as safer primary evidence.',
+      },
+      {
+        url: 'https://www.spar.at/aktionen/steiermark/spar',
+        sourceClass: 'official-action',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'TLS/403-or-JS-only',
+        dataQuality: dataQuality({
+          title: 'partial',
+          discount: 'likely',
+          conditions: 'likely',
+          validFrom: 'likely',
+          validTo: 'likely',
+          lastSeenSourceRun: 'required',
+          regionFormat: 'Steiermark/SPAR',
+        }),
+        categoryCoverage: ['Category-Wide Promotions', 'Bier', 'Waschmittel', 'Tierbedarf'],
+        biggestRisk: 'Format-specific action page must not be merged with EUROSPAR/INTERSPAR.',
+        nextLever: 'Use allowed HTML/JSON snapshot or official PDF links discovered from this page.',
+      },
+      {
+        url: 'https://flugblatt.spar.at/steiermark/spar/260521-1-flugblatt-kw-21/getPdf.ashx',
+        sourceClass: 'official-flyer',
+        status: 'active',
+        crawlable: 'yes',
+        fetchRisk: 'PDF-only',
+        dataQuality: dataQuality({
+          title: 'yes',
+          price: 'yes',
+          priceReference: 'partial',
+          discount: 'partial',
+          image: 'no',
+          conditions: 'partial',
+          validFrom: 'yes',
+          validTo: 'yes',
+          lastSeenSourceRun: 'yes',
+          regionFormat: 'Steiermark/SPAR',
+        }),
+        categoryCoverage: ['Lebensmittel', 'Getraenke', 'Drogerie / Hygiene', 'Haushalt'],
+        biggestRisk: 'Static KW PDF must be replaced by discovery after the issue changes.',
+        nextLever: 'Discover current official PDF from SPAR action/flyer pages before scoped crawl.',
+      },
+    ],
+  },
+  {
+    retailerKey: 'eurospar',
+    displayName: 'EUROSPAR',
+    resources: [
+      {
+        url: 'https://www.spar.at/aktionen/steiermark/eurospar',
+        sourceClass: 'official-action',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'TLS/403-or-JS-only',
+        dataQuality: dataQuality({
+          title: 'partial',
+          discount: 'likely',
+          conditions: 'likely',
+          validFrom: 'likely',
+          validTo: 'likely',
+          lastSeenSourceRun: 'required',
+          regionFormat: 'Steiermark/EUROSPAR',
+        }),
+        categoryCoverage: ['Category-Wide Promotions', 'Non-Food', 'Haushalt'],
+        biggestRisk: 'EUROSPAR may redirect or share content; equality must be proven, not assumed.',
+        nextLever: 'Compare final URL, page markers and extracted format blocks against SPAR and INTERSPAR.',
+      },
+      {
+        url: 'https://flugblatt.spar.at/steiermark/eurospar/260521-1-flugblatt-kw-21/getPdf.ashx',
+        sourceClass: 'official-flyer',
+        status: 'active',
+        crawlable: 'yes',
+        fetchRisk: 'PDF-only',
+        dataQuality: dataQuality({
+          title: 'yes',
+          price: 'yes',
+          priceReference: 'partial',
+          discount: 'partial',
+          image: 'no',
+          conditions: 'partial',
+          validFrom: 'yes',
+          validTo: 'yes',
+          lastSeenSourceRun: 'yes',
+          regionFormat: 'Steiermark/EUROSPAR',
+        }),
+        categoryCoverage: ['Lebensmittel', 'Getraenke', 'Non-Food', 'Haushalt'],
+        biggestRisk: 'Static KW PDF is trustworthy only until the next official flyer replaces it.',
+        nextLever: 'Add current PDF discovery while preserving retailerKey=eurospar.',
+      },
+    ],
+  },
+  {
+    retailerKey: 'interspar',
+    displayName: 'INTERSPAR',
+    resources: [
+      {
+        url: 'https://www.spar.at/aktionen/steiermark/interspar',
+        sourceClass: 'official-action',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'TLS/403-or-JS-only',
+        dataQuality: dataQuality({
+          title: 'partial',
+          discount: 'likely',
+          conditions: 'likely',
+          validFrom: 'likely',
+          validTo: 'likely',
+          lastSeenSourceRun: 'required',
+          regionFormat: 'Steiermark/INTERSPAR',
+        }),
+        categoryCoverage: ['Category-Wide Promotions', 'Non-Food', 'Haushalt', 'Weinwelt'],
+        biggestRisk: 'SPAR-domain INTERSPAR actions must not overwrite interspar.at actions without equivalence evidence.',
+        nextLever: 'Keep this as a separate official action candidate and compare with interspar.at/aktionen/steiermark.',
+      },
+      {
+        url: 'https://www.interspar.at/aktionen/steiermark',
+        sourceClass: 'official-action',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'TLS/403-or-JS-only',
+        dataQuality: dataQuality({
+          title: 'partial',
+          discount: 'likely',
+          conditions: 'likely',
+          validFrom: 'likely',
+          validTo: 'likely',
+          lastSeenSourceRun: 'required',
+          regionFormat: 'Steiermark/INTERSPAR',
+        }),
+        categoryCoverage: ['Category-Wide Promotions', 'Non-Food', 'Haushalt', 'Weinwelt'],
+        biggestRisk: 'HTML may be blocked locally; do not bypass challenge pages.',
+        nextLever: 'Request an official JSON/API/asset endpoint or manual HTML snapshot if local fetch stays blocked.',
+      },
+      {
+        url: 'https://www.interspar.at/shop/lebensmittel/',
+        sourceClass: 'official-category',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'JS/API-likely',
+        dataQuality: dataQuality({ title: 'likely', price: 'likely', image: 'likely', validTo: 'unclear', lastSeenSourceRun: 'required', regionFormat: 'INTERSPAR/shop' }),
+        categoryCoverage: ['Lebensmittel'],
+        biggestRisk: 'Shop assortment is not automatically an offer source.',
+        nextLever: 'Only ingest items with explicit offer or reduced-price evidence.',
+      },
+      {
+        url: 'https://www.interspar.at/shop/haushalt/',
+        sourceClass: 'official-category',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'JS/API-likely',
+        dataQuality: dataQuality({ title: 'likely', price: 'likely', image: 'likely', validTo: 'unclear', lastSeenSourceRun: 'required', regionFormat: 'INTERSPAR/shop' }),
+        categoryCoverage: ['Haushalt', 'Non-Food'],
+        biggestRisk: 'Assortment pages can create false offer positives.',
+        nextLever: 'Gate parser on explicit promotion badges or sale filters.',
+      },
+      {
+        url: 'https://www.interspar.at/shop/weinwelt/',
+        sourceClass: 'official-category',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'JS/API-likely',
+        dataQuality: dataQuality({ title: 'likely', price: 'likely', image: 'likely', validTo: 'unclear', lastSeenSourceRun: 'required', regionFormat: 'INTERSPAR/Weinwelt' }),
+        categoryCoverage: ['Weinwelt', 'Wein & Sekt', 'Spirituosen'],
+        biggestRisk: 'Wine assortment prices are not necessarily temporary offers.',
+        nextLever: 'Use only official offer/sale indicators for active offer storage.',
+      },
+      {
+        url: 'https://flugblatt.interspar.at/steiermark/steiermark_kw21/getPdf.ashx',
+        sourceClass: 'official-flyer',
+        status: 'active',
+        crawlable: 'yes',
+        fetchRisk: 'PDF-only',
+        dataQuality: dataQuality({
+          title: 'yes',
+          price: 'yes',
+          priceReference: 'partial',
+          discount: 'partial',
+          image: 'no',
+          conditions: 'partial',
+          validFrom: 'yes',
+          validTo: 'yes',
+          lastSeenSourceRun: 'yes',
+          regionFormat: 'Steiermark/INTERSPAR',
+        }),
+        categoryCoverage: ['Lebensmittel', 'Getraenke', 'Non-Food', 'Haushalt'],
+        biggestRisk: 'Static KW PDF must be discovered dynamically for release cadence.',
+        nextLever: 'Discover current PDF from official action/flyer pages before RC full crawl.',
+      },
+    ],
+  },
+  {
+    retailerKey: 'pagro',
+    displayName: 'PAGRO',
+    resources: [
+      ...[
+        ['https://www.pagro.at/cms/flugblatt', 'official-flyer', ['Broschueren', 'Non-Food']],
+        ['https://www.pagro.at/angebote', 'official-action', ['Non-Food']],
+        ['https://www.pagro.at/angebote/90-online-only-sale', 'official-category', ['Online-only / Sale']],
+        ['https://www.pagro.at/angebote/angebote-buero-schule', 'official-category', ['Buero / Schule']],
+        ['https://www.pagro.at/angebote/angebote-basteln-kreativ', 'official-category', ['Basteln & Kreativ']],
+        ['https://www.pagro.at/angebote/angebote-spielen', 'official-category', ['Spielen']],
+        ['https://www.pagro.at/angebote/angebote-party-schenken', 'official-category', ['Party & Schenken']],
+        ['https://www.pagro.at/angebote/angebote-haushalt', 'official-category', ['Haushalt']],
+        ['https://www.pagro.at/angebote/angebote-gaming', 'official-category', ['Gaming & Technik']],
+        ['https://www.pagro.at/angebote/angebote-technik', 'official-category', ['Gaming & Technik']],
+        ['https://www.pagro.at/angebote/angebote-saisonen', 'official-category', ['Saisonen']],
+        ['https://www.pagro.at/angebote/dauer-mega-packs', 'official-category', ['Dauerpreise']],
+        ['https://www.pagro.at/angebote/sale', 'official-category', ['Online-only / Sale']],
+      ].map(([url, sourceClass, categoryCoverage]) => ({
+        url,
+        sourceClass,
+        status: 'planned',
+        crawlable: 'blocked',
+        fetchRisk: 'Cloudflare/403',
+        dataQuality: dataQuality({ title: 'likely', price: 'likely', image: 'likely', conditions: 'partial', validTo: 'unclear', lastSeenSourceRun: 'required', regionFormat: 'Austria/PAGRO' }),
+        categoryCoverage,
+        biggestRisk: 'Official PAGRO pages are Cloudflare-protected for local fetches.',
+        nextLever: 'Provide an official stable API/JSON/PDF/asset URL or allow manual fixture audit; do not default to aggregator.',
+      })),
+    ],
+  },
+  {
+    retailerKey: 'hofer',
+    displayName: 'HOFER',
+    resources: [
+      ...[
+        ['https://www.hofer.at/de/angebote/angebote-im-ueberblick.html?productState=In+der+Filiale+erh%C3%A4ltlich', 'official-action', ['Lebensmittel', 'Non-Food']],
+        ['https://www.hofer.at/de/angebote/aktuelle-flugblaetter-und-broschuren.html', 'official-flyer', ['Flugblatt']],
+        ['https://www.hofer.at/de/angebote/aktionen.html', 'official-action', ['Category-Wide Promotions']],
+        ['https://www.hofer.at/de/angebote/hofer-preiswochen.html', 'official-action', ['Lebensmittel', 'Getraenke']],
+        ['https://www.hofer.at/de/angebote/hofer-preis-dauerhaft-guenstiger.html', 'official-category', ['Dauerpreise']],
+        ['https://www.hofer.at/de/angebote/technik-und-haushalt.html', 'official-category', ['Technik & Haushalt']],
+        ['https://www.hofer.at/de/angebote/handys-und-router.html', 'official-category', ['Handys & Router']],
+      ].map(([url, sourceClass, categoryCoverage]) => ({
+        url,
+        sourceClass,
+        status: sourceClass === 'official-flyer' ? 'active' : 'planned',
+        crawlable: 'yes',
+        fetchRisk: sourceClass === 'official-flyer' ? 'HTML-plus-discovered-pages' : 'HTML',
+        dataQuality: dataQuality({ title: 'yes', price: 'yes', priceReference: 'partial', image: 'likely', conditions: 'partial', validFrom: 'partial', validTo: 'partial', lastSeenSourceRun: 'yes', regionFormat: 'Austria/HOFER' }),
+        categoryCoverage,
+        biggestRisk: 'Date pages change and must be discovered dynamically, not hardcoded.',
+        nextLever: 'Keep date-page discovery from official links and use static non-date pages only as seeds.',
+      })),
+    ],
+  },
+  {
+    retailerKey: 'lidl',
+    displayName: 'Lidl',
+    resources: [
+      ...[
+        ['https://www.lidl.at/c/flugblatt/s10012330', 'official-flyer', ['Flugblatt']],
+        ['https://www.lidl.at/c/mega-deals/s10091719', 'official-action', ['Mega Deals']],
+        ['https://www.lidl.at/c/aktion/a10095240', 'official-action', ['Aktion']],
+        ['https://www.lidl.at/c/frische-angebote/a10095239', 'official-category', ['Frische Angebote']],
+        ['https://www.lidl.at/c/jeden-tag-deine-guenstigen-preise/a10095237', 'official-category', ['Dauerpreise']],
+        ['https://www.lidl.at/c/blumen-pflanzen/a10095234', 'official-category', ['Blumen & Pflanzen']],
+        ['https://www.lidl.at/c/super-frische/s10013062', 'official-category', ['Frische Angebote']],
+        ['https://www.lidl.at/c/mit-jedem-bissen-kurzurlaub-machen/a10095235', 'official-category', ['Themenwelt']],
+        ['https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10095236', 'official-category', ['Grillen']],
+      ].map(([url, sourceClass, categoryCoverage]) => ({
+        url,
+        sourceClass,
+        status: url.includes('/flugblatt/') ? 'active' : 'planned',
+        crawlable: 'yes',
+        fetchRisk: url.includes('/flugblatt/') ? 'official-flyer-api' : 'campaign-url-may-change',
+        dataQuality: dataQuality({ title: 'yes', price: 'yes', priceReference: 'partial', image: 'yes', conditions: 'partial', validFrom: 'likely', validTo: 'likely', lastSeenSourceRun: 'yes', regionFormat: 'Austria/Lidl' }),
+        categoryCoverage,
+        biggestRisk: 'Campaign IDs rotate; fixed URLs are seeds, not source truth.',
+        nextLever: 'Discover campaign links from official pages and merge with current seed URLs.',
+      })),
+    ],
+  },
+  {
+    retailerKey: 'bipa',
+    displayName: 'BIPA',
+    resources: [
+      ['https://www.bipa.at/cp/aktionen', 'official-action', 'active', ['Drogerie / Hygiene', 'Kosmetik & Make-up', 'Haushalt']],
+      ['https://www.bipa.at/cp/onlineonly', 'official-category', 'planned', ['Online-only / Sale']],
+      ['https://www.bipa.at/cp/joe-bonusclub', 'official-category', 'planned', ['Club-/Bonusbedingungen']],
+      ['https://www.joe-club.at/flugblatter/details/3054491', 'official-flyer', 'planned', ['Club-/Bonusbedingungen']],
+    ].map(([url, sourceClass, status, categoryCoverage]) => ({
+      url,
+      sourceClass,
+      status,
+      crawlable: status === 'active' ? 'yes' : 'unclear',
+      fetchRisk: sourceClass === 'official-flyer' ? 'external-joe-flyer' : 'HTML/JS',
+      dataQuality: dataQuality({ title: 'likely', price: 'likely', priceReference: 'partial', image: 'likely', conditions: 'likely', validFrom: 'partial', validTo: 'partial', lastSeenSourceRun: 'required', regionFormat: 'Austria/BIPA' }),
+      categoryCoverage,
+      biggestRisk: 'joe/Bonusclub conditions must not be mixed into normal public offers.',
+      nextLever: 'Keep joe and online-only as distinct condition/source classes before enabling.',
+    })),
+  },
+  {
+    retailerKey: 'dm',
+    displayName: 'dm',
+    resources: [
+      {
+        url: 'https://www.dm.at/ausverkauf',
+        sourceClass: 'official-action',
+        status: 'active',
+        crawlable: 'yes',
+        fetchRisk: 'official-product-search-api',
+        dataQuality: dataQuality({ title: 'yes', price: 'yes', priceReference: 'partial', image: 'yes', conditions: 'partial', validFrom: 'snapshot', validTo: 'unclear', lastSeenSourceRun: 'yes', regionFormat: 'Austria/dm' }),
+        categoryCoverage: ['Drogerie / Hygiene', 'Haushalt', 'Babybedarf'],
+        biggestRisk: 'Sale source has weak explicit validity.',
+        nextLever: 'Use source-run snapshot truth and soft-deactivation on next successful source run.',
+      },
+      {
+        url: 'https://www.dm.at/services/kundenprogramme-services/immerguenstig',
+        sourceClass: 'official-category',
+        status: 'planned',
+        crawlable: 'unclear',
+        fetchRisk: 'service-page-not-time-limited-offers',
+        dataQuality: dataQuality({ title: 'partial', price: 'no', conditions: 'yes', validTo: 'not-applicable', lastSeenSourceRun: 'required', regionFormat: 'Austria/dm' }),
+        categoryCoverage: ['Dauerpreise'],
+        biggestRisk: 'Immerguenstig is a durable price promise, not a temporary offer.',
+        nextLever: 'Model as Dauerpreis/service logic, not active offer list item.',
+      },
+    ],
+  },
+  {
+    retailerKey: 'billa',
+    displayName: 'BILLA',
+    resources: [
+      ['https://www.billa.at/unsere-aktionen/aktionen', 'official-action', 'active', ['Lebensmittel', 'Getraenke', 'Drogerie / Hygiene']],
+      ['https://www.billa.at/unsere-aktionen/flugblatt', 'official-flyer', 'active', ['Flugblatt']],
+      ['https://www.joe-club.at/app', 'official-category', 'planned', ['Club-/Bonusbedingungen']],
+      ['https://www.joe-club.at/rabattsammler', 'official-category', 'planned', ['Club-/Bonusbedingungen']],
+      ['https://www.joe-reisen.at/aktionen', 'official-category', 'rejected-for-phase-1', ['Travel']],
+    ].map(([url, sourceClass, status, categoryCoverage]) => ({
+      url,
+      sourceClass,
+      status,
+      crawlable: status === 'active' ? 'yes' : 'unclear',
+      fetchRisk: sourceClass === 'official-action' ? 'official-algolia/api' : 'HTML/PDF-or-service',
+      dataQuality: dataQuality({ title: 'likely', price: sourceClass === 'official-category' ? 'unclear' : 'likely', priceReference: 'partial', image: 'likely', conditions: 'likely', validFrom: 'snapshot', validTo: 'unclear', lastSeenSourceRun: 'required', regionFormat: 'Austria/BILLA' }),
+      categoryCoverage,
+      biggestRisk: 'joe club and travel offers must not be treated as normal BILLA supermarket offers.',
+      nextLever: 'Keep BILLA and BILLA Plus retailer scopes separated around shared official endpoints.',
+    })),
+  },
+  {
+    retailerKey: 'billa-plus',
+    displayName: 'BILLA Plus',
+    resources: [
+      ['https://www.billa.at/unsere-aktionen/aktionen', 'official-action', 'active', ['Lebensmittel', 'Getraenke', 'Drogerie / Hygiene', 'Non-Food']],
+      ['https://www.billa.at/unsere-aktionen/flugblatt', 'official-flyer', 'active', ['Flugblatt']],
+    ].map(([url, sourceClass, status, categoryCoverage]) => ({
+      url,
+      sourceClass,
+      status,
+      crawlable: 'yes',
+      fetchRisk: sourceClass === 'official-action' ? 'official-algolia/api' : 'shared-flyer-scope-risk',
+      dataQuality: dataQuality({ title: 'likely', price: 'likely', priceReference: 'partial', image: 'likely', conditions: 'likely', validFrom: 'snapshot', validTo: 'unclear', lastSeenSourceRun: 'required', regionFormat: 'Austria/BILLA Plus' }),
+      categoryCoverage,
+      biggestRisk: 'Shared BILLA endpoint can collapse BILLA Plus if retailer scope is not explicit.',
+      nextLever: 'Verify retailerKey=billa-plus scoped source replacement after every crawl.',
+    })),
+  },
+  {
+    retailerKey: 'penny',
+    displayName: 'PENNY',
+    resources: [
+      ['https://www.penny.at/angebote', 'official-action', 'active', ['Lebensmittel', 'Getraenke']],
+      ['https://www.penny.at/sortiment/dauer-guenstig', 'official-category', 'planned', ['Dauerpreise']],
+      ['https://www.penny.at/angebote/flugblaetter', 'official-flyer', 'active', ['Flugblatt']],
+      ['https://www.penny.at/unser-penny/da-schau-her', 'official-category', 'planned', ['Service/Content']],
+      ['https://www.penny.at/unser-penny/whatsapp', 'official-category', 'not-crawl-source', ['Servicekanal']],
+    ].map(([url, sourceClass, status, categoryCoverage]) => ({
+      url,
+      sourceClass,
+      status,
+      crawlable: status === 'active' ? 'yes' : 'unclear',
+      fetchRisk: status === 'not-crawl-source' ? 'service-channel' : 'HTML/PDF',
+      dataQuality: dataQuality({ title: 'likely', price: status === 'not-crawl-source' ? 'no' : 'likely', image: 'likely', conditions: 'partial', validFrom: 'partial', validTo: 'partial', lastSeenSourceRun: 'required', regionFormat: 'Austria/PENNY' }),
+      categoryCoverage,
+      biggestRisk: 'Dauer-guenstig and WhatsApp must not inflate temporary active offers.',
+      nextLever: 'Keep durable prices separate from short-lived offers and use flyer as backup evidence.',
+    })),
+  },
+  {
+    retailerKey: 'adeg',
+    displayName: 'ADEG',
+    resources: [
+      {
+        url: 'https://www.adeg.at/flugblatt-aktionen/adeg-flugblatt',
+        sourceClass: 'official-flyer',
+        status: 'planned-secondary',
+        crawlable: 'unclear',
+        fetchRisk: 'PDF/image-flyer-likely',
+        dataQuality: dataQuality({ title: 'partial', price: 'partial', image: 'likely', conditions: 'partial', validFrom: 'likely', validTo: 'likely', lastSeenSourceRun: 'required', regionFormat: 'Austria/ADEG' }),
+        categoryCoverage: ['Lebensmittel', 'Nahversorger'],
+        biggestRisk: 'ADEG is secondary and may need image/PDF parsing for item-level offers.',
+        nextLever: 'Audit after SPAR/PAGRO/HOFER/Lidl/BIPA/dm/BILLA/PENNY sources are stable.',
+      },
+    ],
+  },
+];
+
+function compact(values = []) {
+  return values.map((value) => String(value || '').trim()).filter(Boolean);
+}
+
+function uniqueCompact(values = []) {
+  return [...new Set(compact(values))];
+}
+
+function getOfficialResourceMatrixForRetailer(retailerKey) {
+  const key = String(retailerKey || '').trim().toLowerCase();
+  const row = OFFICIAL_RESOURCE_MATRIX.find((item) => item.retailerKey === key);
+  return row ? row.resources : [];
+}
+
+function getOfficialResourceUrlsForRetailer(retailerKey) {
+  return uniqueCompact(getOfficialResourceMatrixForRetailer(retailerKey).map((resource) => resource.url));
+}
+
+function summarizeOfficialResourceMatrix() {
+  const rows = OFFICIAL_RESOURCE_MATRIX.flatMap((retailer) =>
+    retailer.resources.map((resource) => ({
+      retailerKey: retailer.retailerKey,
+      displayName: retailer.displayName,
+      ...resource,
+    }))
+  );
+
+  return {
+    retailerCount: OFFICIAL_RESOURCE_MATRIX.length,
+    resourceCount: rows.length,
+    activeOfficialResources: rows.filter((resource) => resource.status === 'active').length,
+    plannedOfficialResources: rows.filter((resource) => /^planned/.test(resource.status)).length,
+    blockedOrUnclearResources: rows.filter((resource) => ['blocked', 'unclear'].includes(resource.crawlable)).length,
+    byRetailer: OFFICIAL_RESOURCE_MATRIX.map((retailer) => ({
+      retailerKey: retailer.retailerKey,
+      displayName: retailer.displayName,
+      resourceCount: retailer.resources.length,
+      active: retailer.resources.filter((resource) => resource.status === 'active').length,
+      planned: retailer.resources.filter((resource) => /^planned/.test(resource.status)).length,
+      blockedOrUnclear: retailer.resources.filter((resource) => ['blocked', 'unclear'].includes(resource.crawlable)).length,
+    })),
+  };
+}
+
+module.exports = {
+  DATA_FIELDS,
+  OFFICIAL_RESOURCE_MATRIX,
+  getOfficialResourceMatrixForRetailer,
+  getOfficialResourceUrlsForRetailer,
+  summarizeOfficialResourceMatrix,
+};

@@ -68,11 +68,15 @@ const HOFER_OFFICIAL_OFFER_PAGES = [
 ];
 const LIDL_OFFICIAL_CAMPAIGN_PAGES = [
   'https://www.lidl.at/c/mega-deals/s10091719',
-  'https://www.lidl.at/c/aktion/a10094563',
-  'https://www.lidl.at/c/frische-angebote/a10094562',
-  'https://www.lidl.at/c/echtes-streetfood-schmecken-lohnt-sich/a10094559',
-  'https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10094560',
+  'https://www.lidl.at/c/aktion/a10095240',
+  'https://www.lidl.at/c/frische-angebote/a10095239',
+  'https://www.lidl.at/c/jeden-tag-deine-guenstigen-preise/a10095237',
+  'https://www.lidl.at/c/blumen-pflanzen/a10095234',
+  'https://www.lidl.at/c/super-frische/s10013062',
+  'https://www.lidl.at/c/mit-jedem-bissen-kurzurlaub-machen/a10095235',
+  'https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10095236',
 ];
+const LIDL_CAMPAIGN_PAGE_LIMIT = 14;
 const FETCH_DIAGNOSTIC_PREVIEW_LIMIT = 260;
 
 function responseContentType(response = {}) {
@@ -1003,6 +1007,62 @@ function parseLidlGridDataCardsFromHtml(html, pageUrl) {
   });
 
   return cards;
+}
+
+function isLidlCampaignPageUrl(url) {
+  const value = String(url || '');
+
+  return /https:\/\/www\.lidl\.at\/c\/(?!flugblatt\/|sortiment\/|shop\/)[a-z0-9-]+\/[as]\d+/i.test(value);
+}
+
+function extractLidlCampaignPageLinksFromHtml(html, baseUrl = 'https://www.lidl.at/') {
+  const $ = cheerio.load(html || '');
+  const links = [];
+  const seen = new Set();
+
+  function push(url) {
+    const absoluteUrl = toAbsoluteUrl(url, baseUrl);
+    const normalizedUrl = sanitizeWhitespace(absoluteUrl).replace(/#.*$/, '');
+
+    if (!normalizedUrl || seen.has(normalizedUrl) || !isLidlCampaignPageUrl(normalizedUrl)) {
+      return;
+    }
+
+    seen.add(normalizedUrl);
+    links.push(normalizedUrl);
+  }
+
+  $('a[href]').each((index, element) => {
+    push($(element).attr('href'));
+  });
+
+  for (const match of String(html || '').matchAll(/https:\/\/www\.lidl\.at\/c\/[a-z0-9-]+\/[as]\d+(?:[/?#][^\s"'<>]*)?/gi)) {
+    push(match[0]);
+  }
+
+  return links;
+}
+
+function getLidlCampaignPagesForCrawl({ html, source }) {
+  const configuredSeeds = Array.isArray(source?.crawlPolicy?.campaignSeedUrls) && source.crawlPolicy.campaignSeedUrls.length > 0
+    ? source.crawlPolicy.campaignSeedUrls
+    : LIDL_OFFICIAL_CAMPAIGN_PAGES;
+  const discovered = extractLidlCampaignPageLinksFromHtml(html, source?.sourceUrl || 'https://www.lidl.at/');
+  const pages = [];
+  const seen = new Set();
+
+  for (const url of [...discovered, ...configuredSeeds, ...LIDL_OFFICIAL_CAMPAIGN_PAGES]) {
+    const normalizedUrl = sanitizeWhitespace(url).replace(/#.*$/, '');
+
+    if (!normalizedUrl || seen.has(normalizedUrl) || !isLidlCampaignPageUrl(normalizedUrl)) {
+      continue;
+    }
+
+    seen.add(normalizedUrl);
+    pages.push(normalizedUrl);
+  }
+
+  return pages.slice(0, LIDL_CAMPAIGN_PAGE_LIMIT);
 }
 
 function normalizeLidlSiteProductToOffer({
@@ -4104,6 +4164,8 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
   const diagnostics = {
     flyerIdentifiers: flyerIdentifiers.length,
     flyerRawProducts: 0,
+    campaignPagesDiscovered: 0,
+    campaignPagesSeeded: 0,
     campaignPages: [],
     campaignRawCards: 0,
     campaignParsedOffers: 0,
@@ -4151,7 +4213,11 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     }
   }
 
-  for (const pageUrl of LIDL_OFFICIAL_CAMPAIGN_PAGES) {
+  const campaignPagesForCrawl = getLidlCampaignPagesForCrawl({ html, source });
+  diagnostics.campaignPagesDiscovered = extractLidlCampaignPageLinksFromHtml(html, source.sourceUrl).length;
+  diagnostics.campaignPagesSeeded = campaignPagesForCrawl.length;
+
+  for (const pageUrl of campaignPagesForCrawl) {
     try {
       const page = await fetchLidlOfficialPageHtml(pageUrl);
       const pageDiagnostics = {};
@@ -4729,8 +4795,11 @@ async function fetchNestedHtmlDocuments({ source, crawlJobId, region, links, lim
 async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
   const hoferLinks = [];
   const seenHoferUrls = new Set();
+  const configuredSeeds = Array.isArray(source?.crawlPolicy?.discoverySeedUrls) && source.crawlPolicy.discoverySeedUrls.length > 0
+    ? source.crawlPolicy.discoverySeedUrls
+    : HOFER_OFFICIAL_OFFER_PAGES;
 
-  [...(Array.isArray(links) ? links : []), ...HOFER_OFFICIAL_OFFER_PAGES.map((url) => ({ url, label: url, type: 'page' }))].forEach((item) => {
+  [...(Array.isArray(links) ? links : []), ...configuredSeeds.map((url) => ({ url, label: url, type: 'page' }))].forEach((item) => {
     const normalizedUrl = sanitizeWhitespace(item?.url);
 
     if (!normalizedUrl || seenHoferUrls.has(normalizedUrl)) {
@@ -5244,6 +5313,9 @@ module.exports = {
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
     LIDL_OFFICIAL_CAMPAIGN_PAGES,
+    extractLidlCampaignPageLinksFromHtml,
+    getLidlCampaignPagesForCrawl,
+    isLidlCampaignPageUrl,
     normalizeImageUrl,
   },
 };

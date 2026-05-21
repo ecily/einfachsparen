@@ -3,11 +3,13 @@ const test = require('node:test');
 const {
   OFFICIAL_RETAILERS,
   assessStructure,
+  buildOfficialResourceAudit,
   buildCoverageRatios,
   classifySourceKind,
   getRetailerConfigs,
   isBlockedLikely,
   normalizeCodeSource,
+  OFFICIAL_RESOURCE_MATRIX,
   pct,
 } = require('../src/services/diagnostics/officialSourceMatrixDiagnostic');
 
@@ -30,6 +32,17 @@ test('official retailer configuration covers requested source matrix targets', (
   ]);
   assert.ok(OFFICIAL_RETAILERS.find((retailer) => retailer.retailerKey === 'spar').officialUrls.includes('https://www.spar.at/aktionen/steiermark'));
   assert.ok(OFFICIAL_RETAILERS.find((retailer) => retailer.retailerKey === 'pagro').officialUrls.includes('https://www.pagro.at/angebote'));
+});
+
+test('official resource matrix keeps user-researched resources prominent and merged into configs', () => {
+  const pagro = OFFICIAL_RESOURCE_MATRIX.find((retailer) => retailer.retailerKey === 'pagro');
+  const lidl = getRetailerConfigs().find((retailer) => retailer.retailerKey === 'lidl');
+  const spar = getRetailerConfigs().find((retailer) => retailer.retailerKey === 'spar');
+
+  assert.ok(pagro.resources.some((resource) => resource.url.includes('/angebote/angebote-buero-schule')));
+  assert.ok(pagro.resources.some((resource) => resource.url.includes('/angebote/angebote-gaming')));
+  assert.ok(lidl.officialUrls.includes('https://www.lidl.at/c/aktion/a10095240'));
+  assert.ok(spar.officialUrls.includes('https://www.spar.at/produktwelt/bier?inAngebot=true&page=1'));
 });
 
 test('classifies source kind as official aggregator marketplace or unknown', () => {
@@ -106,4 +119,23 @@ test('structure assessment uses code and reachability hints conservatively', () 
   assert.equal(assessment.pdfFlyerLikely, true);
   assert.equal(assessment.existingParserCoverage, 'active');
   assert.equal(assessment.confidence, 'high');
+});
+
+test('resource audit separates source-defined resources from planned or blocked matrix entries', () => {
+  const pagro = getRetailerConfigs().find((retailer) => retailer.retailerKey === 'pagro');
+  const audit = buildOfficialResourceAudit({
+    retailer: pagro,
+    codeSources: pagro.codeSources,
+    dbCoverage: {
+      sourceBreakdown: [
+        { sourceType: 'aktionsfinder-json', sourceUrl: 'https://www.aktionsfinder.at/pv/pagro-libro/' },
+      ],
+    },
+  });
+
+  assert.equal(audit.resourceCount > 5, true);
+  assert.ok(audit.matrixResourcesAlreadyInSourceDefinitions.includes('https://www.pagro.at/angebote'));
+  assert.ok(audit.matrixResourcesAlreadyInSourceDefinitions.includes('https://www.pagro.at/cms/flugblatt'));
+  assert.ok(audit.matrixResourcesMissingInSourceDefinitions.some((resource) => resource.url.includes('/angebote/angebote-haushalt')));
+  assert.equal(audit.aggregatorPolicy.includes('aggregator-supplement-only'), true);
 });

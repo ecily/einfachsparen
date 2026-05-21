@@ -26,6 +26,8 @@ function deriveSourceKey(source = {}) {
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
+  if (url.includes('spar.at/aktionen/steiermark/eurospar') || (url.includes('spar.at/aktionen/steiermark') && format === 'eurospar')) return 'eurospar-official-actions-steiermark';
+  if (url.includes('spar.at/aktionen/steiermark/interspar') || url.includes('interspar.at/aktionen/steiermark') || (url.includes('spar.at/aktionen/steiermark') && format === 'interspar')) return 'interspar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
   if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
   if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
@@ -35,11 +37,17 @@ function deriveSourceKey(source = {}) {
   if (url.includes('billa.at')) return `${format || 'billa'}-${source.channel || 'official'}-${source.sourceType || 'source'}`;
   if (url.includes('hofer.at')) return 'hofer-official-flyer';
   if (url.includes('lidl.at')) return 'lidl-official-flyer';
+  if (url.includes('penny.at/sortiment/dauer-guenstig')) return 'penny-official-dauer-guenstig';
   if (url.includes('penny.at/angebote/flugblaetter') || (url.includes('penny.at') && source.channel === 'official-flyer')) return 'penny-official-flyer';
   if (url.includes('penny.at/angebote') || (url.includes('penny.at') && source.channel === 'official-site')) return 'penny-official-site';
   if (url.includes('penny.at')) return `penny-${source.channel || 'official'}-${source.sourceType || 'source'}`;
+  if (url.includes('dm.at/services/kundenprogramme-services/immerguenstig')) return 'dm-official-immerguenstig';
   if (url.includes('dm.at')) return 'dm-official-site';
+  if (url.includes('bipa.at/cp/onlineonly')) return 'bipa-official-onlineonly';
+  if (url.includes('bipa.at/cp/joe-bonusclub')) return 'bipa-official-joe-bonusclub';
   if (url.includes('bipa.at')) return 'bipa-official-site';
+  if (url.includes('pagro.at/cms/flugblatt')) return 'pagro-official-flyer';
+  if (url.includes('pagro.at')) return 'pagro-official-site';
 
   return normalizeSourceKey([
     source.retailerKey,

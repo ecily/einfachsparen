@@ -101,6 +101,29 @@ test('extracts official INTERSPAR up-to category promotions and search-relevant 
   assert.equal(offers.find((offer) => offer.promotionScope === 'frotteewaren').validTo.toISOString(), '2026-05-27T23:59:59.999Z');
 });
 
+test('extracts extended non-food category promotion scopes without product prices', () => {
+  const html = `
+    <section><img alt="bis zu -25% auf alle Blumen und Pflanzen. Gueltig von Do, 21.5. bis Mi, 27.5." /></section>
+    <section><img alt="bis zu -20% auf alle Gaming- und Technikartikel. Gueltig von Do, 21.5. bis Mi, 27.5." /></section>
+    <section><img alt="-15% auf alle Party- und Geschenkartikel. Gueltig 21.05.2026 - 24.05.2026." /></section>
+  `;
+  const { offers } = extractAndNormalizeOfficialCategoryPromotions({
+    html,
+    source: INTERSPAR_SOURCE,
+    crawlJobId: 'crawl-interspar-actions',
+    region: 'Austria',
+    now: new Date('2026-05-21T12:00:00.000Z'),
+  });
+
+  assert.deepEqual(offers.map((offer) => offer.promotionScope).sort(), [
+    'gaming-technik',
+    'party-schenken',
+    'pflanzen',
+  ]);
+  assert.equal(offers.find((offer) => offer.promotionScope === 'gaming-technik').categorySecondary, 'Gaming & Technik');
+  assert.equal(offers.find((offer) => offer.promotionScope === 'party-schenken').priceCurrent.amount, null);
+});
+
 test('diagnoses blocked challenge pages separately from parser misses', () => {
   const html = '<html><head><title>Just a moment...</title></head><body>Cloudflare challenge</body></html>';
   const diagnostics = diagnoseOfficialCategoryPromotionHtml({ html, candidates: [] });

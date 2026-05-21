@@ -55,9 +55,19 @@ const CATEGORY_TAXONOMY = [
       { label: 'Kuechenhelfer', patterns: [/(geschirr|pfanne|topf|besteck|messer|kochen|kueche|kuche)/] },
       { label: 'Aufbewahrung & Folien', patterns: [/(folie|frischhalte|alu|beutel|aufbewahrung|dose|box)/] },
       { label: 'Deko & Wohnen', patterns: [/(deko|kerze|vase|kissen|wohnen)/] },
+      { label: 'Frotteewaren', patterns: [/(frottee|frotteewaren|handtuch|handtuecher|handtucher|strandtuch|strandtuecher|strandtucher|badematte|badematten|badetuch|badetuecher|badetucher)/] },
       { label: 'Lufterfrischer & Raumduft', patterns: [/(lufterfrischer|raumduft|duftspray|duftstecker|nachfuller|nachfueller|glade|airwick|air wick)/] },
       { label: 'Papier & Buero', patterns: [/(papier|buero|buro|ordner|heft|stift|druckerpapier)/] },
       { label: 'Papierwaren', patterns: [/(toilettenpapier|kuechenrolle|kuchenrolle|serviette|taschentuecher|taschentucher)/] },
+    ],
+  },
+  {
+    main: 'Non-Food',
+    patterns: [/(non food|non-food|nichtlebensmittel|aktionsware|warenwelt)/],
+    subcategories: [
+      { label: 'Online-only / Sale', patterns: [/(online only|online-only|onlineangebot|online angebot|abverkauf|ausverkauf|clearance)/] },
+      { label: 'Dauerpreise', patterns: [/(dauerpreis|dauer guenstig|dauer guenstiger|dauer-guenstig|immerguenstig|immer guenstig)/] },
+      { label: 'Saisonen', patterns: [/(saison|saisonen|weihnachten|ostern|sommer|winter|schulstart|fasching)/] },
     ],
   },
   {
@@ -75,10 +85,11 @@ const CATEGORY_TAXONOMY = [
     main: 'Tierbedarf',
     patterns: [/(tier|haustier|hund|katze|tierbedarf)/],
     subcategories: [
+      { label: 'Tiernahrung', patterns: [/(tiernahrung|tierfutter|haustierfutter|nassfutter|trockenfutter|snack|leckerli)/] },
       { label: 'Hundefutter', patterns: [/(hund|hundefutter|hundesnack)/] },
       { label: 'Katzenfutter', patterns: [/(katze|katzenfutter|katzensnack|perfect fit|gourmet perle)/] },
       { label: 'Katzenstreu & Pflege', patterns: [/(katzenstreu|katzenpflege)/] },
-      { label: 'Tierzubehoer', patterns: [/(napf|leine|spielzeug|tierzubehor|tierzubehoer)/] },
+      { label: 'Tierzubehoer', patterns: [/(napf|leine|spielzeug|tierzubehor|tierzubehoer|kratzbaum|halsband|streu)/] },
     ],
   },
   {
@@ -107,6 +118,8 @@ const CATEGORY_TAXONOMY = [
       { label: 'Kuechengeraete', patterns: [/(mikrowelle|toaster|wasserkocher|kaffeemaschine|fritteuse|grill|kontaktgrill|standgrill|heissluftfritteuse|heisluftfritteuse)/] },
       { label: 'Unterhaltungselektronik', patterns: [/(tv|fernseher|lautsprecher|kopfhorer|kopfhoerer)/] },
       { label: 'Computer & Mobile', patterns: [/(notebook|laptop|tablet|smartphone|monitor|drucker|scanner|speichermedien|festplatte|usb|computerzubehor|computerzubehoer|pc zubehor|pc zubehoer)/] },
+      { label: 'Handys & Router', patterns: [/(handy|handys|smartphone|router|sim karte|simkarte|wertkarte|mobilfunk|telefon)/] },
+      { label: 'Gaming & Technik', patterns: [/(gaming|gamepad|controller|spielkonsole|nintendo switch|playstation|xbox|videospiel|headset)/] },
       { label: 'Werkzeug & Akkus', patterns: [/(werkzeug|bohrer|akkuschrauber|akku|maschine)/] },
     ],
   },
@@ -117,6 +130,8 @@ const CATEGORY_TAXONOMY = [
       { label: 'Spielzeug', patterns: [/(spielzeug|lego|puppe|pluesch|plueschtier|hot wheels|barbie|spiel)/] },
       { label: 'Games & Konsolen', patterns: [/(games|spielkonsole|nintendo switch|playstation|xbox|videospiel)/] },
       { label: 'Schreibwaren & Schule', patterns: [/(schule|schreibwaren|heft|stift|malblock)/] },
+      { label: 'Party & Schenken', patterns: [/(party|geschenk|schenken|ballon|serviette|geschenkpapier|geschenktasche|geburtstag|feier)/] },
+      { label: 'Saisonen', patterns: [/(saison|saisonen|weihnachten|ostern|sommer|winter|schulstart|fasching)/] },
       { label: 'Sport & Camping', patterns: [/(sport|camping|fahrrad|helm|outdoor|grill|freizeit)/] },
       { label: 'Autozubehoer', patterns: [/(autozubehor|autozubehoer|motoroel|reifen)/] },
     ],
@@ -149,6 +164,31 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(eau de parfum|eau de toilette|parfum|fragrance|fragrances|duft)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Kosmetik & Make-up',
+  },
+  {
+    patterns: [/\b(frottee|frotteewaren|handtuch|handtuecher|handtucher|strandtuch|strandtuecher|strandtucher|badematte|badematten|badetuch|badetuecher|badetucher)\b/],
+    main: 'Haushalt',
+    sub: 'Frotteewaren',
+  },
+  {
+    patterns: [/\b(handy|handys|smartphone|router|simkarte|sim karte|wertkarte|mobilfunk)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Handys & Router',
+  },
+  {
+    patterns: [/\b(gaming|gamepad|controller|spielkonsole|nintendo switch|playstation|xbox|videospiel|headset)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Gaming & Technik',
+  },
+  {
+    patterns: [/\b(party|geschenk|schenken|ballon|geschenkpapier|geschenktasche|geburtstag|partydeko)\b/],
+    main: 'Freizeit / Sonstiges',
+    sub: 'Party & Schenken',
+  },
+  {
+    patterns: [/\b(non food|non-food|nichtlebensmittel|aktionsware)\b/],
+    main: 'Non-Food',
+    sub: 'Sonstiges',
   },
   {
     patterns: [/\b(roestgemuese|rostgemuese|buttergemuese|buttergemuse|gemuese reindl|gemuse reindl|gemuese a la creme|gemuse a la creme|iglo gemuese|iglo gemuse|cremespinat|blattspinat|rotkraut)\b/],
@@ -356,7 +396,12 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Katzenfutter',
   },
   {
-    patterns: [/\b(zooroyal|moon ranger|hundefutter|hundesnack|katzenfutter|katzensnack)\b/],
+    patterns: [/\b(hundefutter|hundesnack|hundekeks|hundeleckerli|nassfutter hund|trockenfutter hund)\b/],
+    main: 'Tierbedarf',
+    sub: 'Hundefutter',
+  },
+  {
+    patterns: [/\b(zooroyal|moon ranger|tierzubehoer|tierzubehor|kratzbaum|napf|leine|halsband)\b/],
     main: 'Tierbedarf',
     sub: 'Tierzubehoer',
   },

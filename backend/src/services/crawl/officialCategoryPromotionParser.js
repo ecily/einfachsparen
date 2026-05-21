@@ -78,6 +78,66 @@ const PROMOTION_SCOPES = [
     ],
     pattern: /\b(?:frottee|frotteewaren|strandtuch|strandtuecher|strandtucher|badematte|badematten)\b/,
   },
+  {
+    key: 'pflanzen',
+    appliesToCategory: 'pflanzen',
+    titleScope: 'alle Blumen und Pflanzen',
+    categoryPrimary: 'Garten / Pflanzen',
+    categorySecondary: 'Pflanzen & Blumen',
+    categoryKey: 'pflanzen-blumen',
+    keywords: ['pflanzen', 'blumen', 'topfpflanzen', 'garten'],
+    pattern: /\b(?:pflanzen|blumen|topfpflanzen|gartenpflanzen)\b/,
+  },
+  {
+    key: 'buero-schule',
+    appliesToCategory: 'buero-schule',
+    titleScope: 'alle Buero- und Schulartikel',
+    categoryPrimary: 'Buero / Schule',
+    categorySecondary: 'Schreibwaren',
+    categoryKey: 'schreibwaren',
+    keywords: ['buero', 'schule', 'schreibwaren', 'papier', 'ordner'],
+    pattern: /\b(?:buero|buro|schule|schreibwaren|papierwaren|ordner|hefte|stifte)\b/,
+  },
+  {
+    key: 'basteln-kreativ',
+    appliesToCategory: 'basteln-kreativ',
+    titleScope: 'alle Bastel- und Kreativartikel',
+    categoryPrimary: 'Buero / Schule',
+    categorySecondary: 'Basteln & Kreativ',
+    categoryKey: 'basteln-kreativ',
+    keywords: ['basteln', 'kreativ', 'farben', 'pinsel', 'kleber'],
+    pattern: /\b(?:basteln|bastel|kreativ|farben|pinsel|kleber|malen)\b/,
+  },
+  {
+    key: 'gaming-technik',
+    appliesToCategory: 'gaming-technik',
+    titleScope: 'alle Gaming- und Technikartikel',
+    categoryPrimary: 'Technik / Elektronik',
+    categorySecondary: 'Gaming & Technik',
+    categoryKey: 'gaming-technik',
+    keywords: ['gaming', 'technik', 'konsole', 'controller', 'headset'],
+    pattern: /\b(?:gaming|technik|konsole|controller|headset|playstation|xbox|nintendo)\b/,
+  },
+  {
+    key: 'party-schenken',
+    appliesToCategory: 'party-schenken',
+    titleScope: 'alle Party- und Geschenkartikel',
+    categoryPrimary: 'Freizeit / Sonstiges',
+    categorySecondary: 'Party & Schenken',
+    categoryKey: 'party-schenken',
+    keywords: ['party', 'schenken', 'geschenk', 'deko', 'ballon'],
+    pattern: /\b(?:party|schenken|geschenk|geschenkartikel|ballon|partydeko)\b/,
+  },
+  {
+    key: 'weinwelt',
+    appliesToCategory: 'weinwelt',
+    titleScope: 'alle Weinwelt-Artikel',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    keywords: ['wein', 'weinwelt', 'sekt', 'prosecco', 'spirituosen'],
+    pattern: /\b(?:weinwelt|wein|weine|sekt|prosecco|spirituosen)\b/,
+  },
 ];
 
 function normalizeForScan(value) {
@@ -156,7 +216,10 @@ function parseDateRange(text, now = new Date()) {
 
 function sourceKeyForActionSource(source = {}) {
   const url = String(source.sourceUrl || '').toLowerCase();
+  const format = String(source.sourceRetailerFormat || source.retailerKey || '').toLowerCase();
 
+  if (url.includes('spar.at/aktionen/steiermark/eurospar') || (url.includes('spar.at/aktionen/steiermark') && format === 'eurospar')) return 'eurospar-official-actions-steiermark';
+  if (url.includes('spar.at/aktionen/steiermark/interspar') || url.includes('interspar.at/aktionen/steiermark') || (url.includes('spar.at/aktionen/steiermark') && format === 'interspar')) return 'interspar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
   if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
 

@@ -108,6 +108,24 @@ test('classifies cat litter separately from cat food', () => {
   assert.equal(decision.secondaryCategory, 'Katzenstreu & Pflege');
 });
 
+test('classifies official resource-matrix non-food categories without polluting food categories', () => {
+  const cases = [
+    ['Frottee Handtuch 2er Pack', 'Haushalt', 'Frotteewaren'],
+    ['Wertkarten Router LTE', 'Technik / Elektronik', 'Handys & Router'],
+    ['Gaming Headset mit Controller', 'Technik / Elektronik', 'Gaming & Technik'],
+    ['Party Geschenkpapier Set', 'Freizeit / Sonstiges', 'Party & Schenken'],
+    ['ZooRoyal Hundenapf rutschfest', 'Tierbedarf', 'Tierzubehoer'],
+    ['Pedigree Hundefutter 2 kg', 'Tierbedarf', 'Hundefutter'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+  }
+});
+
 test('does not treat HOFER or discount wording alone as a product category', () => {
   const decision = determineCategoryDecision({
     title: 'HOFER Diskont Vorteilspreis',

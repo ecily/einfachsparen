@@ -102,6 +102,8 @@ function deriveSourceKey(definition = {}) {
 
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
+  if (url.includes('spar.at/aktionen/steiermark/eurospar') || (url.includes('spar.at/aktionen/steiermark') && format === 'eurospar')) return 'eurospar-official-actions-steiermark';
+  if (url.includes('spar.at/aktionen/steiermark/interspar') || url.includes('interspar.at/aktionen/steiermark') || (url.includes('spar.at/aktionen/steiermark') && format === 'interspar')) return 'interspar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
   if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
   if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';

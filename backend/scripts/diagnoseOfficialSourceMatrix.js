@@ -41,6 +41,7 @@ function printTextSummary(report) {
   console.log(`Official Source Matrix (${report.generatedAt})`);
   console.log(`readOnly=${report.readOnly} mutatedCollections=${report.mutatedCollections.length} reachabilityChecked=${report.reachabilityChecked}`);
   console.log(`retailers=${report.summary.retailerCount} officialUrlsChecked=${report.summary.officialUrlsChecked}`);
+  console.log(`resourceMatrix=${report.summary.resourceMatrix.resourceCount} planned=${report.summary.resourceMatrix.plannedOfficialResources} blockedOrUnclear=${report.summary.resourceMatrix.blockedOrUnclearResources}`);
   console.log('');
 
   for (const retailer of report.retailers) {
@@ -48,6 +49,7 @@ function printTextSummary(report) {
     console.log(`  offers=${retailer.dbCoverage.offerCountApprox} activeApprox=${retailer.dbCoverage.activeOfferCountApprox}`);
     console.log(`  parser=${retailer.structureAssessment.existingParserCoverage} confidence=${retailer.structureAssessment.confidence}`);
     console.log(`  officialSources=${retailer.codeSources.filter((source) => source.sourceKind === 'official').map((source) => `${source.sourceKey}:${source.active ? 'active' : 'inactive'}`).join(', ') || 'none'}`);
+    console.log(`  matrixResources=${retailer.resourceAudit.resourceCount} officialFirst=${retailer.resourceAudit.officialFirstDecision}`);
     console.log(`  next=${retailer.recommendedNextAction}`);
   }
 }

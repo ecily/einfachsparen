@@ -1487,13 +1487,41 @@ test('Lidl official dedupe prevents duplicate campaign products across pages', (
   assert.equal(diagnostics.skipReasons.duplicate, 1);
 });
 
-test('Lidl official campaign page allowlist includes offer themes and excludes risky assortment pages', () => {
+test('Lidl official campaign page seeds track current resource matrix URLs', () => {
   assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/mega-deals/s10091719'));
-  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/aktion/a10094563'));
-  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/frische-angebote/a10094562'));
-  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/echtes-streetfood-schmecken-lohnt-sich/a10094559'));
-  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10094560'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/aktion/a10095240'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/frische-angebote/a10095239'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/jeden-tag-deine-guenstigen-preise/a10095237'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/blumen-pflanzen/a10095234'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/super-frische/s10013062'));
+  assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10095236'));
   assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/jeden-tag-deine-guenstigsten-preise/a10094561'), false);
   assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/blumen-pflanzen/a10094558'), false);
-  assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/super-frische/s10013062'), false);
+});
+
+test('Lidl official campaign discovery merges official links with configured seeds', () => {
+  const html = `
+    <main>
+      <a href="/c/aktion/a10095240">Aktion</a>
+      <a href="https://www.lidl.at/c/blumen-pflanzen/a10095234">Blumen</a>
+      <a href="/c/flugblatt/s10012330">Flugblatt</a>
+      <a href="/c/sortiment/s99999999">Sortiment</a>
+    </main>
+  `;
+  const discovered = __private.extractLidlCampaignPageLinksFromHtml(html, 'https://www.lidl.at/c/flugblatt/s10012330');
+  const pages = __private.getLidlCampaignPagesForCrawl({
+    html,
+    source: {
+      sourceUrl: 'https://www.lidl.at/c/flugblatt/s10012330',
+      crawlPolicy: {
+        campaignSeedUrls: ['https://www.lidl.at/c/frische-angebote/a10095239'],
+      },
+    },
+  });
+
+  assert.ok(discovered.includes('https://www.lidl.at/c/aktion/a10095240'));
+  assert.ok(discovered.includes('https://www.lidl.at/c/blumen-pflanzen/a10095234'));
+  assert.equal(discovered.some((url) => url.includes('/flugblatt/')), false);
+  assert.ok(pages.includes('https://www.lidl.at/c/aktion/a10095240'));
+  assert.ok(pages.includes('https://www.lidl.at/c/frische-angebote/a10095239'));
 });
