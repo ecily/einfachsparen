@@ -648,6 +648,7 @@ const QUERY_CONTEXTS = [
     weakContexts: ['dessert', 'torte', 'kuchen', 'pudding', 'creme'],
   },
   {
+    key: 'bier',
     tokens: ['bier'],
     preferred: ['bier', 'getraenke', 'getranke'],
     strongPreferred: ['bier', 'getraenke', 'getranke'],
@@ -655,6 +656,7 @@ const QUERY_CONTEXTS = [
     exactProductIntent: ['maerzen', 'marzen', 'pils', 'radler'],
     productContext: ['bier', 'getraenke', 'getranke'],
     weakContexts: ['bierwurst', 'bierschinken'],
+    severeWeakContexts: ['shorts', 'bekleidung', 'textil', 'kleinkinder', 'kinderbekleidung', 'damenbekleidung', 'herrenbekleidung'],
   },
   {
     key: 'reis',
@@ -1769,6 +1771,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericJoghurtQuery = context?.key === 'joghurt' && queryTokens.length === 1 && queryTokens[0] === 'joghurt';
   const genericCatFoodQuery = context?.key === 'katzenfutter' && queryTokens.length === 1 && queryTokens[0] === 'katzenfutter';
   const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
+  const genericBeerQuery = context?.key === 'bier' && queryTokens.length === 1 && queryTokens[0] === 'bier';
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
   const conservativeGenericOilQuery = genericOilQuery;
 
@@ -1987,6 +1990,10 @@ function scoreOfferAgainstQuery(offer, query) {
     if (!realRice) {
       return 0;
     }
+  }
+
+  if (genericBeerQuery && countAnyTokenMatches(titleTokens.concat(categoryTokens, comparisonTokens), context.severeWeakContexts || []) > 0) {
+    return 0;
   }
 
   if (genericOilQuery) {

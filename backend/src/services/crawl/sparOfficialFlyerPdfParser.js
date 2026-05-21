@@ -224,6 +224,7 @@ function addCandidate(candidates, pageNumber, data) {
   const candidate = {
     id: `spar-p${pageNumber}-${candidates.length + 1}`,
     page: pageNumber,
+    productKind: 'coffee',
     ...data,
   };
 
@@ -234,6 +235,17 @@ function addCandidate(candidates, pageNumber, data) {
   }
 
   candidates.push(candidate);
+}
+
+function beerCandidate(data = {}) {
+  return {
+    productKind: 'beer',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    searchKeywords: 'bier maerzen marzen pils radler lager hell helles flaschenbier dosenbier',
+    ...data,
+  };
 }
 
 function hasText(text, pattern) {
@@ -342,6 +354,120 @@ function extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, vali
   return candidates;
 }
 
+function extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+  const extraPercentCondition = 'Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt';
+
+  if (hasText(text, /puntigamer\s*(?:maerzen|marzen)/) && hasText(text, /0[,.]\s*5\s*liter/) && /ab\s+24\s+ds\.?\s+je\s*0[,.]\s*99/i.test(normalized)) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Puntigamer Maerzen',
+      brand: 'Puntigamer',
+      price: 0.99,
+      referencePrice: hasText(text, /1\s*ds\.?\s+1[,.]\s*54/) ? 1.54 : null,
+      quantityText: '0.5 l',
+      conditionsText: `ab 24 Dosen. ${extraPercentCondition}`,
+      rawText: 'Puntigamer Maerzen, 0,5 Liter, ab 24 Dosen je 0,99',
+      comparisonSafe: true,
+    }));
+  }
+
+  if (
+    hasText(text, /(?:goesser|gosser|g.sser)\s*(?:maerzen|marzen|m.rzen)/)
+    && hasText(text, /naturradler/)
+    && hasText(text, /0[,.]\s*5\s*(?:-\s*)?liter/)
+    && (/ab\s+6\s+(?:ds|dosen)\.?\s+je\s*0[,.]\s*99/i.test(normalized) || (sourceRetailerFormat === 'interspar' && /mengen\s*vorteil\s*099/i.test(normalized)))
+  ) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Goesser Maerzen, Naturradler Zitrone oder Naturradler Zitrone alkoholfrei',
+      brand: 'Goesser',
+      price: 0.99,
+      referencePrice: /1\s+(?:ds|dose)\.?\s+1[,.]\s*59/i.test(normalized) ? 1.59 : null,
+      quantityText: '0.5 l',
+      conditionsText: `ab 6 Dosen. ${extraPercentCondition}`,
+      rawText: 'Goesser Maerzen, Naturradler Zitrone oder Naturradler Zitrone alkoholfrei, 0,5 Liter, ab 6 Dosen je 0,99',
+      comparisonSafe: true,
+    }));
+  }
+
+  if (
+    hasText(text, /hirter\s*privat pils/)
+    && hasText(text, /0[,.]\s*5\s*(?:-\s*)?liter/)
+    && (/ab\s+6\s+(?:fl|flaschen)\.?\s+je\s*1[,.]\s*19/i.test(normalized) || (sourceRetailerFormat === 'interspar' && /mengen\s*vorteil\s*119/i.test(normalized)))
+  ) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Hirter Privat Pils',
+      brand: 'Hirter',
+      price: 1.19,
+      referencePrice: /1\s+(?:fl|flasche)\.?\s+1[,.]\s*47/i.test(normalized) ? 1.47 : null,
+      quantityText: '0.5 l',
+      conditionsText: `ab 6 Flaschen. ${extraPercentCondition}`,
+      rawText: 'Hirter Privat Pils, 0,5 Liter, ab 6 Flaschen je 1,19',
+      comparisonSafe: true,
+    }));
+  }
+
+  if (hasText(text, /schwechater\s*bier/) && (hasText(text, /20\s*x\s*0[,.]\s*5\s*(?:-\s*)?liter/) || hasText(text, /20er-kiste/)) && /16[,.]\s*80/i.test(normalized)) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Schwechater Bier 20 x 0,5 Liter',
+      brand: 'Schwechater',
+      price: 16.80,
+      referencePrice: /statt\s+19[,.]\s*40/i.test(normalized) ? 19.40 : null,
+      quantityText: '20 x 0.5 l',
+      conditionsText: extraPercentCondition,
+      rawText: 'Schwechater Bier, 20 x 0,5 Liter, 16,80',
+      comparisonSafe: true,
+    }));
+  }
+
+  if (
+    hasText(text, /ottakringer\s*helles/)
+    && hasText(text, /frucade\s*radler/)
+    && hasText(text, /0[,.]\s*5\s*(?:-\s*)?liter/)
+    && (/ab\s+(?:12|24)\s+ds\.?\s+je\s*0[,.]\s*69/i.test(normalized) || (sourceRetailerFormat === 'interspar' && /12\+12\s+gratis\s*ottakringer|ottakringer[\s\S]{0,180}\b069\b/i.test(normalized)))
+  ) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Ottakringer Helles oder Frucade Radler',
+      brand: 'Ottakringer',
+      price: 0.69,
+      referencePrice: /1\s+ds\.?\s+1[,.]\s*39/i.test(normalized) ? 1.39 : null,
+      quantityText: '0.5 l',
+      conditionsText: `12+12 gratis bzw. Mengenpreis laut Flugblatt. ${extraPercentCondition}`,
+      rawText: 'Ottakringer Helles oder Frucade Radler, 0,5 Liter, ab 12/24 Dosen je 0,69',
+      comparisonSafe: true,
+    }));
+  }
+
+  if (sourceRetailerFormat === 'interspar' && hasText(text, /peroni nastro azzurro/) && /16\s*80|1680/i.test(normalized)) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Peroni Nastro Azzurro',
+      brand: 'Peroni',
+      price: 16.80,
+      referencePrice: /statt\s+19[,.]\s*40/i.test(normalized) ? 19.40 : null,
+      quantityText: '20 x 0.33 l',
+      conditionsText: extraPercentCondition,
+      rawText: 'Peroni Nastro Azzurro, 0,33-Liter-Flasche, 16,80',
+      comparisonSafe: false,
+    }));
+  }
+
+  if (sourceRetailerFormat === 'interspar' && hasText(text, /puntigamer das .*bierige.* bier/) && /ab\s+24\s+dosen\s+je/i.test(normalized) && /099|0[,.]\s*99/i.test(normalized)) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Puntigamer das bierige Bier',
+      brand: 'Puntigamer',
+      price: 0.99,
+      referencePrice: /1\s+dose\s+1[,.]\s*54/i.test(normalized) ? 1.54 : null,
+      quantityText: '0.5 l',
+      conditionsText: `ab 24 Dosen. ${extraPercentCondition}`,
+      rawText: 'Puntigamer das bierige Bier, 0,5-Liter-Dose, ab 24 Dosen je 0,99',
+      comparisonSafe: true,
+    }));
+  }
+
+  return candidates;
+}
+
 function summarizeRejections(candidates = []) {
   const counts = new Map();
 
@@ -361,9 +487,15 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
   const seen = new Set();
 
   for (const page of pages) {
-    for (const candidate of extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity })) {
+    const pageCandidates = [
+      ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+    ];
+
+    for (const candidate of pageCandidates) {
       const key = [
         candidate.exclusionReason || '',
+        candidate.productKind || '',
         candidate.title || '',
         candidate.price || '',
         candidate.quantityText || '',
@@ -479,9 +611,10 @@ function normalizeSparPdfCandidateToOffer({
     issues.push('Bedingung aus Flyer beachten');
   }
 
-  const categoryPrimary = 'Getraenke';
-  const categorySecondary = 'Kaffee & Tee';
-  const categoryKey = 'kaffee-tee';
+  const categoryPrimary = candidate.categoryPrimary || 'Getraenke';
+  const categorySecondary = candidate.categorySecondary || 'Kaffee & Tee';
+  const categoryKey = candidate.categoryKey || 'kaffee-tee';
+  const searchKeywords = candidate.searchKeywords || 'kaffee espresso bohne gemahlen';
   const titleNormalized = normalizeTitleForMatch(candidate.title);
   const comparisonSignature = normalizeTitleForMatch([
     candidate.brand,
@@ -540,7 +673,7 @@ function normalizeSparPdfCandidateToOffer({
       candidate.brand,
       candidate.title,
       candidate.quantityText,
-      'kaffee espresso bohne gemahlen',
+      searchKeywords,
       categoryPrimary,
       categorySecondary,
       conditionsText,

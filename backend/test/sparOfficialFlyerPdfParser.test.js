@@ -63,6 +63,30 @@ test('extracts concrete EUROSPAR coffee offers from textlayer fixtures', () => {
   assert.equal(candidates[1].quantityText, '1 kg');
 });
 
+test('extracts concrete beer offers from SPAR KW21 textlayer snippets', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 3,
+        text: [
+          'Gilt auch auf ALLE Aktionspreise! -25% auf alle BIERE',
+          'Hirter Privat Pils 0,5 Liter Mengenvorteil 1 Fl. 1,47 ab 6 Fl. je 1,19 0,89',
+          'Schwechater Bier 0,5 Liter Im Einzelverkauf: 0,97 Mengenvorteil 20er-Kiste statt 19,40 16,80 12,60',
+          'Gösser Märzen Naturradler Zitrone, alkoholfrei, 0,5 Liter Mengenvorteil 1 Ds. 1,59 ab 6 Ds. je 0,99 0,74',
+          'Ottakringer Helles oder Frucade Radler 0,5 Liter 6+6 GRATIS 1 Ds. 1,39 ab 12 Ds. je 0,69 0,52',
+        ].join(' '),
+      },
+    ],
+  }).filter((candidate) => !candidate.exclusionReason);
+
+  assert.ok(candidates.some((candidate) => candidate.title === 'Hirter Privat Pils'));
+  assert.ok(candidates.some((candidate) => candidate.title === 'Schwechater Bier 20 x 0,5 Liter'));
+  assert.ok(candidates.some((candidate) => candidate.title.includes('Goesser Maerzen')));
+  assert.ok(candidates.every((candidate) => candidate.productKind === 'beer'));
+});
+
 test('rejects campaign-only coffee blocks as non-product diagnostics', () => {
   const page = fixture.pages.find((item) => item.pageNumber === 4);
   const candidates = extractSparPdfCandidates({
@@ -128,6 +152,46 @@ test('normalizes SPAR PDF candidates with source metadata and distinguishable re
   assert.equal(stored.rawFacts.sourceMetadata.pdfSha256, 'abc123');
   assert.equal(stored.rawFacts.sourceMetadata.extractionMethod, 'text-layer');
   assert.equal(stored.categorySecondary, 'Kaffee & Tee');
+});
+
+test('normalizes SPAR PDF beer candidates as beer with format metadata', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-20T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'eurospar',
+    validity: currentValidity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: 'Gösser Märzen, Naturradler Zitrone oder Naturradler Zitrone alkoholfrei 0,5 Liter 1 DS 1,59 ab 6 DS. je 0,99 0,74',
+      },
+    ],
+  });
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('eurospar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/eurospar/260521-1-flugblatt-kw-21/getPdf.ashx',
+  });
+  const stored = enrichOfferForStorage(offer, {
+    source: source('eurospar'),
+    sourceType: SOURCE_TYPE,
+    parserVersion: PARSER_VERSION,
+  });
+
+  assert.equal(stored.categorySecondary, 'Bier');
+  assert.equal(stored.categoryKey, 'bier');
+  assert.equal(stored.comparableUnit, 'l');
+  assert.equal(stored.normalizedUnitPrice.amount, 1.98);
+  assert.equal(stored.sourceRetailerFormat, 'eurospar');
+  assert.equal(stored.rawFacts.sourceKey, 'eurospar-official-flyer-pdf');
+  assert.match(stored.searchText, /bier/);
 });
 
 test('SPAR PDF dedupe keys are source-specific and do not blindly replace aggregators', () => {

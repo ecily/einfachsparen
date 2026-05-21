@@ -147,6 +147,28 @@ test('query without useful tokens uses safe regex fallback metadata', () => {
   });
 });
 
+test('beer query keeps beverage radler but rejects Radler shorts side hits', () => {
+  const beer = offer({
+    title: 'Goesser Maerzen Naturradler Zitrone 0,5 l',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    searchText: 'goesser maerzen naturradler bier getraenke',
+  });
+  const shorts = offer({
+    title: 'LILY & DAN Kleinkinder-Radler-Shorts HOFER 3 Stueck',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    searchText: 'lily dan kleinkinder radler shorts bier',
+  });
+
+  assert.ok(scoreOfferAgainstQuery(beer, 'bier') > 0);
+  assert.equal(scoreOfferAgainstQuery(shorts, 'bier'), 0);
+});
+
 test('umlaut oil query stays tokenized and does not fall back to broad regex search', () => {
   const oilQueryTokens = ['oel', ...FOOD_OIL_PRODUCT_TOKENS].sort();
 
