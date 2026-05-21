@@ -157,6 +157,9 @@ function isSnapshotTooOld(offer = {}, now = new Date(), maxAgeDays = DEFAULT_SNA
 }
 
 function isOfferFreshForActiveUse(offer = {}, now = new Date()) {
+  // Local require avoids a module cycle: sourceQuality uses the date-range parser from this file.
+  const { isLowConfidenceAggregatorOffer } = require('./sourceQuality');
+
   if (offer.status && offer.status !== 'active') return false;
   if (offer.isActiveNow === false) return false;
 
@@ -165,6 +168,7 @@ function isOfferFreshForActiveUse(offer = {}, now = new Date()) {
   if (hasExplicitExpiredEvidence(offer.rawFacts) || hasExplicitExpiredEvidence(offer)) return false;
   if (hasExpiredUrlRange(offer, now)) return false;
   if (isSnapshotTooOld(offer, now)) return false;
+  if (isLowConfidenceAggregatorOffer(offer)) return false;
 
   return true;
 }

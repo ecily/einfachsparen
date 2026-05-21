@@ -8,6 +8,8 @@ const {
   isSnapshotTooOld,
   parseAktionsfinderDateRange,
 } = require('../src/services/offers/offerFreshness');
+const { buildOfferRanking } = require('../src/services/offers/offerRankingService');
+const { classifyOfferSourceQuality } = require('../src/services/offers/sourceQuality');
 
 function iso(value) {
   if (!value) return null;
@@ -51,6 +53,8 @@ function summarizeOffer(offer, source) {
   ].filter(Boolean);
   const urlRange = urls.map(parseAktionsfinderDateRange).find((range) => range.validTo) || {};
 
+  const sourceQuality = classifyOfferSourceQuality(offer);
+
   return {
     title: offer.title || '',
     retailerKey: offer.retailerKey || '',
@@ -72,7 +76,65 @@ function summarizeOffer(offer, source) {
     crawlJobId: sourceIdString(offer.crawlJobId),
     syncedAt: iso(offer.updatedAt),
     priceCurrent: offer.priceCurrent?.amount ?? null,
+    sourceClass: sourceQuality.sourceClass,
+    validityConfidence: sourceQuality.validityConfidence,
+    freshnessConfidence: sourceQuality.freshnessConfidence,
+    sourceQualityRisk: sourceQuality.sourceQualityRisk,
   };
+}
+
+async function buildRankingSourceQualityDiagnostics(queries = []) {
+  const result = {};
+
+  for (const query of queries) {
+    const response = await buildOfferRanking({
+      query,
+      limit: 60,
+      offset: 0,
+      offsetExplicit: false,
+    });
+    const offers = Array.isArray(response?.rankedOffers) ? response.rankedOffers : [];
+    const counts = offers.reduce((accumulator, offer) => {
+      const quality = classifyOfferSourceQuality(offer);
+
+      if (quality.hasOfficialEvidence || quality.sourceClass === 'official' || quality.sourceClass === 'official-flyer') {
+        accumulator.official += 1;
+      } else if (quality.sourceClass === 'aggregator' || quality.sourceClass === 'aggregator-ppcv') {
+        accumulator.aggregator += 1;
+      }
+
+      if (quality.isLowConfidenceAggregator) {
+        accumulator.aggregatorPpcvLowConfidence += 1;
+      }
+
+      return accumulator;
+    }, {
+      official: 0,
+      aggregator: 0,
+      aggregatorPpcvLowConfidence: 0,
+    });
+
+    result[query] = {
+      totalCount: response?.summary?.totalCount ?? null,
+      displayed: offers.length,
+      ...counts,
+      examples: offers.slice(0, 10).map((offer) => {
+        const quality = classifyOfferSourceQuality(offer);
+
+        return {
+          title: offer.title || '',
+          retailerKey: offer.retailerKey || '',
+          retailerName: offer.retailerName || '',
+          sourceType: offer.sourceType || '',
+          validTo: iso(offer.validTo),
+          sourceClass: quality.sourceClass,
+          sourceQualityRisk: quality.sourceQualityRisk,
+        };
+      }),
+    };
+  }
+
+  return result;
 }
 
 async function main() {
@@ -115,6 +177,8 @@ async function main() {
   const expiredExamples = [];
   const staleExamples = [];
   const activeMissingValidToExamples = [];
+  const lowConfidencePpcvGroups = new Map();
+  const lowConfidencePpcvExamples = [];
   const queryExamples = {
     goesserMaerzen: [],
     goesser: [],
@@ -131,6 +195,13 @@ async function main() {
       activeMissingValidToGroups.set(groupKey, (activeMissingValidToGroups.get(groupKey) || 0) + 1);
       if (activeMissingValidToExamples.length < 20) {
         activeMissingValidToExamples.push(summarizeOffer(offer, source));
+      }
+    }
+
+    if (classifyOfferSourceQuality(offer).isLowConfidenceAggregator) {
+      lowConfidencePpcvGroups.set(groupKey, (lowConfidencePpcvGroups.get(groupKey) || 0) + 1);
+      if (lowConfidencePpcvExamples.length < 20) {
+        lowConfidencePpcvExamples.push(summarizeOffer(offer, source));
       }
     }
 
@@ -185,6 +256,21 @@ async function main() {
       groups: formatGroups(activeMissingValidToGroups),
       examples: activeMissingValidToExamples,
     },
+    aggregatorPpcvLowConfidence: {
+      count: [...lowConfidencePpcvGroups.values()].reduce((sum, count) => sum + count, 0),
+      groups: formatGroups(lowConfidencePpcvGroups),
+      examples: lowConfidencePpcvExamples,
+    },
+    rankingSourceQuality: await buildRankingSourceQualityDiagnostics([
+      'G\u00f6sser M\u00e4rzen',
+      'goesser',
+      'bier',
+      'kaffee',
+      'waschmittel',
+      'butter',
+      '\u00f6l',
+      'milch',
+    ]),
     queryExamples,
     expiredAktionsfinderUrlRange: {
       count: [...expiredUrlGroups.values()].reduce((sum, count) => sum + count, 0),

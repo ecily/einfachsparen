@@ -2418,6 +2418,57 @@ test('fresh active filter removes soft-deactivated repair offers', () => {
   assert.deepEqual(filterFreshActiveOffers([repaired], new Date('2026-05-21T13:00:00.000Z')), []);
 });
 
+test('fresh active filter removes low-confidence Aktionsfinder ppcv offers without validity evidence', () => {
+  const now = new Date('2026-05-21T13:00:00.000Z');
+  const lowConfidencePpcv = offer({
+    title: 'Goesser Maerzen SPAR 0.50 Liter 20 Stueck',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/flaschenbier/spar/',
+    rawFacts: {
+      sourceType: 'aktionsfinder-json',
+      clickoutUrl: 'https://www.aktionsfinder.at/ppcv/flaschenbier/spar/',
+    },
+  });
+  const officialCurrent = offer({
+    title: 'BILLA Snapshot aktuell',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    sourceType: 'billa-official-algolia',
+    rawFacts: { snapshotCurrent: true },
+  });
+
+  assert.deepEqual(
+    filterFreshActiveOffers([lowConfidencePpcv, officialCurrent], now).map((item) => item.title),
+    ['BILLA Snapshot aktuell']
+  );
+});
+
+test('fresh active filter keeps Aktionsfinder ppcv only when offer-level validity evidence exists', () => {
+  const now = new Date('2026-05-21T13:00:00.000Z');
+  const withValidity = offer({
+    title: 'Aktionsfinder Angebot mit Detail-Gueltigkeit',
+    status: 'active',
+    isActiveNow: true,
+    validTo: new Date('2026-05-27T23:59:59.999Z'),
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/flaschenbier/spar/',
+    rawFacts: {
+      sourceType: 'aktionsfinder-json',
+      validitySource: 'aktionsfinder-leaflet-range',
+      leafletHref: 'https://www.aktionsfinder.at/l/spar-flugblatt-30-04-2026-27-05-2026/',
+    },
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([withValidity], now), [withValidity]);
+});
+
 test('response dedupe keeps priced aggregator when official duplicate has no usable price', () => {
   const aggregator = offer({
     _id: 'priced-aggregator',
@@ -3120,7 +3171,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v5-freshness-search-token-v2',
+    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
