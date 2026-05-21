@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  diagnoseOfficialCategoryPromotionHtml,
   extractAndNormalizeOfficialCategoryPromotions,
   extractOfficialCategoryPromotionCandidates,
   sourceKeyForActionSource,
@@ -42,8 +43,8 @@ test('sourceKeyForActionSource distinguishes official SPAR and INTERSPAR action 
 test('extracts official SPAR Steiermark category-wide beer and pet promotions without prices', () => {
   const html = `
     <main>
-      <article>-25% auf alle Biere. Gueltig 21.05.2026 - 24.05.2026. Ausgenommen Pfand.</article>
-      <article>-25% auf alle Tiernahrungs-Artikel. Gueltig 21.05.2026 - 24.05.2026.</article>
+      <article>-25% auf alle Biere. Gueltig am Fr., 22.5. und Sa., 23.5.26. Ausgenommen Pfand.</article>
+      <article>-25% auf alle Tiernahrungs-Artikel. Gueltig am Fr., 22.5. und Sa., 23.5.26.</article>
     </main>
   `;
   const candidates = extractOfficialCategoryPromotionCandidates({
@@ -68,15 +69,17 @@ test('extracts official SPAR Steiermark category-wide beer and pet promotions wi
   assert.equal(offers[0].offerType, 'category-promotion');
   assert.equal(offers[0].retailerKey, 'spar');
   assert.equal(offers[0].priceCurrent.amount, null);
+  assert.equal(offers[0].validFrom.toISOString(), '2026-05-22T00:00:00.000Z');
+  assert.equal(offers[0].validTo.toISOString(), '2026-05-23T23:59:59.999Z');
   assert.equal(offers[0].rawFacts.sourceType, 'official-action');
 });
 
 test('extracts official INTERSPAR up-to category promotions and search-relevant scopes', () => {
   const html = `
-    <section>bis zu -25% auf alle Waschmittel, Fein- & Spezialwaschmittel inkl. Weichspueler. 21.05.2026 - 24.05.2026.</section>
-    <section>bis zu -25% auf alle Frotteewaren inkl. Strandtuecher und Badematten. 21.05.2026 - 24.05.2026.</section>
-    <section>bis zu -25% auf alle Biere. 21.05.2026 - 24.05.2026.</section>
-    <section>bis zu -25% auf die gesamte Tiernahrung und Tierzubehoer. 21.05.2026 - 24.05.2026.</section>
+    <section><img alt="bis zu -25% auf alle Waschmittel, Fein- & Spezialwaschmittel inkl. Weichspüler.. Gültig von Fr, 22.5. bis Sa, 23.5." /></section>
+    <section><img alt="bis zu -25% auf alle Frotteewaren inkl. Strandtücher und Badematten. Gültig von Do, 21.5. bis Mi, 27.5." /></section>
+    <section><img alt="bis zu -25% auf alle Biere. Gültig am Fr, 22.5. und Sa, 23.5." /></section>
+    <section><img alt="bis zu -25% auf die gesamte Tiernahrung und Tierzubehör. Gültig am Fr, 22.5. und Sa, 23.5." /></section>
   `;
   const { offers } = extractAndNormalizeOfficialCategoryPromotions({
     html,
@@ -94,6 +97,18 @@ test('extracts official INTERSPAR up-to category promotions and search-relevant 
   ]);
   assert.ok(offers.every((offer) => offer.retailerKey === 'interspar'));
   assert.ok(offers.every((offer) => offer.discountUpToPercent === 25));
+  assert.equal(offers.find((offer) => offer.promotionScope === 'waschmittel').validTo.toISOString(), '2026-05-23T23:59:59.999Z');
+  assert.equal(offers.find((offer) => offer.promotionScope === 'frotteewaren').validTo.toISOString(), '2026-05-27T23:59:59.999Z');
+});
+
+test('diagnoses blocked challenge pages separately from parser misses', () => {
+  const html = '<html><head><title>Just a moment...</title></head><body>Cloudflare challenge</body></html>';
+  const diagnostics = diagnoseOfficialCategoryPromotionHtml({ html, candidates: [] });
+
+  assert.equal(diagnostics.blockedChallengeLikely, true);
+  assert.equal(diagnostics.parserCandidateCount, 0);
+  assert.equal(diagnostics.percentFragmentCount, 0);
+  assert.deepEqual(diagnostics.expectedScopeHits, []);
 });
 
 test('price-optional category promotions enrich without missing price or unit review noise', () => {

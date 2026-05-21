@@ -97,7 +97,7 @@ function toYear(value, fallbackYear) {
 function endOfDay(date) {
   if (!date) return null;
   const value = new Date(date);
-  value.setHours(23, 59, 59, 999);
+  value.setUTCHours(23, 59, 59, 999);
   return value;
 }
 
@@ -115,13 +115,16 @@ function parseDateParts(day, month, year, fallbackYear) {
 function parseDateRange(text, now = new Date()) {
   const fallbackYear = now.getFullYear();
   const normalized = String(text || '').replace(/\s+/g, ' ');
-  const rangeMatch = normalized.match(
-    /(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{2,4})?\s*(?:-|bis)\s*(?:[a-z]{2,3}\.?,?\s*)?(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{2,4})?/i
-  );
+  const dateToken = '(?:[a-zäöü]{2,3}\\.?,?\\s*)?(\\d{1,2})\\.\\s*(\\d{1,2})\\.?\\s*(\\d{2,4})?';
+  const rangeMatch = normalized.match(new RegExp(`${dateToken}\\s*(?:-|bis|und)\\s*${dateToken}`, 'i'));
 
   if (rangeMatch) {
     const validFrom = parseDateParts(rangeMatch[1], rangeMatch[2], rangeMatch[3] || rangeMatch[6], fallbackYear);
-    const validTo = endOfDay(parseDateParts(rangeMatch[4], rangeMatch[5], rangeMatch[6] || rangeMatch[3], fallbackYear));
+    let validTo = endOfDay(parseDateParts(rangeMatch[4], rangeMatch[5], rangeMatch[6] || rangeMatch[3], fallbackYear));
+
+    if (validFrom && validTo && validTo < validFrom) {
+      validTo = endOfDay(parseDateParts(rangeMatch[4], rangeMatch[5], Number(validTo.getUTCFullYear()) + 1, fallbackYear));
+    }
 
     return {
       validFrom,
@@ -214,6 +217,30 @@ function extractTextFragments(html) {
   }
 
   return [...new Set(fragments)];
+}
+
+function diagnoseOfficialCategoryPromotionHtml({ html, candidates = [] } = {}) {
+  const $ = cheerio.load(html || '');
+  const fragments = extractTextFragments(html);
+  const bodyText = sanitizeWhitespace($('body').text() || $.root().text());
+  const normalized = normalizeForScan(bodyText);
+  const title = sanitizeWhitespace($('title').text());
+  const expectedScopeHits = PROMOTION_SCOPES
+    .filter((scope) => scope.pattern.test(normalized))
+    .map((scope) => scope.key);
+  const blockedChallengeLikely = /just a moment|cloudflare|attention required|cf-browser-verification|cf-chl/i.test(
+    `${title} ${bodyText} ${String(html || '').slice(0, 2000)}`
+  );
+
+  return {
+    htmlTitle: title.slice(0, 160),
+    bodyTextLength: bodyText.length,
+    percentFragmentCount: fragments.length,
+    parserCandidateCount: candidates.length,
+    expectedScopeHits,
+    discountSeen: Boolean(detectDiscount(bodyText)),
+    blockedChallengeLikely,
+  };
 }
 
 function extractOfficialCategoryPromotionCandidates({ html, source = {}, now = new Date() } = {}) {
@@ -419,6 +446,7 @@ function extractAndNormalizeOfficialCategoryPromotions({ html, source, crawlJobI
       crawlJobId,
       region,
     }),
+    diagnostics: diagnoseOfficialCategoryPromotionHtml({ html, candidates }),
   };
 }
 
@@ -426,6 +454,7 @@ module.exports = {
   PARSER_VERSION,
   SOURCE_TYPE,
   PROMOTION_SCOPES,
+  diagnoseOfficialCategoryPromotionHtml,
   extractOfficialCategoryPromotionCandidates,
   extractAndNormalizeOfficialCategoryPromotions,
   normalizeOfficialCategoryPromotionCandidatesToOffers,

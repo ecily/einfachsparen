@@ -73,6 +73,7 @@ const LIDL_OFFICIAL_CAMPAIGN_PAGES = [
   'https://www.lidl.at/c/echtes-streetfood-schmecken-lohnt-sich/a10094559',
   'https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10094560',
 ];
+const FETCH_DIAGNOSTIC_PREVIEW_LIMIT = 260;
 
 function responseContentType(response = {}) {
   return response.headers?.['content-type'] || response.headers?.['Content-Type'] || '';
@@ -81,6 +82,76 @@ function responseContentType(response = {}) {
 function bodyPreview(value, limit = 300) {
   const text = typeof value === 'string' ? value : JSON.stringify(value || '');
   return String(text || '').replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+function responseBodyAsText(payload) {
+  if (Buffer.isBuffer(payload)) {
+    return payload.toString('utf8');
+  }
+
+  if (typeof payload === 'string') {
+    return payload;
+  }
+
+  if (payload && typeof payload === 'object') {
+    return JSON.stringify(payload);
+  }
+
+  return String(payload || '');
+}
+
+function htmlTitleFromBody(payload) {
+  const text = responseBodyAsText(payload);
+
+  if (!text) {
+    return '';
+  }
+
+  try {
+    return sanitizeWhitespace(cheerio.load(text)('title').text()).slice(0, 160);
+  } catch (error) {
+    return '';
+  }
+}
+
+function isTlsLikeError(error = {}) {
+  return /CERT|TLS|SSL|LEAF|certificate|unable to verify/i.test(`${error.code || ''} ${error.message || ''}`);
+}
+
+function buildFetchDiagnostic(url, error = {}) {
+  const response = error.response || {};
+  const data = response.data;
+  const contentType = responseContentType(response);
+  const preview = bodyPreview(data || error.message, FETCH_DIAGNOSTIC_PREVIEW_LIMIT);
+  const title = htmlTitleFromBody(data);
+  const status = response.status ?? null;
+
+  return {
+    failureStage: 'fetch',
+    url,
+    finalUrl: response.request?.res?.responseUrl || response.config?.url || url,
+    httpStatus: status,
+    statusText: response.statusText || '',
+    contentType,
+    downloadBytes: data ? Buffer.byteLength(responseBodyAsText(data), 'utf8') : 0,
+    errorCode: error.code || '',
+    errorMessage: bodyPreview(error.message, 220),
+    tlsLike: isTlsLikeError(error),
+    isHtml: isHtmlPayload(data || '', contentType),
+    isJson: isJsonPayload(data, contentType),
+    htmlTitle: title,
+    blockedLikely: [401, 403, 407, 429, 451].includes(Number(status))
+      || /just a moment|cloudflare|attention required|cf-browser-verification|cf-chl/i.test(`${title} ${preview}`),
+    bodyPreview: preview,
+  };
+}
+
+function attachFetchDiagnostic(error, url) {
+  error.diagnostic = {
+    ...(error.diagnostic || {}),
+    ...buildFetchDiagnostic(url, error),
+  };
+  return error;
 }
 
 function isHtmlPayload(payload, contentType = '') {
@@ -2879,14 +2950,20 @@ function parseHoferOffersFromPage({
 }
 
 async function fetchHtml(url) {
-  const response = await axios.get(url, {
-    timeout: 30000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/json',
-      'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
-    },
-  });
+  let response;
+
+  try {
+    response = await axios.get(url, {
+      timeout: 30000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/json',
+        'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+      },
+    });
+  } catch (error) {
+    throw attachFetchDiagnostic(error, url);
+  }
 
   return {
     response,
@@ -4971,6 +5048,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         rawCandidateCount: promotionResult.candidates.length,
         parsedOffers: offerDocuments.length,
         refreshResult,
+        diagnostics: promotionResult.diagnostics || {},
       };
 
       if (offerDocuments.length === 0) {
@@ -5063,6 +5141,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       latestStatus: status,
     });
 
+    const isCategoryActionSource = source.parserHint === 'official-category-actions';
+
     return {
       retailerKey: source.retailerKey,
       retailerName: source.retailerName,
@@ -5077,8 +5157,24 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       discoveredLinks: links.length,
       sourceUrl: source.sourceUrl,
       message: sourceMessage,
+      httpStatus: response.status ?? null,
+      contentType: response.headers?.['content-type'] || '',
+      finalUrl: canonicalUrl,
+      ...(isCategoryActionSource ? {
+        sourceKey: sourceKeyForActionSource(source),
+        failureStage: status === 'partial' ? 'parser' : '',
+        diagnostic: {
+          failureStage: status === 'partial' ? 'parser' : '',
+          httpStatus: response.status ?? null,
+          contentType: response.headers?.['content-type'] || '',
+          finalUrl: canonicalUrl,
+          extractedLinkCount: links.length,
+          ...(parserDetails.officialCategoryPromotions?.diagnostics || {}),
+        },
+      } : {}),
     };
   } catch (error) {
+    const diagnostic = error.diagnostic || buildFetchDiagnostic(source.sourceUrl, error);
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
       status: 'failed',
       finishedAt: new Date(),
@@ -5098,8 +5194,21 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         warnings: 0,
         errors: 1,
       },
+      httpLog: {
+        status: diagnostic.httpStatus ?? null,
+        contentType: diagnostic.contentType || '',
+        finalUrl: diagnostic.finalUrl || source.sourceUrl,
+        downloadBytes: Number(diagnostic.downloadBytes || 0),
+        contentHash: '',
+      },
       warningMessages: [],
       errorMessages: [error.message],
+      metadata: {
+        sourceLabel: source.label,
+        sourceUrl: source.sourceUrl,
+        sourceKey: source.parserHint === 'official-category-actions' ? sourceKeyForActionSource(source) : '',
+        fetchDiagnostic: diagnostic,
+      },
     });
 
     await Source.findByIdAndUpdate(source._id, {

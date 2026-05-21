@@ -16,6 +16,11 @@ const compactSourceSummarySchema = new mongoose.Schema(
     skipped: { type: Boolean, default: false },
     message: { type: String, default: '' },
     error: { type: String, default: '' },
+    failureStage: { type: String, default: '' },
+    httpStatus: { type: Number, default: null },
+    contentType: { type: String, default: '' },
+    finalUrl: { type: String, default: '' },
+    diagnostic: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { _id: false }
 );

@@ -47,6 +47,21 @@ test('buildRunSummary aggregates source, retailer, type, dedupe and filter metad
         sourceType: 'flyer',
         status: 'failed',
         error: 'upstream timeout',
+        failureStage: 'fetch',
+        httpStatus: 403,
+        contentType: 'text/html; charset=UTF-8',
+        finalUrl: 'https://www.lidl.at/c/flugblatt/s10012330',
+        diagnostic: {
+          failureStage: 'fetch',
+          httpStatus: 403,
+          htmlTitle: 'Just a moment...',
+          bodyPreview: 'challenge page',
+          requestHeaders: {
+            Authorization: 'Bearer secret',
+            Cookie: 'session=secret',
+            Accept: 'text/html',
+          },
+        },
       },
     ],
     filterMetadata: { ok: true, processedOffers: 120 },
@@ -68,6 +83,12 @@ test('buildRunSummary aggregates source, retailer, type, dedupe and filter metad
   assert.equal(summary.perRetailer.find((item) => item.retailerKey === 'spar').offersStored, 10);
   assert.equal(summary.sourceTypes.find((item) => item.channel === 'aggregator').offersStored, 10);
   assert.equal(summary.sources[1].error, 'upstream timeout');
+  assert.equal(summary.sources[1].failureStage, 'fetch');
+  assert.equal(summary.sources[1].httpStatus, 403);
+  assert.equal(summary.sources[1].diagnostic.htmlTitle, 'Just a moment...');
+  assert.equal(summary.sources[1].diagnostic.requestHeaders.Authorization, '[redacted]');
+  assert.equal(summary.sources[1].diagnostic.requestHeaders.Cookie, '[redacted]');
+  assert.equal(summary.sources[1].diagnostic.requestHeaders.Accept, 'text/html');
 });
 
 test('determineFinalStatus is success only for complete successful crawl results', () => {
@@ -115,7 +136,13 @@ test('serializeCrawlRun returns status payload without raw offers or raw documen
     durationMs: 60000,
     summary: { matchedSourcesCount: 1 },
     result: {
-      sources: [{ sourceKey: 'spar', status: 'success', offersStored: 1, rawDocuments: [{ secret: 'nope' }] }],
+      sources: [{
+        sourceKey: 'spar',
+        status: 'success',
+        offersStored: 1,
+        rawDocuments: [{ secret: 'nope' }],
+        diagnostic: { bodyPreview: 'ok', apiKey: 'nope' },
+      }],
       offers: [{ title: 'nope' }],
       dedupe: { duplicateGroups: 0 },
       filterMetadata: { ok: true },
@@ -129,6 +156,7 @@ test('serializeCrawlRun returns status payload without raw offers or raw documen
   assert.equal(serialized.startedAt, '2026-05-10T00:00:00.000Z');
   assert.equal(serialized.result.offers, undefined);
   assert.equal(serialized.result.sources[0].rawDocuments, undefined);
+  assert.equal(serialized.result.sources[0].diagnostic.apiKey, '[redacted]');
 });
 
 test('serializeCrawlRun tolerates malformed compact source entries', () => {

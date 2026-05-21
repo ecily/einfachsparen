@@ -10,6 +10,7 @@ const ACTIVE_RUN_STATUSES = ['queued', 'running'];
 const LOCK_STALE_MS = 18 * 60 * 60 * 1000;
 const EXPLICIT_RECOVERY_MIN_STALE_MS = 30 * 60 * 1000;
 const PROCESS_STARTED_AT = new Date();
+const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
 
 function compactStrings(values = []) {
   if (!Array.isArray(values)) return [];
@@ -84,6 +85,38 @@ function sanitizeJsonValue(value, seen = new WeakSet()) {
   return sanitized;
 }
 
+function sanitizeDiagnosticValue(value, seen = new WeakSet()) {
+  if (value == null) return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value !== 'object') return value;
+  if (value instanceof Date) return toIsoOrNull(value);
+  if (value._bsontype === 'ObjectId' || value instanceof mongoose.Types.ObjectId) return String(value);
+
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDiagnosticValue(item, seen));
+  }
+
+  const plain = typeof value.toObject === 'function'
+    ? value.toObject({ getters: false, virtuals: false })
+    : value;
+  const sanitized = {};
+
+  for (const [key, entry] of Object.entries(plain)) {
+    if (typeof entry === 'undefined' || typeof entry === 'function') {
+      continue;
+    }
+
+    sanitized[key] = SENSITIVE_DIAGNOSTIC_KEY_PATTERN.test(key)
+      ? '[redacted]'
+      : sanitizeDiagnosticValue(entry, seen);
+  }
+
+  return sanitized;
+}
+
 function normalizeSourceResult(source = {}) {
   if (!source || typeof source !== 'object') {
     source = {};
@@ -93,6 +126,8 @@ function normalizeSourceResult(source = {}) {
   const parsedOffers = numberFrom(source.parsedOffers ?? source.offersExtracted ?? source.offersStored);
   const offersStored = numberFrom(source.offersStored);
   const rejectedOffers = numberFrom(source.rejectedOffers ?? Math.max(0, foundRawItems - parsedOffers));
+  const diagnostic = sanitizeDiagnosticValue(source.diagnostic || source.diagnostics || {});
+  const httpStatus = source.httpStatus ?? diagnostic.httpStatus ?? null;
 
   return {
     sourceId: asStringId(source.sourceId),
@@ -109,6 +144,11 @@ function normalizeSourceResult(source = {}) {
     skipped: Boolean(source.skipped),
     message: compactErrorMessage(source.message),
     error: compactErrorMessage(source.error),
+    failureStage: String(source.failureStage || diagnostic.failureStage || ''),
+    httpStatus: httpStatus === null || typeof httpStatus === 'undefined' ? null : numberFrom(httpStatus, null),
+    contentType: String(source.contentType || diagnostic.contentType || ''),
+    finalUrl: String(source.finalUrl || diagnostic.finalUrl || ''),
+    diagnostic,
   };
 }
 
@@ -800,6 +840,7 @@ module.exports = {
     normalizeSourceResult,
     parseExplicitRecoveryStaleMs,
     sanitizeJsonValue,
+    sanitizeDiagnosticValue,
     serializeLockForAudit,
   },
 };

@@ -137,6 +137,7 @@ async function crawlAllSources({
         status: result.status || 'success',
       });
     } catch (error) {
+      const diagnostic = error.diagnostic || {};
       results.push({
         ...sourceSummary,
         retailerKey: source.retailerKey,
@@ -148,6 +149,11 @@ async function crawlAllSources({
         discoveredLinks: 0,
         status: 'failed',
         error: error.message,
+        failureStage: diagnostic.failureStage || 'fetch',
+        httpStatus: diagnostic.httpStatus ?? null,
+        contentType: diagnostic.contentType || '',
+        finalUrl: diagnostic.finalUrl || source.sourceUrl,
+        diagnostic,
       });
     }
   }
