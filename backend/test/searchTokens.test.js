@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  FOOD_OIL_PRODUCT_TOKENS,
   SEARCH_TOKEN_VERSION,
   buildOfferSearchTokens,
   buildQuerySearchTokens,
@@ -10,26 +11,51 @@ const {
 } = require('../src/services/offers/searchTokens');
 
 test('normalizes coffee accents and conservative coffee synonyms', () => {
-  assert.equal(normalizeSearchTokenText('Café Crème'), 'cafe creme');
-  assert.deepEqual(new Set(buildQuerySearchTokens('Café')), new Set(['cafe', 'caffe', 'kaffee']));
+  assert.equal(normalizeSearchTokenText('Caf\u00e9 Cr\u00e8me'), 'cafe creme');
+  assert.deepEqual(new Set(buildQuerySearchTokens('Caf\u00e9')), new Set(['cafe', 'caffe', 'kaffee']));
   assert.deepEqual(new Set(buildQuerySearchTokens('Kaffee')), new Set(['cafe', 'caffe', 'kaffee']));
 });
 
 test('normalizes kaese and oel variants conservatively', () => {
-  assert.deepEqual(new Set(buildQuerySearchTokens('Käse')), new Set(['kaese', 'kase']));
-  assert.deepEqual(new Set(buildQuerySearchTokens('Oel')), new Set(['oel']));
-  assert.deepEqual(new Set(buildQuerySearchTokens('Öl')), new Set(['oel']));
-  assert.deepEqual(new Set(buildQuerySearchTokens('Ol')), new Set(['oel']));
+  assert.deepEqual(new Set(buildQuerySearchTokens('K\u00e4se')), new Set(['kaese', 'kase']));
+  assert.deepEqual(new Set(buildQuerySearchTokens('K\u00c3\u00a4se')), new Set(['kaese', 'kase']));
+  const genericOilTokens = new Set(['oel', ...FOOD_OIL_PRODUCT_TOKENS]);
+  assert.deepEqual(new Set(buildQuerySearchTokens('Oel')), genericOilTokens);
+  assert.deepEqual(new Set(buildQuerySearchTokens('\u00d6l')), genericOilTokens);
+  assert.deepEqual(new Set(buildQuerySearchTokens('Ol')), genericOilTokens);
   assert.deepEqual(new Set(buildQuerySearchTokens('Haarol')), new Set(['haaroel', 'haarol']));
-  assert.deepEqual(new Set(buildQuerySearchTokens('\ufffdl')), new Set(['oel']));
-  assert.deepEqual(new Set(buildQuerySearchTokens('\u00c3\u00b6l')), new Set(['oel']));
+  assert.deepEqual(new Set(buildQuerySearchTokens('\ufffdl')), genericOilTokens);
+  assert.deepEqual(new Set(buildQuerySearchTokens('\u00c3\u00b6l')), genericOilTokens);
   assert.deepEqual(new Set(buildQuerySearchTokens('Haar\ufffdl')), new Set(['haaroel', 'haarol']));
   assert.deepEqual(new Set(buildQuerySearchTokens('Haar\u00c3\u00b6l')), new Set(['haaroel', 'haarol']));
 });
 
+test('expands generic oil queries to explicit food oil product types only', () => {
+  const genericOilTokens = buildQuerySearchTokens('\u00f6l');
+
+  for (const token of [
+    'bratoel',
+    'kuerbiskernoel',
+    'olivenoel',
+    'pflanzenoel',
+    'rapsoel',
+    'sonnenblumenoel',
+    'speiseoel',
+  ]) {
+    assert.equal(genericOilTokens.includes(token), true);
+  }
+
+  for (const sideHitToken of ['haaroel', 'duftoel', 'duschoel', 'motoroel', 'pflegeoel']) {
+    assert.equal(genericOilTokens.includes(sideHitToken), false);
+  }
+
+  assert.deepEqual(buildQuerySearchTokens('Raps\u00f6l'), ['rapsoel']);
+  assert.deepEqual(buildQuerySearchTokens('rapsoel'), ['rapsoel']);
+});
+
 test('removes stopwords and non-dominant quantity tokens', () => {
   const tokens = buildOfferSearchTokens({
-    title: 'Diverse Sorten Packung 1 kg 500 Gramm Stück Kaffee',
+    title: 'Diverse Sorten Packung 1 kg 500 Gramm St\u00fcck Kaffee',
     quantityText: '1 kg',
   });
 
@@ -74,6 +100,25 @@ test('keeps reis and milch query tokens and indexes conservative product compoun
   assert.equal(riceTokens.includes('reis'), true);
   assert.equal(milkTokens.includes('milch'), true);
   assert.equal(priceTokens.includes('reis'), false);
+});
+
+test('indexes food oil compounds with a generic oil token without indexing oil side hits', () => {
+  const rapeseedOilTokens = buildOfferSearchTokens({
+    title: 'BELLASAN Raps\u00f6l 1 l',
+    categorySecondary: 'Saucen, Oele & Gewuerze',
+  });
+  const oliveOilTokens = buildOfferSearchTokens({ title: 'Italienisches Oliven\u00f6l 750 ml' });
+  const hairOilTokens = buildOfferSearchTokens({
+    title: 'Haar\u00f6l Argan',
+    categorySecondary: 'Haarpflege',
+  });
+
+  assert.equal(rapeseedOilTokens.includes('rapsoel'), true);
+  assert.equal(rapeseedOilTokens.includes('oel'), true);
+  assert.equal(oliveOilTokens.includes('olivenoel'), true);
+  assert.equal(oliveOilTokens.includes('oel'), true);
+  assert.equal(hairOilTokens.includes('haaroel'), true);
+  assert.equal(hairOilTokens.includes('oel'), false);
 });
 
 test('indexes only true butter product compounds as butter search tokens', () => {

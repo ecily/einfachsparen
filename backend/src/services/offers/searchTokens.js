@@ -2,6 +2,27 @@ const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 
 const SEARCH_TOKEN_VERSION = 2;
 
+const FOOD_OIL_PRODUCT_TOKENS = [
+  'bratoel',
+  'bratol',
+  'kronenoel',
+  'kronenol',
+  'kuerbiskernoel',
+  'kuerbiskernol',
+  'kurbiskernoel',
+  'kurbiskernol',
+  'olivenoel',
+  'olivenol',
+  'pflanzenoel',
+  'pflanzenol',
+  'rapsoel',
+  'rapsol',
+  'sonnenblumenoel',
+  'sonnenblumenol',
+  'speiseoel',
+  'speiseol',
+];
+
 const STOPWORDS = new Set([
   'ab',
   'aktion',
@@ -58,6 +79,7 @@ const COMPOUND_PRODUCT_TOKENS = new Set([
 ]);
 
 const CONSERVATIVE_COMPOUND_TOKEN_ALIASES = new Map([
+  ['oel', FOOD_OIL_PRODUCT_TOKENS],
   ['butter', [
     'alpenbutter',
     'bauernbutter',
@@ -162,12 +184,17 @@ function buildQuerySearchTokens(query) {
   const tokens = new Set();
 
   for (const token of tokenizeValue(query)) {
-    if (token === 'ol') {
-      addTokenWithSynonyms(tokens, 'oel');
+    const normalizedToken = token === 'ol' ? 'oel' : token;
+
+    addTokenWithSynonyms(tokens, normalizedToken);
+
+    if (normalizedToken === 'oel') {
+      for (const oilToken of FOOD_OIL_PRODUCT_TOKENS) {
+        addTokenWithSynonyms(tokens, oilToken);
+      }
+
       continue;
     }
-
-    addTokenWithSynonyms(tokens, token);
   }
 
   return [...tokens].sort();
@@ -189,6 +216,7 @@ function withOfferSearchTokens(offer = {}) {
 
 module.exports = {
   SEARCH_TOKEN_VERSION,
+  FOOD_OIL_PRODUCT_TOKENS,
   STOPWORDS,
   buildOfferSearchTokens,
   buildQuerySearchTokens,

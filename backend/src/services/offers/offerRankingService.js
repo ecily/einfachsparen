@@ -709,10 +709,10 @@ const QUERY_CONTEXTS = [
   {
     key: 'oel',
     tokens: ['oel', 'ol'],
-    preferred: ['oel', 'ol', 'oele', 'ole', 'olivenoel', 'olivenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kurbiskernol', 'speiseoel', 'speiseol', 'lebensmittel'],
-    strongPreferred: ['oel', 'ol', 'oele', 'ole', 'olivenoel', 'olivenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kurbiskernol', 'speiseoel', 'speiseol'],
-    productIntent: ['oel', 'ol', 'olivenoel', 'olivenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kurbiskernol', 'kronenoel', 'kronenol', 'speiseoel', 'speiseol'],
-    exactProductIntent: ['olivenoel', 'olivenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kurbiskernol', 'kronenoel', 'kronenol', 'speiseoel', 'speiseol'],
+    preferred: ['oel', 'ol', 'oele', 'ole', 'bratoel', 'bratol', 'olivenoel', 'olivenol', 'pflanzenoel', 'pflanzenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kuerbiskernol', 'kurbiskernoel', 'kurbiskernol', 'speiseoel', 'speiseol', 'lebensmittel'],
+    strongPreferred: ['oel', 'ol', 'oele', 'ole', 'bratoel', 'bratol', 'olivenoel', 'olivenol', 'pflanzenoel', 'pflanzenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kuerbiskernol', 'kurbiskernoel', 'kurbiskernol', 'speiseoel', 'speiseol'],
+    productIntent: ['oel', 'ol', 'bratoel', 'bratol', 'olivenoel', 'olivenol', 'pflanzenoel', 'pflanzenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kuerbiskernol', 'kurbiskernoel', 'kurbiskernol', 'kronenoel', 'kronenol', 'speiseoel', 'speiseol'],
+    exactProductIntent: ['bratoel', 'bratol', 'olivenoel', 'olivenol', 'pflanzenoel', 'pflanzenol', 'rapsoel', 'rapsol', 'sonnenblumenoel', 'sonnenblumenol', 'kuerbiskernoel', 'kuerbiskernol', 'kurbiskernoel', 'kurbiskernol', 'kronenoel', 'kronenol', 'speiseoel', 'speiseol'],
     productContext: ['oel', 'ol', 'oele', 'ole', 'gewuerze', 'gewurze', 'saucen', 'lebensmittel'],
     weakContexts: ['thunfisch', 'frischkaese', 'in oel', 'mit oel'],
     severeWeakContexts: ['aetherisch', 'atherisch', 'duftoel', 'duftol', 'duschoel', 'duschol', 'haaroel', 'haarol', 'haarfarbe', 'koerperoel', 'korperoel', 'pflegeoel', 'pflegeol', 'shampoo', 'coloration', 'motoroel', 'motorol', 'oleo'],
@@ -1181,6 +1181,8 @@ function getGenericOilOfferIntent({ titleTokens, categoryTokens, comparisonToken
   const productTokens = titleTokens.concat(comparisonTokens);
   const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
   const foodOilTokens = [
+    'bratoel',
+    'bratol',
     'olivenoel',
     'olivenol',
     'pflanzenoel',
@@ -1192,6 +1194,8 @@ function getGenericOilOfferIntent({ titleTokens, categoryTokens, comparisonToken
     'speiseoel',
     'speiseol',
     'kuerbiskernoel',
+    'kuerbiskernol',
+    'kurbiskernoel',
     'kurbiskernol',
     'kronenoel',
     'kronenol',
@@ -3814,7 +3818,7 @@ function buildMongoQuerySearchFilter(query) {
 }
 
 function buildTokenizedSearchFilter(query) {
-  const queryTokens = buildQuerySearchTokens(query).slice(0, 8);
+  const queryTokens = buildQuerySearchTokens(query).slice(0, 24);
 
   if (queryTokens.length === 0) {
     return {

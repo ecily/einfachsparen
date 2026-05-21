@@ -29,6 +29,7 @@ const {
   scoreOfferAgainstQuery,
   tokenizeSearchText,
 } = require('../src/services/offers/offerRankingService');
+const { FOOD_OIL_PRODUCT_TOKENS } = require('../src/services/offers/searchTokens');
 
 function offer(overrides) {
   return {
@@ -147,34 +148,47 @@ test('query without useful tokens uses safe regex fallback metadata', () => {
 });
 
 test('umlaut oil query stays tokenized and does not fall back to broad regex search', () => {
+  const oilQueryTokens = ['oel', ...FOOD_OIL_PRODUCT_TOKENS].sort();
+
   assert.deepEqual(buildRankingCandidateQueryMetadata({ query: '\u00f6l' }), {
-    queryTokens: ['oel'],
+    queryTokens: oilQueryTokens,
     candidateQueryMode: 'searchTokensOnly',
     usesSearchTokens: true,
     fallbackUsed: false,
     fallbackReason: '',
   });
   assert.deepEqual(buildRankingCandidateQueryMetadata({ query: 'ol' }), {
-    queryTokens: ['oel'],
+    queryTokens: oilQueryTokens,
     candidateQueryMode: 'searchTokensOnly',
     usesSearchTokens: true,
     fallbackUsed: false,
     fallbackReason: '',
   });
   assert.deepEqual(buildRankingCandidateQueryMetadata({ query: '\ufffdl' }), {
-    queryTokens: ['oel'],
+    queryTokens: oilQueryTokens,
     candidateQueryMode: 'searchTokensOnly',
     usesSearchTokens: true,
     fallbackUsed: false,
     fallbackReason: '',
   });
   assert.deepEqual(buildRankingCandidateQueryMetadata({ query: '\u00c3\u00b6l' }), {
-    queryTokens: ['oel'],
+    queryTokens: oilQueryTokens,
     candidateQueryMode: 'searchTokensOnly',
     usesSearchTokens: true,
     fallbackUsed: false,
     fallbackReason: '',
   });
+});
+
+test('generic oil candidate search recalls explicit food oil tokens without side-hit expansion', () => {
+  const match = buildRankingCandidateMatch({ query: '\u00f6l' });
+  const serialized = JSON.stringify(match);
+
+  assert.match(serialized, /searchTokens/);
+  assert.match(serialized, /rapsoel/);
+  assert.match(serialized, /olivenoel/);
+  assert.match(serialized, /sonnenblumenoel/);
+  assert.doesNotMatch(serialized, /haaroel|duftoel|motoroel|pflegeoel/);
 });
 
 test('unicode hair oil query stays tokenized like ascii variants', () => {
