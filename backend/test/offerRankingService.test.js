@@ -19,6 +19,7 @@ const {
   buildRankingCandidateQueryMetadata,
   hashRankingCacheKey,
   buildRankingResponseFromBase,
+  getRankingCacheCapabilities,
   normalizeSearchText,
   normalizeRetailerList,
   paginateVisibleRankingOffers,
@@ -3063,6 +3064,15 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
   assert.match(hashRankingCacheKey(cacheKey), /^[a-f0-9]{32}$/);
   assert.match(token, /^[A-Za-z0-9_-]{20,80}$/);
   assert.equal(token.includes('Waschmittel'), false);
+});
+
+test('ranking cache capabilities expose token resultset support without secrets', () => {
+  assert.deepEqual(getRankingCacheCapabilities(), {
+    schemaVersion: 'ranking-cache-v4-search-token-v2',
+    resultSetTokens: true,
+    mongoBackedResultSets: true,
+    resultSetTtlSeconds: 300,
+  });
 });
 
 test('ranking response base slices cache hits without changing order or overlap', () => {

@@ -85,6 +85,15 @@ const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
 const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
+
+function getRankingCacheCapabilities() {
+  return {
+    schemaVersion: RANKING_CACHE_SCHEMA_VERSION,
+    resultSetTokens: true,
+    mongoBackedResultSets: true,
+    resultSetTtlSeconds: Math.round(RANKING_RESULT_CACHE_TTL_MS / 1000),
+  };
+}
 const rankingResponseCache = new Map();
 const rankingResultBaseCache = new Map();
 const INSTANCE_MARKER = `${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
@@ -5270,6 +5279,7 @@ module.exports = {
   paginateVisibleRankingOffers,
   buildRankingResponseFromStoredResultCache,
   buildRankingResponseFromBase,
+  getRankingCacheCapabilities,
   normalizeSearchText,
   normalizeRetailerKey,
   normalizeRetailerList,

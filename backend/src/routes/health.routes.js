@@ -2,6 +2,7 @@ const express = require('express');
 const env = require('../config/env');
 const { getDatabaseState } = require('../config/mongodb');
 const { buildSafeBuildInfo } = require('../services/buildInfo');
+const { getRankingCacheCapabilities } = require('../services/offers/offerRankingService');
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ router.get('/', (req, res) => {
     status: 'ok',
     database,
     build: buildSafeBuildInfo(),
+    rankingCache: getRankingCacheCapabilities(),
     now: new Date().toISOString(),
     ...(env.NODE_ENV === 'production'
       ? {}
