@@ -327,6 +327,38 @@ test('ranked offer keeps direct source savings even when cross-offer comparabili
   assert.equal(ranked.savingsAmount, 6);
 });
 
+test('ranked offer response carries category promotion fields without invented price savings', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'spar-beer-category-promo',
+    title: '-25% auf alle Biere',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    offerType: 'category-promotion',
+    sourceRetailerFormat: 'spar',
+    appliesToRetailerFormats: ['spar'],
+    discountPercent: 25,
+    promotionScope: 'bier',
+    appliesToCategory: 'bier',
+    regionScope: 'Steiermark',
+    priceCurrent: { amount: null, currency: 'EUR' },
+    sourceType: 'official-action',
+    sourceUrl: 'https://www.spar.at/aktionen/steiermark',
+    rawFacts: { sourceKey: 'spar-official-actions-steiermark' },
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+    quality: { comparisonSafe: false },
+  }), null, null);
+
+  assert.equal(ranked.offerType, 'category-promotion');
+  assert.equal(ranked.priceCurrent.amount, null);
+  assert.equal(ranked.discountPercent, 25);
+  assert.equal(ranked.discountUpToPercent, null);
+  assert.equal(ranked.promotionScope, 'bier');
+  assert.equal(ranked.regionScope, 'Steiermark');
+  assert.equal(ranked.sourceKey, 'spar-official-actions-steiermark');
+  assert.equal(ranked.savingsAmount, null);
+  assert.equal(ranked.savingsPercent, null);
+});
+
 test('generic rice Mongo prefilter avoids broad pasta category flooding', () => {
   const match = buildRankingCandidateMatch({
     query: 'reis',
@@ -3128,6 +3160,8 @@ test('visible card dedupe only tolerates broken quantity text when structured qu
   ['dm', 'dm-official-html'],
   ['bipa', 'bipa-official-html'],
   ['spar', 'spar-official-html'],
+  ['eurospar', 'spar-official-pdf'],
+  ['interspar', 'official-action'],
   ['hofer', 'hofer-official-html'],
 ].forEach(([retailerKey, officialSourceType]) => {
   test(`prefers ${retailerKey} official response duplicate over aggregator with clearer validity`, () => {
@@ -3316,7 +3350,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2-oil-recall-v2-butter-intent-v1',
+    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2-oil-recall-v2-butter-intent-v1-category-promo-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

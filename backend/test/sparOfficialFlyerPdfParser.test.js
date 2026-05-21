@@ -19,14 +19,17 @@ const fixture = JSON.parse(fs.readFileSync(
 ));
 
 function source(format = 'eurospar') {
+  const retailerKey = format === 'interspar' ? 'interspar' : format === 'eurospar' ? 'eurospar' : 'spar';
+  const retailerName = format === 'interspar' ? 'INTERSPAR' : format === 'eurospar' ? 'EUROSPAR' : 'SPAR';
+
   return {
     _id: '000000000000000000000321',
-    retailerKey: 'spar',
-    retailerName: 'Spar',
+    retailerKey,
+    retailerName,
     channel: 'official-flyer',
     sourceUrl: `https://flugblatt.spar.at/steiermark/${format}/260507-1-flugblatt-kw-19/getPdf.ashx`,
     sourceType: 'pdf',
-    sourceRetailerName: format === 'interspar' ? 'INTERSPAR' : format === 'eurospar' ? 'EUROSPAR' : 'SPAR',
+    sourceRetailerName: retailerName,
     sourceRetailerFormat: format,
     appliesToRetailerFormats: [format],
     retailerFormatLabel: format.toUpperCase(),
@@ -145,7 +148,7 @@ test('normalizes SPAR PDF candidates with source metadata and distinguishable re
   assert.ok(offers.length >= 4);
   assert.ok(activeOffer);
   assert.equal(stored.sourceType, 'spar-official-pdf');
-  assert.equal(stored.retailerKey, 'spar');
+  assert.equal(stored.retailerKey, 'interspar');
   assert.equal(stored.sourceRetailerFormat, 'interspar');
   assert.deepEqual(stored.appliesToRetailerFormats, ['interspar']);
   assert.equal(stored.rawFacts.sourceKey, 'interspar-official-flyer-pdf');
@@ -190,6 +193,7 @@ test('normalizes SPAR PDF beer candidates as beer with format metadata', () => {
   assert.equal(stored.comparableUnit, 'l');
   assert.equal(stored.normalizedUnitPrice.amount, 1.98);
   assert.equal(stored.sourceRetailerFormat, 'eurospar');
+  assert.equal(stored.retailerKey, 'eurospar');
   assert.equal(stored.rawFacts.sourceKey, 'eurospar-official-flyer-pdf');
   assert.match(stored.searchText, /bier/);
 });

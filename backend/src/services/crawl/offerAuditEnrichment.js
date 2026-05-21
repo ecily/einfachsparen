@@ -47,9 +47,15 @@ function inferRetailerFormatMetadata({ offer = {}, source = {} }) {
           ? [sourceRetailerFormat]
           : []
   );
-  const retailerFormats = retailerKey === 'spar'
-    ? uniqueFormats(['spar', 'interspar', 'eurospar'])
-    : uniqueFormats(offer.retailerFormats || []);
+  let retailerFormats = uniqueFormats(offer.retailerFormats || []);
+
+  if (['spar', 'eurospar', 'interspar'].includes(retailerKey)) {
+    retailerFormats = appliesToRetailerFormats.length > 0
+      ? appliesToRetailerFormats
+      : sourceRetailerFormat
+        ? [sourceRetailerFormat]
+        : [retailerKey];
+  }
   const sourceRetailerName = (
     offer.sourceRetailerName
     || source.sourceRetailerName
@@ -141,7 +147,24 @@ function inferSubcategoryConfidence(offer, categoryConfidence) {
   return Math.min(0.85, Math.max(0.45, categoryConfidence - 0.05));
 }
 
+function isPriceOptionalPromotion(offer = {}) {
+  return ['category-promotion', 'percent-promotion'].includes(String(offer.offerType || ''));
+}
+
 function inferSavingsFields(offer) {
+  if (isPriceOptionalPromotion(offer)) {
+    return {
+      hasReferencePrice: false,
+      hasProspectNormalPrice: false,
+      hasEstimatedReferencePrice: false,
+      isActionPriceOnly: false,
+      savingsDisplayType: 'unknown',
+      savingsConfidence: 0,
+      priceReferenceSource: offer?.priceReferenceSource || '',
+      priceReferenceConfidence: Number(offer?.priceReferenceConfidence || 0),
+    };
+  }
+
   const currentAmount = Number(offer?.priceCurrent?.amount);
   const referenceAmount = Number(offer?.priceReference?.amount);
   const sourceText = normalizeTitleForMatch(
@@ -250,7 +273,9 @@ function buildQualityWithComparableSafety(offer, reviewReasons, comparableSafety
 
   if (!comparableSafety.safe) {
     quality.comparisonSafe = false;
-    quality.parsingConfidence = Math.min(Number(quality.parsingConfidence || 0.75), 0.72);
+    if (!comparableSafety.priceOptional) {
+      quality.parsingConfidence = Math.min(Number(quality.parsingConfidence || 0.75), 0.72);
+    }
     quality.issues = [...new Set([...quality.issues, ...comparableSafety.reviewReasons])];
     comparableSafety.reviewReasons.forEach((reason) => reviewReasons.add(reason));
   } else {
@@ -262,15 +287,16 @@ function buildQualityWithComparableSafety(offer, reviewReasons, comparableSafety
 
 function buildReviewReasons({ offer, categoryConfidence, subcategoryConfidence, savingsFields }) {
   const reasons = new Set(Array.isArray(offer?.reviewReasons) ? offer.reviewReasons : []);
+  const priceOptional = isPriceOptionalPromotion(offer);
 
   if (!offer?.title) reasons.add('missing-title');
-  if (!(Number(offer?.priceCurrent?.amount) > 0)) reasons.add('missing-current-price');
+  if (!priceOptional && !(Number(offer?.priceCurrent?.amount) > 0)) reasons.add('missing-current-price');
   if (Number(offer?.quality?.parsingConfidence || 0) < 0.75) reasons.add('parser-low-confidence');
   if (categoryConfidence < 0.5) reasons.add('category-low-confidence');
   if (subcategoryConfidence < 0.4) reasons.add('subcategory-low-confidence');
-  if (!offer?.quantityText) reasons.add('missing-quantity');
+  if (!priceOptional && !offer?.quantityText) reasons.add('missing-quantity');
   if (hasIncompleteValidity(offer)) reasons.add(VALIDITY_INCOMPLETE_REVIEW_REASON);
-  if (savingsFields.isActionPriceOnly) reasons.add('action-price-only');
+  if (!priceOptional && savingsFields.isActionPriceOnly) reasons.add('action-price-only');
 
   return [...reasons];
 }
@@ -320,10 +346,24 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     savingsFields,
   }));
   const conditionFields = inferConditionFields(document);
-  const comparableSafety = assessComparableSafety({
-    ...document,
-    ...conditionFields,
-  });
+  const comparableSafety = isPriceOptionalPromotion(document)
+    ? {
+      safe: false,
+      comparableUnit: '',
+      normalizedUnitPrice: {
+        ...(document.normalizedUnitPrice || {}),
+        amount: null,
+        unit: '',
+        comparable: false,
+        confidence: 0,
+      },
+      reviewReasons: [],
+      priceOptional: true,
+    }
+    : assessComparableSafety({
+      ...document,
+      ...conditionFields,
+    });
   const comparableQuality = buildQualityWithComparableSafety(document, reviewReasonSet, comparableSafety);
   const reviewReasons = [...reviewReasonSet];
   const quality = buildQualityWithValidity({
@@ -417,4 +457,5 @@ module.exports = {
   inferRetailerFormatMetadata,
   buildRetailerFormatScopeKey,
   isCurrentlyRelevantOffer,
+  isPriceOptionalPromotion,
 };

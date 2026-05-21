@@ -149,6 +149,36 @@ test('replaceOffersForSource never hard-deletes previous source offers', async (
   assert.equal(calls.deleteMany.length, 0);
 });
 
+test('replaceOffersForSource deactivates old active offers even when their validTo is still in the future', async () => {
+  const calls = buildCalls();
+
+  const result = await replaceOffersForSource({
+    sourceId: 'source-1',
+    offerDocuments: [
+      {
+        sourceId: 'source-1',
+        crawlJobId: 'job-4',
+        title: 'Neues Bier',
+        validTo: new Date('2099-12-31T23:59:59.000Z'),
+      },
+    ],
+    OfferModel: buildOfferModel(calls),
+  });
+
+  assert.equal(result.deactivatedPreviousOffers, 2);
+  assert.deepEqual(calls.updateMany[0].filter, {
+    sourceId: 'source-1',
+    crawlJobId: { $ne: 'job-4' },
+    $or: [
+      { status: 'active' },
+      { isActiveNow: true },
+      { isActiveToday: true },
+    ],
+  });
+  assert.equal(calls.updateMany[0].update.$set.status, 'inactive');
+  assert.equal(calls.updateMany[0].update.$set.deactivationReason, 'source-replacement-not-seen');
+});
+
 test('replaceOffersForSource skips deactivation for failed or partial source runs', async () => {
   for (const sourceRunStatus of ['failed', 'partial']) {
     const calls = buildCalls();

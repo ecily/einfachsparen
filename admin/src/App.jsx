@@ -81,6 +81,8 @@ function SearchLandingHero() {
     ['billa', 'BILLA'],
     ['billa-plus', 'BILLA Plus'],
     ['spar', 'SPAR'],
+    ['eurospar', 'EUROSPAR'],
+    ['interspar', 'INTERSPAR'],
     ['hofer', 'HOFER'],
     ['lidl', 'Lidl'],
     ['dm', 'dm'],

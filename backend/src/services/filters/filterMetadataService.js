@@ -8,6 +8,7 @@ const CrawlJob = require('../../models/CrawlJob');
 const logger = require('../../lib/logger');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { computeOfferSavings } = require('../offers/promotionMath');
+const { isOfferFreshForActiveUse } = require('../offers/offerFreshness');
 
 const FILTER_METADATA_BULK_BATCH_SIZE = 100;
 
@@ -50,6 +51,7 @@ function getOfferLastSeenAt(offer) {
 function buildCacheRawFacts(rawFacts = {}) {
   const compact = {
     sourceType: rawFacts?.sourceType || '',
+    sourceKey: rawFacts?.sourceKey || '',
     validityText: rawFacts?.validityText || '',
     infoText: rawFacts?.infoText || '',
     discountPercentage: rawFacts?.discountPercentage ?? null,
@@ -75,6 +77,10 @@ function buildCacheRawFacts(rawFacts = {}) {
     sourceRetailerFormat: rawFacts?.sourceRetailerFormat || '',
     retailerFormatLabel: rawFacts?.retailerFormatLabel || '',
     appliesToRetailerFormats: rawFacts?.appliesToRetailerFormats || [],
+    discountUpToPercent: rawFacts?.discountUpToPercent ?? null,
+    promotionScope: rawFacts?.promotionScope || '',
+    appliesToCategory: rawFacts?.appliesToCategory || '',
+    regionScope: rawFacts?.regionScope || '',
   };
 
   return Object.fromEntries(
@@ -83,17 +89,15 @@ function buildCacheRawFacts(rawFacts = {}) {
 }
 
 function isOfferActive(offer, now = new Date()) {
-  if (typeof offer?.isActiveNow === 'boolean') {
-    return offer.isActiveNow;
-  }
-
-  return offer?.status === 'active';
+  return isOfferFreshForActiveUse(offer, now);
 }
 
 const RETAILER_ACTIVE_COVERAGE_TARGETS = {
   hofer: 60,
   lidl: 100,
   spar: 80,
+  eurospar: 55,
+  interspar: 55,
   billa: 90,
   'billa-plus': 90,
   penny: 40,
@@ -648,6 +652,7 @@ function buildOfferCacheDocuments(offers, now) {
       title: offer.title,
       titleNormalized: offer.titleNormalized || '',
       brand: offer.brand || '',
+      offerType: offer.offerType || 'product',
       searchText: offer.searchText || [offer.title, offer.brand, mainCategoryLabel, subcategoryLabel, retailerName].filter(Boolean).join(' '),
       categoryPrimary: mainCategoryLabel,
       categorySecondary: subcategoryLabel || '',
@@ -657,6 +662,11 @@ function buildOfferCacheDocuments(offers, now) {
       subcategoryConfidence: Number(offer.subcategoryConfidence || 0),
       quantityText: offer.quantityText || '',
       conditionsText: offer.conditionsText || '',
+      discountPercent: offer.discountPercent ?? null,
+      discountUpToPercent: offer.discountUpToPercent ?? null,
+      promotionScope: offer.promotionScope || '',
+      appliesToCategory: offer.appliesToCategory || '',
+      regionScope: offer.regionScope || '',
       customerProgramRequired: Boolean(offer.customerProgramRequired),
       hasConditions: Boolean(offer.hasConditions),
       isMultiBuy: Boolean(offer.isMultiBuy),
@@ -888,6 +898,8 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
           'title',
           'brand',
           'titleNormalized',
+          'offerType',
+          'searchText',
           'categoryKey',
           'subcategoryKey',
           'categoryPrimary',
@@ -908,6 +920,11 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
           'comparableUnit',
           'packageType',
           'conditionsText',
+          'discountPercent',
+          'discountUpToPercent',
+          'promotionScope',
+          'appliesToCategory',
+          'regionScope',
           'customerProgramRequired',
           'hasConditions',
           'isMultiBuy',

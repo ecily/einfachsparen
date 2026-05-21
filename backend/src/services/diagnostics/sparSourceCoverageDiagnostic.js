@@ -102,6 +102,8 @@ function deriveSourceKey(definition = {}) {
 
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
+  if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
+  if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
   if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
@@ -119,6 +121,9 @@ function inferParserOrAdapter(definition = {}) {
     return 'crawlOfficialSource / sparOfficialFlyerPdfParser text-layer only';
   }
   if (definition.channel === 'official-flyer') return 'crawlOfficialSource generic link discovery; no SPAR-specific flyer/PDF offer parser branch';
+  if (definition.channel === 'official-site' && definition.parserHint === 'official-category-actions') {
+    return 'crawlOfficialSource / officialCategoryPromotionParser';
+  }
   if (definition.channel === 'official-site') return 'crawlOfficialSource';
 
   return 'unknown';
@@ -200,11 +205,11 @@ function assessOfficialSparSteiermarkCoverage(codeSources = getSparCodeSources()
           : 'missing',
     suitabilityForFutureSupplementalSource: {
       suitable: true,
-      reason: 'Official regional SPAR action/flyer entry with HTML-visible actions, validity/conditions, market formats and flyer/PDF links; should be added as supplemental source only in a later fix block.',
+      reason: 'Official regional SPAR action source is suitable when the page is reachable and category promotion parsing yields trusted offers.',
       constraints: [
         'No login or protected access assumptions.',
-        'Do not replace existing aggregator coverage; use as official supplemental/primary evidence where parse quality is sufficient.',
-        'PDF/flyer links need a SPAR-specific parser or a market-wide flyer abstraction before Offer creation.',
+        'Do not use aggregators as primary evidence when official action/PDF sources are reachable.',
+        'Only successful complete action-source runs may replace previous active action offers.',
       ],
     },
   };

@@ -26,6 +26,8 @@ function deriveSourceKey(source = {}) {
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
+  if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
+  if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
   if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
@@ -90,15 +92,17 @@ function sortSourcesForCrawl(sources = [], activeOfferCountMap = new Map()) {
   };
   const retailerPriority = {
     spar: 0,
-    lidl: 1,
-    penny: 2,
-    dm: 3,
-    pagro: 4,
-    bipa: 5,
-    adeg: 6,
-    hofer: 7,
-    billa: 8,
-    'billa-plus': 9,
+    eurospar: 1,
+    interspar: 2,
+    lidl: 3,
+    penny: 4,
+    dm: 5,
+    pagro: 6,
+    bipa: 7,
+    adeg: 8,
+    hofer: 9,
+    billa: 10,
+    'billa-plus': 11,
   };
 
   return [...sources].sort((left, right) => {

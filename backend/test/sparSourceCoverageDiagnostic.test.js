@@ -29,7 +29,7 @@ test('maps SPAR code sources with activation and parser hints', () => {
   assert.deepEqual(source.retailerKeys, ['spar', 'interspar', 'eurospar']);
 });
 
-test('SPAR source definitions include active aggregators, active PDF flyers and disabled legacy official flyer', () => {
+test('SPAR source definitions include active separated aggregators, PDF flyers and action sources', () => {
   const sources = getSparCodeSources();
   const keys = sources.map((source) => source.sourceKey);
 
@@ -39,8 +39,9 @@ test('SPAR source definitions include active aggregators, active PDF flyers and 
   assert.ok(keys.includes('spar-official-flyer-pdf'));
   assert.ok(keys.includes('eurospar-official-flyer-pdf'));
   assert.ok(keys.includes('interspar-official-flyer-pdf'));
-  assert.ok(keys.includes('spar-official-flyer'));
-  assert.equal(sources.find((source) => source.sourceKey === 'spar-official-flyer' && source.sourceUrl === 'https://www.spar.at/aktionen').appearsActive, false);
+  assert.ok(keys.includes('spar-official-actions-steiermark'));
+  assert.ok(keys.includes('interspar-official-actions'));
+  assert.equal(sources.find((source) => source.sourceKey === 'spar-official-actions-steiermark').appearsActive, true);
   assert.equal(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').appearsActive, true);
   assert.match(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').parserOrAdapter, /text-layer/i);
 });
@@ -56,13 +57,13 @@ test('SPAR official PDF source definitions carry current KW 21 validity and form
   assert.ok(sources.every((source) => /kw-21|kw21/i.test(source.sourceUrl)));
 });
 
-test('official SPAR Steiermark reference is recognized as missing exact URL but covered by generic actions entry', () => {
+test('official SPAR Steiermark reference is recognized as exact configured action source', () => {
   const coverage = assessOfficialSparSteiermarkCoverage(getSparCodeSources());
 
   assert.equal(coverage.referenceUrl, 'https://www.spar.at/aktionen/steiermark');
-  assert.equal(coverage.exactSourceExistsInCode, false);
+  assert.equal(coverage.exactSourceExistsInCode, true);
   assert.equal(coverage.equivalentOfficialActionEntryExistsInCode, true);
-  assert.equal(coverage.currentApplication, 'generic-official-spar-actions-entry-present');
+  assert.equal(coverage.currentApplication, 'exact-url-present');
   assert.equal(coverage.suitabilityForFutureSupplementalSource.suitable, true);
 });
 

@@ -368,11 +368,17 @@ test('does not store future or expired offers', () => {
 test('keeps BILLA and BILLA PLUS separate and disables low-yield sources', () => {
   const billa = RETAILER_DEFINITIONS.find((definition) => definition.retailerKey === 'billa' && definition.channel === 'official-site');
   const billaPlus = RETAILER_DEFINITIONS.find((definition) => definition.retailerKey === 'billa-plus' && definition.channel === 'official-site');
+  const sparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'spar' && definition.sourceType === 'pdf');
+  const eurosparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'eurospar' && definition.sourceType === 'pdf');
+  const intersparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'interspar' && definition.sourceType === 'pdf');
   const marketguruSources = RETAILER_DEFINITIONS.filter((definition) => String(definition.sourceUrl).includes('marktguru.at/'));
   const adegSources = RETAILER_DEFINITIONS.filter((definition) => definition.retailerKey === 'adeg');
 
   assert.equal(billa?.retailerKey, 'billa');
   assert.equal(billaPlus?.retailerKey, 'billa-plus');
+  assert.equal(sparPdf?.retailerKey, 'spar');
+  assert.equal(eurosparPdf?.retailerKey, 'eurospar');
+  assert.equal(intersparPdf?.retailerKey, 'interspar');
   assert.ok(marketguruSources.length > 0);
   assert.ok(marketguruSources.every((definition) => definition.enabled === false));
   assert.ok(adegSources.length >= 2);

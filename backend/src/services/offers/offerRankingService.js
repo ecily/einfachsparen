@@ -16,9 +16,14 @@ const OFFER_RANKING_FIELD_LIST = [
   '_id',
   'retailerKey',
   'retailerName',
+  'sourceRetailerName',
+  'sourceRetailerFormat',
+  'retailerFormatLabel',
+  'appliesToRetailerFormats',
   'title',
   'titleNormalized',
   'brand',
+  'offerType',
   'searchTokens',
   'searchTokenVersion',
   'searchText',
@@ -29,6 +34,11 @@ const OFFER_RANKING_FIELD_LIST = [
   'categoryConfidence',
   'subcategoryConfidence',
   'conditionsText',
+  'discountPercent',
+  'discountUpToPercent',
+  'promotionScope',
+  'appliesToCategory',
+  'regionScope',
   'customerProgramRequired',
   'hasConditions',
   'isMultiBuy',
@@ -71,6 +81,7 @@ const OFFER_RANKING_FIELD_LIST = [
   'lastSeenAt',
   'updatedAt',
   'reviewReasons',
+  'rawFacts.sourceKey',
   'rawFacts.explicitExpired',
   'rawFacts.validTo',
   'rawFacts.clickoutUrl',
@@ -91,7 +102,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v6-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-oil-recall-v2-butter-intent-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v6-source-quality-search-token-v${SEARCH_TOKEN_VERSION}-oil-recall-v2-butter-intent-v1-category-promo-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -2238,9 +2249,15 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     id: offer.id || offer._id,
     retailerKey: offer.retailerKey,
     retailerName: offer.retailerName,
+    sourceRetailerName: offer.sourceRetailerName || '',
+    sourceRetailerFormat: offer.sourceRetailerFormat || '',
+    marketFormat: offer.sourceRetailerFormat || '',
+    retailerFormatLabel: offer.retailerFormatLabel || '',
+    appliesToRetailerFormats: offer.appliesToRetailerFormats || [],
     title: offer.title,
     titleNormalized: offer.titleNormalized || '',
     brand: offer.brand,
+    offerType: offer.offerType || 'product',
     categoryPrimary: offer.categoryPrimary,
     categorySecondary: offer.categorySecondary,
     categoryKey: offer.categoryKey || '',
@@ -2250,6 +2267,11 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     displayCategory: selectDisplayCategory(offer),
     quantityText: offer.quantityText,
     conditionsText: offer.conditionsText,
+    discountPercent: offer.discountPercent ?? null,
+    discountUpToPercent: offer.discountUpToPercent ?? null,
+    promotionScope: offer.promotionScope || '',
+    appliesToCategory: offer.appliesToCategory || '',
+    regionScope: offer.regionScope || '',
     customerProgramRequired: offer.customerProgramRequired,
     hasConditions: Boolean(offer.hasConditions),
     isMultiBuy: Boolean(offer.isMultiBuy),
@@ -2281,6 +2303,9 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     savings: structuredSavings,
     imageUrl: offer.imageUrl || '',
     sourceType: offer.sourceType || '',
+    sourceKey: offer.rawFacts?.sourceKey || '',
+    sourceUrl: offer.sourceUrl || '',
+    sourceUrls: offer.sourceUrls || [],
     sourceTypes: offer.sourceTypes || [],
     evidenceUrls: offer.evidenceUrls || [],
     needsReview: Boolean(offer.needsReview),
@@ -2448,7 +2473,33 @@ const RESPONSE_SOURCE_PRIORITY_MATRIX = {
     ['aggregator', 7, 'aggregator'],
   ],
   spar: [
+    ['official-action', 1, 'official-category-action'],
     ['spar-official-html', 2, 'official-html'],
+    ['spar-official-pdf', 2, 'official-pdf'],
+    ['flyer', 3, 'official-flyer'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  eurospar: [
+    ['official-action', 1, 'official-category-action'],
+    ['spar-official-html', 2, 'official-html'],
+    ['spar-official-pdf', 2, 'official-pdf'],
+    ['flyer', 3, 'official-flyer'],
+    ['offers-page', 3, 'official-page'],
+    ['aktionsfinder-json', 5, 'aggregator-json'],
+    ['marketguru-json-api', 6, 'aggregator-json'],
+    ['marketguru-embedded-json', 6, 'aggregator-json'],
+    ['marketguru-html', 7, 'aggregator-html'],
+    ['aggregator', 7, 'aggregator'],
+  ],
+  interspar: [
+    ['official-action', 1, 'official-category-action'],
+    ['spar-official-html', 2, 'official-html'],
+    ['spar-official-pdf', 2, 'official-pdf'],
     ['flyer', 3, 'official-flyer'],
     ['offers-page', 3, 'official-page'],
     ['aktionsfinder-json', 5, 'aggregator-json'],
@@ -2481,6 +2532,10 @@ function getSourcePriorityEntry(offer) {
 
   if (/ocr|bbox|tesseract|paddle/i.test(sourceType)) {
     return { sourceType, rank: 99, role: 'ocr-diagnostic-only' };
+  }
+
+  if (/official-action/i.test(sourceType)) {
+    return { sourceType, rank: 1, role: 'official-category-action' };
   }
 
   if (/official.*(?:algolia|api|json)|(?:algolia|api|json).*official/i.test(sourceType)) {

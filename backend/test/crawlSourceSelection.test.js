@@ -10,7 +10,7 @@ const SOURCES = [
   {
     _id: '111111111111111111111111',
     retailerKey: 'spar',
-    retailerName: 'Spar',
+    retailerName: 'SPAR',
     channel: 'aggregator',
     label: 'Aktionsfinder SPAR Aktionen',
     sourceUrl: 'https://www.aktionsfinder.at/pv/spar/',
@@ -21,8 +21,8 @@ const SOURCES = [
   },
   {
     _id: '222222222222222222222222',
-    retailerKey: 'spar',
-    retailerName: 'Spar',
+    retailerKey: 'interspar',
+    retailerName: 'INTERSPAR',
     channel: 'aggregator',
     label: 'Aktionsfinder INTERSPAR Aktionen',
     sourceUrl: 'https://www.aktionsfinder.at/pv/interspar/',
@@ -33,8 +33,8 @@ const SOURCES = [
   },
   {
     _id: '333333333333333333333333',
-    retailerKey: 'spar',
-    retailerName: 'Spar',
+    retailerKey: 'eurospar',
+    retailerName: 'EUROSPAR',
     channel: 'aggregator',
     label: 'Aktionsfinder EUROSPAR Aktionen',
     sourceUrl: 'https://www.aktionsfinder.at/pv/eurospar/',
@@ -46,7 +46,7 @@ const SOURCES = [
   {
     _id: '444444444444444444444444',
     retailerKey: 'spar',
-    retailerName: 'Spar',
+    retailerName: 'SPAR',
     channel: 'official-flyer',
     label: 'SPAR Aktionen',
     sourceUrl: 'https://www.spar.at/aktionen',
@@ -58,8 +58,8 @@ const SOURCES = [
   },
   {
     _id: '666666666666666666666666',
-    retailerKey: 'spar',
-    retailerName: 'Spar',
+    retailerKey: 'eurospar',
+    retailerName: 'EUROSPAR',
     channel: 'official-flyer',
     label: 'EUROSPAR Steiermark offizielles PDF-Flugblatt',
     sourceUrl: 'https://flugblatt.spar.at/steiermark/eurospar/260507-1-flugblatt-kw-19/getPdf.ashx',
@@ -137,7 +137,7 @@ test('sourceKeys select exactly the requested runnable sources without SPAR offi
     'aktionsfinder-spar',
   ]);
   assert.equal(selection.matchedSources.some((source) => source.sourceKey === 'spar-official-flyer'), false);
-  assert.deepEqual(selection.effectiveRetailerKeys, ['spar']);
+  assert.deepEqual(selection.effectiveRetailerKeys, ['spar', 'eurospar', 'interspar']);
 });
 
 test('sourceKeys can select SPAR official PDF source exactly', async () => {
@@ -151,7 +151,7 @@ test('sourceKeys can select SPAR official PDF source exactly', async () => {
   assert.equal(selection.wouldRunCount, 1);
   assert.equal(selection.matchedSources[0].sourceKey, 'eurospar-official-flyer-pdf');
   assert.equal(selection.matchedSources[0].sourceRetailerFormat, 'eurospar');
-  assert.deepEqual(selection.effectiveRetailerKeys, ['spar']);
+  assert.deepEqual(selection.effectiveRetailerKeys, ['eurospar']);
 });
 
 test('retailerKeys and sourceKeys act as an intersection', async () => {
@@ -207,7 +207,7 @@ test('retailerKeys-only path remains compatible and excludes disabled sources', 
     retailerKeys: ['spar'],
   });
 
-  assert.equal(selection.wouldRunCount, 4);
+  assert.equal(selection.wouldRunCount, 1);
   assert.deepEqual(seenFilters[0].retailerKey, { $in: ['spar'] });
   assert.deepEqual(seenFilters[0].enabled, { $ne: false });
 });

@@ -10,26 +10,26 @@ const OFFICIAL_RETAILERS = [
     officialUrls: ['https://www.spar.at/aktionen/steiermark', 'https://www.spar.at/aktionen'],
     retailerKeysForDb: ['spar'],
     sourceRetailerFormatsForDb: ['spar'],
-    expectedOfficialSourceTypes: ['spar-official-pdf', 'spar-official-flyer'],
-    parserNotes: ['SPAR official overview is useful for discovery; productive ingestion uses direct official PDF snapshots.'],
+    expectedOfficialSourceTypes: ['spar-official-pdf', 'official-action'],
+    parserNotes: ['SPAR official actions and direct official PDF snapshots are separate official-first sources.'],
   },
   {
     retailerKey: 'eurospar',
     displayName: 'EUROSPAR',
     officialUrls: ['https://www.spar.at/aktionen/steiermark'],
-    retailerKeysForDb: ['spar'],
+    retailerKeysForDb: ['eurospar'],
     sourceRetailerFormatsForDb: ['eurospar'],
-    expectedOfficialSourceTypes: ['spar-official-pdf', 'spar-official-flyer'],
-    parserNotes: ['EUROSPAR official PDF source is kept as sourceRetailerFormat=eurospar under retailerKey=spar.'],
+    expectedOfficialSourceTypes: ['spar-official-pdf'],
+    parserNotes: ['EUROSPAR official PDF source uses retailerKey=eurospar and sourceRetailerFormat=eurospar.'],
   },
   {
     retailerKey: 'interspar',
     displayName: 'INTERSPAR',
-    officialUrls: ['https://www.spar.at/aktionen/steiermark'],
-    retailerKeysForDb: ['spar'],
+    officialUrls: ['https://www.interspar.at/aktionen', 'https://www.spar.at/aktionen/steiermark'],
+    retailerKeysForDb: ['interspar'],
     sourceRetailerFormatsForDb: ['interspar'],
-    expectedOfficialSourceTypes: ['spar-official-pdf', 'spar-official-flyer'],
-    parserNotes: ['INTERSPAR official PDF source is kept as sourceRetailerFormat=interspar under retailerKey=spar.'],
+    expectedOfficialSourceTypes: ['spar-official-pdf', 'official-action'],
+    parserNotes: ['INTERSPAR official PDF/action sources use retailerKey=interspar and sourceRetailerFormat=interspar.'],
   },
   {
     retailerKey: 'billa',
@@ -134,6 +134,8 @@ function deriveSourceKey(source = {}) {
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
+  if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
+  if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
   if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
