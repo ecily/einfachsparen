@@ -561,6 +561,66 @@ test('generic butter excludes facial and body butter while explicit cosmetic but
   assert.equal(facialButterTitles.includes('Q10 Anti Falten Kollagen Experte Facial Butter Tag und Nacht'), true);
 });
 
+test('generic butter excludes lip butter even when category is misclassified as dairy', () => {
+  const lipButter = offer({
+    title: 'pure Softening Lip Butter',
+    brand: 'LOOK BY BIPA',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    categoryKey: 'milchprodukte',
+    subcategoryKey: 'milchprodukte',
+    comparisonGroup: '',
+    searchText: '',
+  });
+
+  assert.deepEqual(applyQueryMatch([lipButter], 'butter'), []);
+  assert.equal(scoreOfferAgainstQuery(lipButter, 'butter'), 0);
+});
+
+test('generic butter still finds real dairy butter when lip butter side hit is present', () => {
+  const offers = [
+    offer({
+      title: 'pure Softening Lip Butter',
+      brand: 'LOOK BY BIPA',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      categoryKey: 'milchprodukte',
+      subcategoryKey: 'milchprodukte',
+      comparisonGroup: '',
+      searchText: '',
+    }),
+    offer({
+      title: 'Schaerdinger Oesterreichische Teebutter 250 g',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      categoryKey: 'milchprodukte',
+      subcategoryKey: 'butter',
+      comparisonGroup: 'schaerdinger-oesterreichische-teebutter::0.25-kg',
+    }),
+  ];
+
+  assert.deepEqual(applyQueryMatch(offers, 'butter').map((item) => item.title), [
+    'Schaerdinger Oesterreichische Teebutter 250 g',
+  ]);
+});
+
+test('explicit lip butter query keeps lip butter searchable', () => {
+  const lipButter = offer({
+    title: 'pure Softening Lip Butter',
+    brand: 'LOOK BY BIPA',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    categoryKey: 'milchprodukte',
+    subcategoryKey: 'milchprodukte',
+    comparisonGroup: '',
+    searchText: '',
+  });
+
+  assert.deepEqual(applyQueryMatch([lipButter], 'lip butter').map((item) => item.title), [
+    'pure Softening Lip Butter',
+  ]);
+});
+
 test('explicit body butter prefers body care and excludes food butter side hits', () => {
   const offers = [
     offer({
@@ -3256,7 +3316,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2-oil-recall-v2',
+    schemaVersion: 'ranking-cache-v6-source-quality-search-token-v2-oil-recall-v2-butter-intent-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
