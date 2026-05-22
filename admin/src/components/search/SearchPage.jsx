@@ -96,6 +96,17 @@ export function SearchPage({
         </SectionCard>
       ) : null}
 
+      <section className="panel browse-intro" aria-labelledby="browse-intro-title">
+        <div className="browse-intro__copy">
+          <p className="eyebrow">Stöbern</p>
+          <h1 id="browse-intro-title">Angebote nach Markt und Kategorie entdecken</h1>
+          <p className="subtitle">
+            Wähle zuerst deine Märkte. Kategorien kannst du danach optional eingrenzen.
+          </p>
+          <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
+        </div>
+      </section>
+
       <RetailerSelectorBlock
         retailers={retailers}
         selectedRetailers={draftRetailers}

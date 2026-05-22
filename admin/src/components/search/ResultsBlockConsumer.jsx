@@ -19,6 +19,7 @@ export function ResultsBlockConsumer({
     <SectionCard>
       <div className="results-block" aria-busy={rankingLoading || rankingLoadingMore ? 'true' : 'false'}>
         <div className="panel__header">
+          <p className="eyebrow">Ergebnisse</p>
           <h2>Angebote aus deiner Auswahl</h2>
           <p>Aktuelle Treffer aus den gew&auml;hlten M&auml;rkten und Kategorien.</p>
         </div>
@@ -32,7 +33,7 @@ export function ResultsBlockConsumer({
           <div className="results-loading">
             <div className="browse-loading-status" role="status" aria-live="polite">
               <span className="browse-loading-status__spinner" aria-hidden="true" />
-              <span>Einen Moment bitte &hellip;</span>
+              <span>Aktuelle Angebote werden geladen &hellip;</span>
             </div>
             <div className="skeleton-grid">
               {Array.from({ length: 4 }).map((_, index) => (
@@ -43,7 +44,7 @@ export function ResultsBlockConsumer({
         ) : visibleOfferCount === 0 ? (
           <div className="empty-state">
             <h3>Aktuell keine passenden Angebote gefunden.</h3>
-            <p>Bitte pr&uuml;fe sp&auml;ter erneut oder &auml;ndere die Auswahl.</p>
+            <p>Bitte pr&uuml;fe sp&auml;ter erneut oder w&auml;hle allgemeinere M&auml;rkte und Kategorien.</p>
           </div>
         ) : (
           <>

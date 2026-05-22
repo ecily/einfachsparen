@@ -17,8 +17,9 @@ export function RetailerSelectorBlock({
     <SectionCard style={{ marginBottom: '1rem' }}>
       <div className="selection-block">
         <div className="selection-block__header">
+          <p className="eyebrow">Schritt 1</p>
           <h2>M&auml;rkte ausw&auml;hlen</h2>
-          <p>Tippe einen oder mehrere M&auml;rkte an und zeige aktuelle Angebote an.</p>
+          <p>Tippe einen oder mehrere M&auml;rkte an. Die Händlerfarben bleiben zur Orientierung sichtbar.</p>
         </div>
 
         {loading ? (

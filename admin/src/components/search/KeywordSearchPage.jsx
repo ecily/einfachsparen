@@ -11,6 +11,7 @@ import {
 } from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
 import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDisplayGroup } from '../../utils/retailers'
+import { getRetailerTheme } from '../../utils/retailerColors'
 
 const KEYWORD_SEARCH_LIMIT = 60
 
@@ -480,6 +481,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
           <div className="keyword-search-market-filter" aria-label="Märkte auswählen">
             {availableRetailers.map((retailer, index, retailerList) => {
               const selected = selectedRetailerKeys.includes(retailer.key)
+              const retailerTheme = getRetailerTheme(retailer.key || retailer.label)
               const nextRetailer = retailerList[index + 1]
               const showGroupSeparator = shouldSeparateRetailerGroups(retailer.key, nextRetailer?.key)
 
@@ -487,11 +489,20 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
                 <Fragment key={retailer.key}>
                   <button
                     type="button"
-                    className={`chip keyword-search-market-chip${selected ? ' chip--active' : ''}`}
+                    className={`chip retailer-chip keyword-search-market-chip${
+                      selected ? ' chip--active retailer-chip--active' : ''
+                    }`}
+                    style={{
+                      '--retailer-color': retailerTheme.color,
+                      '--retailer-text-color': retailerTheme.textColor,
+                      '--retailer-border-color': retailerTheme.borderColor,
+                      '--retailer-soft-color': retailerTheme.softColor,
+                    }}
                     aria-pressed={selected}
                     onClick={() => handleToggleRetailer(retailer.key)}
                   >
-                    {retailer.label}
+                    <span className="retailer-chip__dot" aria-hidden="true" />
+                    <span className="retailer-chip__label">{retailer.label}</span>
                   </button>
                   {showGroupSeparator ? <span className="retailer-chip-group-separator" aria-hidden="true" /> : null}
                 </Fragment>
@@ -509,7 +520,12 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
       {showResultsPanel ? (
         <section className="panel keyword-search-results" aria-busy={loading || loadingMore ? 'true' : 'false'}>
         {hint ? <p className="status">{hint}</p> : null}
-        {loading ? <p className="status">Angebote werden gesucht ...</p> : null}
+        {loading ? (
+          <div className="browse-loading-status" role="status" aria-live="polite">
+            <span className="browse-loading-status__spinner" aria-hidden="true" />
+            <span>Angebote werden gesucht &hellip;</span>
+          </div>
+        ) : null}
         {error ? (
           <div className="empty-state">
             <h3>Die Angebote konnten gerade nicht geladen werden.</h3>
