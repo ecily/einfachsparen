@@ -147,6 +147,40 @@ function referenceDateForFreshness(offer = {}) {
   return toDateOrNull(offer.lastSeenAt) || toDateOrNull(offer.updatedAt) || toDateOrNull(offer.createdAt);
 }
 
+function hasVisibleCustomerProgramCondition(offer = {}) {
+  if (!offer.customerProgramRequired) {
+    return true;
+  }
+
+  return Boolean(
+    String(offer.conditionsText || '').trim()
+    || String(offer.conditionLabel || '').trim()
+    || String(offer.rawFacts?.conditionsText || '').trim()
+    || String(offer.rawFacts?.infoText || '').trim()
+    || (Array.isArray(offer.rawFacts?.loyaltyTags) && offer.rawFacts.loyaltyTags.length > 0)
+  );
+}
+
+function hasPlausiblePublicOfferShape(offer = {}) {
+  const title = String(offer.title || '').trim();
+  const price = Number(offer.priceCurrent?.amount);
+  const hasPlausibleTitle = (
+    title.length >= 5
+    && /[A-Za-z\u00c0-\u017f]/.test(title)
+    && !/^[\d\s.,%-]+$/.test(title)
+    && title.split(/\s+/).length >= 2
+  );
+  const hasPlausiblePrice = Number.isFinite(price) && price > 0 && price < 500;
+  const hasPlausibleQuantity = Boolean(
+    String(offer.quantityText || '').trim()
+    || Number(offer.unitValue) > 0
+    || Number(offer.totalComparableAmount) > 0
+    || String(offer.comparableUnit || '').trim()
+  );
+
+  return hasPlausibleTitle && hasPlausiblePrice && hasPlausibleQuantity;
+}
+
 function isSnapshotTooOld(offer = {}, now = new Date(), maxAgeDays = DEFAULT_SNAPSHOT_MAX_AGE_DAYS) {
   if (offer.validTo) return false;
 
@@ -156,19 +190,49 @@ function isSnapshotTooOld(offer = {}, now = new Date(), maxAgeDays = DEFAULT_SNA
   return now.getTime() - reference.getTime() > maxAgeDays * DAY_MS;
 }
 
+function isExpiredValidToCompensatedByFreshCrawl(offer = {}, now = new Date()) {
+  const validTo = toDateOrNull(offer.validTo);
+  const reference = referenceDateForFreshness(offer);
+
+  if (!validTo || validTo >= now || !reference || reference <= validTo) {
+    return false;
+  }
+
+  // Local require avoids a module cycle: sourceQuality uses the date-range parser from this file.
+  const { hasFreshCrawlEvidence } = require('./sourceQuality');
+
+  return hasFreshCrawlEvidence(offer, now);
+}
+
 function isOfferFreshForActiveUse(offer = {}, now = new Date()) {
   // Local require avoids a module cycle: sourceQuality uses the date-range parser from this file.
-  const { isLowConfidenceAggregatorOffer } = require('./sourceQuality');
+  const { classifyOfferSourceQuality } = require('./sourceQuality');
+  const expiredValidToCompensated = isExpiredValidToCompensatedByFreshCrawl(offer, now);
 
-  if (offer.status && offer.status !== 'active') return false;
-  if (offer.isActiveNow === false) return false;
+  if (offer.status && offer.status !== 'active' && !expiredValidToCompensated) return false;
+  if (offer.isActiveNow === false && !expiredValidToCompensated) return false;
 
   const validTo = toDateOrNull(offer.validTo);
-  if (validTo && validTo < now) return false;
-  if (hasExplicitExpiredEvidence(offer.rawFacts) || hasExplicitExpiredEvidence(offer)) return false;
+  if (validTo && validTo < now && !expiredValidToCompensated) return false;
+  if (hasExplicitExpiredEvidence(offer.rawFacts) || (!expiredValidToCompensated && hasExplicitExpiredEvidence(offer))) return false;
   if (hasExpiredUrlRange(offer, now)) return false;
   if (isSnapshotTooOld(offer, now)) return false;
-  if (isLowConfidenceAggregatorOffer(offer)) return false;
+  if (!hasVisibleCustomerProgramCondition(offer)) return false;
+
+  const sourceQuality = classifyOfferSourceQuality(offer);
+  if (sourceQuality.isLowConfidenceAggregator) return false;
+  if (
+    sourceQuality.sourceClass === 'aggregator-ppcv'
+    && !sourceQuality.hasValidityEvidence
+    && !sourceQuality.hasDetailEvidence
+    && (
+      !sourceQuality.hasFreshCrawlEvidence
+      || !hasPlausiblePublicOfferShape(offer)
+      || !hasVisibleCustomerProgramCondition(offer)
+    )
+  ) {
+    return false;
+  }
 
   return true;
 }
@@ -178,6 +242,9 @@ module.exports = {
   buildOfferStatus,
   hasExplicitExpiredEvidence,
   hasExpiredUrlRange,
+  hasPlausiblePublicOfferShape,
+  hasVisibleCustomerProgramCondition,
+  isExpiredValidToCompensatedByFreshCrawl,
   isOfferFreshForActiveUse,
   isSnapshotTooOld,
   parseAktionsfinderDateRange,

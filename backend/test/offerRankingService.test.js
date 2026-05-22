@@ -31,6 +31,7 @@ const {
   tokenizeSearchText,
 } = require('../src/services/offers/offerRankingService');
 const { FOOD_OIL_PRODUCT_TOKENS } = require('../src/services/offers/searchTokens');
+const { classifyOfferSourceQuality } = require('../src/services/offers/sourceQuality');
 
 function offer(overrides) {
   return {
@@ -2872,6 +2873,118 @@ test('fresh active filter keeps Aktionsfinder ppcv only when offer-level validit
   assert.deepEqual(filterFreshActiveOffers([withValidity], now), [withValidity]);
 });
 
+test('fresh active filter allows fresh plausible Aktionsfinder ppcv without validTo', () => {
+  const now = new Date('2026-05-21T13:00:00.000Z');
+  const freshPpcv = offer({
+    title: 'SPAR Bio Kaffee 500 g',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    lastSeenRunId: 'crawl-spar-1',
+    crawlJobId: 'crawl-spar-1',
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
+    rawFacts: {
+      sourceType: 'aktionsfinder-json',
+      clickoutUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
+    },
+    priceCurrent: { amount: 4.99 },
+    quantityText: '500 g',
+    unitValue: 500,
+    unitType: 'g',
+    comparableUnit: 'kg',
+  });
+
+  const quality = classifyOfferSourceQuality(freshPpcv);
+
+  assert.equal(quality.sourceClass, 'aggregator-ppcv');
+  assert.equal(quality.hasFreshCrawlEvidence, true);
+  assert.equal(quality.validityConfidence, 'low');
+  assert.equal(quality.freshnessConfidence, 'high');
+  assert.equal(quality.sourceQualityRisk, '');
+  assert.deepEqual(filterFreshActiveOffers([freshPpcv], now), [freshPpcv]);
+  assert.equal(buildValidityLabel(freshPpcv), 'Aktuell gefunden - bitte im Markt pruefen.');
+});
+
+test('fresh active filter blocks Aktionsfinder ppcv without current crawl confirmation', () => {
+  const now = new Date('2026-05-21T13:00:00.000Z');
+  const stalePpcv = offer({
+    title: 'SPAR Bio Kaffee 500 g',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-04-20T08:00:00.000Z'),
+    lastSeenRunId: 'old-crawl',
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
+    rawFacts: {
+      sourceType: 'aktionsfinder-json',
+      clickoutUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
+    },
+    priceCurrent: { amount: 4.99 },
+    quantityText: '500 g',
+    comparableUnit: 'kg',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([stalePpcv], now), []);
+});
+
+test('fresh active filter keeps expired validTo blocked unless a newer successful crawl saw the offer again', () => {
+  const now = new Date('2026-05-21T13:00:00.000Z');
+  const expiredWithoutRecrawl = offer({
+    title: 'SPAR Bio Kaffee 500 g',
+    status: 'expired',
+    isActiveNow: false,
+    validTo: new Date('2026-05-10T23:59:59.999Z'),
+    lastSeenAt: new Date('2026-05-10T08:00:00.000Z'),
+    lastSeenRunId: 'old-crawl',
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
+    priceCurrent: { amount: 4.99 },
+    quantityText: '500 g',
+    comparableUnit: 'kg',
+  });
+  const recrawledAfterOldValidTo = {
+    ...expiredWithoutRecrawl,
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    lastSeenRunId: 'fresh-crawl',
+    crawlJobId: 'fresh-crawl',
+  };
+
+  assert.deepEqual(filterFreshActiveOffers([expiredWithoutRecrawl], now), []);
+  assert.deepEqual(filterFreshActiveOffers([recrawledAfterOldValidTo], now), [recrawledAfterOldValidTo]);
+  assert.equal(buildValidityLabel(recrawledAfterOldValidTo), 'Aktuell gefunden - bitte im Markt pruefen.');
+});
+
+test('fresh active filter requires visible customer-program conditions for fresh ppcv offers', () => {
+  const now = new Date('2026-05-21T13:00:00.000Z');
+  const base = offer({
+    title: 'SPAR Kaffee App Preis 500 g',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    lastSeenRunId: 'fresh-crawl',
+    crawlJobId: 'fresh-crawl',
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
+    rawFacts: {
+      sourceType: 'aktionsfinder-json',
+      clickoutUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
+    },
+    priceCurrent: { amount: 3.99 },
+    quantityText: '500 g',
+    comparableUnit: 'kg',
+    customerProgramRequired: true,
+  });
+  const visibleCondition = { ...base, conditionsText: 'nur mit App' };
+  const hiddenCondition = { ...base, conditionsText: '' };
+
+  assert.deepEqual(filterFreshActiveOffers([visibleCondition], now), [visibleCondition]);
+  assert.deepEqual(filterFreshActiveOffers([hiddenCondition], now), []);
+});
+
 test('response dedupe keeps priced aggregator when official duplicate has no usable price', () => {
   const aggregator = offer({
     _id: 'priced-aggregator',
@@ -2933,9 +3046,13 @@ test('SPAR official PDF evidence does not suppress structured Aktionsfinder dupl
     ...officialPdf,
     _id: 'spar-aktionsfinder-json',
     sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/milch/spar/',
     imageUrl: 'https://img.example.test/milch.jpg',
-    validFrom: new Date('2026-05-21T00:00:00.000Z'),
-    validTo: new Date('2026-05-27T23:59:59.999Z'),
+    validFrom: null,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    lastSeenRunId: 'spar-crawl',
+    crawlJobId: 'spar-crawl',
   });
   const prepared = prepareQueryOffersForResponse([officialPdf, aggregator], 'milch');
 

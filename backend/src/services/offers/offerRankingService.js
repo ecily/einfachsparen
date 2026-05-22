@@ -9,7 +9,7 @@ const { SEARCH_TOKEN_VERSION, buildQuerySearchTokens, repairGermanSearchTextEnco
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
-const { isOfferFreshForActiveUse } = require('./offerFreshness');
+const { isExpiredValidToCompensatedByFreshCrawl, isOfferFreshForActiveUse } = require('./offerFreshness');
 const { classifyOfferSourceQuality } = require('./sourceQuality');
 
 const OFFER_RANKING_FIELD_LIST = [
@@ -2704,6 +2704,10 @@ function formatDateLabel(value) {
 }
 
 function buildValidityLabel(offer) {
+  if (!offer?.validTo || isExpiredValidToCompensatedByFreshCrawl(offer)) {
+    return 'Aktuell gefunden - bitte im Markt pruefen.';
+  }
+
   const validFrom = formatDateLabel(offer?.validFrom);
   const validTo = formatDateLabel(offer?.validTo);
 
@@ -2715,7 +2719,7 @@ function buildValidityLabel(offer) {
     return `gueltig bis ${validTo}`;
   }
 
-  return 'aktuell verfuegbar, Enddatum nicht erkannt';
+  return 'Aktuell gefunden - bitte im Markt pruefen.';
 }
 
 function hasReliableValidTo(offer) {

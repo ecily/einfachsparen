@@ -1,7 +1,17 @@
 const { parseAktionsfinderDateRange } = require('./offerFreshness');
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_FRESH_CRAWL_EVIDENCE_MAX_AGE_DAYS = 14;
+
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function toDateOrNull(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function collectOfferUrls(offer = {}) {
@@ -68,6 +78,29 @@ function hasValidityEvidence(offer = {}) {
   });
 }
 
+function hasFreshCrawlEvidence(
+  offer = {},
+  now = new Date(),
+  maxAgeDays = DEFAULT_FRESH_CRAWL_EVIDENCE_MAX_AGE_DAYS
+) {
+  const observedAt =
+    toDateOrNull(offer.lastSeenAt)
+    || toDateOrNull(offer.createdAt);
+  const hasRunEvidence = Boolean(
+    offer.lastSeenRunId
+    || offer.lastSeenSourceRunId
+    || offer.crawlJobId
+    || offer.rawFacts?.crawlRunId
+    || offer.rawFacts?.sourceRunId
+  );
+
+  if (!observedAt || !hasRunEvidence) {
+    return false;
+  }
+
+  return now.getTime() - observedAt.getTime() <= maxAgeDays * DAY_MS;
+}
+
 function classifyOfferSourceQuality(offer = {}) {
   const sourceTypes = collectOfferSourceTypes(offer);
   const isOfficial = hasOfficialEvidence(offer);
@@ -78,11 +111,13 @@ function classifyOfferSourceQuality(offer = {}) {
   const isPpcv = isAktionsfinder && hasAktionsfinderPpcvEvidence(offer);
   const hasDetailEvidence = isAktionsfinder ? hasAktionsfinderDetailEvidence(offer) : false;
   const validityEvidence = hasValidityEvidence(offer);
+  const freshCrawlEvidence = hasFreshCrawlEvidence(offer);
   const lowConfidencePpcv = Boolean(
     isPpcv
     && !isOfficial
     && !validityEvidence
     && !hasDetailEvidence
+    && !freshCrawlEvidence
   );
   let sourceClass = 'unknown';
 
@@ -97,10 +132,11 @@ function classifyOfferSourceQuality(offer = {}) {
   return {
     sourceClass,
     sourceTrustLevel: isOfficial ? 'high' : (isAggregator ? 'medium' : 'unknown'),
-    freshnessConfidence: lowConfidencePpcv ? 'low' : (isOfficial || validityEvidence ? 'high' : 'medium'),
+    freshnessConfidence: lowConfidencePpcv ? 'low' : (isOfficial || validityEvidence || freshCrawlEvidence ? 'high' : 'medium'),
     validityConfidence: validityEvidence ? 'high' : (isOfficial ? 'medium' : 'low'),
     hasOfficialEvidence: isOfficial,
     hasValidityEvidence: validityEvidence,
+    hasFreshCrawlEvidence: freshCrawlEvidence,
     hasDetailEvidence,
     sourceQualityRisk: lowConfidencePpcv ? 'aktionsfinder-ppcv-missing-validity-evidence' : '',
     isLowConfidenceAggregator: lowConfidencePpcv,
@@ -115,6 +151,7 @@ module.exports = {
   classifyOfferSourceQuality,
   collectOfferUrls,
   hasAktionsfinderPpcvEvidence,
+  hasFreshCrawlEvidence,
   hasOfficialEvidence,
   hasValidityEvidence,
   isLowConfidenceAggregatorOffer,

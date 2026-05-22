@@ -177,7 +177,7 @@ test('BIPA official parser keeps snapshot offers when stale page-level validity 
   assert.equal(offers[0].validTo, null);
   assert.equal(offers[0].status, 'active');
   assert.equal(offers[0].isActiveNow, true);
-  assert.equal(buildValidityLabel(enriched[0]), 'aktuell verfuegbar, Enddatum nicht erkannt');
+  assert.equal(buildValidityLabel(enriched[0]), 'Aktuell gefunden - bitte im Markt pruefen.');
   assert.equal(enriched.length, 1);
   assert.equal(enriched[0].reviewReasons.includes('missing-title'), false);
   assert.equal(enriched[0].reviewReasons.includes('missing-current-price'), false);
@@ -536,7 +536,7 @@ test('dm product-search Ausverkauf parser keeps offers without validTo and label
   assert.equal(enriched[0].validTo, null);
   assert.equal(enriched[0].status, 'active');
   assert.equal(enriched[0].isActiveNow, true);
-  assert.equal(buildValidityLabel(enriched[0]), 'aktuell verfuegbar, Enddatum nicht erkannt');
+  assert.equal(buildValidityLabel(enriched[0]), 'Aktuell gefunden - bitte im Markt pruefen.');
 });
 
 test('dm product-search parser rejects products without Ausverkauf context', () => {
@@ -728,7 +728,7 @@ test('HOFER official parser keeps current snapshot offers without validTo and la
   assert.equal(offers[0].isActiveNow, true);
   assert.match(offers[0].conditionsText, /Aktuell gefunden - bitte im Markt pruefen/);
   assert.equal(enriched.length, 1);
-  assert.equal(buildValidityLabel(enriched[0]), 'aktuell verfuegbar, Enddatum nicht erkannt');
+  assert.equal(buildValidityLabel(enriched[0]), 'Aktuell gefunden - bitte im Markt pruefen.');
 });
 
 test('HOFER official parser derives dated-page validTo as full previous day and rejects future offers', () => {
