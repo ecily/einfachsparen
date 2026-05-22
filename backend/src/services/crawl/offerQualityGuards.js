@@ -150,22 +150,162 @@ function textHaystack(offer = {}) {
   ].join(' '));
 }
 
+function rawConditionHaystack(offer = {}) {
+  return [
+    offer.title,
+    offer.description,
+    offer.conditionsText,
+    offer.rawFacts?.infoText,
+    offer.rawFacts?.conditionsText,
+    offer.rawFacts?.validityText,
+    offer.rawFacts?.evidenceText,
+    ...(Array.isArray(offer.rawFacts?.tags) ? offer.rawFacts.tags : []),
+    ...(Array.isArray(offer.rawFacts?.loyaltyTags) ? offer.rawFacts.loyaltyTags : []),
+  ].join(' ');
+}
+
+function normalizeConditionUnit(value) {
+  const unit = normalizeTitleForMatch(value || '');
+
+  if (/pack/.test(unit)) return 'Packungen';
+  if (/fl/.test(unit)) return 'Flaschen';
+  if (/dos/.test(unit)) return 'Dosen';
+
+  return 'Stueck';
+}
+
+function addConditionHint(hints, seen, value) {
+  const text = sanitizeWhitespace(value);
+  const key = normalizeTitleForMatch(text);
+
+  if (!text || !key || seen.has(key)) {
+    return;
+  }
+
+  seen.add(key);
+  hints.push(text);
+}
+
+function trimScope(value) {
+  return sanitizeWhitespace(value)
+    .replace(/\b(?:gueltig|gultig|nur|ausgenommen|statt|je)\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
+
+function extractConditionHints(offer = {}) {
+  const rawText = rawConditionHaystack(offer);
+  const rawLower = String(rawText || '').toLowerCase();
+  const text = normalizeTitleForMatch(rawText);
+  const hints = [];
+  const seen = new Set();
+
+  for (const match of rawLower.matchAll(/\b(\d+)\s*\+\s*(\d+)(?:\s*gratis)?\b/g)) {
+    addConditionHint(hints, seen, `${match[1]}+${match[2]} gratis`);
+  }
+
+  for (const match of text.matchAll(/\b(\d+)\s*(?:fur|fuer)\s*(\d+)\b/g)) {
+    addConditionHint(hints, seen, `${match[1]} fuer ${match[2]}`);
+  }
+
+  for (const match of text.matchAll(/\bnimm\s+(\d+)\s+zahl\s+(\d+)\b/g)) {
+    addConditionHint(hints, seen, `Nimm ${match[1]} zahl ${match[2]}`);
+  }
+
+  for (const match of text.matchAll(/\bab\s+(\d+)\s*(stueck|stuck|stk|packungen?|flaschen?|dosen?)\b/g)) {
+    addConditionHint(hints, seen, `ab ${match[1]} ${normalizeConditionUnit(match[2])}`);
+  }
+
+  for (const match of text.matchAll(/\bbei\s+(\d+)\s*(stueck|stuck|stk|packungen?|flaschen?|dosen?)\b/g)) {
+    addConditionHint(hints, seen, `bei ${match[1]} ${normalizeConditionUnit(match[2])}`);
+  }
+
+  for (const match of text.matchAll(/\b(?:bei\s+kauf\s+von|beim\s+kauf\s+von|kauf\s+von)\s+(\d+)\b/g)) {
+    addConditionHint(hints, seen, `bei Kauf von ${match[1]}`);
+  }
+
+  for (const match of text.matchAll(/\bim\s+(\d+)er\s+pack\b/g)) {
+    addConditionHint(hints, seen, `im ${match[1]}er Pack`);
+  }
+
+  if (/\bmultipack\b/.test(text)) {
+    addConditionHint(hints, seen, 'Multipack');
+  }
+
+  for (const match of rawLower.matchAll(/(?:-|minus\s*)?(\d{1,2})\s*%\s*(?:rabatt\s*)?auf\s+(alle|die gesamte|das gesamte)\s+([a-z0-9a-z\u00c0-\u017f -]{3,80})/g)) {
+    const scope = trimScope(`${match[2]} ${match[3]}`);
+    addConditionHint(hints, seen, `-${match[1]}% auf ${scope}`);
+  }
+
+  for (const match of rawLower.matchAll(/\b(\d{1,2})\s*%\s+rabatt\s+auf\s+([a-z0-9a-z\u00c0-\u017f -]{3,80})/g)) {
+    addConditionHint(hints, seen, `${match[1]}% Rabatt auf ${trimScope(match[2])}`);
+  }
+
+  if (/\bjeder\s+(?:2\.|zweite)\b/.test(text)) {
+    addConditionHint(hints, seen, 'jeder 2.');
+  }
+
+  if (/\bnur\s+mit\s+(?:spar\s*)?app\b|\bapp[-\s]?preis\b/.test(text)) {
+    addConditionHint(hints, seen, 'nur mit App');
+  } else if (/\bmit\s+(?:spar\s*)?app\b/.test(text)) {
+    addConditionHint(hints, seen, 'mit App');
+  }
+
+  if (/\bnur\s+mit\s+gutschein\b|\bgutschein\b|\bcoupon\b/.test(text)) {
+    addConditionHint(hints, seen, text.includes('nur mit gutschein') ? 'nur mit Gutschein' : 'mit Gutschein/Coupon');
+  }
+
+  if (/\bkundenkarte\b|\bclub\b|\bjoe\b|\bjo\b/.test(text)) {
+    addConditionHint(hints, seen, 'mit Kundenkarte/Club');
+  }
+
+  if (/\bnur\s+am\s+freitag\b/.test(text)) addConditionHint(hints, seen, 'nur am Freitag');
+  if (/\bnur\s+am\s+samstag\b/.test(text)) addConditionHint(hints, seen, 'nur am Samstag');
+  if (/\bfr\.?\s*(?:und|&)\s*sa\.?\b/.test(text)) addConditionHint(hints, seen, 'Fr. und Sa.');
+
+  if (/\bnur\s+in\s+teilnehmenden\s+maerkten\b|\bteilnehmenden\s+maerkten\b/.test(text)) {
+    addConditionHint(hints, seen, 'nur in teilnehmenden Maerkten');
+  }
+
+  if (/\bnur\s+bei\s+interspar\b/.test(text)) addConditionHint(hints, seen, 'nur bei INTERSPAR');
+  if (/\bnur\s+bei\s+eurospar\b/.test(text)) addConditionHint(hints, seen, 'nur bei EUROSPAR');
+  if (/\bnur\s+in\s+steiermark\b/.test(text)) addConditionHint(hints, seen, 'nur in Steiermark');
+  if (/\bsolange\s+(?:der\s+)?vorrat\s+reicht\b/.test(text)) addConditionHint(hints, seen, 'solange der Vorrat reicht');
+
+  return hints;
+}
+
+function buildInferredConditionsText(offer = {}) {
+  const parts = [];
+  const seen = new Set();
+
+  addConditionHint(parts, seen, offer.conditionsText);
+  for (const hint of extractConditionHints(offer)) {
+    addConditionHint(parts, seen, hint);
+  }
+
+  return parts.join(' / ');
+}
+
 function detectCustomerProgramRequired(offer = {}) {
   const haystack = textHaystack(offer);
 
-  return /\b(?:app|app preis|kundenkarte|vorteilskarte|clubpreis|club preis|nur mit karte|karte|konto|rabattmarke|lidl plus|jo|joe|payback)\b/.test(haystack);
+  return /\b(?:app|app preis|kundenkarte|vorteilskarte|clubpreis|club preis|nur mit karte|karte|konto|rabattmarke|lidl plus|club|jo|joe|payback)\b/.test(haystack);
 }
 
 function detectConditionalText(offer = {}) {
   const haystack = textHaystack(offer);
 
-  return /\b(?:solange der vorrat reicht|solange vorrat|beim kauf von|ab \d+|nur mit|app|kundenkarte|vorteilskarte|clubpreis|rabattmarke)\b/.test(haystack);
+  return /\b(?:solange der vorrat reicht|solange vorrat|beim kauf von|ab \d+|nur mit|app|kundenkarte|vorteilskarte|clubpreis|rabattmarke|gutschein|coupon|teilnehmenden maerkten|nur am)\b/.test(haystack)
+    || extractConditionHints(offer).length > 0;
 }
 
 function inferConditionFields(offer = {}) {
+  const conditionsText = buildInferredConditionsText(offer);
   const requirement = extractPromotionRequirement({
     title: offer.title || '',
-    conditionsText: offer.conditionsText || '',
+    conditionsText,
     rawFacts: offer.rawFacts || {},
     benefitType: offer.benefitType || '',
   });
@@ -200,6 +340,7 @@ function inferConditionFields(offer = {}) {
     minimumPurchaseQty: requiredQuantity,
     effectiveDiscountType,
     requirement,
+    conditionsText,
   };
 }
 
@@ -224,6 +365,7 @@ module.exports = {
   PACKAGE_SIZE_UNCLEAR_REASON,
   assessComparableSafety,
   inferConditionFields,
+  extractConditionHints,
   isOfferSafelyComparable,
   normalizeComparableUnit,
 };

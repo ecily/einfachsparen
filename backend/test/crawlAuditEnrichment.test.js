@@ -244,6 +244,11 @@ test('recognizes multi-buy and threshold promotion requirements conservatively',
     payableQuantity: 2,
     mechanic: 'x-for-y',
   });
+  assert.deepEqual(extractPromotionRequirement({ title: 'Nimm 3 zahl 2' }), {
+    requiredQuantity: 3,
+    payableQuantity: 2,
+    mechanic: 'x-for-y',
+  });
   assert.deepEqual(extractPromotionRequirement({ conditionsText: 'ab 2 Stueck' }), {
     requiredQuantity: 2,
     payableQuantity: null,
@@ -272,6 +277,43 @@ test('sets condition fields for multi-buy, minimum quantity and app or card pric
   assert.equal(appPrice.customerProgramRequired, true);
   assert.equal(appPrice.hasConditions, true);
   assert.equal(appPrice.effectiveDiscountType, 'card-required');
+});
+
+test('extracts conservative German condition hints into stored condition text', () => {
+  const cases = [
+    ['S-BUDGET Pasta 2+1 gratis', /2\+1 gratis/, { isMultiBuy: true, minimumPurchaseQty: 3 }],
+    ['Pizza 2 fuer 1', /2 fuer 1/, { isMultiBuy: true, minimumPurchaseQty: 2 }],
+    ['Nimm 3 zahl 2 Chips', /Nimm 3 zahl 2/, { isMultiBuy: true, minimumPurchaseQty: 3 }],
+    ['Mineralwasser ab 6 Flaschen je 0,49', /ab 6 Flaschen/, { isMultiBuy: false, minimumPurchaseQty: 6 }],
+    ['Teigwaren ab 2 Packungen je 1,99', /ab 2 Packungen/, { isMultiBuy: false, minimumPurchaseQty: 2 }],
+    ['Kaffee nur mit App', /nur mit App/, { customerProgramRequired: true }],
+    ['Waschmittel mit Gutschein', /mit Gutschein\/Coupon/, { hasConditions: true }],
+    ['-25% auf alle Biere', /-25% auf alle biere/i, { hasConditions: true }],
+  ];
+
+  for (const [title, conditionPattern, expectations] of cases) {
+    const stored = enrichOfferForStorage(activeComparableOffer({ title, conditionsText: '' }));
+
+    assert.match(stored.conditionsText, conditionPattern, title);
+    assert.equal(stored.hasConditions, true, title);
+
+    for (const [field, expected] of Object.entries(expectations)) {
+      assert.equal(stored[field], expected, `${title} ${field}`);
+    }
+  }
+});
+
+test('keeps condition text when offer is normalized for storage', () => {
+  const stored = enrichOfferForStorage(activeComparableOffer({
+    title: 'Limonade Aktion',
+    description: 'nur in teilnehmenden Maerkten, solange der Vorrat reicht',
+    conditionsText: '',
+  }));
+
+  assert.match(stored.conditionsText, /nur in teilnehmenden Maerkten/);
+  assert.match(stored.conditionsText, /solange der Vorrat reicht/);
+  assert.equal(stored.hasConditions, true);
+  assert.ok(stored.searchTokens.includes('teilnehmenden'));
 });
 
 test('keeps SPAR retailer formats on offer documents without changing retailer identity', () => {

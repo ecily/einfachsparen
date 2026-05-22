@@ -298,6 +298,16 @@ function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts
     };
   }
 
+  const nimmMatch = haystack.match(/\bnimm\s+(\d+)\s+zahl\s+(\d+)\b/);
+
+  if (nimmMatch) {
+    return {
+      requiredQuantity: Number(nimmMatch[1]),
+      payableQuantity: Number(nimmMatch[2]),
+      mechanic: 'x-for-y',
+    };
+  }
+
   const thresholdMatch = haystack.match(/\bab\s+(\d+)\s*(?:stk|stueck|stuck|dosen|flaschen|packungen|rollen|beutel|glaser|glaeser)\b/);
 
   if (thresholdMatch) {

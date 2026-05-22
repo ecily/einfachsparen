@@ -183,6 +183,39 @@ function pickBestStructuredOffer(offers) {
   return [...offers].sort((left, right) => getStructuredFieldScore(right) - getStructuredFieldScore(left))[0];
 }
 
+function getConditionScore(offer) {
+  let score = 0;
+
+  if (offer?.conditionsText) score += 60;
+  if (offer?.hasConditions) score += 30;
+  if (offer?.isMultiBuy) score += 30;
+  if (offer?.customerProgramRequired) score += 25;
+  if (Number(offer?.minimumPurchaseQty || 1) > 1) score += 20;
+  if (offer?.benefitType && offer.benefitType !== 'unknown') score += 10;
+  if (offer?.effectiveDiscountType && offer.effectiveDiscountType !== 'unknown') score += 10;
+
+  return score;
+}
+
+function pickBestConditionOffer(offers) {
+  return [...offers].sort((left, right) => getConditionScore(right) - getConditionScore(left))[0];
+}
+
+function buildMergedConditionFields(canonical = {}, bestConditionOffer = {}) {
+  return {
+    benefitType: bestConditionOffer.benefitType || canonical.benefitType || 'unknown',
+    effectiveDiscountType: bestConditionOffer.effectiveDiscountType || canonical.effectiveDiscountType || 'unknown',
+    conditionsText: bestConditionOffer.conditionsText || canonical.conditionsText || '',
+    customerProgramRequired: Boolean(canonical.customerProgramRequired || bestConditionOffer.customerProgramRequired),
+    hasConditions: Boolean(canonical.hasConditions || bestConditionOffer.hasConditions || bestConditionOffer.conditionsText),
+    isMultiBuy: Boolean(canonical.isMultiBuy || bestConditionOffer.isMultiBuy),
+    minimumPurchaseQty: Math.max(
+      Number(canonical.minimumPurchaseQty || 1),
+      Number(bestConditionOffer.minimumPurchaseQty || 1)
+    ),
+  };
+}
+
 function hasComparableUnitPrice(offer) {
   return Boolean(Number(offer?.normalizedUnitPrice?.amount) > 0 && offer?.normalizedUnitPrice?.unit);
 }
@@ -282,7 +315,11 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
           'comparableUnit',
           'totalComparableAmount',
           'effectiveDiscountType',
+          'benefitType',
+          'conditionsText',
           'customerProgramRequired',
+          'hasConditions',
+          'isMultiBuy',
           'offerKey',
           'packCount',
           'unitValue',
@@ -342,6 +379,8 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
     const canonical = sorted[0];
     const bestCategoryOffer = pickBestCategoryOffer(categoryCandidates);
     const bestStructuredOffer = pickBestStructuredOffer(sorted);
+    const bestConditionOffer = pickBestConditionOffer(sorted);
+    const mergedConditionFields = buildMergedConditionFields(canonical, bestConditionOffer);
     const bestUnitPriceOffer = sorted.find(hasComparableUnitPrice) || canonical;
     const mergedReviewState = buildMergedReviewState({ canonical, bestCategoryOffer });
     const mergedSupportingSources = dedupeSourceEvidence(
@@ -390,6 +429,7 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
             totalComparableAmount: bestStructuredOffer.totalComparableAmount ?? canonical.totalComparableAmount ?? null,
             comparableUnit: bestStructuredOffer.comparableUnit || canonical.comparableUnit || '',
             packageType: bestStructuredOffer.packageType || canonical.packageType || '',
+            ...mergedConditionFields,
             normalizedUnitPrice: hasComparableUnitPrice(bestUnitPriceOffer)
               ? bestUnitPriceOffer.normalizedUnitPrice
               : canonical.normalizedUnitPrice,
@@ -403,6 +443,9 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
             rawFacts: {
               ...(canonical.rawFacts || {}),
               mergedDuplicateCount: sorted.length,
+              mergedConditionCandidates: [...new Set(sorted
+                .map((offer) => offer.conditionsText)
+                .filter(Boolean))].slice(0, 8),
               mergedCategoryCandidates: [...new Set(sorted
                 .map((offer) => [offer.categoryPrimary, offer.categorySecondary].filter(Boolean).join(' > '))
                 .filter(Boolean))].slice(0, 8),
@@ -438,4 +481,8 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
 
 module.exports = {
   dedupeOffersAcrossSources,
+  _private: {
+    buildMergedConditionFields,
+    pickBestConditionOffer,
+  },
 };

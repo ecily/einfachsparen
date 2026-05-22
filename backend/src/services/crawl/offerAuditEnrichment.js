@@ -376,6 +376,7 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
   const categoryKey = document.categoryKey || normalizeKey(document.categorySecondary || document.categoryPrimary, 'unkategorisiert');
   const tokenSource = {
     ...document,
+    conditionsText: conditionFields.conditionsText || document.conditionsText || '',
     ...formatMetadata,
     sourceType: resolvedSourceType,
     categoryKey,
@@ -410,6 +411,7 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     subcategoryKey,
     categoryConfidence,
     subcategoryConfidence,
+    conditionsText: conditionFields.conditionsText || document.conditionsText || '',
     customerProgramRequired: conditionFields.customerProgramRequired,
     hasConditions: conditionFields.hasConditions,
     isMultiBuy: conditionFields.isMultiBuy,
@@ -437,6 +439,7 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
       hasProspectNormalPrice: savingsFields.hasProspectNormalPrice,
       hasEstimatedReferencePrice: savingsFields.hasEstimatedReferencePrice,
       isActionPriceOnly: savingsFields.isActionPriceOnly,
+      conditionsText: conditionFields.conditionsText || document.conditionsText || undefined,
       minimumPurchaseQuantity: conditionFields.minimumPurchaseQty > 1 ? conditionFields.minimumPurchaseQty : undefined,
       requiredQuantity: conditionFields.minimumPurchaseQty > 1 ? conditionFields.minimumPurchaseQty : undefined,
       sourceRetailerName: formatMetadata.sourceRetailerName,
