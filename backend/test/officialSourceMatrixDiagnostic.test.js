@@ -45,6 +45,23 @@ test('official resource matrix keeps user-researched resources prominent and mer
   assert.ok(spar.officialUrls.includes('https://www.spar.at/produktwelt/bier?inAngebot=true&page=1'));
 });
 
+test('SPAR discovery matrix records blocked official pages and sitemap-only INTERSPAR shop limits', () => {
+  const sparMatrix = OFFICIAL_RESOURCE_MATRIX.find((retailer) => retailer.retailerKey === 'spar');
+  const eurosparMatrix = OFFICIAL_RESOURCE_MATRIX.find((retailer) => retailer.retailerKey === 'eurospar');
+  const intersparMatrix = OFFICIAL_RESOURCE_MATRIX.find((retailer) => retailer.retailerKey === 'interspar');
+  const sparProductworld = sparMatrix.resources.find((resource) => resource.url.includes('/produktwelt/bier'));
+  const eurosparActions = eurosparMatrix.resources.find((resource) => resource.url.includes('/aktionen/steiermark/eurospar'));
+  const intersparShop = intersparMatrix.resources.find((resource) => resource.url === 'https://www.interspar.at/shop/lebensmittel/');
+
+  assert.equal(sparProductworld.status, 'blocked-2026-05-22');
+  assert.equal(sparProductworld.crawlable, 'no-direct-node-or-cli');
+  assert.match(sparProductworld.nextLever, /do not ingest product sitemap assortment as offers/i);
+  assert.equal(eurosparActions.status, 'blocked-2026-05-22');
+  assert.equal(intersparShop.status, 'sitemap-only-no-offer-evidence-2026-05-22');
+  assert.equal(intersparShop.dataQuality.price, 'no');
+  assert.equal(intersparShop.dataQuality.image, 'yes-sitemap');
+});
+
 test('classifies source kind as official aggregator marketplace or unknown', () => {
   assert.equal(classifySourceKind({ channel: 'official-site', sourceUrl: 'https://www.billa.at/unsere-aktionen/aktionen' }), 'official');
   assert.equal(classifySourceKind({ channel: 'aggregator', sourceUrl: 'https://www.aktionsfinder.at/pv/billa/' }), 'aggregator');
