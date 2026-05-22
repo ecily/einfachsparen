@@ -148,7 +148,7 @@ function SearchLandingHero() {
               maxWidth: '46rem',
             }}
           >
-            Aktuelle Angebote finden. <span className="hero-headline-accent">Spare Geld. Das Leben ist teuer genug.</span>
+            Angebote finden. <span className="hero-headline-accent">Einfach sparen.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
             Suche Supermarkt- und Drogerie-Angebote in Österreich, merke passende Treffer und nutze kaufklug als
