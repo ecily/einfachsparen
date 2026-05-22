@@ -102,7 +102,7 @@ export function PrivacyPage() {
         <p>
           kaufklug.at erfasst einfache, pseudonyme Nutzungsereignisse, damit das Projekt sachlich bewertet und verbessert
           werden kann. Dazu zählen zum Beispiel Seitenaufrufe, geöffnete Einkaufsliste, gestartete Angebotssuchen,
-          Suchergebnisse, hinzugefügte Angebote und Downloads der Android-Testversion. Es werden dabei keine Namen,
+          Suchergebnisse und hinzugefügte Angebote. Es werden dabei keine Namen,
           E-Mail-Adressen, vollständigen IP-Adressen, exakten Standortdaten oder Nutzerkonten gespeichert.
         </p>
         <p>
@@ -129,11 +129,10 @@ export function PrivacyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="Externer QR-Code-Dienst">
+      <LegalSection title="Externe QR-Code-Dienste">
         <p>
-          Für den Download-Hinweis zur Android-Testversion wird ein QR-Code über einen externen QR-Code-Dienst geladen.
-          Beim Anzeigen dieses QR-Codes kann eine technische Verbindung zu diesem Anbieter entstehen. Dabei können
-          technische Zugriffsdaten wie IP-Adresse und Browserinformationen übertragen werden.
+          Derzeit wird in der sichtbaren Webanwendung kein QR-Code zur Android-Testversion geladen. Falls später wieder
+          ein QR-Code angezeigt wird, kann dabei eine technische Verbindung zu einem externen QR-Code-Dienst entstehen.
         </p>
       </LegalSection>
 
@@ -247,17 +246,16 @@ export function CookiesPage() {
 
       <LegalSection title="Pseudonyme Nutzungsmessung">
         <p>
-          kaufklug.at zählt grundlegende Nutzungsereignisse wie Seitenaufrufe, Angebotssuchen, gespeicherte Angebote und
-          Downloads der Android-Testversion. Diese Messung erfolgt ohne Marketing-Cookies, ohne Login und ohne Speicherung
+          kaufklug.at zählt grundlegende Nutzungsereignisse wie Seitenaufrufe, Angebotssuchen und gespeicherte Angebote.
+          Diese Messung erfolgt ohne Marketing-Cookies, ohne Login und ohne Speicherung
           von Namen, E-Mail-Adressen, vollständigen IP-Adressen oder exakten Standortdaten.
         </p>
       </LegalSection>
 
-      <LegalSection title="Externer QR-Code">
+      <LegalSection title="Externe QR-Code-Dienste">
         <p>
-          Beim Anzeigen des QR-Codes zum Download der Android-Testversion kann eine technische Verbindung zu einem
-          externen QR-Code-Dienst entstehen. Wer dies vermeiden möchte, kann den direkten Download-Link verwenden, ohne
-          den QR-Code zu scannen.
+          Derzeit wird in der sichtbaren Webanwendung kein QR-Code zur Android-Testversion geladen. Falls später wieder
+          ein QR-Code angezeigt wird, kann dabei eine technische Verbindung zu einem externen QR-Code-Dienst entstehen.
         </p>
       </LegalSection>
 

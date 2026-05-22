@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import './index.css'
 import {
   fetchHealth,
@@ -39,6 +39,11 @@ import { areStringSetsEqual, flattenRankingOffers, getRankingPagination, mergePa
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 import { getRetailerTheme } from './utils/retailerColors'
+import { shouldSeparateRetailerGroups } from './utils/retailers'
+
+const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
+const MOBILE_BROWSER_NOTICE =
+  'Wir arbeiten gerade an den optimalen Suchergebnissen. Sobald die Datenqualität stabil genug ist, kommt wieder eine neue App-Version. Bis dahin funktioniert kaufklug.at am Handy genauso gut direkt im Browser.'
 
 function getFriendlyErrorMessage(error, fallback) {
   const status = Number(error?.status || 0)
@@ -74,9 +79,14 @@ async function fetchAdminEssence() {
 }
 
 function SearchLandingHero() {
-  const trackedDownloadUrl = buildTrackedApkDownloadUrl('search_hero_button')
-  const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('search_hero_qr')
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(trackedQrDownloadUrl)}`
+  const appDownload = SHOW_ANDROID_TEST_DOWNLOAD
+    ? {
+        trackedDownloadUrl: buildTrackedApkDownloadUrl('search_hero_button'),
+        qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(
+          buildTrackedApkDownloadUrl('search_hero_qr')
+        )}`,
+      }
+    : null
   const heroRetailers = [
     ['billa', 'BILLA'],
     ['billa-plus', 'BILLA Plus'],
@@ -106,22 +116,26 @@ function SearchLandingHero() {
       >
         <div className="search-landing-hero__usp">
           <div className="hero-market-strip" aria-label="Marktbeispiele">
-            {heroRetailers.map(([key, label]) => {
+            {heroRetailers.map(([key, label], index) => {
               const theme = getRetailerTheme(key)
+              const nextRetailer = heroRetailers[index + 1]?.[0]
+              const showGroupSeparator = shouldSeparateRetailerGroups(key, nextRetailer)
 
               return (
-                <span
-                  key={key}
-                  className="hero-market-badge"
-                  style={{
-                    '--retailer-color': theme.color,
-                    '--retailer-text-color': theme.textColor,
-                    '--retailer-border-color': theme.borderColor,
-                    '--retailer-soft-color': theme.softColor,
-                  }}
-                >
-                  {label}
-                </span>
+                <Fragment key={key}>
+                  <span
+                    className="hero-market-badge"
+                    style={{
+                      '--retailer-color': theme.color,
+                      '--retailer-text-color': theme.textColor,
+                      '--retailer-border-color': theme.borderColor,
+                      '--retailer-soft-color': theme.softColor,
+                    }}
+                  >
+                    {label}
+                  </span>
+                  {showGroupSeparator ? <span className="hero-market-separator" aria-hidden="true" /> : null}
+                </Fragment>
               )
             })}
           </div>
@@ -160,32 +174,36 @@ function SearchLandingHero() {
             Am Handy schnell nachsehen.
           </h2>
           <p style={{ color: '#5c6658', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
-            Scanne den QR-Code und nutze kaufklug direkt am Smartphone.
+            {MOBILE_BROWSER_NOTICE}
           </p>
-          <div className="app-download-modal__qr search-landing-hero__qr" style={{ margin: 0 }}>
-            <img
-              src={qrUrl}
-              alt="QR-Code zum Laden der kaufklug.at Android-Testversion"
-              width="220"
-              height="220"
-              loading="eager"
-            />
-          </div>
-          <a
-            href={trackedDownloadUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="primary-action-button"
-            style={{
-              alignItems: 'center',
-              display: 'inline-flex',
-              justifyContent: 'center',
-              maxWidth: '15.5rem',
-              textDecoration: 'none',
-            }}
-          >
-            Android-Testversion laden
-          </a>
+          {appDownload ? (
+            <>
+              <div className="app-download-modal__qr search-landing-hero__qr" style={{ margin: 0 }}>
+                <img
+                  src={appDownload.qrUrl}
+                  alt="QR-Code zum Laden der kaufklug.at Android-Testversion"
+                  width="220"
+                  height="220"
+                  loading="eager"
+                />
+              </div>
+              <a
+                href={appDownload.trackedDownloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="primary-action-button"
+                style={{
+                  alignItems: 'center',
+                  display: 'inline-flex',
+                  justifyContent: 'center',
+                  maxWidth: '15.5rem',
+                  textDecoration: 'none',
+                }}
+              >
+                Android-Testversion laden
+              </a>
+            </>
+          ) : null}
         </div>
       </section>
     </>
@@ -208,7 +226,8 @@ function TrustAndFaqSection() {
     },
     {
       question: 'Funktioniert kaufklug auch ohne App?',
-      answer: 'Ja. Du kannst kaufklug direkt im Browser nutzen. Für den Einkauf im Geschäft ist die App am bequemsten.',
+      answer:
+        'Ja. Die Browser-Version am Handy ist aktuell praktisch gleichwertig nutzbar. Eine neue App-Version kommt wieder, sobald die Datenqualität stabil genug ist.',
     },
     {
       question: 'Kann ich meine Einkaufsliste teilen?',
@@ -293,6 +312,7 @@ function App() {
   const [filtersLoading, setFiltersLoading] = useState(true)
   const [rankingLoading, setRankingLoading] = useState(false)
   const [rankingLoadingMore, setRankingLoadingMore] = useState(false)
+  const [browseAutoRefreshEnabled, setBrowseAutoRefreshEnabled] = useState(false)
   const [qualityLoading, setQualityLoading] = useState(false)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [qualitySavingKey, setQualitySavingKey] = useState('')
@@ -570,6 +590,12 @@ function App() {
     }
   }, [appliedSelectedRetailers, appliedCategoryQueryLabels, appliedSelectedCategoryLabels.length])
 
+  useEffect(() => {
+    if (activePage !== 'search' || rankingLoading || !ranking || !appliedSelectedRetailers.length) return
+
+    setBrowseAutoRefreshEnabled(true)
+  }, [activePage, appliedSelectedRetailers.length, ranking, rankingLoading])
+
   async function reloadAll() {
     const [healthResult, snapshotResult, essenceResult, analyticsResult] = await Promise.all([
       fetchHealth(),
@@ -768,6 +794,7 @@ function App() {
 
   function handleResetAll() {
     rankingRequestIdRef.current += 1
+    setBrowseAutoRefreshEnabled(false)
     setDraftSelectedRetailers([])
     setDraftSelectedCategoryLabels([])
     setAppliedSelectedRetailers([])
@@ -915,6 +942,38 @@ function App() {
   const hasPendingChanges =
     !areStringSetsEqual(draftSelectedRetailers, appliedSelectedRetailers) ||
     !areStringSetsEqual(draftSelectedCategoryLabels, appliedSelectedCategoryLabels)
+
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      activePage !== 'search' ||
+      !browseAutoRefreshEnabled ||
+      filtersLoading ||
+      !hasPendingChanges
+    ) {
+      return undefined
+    }
+
+    const timer = window.setTimeout(() => {
+      trackAnalyticsEvent('offer_search_started', {
+        selectedRetailerCount: draftSelectedRetailers.length,
+        selectedCategoryCount: draftSelectedCategoryLabels.length,
+        source: 'browse_auto_refresh',
+      })
+
+      setAppliedSelectedRetailers([...draftSelectedRetailers])
+      setAppliedSelectedCategoryLabels([...draftSelectedCategoryLabels])
+    }, 250)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    activePage,
+    browseAutoRefreshEnabled,
+    draftSelectedCategoryLabels,
+    draftSelectedRetailers,
+    filtersLoading,
+    hasPendingChanges,
+  ])
 
   return (
     <main className="shell" style={{ paddingBottom: '5.5rem' }}>

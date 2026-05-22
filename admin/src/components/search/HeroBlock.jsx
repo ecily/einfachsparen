@@ -1,10 +1,19 @@
 import { buildTrackedApkDownloadUrl } from '../../utils/apiBase'
 import { SectionCard } from '../layout/SectionCard'
 
+const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
+const MOBILE_BROWSER_NOTICE =
+  'Wir arbeiten gerade an den optimalen Suchergebnissen. Sobald die Datenqualität stabil genug ist, kommt wieder eine neue App-Version. Bis dahin funktioniert kaufklug.at am Handy genauso gut direkt im Browser.'
+
 export function HeroBlock() {
-  const trackedDownloadUrl = buildTrackedApkDownloadUrl('hero_button')
-  const trackedQrDownloadUrl = buildTrackedApkDownloadUrl('hero_qr')
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(trackedQrDownloadUrl)}`
+  const appDownload = SHOW_ANDROID_TEST_DOWNLOAD
+    ? {
+        trackedDownloadUrl: buildTrackedApkDownloadUrl('hero_button'),
+        qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=14&data=${encodeURIComponent(
+          buildTrackedApkDownloadUrl('hero_qr')
+        )}`,
+      }
+    : null
 
   return (
     <SectionCard
@@ -99,42 +108,45 @@ export function HeroBlock() {
             Am Handy ist kaufklug am stärksten.
           </h2>
 
-          <div
-            className="app-download-modal__qr"
-            style={{
-              width: 'min(100%, 280px)',
-              margin: '0 auto',
-            }}
-          >
-            <img
-              src={qrUrl}
-              alt="QR-Code zum Download der kaufklug.at Android-Testversion"
-              width="280"
-              height="280"
-              loading="eager"
-            />
-          </div>
-
-          <a
-            href={trackedDownloadUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="primary-action-button"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              maxWidth: '280px',
-              textDecoration: 'none',
-            }}
-          >
-            Android-Testversion laden
-          </a>
-
           <p style={{ maxWidth: '280px', margin: 0, color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4 }}>
-            QR-Code scannen und Angebote beim Einkaufen direkt am Handy nutzen.
+            {MOBILE_BROWSER_NOTICE}
           </p>
+          {appDownload ? (
+            <>
+              <div
+                className="app-download-modal__qr"
+                style={{
+                  width: 'min(100%, 280px)',
+                  margin: '0 auto',
+                }}
+              >
+                <img
+                  src={appDownload.qrUrl}
+                  alt="QR-Code zum Download der kaufklug.at Android-Testversion"
+                  width="280"
+                  height="280"
+                  loading="eager"
+                />
+              </div>
+
+              <a
+                href={appDownload.trackedDownloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="primary-action-button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  maxWidth: '280px',
+                  textDecoration: 'none',
+                }}
+              >
+                Android-Testversion laden
+              </a>
+            </>
+          ) : null}
         </div>
       </div>
     </SectionCard>

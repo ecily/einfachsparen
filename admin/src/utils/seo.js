@@ -15,7 +15,8 @@ const FAQ_ITEMS = [
   },
   {
     question: 'Funktioniert kaufklug auch ohne App?',
-    answer: 'Ja. Du kannst kaufklug direkt im Browser nutzen. Für den Einkauf im Geschäft ist die App am bequemsten.',
+    answer:
+      'Ja. Die Browser-Version am Handy ist aktuell praktisch gleichwertig nutzbar. Eine neue App-Version kommt wieder, sobald die Datenqualität stabil genug ist.',
   },
   {
     question: 'Kann ich meine Einkaufsliste teilen?',
