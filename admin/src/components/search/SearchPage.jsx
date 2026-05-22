@@ -40,6 +40,7 @@ export function SearchPage({
   const shouldShowBrowseResults = hasAppliedRetailerScope
   const allDraftCategoriesSelected = areAllCategoryGroupsSelected(draftCategoryLabels, categories)
   const [activeBrowseScrollKey, setActiveBrowseScrollKey] = useState(0)
+  const handledBrowseScrollKeyRef = useRef(0)
   const resultsRef = useRef(null)
 
   const allOffers = useMemo(() => flattenRankingOffers(ranking), [ranking])
@@ -58,7 +59,16 @@ export function SearchPage({
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
 
   useEffect(() => {
-    if (!activeBrowseScrollKey || rankingLoading || !hasAppliedRetailerScope) return
+    if (
+      !activeBrowseScrollKey ||
+      activeBrowseScrollKey <= handledBrowseScrollKeyRef.current ||
+      rankingLoading ||
+      !hasAppliedRetailerScope
+    ) {
+      return
+    }
+
+    handledBrowseScrollKeyRef.current = activeBrowseScrollKey
 
     resultsRef.current?.scrollIntoView({
       behavior: 'smooth',
