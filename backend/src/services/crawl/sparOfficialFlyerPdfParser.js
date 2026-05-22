@@ -293,8 +293,10 @@ function looksLikeNonProductLine(line = '') {
 
   return !normalized
     || normalized.length < 3
+    || /\bersparnis\b/i.test(normalized)
+    || /^bis\s+zu\b/i.test(normalized)
     || /\bangebote?\s+gueltig\b/i.test(normalized)
-    || /^(?:statt|per|= per|angebot|gueltig|gilt|noch|zusaetzlich|mengenvorteil|im einzelverkauf|ab \d+|je|nur|-?\d+\s*%|seite \d+)$/i.test(normalized)
+    || /^(?:statt|per|= per|angebot|aktion|gueltig|gilt|noch|zusaetzlich|mengenvorteil|im einzelverkauf|ab \d+|je|nur|-?\d+\s*%|seite \d+)$/i.test(normalized)
     || /^\d{1,3}[,.]\d{2}$/.test(normalized)
     || /\b(?:do|fr|sa|so|mo|di|mi)[,.]?\s*\d{1,2}[,.]\d{1,2}/i.test(normalized);
 }
@@ -321,11 +323,40 @@ function buildGenericTitle(blockLines = []) {
 
   const rawTitle = titleLines
     .join(' ')
+    .replace(/^(?:do|fr|sa|so|mo|di|mi)[.,]*\s*\d{1,2}[.,]\d{1,2}\.?(?:\s*und\s*(?:do|fr|sa|so|mo|di|mi)[.,]*\s*\d{1,2}[.,]\d{1,2}\.?)?(?:\s*\d{2,4})?\s*/i, '')
+    .replace(/^\d{1,3}[,.]\d{2}\s*\([^)]*\)\s*/i, '')
+    .replace(/^ab\s+\d+\s+\S+\s+je\s+\d{1,3}[,.]\d{2}\s*/i, '')
+    .replace(/^jetzt\s+probieren!?\s*/i, '')
+    .replace(/\b\d+(?:[,.]\d+)?[-\s]*(?:kg|g|l|ml|stk|stueck|kapseln|waschgaenge|waschgang)\b.*$/i, '')
     .replace(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b.*$/i, '')
     .replace(/\b(?:ganze bohne|gemahlen|packung|flasche|dose|beutel|glas)\b[,\s]*$/i, '')
     .trim();
 
   return sanitizeWhitespace(rawTitle);
+}
+
+function isPlausibleGenericFlyerTitle(title = '') {
+  const cleanTitle = sanitizeWhitespace(title);
+  const normalized = normalizeForScan(cleanTitle);
+  const words = normalized.split(/\s+/).filter(Boolean);
+
+  if (!cleanTitle || cleanTitle.length > 180) return false;
+  if (!/\p{L}/u.test(cleanTitle)) return false;
+  if (words.length < 2 && cleanTitle.length < 12) return false;
+
+  return !(
+    /\bangebote?\s+gueltig\b/i.test(normalized)
+    || /so\s+spart\s+oesterreich/i.test(normalized)
+    || /so\s+spart\s+osterreich/i.test(normalized)
+    || /^(?:ersparnis|bis\s+zu|aktion|statt|mit\s+%-?aktion)\b/i.test(normalized)
+    || /^ab\s+\d+\b/i.test(normalized)
+    || /^ganze\s+bohne\s+oder$/i.test(normalized)
+    || /^aus\s+oesterreich\b/i.test(normalized)
+    || /^aus\s+osterreich\b/i.test(normalized)
+    || /^gef(?:u|ue)llt\s+mit\b/i.test(normalized)
+    || /^tem\s+kunststoff\b/i.test(normalized)
+    || /^nahrung\s+versch\b/i.test(normalized)
+  );
 }
 
 function extractGenericFlyerCandidatesFromPage(page) {
@@ -355,7 +386,7 @@ function extractGenericFlyerCandidatesFromPage(page) {
     const title = buildGenericTitle(blockLines);
     const quantityText = extractQuantityTextFromBlock(blockLines);
 
-    if (!title || title.length < 4 || !/[a-zA-Z]/.test(title)) {
+    if (!isPlausibleGenericFlyerTitle(title)) {
       addRejectedCandidate(candidates, page.pageNumber, 'generic-unclear-product', blockLines.join(' '));
       continue;
     }

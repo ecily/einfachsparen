@@ -153,6 +153,38 @@ test('normalizes generic non-beer candidates into broad categories', () => {
   assert.match(offer.searchText, /waschmittel/);
 });
 
+test('rejects generic PDF promotion fragments and cleans leading price/date artifacts', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 9,
+        text: [
+          'Ersparnis 1,20 ab',
+          '250 g Packung',
+          '1,99',
+          '„So spart Österreich das ganze Jahr mit S-BUDGET!“ Angebote gültig bei 15 „S“ wie super sparen.',
+          '500 g Packung',
+          '2,99',
+          'Fr., 22.5. und Sa., 23.5.26 S-BUDGET Lachsfilet natur XXL aus Aquakultur Norwegen',
+          '500-g-Pkg.',
+          '7,99',
+          'ab 2 Pkg. je 2,99Recheis Familie 2-Ei Teigwaren versch. Sorten,',
+          '500 g Packung',
+          '2,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted.some((candidate) => candidate.title === 'Ersparnis 1,20 ab'), false);
+  assert.equal(accepted.some((candidate) => /So spart/.test(candidate.title)), false);
+  assert.ok(accepted.some((candidate) => candidate.title === 'S-BUDGET Lachsfilet natur XXL aus Aquakultur Norwegen'));
+  assert.ok(accepted.some((candidate) => candidate.title === 'Recheis Familie 2-Ei Teigwaren versch. Sorten,'));
+});
+
 test('rejects campaign-only coffee blocks as non-product diagnostics', () => {
   const page = fixture.pages.find((item) => item.pageNumber === 4);
   const candidates = extractSparPdfCandidates({
