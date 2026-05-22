@@ -18,6 +18,7 @@ const qualityRoutes = require('./routes/quality.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const downloadRoutes = require('./routes/download.routes');
 const shoppingListRoutes = require('./routes/shoppingList.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 const app = express();
 
@@ -156,6 +157,7 @@ app.get('/api/analytics/summary', requireAdminApiKey);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/shopping-lists', shoppingListRoutes);
+app.use('/api/admin', requireAdminApiKey, adminRoutes);
 
 app.use((error, req, res, next) => {
   const statusCode = Number(error.statusCode || error.status || 500);
