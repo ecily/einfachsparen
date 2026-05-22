@@ -5,8 +5,11 @@ const {
   buildFalsePositiveClasses,
   classifyFalsePositiveTitle,
   classifyRawDocument,
+  definitionForQuery,
   inferProductRootCause,
+  normalizeQueryKey,
   parseArgs,
+  TARGET_RETAILERS,
 } = require('../src/services/diagnostics/sourceProductCoverageDiagnostic');
 const {
   CORE_PRODUCT_QUERIES,
@@ -33,7 +36,31 @@ function offer(overrides = {}) {
 test('source product coverage args are Git Bash and PowerShell friendly', () => {
   assert.deepEqual(parseArgs([]), { query: 'butter', json: false, limit: 500 });
   assert.deepEqual(parseArgs(['--query=milch', '--json', '--limit=700']), { query: 'milch', json: true, limit: 700 });
+  assert.deepEqual(parseArgs(['--query', 'waschmittel', '--json', '--limit', '900']), { query: 'waschmittel', json: true, limit: 900 });
+  assert.deepEqual(parseArgs(['--query', '--json']), { query: 'butter', json: true, limit: 500 });
   assert.deepEqual(parseArgs(['reis']), { query: 'reis', json: false, limit: 500 });
+});
+
+test('source product coverage custom query keys preserve diagnostic intent', () => {
+  assert.equal(normalizeQueryKey('s-budget'), 's-budget');
+  assert.equal(normalizeQueryKey('Haushalt Pflege'), 'haushalt-pflege');
+  assert.deepEqual({
+    key: definitionForQuery('kaffee').key,
+    query: definitionForQuery('kaffee').query,
+    trueTerms: definitionForQuery('kaffee').trueTerms,
+  }, {
+    key: 'kaffee',
+    query: 'kaffee',
+    trueTerms: ['kaffee'],
+  });
+  assert.equal(definitionForQuery('s-budget').key, 's-budget');
+  assert.equal(definitionForQuery('butter').key, 'butter');
+});
+
+test('source product coverage diagnostics include SPAR format retailers', () => {
+  assert.equal(TARGET_RETAILERS.includes('spar'), true);
+  assert.equal(TARGET_RETAILERS.includes('eurospar'), true);
+  assert.equal(TARGET_RETAILERS.includes('interspar'), true);
 });
 
 test('raw document classifier separates true butter evidence from side-hit butter text', () => {

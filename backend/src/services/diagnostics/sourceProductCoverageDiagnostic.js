@@ -7,7 +7,7 @@ const {
 
 const DEFAULT_LIMIT = 500;
 const QUERY_MAX_TIME_MS = 3000;
-const TARGET_RETAILERS = ['spar', 'billa', 'billa-plus', 'penny', 'hofer', 'lidl', 'dm', 'bipa'];
+const TARGET_RETAILERS = ['spar', 'eurospar', 'interspar', 'billa', 'billa-plus', 'penny', 'hofer', 'lidl', 'dm', 'bipa'];
 const FALSE_POSITIVE_KEYS = ['eier', 'oel', 'fleisch', 'obst', 'gemuese'];
 
 const FALSE_POSITIVE_PATTERNS = {
@@ -100,10 +100,36 @@ function buildActiveMatch(now = new Date()) {
   };
 }
 
+function normalizeQueryKey(query = '') {
+  return String(query || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 function definitionForQuery(query = 'butter') {
-  const normalized = normalize(query);
-  return CORE_PRODUCT_QUERIES.find((item) => item.key === normalized || normalize(item.query) === normalized) ||
-    CORE_PRODUCT_QUERIES.find((item) => item.key === 'butter');
+  const rawQuery = String(query || '').trim() || 'butter';
+  const normalized = normalize(rawQuery);
+  const knownDefinition = CORE_PRODUCT_QUERIES.find((item) =>
+    item.key === normalized ||
+    normalize(item.query) === normalized ||
+    normalizeQueryKey(item.key) === normalizeQueryKey(rawQuery)
+  );
+
+  if (knownDefinition) {
+    return knownDefinition;
+  }
+
+  return {
+    key: normalizeQueryKey(rawQuery) || normalized || 'custom',
+    query: rawQuery,
+    trueTerms: [rawQuery],
+    sideTerms: [],
+    requiredContext: [],
+  };
 }
 
 function allDefinitionTerms(definition = {}) {
@@ -606,6 +632,11 @@ async function buildSourceProductCoverageDiagnostic({
   };
 }
 
+function readNextValue(argv, index) {
+  const next = argv[index + 1];
+  return next && !String(next).startsWith('--') ? String(next).trim() : '';
+}
+
 function parseArgs(argv = []) {
   const options = {
     query: 'butter',
@@ -613,9 +644,19 @@ function parseArgs(argv = []) {
     limit: DEFAULT_LIMIT,
   };
 
-  for (const arg of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = String(argv[index] || '');
+
     if (arg === '--json') {
       options.json = true;
+      continue;
+    }
+    if (arg === '--query') {
+      const query = readNextValue(argv, index);
+      if (query) {
+        options.query = query;
+        index += 1;
+      }
       continue;
     }
     if (arg.startsWith('--query=')) {
@@ -623,8 +664,12 @@ function parseArgs(argv = []) {
       if (query) options.query = query;
       continue;
     }
-    if (!arg.startsWith('--') && arg.trim()) {
-      options.query = arg.trim();
+    if (arg === '--limit') {
+      const limit = Number(readNextValue(argv, index));
+      if (Number.isInteger(limit) && limit >= 50 && limit <= 3000) {
+        options.limit = limit;
+        index += 1;
+      }
       continue;
     }
     if (arg.startsWith('--limit=')) {
@@ -632,6 +677,10 @@ function parseArgs(argv = []) {
       if (Number.isInteger(limit) && limit >= 50 && limit <= 3000) {
         options.limit = limit;
       }
+      continue;
+    }
+    if (!arg.startsWith('--') && arg.trim()) {
+      options.query = arg.trim();
     }
   }
 
@@ -645,6 +694,8 @@ module.exports = {
   buildSourceProductCoverageDiagnostic,
   classifyFalsePositiveTitle,
   classifyRawDocument,
+  definitionForQuery,
   inferProductRootCause,
+  normalizeQueryKey,
   parseArgs,
 };
