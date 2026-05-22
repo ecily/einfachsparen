@@ -224,37 +224,12 @@ export function OfferCardConsumer({
               <span>{offer.title}</span>
               {quantityText ? <span className="user-card__title-quantity"> · {quantityText}</span> : null}
             </h3>
+            {quantityText ? <p className="user-card__title-quantity">{quantityText}</p> : null}
 
-            <div className="user-card__facts" aria-label="Angebotsdetails">
-              {category ? <span>{category}</span> : null}
-              {validity ? <span>{validity}</span> : null}
-            </div>
           </div>
         </div>
 
         <div className="user-card__decision">
-          {visibleConditions.length > 0 || hiddenConditions.length > 0 ? (
-            <div className="user-card__conditions" aria-label={`Wichtige Angebotsbedingungen: ${fullConditionText}`}>
-              {visibleConditions.map((condition) => (
-                <span className="user-card__condition-chip" key={condition} title={condition} aria-label={`Bedingung: ${condition}`}>
-                  {getCompactConditionText(condition)}
-                </span>
-              ))}
-              {hiddenConditions.length > 0 ? (
-                <details className="user-card__condition-details">
-                  <summary>{hiddenConditionsLabel}</summary>
-                  <div className="user-card__condition-details-list">
-                    {hiddenConditions.map((condition) => (
-                      <span className="user-card__condition-chip" key={condition} title={condition}>
-                        {condition}
-                      </span>
-                    ))}
-                  </div>
-                </details>
-              ) : null}
-            </div>
-          ) : null}
-
           {priceOptionalPromotion ? (
             <div className="user-card__price user-card__price--promotion">
               <div className="user-card__price-row">
@@ -284,6 +259,33 @@ export function OfferCardConsumer({
               {unitPriceText ? <span className="user-card__unit-price-badge">{unitPriceText}</span> : null}
             </div>
           )}
+
+          {visibleConditions.length > 0 || hiddenConditions.length > 0 ? (
+            <div className="user-card__conditions" aria-label={`Wichtige Angebotsbedingungen: ${fullConditionText}`}>
+              {visibleConditions.map((condition) => (
+                <span className="user-card__condition-chip" key={condition} title={condition} aria-label={`Bedingung: ${condition}`}>
+                  {getCompactConditionText(condition)}
+                </span>
+              ))}
+              {hiddenConditions.length > 0 ? (
+                <details className="user-card__condition-details">
+                  <summary>{hiddenConditionsLabel}</summary>
+                  <div className="user-card__condition-details-list">
+                    {hiddenConditions.map((condition) => (
+                      <span className="user-card__condition-chip" key={condition} title={condition}>
+                        {condition}
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="user-card__facts" aria-label="Angebotsdetails">
+          {validity ? <span className="user-card__meta-pill user-card__meta-pill--validity">{validity}</span> : null}
+          {category ? <span className="user-card__meta-pill user-card__meta-pill--category">{category}</span> : null}
         </div>
 
         {hasActions ? (

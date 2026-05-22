@@ -83,6 +83,7 @@ export function HeroBlock() {
         </div>
 
         <div
+          className="mobile-browser-notice"
           style={{
             display: 'grid',
             gap: '0.75rem',

@@ -158,7 +158,7 @@ function SearchLandingHero() {
         </div>
 
         <div
-          className="search-landing-hero__mobile"
+          className="search-landing-hero__mobile mobile-browser-notice"
           style={{
             display: 'grid',
             gap: '0.55rem',
