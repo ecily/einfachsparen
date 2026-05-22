@@ -2916,6 +2916,33 @@ test('SPAR Aktionsfinder remains visible while no active official SPAR duplicate
   assert.equal(prepared[0]._id, 'spar-aktionsfinder-visible');
 });
 
+test('SPAR official PDF evidence does not suppress structured Aktionsfinder duplicate data', () => {
+  const officialPdf = offer({
+    _id: 'spar-official-pdf',
+    title: 'Bio Vollmilch 1 l',
+    titleNormalized: 'bio vollmilch 1 l',
+    retailerKey: 'spar',
+    sourceType: 'spar-official-pdf',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 l',
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
+    validFrom: null,
+    validTo: null,
+  });
+  const aggregator = offer({
+    ...officialPdf,
+    _id: 'spar-aktionsfinder-json',
+    sourceType: 'aktionsfinder-json',
+    imageUrl: 'https://img.example.test/milch.jpg',
+    validFrom: new Date('2026-05-21T00:00:00.000Z'),
+    validTo: new Date('2026-05-27T23:59:59.999Z'),
+  });
+  const prepared = prepareQueryOffersForResponse([officialPdf, aggregator], 'milch');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'spar-aktionsfinder-json');
+});
+
 test('final response dedupe keeps the same offer id only once', () => {
   const duplicate = offer({
     _id: 'same-offer-id',
@@ -3386,7 +3413,7 @@ test('visible card dedupe only tolerates broken quantity text when structured qu
   ['dm', 'dm-official-html'],
   ['bipa', 'bipa-official-html'],
   ['spar', 'spar-official-html'],
-  ['eurospar', 'spar-official-pdf'],
+  ['eurospar', 'spar-official-html'],
   ['interspar', 'official-action'],
   ['hofer', 'hofer-official-html'],
 ].forEach(([retailerKey, officialSourceType]) => {

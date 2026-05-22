@@ -2847,7 +2847,6 @@ const RESPONSE_SOURCE_PRIORITY_MATRIX = {
   spar: [
     ['official-action', 1, 'official-category-action'],
     ['spar-official-html', 2, 'official-html'],
-    ['spar-official-pdf', 2, 'official-pdf'],
     ['flyer', 3, 'official-flyer'],
     ['offers-page', 3, 'official-page'],
     ['aktionsfinder-json', 5, 'aggregator-json'],
@@ -2855,11 +2854,11 @@ const RESPONSE_SOURCE_PRIORITY_MATRIX = {
     ['marketguru-embedded-json', 6, 'aggregator-json'],
     ['marketguru-html', 7, 'aggregator-html'],
     ['aggregator', 7, 'aggregator'],
+    ['spar-official-pdf', 8, 'official-pdf-evidence'],
   ],
   eurospar: [
     ['official-action', 1, 'official-category-action'],
     ['spar-official-html', 2, 'official-html'],
-    ['spar-official-pdf', 2, 'official-pdf'],
     ['flyer', 3, 'official-flyer'],
     ['offers-page', 3, 'official-page'],
     ['aktionsfinder-json', 5, 'aggregator-json'],
@@ -2867,11 +2866,11 @@ const RESPONSE_SOURCE_PRIORITY_MATRIX = {
     ['marketguru-embedded-json', 6, 'aggregator-json'],
     ['marketguru-html', 7, 'aggregator-html'],
     ['aggregator', 7, 'aggregator'],
+    ['spar-official-pdf', 8, 'official-pdf-evidence'],
   ],
   interspar: [
     ['official-action', 1, 'official-category-action'],
     ['spar-official-html', 2, 'official-html'],
-    ['spar-official-pdf', 2, 'official-pdf'],
     ['flyer', 3, 'official-flyer'],
     ['offers-page', 3, 'official-page'],
     ['aktionsfinder-json', 5, 'aggregator-json'],
@@ -2879,6 +2878,7 @@ const RESPONSE_SOURCE_PRIORITY_MATRIX = {
     ['marketguru-embedded-json', 6, 'aggregator-json'],
     ['marketguru-html', 7, 'aggregator-html'],
     ['aggregator', 7, 'aggregator'],
+    ['spar-official-pdf', 8, 'official-pdf-evidence'],
   ],
   hofer: [
     ['hofer-official-html', 2, 'official-html'],
