@@ -6,7 +6,11 @@ const test = require('node:test');
 const Category = require('../src/models/Category');
 const {
   getCategoryFilters,
-  _private: { syncFilterMetadataCollection },
+  _private: {
+    FILTER_METADATA_OFFER_SELECT_FIELDS,
+    buildRetailerDocuments,
+    syncFilterMetadataCollection,
+  },
 } = require('../src/services/filters/filterMetadataService');
 
 function stableValue(value) {
@@ -175,6 +179,67 @@ test('category filter response shape stays compatible', async () => {
     ]);
   } finally {
     Category.find = originalFind;
+  }
+});
+
+test('retailer filter counts include fresh plausible Aktionsfinder offers without validTo', () => {
+  const now = new Date('2026-05-22T12:00:00.000Z');
+  const freshAktionsfinderOffer = {
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    title: 'SPAR Bio Kornspitz Aktion',
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/spar/bio-kornspitz',
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    lastSeenAt: new Date('2026-05-22T08:00:00.000Z'),
+    lastSeenRunId: 'crawl-spar-fresh',
+    crawlJobId: 'crawl-spar-fresh',
+    quantityText: '1 Stk',
+    unitValue: 1,
+    comparableUnit: 'Stk',
+    priceCurrent: { amount: 0.49, currency: 'EUR' },
+    quality: { parsingConfidence: 0.9, comparisonSafe: true },
+  };
+  const staleAktionsfinderOffer = {
+    ...freshAktionsfinderOffer,
+    title: 'SPAR Alte Aktion',
+    lastSeenAt: new Date('2026-04-20T08:00:00.000Z'),
+    lastSeenRunId: 'crawl-spar-old',
+    crawlJobId: 'crawl-spar-old',
+  };
+  const expiredOffer = {
+    ...freshAktionsfinderOffer,
+    retailerKey: 'eurospar',
+    retailerName: 'EUROSPAR',
+    title: 'EUROSPAR Abgelaufene Aktion',
+    validTo: new Date('2026-05-20T23:59:59.999Z'),
+    lastSeenAt: new Date('2026-05-20T08:00:00.000Z'),
+  };
+
+  const retailers = buildRetailerDocuments(
+    [],
+    [freshAktionsfinderOffer, staleAktionsfinderOffer, expiredOffer],
+    now,
+    [],
+    []
+  );
+
+  const spar = retailers.find((retailer) => retailer.retailerKey === 'spar');
+  const eurospar = retailers.find((retailer) => retailer.retailerKey === 'eurospar');
+
+  assert.equal(spar.totalOffers, 2);
+  assert.equal(spar.activeOfferCount, 1);
+  assert.equal(spar.activeOffers, 1);
+  assert.equal(eurospar.totalOffers, 1);
+  assert.equal(eurospar.activeOfferCount, 0);
+  assert.equal(eurospar.activeOffers, 0);
+});
+
+test('filter metadata offer select keeps crawl freshness fields aligned with ranking visibility', () => {
+  for (const field of ['crawlJobId', 'lastSeenAt', 'lastSeenRunId', 'lastSeenSourceRunId']) {
+    assert.equal(FILTER_METADATA_OFFER_SELECT_FIELDS.includes(field), true);
   }
 });
 

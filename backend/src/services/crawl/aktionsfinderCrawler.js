@@ -19,6 +19,12 @@ const { parseAktionsfinderDateRange } = require('../offers/offerFreshness');
 
 const PARSER_VERSION = 'aktionsfinder-v3-coverage';
 
+const SUPPLEMENTAL_CATEGORY_SLUGS_BY_RETAILER = {
+  spar: ['haushalt', 'milchprodukte'],
+  eurospar: ['haushalt', 'milchprodukte'],
+  interspar: ['haushalt', 'milchprodukte'],
+};
+
 function toAbsoluteUrl(href, baseUrl) {
   try {
     return new URL(href, baseUrl).toString();
@@ -142,6 +148,23 @@ function extractCategoryPageLinks(html, sourceUrl) {
   });
 
   return links;
+}
+
+function buildSupplementalCategoryPageLinks(source = {}) {
+  const slugs = SUPPLEMENTAL_CATEGORY_SLUGS_BY_RETAILER[source.retailerKey] || [];
+
+  return slugs
+    .map((slug) => toAbsoluteUrl(`/ppcv/${slug}/${source.retailerKey}/`, source.sourceUrl))
+    .filter(Boolean);
+}
+
+function buildCategoryPageLinks(html, source) {
+  return uniquePromotions(
+    [
+      ...extractCategoryPageLinks(html, source.sourceUrl).map((url) => ({ id: url, url })),
+      ...buildSupplementalCategoryPageLinks(source).map((url) => ({ id: url, url })),
+    ]
+  ).map((item) => item.url);
 }
 
 function buildPromotionId({ source, title, currentPrice, leafletHref, categorySlug }) {
@@ -334,7 +357,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     const recordStrings = getScriptPushStrings(html);
     const sections = extractSections(recordStrings, source.retailerName);
     const basePromotions = extractAllPromotions(recordStrings, sections);
-    const categoryPageLinks = extractCategoryPageLinks(html, source.sourceUrl)
+    const categoryPageLinks = buildCategoryPageLinks(html, source)
       .slice(0, source.retailerKey === 'pagro' ? 18 : 14);
     const categoryPagePromotions = [];
     const digest = buildPayloadDigest(html);
@@ -540,4 +563,9 @@ async function crawlAllAktionsfinderSources({ region, retailerKeys = [], trigger
 module.exports = {
   crawlAllAktionsfinderSources,
   crawlAktionsfinderSource,
+  _private: {
+    buildCategoryPageLinks,
+    buildSupplementalCategoryPageLinks,
+    extractCategoryPageLinks,
+  },
 };
