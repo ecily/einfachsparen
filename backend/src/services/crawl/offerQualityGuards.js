@@ -167,7 +167,7 @@ function rawConditionHaystack(offer = {}) {
 function normalizeConditionUnit(value) {
   const unit = normalizeTitleForMatch(value || '');
 
-  if (/pack/.test(unit)) return 'Packungen';
+  if (/pack|pkg/.test(unit)) return 'Packungen';
   if (/fl/.test(unit)) return 'Flaschen';
   if (/dos/.test(unit)) return 'Dosen';
 
@@ -213,11 +213,11 @@ function extractConditionHints(offer = {}) {
     addConditionHint(hints, seen, `Nimm ${match[1]} zahl ${match[2]}`);
   }
 
-  for (const match of text.matchAll(/\bab\s+(\d+)\s*(stueck|stuck|stk|packungen?|flaschen?|dosen?)\b/g)) {
+  for (const match of text.matchAll(/\bab\s+(\d+)\s*(stueck|stuck|stk|pkg|packungen?|flaschen?|dosen?)\b/g)) {
     addConditionHint(hints, seen, `ab ${match[1]} ${normalizeConditionUnit(match[2])}`);
   }
 
-  for (const match of text.matchAll(/\bbei\s+(\d+)\s*(stueck|stuck|stk|packungen?|flaschen?|dosen?)\b/g)) {
+  for (const match of text.matchAll(/\bbei\s+(\d+)\s*(stueck|stuck|stk|pkg|packungen?|flaschen?|dosen?)\b/g)) {
     addConditionHint(hints, seen, `bei ${match[1]} ${normalizeConditionUnit(match[2])}`);
   }
 

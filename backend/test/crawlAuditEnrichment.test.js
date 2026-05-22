@@ -254,6 +254,11 @@ test('recognizes multi-buy and threshold promotion requirements conservatively',
     payableQuantity: null,
     mechanic: 'threshold',
   });
+  assert.deepEqual(extractPromotionRequirement({ title: 'Reiniger ab 2 Pkg. je 3,49' }), {
+    requiredQuantity: 2,
+    payableQuantity: null,
+    mechanic: 'threshold',
+  });
 });
 
 test('sets condition fields for multi-buy, minimum quantity and app or card prices', () => {
@@ -286,6 +291,8 @@ test('extracts conservative German condition hints into stored condition text', 
     ['Nimm 3 zahl 2 Chips', /Nimm 3 zahl 2/, { isMultiBuy: true, minimumPurchaseQty: 3 }],
     ['Mineralwasser ab 6 Flaschen je 0,49', /ab 6 Flaschen/, { isMultiBuy: false, minimumPurchaseQty: 6 }],
     ['Teigwaren ab 2 Packungen je 1,99', /ab 2 Packungen/, { isMultiBuy: false, minimumPurchaseQty: 2 }],
+    ['Blue Star WC-Steine Doppelpackung ab 2 Pkg. je', /ab 2 Packungen/, { isMultiBuy: false, minimumPurchaseQty: 2 }],
+    ['Felix Katzennahrung versch. Sorten ab 2 Pkg. je 3,74', /ab 2 Packungen/, { isMultiBuy: false, minimumPurchaseQty: 2 }],
     ['Kaffee nur mit App', /nur mit App/, { customerProgramRequired: true }],
     ['Waschmittel mit Gutschein', /mit Gutschein\/Coupon/, { hasConditions: true }],
     ['-25% auf alle Biere', /-25% auf alle biere/i, { hasConditions: true }],

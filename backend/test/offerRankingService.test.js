@@ -17,6 +17,8 @@ const {
   dedupeQueryOffers,
   dedupeResponseOffers,
   dedupeVisibleCardResponseOffers,
+  mergeSparConditionEvidenceIntoOffers,
+  canMergeConditionEvidence,
   buildRankingCandidateQueryMetadata,
   hashRankingCacheKey,
   buildRankingResponseFromBase,
@@ -46,6 +48,53 @@ function offer(overrides) {
     normalizedUnitPrice: { amount: 1 },
     ...overrides,
   };
+}
+
+function sparOffer(overrides = {}) {
+  return offer({
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    brand: 'Goesser',
+    title: 'Gösser Märzen SPAR 0.50 Liter 1 Dose',
+    quantityText: '0.5 l / 1 dose',
+    packCount: 1,
+    unitValue: 0.5,
+    unitType: 'l',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'l',
+    priceCurrent: { amount: 0.99, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 1.98, unit: 'l', comparable: true, confidence: 0.9 },
+    sourceType: 'aktionsfinder-json',
+    rawFacts: { sourceKey: 'aktionsfinder-spar' },
+    imageUrl: 'https://example.test/goesser.jpg',
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    customerProgramRequired: false,
+    minimumPurchaseQty: 1,
+    validFrom: null,
+    validTo: null,
+    ...overrides,
+  });
+}
+
+function sparPdfOffer(overrides = {}) {
+  return sparOffer({
+    title: 'Goesser Maerzen, Naturradler Zitrone oder Naturradler Zitrone alkoholfrei',
+    sourceType: 'spar-official-pdf',
+    rawFacts: { sourceKey: 'spar-official-flyer-pdf' },
+    imageUrl: '',
+    conditionsText: 'ab 6 Dosen',
+    hasConditions: true,
+    minimumPurchaseQty: 6,
+    effectiveDiscountType: 'threshold',
+    validFrom: '2026-05-21T12:00:00.000Z',
+    validTo: '2026-06-02T12:00:00.000Z',
+    ...overrides,
+  });
 }
 
 test('normalizes umlauts and tokenizes search text for query matching', () => {
@@ -176,6 +225,137 @@ test('ranking retailer filter does not show legacy INTERSPAR-only offers for SPA
   assert.ok(serialized.includes('"sourceRetailerFormat":"spar"'));
   assert.ok(serialized.includes('"appliesToRetailerFormats":"spar"'));
   assert.doesNotMatch(serialized, /eurospar|interspar/);
+});
+
+test('SPAR condition merge keeps Aktionsfinder winner data and imports PDF threshold conditions', () => {
+  const aktionsfinder = sparOffer({
+    id: 'aktionsfinder-goesser',
+    title: 'Gösser Märzen SPAR 0.50 Liter 1 Dose',
+    sourceType: 'aktionsfinder-json',
+    rawFacts: { sourceKey: 'aktionsfinder-spar' },
+    imageUrl: 'https://example.test/goesser.jpg',
+  });
+  const pdf = sparPdfOffer({
+    id: 'pdf-goesser',
+    conditionsText: 'ab 6 Dosen',
+    minimumPurchaseQty: 6,
+    isMultiBuy: false,
+  });
+
+  const [merged] = mergeSparConditionEvidenceIntoOffers([aktionsfinder, pdf]);
+
+  assert.equal(merged.id, 'aktionsfinder-goesser');
+  assert.equal(merged.sourceType, 'aktionsfinder-json');
+  assert.equal(merged.imageUrl, 'https://example.test/goesser.jpg');
+  assert.equal(merged.conditionsText, 'ab 6 Dosen');
+  assert.equal(merged.hasConditions, true);
+  assert.equal(merged.minimumPurchaseQty, 6);
+  assert.equal(merged.validTo, '2026-06-02T12:00:00.000Z');
+  assert.ok(merged.sourceTypes.includes('aktionsfinder-json'));
+  assert.ok(merged.sourceTypes.includes('spar-official-pdf'));
+});
+
+test('SPAR condition merge preserves 12+12 gratis evidence when structured alternative wins', () => {
+  const aktionsfinder = sparOffer({
+    brand: 'Ottakringer',
+    title: 'Ottakringer Helles SPAR 0.50 Liter 1 Dose',
+    priceCurrent: { amount: 0.69, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 1.38, unit: 'l', comparable: true, confidence: 0.9 },
+    imageUrl: 'https://example.test/ottakringer.jpg',
+  });
+  const pdf = sparPdfOffer({
+    brand: 'Ottakringer',
+    title: 'Ottakringer Helles oder Frucade Radler',
+    priceCurrent: { amount: 0.69, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 1.38, unit: 'l', comparable: true, confidence: 0.82 },
+    conditionsText: '12+12 gratis',
+    minimumPurchaseQty: 24,
+    isMultiBuy: true,
+    effectiveDiscountType: 'multi-buy',
+  });
+
+  const [merged] = mergeSparConditionEvidenceIntoOffers([aktionsfinder, pdf]);
+
+  assert.equal(merged.title, 'Ottakringer Helles SPAR 0.50 Liter 1 Dose');
+  assert.equal(merged.imageUrl, 'https://example.test/ottakringer.jpg');
+  assert.equal(merged.conditionsText, '12+12 gratis');
+  assert.equal(merged.isMultiBuy, true);
+  assert.equal(merged.minimumPurchaseQty, 24);
+});
+
+test('SPAR condition merge keeps fragment PDF titles out of visible title while importing safe evidence', () => {
+  const aktionsfinder = sparOffer({
+    brand: 'Felix',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenfutter',
+    categoryKey: 'katzenfutter',
+    title: 'Felix Katzennahrung SPAR 12 x 85 Gramm',
+    quantityText: '12 x 85 g',
+    totalComparableAmount: 1.02,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 4.89, unit: 'kg', comparable: true, confidence: 0.9 },
+    priceCurrent: { amount: 4.99, currency: 'EUR' },
+    imageUrl: 'https://example.test/felix.jpg',
+  });
+  const pdf = sparPdfOffer({
+    brand: 'Felix',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenfutter',
+    categoryKey: 'katzenfutter',
+    title: 'Noch zusätzlich Felix Katzennahrung ab 2 Pkg. je',
+    quantityText: '12 x 85 g',
+    totalComparableAmount: 1.02,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 4.89, unit: 'kg', comparable: true, confidence: 0.82 },
+    priceCurrent: { amount: 4.99, currency: 'EUR' },
+    conditionsText: 'ab 2 Packungen',
+    minimumPurchaseQty: 2,
+  });
+
+  const [merged] = mergeSparConditionEvidenceIntoOffers([aktionsfinder, pdf]);
+
+  assert.equal(merged.title, 'Felix Katzennahrung SPAR 12 x 85 Gramm');
+  assert.equal(merged.imageUrl, 'https://example.test/felix.jpg');
+  assert.equal(merged.conditionsText, 'ab 2 Packungen');
+  assert.equal(merged.minimumPurchaseQty, 2);
+});
+
+test('SPAR condition merge rejects uncertain products, different formats and conflicting price or quantity', () => {
+  const pdf = sparPdfOffer({ brand: 'Goesser', conditionsText: 'ab 6 Dosen' });
+
+  assert.equal(canMergeConditionEvidence(
+    sparOffer({ brand: 'Puntigamer', title: 'Puntigamer Maerzen SPAR 0.50 Liter 1 Dose' }),
+    pdf,
+  ), false);
+  assert.equal(canMergeConditionEvidence(
+    sparOffer({ retailerKey: 'eurospar', retailerName: 'EUROSPAR' }),
+    pdf,
+  ), false);
+  assert.equal(canMergeConditionEvidence(
+    sparOffer({ priceCurrent: { amount: 1.49, currency: 'EUR' } }),
+    pdf,
+  ), false);
+  assert.equal(canMergeConditionEvidence(
+    sparOffer({ quantityText: '0.33 l / 1 dose', unitValue: 0.33, totalComparableAmount: 0.33 }),
+    pdf,
+  ), false);
+});
+
+test('SPAR condition merge deduplicates overlapping condition text', () => {
+  const aktionsfinder = sparOffer({
+    conditionsText: 'ab 6 Dosen',
+    hasConditions: true,
+    minimumPurchaseQty: 6,
+  });
+  const pdf = sparPdfOffer({
+    conditionsText: 'ab 6 Dosen / ab 6 Dosen',
+    minimumPurchaseQty: 6,
+  });
+
+  const [merged] = mergeSparConditionEvidenceIntoOffers([aktionsfinder, pdf]);
+
+  assert.equal(merged.conditionsText, 'ab 6 Dosen');
+  assert.equal(merged.minimumPurchaseQty, 6);
 });
 
 test('query without useful tokens uses safe regex fallback metadata', () => {
@@ -3720,7 +3900,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

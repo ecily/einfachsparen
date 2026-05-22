@@ -105,7 +105,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -3579,6 +3579,256 @@ function haveCompatibleResponseVariant(left, right) {
   return !leftRawVariant || !rightRawVariant || leftRawVariant === rightRawVariant;
 }
 
+function getOfferSourceKey(offer) {
+  return String(offer?.rawFacts?.sourceKey || offer?.sourceKey || '').trim();
+}
+
+function getOfferSourceEvidenceText(offer) {
+  return [
+    getOfferSourceType(offer),
+    getOfferSourceKey(offer),
+    ...(Array.isArray(offer?.sourceTypes) ? offer.sourceTypes : []),
+  ].join(' ').toLowerCase();
+}
+
+function isSparFamilyRetailer(offer) {
+  return ['spar', 'eurospar', 'interspar'].includes(normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || ''));
+}
+
+function isOfficialPdfEvidence(offer) {
+  const evidenceText = getOfferSourceEvidenceText(offer);
+
+  return /official.*(?:pdf|flyer)|(?:pdf|flyer).*official|spar-official-flyer-pdf|eurospar-official-flyer-pdf|interspar-official-flyer-pdf/.test(evidenceText);
+}
+
+function hasConditionEvidence(offer) {
+  return Boolean(
+    String(offer?.conditionsText || offer?.conditionLabel || '').trim()
+    || offer?.hasConditions
+    || offer?.customerProgramRequired
+    || offer?.isMultiBuy
+    || Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || offer?.minQuantity || 1) > 1
+  );
+}
+
+function getConditionTextParts(...offers) {
+  const parts = [];
+  const seen = new Set();
+
+  for (const offer of offers) {
+    const rawParts = String(offer?.conditionsText || offer?.conditionLabel || '')
+      .split(/\s*\/\s*|\s*\.\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    for (const part of rawParts) {
+      const key = normalizeSearchText(part);
+
+      if (!key || seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      parts.push(part);
+    }
+  }
+
+  return parts;
+}
+
+function mergeConditionTexts(target, evidence) {
+  const targetParts = getConditionTextParts(target);
+  const evidenceParts = getConditionTextParts(evidence);
+
+  if (targetParts.length === 0) {
+    return evidenceParts.join(' / ');
+  }
+
+  if (evidenceParts.length === 0) {
+    return targetParts.join(' / ');
+  }
+
+  const targetText = normalizeSearchText(targetParts.join(' '));
+  const evidenceText = normalizeSearchText(evidenceParts.join(' '));
+
+  if (targetText.includes(evidenceText)) {
+    return targetParts.join(' / ');
+  }
+
+  if (evidenceText.includes(targetText)) {
+    return evidenceParts.join(' / ');
+  }
+
+  return getConditionTextParts(target, evidence).join(' / ');
+}
+
+function haveCompatibleResponseCategory(left, right) {
+  const leftCategory = normalizeSearchText(left?.categoryKey || left?.categorySecondary || '');
+  const rightCategory = normalizeSearchText(right?.categoryKey || right?.categorySecondary || '');
+
+  if (leftCategory && rightCategory && leftCategory !== rightCategory) {
+    return false;
+  }
+
+  const leftPrimary = normalizeSearchText(left?.categoryPrimary);
+  const rightPrimary = normalizeSearchText(right?.categoryPrimary);
+
+  return !leftPrimary || !rightPrimary || leftPrimary === rightPrimary;
+}
+
+function haveCompatibleConditionMergeTitle(left, right) {
+  if (hasVeryStrongVisibleCardTitleIdentity(left, right) || sameConservativeTitleIdentity(left, right)) {
+    return true;
+  }
+
+  const leftBrand = normalizeSearchText(left?.brand);
+  const rightBrand = normalizeSearchText(right?.brand);
+  const titleText = normalizeSearchText(`${left?.title || ''} ${right?.title || ''}`);
+
+  if (leftBrand && rightBrand) {
+    return leftBrand === rightBrand;
+  }
+
+  const oneSidedBrand = leftBrand || rightBrand;
+
+  return Boolean(oneSidedBrand && titleText.includes(oneSidedBrand));
+}
+
+function haveCompatibleConditionMergeQuantity(left, right) {
+  const leftStructured = getStructuredQuantitySignature(left);
+  const rightStructured = getStructuredQuantitySignature(right);
+
+  if (leftStructured && rightStructured) {
+    return leftStructured === rightStructured;
+  }
+
+  const leftQuantity = normalizeVisibleQuantityText(left?.quantityText);
+  const rightQuantity = normalizeVisibleQuantityText(right?.quantityText);
+
+  return !leftQuantity || !rightQuantity || leftQuantity === rightQuantity;
+}
+
+function haveCompatibleConditionMergeConditions(target, evidence) {
+  const targetText = normalizeSearchText(target?.conditionsText || target?.conditionLabel);
+  const evidenceText = normalizeSearchText(evidence?.conditionsText || evidence?.conditionLabel);
+
+  if (targetText && evidenceText && targetText !== evidenceText && !targetText.includes(evidenceText) && !evidenceText.includes(targetText)) {
+    return false;
+  }
+
+  if (Boolean(target?.customerProgramRequired) && !Boolean(evidence?.customerProgramRequired)) {
+    return false;
+  }
+
+  return true;
+}
+
+function canMergeConditionEvidence(target, evidence) {
+  if (!target || !evidence || target === evidence) {
+    return false;
+  }
+
+  if (!isSparFamilyRetailer(target) || !isSparFamilyRetailer(evidence)) {
+    return false;
+  }
+
+  if (normalizeRetailerKey(target?.retailerKey || target?.retailerName || '') !== normalizeRetailerKey(evidence?.retailerKey || evidence?.retailerName || '')) {
+    return false;
+  }
+
+  if (!isOfficialPdfEvidence(evidence) || !hasConditionEvidence(evidence)) {
+    return false;
+  }
+
+  if (!sameVisiblePrice(target, evidence)) {
+    return false;
+  }
+
+  if (!haveCompatibleConditionMergeQuantity(target, evidence)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseCategory(target, evidence)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseVariant(target, evidence)) {
+    return false;
+  }
+
+  if (!haveCompatibleConditionMergeConditions(target, evidence)) {
+    return false;
+  }
+
+  return haveCompatibleConditionMergeTitle(target, evidence);
+}
+
+function mergeConditionEvidence(target, evidence) {
+  const mergedConditionsText = mergeConditionTexts(target, evidence);
+  const targetMinimum = Number(target?.minimumPurchaseQty || target?.minimumPurchaseQuantity || target?.minQuantity || 1);
+  const evidenceMinimum = Number(evidence?.minimumPurchaseQty || evidence?.minimumPurchaseQuantity || evidence?.minQuantity || 1);
+  const sourceUrls = [...new Set([
+    ...(Array.isArray(target?.sourceUrls) ? target.sourceUrls : []),
+    target?.sourceUrl,
+    ...(Array.isArray(evidence?.sourceUrls) ? evidence.sourceUrls : []),
+    evidence?.sourceUrl,
+  ].filter(Boolean))];
+  const evidenceUrls = [...new Set([
+    ...(Array.isArray(target?.evidenceUrls) ? target.evidenceUrls : []),
+    ...(Array.isArray(evidence?.evidenceUrls) ? evidence.evidenceUrls : []),
+    evidence?.sourceUrl,
+  ].filter(Boolean))];
+  const sourceTypes = [...new Set([
+    ...(Array.isArray(target?.sourceTypes) ? target.sourceTypes : []),
+    target?.sourceType,
+    ...(Array.isArray(evidence?.sourceTypes) ? evidence.sourceTypes : []),
+    evidence?.sourceType,
+  ].filter(Boolean))];
+
+  return {
+    ...target,
+    benefitType: evidence.benefitType && evidence.benefitType !== 'unknown' ? evidence.benefitType : target.benefitType,
+    effectiveDiscountType: evidence.effectiveDiscountType && evidence.effectiveDiscountType !== 'unknown'
+      ? evidence.effectiveDiscountType
+      : target.effectiveDiscountType,
+    conditionsText: mergedConditionsText || target.conditionsText || evidence.conditionsText || '',
+    customerProgramRequired: Boolean(target.customerProgramRequired || evidence.customerProgramRequired),
+    hasConditions: Boolean(target.hasConditions || evidence.hasConditions || mergedConditionsText),
+    isMultiBuy: Boolean(target.isMultiBuy || evidence.isMultiBuy),
+    minimumPurchaseQty: Math.max(
+      Number.isFinite(targetMinimum) ? targetMinimum : 1,
+      Number.isFinite(evidenceMinimum) ? evidenceMinimum : 1,
+    ),
+    validFrom: target.validFrom || evidence.validFrom,
+    validTo: target.validTo || evidence.validTo,
+    sourceUrls,
+    evidenceUrls,
+    sourceTypes,
+    rawFacts: {
+      ...(target.rawFacts || {}),
+      mergedConditionEvidence: {
+        sourceKey: getOfferSourceKey(evidence),
+        sourceType: getOfferSourceType(evidence),
+        conditionsText: evidence.conditionsText || '',
+      },
+    },
+  };
+}
+
+function mergeSparConditionEvidenceIntoOffers(offers = []) {
+  const conditionEvidence = offers.filter((offer) => isOfficialPdfEvidence(offer) && hasConditionEvidence(offer));
+
+  if (conditionEvidence.length === 0) {
+    return offers;
+  }
+
+  return offers.map((offer) => {
+    const evidence = conditionEvidence.find((candidate) => canMergeConditionEvidence(offer, candidate));
+
+    return evidence ? mergeConditionEvidence(offer, evidence) : offer;
+  });
+}
+
 function hasSameVisibleResponseFingerprint(left, right) {
   if (!left || !right) {
     return false;
@@ -5501,7 +5751,8 @@ async function buildOfferRanking({
   const finalResponseOffers = dedupeFinalResponseOffers(responseCandidateOffers, query);
   timings.finalDedupeMs = nowMs() - finalDedupeStartedAt;
   const visibleDedupeStartedAt = nowMs();
-  const visibleDedupeResult = dedupeVisibleCardResponseOffers(finalResponseOffers, query, {
+  const conditionMergedResponseOffers = mergeSparConditionEvidenceIntoOffers(finalResponseOffers);
+  const visibleDedupeResult = dedupeVisibleCardResponseOffers(conditionMergedResponseOffers, query, {
     collectDiagnostics: Boolean(debugStages),
   });
   timings.visibleDedupeMs = nowMs() - visibleDedupeStartedAt;
@@ -5515,7 +5766,7 @@ async function buildOfferRanking({
   if (debugStages) {
     const sortedIds = new Set(sortedOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
     const responseCandidateIds = new Set(responseCandidateOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
-    const finalIds = new Set(finalResponseOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
+    const finalIds = new Set(conditionMergedResponseOffers.map((offer) => String(offer?._id || offer?.id || '')).filter(Boolean));
 
     debugStages.push(buildDebugRankingStage({
       stage: 'after-response-preparation',
@@ -5526,10 +5777,10 @@ async function buildOfferRanking({
     }));
     debugStages.push(buildDebugRankingStage({
       stage: 'after-final-dedupe',
-      offers: finalResponseOffers,
+      offers: conditionMergedResponseOffers,
       query,
       previousIds: responseCandidateIds,
-      reason: 'final-dedupe',
+      reason: 'final-dedupe-condition-merge',
     }));
     debugStages.push(buildDebugRankingStage({
       stage: 'final-api-like-results',
@@ -5737,6 +5988,8 @@ module.exports = {
   dedupeResponseOffers,
   dedupeFinalResponseOffers,
   dedupeVisibleCardResponseOffers,
+  mergeSparConditionEvidenceIntoOffers,
+  canMergeConditionEvidence,
   hasSameVisibleResponseFingerprint,
   hasSameVisibleCardFingerprint,
   reduceAdjacentQueryDuplicates,

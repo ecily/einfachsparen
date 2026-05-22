@@ -308,7 +308,7 @@ function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts
     };
   }
 
-  const thresholdMatch = haystack.match(/\bab\s+(\d+)\s*(?:stk|stueck|stuck|dosen|flaschen|packungen|rollen|beutel|glaser|glaeser)\b/);
+  const thresholdMatch = haystack.match(/\bab\s+(\d+)\s*(?:stk|stueck|stuck|pkg|dosen|flaschen|packungen|rollen|beutel|glaser|glaeser)\b/);
 
   if (thresholdMatch) {
     return {
