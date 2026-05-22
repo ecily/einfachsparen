@@ -3720,7 +3720,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v7-source-quality-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
