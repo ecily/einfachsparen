@@ -328,6 +328,10 @@ test('SPAR condition merge rejects uncertain products, different formats and con
     pdf,
   ), false);
   assert.equal(canMergeConditionEvidence(
+    sparOffer({ brand: 'Puntigamer', title: 'Puntigamer Maerzen SPAR 0.50 Liter 1 Dose' }),
+    sparPdfOffer({ brand: '', title: 'Goesser Maerzen, Naturradler Zitrone oder Naturradler Zitrone alkoholfrei' }),
+  ), false);
+  assert.equal(canMergeConditionEvidence(
     sparOffer({ retailerKey: 'eurospar', retailerName: 'EUROSPAR' }),
     pdf,
   ), false);
@@ -356,6 +360,24 @@ test('SPAR condition merge deduplicates overlapping condition text', () => {
 
   assert.equal(merged.conditionsText, 'ab 6 Dosen');
   assert.equal(merged.minimumPurchaseQty, 6);
+});
+
+test('SPAR condition merge keeps dated condition sentences intact', () => {
+  const aktionsfinder = sparOffer({
+    brand: 'Goesser',
+    title: 'Gösser Märzen SPAR 0.50 Liter 1 Dose',
+  });
+  const pdf = sparPdfOffer({
+    brand: 'Goesser',
+    conditionsText: 'ab 6 Dosen. Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt',
+  });
+
+  const [merged] = mergeSparConditionEvidenceIntoOffers([aktionsfinder, pdf]);
+
+  assert.equal(
+    merged.conditionsText,
+    'ab 6 Dosen. Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt',
+  );
 });
 
 test('query without useful tokens uses safe regex fallback metadata', () => {

@@ -3617,7 +3617,7 @@ function getConditionTextParts(...offers) {
 
   for (const offer of offers) {
     const rawParts = String(offer?.conditionsText || offer?.conditionLabel || '')
-      .split(/\s*\/\s*|\s*\.\s+/)
+      .split(/\s*\/\s*/)
       .map((part) => part.trim())
       .filter(Boolean);
 
@@ -3683,7 +3683,8 @@ function haveCompatibleConditionMergeTitle(left, right) {
 
   const leftBrand = normalizeSearchText(left?.brand);
   const rightBrand = normalizeSearchText(right?.brand);
-  const titleText = normalizeSearchText(`${left?.title || ''} ${right?.title || ''}`);
+  const leftTitle = normalizeSearchText(left?.title || left?.titleNormalized || '');
+  const rightTitle = normalizeSearchText(right?.title || right?.titleNormalized || '');
 
   if (leftBrand && rightBrand) {
     return leftBrand === rightBrand;
@@ -3691,7 +3692,7 @@ function haveCompatibleConditionMergeTitle(left, right) {
 
   const oneSidedBrand = leftBrand || rightBrand;
 
-  return Boolean(oneSidedBrand && titleText.includes(oneSidedBrand));
+  return Boolean(oneSidedBrand && leftTitle.includes(oneSidedBrand) && rightTitle.includes(oneSidedBrand));
 }
 
 function haveCompatibleConditionMergeQuantity(left, right) {
