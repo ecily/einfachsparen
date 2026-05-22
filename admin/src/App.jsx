@@ -43,7 +43,7 @@ import { shouldSeparateRetailerGroups } from './utils/retailers'
 
 const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
 const MOBILE_BROWSER_NOTICE =
-  'kaufklug.at funktioniert auch am Handy im Browser. Wir arbeiten gerade mit viel Sorgfalt an der Datenqualität – kostenlos für alle. Für die nächste App-Version nehmen wir uns noch etwas Zeit.'
+  'kaufklug.at funktioniert auch am Handy direkt im Browser. Die App-Version bleibt pausiert, bis die Datenqualität stabil genug ist.'
 
 function getFriendlyErrorMessage(error, fallback) {
   const status = Number(error?.status || 0)
@@ -98,6 +98,7 @@ function SearchLandingHero() {
     ['dm', 'dm'],
     ['bipa', 'BIPA'],
   ]
+  const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung', 'Bedingungen sichtbar']
 
   return (
     <>
@@ -147,14 +148,18 @@ function SearchLandingHero() {
               maxWidth: '46rem',
             }}
           >
-            Angebote finden. <span className="hero-headline-accent">Geld sparen.</span>
+            Aktuelle Angebote finden. <span className="hero-headline-accent">Einkauf besser planen.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
-            Suche aktuelle Angebote aus österreichischen Märkten und merke sie für deinen Einkauf.
+            Suche Supermarkt- und Drogerie-Angebote in Österreich, merke passende Treffer und nutze kaufklug als
+            Orientierung für deinen Einkauf.
           </p>
-          <p className="hero-trust-line">
-            Kostenlos. Ohne Anmeldung. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.
-          </p>
+          <div className="hero-trust-row" aria-label="Nutzungshinweise">
+            {trustItems.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
+          <p className="hero-trust-line">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
         </div>
 
         <div

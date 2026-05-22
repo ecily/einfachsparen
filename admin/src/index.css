@@ -764,7 +764,33 @@ a {
   line-height: 1.48;
 }
 
+.hero-trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  align-items: center;
+}
+
+.hero-trust-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.38rem 0.62rem;
+  border: 1px solid rgba(31, 90, 75, 0.16);
+  border-radius: 999px;
+  background: rgba(247, 250, 247, 0.78);
+  color: #213d35;
+  font-size: 0.82rem;
+  font-weight: 840;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .search-landing-hero {
+  border-color: rgba(31, 90, 75, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(226, 185, 111, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(255, 252, 247, 0.98), rgba(242, 247, 244, 0.94));
   max-width: 100%;
   overflow: hidden;
 }
@@ -776,7 +802,7 @@ a {
 
 .search-landing-hero__usp {
   display: grid;
-  gap: 0.68rem;
+  gap: 0.78rem;
   min-width: 0;
 }
 
@@ -790,8 +816,8 @@ a {
   align-content: center;
   padding: 0.85rem;
   border-radius: 1.15rem;
-  background: rgba(255, 252, 247, 0.58);
-  border: 1px solid rgba(22, 33, 24, 0.07);
+  background: rgba(255, 252, 247, 0.66);
+  border: 1px solid rgba(31, 90, 75, 0.1);
   box-shadow: none;
 }
 
@@ -2017,7 +2043,7 @@ a {
 .keyword-search-hero {
   border-color: rgba(31, 90, 75, 0.24);
   background:
-    linear-gradient(90deg, rgba(31, 90, 75, 0.22) 0 5px, transparent 5px),
+    linear-gradient(90deg, rgba(31, 90, 75, 0.28) 0 5px, transparent 5px),
     linear-gradient(180deg, rgba(247, 244, 238, 0.98), rgba(255, 252, 247, 0.97));
   box-shadow: 0 12px 28px rgba(31, 90, 75, 0.09);
 }
@@ -2071,13 +2097,14 @@ a {
 .keyword-search-form input {
   width: 100%;
   min-width: 0;
-  min-height: 56px;
-  border: 1px solid rgba(22, 33, 24, 0.16);
+  min-height: 58px;
+  border: 1px solid rgba(31, 90, 75, 0.24);
   border-radius: 999px;
   background: rgba(255, 252, 247, 0.96);
   color: var(--kk-ink);
-  padding: 0.95rem 1.05rem;
+  padding: 0.98rem 1.12rem;
   outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .keyword-search-form input:focus {
