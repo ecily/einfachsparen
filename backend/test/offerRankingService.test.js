@@ -6,6 +6,7 @@ const {
   buildRankingCandidateLimit,
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateMatch,
+  buildRetailerScopeMatch,
   buildRankedOffer,
   buildValidityLabel,
   buildGroupedRankings,
@@ -136,6 +137,44 @@ test('pushes ranking query into Mongo searchTokens candidate filtering before JS
     fallbackUsed: false,
     fallbackReason: '',
   });
+});
+
+test('ranking retailer filter keeps normal retailerKey query for non-SPAR retailers', () => {
+  assert.deepEqual(buildRetailerScopeMatch(['hofer']), {
+    retailerKey: { $in: ['hofer'] },
+  });
+});
+
+test('ranking retailer filter finds legacy EUROSPAR and INTERSPAR offers by format metadata', () => {
+  assert.deepEqual(buildRetailerScopeMatch(['eurospar']), {
+    $or: [
+      { retailerKey: 'eurospar' },
+      { sourceRetailerFormat: 'eurospar' },
+      { appliesToRetailerFormats: 'eurospar' },
+      { 'rawFacts.sourceRetailerFormat': 'eurospar' },
+      { 'rawFacts.appliesToRetailerFormats': 'eurospar' },
+    ],
+  });
+
+  const match = buildRankingCandidateMatch({
+    selectedRetailers: ['interspar'],
+    query: 'kaffee',
+  });
+
+  assert.ok(Array.isArray(match.$and));
+  assert.equal(match.$and.length, 2);
+  assert.ok(JSON.stringify(match.$and[0]).includes('interspar'));
+  assert.ok(JSON.stringify(match.$and[1]).includes('searchTokens'));
+});
+
+test('ranking retailer filter does not show legacy INTERSPAR-only offers for SPAR-only requests', () => {
+  const match = buildRetailerScopeMatch(['spar']);
+  const serialized = JSON.stringify(match);
+
+  assert.ok(serialized.includes('"retailerKey":"spar"'));
+  assert.ok(serialized.includes('"sourceRetailerFormat":"spar"'));
+  assert.ok(serialized.includes('"appliesToRetailerFormats":"spar"'));
+  assert.doesNotMatch(serialized, /eurospar|interspar/);
 });
 
 test('query without useful tokens uses safe regex fallback metadata', () => {

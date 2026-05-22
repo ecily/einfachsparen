@@ -143,6 +143,85 @@ function normalizeRetailerList(value) {
   return [...new Set(normalizeStringList(value).map(normalizeRetailerKey).filter(Boolean))];
 }
 
+const SPAR_FORMAT_RETAILER_KEYS = new Set(['spar', 'eurospar', 'interspar']);
+
+function buildSparFormatRetailerBranch(retailerKey) {
+  const key = normalizeRetailerKey(retailerKey);
+
+  if (key === 'spar') {
+    return {
+      $or: [
+        {
+          retailerKey: 'spar',
+          $or: [
+            { sourceRetailerFormat: { $in: ['spar', '', null] } },
+            { sourceRetailerFormat: { $exists: false } },
+            { appliesToRetailerFormats: 'spar' },
+            { 'rawFacts.sourceRetailerFormat': 'spar' },
+            { 'rawFacts.appliesToRetailerFormats': 'spar' },
+          ],
+        },
+        { sourceRetailerFormat: 'spar' },
+        { appliesToRetailerFormats: 'spar' },
+        { 'rawFacts.sourceRetailerFormat': 'spar' },
+        { 'rawFacts.appliesToRetailerFormats': 'spar' },
+      ],
+    };
+  }
+
+  return {
+    $or: [
+      { retailerKey: key },
+      { sourceRetailerFormat: key },
+      { appliesToRetailerFormats: key },
+      { 'rawFacts.sourceRetailerFormat': key },
+      { 'rawFacts.appliesToRetailerFormats': key },
+    ],
+  };
+}
+
+function buildRetailerScopeMatch(selectedRetailers = []) {
+  const retailers = normalizeRetailerList(selectedRetailers);
+
+  if (retailers.length === 0) {
+    return null;
+  }
+
+  const sparFormatRetailers = retailers.filter((retailerKey) => SPAR_FORMAT_RETAILER_KEYS.has(retailerKey));
+  const regularRetailers = retailers.filter((retailerKey) => !SPAR_FORMAT_RETAILER_KEYS.has(retailerKey));
+
+  if (sparFormatRetailers.length === 0) {
+    return { retailerKey: { $in: regularRetailers } };
+  }
+
+  const branches = [
+    ...regularRetailers.map((retailerKey) => ({ retailerKey })),
+    ...sparFormatRetailers.map(buildSparFormatRetailerBranch),
+  ];
+
+  return branches.length === 1 ? branches[0] : { $or: branches };
+}
+
+function applyRetailerScopeMatch(match, selectedRetailers = []) {
+  const retailerScopeMatch = buildRetailerScopeMatch(selectedRetailers);
+
+  if (!retailerScopeMatch) {
+    return match;
+  }
+
+  if (retailerScopeMatch.retailerKey && Object.keys(retailerScopeMatch).length === 1) {
+    match.retailerKey = retailerScopeMatch.retailerKey;
+    return match;
+  }
+
+  match.$and = [
+    ...(Array.isArray(match.$and) ? match.$and : []),
+    retailerScopeMatch,
+  ];
+
+  return match;
+}
+
 function normalizeCategoryLabelKey(value) {
   return String(value || '')
     .trim()
@@ -2483,7 +2562,7 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
   }
 
   if (selectedRetailers.length > 0) {
-    filters.retailerKey = { $in: selectedRetailers };
+    applyRetailerScopeMatch(filters, selectedRetailers);
   }
 
   if (unit && unit !== 'all') {
@@ -4227,7 +4306,7 @@ function buildRankingCandidateMatch({
   };
 
   if (selectedRetailers.length > 0) {
-    match.retailerKey = { $in: selectedRetailers };
+    applyRetailerScopeMatch(match, selectedRetailers);
   }
 
   if (selectedCategoryKeys.length > 0) {
@@ -4243,7 +4322,10 @@ function buildRankingCandidateMatch({
   }
 
   if (querySearch.filter) {
-    match.$and = querySearch.filter.$and;
+    match.$and = [
+      ...(Array.isArray(match.$and) ? match.$and : []),
+      ...querySearch.filter.$and,
+    ];
   }
 
   return match;
@@ -4794,7 +4876,7 @@ async function buildFallbackCandidateOffers({ selectedRetailers = [], selectedCa
   const selectedCategoryKeys = selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
 
   if (selectedRetailers.length > 0) {
-    match.retailerKey = { $in: selectedRetailers };
+    applyRetailerScopeMatch(match, selectedRetailers);
   }
 
   if (selectedCategoryKeys.length > 0) {
@@ -5659,6 +5741,7 @@ module.exports = {
   createResultSetToken,
   buildRankingCandidateLimit,
   buildRankingCandidateMatch,
+  buildRetailerScopeMatch,
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateQueryMetadata,
   paginateVisibleRankingOffers,
