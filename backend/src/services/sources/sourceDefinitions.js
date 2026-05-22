@@ -161,7 +161,12 @@ const RETAILER_DEFINITIONS = [
     crawlPolicy: {
       timeoutMs: 60000,
       maxPdfBytes: 41943040,
-      maxPdfPages: 6,
+      maxPdfPages: 24,
+      coverageGuard: {
+        minBaseline: 50,
+        minReplacementRatio: 0.35,
+        minAbsoluteDrop: 25,
+      },
       validityText: 'Do., 21.05.26 - Di., 02.06.26',
       validFrom: '2026-05-21T12:00:00.000Z',
       validTo: '2026-06-02T12:00:00.000Z',
@@ -186,7 +191,12 @@ const RETAILER_DEFINITIONS = [
     crawlPolicy: {
       timeoutMs: 60000,
       maxPdfBytes: 41943040,
-      maxPdfPages: 6,
+      maxPdfPages: 24,
+      coverageGuard: {
+        minBaseline: 50,
+        minReplacementRatio: 0.35,
+        minAbsoluteDrop: 25,
+      },
       validityText: 'Do., 21.05.26 - Di., 02.06.26',
       validFrom: '2026-05-21T12:00:00.000Z',
       validTo: '2026-06-02T12:00:00.000Z',
@@ -211,7 +221,12 @@ const RETAILER_DEFINITIONS = [
     crawlPolicy: {
       timeoutMs: 60000,
       maxPdfBytes: 41943040,
-      maxPdfPages: 6,
+      maxPdfPages: 24,
+      coverageGuard: {
+        minBaseline: 50,
+        minReplacementRatio: 0.35,
+        minAbsoluteDrop: 25,
+      },
       validityText: 'Do., 21.05.26 - Mi., 02.06.26',
       validFrom: '2026-05-21T12:00:00.000Z',
       validTo: '2026-06-02T12:00:00.000Z',

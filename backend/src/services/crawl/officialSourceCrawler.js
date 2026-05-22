@@ -3403,7 +3403,13 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
   const refreshResult = await replaceOffersForSource({
     sourceId: source._id,
     offerDocuments,
+    coverageGuard: {
+      minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? 50),
+      minReplacementRatio: Number(source.crawlPolicy?.coverageGuard?.minReplacementRatio ?? 0.35),
+      minAbsoluteDrop: Number(source.crawlPolicy?.coverageGuard?.minAbsoluteDrop ?? 25),
+    },
   });
+  const replacementQuality = refreshResult.replacementQuality || (refreshResult.reason === 'coverage-drop-quality-risk' ? 'quality-risk' : 'complete');
 
   logger.info('SPAR PDF crawl parsed flyer', {
     sourceKey,
@@ -3412,6 +3418,8 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
     rawCandidates: pdfReference.candidates.length,
     rejectedCandidates: Math.max(0, pdfReference.candidates.length - offerDocuments.length),
     offersStored: offerDocuments.length,
+    replacementQuality,
+    refreshReason: refreshResult.reason || '',
   });
 
   return {
@@ -3426,6 +3434,8 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
       parsedOffers: offerDocuments.length,
       rejectedCandidates: Math.max(0, pdfReference.candidates.length - offerDocuments.length),
       rejectionReasons,
+      replacementQuality,
+      refreshResult,
       pages: pdfReference.file.pages,
       rawDocumentId: rawDocument._id,
     }],
@@ -4930,7 +4940,13 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       });
       const sourceKey = sourceKeyForFormat(source.sourceRetailerFormat || 'spar');
       const offersStored = sparPdfResult.offerDocuments.length;
-      const status = offersStored > 0 || sparPdfResult.rawCandidateCount > 0 ? 'success' : 'partial';
+      const replacementQuality = sparPdfResult.replacementQuality || 'complete';
+      const status = replacementQuality === 'quality-risk'
+        ? 'partial'
+        : (offersStored > 0 || sparPdfResult.rawCandidateCount > 0 ? 'success' : 'partial');
+      const warningMessages = replacementQuality === 'quality-risk'
+        ? [`SPAR PDF source protected previous offers because replacement coverage dropped sharply (${sparPdfResult.refreshResult?.coverageRisk?.previousActiveCount || 0} -> ${sparPdfResult.refreshResult?.coverageRisk?.nextCount || offersStored}).`]
+        : [];
 
       await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
         status,
@@ -4943,13 +4959,15 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         parserVersion: SPAR_PDF_PARSER_VERSION,
         normalizationVersion: NORMALIZATION_VERSION,
         httpLog: sparPdfResult.httpLog || {},
-        warningMessages: [],
+        warningMessages,
         errorMessages: [],
         metadata: {
           sourceLabel: source.label,
           sourceUrl: source.sourceUrl,
           sourceKey,
           sparPdfReports: sparPdfResult.pdfReports,
+          replacementQuality,
+          refreshResult: sparPdfResult.refreshResult,
         },
       }));
 

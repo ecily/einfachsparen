@@ -56,14 +56,15 @@ test('extracts concrete EUROSPAR coffee offers from textlayer fixtures', () => {
     validity: fixture.validity,
   }).filter((candidate) => !candidate.exclusionReason);
 
-  assert.equal(candidates.length, 2);
-  assert.equal(candidates[0].brand, 'Meinl');
-  assert.equal(candidates[0].price, 7.25);
-  assert.equal(candidates[0].quantityText, '500 g');
-  assert.equal(candidates[1].brand, 'Lavazza');
-  assert.equal(candidates[1].price, 22.99);
-  assert.equal(candidates[1].referencePrice, 28.99);
-  assert.equal(candidates[1].quantityText, '1 kg');
+  const meinl = candidates.find((candidate) => candidate.brand === 'Meinl');
+  const lavazza = candidates.find((candidate) => candidate.brand === 'Lavazza');
+
+  assert.ok(candidates.length >= 2);
+  assert.equal(meinl.price, 7.25);
+  assert.equal(meinl.quantityText, '500 g');
+  assert.equal(lavazza.price, 22.99);
+  assert.equal(lavazza.referencePrice, 28.99);
+  assert.equal(lavazza.quantityText, '1 kg');
 });
 
 test('extracts concrete beer offers from SPAR KW21 textlayer snippets', () => {
@@ -88,6 +89,68 @@ test('extracts concrete beer offers from SPAR KW21 textlayer snippets', () => {
   assert.ok(candidates.some((candidate) => candidate.title === 'Schwechater Bier 20 x 0,5 Liter'));
   assert.ok(candidates.some((candidate) => candidate.title.includes('Goesser Maerzen')));
   assert.ok(candidates.every((candidate) => candidate.productKind === 'beer'));
+});
+
+test('extracts non-beer generic SPAR flyer offers from textlayer price blocks', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 7,
+        text: [
+          'S-BUDGET Teebutter',
+          '250 g Packung',
+          'statt 2,99',
+          '1,99',
+          'Persil Waschmittel Universal',
+          '40 Waschgänge',
+          'statt 19,99',
+          '12,99',
+        ].join('\n'),
+      },
+    ],
+  }).filter((candidate) => !candidate.exclusionReason);
+
+  assert.ok(candidates.some((candidate) => candidate.title === 'S-BUDGET Teebutter'));
+  assert.ok(candidates.some((candidate) => candidate.title === 'Persil Waschmittel Universal'));
+  assert.ok(candidates.some((candidate) => candidate.productKind === 'generic-flyer-product'));
+});
+
+test('normalizes generic non-beer candidates into broad categories', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-21T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: currentValidity,
+    pages: [
+      {
+        pageNumber: 8,
+        text: [
+          'Persil Waschmittel Universal',
+          '40 Waschgänge',
+          'statt 19,99',
+          '12,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260521-1-flugblatt-kw-21/getPdf.ashx',
+  });
+
+  assert.equal(offer.title, 'Persil Waschmittel Universal');
+  assert.notEqual(offer.categorySecondary, 'Bier');
+  assert.match(offer.searchText, /waschmittel/);
 });
 
 test('rejects campaign-only coffee blocks as non-product diagnostics', () => {
@@ -196,6 +259,51 @@ test('normalizes SPAR PDF beer candidates as beer with format metadata', () => {
   assert.equal(stored.retailerKey, 'eurospar');
   assert.equal(stored.rawFacts.sourceKey, 'eurospar-official-flyer-pdf');
   assert.match(stored.searchText, /bier/);
+});
+
+test('normalizes relative image URLs and keeps offers when images are missing', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-21T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const [withImage, withoutImage] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates: [
+        {
+          id: 'img-1',
+          page: 2,
+          productKind: 'generic-flyer-product',
+          title: 'S-BUDGET Teebutter',
+          brand: 'S-BUDGET',
+          price: 1.99,
+          quantityText: '250 g',
+          rawText: 'S-BUDGET Teebutter 250 g 1,99',
+          comparisonSafe: true,
+          imageUrl: '/assets/teebutter.png',
+        },
+        {
+          id: 'img-2',
+          page: 2,
+          productKind: 'generic-flyer-product',
+          title: 'Persil Waschmittel Universal',
+          brand: 'Persil',
+          price: 12.99,
+          quantityText: '40 Stk',
+          rawText: 'Persil Waschmittel Universal 40 Stk 12,99',
+          comparisonSafe: true,
+        },
+      ],
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://www.spar.at/flyer/page.html',
+  });
+
+  assert.equal(withImage.imageUrl, 'https://www.spar.at/assets/teebutter.png');
+  assert.equal(withoutImage.imageUrl, '');
+  assert.equal(withoutImage.title, 'Persil Waschmittel Universal');
 });
 
 test('SPAR PDF dedupe keys are source-specific and do not blindly replace aggregators', () => {

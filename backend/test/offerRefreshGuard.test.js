@@ -6,6 +6,10 @@ const { SEARCH_TOKEN_VERSION } = require('../src/services/offers/searchTokens');
 
 function buildOfferModel(calls) {
   return {
+    async countDocuments(filter) {
+      calls.countDocuments.push({ filter });
+      return calls.previousActiveCount || 0;
+    },
     async insertMany(documents, options) {
       calls.insertMany.push({ documents, options });
       return documents;
@@ -22,7 +26,7 @@ function buildOfferModel(calls) {
 }
 
 function buildCalls() {
-  return { insertMany: [], deleteMany: [], updateMany: [] };
+  return { countDocuments: [], insertMany: [], deleteMany: [], updateMany: [], previousActiveCount: 0 };
 }
 
 test('replaceOffersForSource keeps existing live offers when a source produced no new offers', async () => {
@@ -135,6 +139,24 @@ test('replaceOffersForSource inserts the new source snapshot before soft-deactiv
   });
 });
 
+test('replaceOffersForSource scopes soft-deactivation to exactly one sourceId', async () => {
+  for (const sourceId of ['spar-source', 'eurospar-source', 'interspar-source']) {
+    const calls = buildCalls();
+
+    await replaceOffersForSource({
+      sourceId,
+      offerDocuments: [
+        { sourceId, crawlJobId: 'job-format', retailerKey: sourceId.replace('-source', ''), title: 'Kaffee' },
+      ],
+      OfferModel: buildOfferModel(calls),
+    });
+
+    assert.equal(calls.updateMany.length, 1);
+    assert.equal(calls.updateMany[0].filter.sourceId, sourceId);
+    assert.equal(calls.updateMany[0].filter.retailerKey, undefined);
+  }
+});
+
 test('replaceOffersForSource never hard-deletes previous source offers', async () => {
   const calls = buildCalls();
 
@@ -218,4 +240,47 @@ test('replaceOffersForSource skips deactivation for quality-risk replacement sna
   assert.equal(calls.insertMany.length, 0);
   assert.equal(calls.deleteMany.length, 0);
   assert.equal(calls.updateMany.length, 0);
+});
+
+test('replaceOffersForSource protects broad snapshots from sudden low-coverage replacements', async () => {
+  const calls = buildCalls();
+  calls.previousActiveCount = 184;
+
+  const result = await replaceOffersForSource({
+    sourceId: 'spar-official-source',
+    offerDocuments: Array.from({ length: 5 }, (_, index) => ({
+      sourceId: 'spar-official-source',
+      crawlJobId: 'job-low-coverage',
+      title: `Bier ${index}`,
+    })),
+    OfferModel: buildOfferModel(calls),
+  });
+
+  assert.equal(result.reason, 'coverage-drop-quality-risk');
+  assert.equal(result.replacementQuality, 'quality-risk');
+  assert.equal(result.coverageRisk.previousActiveCount, 184);
+  assert.equal(result.coverageRisk.nextCount, 5);
+  assert.equal(result.insertedOffers, 0);
+  assert.equal(result.deactivatedPreviousOffers, 0);
+  assert.equal(calls.insertMany.length, 0);
+  assert.equal(calls.updateMany.length, 0);
+});
+
+test('replaceOffersForSource allows legitimate small sources below baseline', async () => {
+  const calls = buildCalls();
+  calls.previousActiveCount = 8;
+
+  const result = await replaceOffersForSource({
+    sourceId: 'small-source',
+    offerDocuments: [
+      { sourceId: 'small-source', crawlJobId: 'job-small', title: 'Kleines Angebot' },
+    ],
+    OfferModel: buildOfferModel(calls),
+  });
+
+  assert.equal(result.reason, '');
+  assert.equal(result.insertedOffers, 1);
+  assert.equal(result.deactivatedPreviousOffers, 2);
+  assert.equal(calls.insertMany.length, 1);
+  assert.equal(calls.updateMany.length, 1);
 });

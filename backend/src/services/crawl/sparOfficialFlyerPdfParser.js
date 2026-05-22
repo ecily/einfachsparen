@@ -4,9 +4,14 @@ const {
   normalizeTitleForMatch,
   buildSourceEvidence,
 } = require('./sourceEvidence');
-const { buildInclusiveScopeDecision } = require('./categoryClassifier');
 const { buildPdfSourceMetadata, normalizePdfText } = require('./pdfOfferParsing');
+const {
+  determineOfferCategory,
+  determineOfferSubcategory,
+  buildInclusiveScopeDecision,
+} = require('./categoryClassifier');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
+const { normalizeImageUrl } = require('../images/imageUrl');
 
 const PARSER_VERSION = 'spar-official-flyer-pdf-v1';
 const SOURCE_TYPE = 'spar-official-pdf';
@@ -82,7 +87,7 @@ function priceFromUnitPrice(quantityText, unitPriceText) {
 
 function parseQuantity(quantityText) {
   const normalized = normalizeForScan(quantityText);
-  const match = normalized.match(/\b(\d+(?:[,.]\d+)?)\s*(kg|g|l|ml|kapseln|kapsel|stk|stueck)\b/i);
+  const match = normalized.match(/\b(\d+(?:[,.]\d+)?)\s*-?\s*(kg|g|l|ml|kapseln|kapsel|stk|stueck|waschgange|waschgaenge|waschgang)\b/i);
 
   if (!match) {
     return {
@@ -107,6 +112,7 @@ function parseQuantity(quantityText) {
 
   if (unit === 'stueck') unit = 'stk';
   if (unit === 'kapsel') unit = 'kapseln';
+  if (unit === 'waschgange' || unit === 'waschgaenge') unit = 'waschgang';
 
   let comparableUnit = unit;
   let totalComparableAmount = value;
@@ -121,7 +127,7 @@ function parseQuantity(quantityText) {
     totalComparableAmount = value / 1000;
   }
 
-  if (!['kg', 'l', 'stk', 'kapseln'].includes(comparableUnit)) {
+  if (!['kg', 'l', 'stk', 'kapseln', 'waschgang'].includes(comparableUnit)) {
     comparableUnit = '';
     totalComparableAmount = null;
   }
@@ -137,7 +143,7 @@ function parseQuantity(quantityText) {
 function buildNormalizedUnitPrice({ price, quantityText, comparisonSafe }) {
   const quantity = parseQuantity(quantityText);
 
-  if (!comparisonSafe || !price || !quantity.totalComparableAmount || !['kg', 'l', 'Stk'].includes(quantity.comparableUnit)) {
+  if (!comparisonSafe || !price || !quantity.totalComparableAmount || !['kg', 'l', 'Stk', 'waschgang'].includes(quantity.comparableUnit)) {
     return {
       quantity,
       normalizedUnitPrice: {
@@ -235,6 +241,178 @@ function addCandidate(candidates, pageNumber, data) {
   }
 
   candidates.push(candidate);
+}
+
+function normalizePriceText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function parsePriceAmountFromLine(line = '') {
+  const text = normalizePriceText(line);
+
+  if (!text || /(?:per|\/)\s*(?:kg|g|l|ml|stk|stueck|stuck)|statt|gueltig|gültig|bis\s+di|bis\s+mi|bis\s+sa|%/i.test(text)) {
+    return null;
+  }
+
+  const match = text.match(/(?:^|(?:nur|je|preis|um)\s+)(\d{1,3}[,.]\d{2})(?:\s*(?:eur|euro)?)?$/i)
+    || text.match(/^(\d{1,3}[,.]\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number(match[1].replace(',', '.'));
+  return Number.isFinite(amount) && amount > 0 ? money(amount) : null;
+}
+
+function parseReferencePriceFromBlock(blockLines = []) {
+  const text = normalizePriceText(blockLines.join(' '));
+  const match = text.match(/\bstatt\s+(\d{1,3}[,.]\d{2})\b/i);
+  return match ? money(Number(match[1].replace(',', '.'))) : null;
+}
+
+function extractQuantityTextFromBlock(blockLines = []) {
+  const text = normalizePriceText(blockLines.join(' '));
+  const xPackMatch = text.match(/\b\d+\s*x\s*\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml)\b/i);
+  if (xPackMatch) return sanitizeWhitespace(xPackMatch[0]).replace(',', '.');
+
+  const packMatch = text.match(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b/i);
+  if (packMatch) return sanitizeWhitespace(packMatch[0]).replace(',', '.');
+
+  const packageMatch = text.match(/\b\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|ml)[-\s]?(?:packung|flasche|dose|beutel|glas|pkg)\b/i);
+  if (packageMatch) {
+    const quantity = packageMatch[0].match(/\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|ml)/i)?.[0] || '';
+    return sanitizeWhitespace(quantity).replace(',', '.');
+  }
+
+  return '';
+}
+
+function looksLikeNonProductLine(line = '') {
+  const normalized = normalizeForScan(line);
+
+  return !normalized
+    || normalized.length < 3
+    || /\bangebote?\s+gueltig\b/i.test(normalized)
+    || /^(?:statt|per|= per|angebot|gueltig|gilt|noch|zusaetzlich|mengenvorteil|im einzelverkauf|ab \d+|je|nur|-?\d+\s*%|seite \d+)$/i.test(normalized)
+    || /^\d{1,3}[,.]\d{2}$/.test(normalized)
+    || /\b(?:do|fr|sa|so|mo|di|mi)[,.]?\s*\d{1,2}[,.]\d{1,2}/i.test(normalized);
+}
+
+function lineContainsQuantity(line = '') {
+  return /\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b/i.test(line)
+    || /\b\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|ml)[-\s]?(?:packung|flasche|dose|beutel|glas|pkg)\b/i.test(line);
+}
+
+function buildGenericTitle(blockLines = []) {
+  const titleLines = [];
+
+  for (const line of blockLines) {
+    if (looksLikeNonProductLine(line)) continue;
+    if (/^\(?=?\s*per\s+(?:kg|l|100\s*g|100\s*ml)/i.test(line)) continue;
+    if (/^\d+\s*(?:pkg|ds|fl|flaschen|dosen)\.?/i.test(line)) continue;
+
+    titleLines.push(line);
+
+    if (lineContainsQuantity(line) && titleLines.length > 1) {
+      break;
+    }
+  }
+
+  const rawTitle = titleLines
+    .join(' ')
+    .replace(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b.*$/i, '')
+    .replace(/\b(?:ganze bohne|gemahlen|packung|flasche|dose|beutel|glas)\b[,\s]*$/i, '')
+    .trim();
+
+  return sanitizeWhitespace(rawTitle);
+}
+
+function extractGenericFlyerCandidatesFromPage(page) {
+  const text = String(page.text || '').replace(/\u00a0/g, ' ');
+  const lines = text
+    .split(/\r?\n/)
+    .map(sanitizeWhitespace)
+    .filter(Boolean);
+  const candidates = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const price = parsePriceAmountFromLine(lines[index]);
+
+    if (!(price > 0)) {
+      continue;
+    }
+
+    let start = Math.max(0, index - 7);
+    for (let previous = index - 1; previous >= start; previous -= 1) {
+      if (parsePriceAmountFromLine(lines[previous])) {
+        start = previous + 1;
+        break;
+      }
+    }
+    const end = Math.min(lines.length, index + 4);
+    const blockLines = lines.slice(start, end);
+    const title = buildGenericTitle(blockLines);
+    const quantityText = extractQuantityTextFromBlock(blockLines);
+
+    if (!title || title.length < 4 || !/[a-zA-Z]/.test(title)) {
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-unclear-product', blockLines.join(' '));
+      continue;
+    }
+
+    if (!quantityText) {
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-missing-quantity', blockLines.join(' '));
+      continue;
+    }
+
+    addCandidate(candidates, page.pageNumber, {
+      productKind: 'generic-flyer-product',
+      title,
+      brand: title.split(/\s+/)[0] || '',
+      price,
+      referencePrice: parseReferencePriceFromBlock(blockLines),
+      quantityText,
+      conditionsText: '',
+      rawText: blockLines.join(' '),
+      comparisonSafe: true,
+      parserHint: 'generic-text-layer-price-block',
+    });
+  }
+
+  return candidates;
+}
+
+function genericCandidateOverlapsKnown(candidate = {}, knownCandidates = []) {
+  if (!candidate || candidate.exclusionReason) return false;
+
+  const candidateTitle = normalizeTitleForMatch(candidate.title || '');
+  const candidateQuantity = parseQuantity(candidate.quantityText || '');
+  const candidateQuantityKey = candidateQuantity.comparableUnit && candidateQuantity.totalComparableAmount
+    ? `${candidateQuantity.comparableUnit}:${candidateQuantity.totalComparableAmount}`
+    : normalizeTitleForMatch(candidate.quantityText || '');
+  const candidatePrice = Number(candidate.price || 0);
+
+  return knownCandidates.some((known) => {
+    if (!known || known.exclusionReason) return false;
+    if (Number(known.price || 0) !== candidatePrice) return false;
+    const knownQuantity = parseQuantity(known.quantityText || '');
+    const knownQuantityKey = knownQuantity.comparableUnit && knownQuantity.totalComparableAmount
+      ? `${knownQuantity.comparableUnit}:${knownQuantity.totalComparableAmount}`
+      : normalizeTitleForMatch(known.quantityText || '');
+    if (knownQuantityKey !== candidateQuantityKey) return false;
+
+    const knownTitle = normalizeTitleForMatch(known.title || '');
+    const knownBrand = normalizeTitleForMatch(known.brand || '');
+
+    return Boolean(
+      knownTitle
+      && (
+        candidateTitle.includes(knownTitle)
+        || knownTitle.includes(candidateTitle)
+        || (knownBrand && candidateTitle.includes(knownBrand))
+      )
+    );
+  });
 }
 
 function beerCandidate(data = {}) {
@@ -487,9 +665,15 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
   const seen = new Set();
 
   for (const page of pages) {
-    const pageCandidates = [
+    const knownCandidates = [
       ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+    ];
+    const genericCandidates = extractGenericFlyerCandidatesFromPage(page)
+      .filter((candidate) => !genericCandidateOverlapsKnown(candidate, knownCandidates));
+    const pageCandidates = [
+      ...knownCandidates,
+      ...genericCandidates,
     ];
 
     for (const candidate of pageCandidates) {
@@ -611,10 +795,33 @@ function normalizeSparPdfCandidateToOffer({
     issues.push('Bedingung aus Flyer beachten');
   }
 
-  const categoryPrimary = candidate.categoryPrimary || 'Getraenke';
-  const categorySecondary = candidate.categorySecondary || 'Kaffee & Tee';
-  const categoryKey = candidate.categoryKey || 'kaffee-tee';
-  const searchKeywords = candidate.searchKeywords || 'kaffee espresso bohne gemahlen';
+  const categoryContext = [
+    candidate.title,
+    candidate.brand,
+    candidate.quantityText,
+    candidate.rawText,
+    candidate.searchKeywords,
+  ].join(' ');
+  const inferredCategoryPrimary = determineOfferCategory({
+    title: candidate.title,
+    contextText: categoryContext,
+  });
+  const inferredCategorySecondary = determineOfferSubcategory({
+    primaryCategory: inferredCategoryPrimary,
+    title: candidate.title,
+    contextText: categoryContext,
+    fallbackLabel: candidate.productKind || '',
+  });
+  const categoryPrimary = candidate.categoryPrimary || inferredCategoryPrimary || 'Unkategorisiert';
+  const categorySecondary = candidate.categorySecondary || inferredCategorySecondary || categoryPrimary;
+  const categoryKey = candidate.categoryKey || buildKey(categorySecondary || categoryPrimary, 'unkategorisiert');
+  const searchKeywords = candidate.searchKeywords || [
+    candidate.brand,
+    candidate.title,
+    candidate.quantityText,
+    categoryPrimary,
+    categorySecondary,
+  ].join(' ');
   const titleNormalized = normalizeTitleForMatch(candidate.title);
   const comparisonSignature = normalizeTitleForMatch([
     candidate.brand,
@@ -691,7 +898,7 @@ function normalizeSparPdfCandidateToOffer({
     description: candidate.quantityText,
     sourceUrl: pdfUrl || source.sourceUrl,
     sourceType: SOURCE_TYPE,
-    imageUrl: '',
+    imageUrl: normalizeImageUrl(candidate.imageUrl || '', pdfUrl || source.sourceUrl),
     supportingSources: [
       buildSourceEvidence({
         source,
@@ -746,6 +953,7 @@ function normalizeSparPdfCandidateToOffer({
       retailerName: source.retailerName,
       sourceRetailerFormat,
       sourceText: candidate.rawText,
+      parserHint: candidate.parserHint || '',
       evidenceText: sourceMetadata.evidence,
       page: candidate.page,
       pageNumber: candidate.page,

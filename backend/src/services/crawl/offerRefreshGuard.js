@@ -33,6 +33,83 @@ async function runWithOptionalTransaction(work) {
   }
 }
 
+function buildActiveSourceOfferFilter(sourceId) {
+  return {
+    sourceId,
+    $or: [
+      { status: 'active' },
+      { isActiveNow: true },
+      { isActiveToday: true },
+    ],
+  };
+}
+
+function evaluateReplacementCoverageRisk({
+  previousActiveCount = 0,
+  nextCount = 0,
+  minBaseline = 50,
+  minReplacementRatio = 0.35,
+  minAbsoluteDrop = 25,
+} = {}) {
+  const baseline = Number(previousActiveCount || 0);
+  const incoming = Number(nextCount || 0);
+
+  if (baseline < minBaseline) {
+    return {
+      risk: false,
+      reason: '',
+      previousActiveCount: baseline,
+      nextCount: incoming,
+      minBaseline,
+      minReplacementRatio,
+      minAbsoluteDrop,
+    };
+  }
+
+  const replacementRatio = baseline > 0 ? incoming / baseline : 1;
+  const absoluteDrop = baseline - incoming;
+  const risk = incoming < Math.ceil(baseline * minReplacementRatio) && absoluteDrop >= minAbsoluteDrop;
+
+  return {
+    risk,
+    reason: risk ? 'coverage-drop-quality-risk' : '',
+    previousActiveCount: baseline,
+    nextCount: incoming,
+    replacementRatio,
+    absoluteDrop,
+    minBaseline,
+    minReplacementRatio,
+    minAbsoluteDrop,
+  };
+}
+
+async function assessReplacementCoverage({
+  sourceId,
+  documents = [],
+  OfferModel = Offer,
+  coverageGuard = {},
+} = {}) {
+  if (coverageGuard.enabled === false || typeof OfferModel.countDocuments !== 'function') {
+    return evaluateReplacementCoverageRisk({
+      previousActiveCount: 0,
+      nextCount: documents.length,
+      minBaseline: coverageGuard.minBaseline,
+      minReplacementRatio: coverageGuard.minReplacementRatio,
+      minAbsoluteDrop: coverageGuard.minAbsoluteDrop,
+    });
+  }
+
+  const previousActiveCount = await OfferModel.countDocuments(buildActiveSourceOfferFilter(sourceId));
+
+  return evaluateReplacementCoverageRisk({
+    previousActiveCount,
+    nextCount: documents.length,
+    minBaseline: coverageGuard.minBaseline,
+    minReplacementRatio: coverageGuard.minReplacementRatio,
+    minAbsoluteDrop: coverageGuard.minAbsoluteDrop,
+  });
+}
+
 async function replaceOffersForSource({
   sourceId,
   offerDocuments = [],
@@ -42,6 +119,7 @@ async function replaceOffersForSource({
   sourceRunStatus = 'success',
   replacementQuality = 'complete',
   deactivationReason = 'source-replacement-not-seen',
+  coverageGuard = {},
   OfferModel = Offer,
 } = {}) {
   const documents = Array.isArray(offerDocuments) ? offerDocuments.filter(Boolean) : [];
@@ -99,6 +177,27 @@ async function replaceOffersForSource({
     };
   }
 
+  const coverageRisk = await assessReplacementCoverage({
+    sourceId,
+    documents,
+    OfferModel,
+    coverageGuard,
+  });
+
+  if (coverageRisk.risk) {
+    return {
+      insertedOffers: 0,
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
+      skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
+      reason: coverageRisk.reason,
+      replacementQuality: 'quality-risk',
+      coverageRisk,
+      transactional: false,
+    };
+  }
+
   return runWithOptionalTransaction(async (session) => {
     const options = session ? { ordered: false, session } : { ordered: false };
     const updateOptions = session ? { session } : {};
@@ -117,13 +216,8 @@ async function replaceOffersForSource({
       : [];
     const deactivateResult = await OfferModel.updateMany(
       {
-        sourceId,
+        ...buildActiveSourceOfferFilter(sourceId),
         crawlJobId: { $ne: crawlJobId },
-        $or: [
-          { status: 'active' },
-          { isActiveNow: true },
-          { isActiveToday: true },
-        ],
       },
       {
         $set: {
@@ -158,6 +252,9 @@ async function replaceOffersForSource({
 module.exports = {
   replaceOffersForSource,
   _private: {
+    assessReplacementCoverage,
+    buildActiveSourceOfferFilter,
+    evaluateReplacementCoverageRisk,
     isTransactionUnsupportedError,
     runWithOptionalTransaction,
   },
