@@ -130,36 +130,38 @@ function getPromotionScopeLabel(offer) {
   return String(offer?.promotionScope || offer?.appliesToCategory || '').replace(/-/g, ' ').trim()
 }
 
-function getCompactConditionText(value) {
+const SHORT_CONDITION_MAX_LENGTH = 68
+
+function getConditionDisplayText(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
-
-  if (text.length <= 68) {
-    return text
-  }
-
-  return `${text.slice(0, 65).trim()}...`
+  return text
 }
 
-function getVisibleConditionInfo(conditions) {
-  const visibleConditions = []
-  const hiddenConditions = []
+function getVisibleConditionInfo(rawConditions) {
+  const shortConditions = []
+  const detailedConditions = []
+  const seenConditions = new Set()
+
+  const conditions = rawConditions
+    .map((condition) => getConditionDisplayText(condition))
+    .filter((condition) => {
+      const key = condition.toLowerCase()
+      if (!condition || seenConditions.has(key)) return false
+      seenConditions.add(key)
+      return true
+    })
 
   for (const condition of conditions) {
-    const compactCondition = getCompactConditionText(condition)
-
-    if (visibleConditions.length < 2 && compactCondition === condition) {
-      visibleConditions.push(condition)
+    if (condition.length <= SHORT_CONDITION_MAX_LENGTH) {
+      shortConditions.push(condition)
     } else {
-      hiddenConditions.push(condition)
+      detailedConditions.push(condition)
     }
   }
 
-  const hiddenConditionsLabel = hiddenConditions.length === 1 ? 'Weitere Bedingung anzeigen' : 'Bedingungen anzeigen'
-
   return {
-    visibleConditions,
-    hiddenConditions,
-    hiddenConditionsLabel,
+    shortConditions,
+    detailedConditions,
     fullText: conditions.join(' / '),
   }
 }
@@ -176,7 +178,7 @@ export function OfferCardConsumer({
   const category = getShortCategory(offer)
   const validity = formatValidityLabel(offer)
   const conditions = getDisplayConditionLabels(offer)
-  const { visibleConditions, hiddenConditions, hiddenConditionsLabel, fullText: fullConditionText } = getVisibleConditionInfo(conditions)
+  const { shortConditions, detailedConditions, fullText: fullConditionText } = getVisibleConditionInfo(conditions)
   const quantityText = getReadableQuantityText(offer)
   const savingsAmount = getSavingsValue(offer)
   const referenceInfo = getReferenceInfo(offer)
@@ -260,25 +262,18 @@ export function OfferCardConsumer({
             </div>
           )}
 
-          {visibleConditions.length > 0 || hiddenConditions.length > 0 ? (
+          {shortConditions.length > 0 || detailedConditions.length > 0 ? (
             <div className="user-card__conditions" aria-label={`Wichtige Angebotsbedingungen: ${fullConditionText}`}>
-              {visibleConditions.map((condition) => (
+              {shortConditions.map((condition) => (
                 <span className="user-card__condition-chip" key={condition} title={condition} aria-label={`Bedingung: ${condition}`}>
-                  {getCompactConditionText(condition)}
+                  {condition}
                 </span>
               ))}
-              {hiddenConditions.length > 0 ? (
-                <details className="user-card__condition-details">
-                  <summary>{hiddenConditionsLabel}</summary>
-                  <div className="user-card__condition-details-list">
-                    {hiddenConditions.map((condition) => (
-                      <span className="user-card__condition-chip" key={condition} title={condition}>
-                        {condition}
-                      </span>
-                    ))}
-                  </div>
-                </details>
-              ) : null}
+              {detailedConditions.map((condition) => (
+                <p className="user-card__condition-text" key={condition} title={condition}>
+                  {condition}
+                </p>
+              ))}
             </div>
           ) : null}
         </div>

@@ -12,8 +12,12 @@ export function ProductImage({ offerId, src, alt, compact = false }) {
 
   if (!currentSrc) {
     return (
-      <div className={`product-image product-image--placeholder ${compact ? 'product-image--compact' : ''}`}>
-        <span>Kein Bild</span>
+      <div
+        className={`product-image product-image--placeholder ${compact ? 'product-image--compact' : ''}`}
+        aria-label="Kein Produktbild verfuegbar"
+      >
+        <span className="product-image__placeholder-icon" aria-hidden="true" />
+        <span>Kein Produktbild</span>
       </div>
     )
   }

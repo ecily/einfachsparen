@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchKeywordOfferSearch } from '../../utils/apiBase'
 import { trackAnalyticsEvent } from '../../utils/analytics'
 import {
@@ -10,7 +10,7 @@ import {
   normalizeRetailerKey,
 } from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
-import { formatRetailerName } from '../../utils/retailers'
+import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDisplayGroup } from '../../utils/retailers'
 
 const KEYWORD_SEARCH_LIMIT = 60
 
@@ -113,19 +113,25 @@ function getOfferSavingsScore(offer) {
 function buildAvailableRetailers(retailers) {
   const seen = new Set()
 
-  return (retailers || [])
+  const availableRetailers = (retailers || [])
     .map((retailer) => {
       const key = getRetailerKey(retailer)
       const label = getRetailerLabel(retailer)
 
-      return { key, label: label || key }
+      return {
+        key,
+        label: label || key,
+        retailerKey: key,
+        retailerName: label || key,
+      }
     })
     .filter((retailer) => {
       if (!retailer.key || seen.has(retailer.key)) return false
       seen.add(retailer.key)
       return true
     })
-    .sort((left, right) => left.label.localeCompare(right.label, 'de-AT'))
+
+  return sortRetailersByDisplayGroup(availableRetailers)
 }
 
 export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListIds, onAddToShoppingList }) {
@@ -471,19 +477,23 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
 
         {marketFilterEnabled ? (
           <div className="keyword-search-market-filter" aria-label="Märkte auswählen">
-            {availableRetailers.map((retailer) => {
+            {availableRetailers.map((retailer, index, retailerList) => {
               const selected = selectedRetailerKeys.includes(retailer.key)
+              const nextRetailer = retailerList[index + 1]
+              const showGroupSeparator = shouldSeparateRetailerGroups(retailer.key, nextRetailer?.key)
 
               return (
-                <button
-                  key={retailer.key}
-                  type="button"
-                  className={`chip keyword-search-market-chip${selected ? ' chip--active' : ''}`}
-                  aria-pressed={selected}
-                  onClick={() => handleToggleRetailer(retailer.key)}
-                >
-                  {retailer.label}
-                </button>
+                <Fragment key={retailer.key}>
+                  <button
+                    type="button"
+                    className={`chip keyword-search-market-chip${selected ? ' chip--active' : ''}`}
+                    aria-pressed={selected}
+                    onClick={() => handleToggleRetailer(retailer.key)}
+                  >
+                    {retailer.label}
+                  </button>
+                  {showGroupSeparator ? <span className="retailer-chip-group-separator" aria-hidden="true" /> : null}
+                </Fragment>
               )
             })}
             {selectedRetailerKeys.length > 0 ? (
