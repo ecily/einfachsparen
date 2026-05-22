@@ -3,7 +3,7 @@ import { SectionCard } from '../layout/SectionCard'
 
 const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
 const MOBILE_BROWSER_NOTICE =
-  'Wir arbeiten gerade an den optimalen Suchergebnissen. Sobald die Datenqualität stabil genug ist, kommt wieder eine neue App-Version. Bis dahin funktioniert kaufklug.at am Handy genauso gut direkt im Browser.'
+  'kaufklug.at funktioniert auch am Handy im Browser. Wir arbeiten gerade mit viel Sorgfalt an der Datenqualität – kostenlos für alle. Für die nächste App-Version nehmen wir uns noch etwas Zeit.'
 
 export function HeroBlock() {
   const appDownload = SHOW_ANDROID_TEST_DOWNLOAD
@@ -105,7 +105,7 @@ export function HeroBlock() {
               letterSpacing: '-0.04em',
             }}
           >
-            Am Handy ist kaufklug am stärksten.
+            Am Handy direkt nutzen
           </h2>
 
           <p style={{ maxWidth: '280px', margin: 0, color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4 }}>

@@ -43,7 +43,7 @@ import { shouldSeparateRetailerGroups } from './utils/retailers'
 
 const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
 const MOBILE_BROWSER_NOTICE =
-  'Wir arbeiten gerade an den optimalen Suchergebnissen. Sobald die Datenqualität stabil genug ist, kommt wieder eine neue App-Version. Bis dahin funktioniert kaufklug.at am Handy genauso gut direkt im Browser.'
+  'kaufklug.at funktioniert auch am Handy im Browser. Wir arbeiten gerade mit viel Sorgfalt an der Datenqualität – kostenlos für alle. Für die nächste App-Version nehmen wir uns noch etwas Zeit.'
 
 function getFriendlyErrorMessage(error, fallback) {
   const status = Number(error?.status || 0)
@@ -171,7 +171,7 @@ function SearchLandingHero() {
             Einkauf am Smartphone
           </p>
           <h2 style={{ fontSize: 'clamp(1.05rem, 2.4vw, 1.35rem)', lineHeight: 1.14, margin: 0 }}>
-            Am Handy schnell nachsehen.
+            Am Handy direkt nutzen
           </h2>
           <p style={{ color: '#5c6658', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
             {MOBILE_BROWSER_NOTICE}
