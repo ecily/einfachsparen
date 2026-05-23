@@ -249,9 +249,6 @@ function TrustAndFaqSection() {
   return (
     <section className="panel faq-section" style={{ display: 'grid', gap: '1rem', marginTop: '1rem', padding: '1rem' }}>
       <div style={{ display: 'grid', gap: '0.45rem' }}>
-        <p className="eyebrow" style={{ margin: 0 }}>
-          Gut zu wissen
-        </p>
         <h2 style={{ margin: 0 }}>Kurz erklärt</h2>
         <p style={{ color: '#5c6658', margin: 0, maxWidth: '48rem' }}>
           kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.
