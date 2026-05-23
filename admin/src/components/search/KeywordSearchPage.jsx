@@ -5,10 +5,10 @@ import {
   flattenRankingOffers,
   getOfferStableId,
   getRankingPagination,
-  getSavingsValue,
   hasKnownSavings,
   mergePaginatedRankingResults,
   normalizeRetailerKey,
+  shouldDisplayUnitPrice,
 } from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
 import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDisplayGroup } from '../../utils/retailers'
@@ -126,11 +126,6 @@ function getOfferRetailerKey(offer) {
   return normalizeKey(getOfferRetailerLabel(offer))
 }
 
-function getOfferSavingsScore(offer) {
-  const savingsValue = getSavingsValue(offer)
-  return savingsValue > 0 ? savingsValue : 0
-}
-
 function normalizeSavingsUnitKey(value) {
   return String(value || '')
     .trim()
@@ -157,6 +152,22 @@ function getOfferSavingsUnit(offer) {
   }
 }
 
+function getOfferComparableUnitPrice(offer) {
+  const amount = Number(offer?.normalizedUnitPrice?.amount)
+
+  if (!shouldDisplayUnitPrice(offer) || !Number.isFinite(amount) || amount <= 0) {
+    return null
+  }
+
+  const unit = getOfferSavingsUnit(offer)
+  if (unit.key === UNKNOWN_SAVINGS_UNIT_KEY) return null
+
+  return {
+    amount,
+    unit,
+  }
+}
+
 function getSavingsUnitSortRank(unitKey) {
   if (unitKey === UNKNOWN_SAVINGS_UNIT_KEY) return Number.MAX_SAFE_INTEGER
 
@@ -169,9 +180,10 @@ function buildSavingsOfferGroups(items) {
   const groupByKey = new Map()
 
   for (const item of items) {
-    const unitKey = item.savingsUnit.key
+    const unit = item.comparableUnitPrice?.unit
+    const unitKey = unit?.key || UNKNOWN_SAVINGS_UNIT_KEY
     const title =
-      unitKey === UNKNOWN_SAVINGS_UNIT_KEY ? 'Weitere belastbare Ersparnisse' : `Ersparnis pro ${item.savingsUnit.label}`
+      unitKey === UNKNOWN_SAVINGS_UNIT_KEY ? 'Weitere belastbare Angebote' : `Vergleichspreis pro ${unit.label}`
 
     if (!groupByKey.has(unitKey)) {
       const group = {
@@ -251,8 +263,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         index,
         retailerKey: getOfferRetailerKey(offer),
         retailerLabel: getOfferRetailerLabel(offer),
-        savingsScore: getOfferSavingsScore(offer),
-        savingsUnit: getOfferSavingsUnit(offer),
+        comparableUnitPrice: getOfferComparableUnitPrice(offer),
         hasSavings: hasKnownSavings(offer),
       }))
       .filter((item) => {
@@ -267,14 +278,21 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         }
 
         if (sortMode === SORT_OPTIONS.savings) {
-          const unitSort = getSavingsUnitSortRank(left.savingsUnit.key) - getSavingsUnitSortRank(right.savingsUnit.key)
+          const leftPrice = left.comparableUnitPrice
+          const rightPrice = right.comparableUnitPrice
+
+          if (leftPrice && !rightPrice) return -1
+          if (!leftPrice && rightPrice) return 1
+          if (!leftPrice && !rightPrice) return left.index - right.index
+
+          const unitSort = getSavingsUnitSortRank(leftPrice.unit.key) - getSavingsUnitSortRank(rightPrice.unit.key)
           if (unitSort !== 0) return unitSort
 
-          const unitLabelSort = left.savingsUnit.label.localeCompare(right.savingsUnit.label, 'de-AT')
+          const unitLabelSort = leftPrice.unit.label.localeCompare(rightPrice.unit.label, 'de-AT')
           if (unitLabelSort !== 0) return unitLabelSort
 
-          const savingsSort = right.savingsScore - left.savingsScore
-          if (savingsSort !== 0) return savingsSort
+          const unitPriceSort = leftPrice.amount - rightPrice.amount
+          if (unitPriceSort !== 0) return unitPriceSort
         }
 
         return left.index - right.index
