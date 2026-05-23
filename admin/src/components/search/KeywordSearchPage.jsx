@@ -399,7 +399,6 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     <div className="keyword-search-page">
       <section className="panel keyword-search-hero">
         <div className="keyword-search-hero__copy">
-          <p className="eyebrow">Angebotssuche</p>
           <h1>Wonach suchst du heute?</h1>
           <p className="subtitle">Suche nach Produkt, Marke oder Kategorie, zum Beispiel Kaffee, Milka oder Waschmittel.</p>
         </div>

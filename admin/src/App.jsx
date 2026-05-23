@@ -153,8 +153,7 @@ function SearchLandingHero() {
             Angebote finden. <span className="hero-headline-accent">Einfach sparen.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
-            Suche Supermarkt- und Drogerie-Angebote in Österreich, merke passende Treffer und nutze kaufklug als
-            Orientierung für deinen Einkauf.
+            Suche Supermarkt- und Drogerie-Angebote in Österreich und nutze kaufklug für deinen Einkauf.
           </p>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (
