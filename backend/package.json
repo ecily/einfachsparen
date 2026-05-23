@@ -35,6 +35,7 @@
     "diagnose:billa-algolia-hit-sample": "node scripts/diagnoseBillaAlgoliaHitSample.js",
     "diagnose:dm-official-site": "node scripts/diagnoseDmOfficialSite.js",
     "diagnose:offer-images": "node scripts/diagnoseOfferImages.js",
+    "diagnose:image-coverage": "node scripts/diagnoseImageCoverage.js",
     "diagnose:launch-coverage-audit": "node scripts/diagnoseLaunchCoverageAudit.js",
     "diagnose:coverage-live-readiness": "node scripts/diagnoseCoverageLiveReadiness.js",
     "diagnose:search-coverage": "node scripts/diagnoseSearchCoverage.js",
