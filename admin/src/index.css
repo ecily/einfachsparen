@@ -3173,32 +3173,20 @@ textarea:focus {
   }
 
   .hero-market-badge {
-    min-height: 1.62rem;
-    padding: 0.28rem 0.46rem;
-    font-size: 0.76rem;
+    min-height: 1.32rem;
+    padding: 0.18rem 0.36rem;
+    font-size: 0.66rem;
   }
 
   .hero-market-strip {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-inline: contain;
-    padding-bottom: 0.08rem;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .hero-market-strip::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap;
+    gap: 0.22rem 0.24rem;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .hero-market-separator {
-    width: 0.58rem;
-    margin: 0 0.04rem;
-  }
-
-  .hero-market-separator::before {
-    height: 1.36rem;
+    display: none;
   }
 
   .search-landing-hero {
