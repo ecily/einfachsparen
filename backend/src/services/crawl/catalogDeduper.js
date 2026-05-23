@@ -201,6 +201,30 @@ function pickBestConditionOffer(offers) {
   return [...offers].sort((left, right) => getConditionScore(right) - getConditionScore(left))[0];
 }
 
+function isPreservableImageUrl(value) {
+  const imageUrl = String(value || '').trim();
+
+  if (!imageUrl || /(?:placeholder|no[-_ ]?image|missing[-_ ]?image|bild[-_ ]?folgt|spacer|transparent|blank)/i.test(imageUrl)) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(imageUrl);
+    return ['http:', 'https:'].includes(parsed.protocol);
+  } catch (error) {
+    return false;
+  }
+}
+
+function pickMergedImageUrl(canonical = {}, sortedOffers = []) {
+  if (isPreservableImageUrl(canonical.imageUrl)) {
+    return String(canonical.imageUrl).trim();
+  }
+
+  const candidate = sortedOffers.find((offer) => isPreservableImageUrl(offer?.imageUrl));
+  return candidate ? String(candidate.imageUrl).trim() : '';
+}
+
 function buildMergedConditionFields(canonical = {}, bestConditionOffer = {}) {
   return {
     benefitType: bestConditionOffer.benefitType || canonical.benefitType || 'unknown',
@@ -336,6 +360,7 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
           'evidenceUrls',
           'sourceTypes',
           'seenInSources',
+          'imageUrl',
           'firstSeenAt',
           'lastSeenAt',
           'dedupeKey',
@@ -381,6 +406,7 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
     const bestStructuredOffer = pickBestStructuredOffer(sorted);
     const bestConditionOffer = pickBestConditionOffer(sorted);
     const mergedConditionFields = buildMergedConditionFields(canonical, bestConditionOffer);
+    const mergedImageUrl = pickMergedImageUrl(canonical, sorted);
     const bestUnitPriceOffer = sorted.find(hasComparableUnitPrice) || canonical;
     const mergedReviewState = buildMergedReviewState({ canonical, bestCategoryOffer });
     const mergedSupportingSources = dedupeSourceEvidence(
@@ -429,6 +455,7 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
             totalComparableAmount: bestStructuredOffer.totalComparableAmount ?? canonical.totalComparableAmount ?? null,
             comparableUnit: bestStructuredOffer.comparableUnit || canonical.comparableUnit || '',
             packageType: bestStructuredOffer.packageType || canonical.packageType || '',
+            imageUrl: mergedImageUrl,
             ...mergedConditionFields,
             normalizedUnitPrice: hasComparableUnitPrice(bestUnitPriceOffer)
               ? bestUnitPriceOffer.normalizedUnitPrice
@@ -483,6 +510,9 @@ module.exports = {
   dedupeOffersAcrossSources,
   _private: {
     buildMergedConditionFields,
+    buildDedupeKey,
+    isPreservableImageUrl,
+    pickMergedImageUrl,
     pickBestConditionOffer,
   },
 };
