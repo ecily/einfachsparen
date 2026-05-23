@@ -6,6 +6,7 @@ import {
   getOfferStableId,
   getRankingPagination,
   getSavingsValue,
+  hasKnownSavings,
   mergePaginatedRankingResults,
   normalizeRetailerKey,
 } from '../../utils/offers'
@@ -20,6 +21,25 @@ const SORT_OPTIONS = {
   retailer: 'retailer',
   savings: 'savings',
 }
+
+const UNKNOWN_SAVINGS_UNIT_KEY = '__unknown__'
+
+const SAVINGS_UNIT_LABELS = {
+  kg: 'kg',
+  g: 'g',
+  '100 g': '100 g',
+  l: 'l',
+  ml: 'ml',
+  '100 ml': '100 ml',
+  stk: 'Stück',
+  stück: 'Stück',
+  stueck: 'Stück',
+  packung: 'Packung',
+  portion: 'Portion',
+  waschgang: 'Waschgang',
+}
+
+const SAVINGS_UNIT_ORDER = ['kg', '100 g', 'g', 'l', '100 ml', 'ml', 'stk', 'stück', 'stueck', 'packung', 'portion', 'waschgang']
 
 function getInitialKeywordQuery() {
   if (typeof window === 'undefined') return ''
@@ -111,6 +131,64 @@ function getOfferSavingsScore(offer) {
   return savingsValue > 0 ? savingsValue : 0
 }
 
+function normalizeSavingsUnitKey(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('de-AT')
+}
+
+function getOfferSavingsUnit(offer) {
+  const candidates = [offer?.normalizedUnitPrice?.unit, offer?.comparableUnit]
+
+  for (const candidate of candidates) {
+    const key = normalizeSavingsUnitKey(candidate)
+    if (!key) continue
+
+    return {
+      key,
+      label: SAVINGS_UNIT_LABELS[key] || String(candidate).trim(),
+    }
+  }
+
+  return {
+    key: UNKNOWN_SAVINGS_UNIT_KEY,
+    label: '',
+  }
+}
+
+function getSavingsUnitSortRank(unitKey) {
+  if (unitKey === UNKNOWN_SAVINGS_UNIT_KEY) return Number.MAX_SAFE_INTEGER
+
+  const rank = SAVINGS_UNIT_ORDER.indexOf(unitKey)
+  return rank === -1 ? SAVINGS_UNIT_ORDER.length : rank
+}
+
+function buildSavingsOfferGroups(items) {
+  const groups = []
+  const groupByKey = new Map()
+
+  for (const item of items) {
+    const unitKey = item.savingsUnit.key
+    const title =
+      unitKey === UNKNOWN_SAVINGS_UNIT_KEY ? 'Weitere belastbare Ersparnisse' : `Ersparnis pro ${item.savingsUnit.label}`
+
+    if (!groupByKey.has(unitKey)) {
+      const group = {
+        key: unitKey,
+        title,
+        offers: [],
+      }
+      groupByKey.set(unitKey, group)
+      groups.push(group)
+    }
+
+    groupByKey.get(unitKey).offers.push(item.offer)
+  }
+
+  return groups
+}
+
 function buildAvailableRetailers(retailers) {
   const seen = new Set()
 
@@ -162,7 +240,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
     () => (marketFilterEnabled ? selectedRetailerKeys : []),
     [marketFilterEnabled, selectedRetailerKeys]
   )
-  const visibleOffers = useMemo(() => {
+  const visibleOfferItems = useMemo(() => {
     if (marketFilterEnabled && activeRetailerKeys.length === 0) return []
 
     const selectedRetailers = new Set(activeRetailerKeys)
@@ -174,8 +252,11 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         retailerKey: getOfferRetailerKey(offer),
         retailerLabel: getOfferRetailerLabel(offer),
         savingsScore: getOfferSavingsScore(offer),
+        savingsUnit: getOfferSavingsUnit(offer),
+        hasSavings: hasKnownSavings(offer),
       }))
       .filter((item) => {
+        if (sortMode === SORT_OPTIONS.savings && !item.hasSavings) return false
         if (!marketFilterEnabled) return true
         return selectedRetailers.has(item.retailerKey)
       })
@@ -186,14 +267,22 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
         }
 
         if (sortMode === SORT_OPTIONS.savings) {
+          const unitSort = getSavingsUnitSortRank(left.savingsUnit.key) - getSavingsUnitSortRank(right.savingsUnit.key)
+          if (unitSort !== 0) return unitSort
+
+          const unitLabelSort = left.savingsUnit.label.localeCompare(right.savingsUnit.label, 'de-AT')
+          if (unitLabelSort !== 0) return unitLabelSort
+
           const savingsSort = right.savingsScore - left.savingsScore
           if (savingsSort !== 0) return savingsSort
         }
 
         return left.index - right.index
       })
-      .map((item) => item.offer)
   }, [activeRetailerKeys, marketFilterEnabled, offers, sortMode])
+  const visibleOffers = useMemo(() => visibleOfferItems.map((item) => item.offer), [visibleOfferItems])
+  const visibleOfferGroups = useMemo(() => buildSavingsOfferGroups(visibleOfferItems), [visibleOfferItems])
+  const showSavingsGroups = sortMode === SORT_OPTIONS.savings && visibleOfferGroups.length > 0
   const needsMarketSelection = marketFilterEnabled && selectedRetailerKeys.length === 0
   const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
@@ -546,7 +635,9 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
                 Angebote für „{submittedQuery}“
               </h2>
               <p>
-                {pagination.totalCount && pagination.totalCount > visibleOffers.length
+                {sortMode === SORT_OPTIONS.savings
+                  ? `${visibleOffers.length} Angebote mit belastbarer Ersparnis angezeigt`
+                  : pagination.totalCount && pagination.totalCount > visibleOffers.length
                   ? `${visibleOffers.length} von ${pagination.totalCount} Angeboten angezeigt`
                   : `${visibleOffers.length} Angebote gefunden`}
               </p>
@@ -555,16 +646,39 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
 
             {visibleOffers.length > 0 ? (
               <>
-                <div className="user-results">
-                  {visibleOffers.map((offer) => (
-                    <OfferCardConsumer
-                      key={offer.id}
-                      offer={offer}
-                      onAddToShoppingList={onAddToShoppingList}
-                      isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
-                    />
-                  ))}
-                </div>
+                {showSavingsGroups ? (
+                  <div className="keyword-search-savings-groups">
+                    {visibleOfferGroups.map((group) => (
+                      <section key={group.key} className="keyword-search-savings-group" aria-label={group.title}>
+                        <div className="keyword-search-savings-group__header">
+                          <h3>{group.title}</h3>
+                          <span>{group.offers.length} Angebote</span>
+                        </div>
+                        <div className="user-results">
+                          {group.offers.map((offer) => (
+                            <OfferCardConsumer
+                              key={offer.id}
+                              offer={offer}
+                              onAddToShoppingList={onAddToShoppingList}
+                              isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="user-results">
+                    {visibleOffers.map((offer) => (
+                      <OfferCardConsumer
+                        key={offer.id}
+                        offer={offer}
+                        onAddToShoppingList={onAddToShoppingList}
+                        isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
+                      />
+                    ))}
+                  </div>
+                )}
                 {pagination.hasMore ? (
                   <div className="load-more-results" role="status" aria-live="polite">
                     <button

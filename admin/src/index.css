@@ -1479,6 +1479,44 @@ a {
   line-height: 1.25;
 }
 
+.keyword-search-savings-groups {
+  display: grid;
+  gap: 1rem;
+}
+
+.keyword-search-savings-group {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.keyword-search-savings-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.58rem 0.75rem;
+  border: 1px solid rgba(31, 90, 75, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.78);
+  color: var(--kk-muted);
+}
+
+.keyword-search-savings-group__header h3 {
+  margin: 0;
+  color: var(--kk-value-text);
+  font-size: 0.92rem;
+  font-weight: 860;
+  letter-spacing: 0;
+}
+
+.keyword-search-savings-group__header span {
+  flex: 0 0 auto;
+  color: var(--kk-muted);
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
 .savings-notice {
   padding: 0.95rem 1rem;
   border-radius: var(--kk-radius-md);
