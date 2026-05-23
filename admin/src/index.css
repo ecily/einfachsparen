@@ -228,8 +228,8 @@ a {
 .page-nav__button {
   position: relative;
   min-height: var(--kk-touch);
-  border: 0;
-  background: transparent;
+  border: 1px solid transparent;
+  background: rgba(255, 252, 247, 0.34);
   color: #4f5a54;
   padding: 0.72rem 1.05rem;
   border-radius: 999px;
@@ -251,6 +251,7 @@ a {
 
 .page-nav__button--active {
   background: linear-gradient(135deg, var(--kk-brand-primary-dark), var(--kk-green-2));
+  border-color: rgba(255, 252, 247, 0.42);
   color: var(--kk-soft);
   box-shadow: 0 12px 24px rgba(31, 90, 75, 0.24);
 }
@@ -702,6 +703,7 @@ a {
 }
 
 .hero-market-badge {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -760,8 +762,8 @@ a {
   margin: 0;
   max-width: 42rem;
   color: var(--kk-muted);
-  font-size: 0.92rem;
-  line-height: 1.48;
+  font-size: clamp(0.78rem, 1.6vw, 0.86rem);
+  line-height: 1.28;
 }
 
 .hero-trust-row {
@@ -1453,14 +1455,14 @@ a {
   width: fit-content;
   max-width: 100%;
   margin: -0.1rem 0 0;
-  padding: 0.38rem 0.62rem;
-  border: 1px solid var(--kk-condition-border-soft);
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(128, 112, 88, 0.18);
   border-radius: 999px;
-  background: var(--kk-condition-bg-soft);
-  color: var(--kk-condition-text);
-  font-size: 0.93rem;
-  font-weight: 760;
-  line-height: 1.45;
+  background: rgba(255, 252, 247, 0.72);
+  color: var(--kk-muted);
+  font-size: 0.84rem;
+  font-weight: 720;
+  line-height: 1.25;
 }
 
 .savings-notice {
@@ -2583,6 +2585,11 @@ a {
   font-weight: 900;
 }
 
+.page-nav__button:not(.page-nav__button--active) .page-nav__count {
+  background: var(--kk-brand-primary-soft);
+  color: var(--kk-brand-primary-dark);
+}
+
 .shopping-check__saving strong {
   color: var(--kk-value-text);
   font-size: clamp(2rem, 6vw, 3.2rem);
@@ -3087,7 +3094,7 @@ textarea:focus {
   .page-nav {
     top: 0.45rem;
     display: grid;
-    grid-template-columns: 2.5rem 4.2rem 5.2rem 4.2rem;
+    grid-template-columns: 2.5rem minmax(4.35rem, 1fr) minmax(4.95rem, 1.12fr) minmax(4.55rem, 1fr);
     justify-content: start;
     gap: 0.3rem;
     align-items: stretch;
@@ -3118,13 +3125,20 @@ textarea:focus {
   }
 
   .page-nav__button {
-    font-size: 0.94rem;
+    font-size: 0.86rem;
     flex: 1 1 0;
     min-width: 0;
     width: 100%;
     justify-self: stretch;
     overflow: hidden;
     white-space: normal;
+    box-shadow: inset 0 0 0 1px rgba(22, 33, 24, 0.04);
+  }
+
+  .page-nav__button--active {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 252, 247, 0.28),
+      0 8px 18px rgba(31, 90, 75, 0.22);
   }
 
   .panel {
@@ -3167,7 +3181,10 @@ textarea:focus {
   .hero-market-strip {
     flex-wrap: nowrap;
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
     padding-bottom: 0.08rem;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
 
@@ -3240,8 +3257,58 @@ textarea:focus {
   }
 
   .market-check-note {
+    width: fit-content;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    line-height: 1.22;
+  }
+
+  .hero-trust-line {
+    font-size: 0.76rem;
+    line-height: 1.22;
+  }
+
+  .selection-block > .chip-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.42rem;
+  }
+
+  .selection-block > .chip-grid .retailer-chip {
     width: 100%;
-    border-radius: 1rem;
+    min-height: 3.35rem;
+    align-content: center;
+    gap: 0.24rem 0.36rem;
+    padding: 0.48rem 0.56rem;
+    border-radius: 0.95rem;
+  }
+
+  .selection-block > .chip-grid .retailer-chip__label {
+    overflow-wrap: normal;
+  }
+
+  .selection-block > .chip-grid .retailer-chip__meta {
+    flex-basis: 100%;
+    margin-left: 1rem;
+    font-size: 0.72rem;
+    line-height: 1.1;
+  }
+
+  .selection-block > .chip-grid .retailer-chip__meta::before {
+    content: none;
+  }
+
+  .selection-block > .chip-grid .retailer-chip-group-separator {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 0.28rem;
+    margin: 0;
+  }
+
+  .selection-block > .chip-grid .retailer-chip-group-separator::before {
+    width: min(5rem, 32%);
+    height: 2px;
+    background: rgba(22, 33, 24, 0.18);
   }
 
   .browse-page .selection-block,
@@ -3597,8 +3664,8 @@ textarea:focus {
   }
 
   .page-nav__button {
-    padding: 0.5rem 0.3rem;
-    font-size: 0.68rem;
+    padding: 0.52rem 0.28rem;
+    font-size: 0.78rem;
   }
 
   .page-nav__button--small {
@@ -3719,8 +3786,8 @@ textarea:focus {
   }
 
   .page-nav__button {
-    padding: 0.46rem 0.24rem;
-    font-size: 0.64rem;
+    padding: 0.46rem 0.18rem;
+    font-size: 0.72rem;
   }
 
   .panel {
@@ -3785,7 +3852,11 @@ textarea:focus {
   }
 
   .page-nav__count {
-    display: none;
+    min-width: 1.08rem;
+    height: 1.08rem;
+    margin-left: 0.2rem;
+    padding: 0 0.22rem;
+    font-size: 0.68rem;
   }
 }
 

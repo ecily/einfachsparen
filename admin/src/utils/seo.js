@@ -253,6 +253,7 @@ export function updateSeoMetadata(activePage) {
 }
 
 export function getInitialPageFromPathname(pathname) {
+  if (/^\/liste\/?$/.test(pathname)) return 'shopping-list'
   if (pathname.includes('/liste/')) return 'shared-shopping-list'
   if (pathname.includes('ecily_web')) return 'diagnostics'
   if (pathname.includes('impressum')) return 'impressum'

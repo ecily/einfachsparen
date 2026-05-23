@@ -104,9 +104,18 @@ export function buildShoppingListItemFromSnapshot(item) {
 }
 
 export function getShoppingListItemSavingsInfo(item) {
+  const derivedSavingsValue = getSavingsValue(item)
+
+  if (derivedSavingsValue > 0) {
+    return {
+      type: 'known',
+      amount: derivedSavingsValue,
+      isApproximate: Boolean(item?.savings?.isApproximate || item?.referencePrice?.isApproximate),
+    }
+  }
+
   const savingsValue = Number(item?.savingsAmount)
   const hasTrustedSavings =
-    item?.savingsSource === SAVINGS_SOURCE_BACKEND_REFERENCE &&
     item?.hasKnownSavings === true &&
     Number.isFinite(savingsValue) &&
     savingsValue > 0

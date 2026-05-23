@@ -96,24 +96,34 @@ function getItemQuantity(quantities, itemId) {
   return Number.isFinite(quantity) && quantity > 0 ? Math.min(Math.round(quantity), 99) : 1
 }
 
+function toCents(amount) {
+  const numericAmount = Number(amount)
+
+  return Number.isFinite(numericAmount) ? Math.round(numericAmount * 100) : 0
+}
+
 function getItemsTotal(items, quantities) {
-  return (items || []).reduce((sum, item) => {
+  const cents = (items || []).reduce((sum, item) => {
     const price = Number(item?.priceCurrent?.amount)
 
     if (!Number.isFinite(price)) {
       return sum
     }
 
-    return sum + price * getItemQuantity(quantities, getShoppingListItemId(item))
+    return sum + toCents(price) * getItemQuantity(quantities, getShoppingListItemId(item))
   }, 0)
+
+  return cents / 100
 }
 
 function getKnownSavingsTotal(items, quantities) {
-  return (items || []).reduce((sum, item) => {
+  const cents = (items || []).reduce((sum, item) => {
     const savings = getShoppingListItemSavingsInfo(item)
 
-    return savings.type === 'known' ? sum + savings.amount * getItemQuantity(quantities, getShoppingListItemId(item)) : sum
+    return savings.type === 'known' ? sum + toCents(savings.amount) * getItemQuantity(quantities, getShoppingListItemId(item)) : sum
   }, 0)
+
+  return cents / 100
 }
 
 function getApproximateSavingsCount(items = []) {

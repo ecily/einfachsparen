@@ -97,6 +97,8 @@ function SearchLandingHero() {
     ['lidl', 'Lidl'],
     ['dm', 'dm'],
     ['bipa', 'BIPA'],
+    ['pagro', 'PAGRO'],
+    ['penny', 'PENNY'],
   ]
   const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung', 'Bedingungen sichtbar']
 
