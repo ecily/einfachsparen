@@ -4,7 +4,12 @@ const {
   normalizeTitleForMatch,
   buildSourceEvidence,
 } = require('./sourceEvidence');
-const { buildPdfSourceMetadata, normalizePdfText } = require('./pdfOfferParsing');
+const {
+  PDF_CATEGORY_MISMATCH_REVIEW_REASON,
+  buildPdfSourceMetadata,
+  detectPdfCategoryMismatchReviewSignal,
+  normalizePdfText,
+} = require('./pdfOfferParsing');
 const {
   determineOfferCategory,
   determineOfferSubcategory,
@@ -853,6 +858,21 @@ function normalizeSparPdfCandidateToOffer({
     categoryPrimary,
     categorySecondary,
   ].join(' ');
+  const categoryMismatchSignal = detectPdfCategoryMismatchReviewSignal({
+    sourceType: SOURCE_TYPE,
+    sourceKey,
+    title: candidate.title,
+    brand: candidate.brand,
+    quantityText: candidate.quantityText,
+    categoryPrimary,
+    categorySecondary,
+    categoryKey,
+  });
+
+  if (categoryMismatchSignal && !issues.includes(PDF_CATEGORY_MISMATCH_REVIEW_REASON)) {
+    issues.push(PDF_CATEGORY_MISMATCH_REVIEW_REASON);
+  }
+
   const titleNormalized = normalizeTitleForMatch(candidate.title);
   const comparisonSignature = normalizeTitleForMatch([
     candidate.brand,

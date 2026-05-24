@@ -3,6 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const {
+  PDF_CATEGORY_MISMATCH_REVIEW_REASON,
+} = require('../src/services/crawl/pdfOfferParsing');
+const {
   PARSER_VERSION,
   SOURCE_TYPE,
   extractSparPdfCandidates,
@@ -291,6 +294,44 @@ test('normalizes SPAR PDF beer candidates as beer with format metadata', () => {
   assert.equal(stored.retailerKey, 'eurospar');
   assert.equal(stored.rawFacts.sourceKey, 'eurospar-official-flyer-pdf');
   assert.match(stored.searchText, /bier/);
+});
+
+test('keeps SPAR PDF offers with strong category mismatch and marks review reason', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-20T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates: [
+        {
+          id: 'mismatch-1',
+          page: 2,
+          productKind: 'beer',
+          categoryPrimary: 'Getraenke',
+          categorySecondary: 'Bier',
+          categoryKey: 'bier',
+          title: 'Schokolade versch. Sorten',
+          brand: '',
+          price: 16.80,
+          quantityText: '250 g',
+          rawText: 'Schokolade versch. Sorten 250 g 16,80',
+          comparisonSafe: true,
+        },
+      ],
+    },
+    source: source('eurospar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/eurospar/260521-1-flugblatt-kw-21/getPdf.ashx',
+  });
+
+  assert.ok(offer);
+  assert.equal(offer.title, 'Schokolade versch. Sorten');
+  assert.equal(offer.categorySecondary, 'Bier');
+  assert.ok(offer.reviewReasons.includes(PDF_CATEGORY_MISMATCH_REVIEW_REASON));
+  assert.ok(offer.quality.issues.includes(PDF_CATEGORY_MISMATCH_REVIEW_REASON));
 });
 
 test('normalizes relative image URLs and keeps offers when images are missing', () => {

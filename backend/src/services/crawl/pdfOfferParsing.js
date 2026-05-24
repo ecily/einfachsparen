@@ -1,5 +1,7 @@
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
 
+const PDF_CATEGORY_MISMATCH_REVIEW_REASON = 'pdf_category_mismatch_strong';
+
 const DEFAULT_BAD_LINE_PATTERNS = [
   /penny\.at|billa\.at|spar\.at|hofer\.at|lidl\.at|dm\.at|bipa\.at/i,
   /impressum|medieninhaber|herausgeber|druck- und satzfehler/i,
@@ -215,7 +217,142 @@ function buildPdfSourceMetadata({
   };
 }
 
+function normalizeReviewText(value) {
+  return normalizeTitleForMatch(value)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function textMatchesAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function detectPdfProductGroup({ title = '', brand = '', quantityText = '' } = {}) {
+  const text = normalizeReviewText([title, brand, quantityText].join(' '));
+
+  if (!text) return '';
+
+  if (textMatchesAny(text, [
+    /\b(schokolade|milka|lindt|praline|pralinen|nougat|bonbon|zuckerl|keks|kekse|waffel|gummibaer|gummibaeren|fruchtgummi|suesswaren|susswaren)\b/,
+  ])) {
+    return 'sweets';
+  }
+
+  if (textMatchesAny(text, [
+    /\b(bier|maerzen|marzen|pils|radler|helles|flaschenbier|dosenbier|goesser|gosser|puntigamer|hirter|ottakringer|schwechater|stiegl|zipfer|wieselburger)\b/,
+  ])) {
+    return 'beer';
+  }
+
+  if (textMatchesAny(text, [
+    /\b(waschmittel|vollwaschmittel|colorwaschmittel|waschpulver|waschcaps|weichspueler|weichspuler|ariel|persil|coral|fewa)\b/,
+  ])) {
+    return 'laundry';
+  }
+
+  if (textMatchesAny(text, [
+    /\b(zahnpasta|zahncreme|zahnbuerste|zahnburste|mundspuelung|mundspulung|duschgel|shampoo|deo|deodorant|haarkur|spuelung|spulung|bodylotion)\b/,
+  ])) {
+    return 'hygiene';
+  }
+
+  if (textMatchesAny(text, [
+    /\b(tierfutter|katzenfutter|hundefutter|katze|katzen|hund|hunde|whiskas|gourmet perle|gourmet gold|perfect fit|sheba|pedigree|schmackos)\b/,
+  ])) {
+    return 'pet';
+  }
+
+  return '';
+}
+
+function detectCategoryGroup({ categoryPrimary = '', categorySecondary = '', categoryKey = '' } = {}) {
+  const text = normalizeReviewText([categoryPrimary, categorySecondary, categoryKey].join(' '));
+
+  if (!text) return '';
+  if (/\bbier\b/.test(text)) return 'beer';
+  if (/\b(suesswaren|susswaren|knabbereien)\b/.test(text)) return 'sweets';
+  if (/\b(waschmittel|reiniger|haushalt)\b/.test(text)) return 'laundry';
+  if (/\b(drogerie|hygiene|koerperpflege|korperpflege|zahnpflege|mund|haar)\b/.test(text)) return 'hygiene';
+  if (/\b(tierbedarf|katzenfutter|hundefutter|tiernahrung)\b/.test(text)) return 'pet';
+  if (/\b(getraenke|getranke|softdrinks|energy|wasser|saefte|safte)\b/.test(text)) return 'beverage';
+  if (/\blebensmittel\b/.test(text)) return 'food';
+
+  return '';
+}
+
+function isOfficialPdfOfferSource(offer = {}) {
+  const sourceText = normalizeReviewText([
+    offer.sourceType,
+    offer.sourceKey,
+    offer.sourceKind,
+    offer.rawFacts?.sourceType,
+    offer.rawFacts?.sourceKind,
+    offer.rawFacts?.sourceKey,
+    offer.rawFacts?.sourceMetadata?.sourceKind,
+    offer.rawFacts?.sourceMetadata?.sourceKey,
+  ].join(' '));
+
+  return /\b(?:spar|penny)-official-[a-z-]*pdf\b/.test(sourceText)
+    || /\bofficial\b.*\bpdf\b/.test(sourceText)
+    || /\bpdf\b.*\bofficial\b/.test(sourceText);
+}
+
+function detectPdfCategoryMismatchReviewSignal(offer = {}) {
+  if (!isOfficialPdfOfferSource(offer)) {
+    return null;
+  }
+
+  const productGroup = detectPdfProductGroup(offer);
+  const categoryGroup = detectCategoryGroup(offer);
+
+  if (!productGroup || !categoryGroup) {
+    return null;
+  }
+
+  const compatibleGroups = {
+    sweets: new Set(['sweets', 'food']),
+    beer: new Set(['beer', 'beverage']),
+    laundry: new Set(['laundry', 'hygiene']),
+    hygiene: new Set(['hygiene']),
+    pet: new Set(['pet']),
+  };
+
+  if (compatibleGroups[productGroup]?.has(categoryGroup)) {
+    return null;
+  }
+
+  const strongMismatchPairs = new Set([
+    'sweets:beer',
+    'sweets:beverage',
+    'beer:sweets',
+    'beer:hygiene',
+    'beer:laundry',
+    'beer:pet',
+    'laundry:food',
+    'laundry:beverage',
+    'laundry:beer',
+    'hygiene:food',
+    'hygiene:beverage',
+    'hygiene:beer',
+    'pet:beer',
+    'pet:sweets',
+    'pet:beverage',
+  ]);
+  const pair = `${productGroup}:${categoryGroup}`;
+
+  if (!strongMismatchPairs.has(pair)) {
+    return null;
+  }
+
+  return {
+    reason: PDF_CATEGORY_MISMATCH_REVIEW_REASON,
+    productGroup,
+    categoryGroup,
+  };
+}
+
 module.exports = {
+  PDF_CATEGORY_MISMATCH_REVIEW_REASON,
   normalizePdfText,
   parsePdfPriceAmount,
   hasPdfPriceSignal,
@@ -224,4 +361,5 @@ module.exports = {
   validatePdfOfferCandidate,
   summarizeRejections,
   buildPdfSourceMetadata,
+  detectPdfCategoryMismatchReviewSignal,
 };

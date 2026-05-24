@@ -11,6 +11,8 @@ const {
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const {
+  PDF_CATEGORY_MISMATCH_REVIEW_REASON,
+  detectPdfCategoryMismatchReviewSignal,
   parsePdfPriceAmount,
   isBadPdfLine,
   hasPlausibleProductTitle,
@@ -712,6 +714,20 @@ function normalizePennyPdfCandidateToOffer({
 
   if (categoryPrimary === 'Sonstiges' || categoryDecision.needsReview) {
     issues.push(...(categoryDecision.reviewReasons || ['Kategorie aus PDF unsicher']));
+  }
+
+  const categoryMismatchSignal = detectPdfCategoryMismatchReviewSignal({
+    sourceType: 'penny-official-pdf',
+    sourceKey: PENNY_PDF_SOURCE_KEY,
+    title: candidate.title,
+    quantityText: candidate.quantityText,
+    categoryPrimary,
+    categorySecondary,
+    categoryKey,
+  });
+
+  if (categoryMismatchSignal && !issues.includes(PDF_CATEGORY_MISMATCH_REVIEW_REASON)) {
+    issues.push(PDF_CATEGORY_MISMATCH_REVIEW_REASON);
   }
 
   const titleNormalized = normalizeForAudit(candidate.title);
