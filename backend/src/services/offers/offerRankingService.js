@@ -3340,6 +3340,36 @@ function haveSameVisibleQuantity(left, right) {
   return Boolean(leftText && leftText === rightText);
 }
 
+function hasBrokenVisibleQuantity(offer) {
+  const rawText = normalizeSearchText(offer?.quantityText);
+
+  if (/\bundefined\b|\bnan\b/.test(rawText)) {
+    return true;
+  }
+
+  return !getStructuredQuantitySignature(offer) && !normalizeVisibleQuantityText(offer?.quantityText);
+}
+
+function hasSimpleVisiblePackQuantity(offer) {
+  if (hasBrokenVisibleQuantity(offer)) {
+    return false;
+  }
+
+  const text = normalizeVisibleQuantityText(offer?.quantityText);
+
+  if (/^1\s+(?:flasche|packung|stueck)$/.test(text)) {
+    return true;
+  }
+
+  const unitValue = Number(offer?.unitValue);
+  const total = Number(offer?.totalComparableAmount);
+  const unitType = normalizeQuantityUnit(offer?.unitType || offer?.comparableUnit || offer?.normalizedUnitPrice?.unit || '');
+
+  return unitValue === 1
+    && (!Number.isFinite(total) || total === 1)
+    && ['flasche', 'packung', 'stueck'].includes(unitType);
+}
+
 function getOfferScopeKey(offer) {
   const formats = Array.isArray(offer?.appliesToRetailerFormats)
     ? offer.appliesToRetailerFormats
@@ -4099,7 +4129,9 @@ function hasSameVisibleCardFingerprint(left, right) {
   }
 
   if (!haveSameVisibleQuantity(left, right)) {
-    return false;
+    if (!hasSameBrokenQuantityVisibleCardFingerprint(left, right)) {
+      return false;
+    }
   }
 
   if (!haveSameVisibleCardValidity(left, right)) {
@@ -4107,6 +4139,39 @@ function hasSameVisibleCardFingerprint(left, right) {
   }
 
   return haveSameVisibleCardConditions(left, right);
+}
+
+function hasSameBrokenQuantityVisibleCardFingerprint(left, right) {
+  const sourceType = getOfferSourceType(left);
+  const sameSourceType = sourceType && sourceType === getOfferSourceType(right);
+
+  if (!sameSourceType || sourceType !== 'aktionsfinder-json') {
+    return false;
+  }
+
+  const leftTitle = normalizeSearchText(left?.titleNormalized || left?.title);
+  const rightTitle = normalizeSearchText(right?.titleNormalized || right?.title);
+
+  if (!leftTitle || leftTitle !== rightTitle) {
+    return false;
+  }
+
+  if (getOfferVariantKey(left) !== getOfferVariantKey(right)) {
+    return false;
+  }
+
+  if (!haveSameVisibleCardValidity(left, right) || !haveSameVisibleCardConditions(left, right)) {
+    return false;
+  }
+
+  const leftBroken = hasBrokenVisibleQuantity(left);
+  const rightBroken = hasBrokenVisibleQuantity(right);
+
+  if (leftBroken === rightBroken) {
+    return false;
+  }
+
+  return leftBroken ? hasSimpleVisiblePackQuantity(right) : hasSimpleVisiblePackQuantity(left);
 }
 
 function hasUsableOfferPrice(offer) {

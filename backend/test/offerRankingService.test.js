@@ -3840,6 +3840,189 @@ test('visible card dedupe only tolerates broken quantity text when structured qu
   assert.equal(unsafeResult.offers.length, 2);
 });
 
+function arielDmAktionsfinderOffer(overrides = {}) {
+  return offer({
+    title: 'Ariel Waschmittel Fluessig div. Sorten 40 WL dm 1 Flasche',
+    titleNormalized: 'ariel waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    retailerKey: 'dm',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 11.65 },
+    quantityText: '1 flasche',
+    unitValue: 1,
+    unitType: 'flasche',
+    totalComparableAmount: 1,
+    comparableUnit: 'flasche',
+    normalizedUnitPrice: { amount: 11.65, unit: 'flasche', comparable: true },
+    conditionsText: '',
+    customerProgramRequired: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+    validFrom: new Date('2026-04-30T00:00:00Z'),
+    validTo: new Date('2026-06-02T00:00:00Z'),
+    imageUrl: 'https://example.test/ariel.jpg',
+    ...overrides,
+  });
+}
+
+test('visible card dedupe collapses same-source duplicate when exactly one quantity is broken and the other is a simple pack quantity', () => {
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'ariel-broken',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+  });
+  const clean = arielDmAktionsfinderOffer({ _id: 'ariel-clean' });
+  const result = dedupeVisibleCardResponseOffers([broken, clean], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0]._id, 'ariel-clean');
+});
+
+test('visible card broken-quantity tolerance keeps price variants visible', () => {
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'ariel-broken',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+  });
+  const otherPrice = arielDmAktionsfinderOffer({
+    _id: 'ariel-other-price',
+    priceCurrent: { amount: 19.99 },
+    normalizedUnitPrice: { amount: 19.99, unit: 'flasche', comparable: true },
+  });
+  const result = dedupeVisibleCardResponseOffers([broken, otherPrice], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
+test('visible card broken-quantity tolerance keeps different retailers visible', () => {
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'dm-broken',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+  });
+  const otherRetailer = arielDmAktionsfinderOffer({ _id: 'bipa-clean', retailerKey: 'bipa' });
+  const result = dedupeVisibleCardResponseOffers([broken, otherRetailer], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
+test('visible card broken-quantity tolerance keeps different sources visible', () => {
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'ariel-broken',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+  });
+  const otherSource = arielDmAktionsfinderOffer({
+    _id: 'ariel-other-source',
+    sourceType: 'wogibtswas-html',
+  });
+  const result = dedupeVisibleCardResponseOffers([broken, otherSource], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
+test('visible card broken-quantity tolerance does not collapse official source offers', () => {
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'official-broken',
+    sourceType: 'dm-official-product-search',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+  });
+  const clean = arielDmAktionsfinderOffer({
+    _id: 'official-clean',
+    sourceType: 'dm-official-product-search',
+  });
+  const result = dedupeVisibleCardResponseOffers([broken, clean], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
+test('visible card broken-quantity tolerance keeps different conditions visible', () => {
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'ariel-broken',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+  });
+  const conditional = arielDmAktionsfinderOffer({
+    _id: 'ariel-condition',
+    conditionsText: 'nur mit App',
+    customerProgramRequired: true,
+  });
+  const result = dedupeVisibleCardResponseOffers([broken, conditional], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
+test('visible card broken-quantity tolerance keeps different validity visible', () => {
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'ariel-broken',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false },
+  });
+  const otherValidity = arielDmAktionsfinderOffer({
+    _id: 'ariel-other-validity',
+    validTo: new Date('2026-06-09T00:00:00Z'),
+  });
+  const result = dedupeVisibleCardResponseOffers([broken, otherValidity], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
+test('visible card broken-quantity tolerance keeps real quantity variants visible', () => {
+  const oneBottle = arielDmAktionsfinderOffer({ _id: 'ariel-one', quantityText: '1 flasche' });
+  const twoBottles = arielDmAktionsfinderOffer({
+    _id: 'ariel-two',
+    quantityText: '2 flaschen',
+    unitValue: 2,
+    totalComparableAmount: 2,
+    normalizedUnitPrice: { amount: 5.825, unit: 'flasche', comparable: true },
+  });
+  const result = dedupeVisibleCardResponseOffers([oneBottle, twoBottles], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
+test('visible card broken-quantity tolerance does not change non-broken quantity behavior', () => {
+  const bottle = arielDmAktionsfinderOffer({ _id: 'ariel-bottle', quantityText: '1 flasche' });
+  const pack = arielDmAktionsfinderOffer({
+    _id: 'ariel-pack',
+    quantityText: '1 packung',
+    unitType: 'packung',
+    comparableUnit: 'packung',
+    normalizedUnitPrice: { amount: 11.65, unit: 'packung', comparable: true },
+  });
+  const result = dedupeVisibleCardResponseOffers([bottle, pack], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 2);
+});
+
 [
   ['billa', 'billa-official-algolia'],
   ['billa-plus', 'billa-official-algolia'],
