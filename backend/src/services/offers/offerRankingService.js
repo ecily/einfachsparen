@@ -2793,6 +2793,14 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
   const spread = safelyComparable && worstUnitPrice && bestUnitPrice && worstUnitPrice !== bestUnitPrice
     ? (normalizedAmount - bestUnitPrice) / (worstUnitPrice - bestUnitPrice)
     : 0;
+  const publicNormalizedUnitPrice = safelyComparable
+    ? offer.normalizedUnitPrice
+    : {
+      amount: null,
+      unit: '',
+      comparable: false,
+      confidence: Math.min(Number(offer?.normalizedUnitPrice?.confidence || 0), 0.4),
+    };
 
   return {
     id: offer.id || offer._id,
@@ -2837,7 +2845,7 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     totalComparableAmount: offer.totalComparableAmount ?? null,
     comparableUnit: offer.comparableUnit || '',
     packageType: offer.packageType || '',
-    normalizedUnitPrice: offer.normalizedUnitPrice,
+    normalizedUnitPrice: publicNormalizedUnitPrice,
     priceCurrent: offer.priceCurrent,
     priceReference: offer.priceReference,
     priceReferenceSource: offer.priceReferenceSource || '',

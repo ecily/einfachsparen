@@ -4285,3 +4285,62 @@ test('ranking response base slices cache hits without changing order or overlap'
   assert.equal(firstPage.rankedOffers[0].title, 'Waschmittel 0');
   assert.equal(secondPage.rankedOffers[0].title, 'Waschmittel 60');
 });
+
+test('ranked offer response hides unsafe stored technical unit prices', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'parkside-drill',
+    title: 'PARKSIDE Akku-Bohrschrauber, 20 V',
+    retailerKey: 'lidl',
+    sourceType: 'lidl-official-flyer-api',
+    priceCurrent: { amount: 24.99, currency: 'EUR' },
+    quantityText: '',
+    comparableUnit: '',
+    normalizedUnitPrice: {
+      amount: 24990,
+      unit: 'kg',
+      comparable: false,
+      confidence: 0.4,
+    },
+    quality: {
+      comparisonSafe: false,
+    },
+  }), 24.99, 24.99);
+
+  assert.deepEqual(ranked.normalizedUnitPrice, {
+    amount: null,
+    unit: '',
+    comparable: false,
+    confidence: 0.4,
+  });
+  assert.equal(ranked.priceGapPercent, 0);
+});
+
+test('ranked offer response keeps safely comparable unit prices visible', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'coffee',
+    title: 'Kaffee 1 kg',
+    retailerKey: 'lidl',
+    priceCurrent: { amount: 7.99, currency: 'EUR' },
+    quantityText: '1 kg',
+    unitValue: 1,
+    unitType: 'kg',
+    totalComparableAmount: 1,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: {
+      amount: 7.99,
+      unit: 'kg',
+      comparable: true,
+      confidence: 0.9,
+    },
+    quality: {
+      comparisonSafe: true,
+    },
+  }), 7.99, 7.99);
+
+  assert.deepEqual(ranked.normalizedUnitPrice, {
+    amount: 7.99,
+    unit: 'kg',
+    comparable: true,
+    confidence: 0.9,
+  });
+});

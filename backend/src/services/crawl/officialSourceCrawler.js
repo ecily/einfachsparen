@@ -481,10 +481,10 @@ function buildOfficialNormalizedUnitPrice({ priceAmount, quantityText }) {
 
 function buildUnitPriceFromLabel(label, currentPrice) {
   const text = sanitizeWhitespace(label);
-  const slashUnitMatch = text.match(/([\d,.]+)\s*\/\s*(?:(\d+(?:[.,]\d+)?)\s*)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stuck|stueck|stk|waschgang)\b/i);
+  const slashUnitMatch = text.match(/([\d,.]+)\s*(?:\u20ac|eur|euro)?\s*\/\s*(?:(\d+(?:[.,]\d+)?)\s*)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stuck|stueck|stk|waschgang)\b/i);
   const match = text.match(/(\d+(?:[.,]\d+)?)\s*(?:per\s+)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stuck|stueck|stk|waschgang)\s*(?:=|:)?\s*(?:€|eur)?\s*([\d,.]+)/i);
 
-  if (!match && slashUnitMatch) {
+  if (slashUnitMatch) {
     let amount = parseNumericAmount(slashUnitMatch[1]);
     const basisQuantity = parseNumericAmount(slashUnitMatch[2] || '1') || 1;
     const unit = normalizeUnitFromText(slashUnitMatch[3]);

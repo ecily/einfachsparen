@@ -1654,6 +1654,9 @@ test('Lidl flyer API normalizer maps explicit base price but ignores technical q
   const drBeckmann = normalizeLidlFlyerProduct({
     description: 'Nur gültig mit Lidl Plus Spuelmaschinenreiniger: 60 g (1 kg = 41.50)',
   });
+  const perKg = normalizeLidlFlyerProduct({
+    description: 'Spuelmaschinenreiniger: 60 g 41.50 \u20ac/kg',
+  });
   const parkside = normalizeLidlFlyerProduct({
     title: 'PARKSIDE Akku-Bohrschrauber, 20 V',
     brand: 'PARKSIDE',
@@ -1666,14 +1669,25 @@ test('Lidl flyer API normalizer maps explicit base price but ignores technical q
     price: '19.99',
     description: 'Mit 5 hoehenverstellbaren Boeden. Belastung: je Boden: max. 160 kg.',
   });
+  const cable = normalizeLidlFlyerProduct({
+    title: 'PARKSIDE Verlaengerungskabel',
+    brand: 'PARKSIDE',
+    price: '9.99',
+    description: 'Robustes Outdoor-Kabel, 50 m Reichweite.',
+  });
 
   assert.equal(drBeckmann.normalizedUnitPrice.amount, 41.5);
   assert.equal(drBeckmann.normalizedUnitPrice.unit, 'kg');
   assert.equal(drBeckmann.normalizedUnitPrice.comparable, true);
+  assert.equal(perKg.normalizedUnitPrice.amount, 41.5);
+  assert.equal(perKg.normalizedUnitPrice.unit, 'kg');
+  assert.equal(perKg.normalizedUnitPrice.comparable, true);
   assert.equal(parkside.normalizedUnitPrice.comparable, false);
   assert.equal(parkside.normalizedUnitPrice.amount, null);
   assert.equal(shelf.normalizedUnitPrice.comparable, false);
   assert.equal(shelf.normalizedUnitPrice.amount, null);
+  assert.equal(cable.normalizedUnitPrice.comparable, false);
+  assert.equal(cable.normalizedUnitPrice.amount, null);
 });
 
 function lidlCard(product = {}) {
