@@ -5,7 +5,12 @@ const RetailerCategoryOfferCache = require('../../models/RetailerCategoryOfferCa
 const RankingResultCache = require('../../models/RankingResultCache');
 const crypto = require('node:crypto');
 const { computeOfferSavings } = require('./promotionMath');
-const { SEARCH_TOKEN_VERSION, buildQuerySearchTokens, repairGermanSearchTextEncoding } = require('./searchTokens');
+const {
+  SEARCH_TOKEN_VERSION,
+  STOPWORDS: SEARCH_TOKEN_STOPWORDS,
+  buildQuerySearchTokens,
+  repairGermanSearchTextEncoding,
+} = require('./searchTokens');
 const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
@@ -23,6 +28,7 @@ const OFFER_RANKING_FIELD_LIST = [
   'title',
   'titleNormalized',
   'brand',
+  'description',
   'offerType',
   'searchTokens',
   'searchTokenVersion',
@@ -105,7 +111,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -548,6 +554,167 @@ function expandScoringQueryTokens(tokens = []) {
   }
 
   return [...expanded];
+}
+
+const TERM_COVERAGE_STOPWORD_ALLOWLIST = new Set([
+  'dose',
+]);
+
+function buildMeaningfulQueryTerms(query) {
+  const seen = new Set();
+  const terms = [];
+
+  for (const token of tokenizeSearchText(query)) {
+    const normalizedToken = token === 'ol' ? 'oel' : token;
+
+    if (
+      normalizedToken.length < 3 ||
+      /^\d+$/.test(normalizedToken) ||
+      (SEARCH_TOKEN_STOPWORDS.has(normalizedToken) && !TERM_COVERAGE_STOPWORD_ALLOWLIST.has(normalizedToken))
+    ) {
+      continue;
+    }
+
+    if (!seen.has(normalizedToken)) {
+      seen.add(normalizedToken);
+      terms.push(normalizedToken);
+    }
+  }
+
+  return terms;
+}
+
+function buildTermCoverageTokens(values = []) {
+  return tokenizeSearchText(values.filter(Boolean).join(' '));
+}
+
+function tokenMatchesCoverageTerm(fieldToken, queryTerm) {
+  if (tokenMatchesQueryToken(fieldToken, queryTerm, { allowPrefix: true })) {
+    return true;
+  }
+
+  return queryTerm.length >= 5 &&
+    fieldToken.length > queryTerm.length &&
+    fieldToken.length <= queryTerm.length + 14 &&
+    fieldToken.endsWith(queryTerm);
+}
+
+function hasTermCoverageMatch(fieldTokens, queryTerm) {
+  return fieldTokens.some((fieldToken) => tokenMatchesCoverageTerm(fieldToken, queryTerm));
+}
+
+function buildCautiousQueryTermVariants(queryTerm) {
+  return buildQuerySearchTokens(queryTerm)
+    .filter((token) => token !== queryTerm && token.length >= 3 && !SEARCH_TOKEN_STOPWORDS.has(token));
+}
+
+function calculateOfferTermCoverage(offer, query) {
+  const queryTerms = buildMeaningfulQueryTerms(query);
+
+  if (queryTerms.length < 2) {
+    return {
+      bucket: 0,
+      coveredTerms: 0,
+      totalTerms: queryTerms.length,
+      strongTerms: 0,
+      mediumTerms: 0,
+      directTerms: 0,
+      sourceScore: 0,
+    };
+  }
+
+  const strongTokens = buildTermCoverageTokens([
+    offer.title,
+    offer.brand,
+    offer.categoryPrimary,
+    offer.categorySecondary,
+    offer.subcategoryKey,
+    offer.categoryKey,
+    offer.comparisonGroup,
+    ...(Array.isArray(offer.searchTokens) ? offer.searchTokens : []),
+  ]);
+  const mediumTokens = buildTermCoverageTokens([
+    offer.searchText,
+    offer.description,
+    offer.conditionsText,
+    offer.promotionScope,
+    offer.appliesToCategory,
+  ]);
+  let coveredTerms = 0;
+  let strongTerms = 0;
+  let mediumTerms = 0;
+  let directTerms = 0;
+  let sourceScore = 0;
+
+  for (const queryTerm of queryTerms) {
+    const strongMatched = hasTermCoverageMatch(strongTokens, queryTerm);
+    const mediumMatched = !strongMatched && hasTermCoverageMatch(mediumTokens, queryTerm);
+    const cautiousMatched = !strongMatched && !mediumMatched &&
+      buildCautiousQueryTermVariants(queryTerm).some((variant) =>
+        hasTermCoverageMatch(strongTokens, variant) || hasTermCoverageMatch(mediumTokens, variant)
+      );
+
+    if (!strongMatched && !mediumMatched && !cautiousMatched) {
+      continue;
+    }
+
+    coveredTerms += 1;
+
+    if (strongMatched) {
+      strongTerms += 1;
+      directTerms += 1;
+      sourceScore += 3;
+    } else if (mediumMatched) {
+      mediumTerms += 1;
+      directTerms += 1;
+      sourceScore += 2;
+    } else {
+      sourceScore += 1;
+    }
+  }
+
+  return {
+    bucket: coveredTerms === queryTerms.length ? 3 : coveredTerms >= 2 ? 2 : coveredTerms === 1 ? 1 : 0,
+    coveredTerms,
+    totalTerms: queryTerms.length,
+    strongTerms,
+    mediumTerms,
+    directTerms,
+    sourceScore,
+  };
+}
+
+function compareTermCoverage(leftCoverage, rightCoverage) {
+  const left = leftCoverage || {};
+  const right = rightCoverage || {};
+  const leftBucket = Number(left.bucket || 0);
+  const rightBucket = Number(right.bucket || 0);
+  const leftCoveredTerms = Number(left.coveredTerms || 0);
+  const rightCoveredTerms = Number(right.coveredTerms || 0);
+  const leftStrongTerms = Number(left.strongTerms || 0);
+  const rightStrongTerms = Number(right.strongTerms || 0);
+  const leftDirectTerms = Number(left.directTerms || 0);
+  const rightDirectTerms = Number(right.directTerms || 0);
+  const leftSourceScore = Number(left.sourceScore || 0);
+  const rightSourceScore = Number(right.sourceScore || 0);
+
+  if (rightBucket !== leftBucket) {
+    return rightBucket - leftBucket;
+  }
+
+  if (rightCoveredTerms !== leftCoveredTerms) {
+    return rightCoveredTerms - leftCoveredTerms;
+  }
+
+  if (rightStrongTerms !== leftStrongTerms) {
+    return rightStrongTerms - leftStrongTerms;
+  }
+
+  if (rightDirectTerms !== leftDirectTerms) {
+    return rightDirectTerms - leftDirectTerms;
+  }
+
+  return rightSourceScore - leftSourceScore;
 }
 
 function buildWordString(value) {
@@ -2500,9 +2667,16 @@ function applyQueryMatch(offers, query) {
     .map((offer) => ({
       offer,
       score: scoreOfferAgainstQuery(offer, query),
+      termCoverage: calculateOfferTermCoverage(offer, query),
     }))
     .filter((item) => item.score > 0)
     .sort((left, right) => {
+      const termCoverageComparison = compareTermCoverage(left.termCoverage, right.termCoverage);
+
+      if (termCoverageComparison !== 0) {
+        return termCoverageComparison;
+      }
+
       if (right.score !== left.score) {
         return right.score - left.score;
       }
@@ -5701,11 +5875,13 @@ async function buildOfferRanking({
     }));
   }
   const queryScores = hasQuery ? new WeakMap() : null;
+  const queryTermCoverages = hasQuery ? new WeakMap() : null;
 
   if (queryScores) {
     const scoreCacheStartedAt = nowMs();
     for (const offer of fullyFilteredOffers) {
       queryScores.set(offer, scoreOfferAgainstQuery(offer, query));
+      queryTermCoverages.set(offer, calculateOfferTermCoverage(offer, query));
     }
     timings.scoreCacheMs = nowMs() - scoreCacheStartedAt;
   }
@@ -5714,6 +5890,15 @@ async function buildOfferRanking({
   const sortedOffers = fullyFilteredOffers
     .sort((left, right) => {
       if (queryScores) {
+        const termCoverageComparison = compareTermCoverage(
+          queryTermCoverages.get(left) || {},
+          queryTermCoverages.get(right) || {}
+        );
+
+        if (termCoverageComparison !== 0) {
+          return termCoverageComparison;
+        }
+
         const leftQueryScore = queryScores.get(left) || 0;
         const rightQueryScore = queryScores.get(right) || 0;
 
@@ -5981,6 +6166,7 @@ module.exports = {
   clearRankingResponseCache,
   getRankingResponseCacheSize,
   scoreOfferAgainstQuery,
+  calculateOfferTermCoverage,
   applyQueryMatch,
   filterFreshActiveOffers,
   buildValidityLabel,

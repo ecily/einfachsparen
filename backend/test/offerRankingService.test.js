@@ -12,6 +12,7 @@ const {
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
   buildRankingBaseCacheKey,
+  calculateOfferTermCoverage,
   createResultSetToken,
   dedupeFinalResponseOffers,
   dedupeQueryOffers,
@@ -441,6 +442,121 @@ test('beer query rejects hair care weizen false positives even when category is 
   assert.deepEqual(applyQueryMatch([balsam, beer, shampoo], 'bier').map((item) => item.title), [
     'Hadmar Bio Bier 6x0,5l',
   ]);
+});
+
+test('multi-term ranking prefers offers covering all original query terms via strong fields and search tokens', () => {
+  const fullIntent = offer({
+    title: 'ZZZ Milka Aktion',
+    brand: 'Milka',
+    searchTokens: ['milka', 'schokolade'],
+    searchTokenVersion: 2,
+  });
+  const brandOnly = offer({
+    title: 'Milka Geschenkpackung',
+    brand: 'Milka',
+    searchTokens: ['milka'],
+    searchTokenVersion: 2,
+  });
+  const productOnly = offer({
+    title: 'Alpenmilch Schokolade',
+    categorySecondary: 'Schokolade',
+    searchTokens: ['schokolade'],
+    searchTokenVersion: 2,
+  });
+  const rankedTitles = applyQueryMatch([brandOnly, productOnly, fullIntent], 'milka schokolade')
+    .map((item) => item.title);
+
+  assert.equal(rankedTitles[0], 'ZZZ Milka Aktion');
+  assert.equal(rankedTitles.includes('Milka Geschenkpackung'), true);
+  assert.equal(rankedTitles.includes('Alpenmilch Schokolade'), true);
+  assert.deepEqual(calculateOfferTermCoverage(fullIntent, 'milka schokolade'), {
+    bucket: 3,
+    coveredTerms: 2,
+    totalTerms: 2,
+    strongTerms: 2,
+    mediumTerms: 0,
+    directTerms: 2,
+    sourceScore: 6,
+  });
+});
+
+test('multi-term ranking prefers brand plus product type over brand-only hits without dropping partials', () => {
+  const fullIntent = offer({
+    title: 'Ariel Waschmittel Pulver',
+    brand: 'Ariel',
+    categorySecondary: 'Waschmittel',
+    searchText: 'ariel waschmittel drogerie',
+  });
+  const brandOnly = offer({
+    title: 'Ariel Pods Color',
+    brand: 'Ariel',
+    searchText: 'ariel pods',
+  });
+  const productOnly = offer({
+    title: 'Universal Waschmittel',
+    categorySecondary: 'Waschmittel',
+    searchText: 'waschmittel drogerie',
+  });
+  const ranked = applyQueryMatch([brandOnly, productOnly, fullIntent], 'ariel waschmittel');
+
+  assert.equal(ranked[0].title, 'Ariel Waschmittel Pulver');
+  assert.deepEqual(new Set(ranked.map((item) => item.title)), new Set([
+    'Ariel Waschmittel Pulver',
+    'Ariel Pods Color',
+    'Universal Waschmittel',
+  ]));
+});
+
+test('multi-term coverage keeps cautious synonym matches and category-only partials searchable', () => {
+  const synonymFull = offer({
+    title: 'Caffe Crema Ganze Bohnen',
+    categorySecondary: 'Kaffee & Tee',
+    searchTokens: ['caffe', 'bohnen'],
+    searchTokenVersion: 2,
+  });
+  const categoryPartial = offer({
+    title: 'Jacobs Filterkaffee gemahlen',
+    categorySecondary: 'Kaffee & Tee',
+    searchText: 'kaffee getraenke',
+    searchTokens: ['kaffee'],
+    searchTokenVersion: 2,
+  });
+  const ranked = applyQueryMatch([categoryPartial, synonymFull], 'kaffee bohnen');
+
+  assert.equal(ranked[0].title, 'Caffe Crema Ganze Bohnen');
+  assert.equal(ranked.some((item) => item.title === 'Jacobs Filterkaffee gemahlen'), true);
+  assert.equal(calculateOfferTermCoverage(synonymFull, 'kaffee bohnen').bucket, 3);
+  assert.equal(calculateOfferTermCoverage(categoryPartial, 'kaffee bohnen').bucket, 1);
+});
+
+test('term coverage treats meaningful packaging terms defensively for beer dose queries', () => {
+  const canBeer = offer({
+    title: 'Ottakringer Helles 0.5 l Dose',
+    categorySecondary: 'Bier',
+    searchText: 'bier dose getraenke',
+  });
+  const bottleBeer = offer({
+    title: 'Goesser Maerzen Flasche',
+    categorySecondary: 'Bier',
+    searchText: 'bier getraenke',
+  });
+  const ranked = applyQueryMatch([bottleBeer, canBeer], 'bier dose');
+
+  assert.equal(ranked[0].title, 'Ottakringer Helles 0.5 l Dose');
+  assert.equal(calculateOfferTermCoverage(canBeer, 'bier dose').bucket, 3);
+  assert.equal(calculateOfferTermCoverage(bottleBeer, 'bier dose').bucket, 1);
+});
+
+test('single-term searches do not receive a term coverage bucket', () => {
+  const coffee = offer({
+    title: 'Lavazza Kaffee',
+    categorySecondary: 'Kaffee & Tee',
+    searchTokens: ['kaffee', 'caffe'],
+    searchTokenVersion: 2,
+  });
+
+  assert.equal(calculateOfferTermCoverage(coffee, 'kaffee').bucket, 0);
+  assert.equal(applyQueryMatch([coffee], 'kaffee')[0].title, 'Lavazza Kaffee');
 });
 
 test('umlaut oil query stays tokenized and does not fall back to broad regex search', () => {
@@ -3922,7 +4038,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
