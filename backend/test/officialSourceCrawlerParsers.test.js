@@ -39,6 +39,57 @@ function parseBipaOffers(bodyHtml) {
   });
 }
 
+function bipaMobifyHit(id, overrides = {}) {
+  return {
+    hitType: 'product',
+    productId: `B3-${id}`,
+    representedProduct: { id: `B3-${id}` },
+    image: {
+      link: `https://www.bipa.at/on/demandware.static/-/Sites-catalog/de_AT/v1/original/${id}.png`,
+      disBaseLink: `https://www.bipa.at/dw/image/v2/AAFT_PRD/on/demandware.static/-/Sites-catalog/de_AT/v1/original/${id}.png`,
+      alt: `Bild: Test Produkt ${id}`,
+    },
+    productName: 'BIPA Test Produkt',
+    c_brand: 'BIPA',
+    c_kundenbezeichnung: 'Test Produkt',
+    c_inhalt: '250 ml',
+    c_category: 'pflege-koerper-duschgel',
+    c_displayedPrice: 2.49,
+    c_insteadPrice: 3.49,
+    c_basePrice: '100 ml 1,00',
+    c_effectivePriceBadges: ['Aktion'],
+    c_effectiveCornerBadges: [],
+    ...overrides,
+  };
+}
+
+function bipaMobifyHtml(hits, { bodyPrefix = '' } = {}) {
+  const payload = {
+    pageProps: {
+      pageProps: {
+        productSearchResult: {
+          limit: hits.length,
+          offset: 0,
+          total: hits.length,
+          hits,
+        },
+      },
+    },
+  };
+  const links = hits.map((hit) => {
+    const id = String(hit.productId || '').replace(/^B3-/, '');
+    return `<a data-testid="product-tile-B3-${id}" href="/p/test-product-${id}/B3-${id}">${hit.productName || ''}</a>`;
+  }).join('');
+
+  return `
+    <html><body>
+      ${bodyPrefix}
+      ${links}
+      <script id="mobify-data" type="application/json">${JSON.stringify(payload)}</script>
+    </body></html>
+  `;
+}
+
 test('BIPA official parser extracts current sale price, reference price and perfume offers from current product-card markup', () => {
   const html = `
     <html><body>
@@ -251,6 +302,126 @@ test('BIPA official parser keeps valid offers when product image is missing', ()
 
   assert.equal(offers.length, 1);
   assert.equal(offers[0].imageUrl, '');
+});
+
+test('BIPA category Mobify parser extracts product image, price fields and product-near badge condition', () => {
+  const offers = __private.parseBipaOffersFromHtml({
+    html: bipaMobifyHtml([
+      bipaMobifyHit('716480', {
+        c_brand: 'BI CARE',
+        productName: 'BI CARE Deo Roll-On Woman Extra Dry',
+        c_kundenbezeichnung: 'Deo Roll-On Woman Extra Dry',
+        c_displayedPrice: 0.89,
+        c_insteadPrice: 0.99,
+        c_basePrice: '100 ml 1,78',
+      }),
+    ]),
+    source: source({ sourceUrl: 'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion' }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].brand, 'BI CARE');
+  assert.equal(offers[0].title, 'Deo Roll-On Woman Extra Dry');
+  assert.equal(offers[0].sourceUrl, 'https://www.bipa.at/p/test-product-716480/B3-716480');
+  assert.equal(offers[0].imageUrl, 'https://www.bipa.at/on/demandware.static/-/Sites-catalog/de_AT/v1/original/716480.png');
+  assert.equal(offers[0].priceCurrent.amount, 0.89);
+  assert.equal(offers[0].priceReference.amount, 0.99);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 17.8);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
+  assert.equal(offers[0].conditionsText, 'Aktion');
+  assert.equal(offers[0].rawFacts.sourceType, __private.BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE);
+  assert.equal(offers[0].rawFacts.bipaProductId, '716480');
+});
+
+test('BIPA category Mobify parser keeps offers without image and rejects mismatched product image IDs', () => {
+  const offers = __private.parseBipaOffersFromHtml({
+    html: bipaMobifyHtml([
+      bipaMobifyHit('222111', {
+        image: {
+          link: 'https://www.bipa.at/on/demandware.static/-/Sites-catalog/de_AT/v1/original/999999.png',
+        },
+      }),
+      bipaMobifyHit('333111', {
+        image: {},
+      }),
+    ]),
+    source: source({ sourceUrl: 'https://www.bipa.at/c/haushalt?limit=20&refine_0=c_pricebadges%3DAktion' }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/c/haushalt?limit=20&refine_0=c_pricebadges%3DAktion',
+  });
+
+  assert.equal(offers.length, 2);
+  assert.equal(offers[0].rawFacts.bipaProductId, '222111');
+  assert.equal(offers[0].imageUrl, '');
+  assert.equal(offers[1].rawFacts.bipaProductId, '333111');
+  assert.equal(offers[1].imageUrl, '');
+});
+
+test('BIPA category Mobify parser does not copy global page badges as product conditions', () => {
+  const offers = __private.parseBipaOffersFromHtml({
+    html: bipaMobifyHtml([
+      bipaMobifyHit('444111', {
+        c_effectivePriceBadges: [],
+      }),
+    ], {
+      bodyPrefix: '<div class="global-promo">1+1 gratis nur im Seitenbanner</div>',
+    }),
+    source: source({ sourceUrl: 'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion' }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].conditionsText, '');
+  assert.deepEqual(offers[0].rawFacts.priceBadges, []);
+});
+
+test('BIPA category action URL config uses pricebadge filters', () => {
+  assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.length >= 10);
+  assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.startsWith('https://www.bipa.at/c/')));
+  assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.includes('refine_0=c_pricebadges')));
+});
+
+test('BIPA promotion link discovery ignores unfiltered category pages', () => {
+  const links = __private.collectBipaPromotionLinks(`
+    <a href="/c/pflege">Pflege</a>
+    <a href="/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion">Pflege Aktionen</a>
+    <a href="/cp/onlineonly">Online Only</a>
+  `, 'https://www.bipa.at/cp/aktionen');
+
+  assert.deepEqual(links.map((link) => link.url), [
+    'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion',
+    'https://www.bipa.at/cp/onlineonly',
+  ]);
+});
+
+test('BIPA official dedupe prefers product ID across category pages', () => {
+  const offers = __private.dedupeBipaOffers([
+    {
+      title: 'Test Produkt',
+      brand: 'BIPA',
+      sourceUrl: 'https://www.bipa.at/p/test-product/B3-555111',
+      priceCurrent: { amount: 1.99 },
+      quantityText: '100 ml',
+      rawFacts: { bipaProductId: '555111' },
+    },
+    {
+      title: 'Test Produkt anderer Kategorie',
+      brand: 'BIPA',
+      sourceUrl: 'https://www.bipa.at/p/test-product/B3-555111',
+      priceCurrent: { amount: 1.99 },
+      quantityText: '100 ml',
+      rawFacts: { bipaProductId: '555111' },
+    },
+  ]);
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].rawFacts.bipaProductId, '555111');
 });
 
 test('BIPA official parser keeps snapshot offers when stale page-level validity text is present', () => {
