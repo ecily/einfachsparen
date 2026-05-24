@@ -1585,6 +1585,97 @@ function lidlCurrentWindow() {
   };
 }
 
+function lidlFlyerWindow() {
+  const now = new Date();
+  const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const to = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000);
+
+  return {
+    offerStartDate: from.toISOString().slice(0, 10),
+    offerEndDate: to.toISOString().slice(0, 10),
+  };
+}
+
+function normalizeLidlFlyerProduct(product = {}, flyer = {}) {
+  return __private.normalizeLidlProductToOffer({
+    product: {
+      title: 'Dr. Beckmann',
+      brand: '',
+      price: '2.49',
+      image: '/images/lidl/dr-beckmann.png',
+      url: 'https://www.lidl.at/l/de/flugblatt/test/ar/0',
+      description: 'Spuelmaschinenreiniger: 60 g (1 kg = 41.50)',
+      ...product,
+    },
+    flyer: {
+      title: 'Flugblatt',
+      name: 'Ab Donnerstag',
+      flyerUrlAbsolute: 'https://www.lidl.at/l/de/flugblatt/test/ar/0',
+      ...lidlFlyerWindow(),
+      ...flyer,
+    },
+    source: lidlOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+  });
+}
+
+test('Lidl flyer API normalizer maps product-level Lidl Plus condition and customer program flag', () => {
+  const offer = normalizeLidlFlyerProduct({
+    description: 'Nur gültig mit Lidl Plus Spuelmaschinenreiniger: 60 g (1 kg = 41.50)',
+  });
+
+  assert.equal(offer.conditionsText, 'Nur gueltig mit Lidl Plus');
+  assert.equal(offer.customerProgramRequired, true);
+  assert.equal(offer.benefitType, 'conditional-price');
+  assert.match(offer.quality.issues.join(' '), /Kundenprogramm/);
+});
+
+test('Lidl flyer API normalizer does not infer Lidl Plus from flyer-level context', () => {
+  const offer = normalizeLidlFlyerProduct(
+    { description: 'Spuelmaschinenreiniger: 60 g (1 kg = 41.50)' },
+    { title: 'Lidl Plus Gewinnspiel', name: 'Nur mit Lidl Plus' }
+  );
+
+  assert.equal(offer.conditionsText, '');
+  assert.equal(offer.customerProgramRequired, false);
+});
+
+test('Lidl flyer API normalizer keeps normal descriptions condition-free', () => {
+  const offer = normalizeLidlFlyerProduct({
+    description: 'Spuelmaschinenreiniger: 60 g (1 kg = 41.50)',
+  });
+
+  assert.equal(offer.conditionsText, '');
+  assert.equal(offer.customerProgramRequired, false);
+});
+
+test('Lidl flyer API normalizer maps explicit base price but ignores technical quantities', () => {
+  const drBeckmann = normalizeLidlFlyerProduct({
+    description: 'Nur gültig mit Lidl Plus Spuelmaschinenreiniger: 60 g (1 kg = 41.50)',
+  });
+  const parkside = normalizeLidlFlyerProduct({
+    title: 'PARKSIDE Akku-Bohrschrauber, 20 V',
+    brand: 'PARKSIDE',
+    price: '24.99',
+    description: 'Nur gültig mit Lidl Plus Komplettset inkl. 2 Ah Lithium-Ionen-Akku und Ladegeraet. Max. Drehmoment: 35 Nm.',
+  });
+  const shelf = normalizeLidlFlyerProduct({
+    title: 'PARKSIDE Schwerlastregal',
+    brand: 'PARKSIDE',
+    price: '19.99',
+    description: 'Mit 5 hoehenverstellbaren Boeden. Belastung: je Boden: max. 160 kg.',
+  });
+
+  assert.equal(drBeckmann.normalizedUnitPrice.amount, 41.5);
+  assert.equal(drBeckmann.normalizedUnitPrice.unit, 'kg');
+  assert.equal(drBeckmann.normalizedUnitPrice.comparable, true);
+  assert.equal(parkside.normalizedUnitPrice.comparable, false);
+  assert.equal(parkside.normalizedUnitPrice.amount, null);
+  assert.equal(shelf.normalizedUnitPrice.comparable, false);
+  assert.equal(shelf.normalizedUnitPrice.amount, null);
+});
+
 function lidlCard(product = {}) {
   const window = lidlCurrentWindow();
   const payload = {

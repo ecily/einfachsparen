@@ -949,7 +949,8 @@ function buildLidlDedupeKey({ productId = '', productUrl = '', title = '', brand
 }
 
 function buildLidlNormalizedUnitPrice(description, currentPrice) {
-  const text = normalizeTitleForMatch(decodeHtmlEntities(description));
+  const decodedDescription = decodeHtmlEntities(description);
+  const text = normalizeTitleForMatch(decodedDescription);
   const perUnitMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(eur|euro)?\s*\/\s*(kg|kilogramm|l|liter|stk|stueck|stuck)/i);
 
   if (perUnitMatch) {
@@ -961,10 +962,19 @@ function buildLidlNormalizedUnitPrice(description, currentPrice) {
     };
   }
 
-  return buildOfficialNormalizedUnitPrice({
-    priceAmount: currentPrice,
-    quantityText: decodeHtmlEntities(description),
-  });
+  const hasExplicitBasePriceSignal = /(?:^|[\s(])(?:1|100)\s*(?:kg|kilogramm|g|gramm|l|liter|ml|milliliter|stk|stueck|stuck)\s*(?:=|:)\s*(?:€|eur)?\s*\d/i.test(decodedDescription)
+    || /\d+(?:[.,]\d+)?\s*(?:€|eur|euro)?\s*\/\s*(?:kg|kilogramm|l|liter|stk|stueck|stuck)\b/i.test(decodedDescription);
+
+  if (!hasExplicitBasePriceSignal) {
+    return {
+      amount: null,
+      unit: '',
+      comparable: false,
+      confidence: 0,
+    };
+  }
+
+  return buildUnitPriceFromLabel(decodedDescription, currentPrice);
 }
 
 function extractLidlQuantityText(description) {
@@ -5658,6 +5668,7 @@ module.exports = {
     isHoferOfferPageUrl,
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
+    normalizeLidlProductToOffer,
     LIDL_OFFICIAL_CAMPAIGN_PAGES,
     extractLidlCampaignPageLinksFromHtml,
     getLidlCampaignPagesForCrawl,
