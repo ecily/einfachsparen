@@ -4157,8 +4157,8 @@ function hasSameBrokenQuantityVisibleCardFingerprint(left, right) {
     return false;
   }
 
-  const leftTitle = normalizeSearchText(left?.titleNormalized || left?.title);
-  const rightTitle = normalizeSearchText(right?.titleNormalized || right?.title);
+  const leftTitle = normalizeSearchText(left?.title || left?.titleNormalized);
+  const rightTitle = normalizeSearchText(right?.title || right?.titleNormalized);
 
   if (!leftTitle || leftTitle !== rightTitle) {
     return false;

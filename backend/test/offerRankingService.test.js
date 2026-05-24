@@ -3881,6 +3881,40 @@ test('visible card dedupe collapses same-source duplicate when exactly one quant
   assert.equal(result.offers[0]._id, 'ariel-clean');
 });
 
+test('visible card dedupe collapses live dm Ariel duplicate with polluted normalized title and broken quantity', () => {
+  const liveTitle = 'Ariel Waschmittel Fluessig div. Sorten 40 WL dm 1 Flasche';
+  const broken = arielDmAktionsfinderOffer({
+    _id: '6a1231d917a69802d5088f30',
+    title: liveTitle,
+    titleNormalized: 'ariel ariel waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    sourceTypes: ['aktionsfinder-json', 'aggregator'],
+    sourceUrl: 'https://www.dm.at/p/d/3059061/ariel-colorwaschmittel-fluessig',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: 'WG',
+    packCount: 1,
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+    validFrom: new Date('2026-04-30T00:00:00Z'),
+    validTo: new Date('2026-06-02T00:00:00Z'),
+  });
+  const clean = arielDmAktionsfinderOffer({
+    _id: '6a1231d917a69802d5088f8b',
+    title: liveTitle,
+    titleNormalized: 'ariel waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    sourceTypes: ['aktionsfinder-json', 'aggregator'],
+    sourceUrl: 'https://www.aktionsfinder.at/l/dm-drogerie-markt-30-04-2026-02-06-2026/',
+    quantityText: '1 flasche',
+    validFrom: new Date('2026-04-30T12:00:00Z'),
+    validTo: new Date('2026-06-02T23:59:59.999Z'),
+  });
+  const result = dedupeVisibleCardResponseOffers([broken, clean], 'ariel waschmittel');
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0]._id, '6a1231d917a69802d5088f8b');
+});
+
 test('visible card broken-quantity tolerance keeps price variants visible', () => {
   const broken = arielDmAktionsfinderOffer({
     _id: 'ariel-broken',
