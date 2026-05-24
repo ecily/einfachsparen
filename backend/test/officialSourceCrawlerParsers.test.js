@@ -29,6 +29,16 @@ function formatDateAt(date) {
   ].join('.');
 }
 
+function parseBipaOffers(bodyHtml) {
+  return __private.parseBipaOffersFromHtml({
+    html: `<html><body>${bodyHtml}</body></html>`,
+    source: source(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/cp/aktionen',
+  });
+}
+
 test('BIPA official parser extracts current sale price, reference price and perfume offers from current product-card markup', () => {
   const html = `
     <html><body>
@@ -111,6 +121,113 @@ test('BIPA official parser converts relative image URLs to absolute URLs', () =>
 
   assert.equal(offers.length, 1);
   assert.equal(offers[0].imageUrl, 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/456.png?sw=140');
+});
+
+test('BIPA official parser extracts picture source srcset image URLs from product cards', () => {
+  const offers = parseBipaOffers(`
+    <a href="/p/no-cosmetics-hydrator/B3-100">
+      <picture>
+        <source srcset="/dw/image/v2/AAFT_PRD/original/100.webp?sw=140 1x, /dw/image/v2/AAFT_PRD/original/100.webp?sw=280 2x">
+        <img src="/placeholder.png">
+      </picture>
+      <p>No Cosmetics</p>
+      <p>120h Liquid Hydrator</p>
+      <p>100 ml</p>
+      <p>\u20ac 9,99</p>
+      <p>\u20ac 8,99</p>
+    </a>
+  `);
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].imageUrl, 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/100.webp?sw=140');
+});
+
+test('BIPA official parser extracts lazy source image attributes from product cards', () => {
+  const cases = [
+    {
+      id: '101',
+      html: '<source data-srcset="/dw/image/v2/AAFT_PRD/original/101.png?sw=140 1x, /dw/image/v2/AAFT_PRD/original/101.png?sw=280 2x">',
+      expected: 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/101.png?sw=140',
+    },
+    {
+      id: '102',
+      html: '<source data-src="/dw/image/v2/AAFT_PRD/original/102.png?sw=140">',
+      expected: 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/102.png?sw=140',
+    },
+  ];
+
+  for (const { id, html, expected } of cases) {
+    const offers = parseBipaOffers(`
+      <a href="/p/bipa-source-test-${id}/B3-${id}">
+        ${html}
+        <p>BIPA</p>
+        <p>Source Test 100ml</p>
+        <p>100 ml</p>
+        <p>\u20ac 4,99</p>
+        <p>\u20ac 2,99</p>
+      </a>
+    `);
+
+    assert.equal(offers.length, 1);
+    assert.equal(offers[0].imageUrl, expected);
+  }
+});
+
+test('BIPA official parser extracts data-original and data-lazy-src image attributes from product cards', () => {
+  const cases = [
+    {
+      id: '201',
+      imageHtml: '<img data-original="/dw/image/v2/AAFT_PRD/original/201.png?sw=140">',
+      expected: 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/201.png?sw=140',
+    },
+    {
+      id: '202',
+      imageHtml: '<img data-lazy-src="/dw/image/v2/AAFT_PRD/original/202.png?sw=140">',
+      expected: 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/202.png?sw=140',
+    },
+  ];
+
+  for (const { id, imageHtml, expected } of cases) {
+    const offers = parseBipaOffers(`
+      <a href="/p/bipa-lazy-test-${id}/B3-${id}">
+        ${imageHtml}
+        <p>BIPA</p>
+        <p>Lazy Test 250ml</p>
+        <p>250 ml</p>
+        <p>\u20ac 5,99</p>
+        <p>\u20ac 3,99</p>
+      </a>
+    `);
+
+    assert.equal(offers.length, 1);
+    assert.equal(offers[0].imageUrl, expected);
+  }
+});
+
+test('BIPA official parser does not copy image URLs from neighboring product cards', () => {
+  const offers = parseBipaOffers(`
+    <a href="/p/first-product-without-image/B3-301">
+      <p>Erste Marke</p>
+      <p>Produkt ohne Bild 100ml</p>
+      <p>100 ml</p>
+      <p>\u20ac 4,99</p>
+      <p>\u20ac 2,99</p>
+    </a>
+    <a href="/p/second-product-with-image/B3-302">
+      <img data-original="/dw/image/v2/AAFT_PRD/original/302.png?sw=140">
+      <p>Zweite Marke</p>
+      <p>Produkt mit Bild 100ml</p>
+      <p>100 ml</p>
+      <p>\u20ac 6,99</p>
+      <p>\u20ac 3,99</p>
+    </a>
+  `);
+
+  assert.equal(offers.length, 2);
+  assert.equal(offers[0].title, 'Produkt ohne Bild 100ml');
+  assert.equal(offers[0].imageUrl, '');
+  assert.equal(offers[1].title, 'Produkt mit Bild 100ml');
+  assert.equal(offers[1].imageUrl, 'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/302.png?sw=140');
 });
 
 test('BIPA official parser keeps valid offers when product image is missing', () => {

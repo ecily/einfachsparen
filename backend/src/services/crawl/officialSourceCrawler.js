@@ -544,16 +544,36 @@ function extractUnitPriceTextFromText(value) {
 }
 
 function extractImageUrl(card) {
-  return [
-    card.find('.at-product-images_img').attr('data-src'),
-    card.find('.at-product-images_img').attr('data-srcset'),
-    card.find('.at-product-images_img').attr('srcset'),
-    card.find('.at-product-images_img').attr('src'),
-    card.find('img').attr('data-src'),
-    card.find('img').attr('data-srcset'),
-    card.find('img').attr('srcset'),
-    card.find('img').attr('src'),
-  ].find((value) => sanitizeWhitespace(value)) || '';
+  const imageCandidates = [
+    ['.at-product-images_img', 'data-src'],
+    ['.at-product-images_img', 'data-srcset'],
+    ['.at-product-images_img', 'srcset'],
+    ['.at-product-images_img', 'data-original'],
+    ['.at-product-images_img', 'data-lazy-src'],
+    ['.at-product-images_img', 'src'],
+    ['picture source', 'srcset'],
+    ['picture source', 'data-srcset'],
+    ['picture source', 'data-src'],
+    ['source', 'srcset'],
+    ['source', 'data-srcset'],
+    ['source', 'data-src'],
+    ['img', 'data-src'],
+    ['img', 'data-srcset'],
+    ['img', 'srcset'],
+    ['img', 'data-original'],
+    ['img', 'data-lazy-src'],
+    ['img', 'src'],
+  ];
+
+  for (const [selector, attribute] of imageCandidates) {
+    const value = sanitizeWhitespace(card.find(selector).first().attr(attribute));
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return '';
 }
 
 function extractHoferProductUrl(card, pageUrl) {
