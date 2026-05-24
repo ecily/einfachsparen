@@ -3887,6 +3887,8 @@ test('visible card dedupe collapses live dm Ariel duplicate with polluted normal
     _id: '6a1231d917a69802d5088f30',
     title: liveTitle,
     titleNormalized: 'ariel ariel waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    brand: 'Ariel',
+    packageType: 'pack',
     sourceTypes: ['aktionsfinder-json', 'aggregator'],
     sourceUrl: 'https://www.dm.at/p/d/3059061/ariel-colorwaschmittel-fluessig',
     quantityText: '$undefined WG / 1 Fl.',
@@ -3903,6 +3905,8 @@ test('visible card dedupe collapses live dm Ariel duplicate with polluted normal
     _id: '6a1231d917a69802d5088f8b',
     title: liveTitle,
     titleNormalized: 'ariel waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    brand: '',
+    packageType: 'pack',
     sourceTypes: ['aktionsfinder-json', 'aggregator'],
     sourceUrl: 'https://www.aktionsfinder.at/l/dm-drogerie-markt-30-04-2026-02-06-2026/',
     quantityText: '1 flasche',
@@ -3913,6 +3917,34 @@ test('visible card dedupe collapses live dm Ariel duplicate with polluted normal
 
   assert.equal(result.offers.length, 1);
   assert.equal(result.offers[0]._id, '6a1231d917a69802d5088f8b');
+});
+
+test('visible card broken-quantity tolerance keeps one-sided brand variants when visible title does not confirm the brand', () => {
+  const genericTitle = 'Waschmittel Fluessig div. Sorten 40 WL dm 1 Flasche';
+  const broken = arielDmAktionsfinderOffer({
+    _id: 'brand-variant-broken',
+    title: genericTitle,
+    titleNormalized: 'waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    brand: 'Ariel',
+    packageType: 'pack',
+    quantityText: '$undefined WG / 1 Fl.',
+    unitValue: null,
+    unitType: 'WG',
+    packCount: 1,
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  });
+  const clean = arielDmAktionsfinderOffer({
+    _id: 'brand-variant-clean',
+    title: genericTitle,
+    titleNormalized: 'waschmittel fluessig div sorten 40 wl dm 1 flasche',
+    brand: '',
+    packageType: 'pack',
+  });
+  const result = dedupeVisibleCardResponseOffers([broken, clean], 'waschmittel');
+
+  assert.equal(result.offers.length, 2);
 });
 
 test('visible card broken-quantity tolerance keeps price variants visible', () => {

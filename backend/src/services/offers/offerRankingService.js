@@ -3542,6 +3542,66 @@ function getOfferVariantKey(offer) {
   ].filter(Boolean).join(':');
 }
 
+function getOfferNonBrandVariantKey(offer) {
+  const rawVariantKeys = [
+    'abmessung',
+    'akku',
+    'breite',
+    'color',
+    'durchmesser',
+    'farbe',
+    'groesse',
+    'grosse',
+    'hoehe',
+    'hohe',
+    'laenge',
+    'lange',
+    'leistung',
+    'material',
+    'model',
+    'modell',
+    'spannung',
+    'staerke',
+    'starke',
+    'tiefe',
+    'voltage',
+    'watt',
+  ];
+
+  return [
+    normalizeSearchText(offer?.packageType),
+    findRawFactValue(offer?.rawFacts, rawVariantKeys),
+  ].filter(Boolean).join(':');
+}
+
+function haveCompatibleBrokenQuantityVariant(left, right, leftTitleKey = '', rightTitleKey = '') {
+  const leftVariant = getOfferVariantKey(left);
+  const rightVariant = getOfferVariantKey(right);
+
+  if (leftVariant === rightVariant) {
+    return true;
+  }
+
+  if (getOfferNonBrandVariantKey(left) !== getOfferNonBrandVariantKey(right)) {
+    return false;
+  }
+
+  const leftBrand = normalizeSearchText(left?.brand);
+  const rightBrand = normalizeSearchText(right?.brand);
+
+  if (leftBrand && rightBrand && leftBrand !== rightBrand) {
+    return false;
+  }
+
+  const oneSidedBrand = leftBrand || rightBrand;
+
+  return Boolean(
+    oneSidedBrand &&
+    leftTitleKey.includes(oneSidedBrand) &&
+    rightTitleKey.includes(oneSidedBrand),
+  );
+}
+
 function getStrictQueryDedupeKeys(offer) {
   const keys = [];
   const identity = getOfferIdentity(offer);
@@ -4164,7 +4224,7 @@ function hasSameBrokenQuantityVisibleCardFingerprint(left, right) {
     return false;
   }
 
-  if (getOfferVariantKey(left) !== getOfferVariantKey(right)) {
+  if (!haveCompatibleBrokenQuantityVariant(left, right, leftTitle, rightTitle)) {
     return false;
   }
 
