@@ -3530,6 +3530,10 @@ textarea:focus {
     border-radius: 18px;
   }
 
+  .search-landing-hero__mobile.mobile-browser-notice {
+    display: grid !important;
+  }
+
   .mobile-browser-notice {
     display: none !important;
   }
