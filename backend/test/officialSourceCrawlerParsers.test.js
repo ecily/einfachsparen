@@ -1918,3 +1918,168 @@ test('Lidl official campaign discovery merges official links with configured see
   assert.ok(pages.includes('https://www.lidl.at/c/aktion/a10095240'));
   assert.ok(pages.includes('https://www.lidl.at/c/frische-angebote/a10095239'));
 });
+
+function billaActionSource() {
+  return source({
+    retailerKey: 'billa',
+    retailerName: 'Billa',
+    channel: 'official-site',
+    sourceUrl: 'https://www.billa.at/unsere-aktionen/aktionen',
+    label: 'BILLA Aktionen',
+  });
+}
+
+function parseBillaActionHtml(bodyHtml, sourceOverrides = {}) {
+  const billaSource = {
+    ...billaActionSource(),
+    ...sourceOverrides,
+  };
+
+  return __private.extractBillaActionTeasersFromHtml({
+    html: `<html><body>${bodyHtml}</body></html>`,
+    source: billaSource,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: billaSource.sourceUrl,
+  });
+}
+
+test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 condition', () => {
+  const result = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <div class="row">
+      <h3>Extrem Aktion*</h3>
+      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+    </div>
+    <div class="ws-slider-group">
+      <article>
+        <div data-teaser-name="Egger
+div. Sorten
+0,5 Liter
+
+1 DOSE € 1,19
+12+12
+GRATIS
+BEI 24 DOSEN JE
+0,59">
+          <img src="https://assets.example.test/egger.jpg">
+        </div>
+      </article>
+    </div>
+  `);
+  const stored = enrichOffersForStorage(result.offers, {
+    source: billaActionSource(),
+    parserVersion: 'test',
+  });
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(stored[0].title, 'Egger div. Sorten');
+  assert.match(stored[0].conditionsText, /Extrem Aktion/);
+  assert.match(stored[0].conditionsText, /12\+12 gratis/);
+  assert.match(stored[0].conditionsText, /bei 24 Dosen/);
+  assert.equal(stored[0].minimumPurchaseQty, 24);
+  assert.equal(stored[0].isMultiBuy, true);
+  assert.equal(stored[0].validFrom.toISOString(), '2026-05-21T12:00:00.000Z');
+  assert.equal(stored[0].validTo.toISOString(), '2026-05-27T23:59:59.999Z');
+  assert.equal(stored[0].rawFacts.sourceType, 'billa-official-action-html');
+});
+
+test('BILLA action HTML parser keeps global legal text out of product conditions', () => {
+  const result = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <div class="row">
+      <h3>Extrem Aktion*</h3>
+      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+    </div>
+    <div class="legal">Rechtstext: 12+12 gratis bei 24 Dosen je 0,59, solange der Vorrat reicht.</div>
+    <div class="ws-slider-group">
+      <article>
+        <div data-teaser-name="Test Produkt
+0,5 Liter
+1 DOSE € 1,19"></div>
+      </article>
+    </div>
+  `);
+
+  assert.equal(result.offers.length, 0);
+});
+
+test('BILLA action HTML parser does not copy a neighbor product condition', () => {
+  const result = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <div class="row">
+      <h3>Extrem Aktion*</h3>
+      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+    </div>
+    <div class="ws-slider-group">
+      <article><div data-teaser-name="Egger
+0,5 Liter
+1 DOSE € 1,19
+12+12
+GRATIS
+BEI 24 DOSEN JE
+0,59"></div></article>
+      <article><div data-teaser-name="Nachbar Produkt
+0,5 Liter
+1 DOSE € 1,19"></div></article>
+    </div>
+  `);
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0].title, 'Egger');
+  assert.doesNotMatch(result.offers[0].conditionsText, /Nachbar/);
+});
+
+test('BILLA action HTML parser allows offers without safe condition to stay unparsed', () => {
+  const result = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <div class="row">
+      <h3>Extrem Aktion*</h3>
+      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+    </div>
+    <div class="ws-slider-group">
+      <article><div data-teaser-name="Normales Angebot
+1 Liter
+1 FLASCHE € 1,19"></div></article>
+    </div>
+  `);
+
+  assert.equal(result.offers.length, 0);
+});
+
+test('BILLA action HTML parser only takes section context from the nearest assigned section', () => {
+  const result = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <div class="row">
+      <h3>Extrem Aktion*</h3>
+      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+    </div>
+    <div class="ws-slider-group">
+      <article><div data-teaser-name="Egger
+0,5 Liter
+1 DOSE € 1,19
+12+12
+GRATIS
+BEI 24 DOSEN JE
+0,59"></div></article>
+    </div>
+    <div class="row">
+      <h3>Grillzeit ist Genusszeit!</h3>
+      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+    </div>
+    <div class="ws-slider-group">
+      <article><div data-teaser-name="Grill Produkt
+1,5 Liter
+1 FLASCHE € 2,39
+3+3
+GRATIS
+BEI 6 FL. JE
+1,19"></div></article>
+    </div>
+  `);
+
+  assert.equal(result.offers.length, 2);
+  assert.match(result.offers[0].conditionsText, /Extrem Aktion/);
+  assert.doesNotMatch(result.offers[1].conditionsText, /Extrem Aktion/);
+  assert.equal(result.offers[1].rawFacts.sectionTitle, 'Grillzeit ist Genusszeit!');
+});

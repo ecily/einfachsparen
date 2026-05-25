@@ -135,7 +135,7 @@ test('diagnoses blocked challenge pages separately from parser misses', () => {
 });
 
 test('price-optional category promotions enrich without missing price or unit review noise', () => {
-  const html = '<article>-25% auf alle Biere. Gueltig 21.05.2026 - 24.05.2026.</article>';
+  const html = '<article>-25% auf alle Biere. Gueltig 21.05.2026 - 31.12.2099.</article>';
   const { offers } = extractAndNormalizeOfficialCategoryPromotions({
     html,
     source: SPAR_SOURCE,

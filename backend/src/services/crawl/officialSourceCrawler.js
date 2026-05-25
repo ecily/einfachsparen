@@ -4031,6 +4031,344 @@ function buildBillaConditionsText(hit) {
   );
 }
 
+function parseBillaActionDate(value, fallbackYear = null) {
+  const match = String(value || '').match(/(\d{1,2})\.(\d{1,2})\.(?:(\d{2,4}))?/);
+
+  if (!match) {
+    return null;
+  }
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  let year = match[3] ? Number(match[3]) : Number(fallbackYear);
+
+  if (!year) {
+    return null;
+  }
+
+  if (year < 100) {
+    year += 2000;
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function parseBillaActionValidity(value) {
+  const text = sanitizeWhitespace(value);
+  const match = text.match(/gueltig\s+von\s+(.+?)\s+bis\s+(.+)$/i)
+    || text.match(/gültig\s+von\s+(.+?)\s+bis\s+(.+)$/i);
+
+  if (!match) {
+    return { validFrom: null, validTo: null, validityText: '' };
+  }
+
+  const endYearMatch = match[2].match(/(\d{2,4})(?!.*\d)/);
+  const fallbackYear = endYearMatch ? Number(endYearMatch[1]) : null;
+  const validFrom = parseBillaActionDate(match[1], fallbackYear);
+  const validTo = endOfUtcDay(parseBillaActionDate(match[2], fallbackYear));
+
+  return {
+    validFrom,
+    validTo,
+    validityText: text,
+  };
+}
+
+function findPreviousBillaContext($, element, selector = '', pattern = null) {
+  let current = element;
+
+  for (let depth = 0; current && depth < 8; depth += 1) {
+    const siblings = $(current).prevAll().toArray();
+
+    for (const sibling of siblings) {
+      const candidate = selector
+        ? $(sibling).find(selector).add($(sibling).filter(selector)).last()
+        : $(sibling);
+      const text = sanitizeWhitespace(candidate.text());
+
+      if (text && (!pattern || pattern.test(text))) {
+        return text;
+      }
+    }
+
+    current = $(current).parent()[0];
+  }
+
+  return '';
+}
+
+function buildBillaActionContext({ $, element }) {
+  const sectionHeading = findPreviousBillaContext($, element, 'h3');
+  const scopeHeading = findPreviousBillaContext($, element, 'h2');
+  const validityText = findPreviousBillaContext(
+    $,
+    element,
+    '',
+    /G(?:ü|ue)ltig\s+von\s+.+?\s+bis\s+.+?\d{1,2}\.\d{1,2}\.\d{2,4}/i
+  );
+  const validityMatch = validityText.match(/G(?:ü|ue)ltig\s+von\s+[^.]+?\d{1,2}\.\d{1,2}\.\s+bis\s+[^.]+?\d{1,2}\.\d{1,2}\.\d{2,4}/i);
+  const validity = parseBillaActionValidity(validityMatch?.[0] || '');
+
+  return {
+    sectionTitle: sanitizeWhitespace(sectionHeading || '').replace(/\*+$/, '').trim(),
+    scopeText: sanitizeWhitespace(scopeHeading || ''),
+    ...validity,
+  };
+}
+
+function normalizeBillaTeaserLines(value) {
+  return String(value || '')
+    .split(/\r?\n+/)
+    .map((line) => sanitizeWhitespace(line))
+    .filter(Boolean);
+}
+
+function parseBillaTeaserPrice(value) {
+  const amount = parseNumericAmount(value);
+  return amount && amount > 0 ? amount : null;
+}
+
+function normalizeBillaConditionUnit(value) {
+  const unit = normalizeTitleForMatch(value);
+
+  if (/dos|dose/.test(unit)) return 'Dosen';
+  if (/fl/.test(unit)) return 'Flaschen';
+  if (/pkg|pack/.test(unit)) return 'Pkg.';
+  if (/stk|stueck|stuck/.test(unit)) return 'Stk.';
+
+  return sanitizeWhitespace(value).replace(/\.$/, '');
+}
+
+function parseBillaActionTeaserName(value) {
+  const lines = normalizeBillaTeaserLines(value);
+  const fullText = sanitizeWhitespace(lines.join(' '));
+
+  if (!fullText || !/\b(?:gratis|ab\s+\d+|bei\s+\d+)\b/i.test(fullText)) {
+    return null;
+  }
+
+  const mechanicParts = [];
+  const plusMatch = fullText.match(/\b(\d+)\s*\+\s*(\d+)\s*gratis\b/i);
+  const thresholdMatch = fullText.match(/\b(?:bei|ab)\s+(\d+)\s*(dosen|dose|flaschen|fl\.|pkg\.?|packungen|stueck|stk\.?)\s+je\s+(\d+(?:[,.]\d{1,2})?)\b/i);
+  const abMatch = fullText.match(/\bab\s+(\d+)\s*(dosen|dose|flaschen|fl\.|pkg\.?|packungen|stueck|stk\.?)\s+je\s+(\d+(?:[,.]\d{1,2})?)\b/i);
+  const currentPrice = parseBillaTeaserPrice(thresholdMatch?.[3] || abMatch?.[3]);
+
+  if (plusMatch) {
+    mechanicParts.push(`${plusMatch[1]}+${plusMatch[2]} gratis`);
+  }
+
+  if (thresholdMatch) {
+    mechanicParts.push(`bei ${thresholdMatch[1]} ${normalizeBillaConditionUnit(thresholdMatch[2])} je ${String(thresholdMatch[3]).replace('.', ',')}`);
+  } else if (abMatch) {
+    mechanicParts.push(`ab ${abMatch[1]} ${normalizeBillaConditionUnit(abMatch[2])} je ${String(abMatch[3]).replace('.', ',')}`);
+  }
+
+  if (!mechanicParts.length || !currentPrice) {
+    return null;
+  }
+
+  const actionIndex = lines.findIndex((line) => /^(?:extrem\s+)?aktion\b/i.test(line));
+  const quantityIndex = lines.findIndex((line) => /\b\d+(?:[,.]\d+)?\s*(?:liter|l|kg|g|ml|rollen|stueck|stk|dose|flasche|pkg)\b/i.test(line));
+  const priceLineIndex = lines.findIndex((line) => /\b(?:dose|flasche|fl\.|pkg\.?|stk\.?|stueck)\s*(?:€|eur)\s*\d/i.test(line));
+  const titleEnd = [quantityIndex, actionIndex, priceLineIndex]
+    .filter((index) => index > 0)
+    .sort((left, right) => left - right)[0] || Math.min(lines.length, 3);
+  const title = sanitizeWhitespace(lines.slice(0, titleEnd).join(' '));
+  const quantityParts = [];
+  const quantityLine = quantityIndex >= 0 ? lines[quantityIndex] : '';
+  const packageLine = priceLineIndex >= 0 ? lines[priceLineIndex].replace(/\s*(?:€|eur)\s*\d[\d,.]*.*$/i, '') : '';
+  const referencePrice = parseBillaTeaserPrice(priceLineIndex >= 0 ? lines[priceLineIndex] : '');
+
+  if (quantityLine) {
+    quantityParts.push(quantityLine);
+  }
+
+  if (packageLine && !normalizeTitleForMatch(quantityLine).includes(normalizeTitleForMatch(packageLine))) {
+    quantityParts.push(packageLine);
+  }
+
+  const actionContext = lines.slice(Math.max(0, actionIndex), Math.min(lines.length, actionIndex + 2)).join(' ');
+  const hasExtremAction = /extrem\s+aktion/i.test(`${actionContext} ${fullText}`);
+  const conditionsText = sanitizeWhitespace([
+    hasExtremAction ? 'Extrem Aktion' : '',
+    ...mechanicParts,
+  ].filter(Boolean).join('; '));
+
+  return {
+    title,
+    quantityText: sanitizeWhitespace(quantityParts.join(' / ')),
+    currentPrice,
+    referencePrice,
+    conditionsText,
+    rawText: fullText,
+  };
+}
+
+function normalizeBillaActionTeaserToOffer({ candidate, source, crawlJobId, region, observedUrl }) {
+  const title = candidate.title;
+  const sectionCondition = /extrem\s+aktion/i.test(candidate.sectionTitle || '') && !/extrem\s+aktion/i.test(candidate.conditionsText || '')
+    ? 'Extrem Aktion'
+    : '';
+  const conditionsText = sanitizeWhitespace([sectionCondition, candidate.conditionsText].filter(Boolean).join('; '));
+  const categoryPrimary = determineOfferCategory({
+    title,
+    contextText: `${candidate.sectionTitle} ${candidate.rawText}`,
+    sourceCategory: candidate.sectionTitle,
+  });
+  const normalizedUnitPrice = buildOfficialNormalizedUnitPrice({
+    priceAmount: candidate.currentPrice,
+    quantityText: candidate.quantityText,
+  });
+  const statusInfo = buildOfferStatus(candidate.validFrom, candidate.validTo, Boolean(candidate.validFrom || candidate.validTo));
+  const scopeDecision = buildInclusiveScopeDecision();
+  const issues = [];
+
+  if (!candidate.validFrom || !candidate.validTo) {
+    issues.push('Gueltigkeitszeitraum aus BILLA-Aktionsabschnitt unvollstaendig');
+  }
+
+  if (!normalizedUnitPrice.comparable) {
+    issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+  }
+
+  const overrideResult = applyManualCategoryOverridesToOfferSync({
+    crawlJobId,
+    sourceId: source._id,
+    retailerKey: source.retailerKey,
+    retailerName: source.retailerName,
+    region,
+    title,
+    brand: title.split(/\s+/)[0] || '',
+    categoryPrimary,
+    categorySecondary: determineOfferSubcategory({
+      primaryCategory: categoryPrimary,
+      sourceCategory: candidate.sectionTitle,
+      fallbackLabel: categoryPrimary,
+      title,
+      contextText: `${candidate.sectionTitle} ${candidate.rawText}`,
+    }),
+    comparisonSignature: normalizeTitleForMatch(title).split(' ').slice(0, 8).join('-'),
+    comparisonQuantityKey: candidate.quantityText ? normalizeTitleForMatch(candidate.quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+    comparisonCategoryKey: normalizeTitleForMatch(candidate.sectionTitle || categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+    description: '',
+    sourceUrl: observedUrl || source.sourceUrl,
+    imageUrl: normalizeImageUrl(candidate.imageUrl || '', source.sourceUrl),
+    supportingSources: [
+      buildSourceEvidence({
+        source,
+        observedUrl: observedUrl || source.sourceUrl,
+        matchType: 'primary',
+      }),
+    ],
+    validFrom: candidate.validFrom,
+    validTo: candidate.validTo,
+    status: statusInfo.status,
+    isActiveNow: statusInfo.isActiveNow,
+    isActiveToday: statusInfo.isActiveToday,
+    benefitType: 'multi-buy',
+    conditionsText,
+    customerProgramRequired: false,
+    availabilityScope: region || 'Grossraum Graz',
+    priceCurrent: {
+      amount: candidate.currentPrice,
+      currency: 'EUR',
+      originalText: candidate.currentPrice ? `${candidate.currentPrice.toFixed(2)} EUR` : '',
+    },
+    priceReference: {
+      amount: candidate.referencePrice,
+      currency: 'EUR',
+      originalText: candidate.referencePrice ? `${candidate.referencePrice.toFixed(2)} EUR` : '',
+    },
+    priceReferenceSource: candidate.referencePrice ? 'prospect' : '',
+    priceReferenceConfidence: candidate.referencePrice ? 0.95 : 0,
+    quantityText: candidate.quantityText,
+    normalizedUnitPrice,
+    quality: {
+      completenessScore: [candidate.currentPrice, title, categoryPrimary, candidate.validTo].filter(Boolean).length / 4,
+      parsingConfidence: 0.82,
+      comparisonSafe: normalizedUnitPrice.comparable,
+      issues,
+    },
+    rawFacts: {
+      sourceType: 'billa-official-action-html',
+      sectionTitle: candidate.sectionTitle,
+      scopeText: candidate.scopeText,
+      validityText: candidate.validityText,
+      teaserName: candidate.rawText,
+      conditionsText,
+    },
+    adminReview: {
+      status: issues.length > 0 ? 'pending' : 'reviewed',
+      note: '',
+      feedbackDigest: '',
+    },
+    scope: scopeDecision,
+  });
+
+  return overrideResult.offer || null;
+}
+
+function extractBillaActionTeasersFromHtml({ html, source, crawlJobId, region, pageUrl }) {
+  const $ = cheerio.load(html, { withStartIndices: true });
+  const offers = [];
+  const diagnostics = {
+    rawTeasers: 0,
+    parsedOffers: 0,
+    skipReasons: {},
+  };
+
+  function skip(reason) {
+    diagnostics.skipReasons[reason] = (diagnostics.skipReasons[reason] || 0) + 1;
+  }
+
+  $('[data-teaser-name]').each((index, element) => {
+    const teaserName = $(element).attr('data-teaser-name') || '';
+
+    if (!/\b(?:gratis|ab\s+\d+|bei\s+\d+)\b/i.test(teaserName)) {
+      return;
+    }
+
+    diagnostics.rawTeasers += 1;
+
+    const parsed = parseBillaActionTeaserName(teaserName);
+
+    if (!parsed?.title || !parsed.currentPrice || !parsed.conditionsText) {
+      skip('unparsed-product-teaser');
+      return;
+    }
+
+    const context = buildBillaActionContext({ $, element });
+    const imageUrl = $(element).find('img').first().attr('src')
+      || $(element).find('source').first().attr('srcset')?.split(/\s+/)[0]
+      || '';
+    const offer = normalizeBillaActionTeaserToOffer({
+      candidate: {
+        ...parsed,
+        ...context,
+        imageUrl,
+      },
+      source,
+      crawlJobId,
+      region,
+      observedUrl: pageUrl || source.sourceUrl,
+    });
+
+    if (!offer) {
+      skip('normalization-rejected');
+      return;
+    }
+
+    offers.push(offer);
+  });
+
+  diagnostics.parsedOffers = offers.length;
+
+  return {
+    offers,
+    diagnostics,
+  };
+}
+
 function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, observedUrl }) {
   const { currentPrice, referencePrice } = buildBillaPrice(hit);
   const normalizedUnitPrice = buildBillaNormalizedUnitPrice(hit, currentPrice);
@@ -4136,11 +4474,22 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
   return overrideResult.offer || null;
 }
 
-async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
+async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html = '', pageUrl = '' }) {
   const hits = await fetchBillaAlgoliaPromotionHits();
+  const htmlPromotionResult = html
+    ? extractBillaActionTeasersFromHtml({
+      html,
+      source,
+      crawlJobId,
+      region,
+      pageUrl: pageUrl || source.sourceUrl,
+    })
+    : { offers: [], diagnostics: { rawTeasers: 0, parsedOffers: 0, skipReasons: {} } };
   const payload = {
     retailerKey: source.retailerKey,
     hitCount: hits.length,
+    htmlTeaserCount: htmlPromotionResult.diagnostics.rawTeasers,
+    htmlParsedOffers: htmlPromotionResult.offers.length,
     sample: hits.slice(0, 25),
   };
 
@@ -4159,22 +4508,27 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
     payload: {
       retailerKey: source.retailerKey,
       hitCount: hits.length,
+      htmlTeaserCount: htmlPromotionResult.diagnostics.rawTeasers,
+      htmlParsedOffers: htmlPromotionResult.offers.length,
+      htmlSkipReasons: htmlPromotionResult.diagnostics.skipReasons,
       sampleNames: hits.slice(0, 5).map((hit) => sanitizeWhitespace(hit?.name || '')).filter(Boolean),
     },
   });
 
-  const normalizedOffers = hits.map((hit) =>
-    normalizeBillaPromotionToOffer({
-      hit,
-      source,
-      crawlJobId,
-      region,
-      observedUrl: source.sourceUrl,
-    })
-  );
+  const normalizedOffers = [
+    ...hits.map((hit) =>
+      normalizeBillaPromotionToOffer({
+        hit,
+        source,
+        crawlJobId,
+        region,
+        observedUrl: source.sourceUrl,
+      })
+    ),
+    ...htmlPromotionResult.offers,
+  ];
   const offerDocuments = enrichOffersForStorage(normalizedOffers, {
     source,
-    sourceType: 'billa-official-algolia',
     parserVersion: PARSER_VERSION,
     normalizationVersion: NORMALIZATION_VERSION,
   });
@@ -4186,8 +4540,12 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region }) {
 
   return {
     hitCount: hits.length,
+    rawCandidateCount: hits.length + htmlPromotionResult.diagnostics.rawTeasers,
     offerDocuments,
     rawDocuments: 1,
+    diagnostics: {
+      htmlPromotions: htmlPromotionResult.diagnostics,
+    },
     refreshResult,
   };
 }
@@ -5393,12 +5751,15 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         source,
         crawlJobId: crawlJob._id,
         region,
+        html,
+        pageUrl: canonicalUrl,
       });
 
       offersStored += billaOfficialResult.offerDocuments.length;
       extraRawDocuments += billaOfficialResult.rawDocuments;
-      rawCandidateCount += billaOfficialResult.hitCount || billaOfficialResult.offerDocuments.length;
+      rawCandidateCount += billaOfficialResult.rawCandidateCount || billaOfficialResult.hitCount || billaOfficialResult.offerDocuments.length;
       allStoredOffers.push(...billaOfficialResult.offerDocuments);
+      parserDetails.billaOfficial = billaOfficialResult.diagnostics || {};
     } else if (source.retailerKey === 'penny' && source.channel === 'official-flyer') {
       const pennyFlyerResult = await crawlPennyOfficialFlyers({
         source,
@@ -5673,6 +6034,8 @@ module.exports = {
     extractLidlCampaignPageLinksFromHtml,
     getLidlCampaignPagesForCrawl,
     isLidlCampaignPageUrl,
+    parseBillaActionTeaserName,
+    extractBillaActionTeasersFromHtml,
     normalizeImageUrl,
   },
 };
