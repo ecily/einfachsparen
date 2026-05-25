@@ -330,9 +330,11 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
             <span>Du sparst ca.</span>
             <strong>{canShowKnownSavings ? formatPrice(knownSavingsTotal) : formatPrice(0)}</strong>
           </div>
-        </div>
 
-        {canShowSavingsPercent ? <p className="shopping-check__percent-note">Das entspricht ca. {savingsPercent} % Ersparnis.</p> : null}
+          {canShowSavingsPercent ? (
+            <div className="shopping-check__percent-note">Das entspricht ca. {savingsPercent} % Ersparnis.</div>
+          ) : null}
+        </div>
 
         <p className="shopping-check__note">
           Ersparnisse zählen wir nur mit Vergleichspreis. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine

@@ -3064,8 +3064,14 @@ a {
 }
 
 .shopping-check__percent-note {
-  margin: -0.08rem 0 0;
-  max-width: 56rem;
+  align-self: center;
+  flex: 1.1 1 13rem;
+  min-width: 12rem;
+  max-width: 18rem;
+  padding: 0.58rem 0.72rem;
+  border: 1px solid rgba(47, 111, 78, 0.16);
+  border-radius: 999px;
+  background: rgba(242, 247, 244, 0.72);
   color: #4f5f56;
   font-size: 0.96rem;
   font-weight: 780;
@@ -3079,7 +3085,6 @@ a {
 }
 
 .shopping-check__soft-note,
-.shopping-check__percent-note,
 .shopping-check__note {
   grid-column: 1 / -1;
 }
