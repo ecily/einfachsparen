@@ -44,6 +44,10 @@ import { shouldSeparateRetailerGroups } from './utils/retailers'
 const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
 const BETA_TEST_NOTICE =
   'Hilf mit, kaufklug besser zu machen: Bei jedem Angebot kannst du Fehler direkt melden. Danke!'
+const BETA_INFO_TITLE = 'Warum Beta-Test?'
+const BETA_INFO_TEXT =
+  'kaufklug lernt gerade, Angebote noch zuverlässiger zu zeigen. Wenn dir ein falscher Preis, eine fehlende Bedingung, ein falsches Bild oder eine falsche Kategorie auffällt, melde es direkt beim Angebot. So können wir die Datenqualität gezielt verbessern.'
+const BETA_INFO_CLOSING = 'Danke für deine Hilfe.'
 const MOBILE_BROWSER_NOTICE =
   'kaufklug.at funktioniert auch am Handy direkt im Browser. Die App-Version bleibt pausiert, bis die Datenqualität stabil genug ist.'
 
@@ -78,6 +82,53 @@ async function fetchAdminEssence() {
   }
 
   return payload?.essence || payload?.digest || payload?.text || payload?.summary || ''
+}
+
+function BetaInfoPanel({ id, onClose, className = '' }) {
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  return (
+    <div id={id} className={`beta-info-panel ${className}`.trim()} role="region" aria-labelledby={`${id}-title`}>
+      <div>
+        <strong id={`${id}-title`}>{BETA_INFO_TITLE}</strong>
+        <p>{BETA_INFO_TEXT}</p>
+        <p>{BETA_INFO_CLOSING}</p>
+      </div>
+      <button type="button" className="beta-info-panel__close" onClick={onClose} aria-label="Beta-Erklärung schließen">
+        Schließen
+      </button>
+    </div>
+  )
+}
+
+function BetaNoticeDisclosure() {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div className={`search-landing-hero__beta-notice${isOpen ? ' search-landing-hero__beta-notice--open' : ''}`}>
+      <button
+        type="button"
+        className="beta-notice-trigger beta-notice-trigger--hero"
+        aria-expanded={isOpen}
+        aria-controls="beta-info-hero"
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <strong>BETA-TEST LÄUFT!</strong>
+        <p>{BETA_TEST_NOTICE}</p>
+      </button>
+      {isOpen ? <BetaInfoPanel id="beta-info-hero" className="beta-info-panel--hero" onClose={() => setIsOpen(false)} /> : null}
+    </div>
+  )
 }
 
 function SearchLandingHero() {
@@ -175,19 +226,18 @@ function SearchLandingHero() {
             textAlign: 'center',
           }}
         >
-          <div className="search-landing-hero__beta-notice">
-            <strong>BETA-TEST LÄUFT!</strong>
-            <p>{BETA_TEST_NOTICE}</p>
+          <BetaNoticeDisclosure />
+          <div className="search-landing-hero__phone-copy">
+            <p className="eyebrow" style={{ margin: 0 }}>
+              Einkauf am Smartphone
+            </p>
+            <h2 style={{ fontSize: 'clamp(1.05rem, 2.4vw, 1.35rem)', lineHeight: 1.14, margin: 0 }}>
+              Am Handy direkt nutzen
+            </h2>
+            <p style={{ color: '#5c6658', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
+              {MOBILE_BROWSER_NOTICE}
+            </p>
           </div>
-          <p className="eyebrow" style={{ margin: 0 }}>
-            Einkauf am Smartphone
-          </p>
-          <h2 style={{ fontSize: 'clamp(1.05rem, 2.4vw, 1.35rem)', lineHeight: 1.14, margin: 0 }}>
-            Am Handy direkt nutzen
-          </h2>
-          <p style={{ color: '#5c6658', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
-            {MOBILE_BROWSER_NOTICE}
-          </p>
           {appDownload ? (
             <>
               <div className="app-download-modal__qr search-landing-hero__qr" style={{ margin: 0 }}>
@@ -322,6 +372,7 @@ function App() {
   const [rankingLoading, setRankingLoading] = useState(false)
   const [rankingLoadingMore, setRankingLoadingMore] = useState(false)
   const [browseAutoRefreshEnabled, setBrowseAutoRefreshEnabled] = useState(false)
+  const [isHeaderBetaInfoOpen, setIsHeaderBetaInfoOpen] = useState(false)
   const [qualityLoading, setQualityLoading] = useState(false)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [qualitySavingKey, setQualitySavingKey] = useState('')
@@ -632,6 +683,7 @@ function App() {
   }
 
   function handleNavigate(nextPage) {
+    setIsHeaderBetaInfoOpen(false)
     setActivePage(nextPage)
     setSharedListId('')
 
@@ -644,6 +696,7 @@ function App() {
   }
 
   function handleLogoClick() {
+    setIsHeaderBetaInfoOpen(false)
     setActivePage('product-search')
     setSharedListId('')
 
@@ -659,6 +712,7 @@ function App() {
     event.preventDefault()
 
     const nextQuery = navSearchQuery.trim()
+    setIsHeaderBetaInfoOpen(false)
     setActivePage('product-search')
     setKeywordSearchRequest((current) => ({ query: nextQuery, nonce: current.nonce + 1 }))
 
@@ -991,6 +1045,15 @@ function App() {
         <button className="page-nav__logo" type="button" onClick={handleLogoClick} aria-label="Zur Startseite">
           <img src="/kaufklug-logo.png" alt="" width="1024" height="1024" />
         </button>
+        <button
+          className="page-nav__beta"
+          type="button"
+          aria-expanded={isHeaderBetaInfoOpen}
+          aria-controls="beta-info-header"
+          onClick={() => setIsHeaderBetaInfoOpen((current) => !current)}
+        >
+          Beta
+        </button>
         <div className="page-nav__main">
           <button
             className={`page-nav__button${activePage === 'product-search' ? ' page-nav__button--active' : ''}`}
@@ -1029,6 +1092,9 @@ function App() {
           </button>
         </form>
       </nav>
+      {isHeaderBetaInfoOpen ? (
+        <BetaInfoPanel id="beta-info-header" className="beta-info-panel--header" onClose={() => setIsHeaderBetaInfoOpen(false)} />
+      ) : null}
 
       {activePage === 'shared-shopping-list' ? (
         <SharedShoppingListPage
