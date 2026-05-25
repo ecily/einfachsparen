@@ -3063,6 +3063,15 @@ a {
   overflow-wrap: anywhere;
 }
 
+.shopping-check__percent-note {
+  margin: -0.08rem 0 0;
+  max-width: 56rem;
+  color: #4f5f56;
+  font-size: 0.96rem;
+  font-weight: 780;
+  line-height: 1.38;
+}
+
 .shopping-check__note {
   max-width: 56rem;
   color: #667069;
@@ -3070,6 +3079,7 @@ a {
 }
 
 .shopping-check__soft-note,
+.shopping-check__percent-note,
 .shopping-check__note {
   grid-column: 1 / -1;
 }

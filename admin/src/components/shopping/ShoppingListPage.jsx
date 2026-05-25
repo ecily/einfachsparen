@@ -150,6 +150,18 @@ function getKnownSavingsTotal(items, quantities) {
   return cents / 100
 }
 
+function getSavingsPercent(offerTotal, savingsTotal) {
+  const paid = Number(offerTotal)
+  const saved = Number(savingsTotal)
+  const comparisonTotal = paid + saved
+
+  if (!Number.isFinite(paid) || !Number.isFinite(saved) || paid <= 0 || saved <= 0 || comparisonTotal <= 0) {
+    return 0
+  }
+
+  return Math.round((saved / comparisonTotal) * 100)
+}
+
 function getApproximateSavingsCount(items = []) {
   return (items || []).filter((item) => {
     const savings = getShoppingListItemSavingsInfo(item)
@@ -204,6 +216,8 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
   const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const canShowOfferTotal = useMemo(() => hasKnownCurrentPrice(shoppingListItems), [shoppingListItems])
   const canShowKnownSavings = summary.knownSavingsCount > 0 && knownSavingsTotal > 0
+  const savingsPercent = getSavingsPercent(offerTotal, knownSavingsTotal)
+  const canShowSavingsPercent = canShowOfferTotal && canShowKnownSavings && savingsPercent > 0
 
   useEffect(() => {
     storeCheckedShoppingListItems(checkedItemIds)
@@ -317,6 +331,8 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
             <strong>{canShowKnownSavings ? formatPrice(knownSavingsTotal) : formatPrice(0)}</strong>
           </div>
         </div>
+
+        {canShowSavingsPercent ? <p className="shopping-check__percent-note">Das entspricht ca. {savingsPercent} % Ersparnis.</p> : null}
 
         <p className="shopping-check__note">
           Ersparnisse zählen wir nur mit Vergleichspreis. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine
