@@ -8,6 +8,7 @@ const { computeOfferSavings } = require('./promotionMath');
 const {
   SEARCH_TOKEN_VERSION,
   STOPWORDS: SEARCH_TOKEN_STOPWORDS,
+  WURST_PRODUCT_TOKENS,
   buildQuerySearchTokens,
   repairGermanSearchTextEncoding,
 } = require('./searchTokens');
@@ -111,7 +112,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -1031,6 +1032,43 @@ const QUERY_CONTEXTS = [
     productContext: ['fleisch', 'wurst'],
     weakContexts: ['fleischersatz', 'pflanzlich', 'moussaka', 'fertiggericht'],
     severeWeakContexts: ['zahnfleisch', 'mundpflege', 'mundspuelung', 'fleischtomaten', 'tomatenpflanzen', 'hundefutter', 'katzenfutter', 'tierfutter'],
+  },
+  {
+    key: 'wurst',
+    tokens: ['wurst'],
+    preferred: ['wurst', 'aufschnitt', 'salami', 'frankfurter', 'schinken', 'speck', 'fleisch', 'lebensmittel'],
+    strongPreferred: ['wurst', 'aufschnitt', 'salami', 'frankfurter', 'schinken', 'speck'],
+    productIntent: WURST_PRODUCT_TOKENS,
+    exactProductIntent: WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst'),
+    productContext: ['wurst', 'fleisch', 'aufschnitt'],
+    weakContexts: [
+      'faschiertes',
+      'filet',
+      'fleisch',
+      'garnelen',
+      'hendl',
+      'huhn',
+      'karree',
+      'lachs',
+      'poularde',
+      'schnitzel',
+      'steak',
+      'thunfisch',
+    ],
+    severeWeakContexts: [
+      'forelle',
+      'fisch',
+      'gefluegel',
+      'geflugel',
+      'grillhendl',
+      'huehner',
+      'huehnerfilet',
+      'huhner',
+      'huhnerfilet',
+      'lachsfilet',
+      'maishendl',
+      'unterkeulen',
+    ],
   },
   {
     key: 'gemuese',
@@ -2139,6 +2177,78 @@ function scoreRiceSearchIntent({ titleTokens, categoryTokens, comparisonTokens, 
   return adjustment;
 }
 
+function getGenericWurstOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const productWurst = hasAnyTokenFamily(productTokens, WURST_PRODUCT_TOKENS);
+  const categoryWurst = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['wurst', 'aufschnitt']);
+  const fishSide = hasAnyTokenFamily(productTokens, [
+    'fisch',
+    'forelle',
+    'garnelen',
+    'lachs',
+    'lachsfilet',
+    'thunfisch',
+  ]);
+  const meatCutSide = hasAnyTokenFamily(productTokens, [
+    'faschiertes',
+    'filet',
+    'grillhendl',
+    'hendl',
+    'huhn',
+    'huehner',
+    'huehnerfilet',
+    'huhner',
+    'huhnerfilet',
+    'karree',
+    'maishendl',
+    'poularde',
+    'schnitzel',
+    'schweinsschnitzel',
+    'steak',
+    'unterkeulen',
+  ]);
+  const categoryOnly = !productWurst && categoryWurst;
+  const clearSideHit = !productWurst && (fishSide || meatCutSide);
+  const noProductSignal = !productWurst &&
+    !hasAnyTokenFamily(allTokens, WURST_PRODUCT_TOKENS) &&
+    categoryWurst;
+
+  return {
+    categoryOnly,
+    clearSideHit,
+    productWurst,
+    weakCategoryOnly: noProductSignal && !clearSideHit,
+  };
+}
+
+function scoreWurstSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const {
+    categoryOnly,
+    clearSideHit,
+    productWurst,
+    weakCategoryOnly,
+  } = getGenericWurstOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (productWurst) {
+    adjustment += 5200;
+  }
+
+  if (clearSideHit) {
+    adjustment -= 6200;
+  } else if (categoryOnly) {
+    adjustment -= weakCategoryOnly ? 3600 : 2400;
+  }
+
+  return adjustment;
+}
+
 function scoreFieldAgainstQuery(value, queryTokens, weights) {
   const fieldTokens = tokenizeSearchText(value);
 
@@ -2274,6 +2384,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericDogFoodQuery = context?.key === 'hundefutter' && queryTokens.length === 1 && queryTokens[0] === 'hundefutter';
   const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
   const genericBeerQuery = context?.key === 'bier' && queryTokens.length === 1 && queryTokens[0] === 'bier';
+  const genericWurstQuery = context?.key === 'wurst' && queryTokens.length === 1 && queryTokens[0] === 'wurst';
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
   const conservativeGenericOilQuery = genericOilQuery;
 
@@ -2469,6 +2580,15 @@ function scoreOfferAgainstQuery(offer, query) {
 
     if (genericRiceQuery) {
       score += scoreRiceSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
+    if (genericWurstQuery) {
+      score += scoreWurstSearchIntent({
         titleTokens,
         categoryTokens,
         comparisonTokens,

@@ -23,6 +23,37 @@ const FOOD_OIL_PRODUCT_TOKENS = [
   'speiseol',
 ];
 
+const WURST_PRODUCT_TOKENS = [
+  'aufschnitt',
+  'bacon',
+  'bierschinken',
+  'bratwurst',
+  'cabanossi',
+  'extrawurst',
+  'frankfurter',
+  'grillwurst',
+  'haussalami',
+  'hauswurst',
+  'kaesewurst',
+  'kantwurst',
+  'krakauer',
+  'leberkaese',
+  'leberkase',
+  'leberwurst',
+  'mortadella',
+  'polnische',
+  'presswurst',
+  'putensalami',
+  'salami',
+  'schinken',
+  'speck',
+  'streichwurst',
+  'wuerstel',
+  'wuerstl',
+  'wurst',
+  'wurstl',
+];
+
 const STOPWORDS = new Set([
   'ab',
   'aktion',
@@ -91,6 +122,7 @@ const QUERY_SYNONYMS = new Map([
     'tierfutter',
     'whiskas',
   ]],
+  ['wurst', WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst')],
 ]);
 
 const COMPOUND_PRODUCT_TOKENS = new Set([
@@ -110,6 +142,7 @@ const CONSERVATIVE_COMPOUND_TOKEN_ALIASES = new Map([
     'sussrahmbutter',
     'teebutter',
   ]],
+  ['wurst', WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst')],
 ]);
 
 function repairGermanSearchTextEncoding(value) {
@@ -257,6 +290,7 @@ function withOfferSearchTokens(offer = {}) {
 module.exports = {
   SEARCH_TOKEN_VERSION,
   FOOD_OIL_PRODUCT_TOKENS,
+  WURST_PRODUCT_TOKENS,
   STOPWORDS,
   buildOfferSearchTokens,
   buildQuerySearchTokens,

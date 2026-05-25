@@ -107,6 +107,18 @@ test('expands nudeln query only to direct pasta product tokens', () => {
   ]));
 });
 
+test('expands wurst query to direct sausage and cold-cut product tokens only', () => {
+  const wurstTokens = buildQuerySearchTokens('wurst');
+
+  for (const token of ['wurst', 'salami', 'frankfurter', 'wuerstel', 'aufschnitt', 'schinken', 'speck']) {
+    assert.equal(wurstTokens.includes(token), true);
+  }
+
+  for (const sideHitToken of ['lachs', 'hendl', 'schnitzel', 'fisch']) {
+    assert.equal(wurstTokens.includes(sideHitToken), false);
+  }
+});
+
 test('keeps reis and milch query tokens and indexes conservative product compounds', () => {
   assert.deepEqual(buildQuerySearchTokens('reis'), ['reis']);
   assert.deepEqual(buildQuerySearchTokens('milch'), ['milch']);
@@ -118,6 +130,16 @@ test('keeps reis and milch query tokens and indexes conservative product compoun
   assert.equal(riceTokens.includes('reis'), true);
   assert.equal(milkTokens.includes('milch'), true);
   assert.equal(priceTokens.includes('reis'), false);
+});
+
+test('indexes common wurst compounds with a generic wurst token', () => {
+  const grillwurstTokens = buildOfferSearchTokens({ title: 'BBQ Grillwurst-Mix' });
+  const salamiTokens = buildOfferSearchTokens({ title: 'Haussalami geschnitten' });
+  const fishTokens = buildOfferSearchTokens({ title: 'Lachsfilet frisch' });
+
+  assert.equal(grillwurstTokens.includes('wurst'), true);
+  assert.equal(salamiTokens.includes('wurst'), true);
+  assert.equal(fishTokens.includes('wurst'), false);
 });
 
 test('indexes food oil compounds with a generic oil token without indexing oil side hits', () => {

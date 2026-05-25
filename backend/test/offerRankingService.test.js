@@ -2353,6 +2353,98 @@ test('nudeln search keeps pasta visible ahead of sweet noodle side hits', () => 
   assert.ok(sortedTitles.indexOf('Mohnnudeln mit Butterbroesel') > 1);
 });
 
+test('wurst search ranks sausage and cold-cut products ahead of category-only fish and meat hits', () => {
+  const offers = [
+    offer({
+      title: 'Lachsfilet frisch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'lachsfilet-frisch::0.25-kg',
+    }),
+    offer({
+      title: 'Huhnerschnitzel paniert',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'huhnerschnitzel-paniert::0.4-kg',
+      imageUrl: '',
+    }),
+    offer({
+      title: 'TANN Salami',
+      brand: 'TANN',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'tann-salami::0.1-kg',
+    }),
+    offer({
+      title: 'Frankfurter Wuerstel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'frankfurter-wuerstel::0.3-kg',
+    }),
+    offer({
+      title: 'BBQ Grillwurst-Mix',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'bbq-grillwurst-mix::0.6-kg',
+    }),
+    offer({
+      title: 'Schinken Aufschnitt',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'schinken-aufschnitt::0.2-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'wurst').map((item) => item.title);
+
+  assert.deepEqual(new Set(sortedTitles.slice(0, 4)), new Set([
+    'BBQ Grillwurst-Mix',
+    'Frankfurter Wuerstel',
+    'Schinken Aufschnitt',
+    'TANN Salami',
+  ]));
+  assert.ok(sortedTitles.indexOf('Lachsfilet frisch') > sortedTitles.indexOf('TANN Salami'));
+  assert.ok(sortedTitles.indexOf('Huhnerschnitzel paniert') > sortedTitles.indexOf('Frankfurter Wuerstel'));
+  assert.equal(sortedTitles.includes('Lachsfilet frisch'), true);
+  assert.equal(sortedTitles.includes('Huhnerschnitzel paniert'), true);
+});
+
+test('wurst category remains a weak signal without outranking explicit salami', () => {
+  const offers = [
+    offer({
+      title: 'Kategorie-Angebot Fleischplatte',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'fleischplatte::0.5-kg',
+    }),
+    offer({
+      title: 'Haussalami geschnitten',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'haussalami-geschnitten::0.15-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'wurst').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles, [
+    'Haussalami geschnitten',
+    'Kategorie-Angebot Fleischplatte',
+  ]);
+});
+
+test('single-word core product searches keep direct product matches searchable', () => {
+  const directProductOffers = [
+    ['kaffee', offer({ title: 'Lavazza Kaffee Bohnen', categorySecondary: 'Kaffee & Tee' })],
+    ['bier', offer({ title: 'Goesser Maerzen Bier', categorySecondary: 'Bier' })],
+    ['duschgel', offer({ title: 'Nivea Duschgel', categorySecondary: 'Koerperpflege' })],
+    ['zahnpasta', offer({ title: 'Elmex Zahnpasta', categorySecondary: 'Mundpflege' })],
+  ];
+
+  for (const [query, directOffer] of directProductOffers) {
+    assert.equal(applyQueryMatch([directOffer], query).length, 1);
+    assert.ok(scoreOfferAgainstQuery(directOffer, query) > 0);
+  }
+});
+
 test('filters safe core-product false positives without broadening generic queries', () => {
   assert.deepEqual(applyQueryMatch([
     offer({
@@ -4287,7 +4379,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
