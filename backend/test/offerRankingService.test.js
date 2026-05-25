@@ -13,6 +13,7 @@ const {
   buildKnownCategoryLabelMap,
   buildRankingBaseCacheKey,
   calculateOfferTermCoverage,
+  compareOffersByRanking,
   createResultSetToken,
   dedupeFinalResponseOffers,
   dedupeQueryOffers,
@@ -4666,7 +4667,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-offer-quality-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
@@ -4757,7 +4758,33 @@ test('ranked offer response hides unsafe stored technical unit prices', () => {
     comparable: false,
     confidence: 0.4,
   });
+  assert.equal(ranked.comparableUnit, '');
   assert.equal(ranked.priceGapPercent, 0);
+});
+
+test('ranked offer response sanitizes broken visible quantity artifacts without hiding the clean pack hint', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'ariel-broken',
+    title: 'Ariel Waschmittel Fluessig div. Sorten 40 WL dm 1 Flasche',
+    retailerKey: 'dm',
+    priceCurrent: { amount: 11.65, currency: 'EUR' },
+    quantityText: '$undefined WG / 1 Fl.',
+    unitType: 'WG',
+    comparableUnit: '',
+    normalizedUnitPrice: {
+      amount: null,
+      unit: '',
+      comparable: false,
+      confidence: 0,
+    },
+    quality: {
+      comparisonSafe: false,
+    },
+  }), null, null);
+
+  assert.equal(ranked.quantityText, '1 Fl.');
+  assert.equal(ranked.unitType, '');
+  assert.equal(ranked.comparableUnit, '');
 });
 
 test('ranked offer response keeps safely comparable unit prices visible', () => {
@@ -4788,4 +4815,74 @@ test('ranked offer response keeps safely comparable unit prices visible', () => 
     comparable: true,
     confidence: 0.9,
   });
+  assert.equal(ranked.comparableUnit, 'kg');
+});
+
+test('ranking quality adjustment stays behind query relevance', () => {
+  const relevantWithoutImage = offer({
+    title: 'Milka Schokolade Alpenmilch',
+    brand: 'Milka',
+    categorySecondary: 'Schokolade',
+    searchText: 'milka schokolade',
+    imageUrl: '',
+    sourceType: 'aktionsfinder-json',
+  });
+  const irrelevantWithImage = offer({
+    title: 'Nivea Duschgel',
+    brand: 'Nivea',
+    categorySecondary: 'Duschgel',
+    searchText: 'nivea duschgel',
+    imageUrl: 'https://example.test/nivea.jpg',
+    sourceType: 'bipa-official-html',
+  });
+
+  assert.equal(compareOffersByRanking(relevantWithoutImage, irrelevantWithImage, { query: 'milka schokolade' }) < 0, true);
+});
+
+test('ranking quality adjustment weakly prefers equally relevant official complete card', () => {
+  const official = offer({
+    title: 'Bio Vollmilch 1 l',
+    categorySecondary: 'Milch',
+    searchText: 'milch',
+    sourceType: 'billa-official-algolia',
+    sourceUrl: 'https://www.billa.at/aktionen/milch',
+    imageUrl: 'https://example.test/milch.jpg',
+    conditionsText: 'nur diese Woche',
+    quantityText: '1 l',
+    unitValue: 1,
+    unitType: 'l',
+    totalComparableAmount: 1,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true, issues: [] },
+    categoryConfidence: 0.8,
+  });
+  const aggregator = offer({
+    ...official,
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/l/billa/',
+    imageUrl: '',
+    conditionsText: '',
+  });
+
+  assert.equal(compareOffersByRanking(official, aggregator, { query: 'milch' }) < 0, true);
+});
+
+test('ranking quality issue only demotes and does not remove equal query match', () => {
+  const clean = offer({
+    title: 'Ariel Waschmittel Pulver',
+    categorySecondary: 'Waschmittel',
+    searchText: 'ariel waschmittel',
+    priceCurrent: { amount: 9.99 },
+    normalizedUnitPrice: { amount: 9.99, unit: 'Stk', comparable: false, confidence: 0.2 },
+    quality: { comparisonSafe: false, issues: [] },
+  });
+  const review = offer({
+    ...clean,
+    reviewReasons: ['Menge unvollstaendig'],
+    quality: { comparisonSafe: false, issues: ['Menge unvollstaendig'] },
+  });
+
+  assert.equal(scoreOfferAgainstQuery(review, 'ariel waschmittel') > 0, true);
+  assert.equal(compareOffersByRanking(clean, review, { query: 'ariel waschmittel' }) < 0, true);
 });

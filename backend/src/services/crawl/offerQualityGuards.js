@@ -358,6 +358,68 @@ function isOfferSafelyComparable(offer = {}) {
   );
 }
 
+function hasTechnicalQuantityArtifact(value) {
+  return /\$?\b(?:undefined|nan|null)\b|\[object object\]/i.test(String(value || ''));
+}
+
+function sanitizePublicQuantityText(value) {
+  const raw = sanitizeWhitespace(value);
+
+  if (!raw) {
+    return '';
+  }
+
+  if (!hasTechnicalQuantityArtifact(raw)) {
+    return raw;
+  }
+
+  return raw
+    .split('/')
+    .map((part) => sanitizeWhitespace(part))
+    .filter((part) => part && !hasTechnicalQuantityArtifact(part))
+    .join(' / ');
+}
+
+function sanitizePublicUnitField(value, { safelyComparable = false, artifactContext = false } = {}) {
+  const raw = sanitizeWhitespace(value);
+
+  if (!raw || hasTechnicalQuantityArtifact(raw)) {
+    return '';
+  }
+
+  if (safelyComparable) {
+    return raw;
+  }
+
+  if (artifactContext && !normalizeComparableUnit(raw)) {
+    return '';
+  }
+
+  return raw;
+}
+
+function buildPublicComparableUnit(offer = {}, { safelyComparable = isOfferSafelyComparable(offer) } = {}) {
+  if (!safelyComparable) {
+    return '';
+  }
+
+  return normalizeComparableUnit(offer.comparableUnit || offer.normalizedUnitPrice?.unit);
+}
+
+function sanitizePublicOfferQuantityFields(offer = {}, { safelyComparable = isOfferSafelyComparable(offer) } = {}) {
+  const rawQuantityText = String(offer.quantityText || '');
+  const artifactContext = hasTechnicalQuantityArtifact(rawQuantityText)
+    || hasTechnicalQuantityArtifact(offer.unitType)
+    || hasTechnicalQuantityArtifact(offer.comparableUnit)
+    || hasTechnicalQuantityArtifact(offer.normalizedUnitPrice?.unit);
+
+  return {
+    quantityText: sanitizePublicQuantityText(rawQuantityText),
+    unitType: sanitizePublicUnitField(offer.unitType, { safelyComparable, artifactContext }),
+    comparableUnit: buildPublicComparableUnit(offer, { safelyComparable }),
+  };
+}
+
 module.exports = {
   UNIT_UNCLEAR_REASON,
   UNIT_CONFLICT_REASON,
@@ -367,5 +429,7 @@ module.exports = {
   inferConditionFields,
   extractConditionHints,
   isOfferSafelyComparable,
+  sanitizePublicOfferQuantityFields,
+  sanitizePublicQuantityText,
   normalizeComparableUnit,
 };

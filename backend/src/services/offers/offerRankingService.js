@@ -14,11 +14,16 @@ const {
   buildQuerySearchTokens,
   repairGermanSearchTextEncoding,
 } = require('./searchTokens');
-const { isOfferSafelyComparable, normalizeComparableUnit } = require('../crawl/offerQualityGuards');
+const {
+  isOfferSafelyComparable,
+  normalizeComparableUnit,
+  sanitizePublicOfferQuantityFields,
+} = require('../crawl/offerQualityGuards');
 const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { isExpiredValidToCompensatedByFreshCrawl, isOfferFreshForActiveUse } = require('./offerFreshness');
 const { classifyOfferSourceQuality } = require('./sourceQuality');
+const { buildOfferQualityRankingAdjustment } = require('./offerQualityScore');
 
 const OFFER_RANKING_FIELD_LIST = [
   '_id',
@@ -114,7 +119,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-offer-quality-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -3098,6 +3103,7 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
 
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
   const safelyComparable = isOfferSafelyComparable(offer);
+  const publicQuantityFields = sanitizePublicOfferQuantityFields(offer, { safelyComparable });
   const computedPromotion = computeOfferSavings(offer);
   const legacySavings = {
     savingsAmount:
@@ -3165,7 +3171,7 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     categoryConfidence: Number(offer.categoryConfidence || 0),
     subcategoryConfidence: Number(offer.subcategoryConfidence || 0),
     displayCategory: selectDisplayCategory(offer),
-    quantityText: offer.quantityText,
+    quantityText: publicQuantityFields.quantityText,
     conditionsText: offer.conditionsText,
     discountPercent: offer.discountPercent ?? null,
     discountUpToPercent: offer.discountUpToPercent ?? null,
@@ -3184,9 +3190,9 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     validTo: offer.validTo,
     packCount: offer.packCount ?? null,
     unitValue: offer.unitValue ?? null,
-    unitType: offer.unitType || '',
+    unitType: publicQuantityFields.unitType,
     totalComparableAmount: offer.totalComparableAmount ?? null,
-    comparableUnit: offer.comparableUnit || '',
+    comparableUnit: publicQuantityFields.comparableUnit,
     packageType: offer.packageType || '',
     normalizedUnitPrice: publicNormalizedUnitPrice,
     priceCurrent: offer.priceCurrent,
@@ -3296,6 +3302,7 @@ function buildConsumerScore(offer) {
   if (safelyComparable && offer?.comparisonGroup) score += 500;
   if (hasReliableValidTo(offer)) score += 25;
   score += buildSourceQualityScore(offer);
+  score += buildOfferQualityRankingAdjustment(offer);
 
   const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
   if (safelyComparable && Number.isFinite(unitAmount) && unitAmount > 0) {
@@ -6657,6 +6664,7 @@ module.exports = {
   hasSameVisibleCardFingerprint,
   reduceAdjacentQueryDuplicates,
   prepareQueryOffersForResponse,
+  compareOffersByRanking,
   parseRankingCategories,
   buildKnownCategoryLabelMap,
   buildRankingBaseCacheKey,

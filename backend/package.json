@@ -20,6 +20,7 @@
     "diagnose:freshness-risk": "node scripts/diagnoseFreshnessRisk.js",
     "diagnose:retailer-readiness": "node scripts/diagnoseRetailerReadiness.js",
     "diagnose:sources-ladder": "node scripts/diagnoseSourcesLadder.js",
+    "diagnose:source-quality-matrix": "node scripts/diagnoseSourceQualityMatrix.js",
     "diagnose:ranking-performance": "node scripts/rankingPerformanceSmoke.js",
     "diagnose:query-quality-gaps": "node scripts/diagnoseQueryQualityGaps.js",
     "diagnose:coverage-baseline": "node scripts/diagnoseCoverageBaseline.js",
