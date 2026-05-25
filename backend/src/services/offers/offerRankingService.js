@@ -8,6 +8,7 @@ const { computeOfferSavings } = require('./promotionMath');
 const {
   SEARCH_TOKEN_VERSION,
   STOPWORDS: SEARCH_TOKEN_STOPWORDS,
+  TEE_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
   buildQuerySearchTokens,
   repairGermanSearchTextEncoding,
@@ -112,7 +113,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -843,6 +844,17 @@ const QUERY_CONTEXTS = [
       'nahrungsergaenzung',
       'nahrungserganzung',
     ],
+  },
+  {
+    key: 'tee',
+    tokens: ['tee'],
+    preferred: ['tee', 'teebeutel', 'kraeutertee', 'krautertee', 'schwarztee', 'gruentee', 'gruenentee', 'eistee', 'teekanne', 'fruechtetee', 'fruchtetee', 'kamillentee', 'pfefferminztee', 'getraenke'],
+    strongPreferred: ['tee', 'teebeutel', 'kraeutertee', 'krautertee', 'schwarztee', 'gruentee', 'gruenentee', 'eistee', 'teekanne', 'fruechtetee', 'fruchtetee', 'kamillentee', 'pfefferminztee'],
+    productIntent: TEE_PRODUCT_TOKENS,
+    exactProductIntent: TEE_PRODUCT_TOKENS.filter((token) => token !== 'tee'),
+    productContext: ['tee', 'getraenke'],
+    weakContexts: ['kaffee', 'cafe', 'caffe', 'kapsel', 'kapseln', 'bohne', 'bohnen', 'espresso', 'cappuccino', 'crema', 'nespresso', 'nespressokompatible', 'eiskaffee'],
+    severeWeakContexts: ['teebutter', 'kidneybohnen'],
   },
   {
     tokens: ['kaffee', 'cafe', 'caffe'],
@@ -2249,6 +2261,74 @@ function scoreWurstSearchIntent({ titleTokens, categoryTokens, comparisonTokens,
   return adjustment;
 }
 
+function getGenericTeeOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const productTea = hasAnyTokenMatch(productTokens, TEE_PRODUCT_TOKENS, { exact: true, suffix: true });
+  const categoryTea = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['tee']);
+  const coffeeSide = hasAnyTokenFamily(productTokens, [
+    'bohne',
+    'bohnen',
+    'cafe',
+    'caffe',
+    'cappuccino',
+    'crema',
+    'eduscho',
+    'eiskaffee',
+    'espresso',
+    'jacobs',
+    'kaffee',
+    'kapsel',
+    'kapseln',
+    'lavazza',
+    'nespresso',
+    'nespressokompatible',
+  ]);
+  const clearNonTeaSide = hasAnyTokenFamily(productTokens, [
+    'kidneybohnen',
+    'teebutter',
+  ]);
+  const categoryOnly = !productTea && categoryTea;
+  const clearSideHit = !productTea && (coffeeSide || clearNonTeaSide);
+  const noProductSignal = !productTea &&
+    !hasAnyTokenMatch(allTokens, TEE_PRODUCT_TOKENS, { exact: true, suffix: true }) &&
+    categoryTea;
+
+  return {
+    categoryOnly,
+    clearSideHit,
+    productTea,
+    weakCategoryOnly: noProductSignal && !clearSideHit,
+  };
+}
+
+function scoreTeeSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const {
+    categoryOnly,
+    clearSideHit,
+    productTea,
+    weakCategoryOnly,
+  } = getGenericTeeOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (productTea) {
+    adjustment += 5200;
+  }
+
+  if (clearSideHit) {
+    adjustment -= 6200;
+  } else if (categoryOnly) {
+    adjustment -= weakCategoryOnly ? 3800 : 2600;
+  }
+
+  return adjustment;
+}
+
 function scoreFieldAgainstQuery(value, queryTokens, weights) {
   const fieldTokens = tokenizeSearchText(value);
 
@@ -2385,6 +2465,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
   const genericBeerQuery = context?.key === 'bier' && queryTokens.length === 1 && queryTokens[0] === 'bier';
   const genericWurstQuery = context?.key === 'wurst' && queryTokens.length === 1 && queryTokens[0] === 'wurst';
+  const genericTeeQuery = context?.key === 'tee' && queryTokens.length === 1 && queryTokens[0] === 'tee';
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
   const conservativeGenericOilQuery = genericOilQuery;
 
@@ -2589,6 +2670,15 @@ function scoreOfferAgainstQuery(offer, query) {
 
     if (genericWurstQuery) {
       score += scoreWurstSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
+    if (genericTeeQuery) {
+      score += scoreTeeSearchIntent({
         titleTokens,
         categoryTokens,
         comparisonTokens,

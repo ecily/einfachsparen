@@ -54,6 +54,22 @@ const WURST_PRODUCT_TOKENS = [
   'wurstl',
 ];
 
+const TEE_PRODUCT_TOKENS = [
+  'eistee',
+  'fruechtetee',
+  'fruchtetee',
+  'gruentee',
+  'gruenentee',
+  'kamillentee',
+  'kraeutertee',
+  'krautertee',
+  'pfefferminztee',
+  'schwarztee',
+  'tee',
+  'teebeutel',
+  'teekanne',
+];
+
 const STOPWORDS = new Set([
   'ab',
   'aktion',
@@ -122,6 +138,7 @@ const QUERY_SYNONYMS = new Map([
     'tierfutter',
     'whiskas',
   ]],
+  ['tee', TEE_PRODUCT_TOKENS.filter((token) => token !== 'tee')],
   ['wurst', WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst')],
 ]);
 
@@ -291,6 +308,7 @@ module.exports = {
   SEARCH_TOKEN_VERSION,
   FOOD_OIL_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
+  TEE_PRODUCT_TOKENS,
   STOPWORDS,
   buildOfferSearchTokens,
   buildQuerySearchTokens,

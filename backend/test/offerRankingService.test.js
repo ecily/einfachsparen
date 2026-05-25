@@ -2431,6 +2431,137 @@ test('wurst category remains a weak signal without outranking explicit salami', 
   ]);
 });
 
+test('tee search ranks real tea products ahead of coffee category side hits', () => {
+  const offers = [
+    offer({
+      title: 'Lavazza Nespressokompatible Alukapseln',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'lavazza-kapseln::30-stueck',
+    }),
+    offer({
+      title: 'Jacobs Cafe Crema Ganze Bohne',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'jacobs-cafe-crema-bohne::1-kg',
+    }),
+    offer({
+      title: 'Nescafe Eiskaffee div. Sorten',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'nescafe-eiskaffee::0.25-l',
+    }),
+    offer({
+      title: 'Greenland Kidneybohnen',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'greenland-kidneybohnen::0.8-kg',
+    }),
+    offer({
+      title: 'Teekanne Fruechtetee',
+      brand: 'Teekanne',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'teekanne-fruechtetee::20-stueck',
+    }),
+    offer({
+      title: 'Ceylon-Tee',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'ceylon-tee::25-stueck',
+    }),
+    offer({
+      title: 'Westminster Schwarzer Tee',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'westminster-schwarzer-tee::25-stueck',
+    }),
+    offer({
+      title: 'Kraeutertee Kamille',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      comparisonGroup: 'kraeutertee-kamille::20-stueck',
+    }),
+    offer({
+      title: 'Eistee Gruener-Tee Zitrone',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Softdrinks & Energy',
+      comparisonGroup: 'eistee-gruener-tee-zitrone::1-l',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'tee').map((item) => item.title);
+
+  assert.deepEqual(new Set(sortedTitles.slice(0, 5)), new Set([
+    'Ceylon-Tee',
+    'Eistee Gruener-Tee Zitrone',
+    'Kraeutertee Kamille',
+    'Teekanne Fruechtetee',
+    'Westminster Schwarzer Tee',
+  ]));
+  assert.ok(sortedTitles.indexOf('Lavazza Nespressokompatible Alukapseln') > sortedTitles.indexOf('Ceylon-Tee'));
+  assert.ok(sortedTitles.indexOf('Jacobs Cafe Crema Ganze Bohne') > sortedTitles.indexOf('Westminster Schwarzer Tee'));
+  assert.ok(sortedTitles.indexOf('Nescafe Eiskaffee div. Sorten') > sortedTitles.indexOf('Eistee Gruener-Tee Zitrone'));
+  assert.ok(sortedTitles.indexOf('Greenland Kidneybohnen') > sortedTitles.indexOf('Teekanne Fruechtetee'));
+});
+
+test('tee search treats Teebutter and category-only coffee tea pages as weak signals', () => {
+  const teebeutel = offer({
+    title: 'Teekanne Teebeutel Kamillentee',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'teekanne-teebeutel-kamillentee::20-stueck',
+  });
+  const teebutter = offer({
+    title: 'Oesterreichische Teebutter',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'oesterreichische-teebutter::0.25-kg',
+  });
+  const categoryOnly = offer({
+    title: 'Sortiment Angebot',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'sortiment-angebot::1-stueck',
+  });
+  const sortedTitles = applyQueryMatch([categoryOnly, teebutter, teebeutel], 'tee').map((item) => item.title);
+
+  assert.equal(scoreOfferAgainstQuery(teebeutel, 'tee') > scoreOfferAgainstQuery(teebutter, 'tee'), true);
+  assert.deepEqual(sortedTitles, [
+    'Teekanne Teebeutel Kamillentee',
+    'Oesterreichische Teebutter',
+    'Sortiment Angebot',
+  ]);
+});
+
+test('tee context does not regress kaffee or eistee queries', () => {
+  const coffee = offer({
+    title: 'Lavazza Kaffee Bohnen',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'lavazza-kaffee-bohnen::1-kg',
+  });
+  const tea = offer({
+    title: 'Ceylon-Tee',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'ceylon-tee::25-stueck',
+  });
+  const icedTea = offer({
+    title: 'Eistee Gruener-Tee Zitrone',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Softdrinks & Energy',
+    comparisonGroup: 'eistee-gruener-tee-zitrone::1-l',
+  });
+
+  assert.deepEqual(applyQueryMatch([tea, coffee], 'kaffee').map((item) => item.title), [
+    'Lavazza Kaffee Bohnen',
+    'Ceylon-Tee',
+  ]);
+  assert.deepEqual(applyQueryMatch([coffee, icedTea], 'eistee').map((item) => item.title), [
+    'Eistee Gruener-Tee Zitrone',
+  ]);
+});
+
 test('single-word core product searches keep direct product matches searchable', () => {
   const directProductOffers = [
     ['kaffee', offer({ title: 'Lavazza Kaffee Bohnen', categorySecondary: 'Kaffee & Tee' })],
@@ -4379,7 +4510,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

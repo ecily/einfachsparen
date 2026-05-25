@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   FOOD_OIL_PRODUCT_TOKENS,
   SEARCH_TOKEN_VERSION,
+  TEE_PRODUCT_TOKENS,
   buildOfferSearchTokens,
   buildQuerySearchTokens,
   normalizeSearchTokenText,
@@ -117,6 +118,20 @@ test('expands wurst query to direct sausage and cold-cut product tokens only', (
   for (const sideHitToken of ['lachs', 'hendl', 'schnitzel', 'fisch']) {
     assert.equal(wurstTokens.includes(sideHitToken), false);
   }
+});
+
+test('expands tee query to direct tea product tokens without coffee or Teebutter side hits', () => {
+  const teeTokens = buildQuerySearchTokens('tee');
+
+  for (const token of ['tee', 'teebeutel', 'kraeutertee', 'schwarztee', 'gruentee', 'eistee', 'teekanne']) {
+    assert.equal(teeTokens.includes(token), true);
+  }
+
+  for (const sideHitToken of ['kaffee', 'kapseln', 'bohnen', 'espresso', 'teebutter', 'kidneybohnen']) {
+    assert.equal(teeTokens.includes(sideHitToken), false);
+  }
+
+  assert.deepEqual(new Set(teeTokens), new Set(TEE_PRODUCT_TOKENS));
 });
 
 test('keeps reis and milch query tokens and indexes conservative product compounds', () => {
