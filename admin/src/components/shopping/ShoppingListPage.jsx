@@ -102,6 +102,30 @@ function toCents(amount) {
   return Number.isFinite(numericAmount) ? Math.round(numericAmount * 100) : 0
 }
 
+function getOfferBasisQuantity(item) {
+  const candidates = [
+    item?.minimumPurchaseQty,
+    item?.minimumPurchaseQuantity,
+    item?.minQuantity,
+    item?.minimumQuantity,
+    item?.minimumOrderQuantity,
+    item?.minimumPurchase?.quantity,
+    item?.discount?.minimumQuantity,
+    item?.rawFacts && typeof item.rawFacts === 'object' ? item.rawFacts.minimumPurchaseQuantity : null,
+    item?.rawFacts && typeof item.rawFacts === 'object' ? item.rawFacts.requiredQuantity : null,
+  ]
+
+  for (const candidate of candidates) {
+    const quantity = Number(candidate)
+
+    if (Number.isFinite(quantity) && quantity > 1) {
+      return Math.min(Math.round(quantity), 99)
+    }
+  }
+
+  return 1
+}
+
 function getItemsTotal(items, quantities) {
   const cents = (items || []).reduce((sum, item) => {
     const price = Number(item?.priceCurrent?.amount)
@@ -110,7 +134,7 @@ function getItemsTotal(items, quantities) {
       return sum
     }
 
-    return sum + toCents(price) * getItemQuantity(quantities, getShoppingListItemId(item))
+    return sum + toCents(price) * getOfferBasisQuantity(item) * getItemQuantity(quantities, getShoppingListItemId(item))
   }, 0)
 
   return cents / 100

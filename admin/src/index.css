@@ -3034,16 +3034,18 @@ a {
 }
 
 .shopping-check__metric span {
-  color: var(--kk-brand-primary);
+  color: var(--shopping-check-label-color, var(--kk-brand-primary));
   font-size: 0.86rem;
   font-weight: 900;
 }
 
 .shopping-check__metric--price {
+  --shopping-check-label-color: #667069;
   --shopping-check-value-color: #41554b;
 }
 
 .shopping-check__metric--saving {
+  --shopping-check-label-color: #527b5a;
   --shopping-check-value-color: var(--kk-value-text);
 }
 
