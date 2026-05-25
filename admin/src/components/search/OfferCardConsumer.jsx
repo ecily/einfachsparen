@@ -10,6 +10,7 @@ import {
 import { formatUnitPrice, formatValidityLabel } from '../../utils/formatting'
 import { getRetailerTheme } from '../../utils/retailerColors'
 import { formatRetailerName } from '../../utils/retailers'
+import { OfferFeedbackPanel } from './OfferFeedbackPanel'
 
 function formatPrice(amount, currency = 'EUR') {
   if (amount === null || amount === undefined || amount === '') {
@@ -173,6 +174,9 @@ export function OfferCardConsumer({
   showShoppingListAction = true,
   actionSlot = null,
   className = '',
+  feedbackCategories = [],
+  feedbackPageContext = {},
+  enableOfferFeedback = true,
 }) {
   const showUnitPrice = shouldDisplayUnitPrice(offer)
   const category = getShortCategory(offer)
@@ -200,7 +204,7 @@ export function OfferCardConsumer({
     hasSavings ? 'user-card--known-savings' : 'user-card--action-price',
     className,
   ].filter(Boolean).join(' ')
-  const hasActions = actionSlot || (showShoppingListAction && onAddToShoppingList)
+  const hasActions = enableOfferFeedback || actionSlot || (showShoppingListAction && onAddToShoppingList)
 
   return (
     <article
@@ -285,6 +289,13 @@ export function OfferCardConsumer({
 
         {hasActions ? (
           <div className="user-card__actions">
+            {enableOfferFeedback ? (
+              <OfferFeedbackPanel
+                offer={offer}
+                categories={feedbackCategories}
+                pageContext={feedbackPageContext}
+              />
+            ) : null}
             {showShoppingListAction && onAddToShoppingList ? (
               <button
                 type="button"

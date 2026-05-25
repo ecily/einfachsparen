@@ -225,7 +225,7 @@ function buildAvailableRetailers(retailers) {
   return sortRetailersByDisplayGroup(availableRetailers)
 }
 
-export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListIds, onAddToShoppingList }) {
+export function KeywordSearchPage({ searchRequest, retailers = [], categories = [], shoppingListIds, onAddToShoppingList }) {
   const resultsHeadingRef = useRef(null)
   const requestIdRef = useRef(0)
   const [queryInput, setQueryInput] = useState(() => getInitialKeywordQuery())
@@ -673,26 +673,63 @@ export function KeywordSearchPage({ searchRequest, retailers = [], shoppingListI
                           <span>{group.offers.length} Angebote</span>
                         </div>
                         <div className="user-results">
-                          {group.offers.map((offer) => (
+                          {group.offers.map((offer) => {
+                            const resultPosition = visibleOffers.findIndex((visibleOffer) => visibleOffer.id === offer.id) + 1
+
+                            return (
                             <OfferCardConsumer
                               key={offer.id}
                               offer={offer}
                               onAddToShoppingList={onAddToShoppingList}
                               isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
+                              feedbackCategories={categories}
+                              feedbackPageContext={{
+                                routeName: 'offers-ranking',
+                                query: submittedQuery,
+                                activeRetailers: activeRetailerKeys,
+                                activeCategories: [],
+                                programRetailers: activeRetailerKeys,
+                                onlyWithoutProgram: false,
+                                sortMode,
+                                resultPosition,
+                                activeFilters: {
+                                  marketFilterEnabled,
+                                  selectedRetailers: activeRetailerKeys,
+                                  sortMode,
+                                  resultGroup: group.key,
+                                },
+                              }}
                             />
-                          ))}
+                            )
+                          })}
                         </div>
                       </section>
                     ))}
                   </div>
                 ) : (
                   <div className="user-results">
-                    {visibleOffers.map((offer) => (
+                    {visibleOffers.map((offer, index) => (
                       <OfferCardConsumer
                         key={offer.id}
                         offer={offer}
                         onAddToShoppingList={onAddToShoppingList}
                         isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
+                        feedbackCategories={categories}
+                        feedbackPageContext={{
+                          routeName: 'offers-ranking',
+                          query: submittedQuery,
+                          activeRetailers: activeRetailerKeys,
+                          activeCategories: [],
+                          programRetailers: activeRetailerKeys,
+                          onlyWithoutProgram: false,
+                          sortMode,
+                          resultPosition: index + 1,
+                          activeFilters: {
+                            marketFilterEnabled,
+                            selectedRetailers: activeRetailerKeys,
+                            sortMode,
+                          },
+                        }}
                       />
                     ))}
                   </div>

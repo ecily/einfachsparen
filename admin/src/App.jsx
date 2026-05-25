@@ -1065,6 +1065,7 @@ function App() {
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
+            categories={categories}
             shoppingListIds={shoppingListIds}
             onAddToShoppingList={handleAddToShoppingList}
           />

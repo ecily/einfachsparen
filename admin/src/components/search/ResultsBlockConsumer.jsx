@@ -11,6 +11,8 @@ export function ResultsBlockConsumer({
   onAddToShoppingList,
   onLoadMoreOffers,
   shoppingListIds,
+  categories = [],
+  feedbackPageContext = {},
 }) {
   const visibleOfferCount = safeOffers.length + actionOffers.length
   const totalCount = pagination?.totalCount || 0
@@ -66,6 +68,15 @@ export function ResultsBlockConsumer({
               highlightPrefix="Angebot"
               onAddToShoppingList={onAddToShoppingList}
               shoppingListIds={shoppingListIds}
+              feedbackCategories={categories}
+              feedbackPageContext={{
+                ...feedbackPageContext,
+                activeFilters: {
+                  ...(feedbackPageContext.activeFilters || {}),
+                  resultGroup: 'known_savings',
+                },
+              }}
+              resultPositionOffset={0}
             />
 
             <ResultsSection
@@ -75,6 +86,15 @@ export function ResultsBlockConsumer({
               highlightPrefix="Aktion"
               onAddToShoppingList={onAddToShoppingList}
               shoppingListIds={shoppingListIds}
+              feedbackCategories={categories}
+              feedbackPageContext={{
+                ...feedbackPageContext,
+                activeFilters: {
+                  ...(feedbackPageContext.activeFilters || {}),
+                  resultGroup: 'action_price',
+                },
+              }}
+              resultPositionOffset={safeOffers.length}
             />
 
             {pagination?.hasMore ? (

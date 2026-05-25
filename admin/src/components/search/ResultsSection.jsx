@@ -1,7 +1,17 @@
 import { OfferCardConsumer } from './OfferCardConsumer'
 import { getOfferStableId } from '../../utils/offers'
 
-export function ResultsSection({ title, subtitle, offers, highlightPrefix, onAddToShoppingList, shoppingListIds }) {
+export function ResultsSection({
+  title,
+  subtitle,
+  offers,
+  highlightPrefix,
+  onAddToShoppingList,
+  shoppingListIds,
+  feedbackCategories = [],
+  feedbackPageContext = {},
+  resultPositionOffset = 0,
+}) {
   if (!offers.length) return null
 
   return (
@@ -19,6 +29,11 @@ export function ResultsSection({ title, subtitle, offers, highlightPrefix, onAdd
             highlightLabel={`${highlightPrefix} ${index + 1}`}
             onAddToShoppingList={onAddToShoppingList}
             isInShoppingList={shoppingListIds.has(getOfferStableId(offer))}
+            feedbackCategories={feedbackCategories}
+            feedbackPageContext={{
+              ...feedbackPageContext,
+              resultPosition: resultPositionOffset + index + 1,
+            }}
           />
         ))}
       </div>

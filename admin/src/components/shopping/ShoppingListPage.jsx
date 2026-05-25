@@ -390,6 +390,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                       key={itemId}
                       offer={offer}
                       showShoppingListAction={false}
+                      enableOfferFeedback={false}
                       className={`user-card--shopping-list${isChecked ? ' user-card--checked' : ''}`}
                       actionSlot={
                         <div className="shopping-list-card-actions">

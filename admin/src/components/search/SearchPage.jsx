@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { areAllCategoryGroupsSelected, filterVisibleOffers } from '../../utils/categories'
+import { areAllCategoryGroupsSelected, buildSelectedCategoryQueryLabels, filterVisibleOffers } from '../../utils/categories'
 import { flattenRankingOffers, getRankingPagination, splitRankingOffers } from '../../utils/offers'
 import { SectionCard } from '../layout/SectionCard'
 import { HeroLoaderModal } from '../layout/HeroLoaderModal'
@@ -39,6 +39,10 @@ export function SearchPage({
   const hasDraftSelection = draftRetailers.length > 0 || draftCategoryLabels.length > 0
   const shouldShowBrowseResults = hasAppliedRetailerScope
   const allDraftCategoriesSelected = areAllCategoryGroupsSelected(draftCategoryLabels, categories)
+  const appliedCategoryQueryLabels = useMemo(
+    () => buildSelectedCategoryQueryLabels(appliedCategoryLabels, categories),
+    [appliedCategoryLabels, categories]
+  )
   const [activeBrowseScrollKey, setActiveBrowseScrollKey] = useState(0)
   const handledBrowseScrollKeyRef = useRef(0)
   const resultsRef = useRef(null)
@@ -151,6 +155,19 @@ export function SearchPage({
             onAddToShoppingList={onAddToShoppingList}
             onLoadMoreOffers={onLoadMoreOffers}
             shoppingListIds={shoppingListIds}
+            categories={categories}
+            feedbackPageContext={{
+              routeName: 'browse-offers',
+              activeRetailers: appliedRetailers,
+              activeCategories: appliedCategoryQueryLabels,
+              programRetailers: appliedRetailers,
+              onlyWithoutProgram: false,
+              sortMode: 'browse',
+              activeFilters: {
+                selectedRetailers: appliedRetailers,
+                selectedCategoryTokens: appliedCategoryLabels,
+              },
+            }}
           />
         </div>
       ) : null}
