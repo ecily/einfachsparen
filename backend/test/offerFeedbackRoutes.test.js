@@ -214,6 +214,7 @@ test('POST /api/offer-feedback speichert offer_nonsense', async () => {
       reasons: ['offer_nonsense'],
       structuredDetails: {
         offer_nonsense: {
+          issueTypes: ['broken_title', 'incomplete_product_text'],
           userNote: 'Der Artikel passt fachlich nicht zur Karte.',
         },
       },
@@ -222,7 +223,171 @@ test('POST /api/offer-feedback speichert offer_nonsense', async () => {
 
   assert.equal(response.statusCode, 201);
   assert.deepEqual(created[0].structuredDetails.offer_nonsense, {
+    issueTypes: ['broken_title', 'incomplete_product_text'],
     userNote: 'Der Artikel passt fachlich nicht zur Karte.',
+  });
+});
+
+test('POST /api/offer-feedback speichert search_result_wrong Details', async () => {
+  const created = [];
+  const app = createTestApp({ created });
+
+  const response = await requestJson(app, {
+    body: minimalPayload({
+      reasons: ['search_result_wrong'],
+      offerSnapshot: {
+        title: 'Recheis Recheis Goldmarke Goldloeckchen',
+        brand: 'Recheis',
+        rawTitle: 'Recheis Recheis Goldmarke Goldloeckchen',
+        displayTitle: 'Recheis Goldmarke Goldloeckchen',
+        categoryPrimary: 'Pasta, Reis & Konserven',
+        visibleBadges: ['Aktion', 'Bild folgt'],
+      },
+      pageContext: {
+        query: 'Eis',
+        routeName: 'offers-ranking',
+        sortMode: 'default',
+        programRetailers: ['billa'],
+        onlyWithoutProgram: false,
+      },
+      clientContext: {
+        uiComponent: 'OfferCardConsumer',
+        schemaVersion: 'offer-feedback-v1',
+      },
+      structuredDetails: {
+        search_result_wrong: {
+          query: 'Eis',
+          visibleTitle: 'Recheis Recheis Goldmarke Goldloeckchen',
+          currentCategoryPrimary: 'Pasta, Reis & Konserven',
+          currentCategorySecondary: 'Nudeln',
+          expectedProductType: 'Speiseeis',
+          expectedCategoryPrimary: 'Tiefkuehl- & Fertigprodukte',
+          expectedCategorySecondary: 'Eis',
+          issueTypes: ['substring_false_positive', 'brand_name_false_positive'],
+          userNote: 'Recheis matcht auf Eis, ist aber Pasta.',
+          ignoredField: 'not stored',
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(created[0].offerSnapshot.brand, 'Recheis');
+  assert.deepEqual(created[0].offerSnapshot.visibleBadges, ['Aktion', 'Bild folgt']);
+  assert.equal(created[0].pageContext.query, 'Eis');
+  assert.equal(created[0].pageContext.routeName, 'offers-ranking');
+  assert.deepEqual(created[0].pageContext.programRetailers, ['billa']);
+  assert.equal(created[0].pageContext.onlyWithoutProgram, false);
+  assert.equal(created[0].clientContext.uiComponent, 'OfferCardConsumer');
+  assert.equal(created[0].clientContext.schemaVersion, 'offer-feedback-v1');
+  assert.deepEqual(created[0].structuredDetails.search_result_wrong, {
+    query: 'Eis',
+    visibleTitle: 'Recheis Recheis Goldmarke Goldloeckchen',
+    currentCategoryPrimary: 'Pasta, Reis & Konserven',
+    currentCategorySecondary: 'Nudeln',
+    expectedProductType: 'Speiseeis',
+    expectedCategoryPrimary: 'Tiefkuehl- & Fertigprodukte',
+    expectedCategorySecondary: 'Eis',
+    issueTypes: ['substring_false_positive', 'brand_name_false_positive'],
+    userNote: 'Recheis matcht auf Eis, ist aber Pasta.',
+  });
+  assert.equal(created[0].structuredDetails.search_result_wrong.ignoredField, undefined);
+});
+
+test('POST /api/offer-feedback lehnt ungueltige search_result_wrong issueTypes ab', async () => {
+  const created = [];
+  const app = createTestApp({ created });
+
+  const response = await requestJson(app, {
+    body: minimalPayload({
+      reasons: ['search_result_wrong'],
+      structuredDetails: {
+        search_result_wrong: {
+          issueTypes: ['not_allowed'],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.body.ok, false);
+  assert.match(response.body.message, /ungueltigen Wert/);
+  assert.equal(created.length, 0);
+});
+
+test('POST /api/offer-feedback lehnt ungueltige offer_nonsense issueTypes ab', async () => {
+  const created = [];
+  const app = createTestApp({ created });
+
+  const response = await requestJson(app, {
+    body: minimalPayload({
+      reasons: ['offer_nonsense'],
+      structuredDetails: {
+        offer_nonsense: {
+          issueTypes: ['not_allowed'],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.body.ok, false);
+  assert.match(response.body.message, /ungueltigen Wert/);
+  assert.equal(created.length, 0);
+});
+
+test('POST /api/offer-feedback speichert image_wrong mit missing_image', async () => {
+  const created = [];
+  const app = createTestApp({ created });
+
+  const response = await requestJson(app, {
+    body: minimalPayload({
+      reasons: ['image_wrong'],
+      offerSnapshot: {
+        title: 'Bild folgt Produkt',
+        imagePresent: false,
+        imageUrlPresent: false,
+      },
+      structuredDetails: {
+        image_wrong: {
+          issueTypes: ['missing_image'],
+          userNote: 'Karte zeigt Bild folgt.',
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.deepEqual(created[0].structuredDetails.image_wrong, {
+    issueTypes: ['missing_image'],
+    userNote: 'Karte zeigt Bild folgt.',
+  });
+});
+
+test('POST /api/offer-feedback speichert duplicate Details', async () => {
+  const created = [];
+  const app = createTestApp({ created });
+
+  const response = await requestJson(app, {
+    body: minimalPayload({
+      reasons: ['duplicate'],
+      structuredDetails: {
+        duplicate: {
+          duplicateOfferId: 'offer-456',
+          duplicateVisibleTitle: 'Felix Linsen mit Speck',
+          duplicateReason: 'Gleicher Titel und Preis sichtbar.',
+          userNote: 'Doppelte Karte in den Ergebnissen.',
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.deepEqual(created[0].structuredDetails.duplicate, {
+    duplicateOfferId: 'offer-456',
+    duplicateVisibleTitle: 'Felix Linsen mit Speck',
+    duplicateReason: 'Gleicher Titel und Preis sichtbar.',
+    userNote: 'Doppelte Karte in den Ergebnissen.',
   });
 });
 
@@ -267,8 +432,9 @@ test('POST /api/offer-feedback speichert keine structuredDetails fuer nicht ausg
         category_wrong: {
           suggestedCategoryPrimary: 'Konserven',
         },
-        price_wrong: {
-          seenPriceText: '3,99 EUR',
+        search_result_wrong: {
+          query: 'Eis',
+          issueTypes: ['substring_false_positive'],
         },
       },
     }),
@@ -276,7 +442,7 @@ test('POST /api/offer-feedback speichert keine structuredDetails fuer nicht ausg
 
   assert.equal(response.statusCode, 201);
   assert.equal(created[0].structuredDetails.category_wrong.suggestedCategoryPrimary, 'Konserven');
-  assert.equal(created[0].structuredDetails.price_wrong, undefined);
+  assert.equal(created[0].structuredDetails.search_result_wrong, undefined);
 });
 
 test('POST /api/offer-feedback lehnt ungueltige reasons ab', async () => {

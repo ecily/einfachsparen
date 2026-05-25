@@ -10,6 +10,7 @@ const REASON_VALUES = new Set([
   'duplicate',
   'expired_or_not_found',
   'offer_nonsense',
+  'search_result_wrong',
   'other',
 ]);
 
@@ -34,6 +35,25 @@ const EXPIRED_ISSUE_TYPES = new Set([
   'not_found_in_store',
   'expired',
   'not_found_online',
+  'unclear',
+  'other',
+]);
+
+const SEARCH_RESULT_ISSUE_TYPES = new Set([
+  'irrelevant_for_query',
+  'substring_false_positive',
+  'brand_name_false_positive',
+  'wrong_intent',
+  'unclear',
+  'other',
+]);
+
+const OFFER_NONSENSE_ISSUE_TYPES = new Set([
+  'broken_title',
+  'incomplete_product_text',
+  'nonsensical_product',
+  'broken_price_or_quantity',
+  'wrong_source_merge',
   'unclear',
   'other',
 ]);
@@ -261,8 +281,12 @@ function normalizeOfferSnapshot(value) {
 
   return {
     title: trimString(raw.title, { field: 'offerSnapshot.title', maxLength: 300, nullable: false }),
+    brand: trimString(raw.brand, { field: 'offerSnapshot.brand', maxLength: 160 }),
+    rawTitle: trimString(raw.rawTitle, { field: 'offerSnapshot.rawTitle', maxLength: 500 }),
+    displayTitle: trimString(raw.displayTitle, { field: 'offerSnapshot.displayTitle', maxLength: 300 }),
     retailerKey: trimString(raw.retailerKey, { field: 'offerSnapshot.retailerKey', maxLength: 80, nullable: false }),
     retailerLabel: trimString(raw.retailerLabel, { field: 'offerSnapshot.retailerLabel', maxLength: 120, nullable: false }),
+    retailerStoreType: trimString(raw.retailerStoreType, { field: 'offerSnapshot.retailerStoreType', maxLength: 80 }),
     priceCurrent: normalizePriceSnapshot(raw.priceCurrent, 'offerSnapshot.priceCurrent'),
     priceOriginal: normalizePriceSnapshot(raw.priceOriginal, 'offerSnapshot.priceOriginal'),
     savingsPercent: optionalNumber(raw.savingsPercent, 'offerSnapshot.savingsPercent'),
@@ -284,12 +308,19 @@ function normalizeOfferSnapshot(value) {
       maxItems: 20,
       maxLength: 160,
     }),
+    visibleBadges: normalizeStringArray(raw.visibleBadges, {
+      field: 'offerSnapshot.visibleBadges',
+      maxItems: 30,
+      maxLength: 160,
+    }),
     customerProgramRequired: optionalBoolean(raw.customerProgramRequired, 'offerSnapshot.customerProgramRequired'),
     validityText: trimString(raw.validityText, { field: 'offerSnapshot.validityText', maxLength: 300 }),
     validFrom: optionalDate(raw.validFrom, 'offerSnapshot.validFrom'),
     validTo: optionalDate(raw.validTo, 'offerSnapshot.validTo'),
     imagePresent: optionalBoolean(raw.imagePresent, 'offerSnapshot.imagePresent'),
     imageUrlPresent: optionalBoolean(raw.imageUrlPresent, 'offerSnapshot.imageUrlPresent'),
+    sourceName: trimString(raw.sourceName, { field: 'offerSnapshot.sourceName', maxLength: 160 }),
+    sourceUrl: trimString(raw.sourceUrl, { field: 'offerSnapshot.sourceUrl', maxLength: 1000 }),
     sourceType: trimString(raw.sourceType, { field: 'offerSnapshot.sourceType', maxLength: 80 }),
     sourceTypes: normalizeStringArray(raw.sourceTypes, {
       field: 'offerSnapshot.sourceTypes',
@@ -315,8 +346,10 @@ function normalizePageContext(value) {
 
   return {
     path: trimString(raw.path, { field: 'pageContext.path', maxLength: 500 }),
+    routeName: trimString(raw.routeName, { field: 'pageContext.routeName', maxLength: 120 }),
     url: trimString(raw.url, { field: 'pageContext.url', maxLength: 1000 }),
     query: trimString(raw.query, { field: 'pageContext.query', maxLength: 500 }),
+    sortMode: trimString(raw.sortMode, { field: 'pageContext.sortMode', maxLength: 80 }),
     activeRetailers: normalizeStringArray(raw.activeRetailers, {
       field: 'pageContext.activeRetailers',
       maxItems: 20,
@@ -327,6 +360,12 @@ function normalizePageContext(value) {
       maxItems: 20,
       maxLength: 120,
     }),
+    programRetailers: normalizeStringArray(raw.programRetailers, {
+      field: 'pageContext.programRetailers',
+      maxItems: 20,
+      maxLength: 80,
+    }),
+    onlyWithoutProgram: optionalBoolean(raw.onlyWithoutProgram, 'pageContext.onlyWithoutProgram'),
     activeFilters: normalizeSmallObject(raw.activeFilters, { field: 'pageContext.activeFilters' }),
     resultPosition: optionalInteger(raw.resultPosition, 'pageContext.resultPosition'),
     viewport: trimString(raw.viewport, { field: 'pageContext.viewport', maxLength: 40 }),
@@ -348,6 +387,8 @@ function normalizeClientContext(value, req) {
       maxLength: 80,
       nullable: false,
     }) || 'public-offer-card',
+    uiComponent: trimString(raw.uiComponent, { field: 'clientContext.uiComponent', maxLength: 120 }),
+    schemaVersion: trimString(raw.schemaVersion, { field: 'clientContext.schemaVersion', maxLength: 80 }),
     appVersion: trimString(raw.appVersion, { field: 'clientContext.appVersion', maxLength: 80 }),
     submittedAtClient: optionalDate(raw.submittedAtClient, 'clientContext.submittedAtClient'),
   };
@@ -484,8 +525,72 @@ function normalizeDuplicateDetails(raw) {
     field: 'structuredDetails.duplicate.duplicateOfferId',
     maxLength: 120,
   }));
+  assignIfPresent(details, 'duplicateVisibleTitle', trimString(raw.duplicateVisibleTitle, {
+    field: 'structuredDetails.duplicate.duplicateVisibleTitle',
+    maxLength: 300,
+  }));
+  assignIfPresent(details, 'duplicateReason', trimString(raw.duplicateReason, {
+    field: 'structuredDetails.duplicate.duplicateReason',
+    maxLength: 300,
+  }));
   assignIfPresent(details, 'userNote', trimString(raw.userNote, {
     field: 'structuredDetails.duplicate.userNote',
+    maxLength: 500,
+  }));
+  return details;
+}
+
+function normalizeOfferNonsenseDetails(raw) {
+  const details = {};
+  assignIfPresent(details, 'issueTypes', normalizeEnumArray(raw.issueTypes, {
+    field: 'structuredDetails.offer_nonsense.issueTypes',
+    allowedValues: OFFER_NONSENSE_ISSUE_TYPES,
+    maxItems: 7,
+  }));
+  assignIfPresent(details, 'userNote', trimString(raw.userNote, {
+    field: 'structuredDetails.offer_nonsense.userNote',
+    maxLength: 500,
+  }));
+  return details;
+}
+
+function normalizeSearchResultWrongDetails(raw) {
+  const details = {};
+  assignIfPresent(details, 'query', trimString(raw.query, {
+    field: 'structuredDetails.search_result_wrong.query',
+    maxLength: 120,
+  }));
+  assignIfPresent(details, 'visibleTitle', trimString(raw.visibleTitle, {
+    field: 'structuredDetails.search_result_wrong.visibleTitle',
+    maxLength: 300,
+  }));
+  assignIfPresent(details, 'currentCategoryPrimary', trimString(raw.currentCategoryPrimary, {
+    field: 'structuredDetails.search_result_wrong.currentCategoryPrimary',
+    maxLength: 120,
+  }));
+  assignIfPresent(details, 'currentCategorySecondary', trimString(raw.currentCategorySecondary, {
+    field: 'structuredDetails.search_result_wrong.currentCategorySecondary',
+    maxLength: 120,
+  }));
+  assignIfPresent(details, 'expectedProductType', trimString(raw.expectedProductType, {
+    field: 'structuredDetails.search_result_wrong.expectedProductType',
+    maxLength: 160,
+  }));
+  assignIfPresent(details, 'expectedCategoryPrimary', trimString(raw.expectedCategoryPrimary, {
+    field: 'structuredDetails.search_result_wrong.expectedCategoryPrimary',
+    maxLength: 120,
+  }));
+  assignIfPresent(details, 'expectedCategorySecondary', trimString(raw.expectedCategorySecondary, {
+    field: 'structuredDetails.search_result_wrong.expectedCategorySecondary',
+    maxLength: 120,
+  }));
+  assignIfPresent(details, 'issueTypes', normalizeEnumArray(raw.issueTypes, {
+    field: 'structuredDetails.search_result_wrong.issueTypes',
+    allowedValues: SEARCH_RESULT_ISSUE_TYPES,
+    maxItems: 6,
+  }));
+  assignIfPresent(details, 'userNote', trimString(raw.userNote, {
+    field: 'structuredDetails.search_result_wrong.userNote',
     maxLength: 500,
   }));
   return details;
@@ -526,6 +631,10 @@ function normalizeStructuredDetails(value, reasons) {
       normalized.expired_or_not_found = normalizeExpiredDetails(rawDetails);
     } else if (reason === 'duplicate') {
       normalized.duplicate = normalizeDuplicateDetails(rawDetails);
+    } else if (reason === 'offer_nonsense') {
+      normalized.offer_nonsense = normalizeOfferNonsenseDetails(rawDetails);
+    } else if (reason === 'search_result_wrong') {
+      normalized.search_result_wrong = normalizeSearchResultWrongDetails(rawDetails);
     } else if (reasonSet.has(reason)) {
       normalized[reason] = normalizeUserNoteOnlyDetails(rawDetails, reason);
     }
