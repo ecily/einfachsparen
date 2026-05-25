@@ -19,6 +19,7 @@ const MAX_ANALYTICS_METADATA_LENGTH = 2000;
 const MAX_PUBLIC_PAYLOAD_BYTES = {
   '/api/analytics/event': 16 * 1024,
   '/api/feedback': 32 * 1024,
+  '/api/offer-feedback': 64 * 1024,
   '/api/shopping-lists/share': 128 * 1024,
 };
 

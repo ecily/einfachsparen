@@ -60,6 +60,12 @@ const feedbackRateLimit = buildRateLimit({
   message: 'Zu viel Feedback in kurzer Zeit. Bitte versuche es spaeter erneut.',
 });
 
+const offerFeedbackRateLimit = buildRateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  message: 'Zu viel Angebotsfeedback in kurzer Zeit. Bitte versuche es spaeter erneut.',
+});
+
 const analyticsEventRateLimit = buildRateLimit({
   windowMs: 5 * 60 * 1000,
   limit: 90,
@@ -73,6 +79,7 @@ module.exports = {
   filterRateLimit,
   globalRateLimit,
   imageProxyRateLimit,
+  offerFeedbackRateLimit,
   offersRateLimit,
   shoppingListShareRateLimit,
 };
