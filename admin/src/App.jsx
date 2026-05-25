@@ -42,6 +42,8 @@ import { getRetailerTheme } from './utils/retailerColors'
 import { shouldSeparateRetailerGroups } from './utils/retailers'
 
 const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
+const BETA_TEST_NOTICE =
+  'Hilf mit, kaufklug besser zu machen: Bei jedem Angebot kannst du Fehler direkt melden. Danke!'
 const MOBILE_BROWSER_NOTICE =
   'kaufklug.at funktioniert auch am Handy direkt im Browser. Die App-Version bleibt pausiert, bis die Datenqualität stabil genug ist.'
 
@@ -173,6 +175,10 @@ function SearchLandingHero() {
             textAlign: 'center',
           }}
         >
+          <div className="search-landing-hero__beta-notice">
+            <strong>BETA-TEST LÄUFT!</strong>
+            <p>{BETA_TEST_NOTICE}</p>
+          </div>
           <p className="eyebrow" style={{ margin: 0 }}>
             Einkauf am Smartphone
           </p>

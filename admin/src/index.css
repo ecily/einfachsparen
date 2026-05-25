@@ -843,6 +843,30 @@ a {
   letter-spacing: 0.12em;
 }
 
+.search-landing-hero__beta-notice {
+  display: grid;
+  gap: 0.22rem;
+  max-width: 19rem;
+  padding: 0.54rem 0.68rem;
+  border: 1px solid rgba(146, 45, 45, 0.2);
+  border-radius: 0.82rem;
+  background: var(--kk-red-soft);
+  color: var(--kk-red);
+}
+
+.search-landing-hero__beta-notice strong {
+  font-size: clamp(0.95rem, 2.1vw, 1.12rem);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.search-landing-hero__beta-notice p {
+  margin: 0;
+  color: #66302b;
+  font-size: 0.84rem;
+  line-height: 1.28;
+}
+
 .search-landing-hero__mobile h2 {
   color: #293627;
   font-weight: 820;
