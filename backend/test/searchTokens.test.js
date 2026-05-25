@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  FISCH_PRODUCT_TOKENS,
   FOOD_OIL_PRODUCT_TOKENS,
   SEARCH_TOKEN_VERSION,
   TEE_PRODUCT_TOKENS,
@@ -118,6 +119,20 @@ test('expands wurst query to direct sausage and cold-cut product tokens only', (
   for (const sideHitToken of ['lachs', 'hendl', 'schnitzel', 'fisch']) {
     assert.equal(wurstTokens.includes(sideHitToken), false);
   }
+});
+
+test('expands fisch query to direct fish and seafood product tokens only', () => {
+  const fischTokens = buildQuerySearchTokens('fisch');
+
+  for (const token of ['fisch', 'fischfilet', 'lachs', 'thunfisch', 'forelle', 'sardinen', 'garnelen', 'meeresfruechte', 'shrimp', 'prawns']) {
+    assert.equal(fischTokens.includes(token), true);
+  }
+
+  for (const sideHitToken of ['hendl', 'huhn', 'schnitzel', 'wurst', 'salami', 'schinken', 'speck', 'fleisch', 'rind', 'schwein']) {
+    assert.equal(fischTokens.includes(sideHitToken), false);
+  }
+
+  assert.deepEqual(new Set(fischTokens), new Set(FISCH_PRODUCT_TOKENS));
 });
 
 test('expands tee query to direct tea product tokens without coffee or Teebutter side hits', () => {

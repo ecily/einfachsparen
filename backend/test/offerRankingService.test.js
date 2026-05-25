@@ -2353,6 +2353,162 @@ test('nudeln search keeps pasta visible ahead of sweet noodle side hits', () => 
   assert.ok(sortedTitles.indexOf('Mohnnudeln mit Butterbroesel') > 1);
 });
 
+test('fisch search ranks fish and seafood products ahead of meat and sausage category side hits', () => {
+  const offers = [
+    offer({
+      title: 'Hendl Schnitzerl',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'hendl-schnitzerl::0.4-kg',
+    }),
+    offer({
+      title: 'TANN Salami',
+      brand: 'TANN',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'tann-salami::0.1-kg',
+    }),
+    offer({
+      title: 'Schweins Schnitzel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'schweins-schnitzel::0.5-kg',
+    }),
+    offer({
+      title: 'Rindsgulasch Fleisch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'rindsgulasch-fleisch::0.5-kg',
+    }),
+    offer({
+      title: 'Thunfisch in Oel',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'thunfisch-in-oel::0.195-kg',
+    }),
+    offer({
+      title: 'Lachsfilet frisch',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'lachsfilet-frisch::0.25-kg',
+    }),
+    offer({
+      title: 'Forellen Filet geraeuchert',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'forellen-filet::0.125-kg',
+    }),
+    offer({
+      title: 'Garnelen gekocht',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'garnelen-gekocht::0.2-kg',
+    }),
+    offer({
+      title: 'Fischfilet paniert',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Tiefkuehl',
+      comparisonGroup: 'fischfilet-paniert::0.45-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'fisch').map((item) => item.title);
+
+  assert.deepEqual(new Set(sortedTitles.slice(0, 5)), new Set([
+    'Fischfilet paniert',
+    'Forellen Filet geraeuchert',
+    'Garnelen gekocht',
+    'Lachsfilet frisch',
+    'Thunfisch in Oel',
+  ]));
+
+  for (const sideHit of ['Hendl Schnitzerl', 'TANN Salami', 'Schweins Schnitzel', 'Rindsgulasch Fleisch']) {
+    assert.ok(sortedTitles.indexOf(sideHit) > sortedTitles.indexOf('Thunfisch in Oel'));
+  }
+});
+
+test('fisch category-only signal stays weak while explicit Thunfisch remains relevant', () => {
+  const thunfisch = offer({
+    title: 'Thunfisch',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'thunfisch::0.195-kg',
+  });
+  const hendl = offer({
+    title: 'Hendl Schnitzerl',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'hendl-schnitzerl::0.4-kg',
+  });
+  const categoryOnly = offer({
+    title: 'Sortiment Angebot',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'sortiment-angebot::1-stueck',
+  });
+  const sortedTitles = applyQueryMatch([categoryOnly, hendl, thunfisch], 'fisch').map((item) => item.title);
+
+  assert.equal(scoreOfferAgainstQuery(categoryOnly, 'fisch') > 0, true);
+  assert.equal(scoreOfferAgainstQuery(thunfisch, 'fisch') > scoreOfferAgainstQuery(categoryOnly, 'fisch'), true);
+  assert.equal(scoreOfferAgainstQuery(thunfisch, 'fisch') > scoreOfferAgainstQuery(hendl, 'fisch'), true);
+  assert.deepEqual(sortedTitles, [
+    'Thunfisch',
+    'Hendl Schnitzerl',
+    'Sortiment Angebot',
+  ]);
+});
+
+test('fisch context keeps fleisch, lachs, schnitzel, wurst, tee and multi-word controls searchable', () => {
+  const fish = offer({
+    title: 'Lachsfilet frisch',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'lachsfilet-frisch::0.25-kg',
+  });
+  const meat = offer({
+    title: 'Rindsgulasch Fleisch',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'rindsgulasch-fleisch::0.5-kg',
+  });
+  const schnitzel = offer({
+    title: 'Schweins Schnitzel',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'schweins-schnitzel::0.5-kg',
+  });
+  const sausage = offer({
+    title: 'Haussalami geschnitten',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'haussalami-geschnitten::0.15-kg',
+  });
+  const tea = offer({
+    title: 'Teekanne Fruechtetee',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'teekanne-fruechtetee::20-stueck',
+  });
+  const coffee = offer({
+    title: 'Lavazza Kaffee Bohnen',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'lavazza-kaffee-bohnen::1-kg',
+  });
+
+  assert.ok(applyQueryMatch([fish, meat, schnitzel, sausage], 'fleisch').some((item) => item.title === 'Rindsgulasch Fleisch'));
+  assert.deepEqual(applyQueryMatch([meat, fish], 'lachs').map((item) => item.title), ['Lachsfilet frisch']);
+  assert.deepEqual(applyQueryMatch([fish, schnitzel], 'schnitzel').map((item) => item.title), ['Schweins Schnitzel']);
+  assert.deepEqual(applyQueryMatch([fish, sausage], 'wurst').map((item) => item.title), [
+    'Haussalami geschnitten',
+    'Lachsfilet frisch',
+  ]);
+  assert.deepEqual(applyQueryMatch([coffee, tea], 'tee').map((item) => item.title), [
+    'Teekanne Fruechtetee',
+    'Lavazza Kaffee Bohnen',
+  ]);
+  assert.deepEqual(applyQueryMatch([fish, meat], 'lachs frisch').map((item) => item.title), ['Lachsfilet frisch']);
+});
+
 test('wurst search ranks sausage and cold-cut products ahead of category-only fish and meat hits', () => {
   const offers = [
     offer({
@@ -4510,7 +4666,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

@@ -70,6 +70,37 @@ const TEE_PRODUCT_TOKENS = [
   'teekanne',
 ];
 
+const FISCH_PRODUCT_TOKENS = [
+  'fisch',
+  'fischfilet',
+  'fischfilets',
+  'fischstaebchen',
+  'forelle',
+  'forellen',
+  'forellenfilet',
+  'garnelen',
+  'hering',
+  'kabeljau',
+  'kabeljaufilet',
+  'lachs',
+  'lachsfilet',
+  'makrele',
+  'makrelen',
+  'matjes',
+  'meeresfruechte',
+  'prawns',
+  'sardine',
+  'sardinen',
+  'seelachs',
+  'seelachsfilet',
+  'shrimp',
+  'shrimps',
+  'sushi',
+  'thunfisch',
+  'zander',
+  'zanderfilet',
+];
+
 const STOPWORDS = new Set([
   'ab',
   'aktion',
@@ -138,6 +169,7 @@ const QUERY_SYNONYMS = new Map([
     'tierfutter',
     'whiskas',
   ]],
+  ['fisch', FISCH_PRODUCT_TOKENS.filter((token) => token !== 'fisch')],
   ['tee', TEE_PRODUCT_TOKENS.filter((token) => token !== 'tee')],
   ['wurst', WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst')],
 ]);
@@ -307,6 +339,7 @@ function withOfferSearchTokens(offer = {}) {
 module.exports = {
   SEARCH_TOKEN_VERSION,
   FOOD_OIL_PRODUCT_TOKENS,
+  FISCH_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
   TEE_PRODUCT_TOKENS,
   STOPWORDS,

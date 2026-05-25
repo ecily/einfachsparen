@@ -8,6 +8,7 @@ const { computeOfferSavings } = require('./promotionMath');
 const {
   SEARCH_TOKEN_VERSION,
   STOPWORDS: SEARCH_TOKEN_STOPWORDS,
+  FISCH_PRODUCT_TOKENS,
   TEE_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
   buildQuerySearchTokens,
@@ -113,7 +114,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -1044,6 +1045,48 @@ const QUERY_CONTEXTS = [
     productContext: ['fleisch', 'wurst'],
     weakContexts: ['fleischersatz', 'pflanzlich', 'moussaka', 'fertiggericht'],
     severeWeakContexts: ['zahnfleisch', 'mundpflege', 'mundspuelung', 'fleischtomaten', 'tomatenpflanzen', 'hundefutter', 'katzenfutter', 'tierfutter'],
+  },
+  {
+    key: 'fisch',
+    tokens: ['fisch'],
+    preferred: ['fisch', 'fischfilet', 'lachs', 'thunfisch', 'forelle', 'forellen', 'garnelen', 'meeresfruechte', 'sardinen', 'makrele', 'hering', 'matjes', 'sushi', 'lebensmittel'],
+    strongPreferred: ['fisch', 'fischfilet', 'lachs', 'thunfisch', 'forelle', 'forellen', 'garnelen', 'meeresfruechte', 'sardinen', 'makrele', 'hering', 'matjes', 'sushi'],
+    productIntent: FISCH_PRODUCT_TOKENS,
+    exactProductIntent: FISCH_PRODUCT_TOKENS.filter((token) => token !== 'fisch'),
+    productContext: ['fisch', 'meeresfruechte'],
+    weakContexts: [
+      'faschiertes',
+      'frankfurter',
+      'gefluegel',
+      'geflugel',
+      'hendl',
+      'huhn',
+      'huehner',
+      'huhner',
+      'karree',
+      'poularde',
+      'rind',
+      'salami',
+      'schinken',
+      'schnitzel',
+      'schwein',
+      'speck',
+      'steak',
+    ],
+    severeWeakContexts: [
+      'bratwurst',
+      'fleischlaibchen',
+      'grillhendl',
+      'huehnerfilet',
+      'huhnerfilet',
+      'keulen',
+      'leberkaese',
+      'leberkase',
+      'schnitzerl',
+      'schweinsschnitzel',
+      'unterkeulen',
+      'wuerstel',
+    ],
   },
   {
     key: 'wurst',
@@ -2329,6 +2372,86 @@ function scoreTeeSearchIntent({ titleTokens, categoryTokens, comparisonTokens, a
   return adjustment;
 }
 
+function getGenericFischOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const productFish = hasAnyTokenFamily(productTokens, FISCH_PRODUCT_TOKENS);
+  const categoryFish = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['fisch', 'meeresfruechte']);
+  const meatAndSausageSide = hasAnyTokenFamily(productTokens, [
+    'bratwurst',
+    'faschiertes',
+    'fleisch',
+    'fleischlaibchen',
+    'frankfurter',
+    'gefluegel',
+    'geflugel',
+    'grillhendl',
+    'hendl',
+    'huhn',
+    'huehner',
+    'huehnerfilet',
+    'huhner',
+    'huhnerfilet',
+    'karree',
+    'keulen',
+    'leberkaese',
+    'leberkase',
+    'maishendl',
+    'poularde',
+    'rind',
+    'salami',
+    'schinken',
+    'schnitzel',
+    'schnitzerl',
+    'schwein',
+    'schweinsschnitzel',
+    'speck',
+    'steak',
+    'unterkeulen',
+    'wuerstel',
+    'wurst',
+  ]);
+  const categoryOnly = !productFish && categoryFish;
+  const clearSideHit = !productFish && meatAndSausageSide;
+  const noProductSignal = !productFish &&
+    !hasAnyTokenFamily(allTokens, FISCH_PRODUCT_TOKENS) &&
+    categoryFish;
+
+  return {
+    categoryOnly,
+    clearSideHit,
+    productFish,
+    weakCategoryOnly: noProductSignal && !clearSideHit,
+  };
+}
+
+function scoreFischSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const {
+    categoryOnly,
+    clearSideHit,
+    productFish,
+    weakCategoryOnly,
+  } = getGenericFischOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (productFish) {
+    adjustment += 5600;
+  }
+
+  if (clearSideHit) {
+    adjustment -= 6500;
+  } else if (categoryOnly) {
+    adjustment -= weakCategoryOnly ? 3800 : 2600;
+  }
+
+  return adjustment;
+}
+
 function scoreFieldAgainstQuery(value, queryTokens, weights) {
   const fieldTokens = tokenizeSearchText(value);
 
@@ -2466,6 +2589,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericBeerQuery = context?.key === 'bier' && queryTokens.length === 1 && queryTokens[0] === 'bier';
   const genericWurstQuery = context?.key === 'wurst' && queryTokens.length === 1 && queryTokens[0] === 'wurst';
   const genericTeeQuery = context?.key === 'tee' && queryTokens.length === 1 && queryTokens[0] === 'tee';
+  const genericFischQuery = context?.key === 'fisch' && queryTokens.length === 1 && queryTokens[0] === 'fisch';
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
   const conservativeGenericOilQuery = genericOilQuery;
 
@@ -2679,6 +2803,15 @@ function scoreOfferAgainstQuery(offer, query) {
 
     if (genericTeeQuery) {
       score += scoreTeeSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
+    if (genericFischQuery) {
+      score += scoreFischSearchIntent({
         titleTokens,
         categoryTokens,
         comparisonTokens,
