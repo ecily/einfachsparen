@@ -279,19 +279,19 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
 
   return (
     <>
-      <section className="shopping-check" aria-labelledby="shopping-check-title">
+      <section className="shopping-check" aria-label="Einkaufslisten-Zusammenfassung">
         <div className="shopping-check__metrics">
-          <div className="shopping-check__metric shopping-check__metric--saving">
-            <span id="shopping-check-title">Du sparst ca.</span>
-            <strong>{canShowKnownSavings ? formatPrice(knownSavingsTotal) : formatPrice(0)}</strong>
-          </div>
-
           {canShowOfferTotal ? (
             <div className="shopping-check__metric shopping-check__metric--price">
-              <span>Preis ca.</span>
+              <span>Du zahlst ca.</span>
               <strong>{formatPrice(offerTotal)}</strong>
             </div>
           ) : null}
+
+          <div className="shopping-check__metric shopping-check__metric--saving">
+            <span>Du sparst ca.</span>
+            <strong>{canShowKnownSavings ? formatPrice(knownSavingsTotal) : formatPrice(0)}</strong>
+          </div>
         </div>
 
         <p className="shopping-check__note">

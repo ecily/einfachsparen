@@ -3020,15 +3020,17 @@ a {
 .shopping-check__metrics {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
-  gap: 0.75rem 1.1rem;
+  align-items: stretch;
+  gap: 0.72rem 1rem;
   min-width: 0;
 }
 
 .shopping-check__metric {
   display: grid;
   gap: 0.28rem;
+  flex: 1 1 13rem;
   min-width: 0;
+  max-width: 18rem;
 }
 
 .shopping-check__metric span {
@@ -3038,8 +3040,11 @@ a {
 }
 
 .shopping-check__metric--price {
-  padding-left: 1rem;
-  border-left: 1px solid rgba(31, 90, 75, 0.15);
+  --shopping-check-value-color: #41554b;
+}
+
+.shopping-check__metric--saving {
+  --shopping-check-value-color: var(--kk-value-text);
 }
 
 .page-nav__button:not(.page-nav__button--active) .page-nav__count {
@@ -3048,19 +3053,12 @@ a {
 }
 
 .shopping-check__metric strong {
-  color: var(--kk-value-text);
+  color: var(--shopping-check-value-color, var(--kk-value-text));
+  font-size: clamp(1.75rem, 4.6vw, 2.55rem);
+  font-weight: 880;
   line-height: 1;
   letter-spacing: 0;
   overflow-wrap: anywhere;
-}
-
-.shopping-check__metric--saving strong {
-  font-size: clamp(2rem, 6vw, 3.2rem);
-}
-
-.shopping-check__metric--price strong {
-  font-size: clamp(1.35rem, 3.2vw, 2rem);
-  font-weight: 850;
 }
 
 .shopping-check__note {
@@ -4380,20 +4378,16 @@ textarea:focus {
   }
 
   .shopping-check__metrics {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.68rem;
+    gap: 0.65rem;
   }
 
-  .shopping-check__metric--price {
-    padding-top: 0.68rem;
-    padding-left: 0;
-    border-top: 1px solid rgba(31, 90, 75, 0.12);
-    border-left: 0;
+  .shopping-check__metric {
+    flex-basis: 10.5rem;
+    max-width: none;
   }
 
-  .shopping-check__metric--saving strong {
-    font-size: clamp(1.9rem, 11vw, 2.7rem);
+  .shopping-check__metric strong {
+    font-size: clamp(1.75rem, 9vw, 2.35rem);
   }
 
   .shopping-list-actions__danger {
