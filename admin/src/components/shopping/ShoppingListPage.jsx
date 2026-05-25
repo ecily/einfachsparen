@@ -133,14 +133,6 @@ function getApproximateSavingsCount(items = []) {
   }).length
 }
 
-function getSavingsDisplayLabel({ approximateCount, knownSavingsTotal }) {
-  if (knownSavingsTotal <= 0) {
-    return 'Noch keine bekannte Ersparnis'
-  }
-
-  return approximateCount > 0 ? 'Bekannte Ersparnis ca.' : 'Bekannte Ersparnis'
-}
-
 function getMarketSummaryText({ groupSummary, knownSavingsTotal, approximateCount }) {
   const articleText = getArticleCountText(groupSummary.itemCount)
 
@@ -183,18 +175,11 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
     [checkedItemIds, hideCompleted, shoppingListItems]
   )
   const groupedItems = useMemo(() => groupShoppingListByRetailer(visibleItems), [visibleItems])
-  const allGroups = useMemo(() => groupShoppingListByRetailer(shoppingListItems), [shoppingListItems])
-  const allRetailerCount = allGroups.length
   const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
   const offerTotal = useMemo(() => getItemsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const canShowOfferTotal = useMemo(() => hasKnownCurrentPrice(shoppingListItems), [shoppingListItems])
   const canShowKnownSavings = summary.knownSavingsCount > 0 && knownSavingsTotal > 0
-  const knownSavingsLabel = getSavingsDisplayLabel({
-    approximateCount: summary.approximateSavingsCount,
-    knownSavingsTotal,
-  })
-  const hasMissingSavings = summary.knownSavingsCount < shoppingListItems.length
 
   useEffect(() => {
     storeCheckedShoppingListItems(checkedItemIds)
@@ -295,29 +280,24 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
   return (
     <>
       <section className="shopping-check" aria-labelledby="shopping-check-title">
-        <div className="shopping-check__saving">
-          <span id="shopping-check-title">{knownSavingsLabel}</span>
-          <strong>{canShowKnownSavings ? formatPrice(knownSavingsTotal) : 'Aktionspreise'}</strong>
-          <p>
-            {canShowKnownSavings
-              ? 'Wir zählen nur Ersparnisse, bei denen ein Vergleichspreis vorliegt.'
-              : 'Angebote ohne Vergleichspreis zählen wir nicht zur Ersparnis.'}
-          </p>
+        <div className="shopping-check__metrics">
+          <div className="shopping-check__metric shopping-check__metric--saving">
+            <span id="shopping-check-title">Du sparst ca.</span>
+            <strong>{canShowKnownSavings ? formatPrice(knownSavingsTotal) : formatPrice(0)}</strong>
+          </div>
+
+          {canShowOfferTotal ? (
+            <div className="shopping-check__metric shopping-check__metric--price">
+              <span>Preis ca.</span>
+              <strong>{formatPrice(offerTotal)}</strong>
+            </div>
+          ) : null}
         </div>
 
-        <div className="shopping-check__facts">
-          <span>{getArticleCountText(shoppingListItems.length)}</span>
-          <span>
-            {allRetailerCount} {allRetailerCount === 1 ? 'Markt' : 'Märkte'}
-          </span>
-          {summary.knownSavingsCount > 0 ? <span>{summary.knownSavingsCount} mit bekannter Ersparnis</span> : null}
-          {canShowOfferTotal ? <span>Aktionspreise ca. {formatPrice(offerTotal)}</span> : null}
-        </div>
-
-        {canShowKnownSavings || hasMissingSavings ? (
-          <p className="shopping-check__soft-note">Angebote ohne Vergleichspreis zählen wir nicht zur Ersparnis.</p>
-        ) : null}
-        <p className="shopping-check__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine Preisgarantie.</p>
+        <p className="shopping-check__note">
+          Ersparnisse zählen wir nur mit Vergleichspreis. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine
+          Preisgarantie.
+        </p>
       </section>
 
       <div className="shopping-list-actions">
