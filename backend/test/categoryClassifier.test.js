@@ -159,6 +159,8 @@ test('classifies cat food brands as pet food instead of sauce or groceries', () 
 test('keeps Felix food products out of pet food despite misleading source category context', () => {
   for (const input of [
     { title: 'Felix Felix Linsen mit Speck' },
+    { title: 'Felix Felix Chili Con Carne' },
+    { title: 'Felix Felix Erdaepfelgulasch' },
     {
       title: 'Felix Felix Linsen mit Speck',
       sourceCategory: 'Tierbedarf Katzenfutter',

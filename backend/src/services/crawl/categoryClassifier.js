@@ -148,7 +148,7 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
-    patterns: [/\bfelix\b.*\b(linsen|bohnen|eintopf|konserve|ravioli|sugo|pasta)\b/],
+    patterns: [/\bfelix\b.*(linsen|bohnen|eintopf|konserve|ravioli|sugo|pasta|chili|gulasch)/],
     main: 'Lebensmittel',
     sub: 'Pasta, Reis & Konserven',
   },
