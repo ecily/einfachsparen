@@ -25,7 +25,7 @@ const CATEGORY_TAXONOMY = [
       { label: 'Wasser', patterns: [/(wasser|mineralwasser|sprudel)/] },
       { label: 'Softdrinks & Energy', patterns: [/\b(cola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink)\b/] },
       { label: 'Saefte & Sirupe', patterns: [/\b(saft|nektar|sirup|smoothie|orangensaft|apfelsaft|multivitamin)\b/] },
-      { label: 'Bier', patterns: [/\b(bier|pils|weizen|radler|lager|helles|alkoholfrei|flaschenbier|dosenbier|ottakringer|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/] },
+      { label: 'Bier', patterns: [/\b(bier|pils|weizen|radler|lager|helles|maerzen|marzen|flaschenbier|dosenbier|ottakringer|puntigamer|hirter|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/] },
       { label: 'Wein & Sekt', patterns: [/\b(wein|rotwein|weisswein|rosewein|rose|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|gruener veltliner|veltliner|hugo)\b/] },
       { label: 'Spirituosen', patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister)\b/] },
       { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha|bohne|kaffeekapsel|kapseln|nespresso|dolce gusto)/] },
@@ -148,14 +148,40 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
+    patterns: [/\bfelix\b.*\b(linsen|bohnen|eintopf|konserve|ravioli|sugo|pasta)\b/],
+    main: 'Lebensmittel',
+    sub: 'Pasta, Reis & Konserven',
+  },
+  {
+    patterns: [/\b(somat|geschirrspueltabs|geschirrspultabs|geschirrspuel-tabs|geschirrspul-tabs|spuelmaschinentabs|spulmaschinentabs)\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
+  },
+  {
+    patterns: [/\b(sojasauce|pizzasauce|bratolivenoel)\b/],
+    main: 'Lebensmittel',
+    sub: 'Saucen, Oele & Gewuerze',
+  },
+  {
+    patterns: [/\b(body butter|koerperbutter|korperbutter|lippenbalsam|lippenpflege|lip butter|lippen butter)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Koerperpflege',
+  },
+  {
+    patterns: [/\bsommerbutter\b/],
+    main: 'Lebensmittel',
+    sub: 'Milchprodukte',
+  },
+  {
     patterns: [/\b(pedigree|schmackos|biscrok)\b/],
     main: 'Tierbedarf',
     sub: 'Hundefutter',
   },
   {
     patterns: [
-      /\b(felix|whiskas|gourmet gold|gourmet perle|purina one|sheba|zooroyal)\b.*\b(katze|katzen|katzenfutter|nassfutter|trockenfutter|futter|dose|schale|beutel)\b/,
-      /\b(katze|katzen|katzenfutter|nassfutter|trockenfutter|futter)\b.*\b(felix|whiskas|gourmet gold|gourmet perle|purina one|sheba|zooroyal)\b/,
+      /\b(felix|whiskas|gourmet gold|gourmet perle|purina one|sheba|zooroyal)\b.*\b(katze|katzen|katzenfutter|katzennahrung|nassfutter|trockenfutter|futter|dose|schale|beutel)\b/,
+      /\b(katze|katzen|katzenfutter|katzennahrung|nassfutter|trockenfutter|futter)\b.*\b(felix|whiskas|gourmet gold|gourmet perle|purina one|sheba|zooroyal)\b/,
+      /\bpurina\b.*\bfelix\b|\bfelix\b.*\bpurina\b/,
     ],
     main: 'Tierbedarf',
     sub: 'Katzenfutter',
@@ -271,7 +297,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Fleisch, Wurst & Fisch',
   },
   {
-    patterns: [/\b(bier|pils|weizen|radler|lager|helles|flaschenbier|dosenbier|ottakringer|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/],
+    patterns: [/\b(bier|pils|weizen|radler|lager|helles|maerzen|marzen|flaschenbier|dosenbier|ottakringer|puntigamer|hirter|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/],
     main: 'Getraenke',
     sub: 'Bier',
   },
@@ -396,7 +422,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Gesundheit & Nahrungsergaenzung',
   },
   {
-    patterns: [/\b(perfect fit|gourmet perle|gourmet gold|katzenfutter|katzensnack)\b/],
+    patterns: [/\b(perfect fit|gourmet perle|gourmet gold|katzenfutter|katzennahrung|katzensnack)\b/],
     main: 'Tierbedarf',
     sub: 'Katzenfutter',
   },

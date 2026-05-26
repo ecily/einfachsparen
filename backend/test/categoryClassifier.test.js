@@ -25,6 +25,50 @@ test('classifies common Austrian supermarket product names into concrete subcate
   }
 });
 
+test('classifies sauce compounds as food sauce products', () => {
+  for (const title of [
+    'Taste of Asia Sojasauce 250 ml',
+    'Kikkoman Sojasauce 150 ml',
+    'Oro di Parma Pizzasauce Oregano',
+  ]) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Lebensmittel', title);
+    assert.equal(decision.secondaryCategory, 'Saucen, Oele & Gewuerze', title);
+  }
+});
+
+test('keeps dishwasher and detergent products ahead of scent or flavor side tokens', () => {
+  const somat = determineCategoryDecision({
+    title: 'Somat All in 1 Extra Geschirrspuel-Tabs Zitrone & Limette 55 Stueck',
+  });
+  const lemons = determineCategoryDecision({ title: 'Zitronen frisch 500 g' });
+
+  assert.equal(somat.primaryCategory, 'Haushalt');
+  assert.equal(somat.secondaryCategory, 'Waschmittel & Reiniger');
+  assert.equal(lemons.primaryCategory, 'Lebensmittel');
+  assert.equal(lemons.secondaryCategory, 'Obst & Gemuese');
+});
+
+test('does not use alkoholfrei alone as a beer category trigger', () => {
+  const plain = determineCategoryDecision({ title: 'Aktiv Tonikum alkoholfrei' });
+  const hairCare = determineCategoryDecision({
+    title: 'Aktiv Tonikum alkoholfrei',
+    sourceCategory: 'Haarpflege',
+    contextText: 'BIPA Haarpflege',
+  });
+  const goesser = determineCategoryDecision({ title: 'Goesser alkoholfrei Bier 0,5 l' });
+  const ottakringer = determineCategoryDecision({ title: 'Ottakringer alkoholfrei 0,5 l' });
+
+  assert.notEqual(plain.secondaryCategory, 'Bier');
+  assert.equal(hairCare.primaryCategory, 'Drogerie / Hygiene');
+  assert.equal(hairCare.secondaryCategory, 'Haarpflege');
+  assert.equal(goesser.primaryCategory, 'Getraenke');
+  assert.equal(goesser.secondaryCategory, 'Bier');
+  assert.equal(ottakringer.primaryCategory, 'Getraenke');
+  assert.equal(ottakringer.secondaryCategory, 'Bier');
+});
+
 test('keeps hardened launch-quality examples in the intended categories', () => {
   const cases = [
     ['Meinl Praesident Ganze Bohne oder gemahlen 500 g', 'Getraenke', 'Kaffee & Tee'],
@@ -56,13 +100,20 @@ test('keeps hardened launch-quality examples in the intended categories', () => 
 
 test('keeps critical side hits out of misleading butter and rice categories', () => {
   const bodyButter = determineCategoryDecision({ title: 'Kakaobutter Duschgel 250 ml' });
+  const bodyButterPlain = determineCategoryDecision({ title: 'Body Butter Shea 250 ml' });
+  const lipButter = determineCategoryDecision({ title: 'Lippenbalsam Butter 4 g' });
   const croissant = determineCategoryDecision({ title: 'Butter Croissant 1 Stueck' });
   const reiswaffeln = determineCategoryDecision({ title: 'Bio Reiswaffeln Natur 30 g' });
+  const sommerbutter = determineCategoryDecision({ title: 'Schaerdinger Sommerbutter 250 g' });
 
   assert.equal(bodyButter.primaryCategory, 'Drogerie / Hygiene');
   assert.equal(bodyButter.secondaryCategory, 'Koerperpflege');
+  assert.notEqual(bodyButterPlain.secondaryCategory, 'Milchprodukte');
+  assert.notEqual(lipButter.secondaryCategory, 'Milchprodukte');
   assert.equal(croissant.secondaryCategory, 'Brot & Gebaeck');
   assert.equal(reiswaffeln.secondaryCategory, 'Suesswaren & Knabbereien');
+  assert.equal(sommerbutter.primaryCategory, 'Lebensmittel');
+  assert.equal(sommerbutter.secondaryCategory, 'Milchprodukte');
 });
 
 test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', () => {
@@ -85,10 +136,16 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
 
 test('classifies cat food brands as pet food instead of sauce or groceries', () => {
   const cases = [
+    'Felix Katzenfutter',
+    'Felix Nassfutter',
+    'Felix Katzennahrung',
     'Felix Katzenfutter-Beutel div. Sorten 85 g',
+    'Purina Felix',
+    'Purina Felix Nassfutter',
     'Whiskas Katzen-Trockenfutter 950 g',
     'Gourmet GOLD Katzenfutter-Dose 85 g',
     'Purina One Katzenfutter-Beutel 4 Stueck',
+    'Sheba Katzennahrung',
   ];
 
   for (const title of cases) {
@@ -96,6 +153,24 @@ test('classifies cat food brands as pet food instead of sauce or groceries', () 
 
     assert.equal(decision.primaryCategory, 'Tierbedarf', title);
     assert.equal(decision.secondaryCategory, 'Katzenfutter', title);
+  }
+});
+
+test('keeps Felix food products out of pet food despite misleading source category context', () => {
+  for (const input of [
+    { title: 'Felix Felix Linsen mit Speck' },
+    {
+      title: 'Felix Felix Linsen mit Speck',
+      sourceCategory: 'Tierbedarf Katzenfutter',
+      contextText: 'Tierbedarf Katzenfutter',
+    },
+  ]) {
+    const decision = determineCategoryDecision(input);
+
+    assert.equal(decision.primaryCategory, 'Lebensmittel', input.title);
+    assert.equal(decision.secondaryCategory, 'Pasta, Reis & Konserven', input.title);
+    assert.notEqual(decision.primaryCategory, 'Tierbedarf', input.title);
+    assert.notEqual(decision.secondaryCategory, 'Katzenfutter', input.title);
   }
 });
 
