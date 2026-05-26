@@ -3101,9 +3101,170 @@ function buildFilters({ categories, query, unit, retailers, onlyWithoutProgram }
   return filters;
 }
 
-function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
+function getViennaDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce((result, part) => ({
+    ...result,
+    [part.type]: part.value,
+  }), {});
+
+  return parts.year && parts.month && parts.day ? `${parts.year}-${parts.month}-${parts.day}` : '';
+}
+
+function inferConditionContextYear({ offer = {}, referenceDate = new Date(), dates = [] } = {}) {
+  const explicitYear = dates.find((date) => date.year)?.year;
+  if (explicitYear) return explicitYear;
+
+  for (const value of [offer.validFrom, offer.validTo, referenceDate]) {
+    if (!value) continue;
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.getUTCFullYear();
+  }
+
+  return null;
+}
+
+function dateKeyFromParts({ day, month, year }) {
+  const parsedDay = Number(day);
+  const parsedMonth = Number(month);
+  const parsedYear = Number(year);
+
+  if (!parsedDay || !parsedMonth || !parsedYear) return '';
+
+  const date = new Date(Date.UTC(parsedYear, parsedMonth - 1, parsedDay, 12, 0, 0));
+
+  if (
+    date.getUTCFullYear() !== parsedYear
+    || date.getUTCMonth() !== parsedMonth - 1
+    || date.getUTCDate() !== parsedDay
+  ) {
+    return '';
+  }
+
+  return [
+    String(parsedYear).padStart(4, '0'),
+    String(parsedMonth).padStart(2, '0'),
+    String(parsedDay).padStart(2, '0'),
+  ].join('-');
+}
+
+function extractConditionDateParts(value = '') {
+  const dates = [];
+  const pattern = /(?:\b(?:mo|di|mi|do|fr|sa|so)\.?,?\s*)?(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{2,4})?/gi;
+  let match;
+
+  while ((match = pattern.exec(String(value || '')))) {
+    const rawYear = match[3] ? Number(match[3]) : null;
+    dates.push({
+      day: Number(match[1]),
+      month: Number(match[2]),
+      year: rawYear ? (rawYear < 100 ? 2000 + rawYear : rawYear) : null,
+    });
+  }
+
+  return dates;
+}
+
+function isExpiredDateBoundConditionFragment(fragment, { offer = {}, now = new Date() } = {}) {
+  const dates = extractConditionDateParts(fragment);
+
+  if (dates.length === 0) {
+    return false;
+  }
+
+  const contextYear = inferConditionContextYear({ offer, referenceDate: now, dates });
+  if (!contextYear) {
+    return false;
+  }
+
+  const dateKeys = dates
+    .map((date) => dateKeyFromParts({ ...date, year: date.year || contextYear }))
+    .filter(Boolean);
+  const currentDateKey = getViennaDateKey(now);
+
+  if (dateKeys.length === 0 || !currentDateKey) {
+    return false;
+  }
+
+  return dateKeys.sort()[dateKeys.length - 1] < currentDateKey;
+}
+
+function normalizeConditionTextAfterFragmentRemoval(value = '') {
+  return String(value || '')
+    .replace(/\s+\./g, '.')
+    .replace(/\.\s*\./g, '.')
+    .replace(/^\s*[.;,]\s*/, '')
+    .replace(/\s*[.;,]\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function removeExpiredDateBoundFragmentsFromPart(part, { offer = {}, now = new Date() } = {}) {
+  const extraConditionPattern = /\b(?:noch\s+)?zus(?:ae|a|\u00e4)tzlich\s+-?\s*\d{1,2}\s*%[\s\S]*?laut\s+flugblatt\b/gi;
+
+  return normalizeConditionTextAfterFragmentRemoval(
+    String(part || '').replace(extraConditionPattern, (fragment) => (
+      isExpiredDateBoundConditionFragment(fragment, { offer, now }) ? '' : fragment
+    ))
+  );
+}
+
+function filterExpiredDateBoundConditionFragments(conditionsText, { offer = {}, now = new Date() } = {}) {
+  const rawText = String(conditionsText || '').trim();
+
+  if (!rawText || !isSparFamilyRetailer(offer)) {
+    return rawText;
+  }
+
+  const hasOfficialPdfEvidence = isOfficialPdfEvidence(offer)
+    || isOfficialPdfEvidence({
+      sourceType: offer?.rawFacts?.mergedConditionEvidence?.sourceType || '',
+      rawFacts: { sourceKey: offer?.rawFacts?.mergedConditionEvidence?.sourceKey || '' },
+      sourceTypes: [],
+    });
+
+  if (!hasOfficialPdfEvidence && !/\bzus(?:ae|a|\u00e4)tzlich\b/i.test(rawText)) {
+    return rawText;
+  }
+
+  const parts = rawText
+    .split(/\s*\/\s*/)
+    .map((part) => removeExpiredDateBoundFragmentsFromPart(part, { offer, now }))
+    .filter(Boolean);
+  const seen = new Set();
+  const deduped = [];
+
+  for (const part of parts) {
+    const key = normalizeSearchText(part);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(part);
+  }
+
+  return deduped.join(' / ');
+}
+
+function getPublicConditionsText(offer, options = {}) {
+  return filterExpiredDateBoundConditionFragments(offer?.conditionsText || '', {
+    offer,
+    now: options.now || new Date(),
+  });
+}
+
+function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
   const safelyComparable = isOfferSafelyComparable(offer);
   const publicQuantityFields = sanitizePublicOfferQuantityFields(offer, { safelyComparable });
+  const publicConditionsText = getPublicConditionsText(offer, options);
   const computedPromotion = computeOfferSavings(offer);
   const legacySavings = {
     savingsAmount:
@@ -3172,7 +3333,7 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice) {
     subcategoryConfidence: Number(offer.subcategoryConfidence || 0),
     displayCategory: selectDisplayCategory(offer),
     quantityText: publicQuantityFields.quantityText,
-    conditionsText: offer.conditionsText,
+    conditionsText: publicConditionsText,
     discountPercent: offer.discountPercent ?? null,
     discountUpToPercent: offer.discountUpToPercent ?? null,
     promotionScope: offer.promotionScope || '',
@@ -4258,30 +4419,50 @@ function getConditionTextParts(...offers) {
   return parts;
 }
 
-function mergeConditionTexts(target, evidence) {
+function mergeConditionTexts(target, evidence, options = {}) {
   const targetParts = getConditionTextParts(target);
   const evidenceParts = getConditionTextParts(evidence);
+  const filterMergedText = (text) => filterExpiredDateBoundConditionFragments(text, {
+    offer: {
+      ...(target || {}),
+      sourceType: evidence?.sourceType || target?.sourceType,
+      sourceTypes: [
+        ...(Array.isArray(target?.sourceTypes) ? target.sourceTypes : []),
+        target?.sourceType,
+        ...(Array.isArray(evidence?.sourceTypes) ? evidence.sourceTypes : []),
+        evidence?.sourceType,
+      ].filter(Boolean),
+      rawFacts: {
+        ...(target?.rawFacts || {}),
+        mergedConditionEvidence: {
+          sourceKey: getOfferSourceKey(evidence),
+          sourceType: getOfferSourceType(evidence),
+        },
+      },
+    },
+    now: options.now || new Date(),
+  });
 
   if (targetParts.length === 0) {
-    return evidenceParts.join(' / ');
+    return filterMergedText(evidenceParts.join(' / '));
   }
 
   if (evidenceParts.length === 0) {
-    return targetParts.join(' / ');
+    return filterMergedText(targetParts.join(' / '));
   }
 
   const targetText = normalizeSearchText(targetParts.join(' '));
   const evidenceText = normalizeSearchText(evidenceParts.join(' '));
 
   if (targetText.includes(evidenceText)) {
-    return targetParts.join(' / ');
+    return filterMergedText(targetParts.join(' / '));
   }
 
   if (evidenceText.includes(targetText)) {
-    return evidenceParts.join(' / ');
+    return filterMergedText(evidenceParts.join(' / '));
   }
 
-  return getConditionTextParts(target, evidence).join(' / ');
+  return filterMergedText(getConditionTextParts(target, evidence).join(' / '));
 }
 
 function haveCompatibleResponseCategory(left, right) {
@@ -4386,8 +4567,8 @@ function canMergeConditionEvidence(target, evidence) {
   return haveCompatibleConditionMergeTitle(target, evidence);
 }
 
-function mergeConditionEvidence(target, evidence) {
-  const mergedConditionsText = mergeConditionTexts(target, evidence);
+function mergeConditionEvidence(target, evidence, options = {}) {
+  const mergedConditionsText = mergeConditionTexts(target, evidence, options);
   const targetMinimum = Number(target?.minimumPurchaseQty || target?.minimumPurchaseQuantity || target?.minQuantity || 1);
   const evidenceMinimum = Number(evidence?.minimumPurchaseQty || evidence?.minimumPurchaseQuantity || evidence?.minQuantity || 1);
   const sourceUrls = [...new Set([
@@ -4438,7 +4619,7 @@ function mergeConditionEvidence(target, evidence) {
   };
 }
 
-function mergeSparConditionEvidenceIntoOffers(offers = []) {
+function mergeSparConditionEvidenceIntoOffers(offers = [], options = {}) {
   const conditionEvidence = offers.filter((offer) => isOfficialPdfEvidence(offer) && hasConditionEvidence(offer));
 
   if (conditionEvidence.length === 0) {
@@ -4448,7 +4629,7 @@ function mergeSparConditionEvidenceIntoOffers(offers = []) {
   return offers.map((offer) => {
     const evidence = conditionEvidence.find((candidate) => canMergeConditionEvidence(offer, candidate));
 
-    return evidence ? mergeConditionEvidence(offer, evidence) : offer;
+    return evidence ? mergeConditionEvidence(offer, evidence, options) : offer;
   });
 }
 
@@ -6660,6 +6841,7 @@ module.exports = {
   dedupeVisibleCardResponseOffers,
   mergeSparConditionEvidenceIntoOffers,
   canMergeConditionEvidence,
+  filterExpiredDateBoundConditionFragments,
   hasSameVisibleResponseFingerprint,
   hasSameVisibleCardFingerprint,
   reduceAdjacentQueryDuplicates,

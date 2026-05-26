@@ -21,6 +21,7 @@ const {
   dedupeVisibleCardResponseOffers,
   mergeSparConditionEvidenceIntoOffers,
   canMergeConditionEvidence,
+  filterExpiredDateBoundConditionFragments,
   buildRankingCandidateQueryMetadata,
   hashRankingCacheKey,
   buildRankingResponseFromBase,
@@ -364,7 +365,7 @@ test('SPAR condition merge deduplicates overlapping condition text', () => {
   assert.equal(merged.minimumPurchaseQty, 6);
 });
 
-test('SPAR condition merge keeps dated condition sentences intact', () => {
+test('SPAR condition merge keeps current dated condition sentences intact', () => {
   const aktionsfinder = sparOffer({
     brand: 'Goesser',
     title: 'Gösser Märzen SPAR 0.50 Liter 1 Dose',
@@ -374,11 +375,132 @@ test('SPAR condition merge keeps dated condition sentences intact', () => {
     conditionsText: 'ab 6 Dosen. Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt',
   });
 
-  const [merged] = mergeSparConditionEvidenceIntoOffers([aktionsfinder, pdf]);
+  const [merged] = mergeSparConditionEvidenceIntoOffers([aktionsfinder, pdf], {
+    now: new Date('2026-05-22T12:00:00.000Z'),
+  });
 
   assert.equal(
     merged.conditionsText,
     'ab 6 Dosen. Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt',
+  );
+});
+
+test('SPAR condition guard removes expired Zusaetzlich fragments and keeps basis conditions', () => {
+  const offerWithBasis = sparPdfOffer({
+    conditionsText: 'Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt / ab 6 Dosen',
+  });
+
+  assert.equal(
+    filterExpiredDateBoundConditionFragments(offerWithBasis.conditionsText, {
+      offer: offerWithBasis,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    'ab 6 Dosen',
+  );
+  assert.equal(
+    filterExpiredDateBoundConditionFragments(
+      'ab 6 Dosen. Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt / ab 6 Dosen',
+      {
+        offer: offerWithBasis,
+        now: new Date('2026-05-26T10:00:00.000Z'),
+      },
+    ),
+    'ab 6 Dosen',
+  );
+});
+
+test('SPAR condition guard handles Zusaetzlich umlaut variant', () => {
+  const pdf = sparPdfOffer({
+    conditionsText: 'ab 24 Dosen. Zusätzlich -25% am Fr., 22.05. und Sa., 23.05.2026 laut Flugblatt',
+  });
+
+  assert.equal(
+    filterExpiredDateBoundConditionFragments(pdf.conditionsText, {
+      offer: pdf,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    'ab 24 Dosen',
+  );
+});
+
+test('SPAR condition guard keeps future and current date-bound Zusatz conditions', () => {
+  const pdf = sparPdfOffer({
+    conditionsText: 'Zusaetzlich -25% am Fr., 29.5. und Sa., 30.5.2026 laut Flugblatt / ab 6 Dosen',
+  });
+
+  assert.equal(
+    filterExpiredDateBoundConditionFragments(pdf.conditionsText, {
+      offer: pdf,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    'Zusaetzlich -25% am Fr., 29.5. und Sa., 30.5.2026 laut Flugblatt / ab 6 Dosen',
+  );
+  assert.equal(
+    filterExpiredDateBoundConditionFragments(pdf.conditionsText, {
+      offer: pdf,
+      now: new Date('2026-05-29T10:00:00.000Z'),
+    }),
+    'Zusaetzlich -25% am Fr., 29.5. und Sa., 30.5.2026 laut Flugblatt / ab 6 Dosen',
+  );
+});
+
+test('SPAR condition guard leaves base and unclear conditions unchanged', () => {
+  const pdf = sparPdfOffer();
+
+  assert.equal(
+    filterExpiredDateBoundConditionFragments('ab 6 Dosen', {
+      offer: pdf,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    'ab 6 Dosen',
+  );
+  assert.equal(
+    filterExpiredDateBoundConditionFragments('ab 24 Dosen', {
+      offer: pdf,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    'ab 24 Dosen',
+  );
+  assert.equal(
+    filterExpiredDateBoundConditionFragments('12+12 gratis', {
+      offer: pdf,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    '12+12 gratis',
+  );
+  assert.equal(
+    filterExpiredDateBoundConditionFragments('Zusaetzlich -25% am Flugblatt-Wochenende laut Flugblatt / ab 6 Dosen', {
+      offer: pdf,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    'Zusaetzlich -25% am Flugblatt-Wochenende laut Flugblatt / ab 6 Dosen',
+  );
+});
+
+test('buildRankedOffer filters expired date-bound Zusatz condition text in API response', () => {
+  const ranked = buildRankedOffer(
+    sparPdfOffer({
+      conditionsText: 'ab 6 Dosen. Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt / ab 6 Dosen',
+    }),
+    1.98,
+    1.98,
+    { now: new Date('2026-05-26T10:00:00.000Z') },
+  );
+
+  assert.equal(ranked.conditionsText, 'ab 6 Dosen');
+});
+
+test('SPAR condition guard can return an empty condition text when only expired Zusatz remains', () => {
+  const pdf = sparPdfOffer({
+    conditionsText: 'Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt',
+  });
+
+  assert.equal(
+    filterExpiredDateBoundConditionFragments(pdf.conditionsText, {
+      offer: pdf,
+      now: new Date('2026-05-26T10:00:00.000Z'),
+    }),
+    '',
   );
 });
 
