@@ -37,6 +37,7 @@ const {
 const {
   PARSER_VERSION: SPAR_PDF_PARSER_VERSION,
   SOURCE_TYPE: SPAR_PDF_SOURCE_TYPE,
+  buildRejectedCandidateSamples: buildSparPdfRejectedCandidateSamples,
   buildValidityFromSource,
   extractSparPdfReference,
   normalizeSparPdfCandidatesToOffers,
@@ -3741,6 +3742,18 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
     pdfSha256,
   });
   const rejectionReasons = summarizeSparPdfRejections(pdfReference.candidates);
+  const rejectedCandidateSamples = buildSparPdfRejectedCandidateSamples({
+    candidates: pdfReference.candidates,
+    sourceKey,
+    retailerKey: source.retailerKey,
+    sourceRetailerFormat,
+    validityContext: validity.validityText || [
+      validity.validFrom ? validity.validFrom.toISOString().slice(0, 10) : '',
+      validity.validTo ? validity.validTo.toISOString().slice(0, 10) : '',
+    ].filter(Boolean).join(' - '),
+    maxSamplesPerSourceReason: 5,
+    maxSnippetLength: 220,
+  });
 
   const rawDocument = await createCompactRawDocument({
     sourceId: source._id,
@@ -3783,6 +3796,7 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
         validityText: validity.validityText || '',
       },
       pageCandidateCounts: pdfReference.pages,
+      rejectedCandidateSamples,
     },
   });
 
@@ -3845,6 +3859,7 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
       parsedOffers: offerDocuments.length,
       rejectedCandidates: Math.max(0, pdfReference.candidates.length - offerDocuments.length),
       rejectionReasons,
+      rejectedCandidateSamples,
       replacementQuality,
       refreshResult,
       pages: pdfReference.file.pages,

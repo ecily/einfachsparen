@@ -261,10 +261,12 @@ function sourceRetailerNameForFormat(format) {
   return 'SPAR';
 }
 
-function addRejectedCandidate(candidates, pageNumber, reason, rawText) {
+function addRejectedCandidate(candidates, pageNumber, reason, rawText, metadata = {}) {
   candidates.push({
     id: `spar-p${pageNumber}-rejected-${candidates.length + 1}`,
     page: pageNumber,
+    blockIndex: metadata.blockIndex ?? null,
+    stage: metadata.stage || metadata.parserHint || 'pdf-candidate-filter',
     title: '',
     brand: '',
     price: null,
@@ -436,12 +438,18 @@ function extractGenericFlyerCandidatesFromPage(page) {
     const quantityText = extractQuantityTextFromBlock(blockLines);
 
     if (!isPlausibleGenericFlyerTitle(title)) {
-      addRejectedCandidate(candidates, page.pageNumber, 'generic-unclear-product', blockLines.join(' '));
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-unclear-product', blockLines.join(' '), {
+        blockIndex: index,
+        parserHint: 'generic-text-layer-price-block',
+      });
       continue;
     }
 
     if (!quantityText) {
-      addRejectedCandidate(candidates, page.pageNumber, 'generic-missing-quantity', blockLines.join(' '));
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-missing-quantity', blockLines.join(' '), {
+        blockIndex: index,
+        parserHint: 'generic-text-layer-price-block',
+      });
       continue;
     }
 
@@ -760,6 +768,72 @@ function summarizeRejections(candidates = []) {
   return [...counts.entries()]
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
     .map(([reason, count]) => ({ reason, count }));
+}
+
+function uniqueTokens(values = []) {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function extractEvidenceTokens(text = '', pattern) {
+  return uniqueTokens([...String(text || '').matchAll(pattern)].map((match) => match[0])).slice(0, 8);
+}
+
+function truncateEvidence(value, maxLength = 220) {
+  const text = sanitizeWhitespace(value || '');
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3).trim()}...` : text;
+}
+
+function rejectedCandidateTitleHint(candidate = {}) {
+  if (candidate.title) return truncateEvidence(candidate.title, 90);
+  return truncateEvidence(String(candidate.rawText || candidate.snippet || '')
+    .replace(/\b\d{1,3}[,.]\d{2}\b/g, ' ')
+    .replace(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|dosen|flaschen|kisten)\b/ig, ' ')
+    .replace(/\s+/g, ' '), 90);
+}
+
+function buildRejectedCandidateSamples({
+  candidates = [],
+  sourceKey = '',
+  retailerKey = '',
+  sourceRetailerFormat = '',
+  validityContext = '',
+  createdAt = new Date(),
+  maxSamplesPerSourceReason = 5,
+  maxSnippetLength = 220,
+} = {}) {
+  const samples = [];
+  const counts = new Map();
+  const resolvedSourceKey = sourceKey || sourceKeyForFormat(sourceRetailerFormat || retailerKey || 'spar');
+
+  for (const candidate of candidates) {
+    const reason = candidate?.exclusionReason || candidate?.reason || '';
+    if (!reason) continue;
+
+    const bucketKey = `${resolvedSourceKey}::${reason}`;
+    const count = counts.get(bucketKey) || 0;
+    if (count >= maxSamplesPerSourceReason) continue;
+    counts.set(bucketKey, count + 1);
+
+    const snippetSource = candidate.rawText || candidate.snippet || candidate.sourceText || '';
+    samples.push({
+      sourceKey: candidate.sourceKey || resolvedSourceKey,
+      retailerKey: candidate.retailerKey || retailerKey || sourceRetailerFormat || '',
+      reason,
+      stage: candidate.stage || candidate.parserHint || 'pdf-candidate-filter',
+      page: candidate.page ?? candidate.pageNumber ?? null,
+      blockIndex: candidate.blockIndex ?? null,
+      snippet: truncateEvidence(snippetSource, maxSnippetLength),
+      nearbyPriceTokens: extractEvidenceTokens(snippetSource, /\b\d{1,3}[,.]\d{2}\b/g),
+      nearbyQuantityTokens: extractEvidenceTokens(snippetSource, /\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|dosen|flaschen|kisten)\b/ig),
+      nearbyConditionTokens: extractEvidenceTokens(snippetSource, /\b(?:1\+1|2\s*fuer\s*1|ab\s+\d+|gratis|pickerl|rabatt|kundenkarte|app|konto|joker)\b/ig),
+      candidateTitleHint: rejectedCandidateTitleHint({ ...candidate, snippet: snippetSource }),
+      validityContext: truncateEvidence(candidate.validityContext || validityContext, 120),
+      parserVersion: PARSER_VERSION,
+      createdAt: createdAt instanceof Date ? createdAt.toISOString() : createdAt,
+    });
+  }
+
+  return samples;
 }
 
 function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', validity = {} } = {}) {
@@ -1127,6 +1201,7 @@ module.exports = {
   PARSER_VERSION,
   SOURCE_KEYS_BY_FORMAT,
   SOURCE_TYPE,
+  buildRejectedCandidateSamples,
   buildValidityFromSource,
   dateKey,
   extractSparPdfCandidates,

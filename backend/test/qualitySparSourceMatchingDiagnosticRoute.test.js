@@ -8,6 +8,7 @@ const { createQualityRouter } = require('../src/routes/quality.routes');
 const {
   buildAggregatorOfferQuery,
   buildPdfOfferQuery,
+  fetchProductionRejectedCandidateSamples,
   parseSparMatchingDiagnosticQuery,
   shapeSparSourceMatchingReport,
   summarizeSourceFieldCoverage,
@@ -221,6 +222,72 @@ test('SPAR matching report shaping can suppress weak examples while keeping clus
   assert.deepEqual(shaped.weakMatchExamples, []);
   assert.equal(shaped.weakMatchClusters[0].count, 1);
   assert.equal(shaped.fullMatchRowsReturned, false);
+});
+
+test('SPAR matching production diagnostic fetches bounded rejected candidate samples read-only', async () => {
+  const calls = [];
+  const RawDocumentModel = {
+    find(query) {
+      calls.push({ method: 'find', query });
+      return {
+        select(fields) {
+          calls.push({ method: 'select', fields });
+          return this;
+        },
+        sort(sort) {
+          calls.push({ method: 'sort', sort });
+          return this;
+        },
+        limit(limit) {
+          calls.push({ method: 'limit', limit });
+          return this;
+        },
+        maxTimeMS(maxTimeMs) {
+          calls.push({ method: 'maxTimeMS', maxTimeMs });
+          return this;
+        },
+        lean() {
+          calls.push({ method: 'lean' });
+          return Promise.resolve([
+            {
+              retailerKey: 'spar',
+              fetchedAt: new Date('2026-05-28T10:00:00.000Z'),
+              payload: {
+                sourceKey: 'spar-official-flyer-pdf',
+                rejectedCandidateSamples: [
+                  {
+                    reason: 'generic-missing-quantity',
+                    stage: 'generic-text-layer-price-block',
+                    page: 2,
+                    blockIndex: 17,
+                    snippet: `${'x'.repeat(400)} 9,99 1 kg ab 2`,
+                    nearbyPriceTokens: ['9,99'],
+                    nearbyQuantityTokens: ['1 kg'],
+                    nearbyConditionTokens: ['ab 2'],
+                    candidateTitleHint: 'Kaffee',
+                    validityContext: '2026-05-27 - 2026-06-02',
+                  },
+                ],
+              },
+            },
+          ]);
+        },
+      };
+    },
+  };
+
+  const samples = await fetchProductionRejectedCandidateSamples(RawDocumentModel, {
+    retailer: 'spar',
+    limit: 5,
+  });
+
+  assert.equal(samples.length, 1);
+  assert.equal(samples[0].sourceKey, 'spar-official-flyer-pdf');
+  assert.equal(samples[0].reason, 'generic-missing-quantity');
+  assert.ok(samples[0].snippet.length <= 260);
+  assert.deepEqual(samples[0].nearbyPriceTokens, ['9,99']);
+  assert.equal(calls.some((call) => call.method === 'find' && call.query.retailerKey === 'spar'), true);
+  assert.equal(calls.some((call) => call.method === 'maxTimeMS'), true);
 });
 
 test('SPAR matching field coverage reports source and data field availability compactly', () => {

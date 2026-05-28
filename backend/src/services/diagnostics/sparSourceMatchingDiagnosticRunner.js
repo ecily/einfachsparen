@@ -1,5 +1,6 @@
 const Offer = require('../../models/Offer');
 const CrawlJob = require('../../models/CrawlJob');
+const RawDocument = require('../../models/RawDocument');
 const {
   buildSparSourceMatchingDiagnostic,
 } = require('./sparSourceMatchingDiagnostic');
@@ -22,6 +23,7 @@ const MAX_LIMIT_AGGREGATOR = 5000;
 const DEFAULT_MAX_EXAMPLES = 8;
 const MAX_EXAMPLES = 25;
 const QUERY_MAX_TIME_MS = 5000;
+const DEFAULT_REJECTION_SAMPLE_LIMIT = 60;
 
 const OFFER_SELECT_FIELDS = [
   '_id',
@@ -258,15 +260,81 @@ async function fetchProductionRejectionReasonHistogram(CrawlJobModel, { retailer
   return Object.fromEntries(rows.map((row) => [row._id || 'unknown', row.count]));
 }
 
+function normalizeRejectedCandidateSample(sample = {}) {
+  const reason = String(sample.reason || '').trim();
+  if (!reason) return null;
+
+  return {
+    sourceKey: String(sample.sourceKey || '').trim(),
+    retailerKey: String(sample.retailerKey || '').trim(),
+    reason,
+    stage: String(sample.stage || '').trim(),
+    page: sample.page ?? null,
+    blockIndex: sample.blockIndex ?? null,
+    snippet: String(sample.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 260),
+    nearbyPriceTokens: Array.isArray(sample.nearbyPriceTokens) ? sample.nearbyPriceTokens.slice(0, 8) : [],
+    nearbyQuantityTokens: Array.isArray(sample.nearbyQuantityTokens) ? sample.nearbyQuantityTokens.slice(0, 8) : [],
+    nearbyConditionTokens: Array.isArray(sample.nearbyConditionTokens) ? sample.nearbyConditionTokens.slice(0, 8) : [],
+    candidateTitleHint: String(sample.candidateTitleHint || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+    validityContext: String(sample.validityContext || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+    parserVersion: String(sample.parserVersion || '').trim(),
+    createdAt: sample.createdAt || null,
+  };
+}
+
+async function fetchProductionRejectedCandidateSamples(RawDocumentModel, { retailer = 'all', limit = DEFAULT_REJECTION_SAMPLE_LIMIT } = {}) {
+  const match = {
+    sourceType: 'spar-official-pdf',
+    'payload.rejectedCandidateSamples.0': { $exists: true },
+    ...(retailer === 'all' ? { retailerKey: { $in: TARGET_RETAILERS } } : { retailerKey: retailer }),
+  };
+
+  const docs = await RawDocumentModel.find(match)
+    .select('retailerKey payload.sourceKey payload.rejectedCandidateSamples fetchedAt')
+    .sort({ fetchedAt: -1 })
+    .limit(12)
+    .maxTimeMS(QUERY_MAX_TIME_MS)
+    .lean();
+
+  const samples = [];
+  const seen = new Set();
+
+  for (const doc of docs) {
+    for (const rawSample of doc.payload?.rejectedCandidateSamples || []) {
+      const sample = normalizeRejectedCandidateSample({
+        sourceKey: doc.payload?.sourceKey || '',
+        retailerKey: doc.retailerKey || '',
+        ...rawSample,
+      });
+      if (!sample) continue;
+
+      const key = [
+        sample.sourceKey,
+        sample.reason,
+        sample.page,
+        sample.blockIndex,
+        sample.snippet,
+      ].join('::');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      samples.push(sample);
+      if (samples.length >= limit) return samples;
+    }
+  }
+
+  return samples;
+}
+
 async function buildProductionSparSourceMatchingDiagnostic({
   query = {},
   OfferModel = Offer,
   CrawlJobModel = CrawlJob,
+  RawDocumentModel = RawDocument,
   generatedAt = new Date(),
 } = {}) {
   const options = parseSparMatchingDiagnosticQuery(query);
   const now = new Date();
-  const [pdfOffers, aggregatorOffers, productionRejectionReasonHistogram] = await Promise.all([
+  const [pdfOffers, aggregatorOffers, productionRejectionReasonHistogram, rejectedCandidateSamples] = await Promise.all([
     findReadOnlyOffers(OfferModel, buildPdfOfferQuery({ retailer: options.retailer, now }), {
       limit: options.limitPdf,
       sort: { retailerKey: 1, validTo: -1, titleNormalized: 1, updatedAt: -1 },
@@ -276,11 +344,12 @@ async function buildProductionSparSourceMatchingDiagnostic({
       sort: { retailerKey: 1, validTo: -1, titleNormalized: 1, updatedAt: -1 },
     }),
     fetchProductionRejectionReasonHistogram(CrawlJobModel, { retailer: options.retailer }),
+    fetchProductionRejectedCandidateSamples(RawDocumentModel, { retailer: options.retailer }),
   ]);
 
   const report = buildSparSourceMatchingDiagnostic({
     offers: [...pdfOffers, ...aggregatorOffers],
-    rejectedCandidateSamples: [],
+    rejectedCandidateSamples,
     generatedAt,
     maxExamples: options.maxExamples,
   });
@@ -314,6 +383,7 @@ module.exports = {
   buildAggregatorOfferQuery,
   buildPdfOfferQuery,
   buildProductionSparSourceMatchingDiagnostic,
+  fetchProductionRejectedCandidateSamples,
   parseSparMatchingDiagnosticQuery,
   shapeSparSourceMatchingReport,
   summarizeSourceFieldCoverage,

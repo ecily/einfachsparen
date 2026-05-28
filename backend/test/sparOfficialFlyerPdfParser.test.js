@@ -8,6 +8,7 @@ const {
 const {
   PARSER_VERSION,
   SOURCE_TYPE,
+  buildRejectedCandidateSamples,
   extractSparPdfCandidates,
   normalizeSparPdfCandidatesToOffers,
   priceFromUnitPrice,
@@ -271,6 +272,45 @@ test('rejects generic PDF promotion fragments and cleans leading price/date arti
   assert.equal(accepted.some((candidate) => /So spart/.test(candidate.title)), false);
   assert.ok(accepted.some((candidate) => candidate.title === 'S-BUDGET Lachsfilet natur XXL aus Aquakultur Norwegen'));
   assert.ok(accepted.some((candidate) => candidate.title === 'Recheis Familie 2-Ei Teigwaren versch. Sorten,'));
+});
+
+test('builds bounded SPAR PDF rejected-candidate samples for raw document diagnostics', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 9,
+        text: [
+          'Ersparnis 1,20 ab',
+          '250 g Packung',
+          '1,99',
+          'S-BUDGET Beispiel ohne Menge',
+          'ab 2 Packungen je 2,99',
+          '2,99',
+        ].join('\n'),
+      },
+    ],
+  });
+
+  const samples = buildRejectedCandidateSamples({
+    candidates,
+    sourceKey: 'spar-official-flyer-pdf',
+    retailerKey: 'spar',
+    validityContext: '2026-05-27 - 2026-06-02',
+    createdAt: '2026-05-28T10:00:00.000Z',
+    maxSamplesPerSourceReason: 2,
+    maxSnippetLength: 120,
+  });
+
+  assert.ok(samples.length > 0);
+  assert.equal(samples[0].sourceKey, 'spar-official-flyer-pdf');
+  assert.equal(samples[0].retailerKey, 'spar');
+  assert.ok(samples[0].reason);
+  assert.ok(samples[0].snippet.length <= 120);
+  assert.ok(Array.isArray(samples[0].nearbyPriceTokens));
+  assert.ok(Array.isArray(samples[0].nearbyQuantityTokens));
+  assert.equal(Object.prototype.hasOwnProperty.call(samples[0], 'rawText'), false);
 });
 
 test('rejects campaign-only coffee blocks as non-product diagnostics', () => {

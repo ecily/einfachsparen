@@ -11,6 +11,33 @@ function compactPreview(values, limit = 5, maxLength = 80) {
     .slice(0, limit);
 }
 
+function compactNestedObject(value, maxStringLength = 120) {
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([nestedKey, nestedValue]) => {
+        if (typeof nestedValue === 'string') {
+          return [nestedKey, truncateText(nestedValue, maxStringLength)];
+        }
+
+        if (typeof nestedValue === 'number' || typeof nestedValue === 'boolean' || nestedValue === null) {
+          return [nestedKey, nestedValue];
+        }
+
+        if (Array.isArray(nestedValue)) {
+          const items = nestedValue
+            .map((item) => (typeof item === 'string' ? truncateText(item, 60) : null))
+            .filter(Boolean)
+            .slice(0, 8);
+
+          return items.length > 0 ? [nestedKey, items] : null;
+        }
+
+        return null;
+      })
+      .filter(Boolean)
+  );
+}
+
 function compactPayload(payload = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return {};
@@ -31,6 +58,8 @@ function compactPayload(payload = {}) {
       }
 
       if (Array.isArray(value)) {
+        const itemLimit = key === 'rejectedCandidateSamples' ? 18 : 5;
+        const nestedStringLimit = key === 'rejectedCandidateSamples' ? 220 : 120;
         const items = value
           .map((item) => {
             if (typeof item === 'string') {
@@ -38,33 +67,19 @@ function compactPayload(payload = {}) {
             }
 
             if (item && typeof item === 'object') {
-              return Object.fromEntries(
-                Object.entries(item)
-                  .filter(([, nestedValue]) => ['string', 'number', 'boolean'].includes(typeof nestedValue) || nestedValue === null)
-                  .map(([nestedKey, nestedValue]) => [
-                    nestedKey,
-                    typeof nestedValue === 'string' ? truncateText(nestedValue, 120) : nestedValue,
-                  ])
-              );
+              return compactNestedObject(item, nestedStringLimit);
             }
 
             return null;
           })
           .filter(Boolean)
-          .slice(0, 5);
+          .slice(0, itemLimit);
 
         return items.length > 0 ? [key, items] : null;
       }
 
       if (value && typeof value === 'object') {
-        const nested = Object.fromEntries(
-          Object.entries(value)
-            .filter(([, nestedValue]) => ['string', 'number', 'boolean'].includes(typeof nestedValue) || nestedValue === null)
-            .map(([nestedKey, nestedValue]) => [
-              nestedKey,
-              typeof nestedValue === 'string' ? truncateText(nestedValue, 120) : nestedValue,
-            ])
-        );
+        const nested = compactNestedObject(value);
 
         return Object.keys(nested).length > 0 ? [key, nested] : null;
       }
@@ -138,6 +153,9 @@ async function createCompactRawDocument({
 }
 
 module.exports = {
+  _private: {
+    compactPayload,
+  },
   clearRawDocumentsForSource,
   createCompactRawDocument,
 };
