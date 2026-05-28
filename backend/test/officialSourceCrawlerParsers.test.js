@@ -2117,6 +2117,104 @@ test('BILLA flyer PDF parser rejects clear title with missing quantity defensive
   assert.equal(offers.length, 0);
 });
 
+test('BILLA flyer PDF parser rejects date-only alternative price pairing defensively', () => {
+  const pdfReference = parseBillaPdfPage(`
+    Eskimo
+    Cremissimo
+    1 l
+    079
+    DO MO DI
+    299
+    FR & SA
+  `, { now: new Date('2026-05-28T12:00:00Z') });
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(pdfReference.candidates.length, 1);
+  assert.equal(pdfReference.candidates[0].title, 'Eskimo Cremissimo');
+  assert.equal(pdfReference.candidates[0].price, 0.79);
+  assert.equal(pdfReference.candidates[0].conditionsText, '');
+  assert.equal(pdfReference.candidates[0].exclusionReason, 'product-price-ambiguous');
+  assert.equal(offers.length, 0);
+});
+
+test('BILLA flyer PDF parser keeps clear multi-buy conditions clean and structured', () => {
+  const pdfReference = parseBillaPdfPage(`
+    Schaerdinger
+    Teebutter
+    250 g
+    Eskimo
+    Twinni
+    470 ml
+    Schogetten
+    Schokolade
+    100 g
+    Schwechater
+    Bier
+    0.5 l
+    159
+    AB 4 PKG. JE
+    201
+    AB 2 PACKUNGEN
+    099
+    BEI 4 PACKUNGEN
+    069
+    BEI 24 DOSEN JE
+  `);
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource({ retailerKey: 'billa-plus', retailerName: 'Billa Plus' }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_PLUS_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(pdfReference.candidates.filter((candidate) => !candidate.exclusionReason).length, 4);
+  assert.equal(offers.length, 4);
+  assert.deepEqual(offers.map((offer) => offer.conditionsText), [
+    'ab 4 Packungen',
+    'ab 2 Packungen',
+    'bei 4 Packungen',
+    'bei 24 Dosen',
+  ]);
+  assert.deepEqual(offers.map((offer) => offer.minimumPurchaseQty), [4, 2, 4, 24]);
+});
+
+test('BILLA flyer PDF parser removes layout date fragments from visible conditions', () => {
+  const pdfReference = parseBillaPdfPage(`
+    FREI VON 1o0%
+    Vegavita Antipasti Selection
+    360 g
+    649
+    AKTION
+    487 FR & SA
+    FR & SA
+    Alternative Flyerpreise: 6.49 EUR (649 AKTION); 4.87 EUR (487 FR & SA)
+  `, { sourceRetailerFormat: 'billa-plus' });
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource({
+      retailerKey: 'billa-plus',
+      retailerName: 'Billa Plus',
+      label: 'BILLA PLUS Flugblatt',
+    }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_PLUS_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Vegavita Antipasti Selection');
+  assert.equal(offers[0].conditionsText, 'Aktion');
+  assert.doesNotMatch(offers[0].conditionsText, /487|FR|Alternative Flyerpreise/i);
+  assert.doesNotMatch(offers[0].searchText, /alternative flyerpreise/i);
+});
+
 test('BILLA flyer source selects retailer-specific official PDF links', () => {
   const links = [
     { type: 'pdf', url: 'https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf', label: 'BILLA Flugblatt' },

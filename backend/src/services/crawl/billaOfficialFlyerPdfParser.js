@@ -370,10 +370,7 @@ function chooseBillaDatePricePair(first, second, now = new Date()) {
 
   return {
     price: selected.price,
-    lines: [
-      ...selected.lines,
-      `Alternative Flyerpreise: ${first.price.toFixed(2)} EUR (${first.lines.join(' ')}); ${second.price.toFixed(2)} EUR (${second.lines.join(' ')})`,
-    ],
+    lines: selected.lines,
   };
 }
 
@@ -451,10 +448,95 @@ function hasAnchoredBillaPriceContext(value = '') {
   return Boolean(
     /\b(?:ab|bei)\s+\d+\b/i.test(normalized)
     || /\baktion\b/i.test(normalized)
-    || /\balternative flyerpreise\b/i.test(normalized)
     || /\b1\s+(?:pkg|packung|fl|flasche|dose|stk|stueck|stÃ¼ck)\b.*€\s*\d/i.test(text)
     || /\bstatt\s+\d{1,3}(?:[,.]\d{2})?\b/i.test(text)
   );
+}
+
+function normalizeBillaConditionUnit(value = '') {
+  const normalized = normalizeForScan(value);
+
+  if (/^(?:pkg|packung|packungen)$/.test(normalized)) return 'Packungen';
+  if (/^(?:fl|flasche|flaschen)$/.test(normalized)) return 'Flaschen';
+  if (/^(?:dose|dosen)$/.test(normalized)) return 'Dosen';
+  if (/^(?:stk|stueck|stuck)$/.test(normalized)) return 'Stueck';
+
+  return sanitizeWhitespace(value);
+}
+
+function normalizeBillaConditionFragment(line = '') {
+  const raw = sanitizeWhitespace(normalizePdfText(line)).replace(/\s+/g, ' ').trim();
+  const normalized = normalizeForScan(raw);
+
+  if (!raw) return '';
+  if (/alternative flyerpreise/i.test(raw)) return '';
+  if (/^\d{1,4}$/.test(normalized)) return '';
+  if (/^\d{1,4}\s+(?:fr|sa|do|mo|di)\b/.test(normalized)) return '';
+  if (/^(?:fr|sa|do|mo|di)(?:\s*(?:&|und)?\s*(?:fr|sa|do|mo|di))*\.?$/.test(normalized)) return '';
+  if (/^1\s+(?:pkg|packung|fl|flasche|dose|stk|stueck|stuck)\b/.test(normalized)) return '';
+
+  const threshold = normalized.match(/^(ab|bei)\s+(\d+)\s*(pkg|packung|packungen|fl|flasche|flaschen|dose|dosen|stk|stueck|stuck)\.?(?:\s+je)?\b/);
+  if (threshold) {
+    return `${threshold[1]} ${threshold[2]} ${normalizeBillaConditionUnit(threshold[3])}`;
+  }
+
+  const multibuy = normalized.match(/\b(\d+\s*\+\s*\d+)\s+gratis\b/);
+  if (multibuy) {
+    return `${multibuy[1].replace(/\s+/g, '')} gratis`;
+  }
+
+  const percent = normalized.match(/^-?\s*(\d{1,2})\s*%$/);
+  if (percent) {
+    return `-${percent[1]}%`;
+  }
+
+  const statt = raw.match(/^statt\s+(\d{1,3}(?:[,.]\d{2})|\d{3,4})\b/i);
+  if (statt) {
+    return `statt ${statt[1].replace(',', '.')}`;
+  }
+
+  if (/^aktion$/.test(normalized)) return 'Aktion';
+
+  return '';
+}
+
+function buildBillaConditionsText(lines = []) {
+  const fragments = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = sanitizeWhitespace(normalizePdfText(lines[index]));
+    const normalized = normalizeForScan(raw);
+
+    if (/^statt$/.test(normalized)) {
+      const next = sanitizeWhitespace(normalizePdfText(lines[index + 1] || ''));
+      if (/^\d{1,3}(?:[,.]\d{2})$/.test(next)) {
+        fragments.push(`statt ${next.replace(',', '.')}`);
+        index += 1;
+        continue;
+      }
+    }
+
+    const fragment = normalizeBillaConditionFragment(raw);
+    if (fragment) fragments.push(fragment);
+  }
+
+  const seen = new Set();
+  return fragments
+    .filter((fragment) => {
+      const key = normalizeForScan(fragment);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(' / ');
+}
+
+function extractMinimumPurchaseQtyFromConditions(conditionsText = '') {
+  const match = normalizeForScan(conditionsText).match(/\b(?:ab|bei)\s+(\d+)\b/);
+  if (!match) return 1;
+
+  const quantity = Number(match[1]);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
 }
 
 function buildCandidateFromPair({ productBlock, priceGroup, pageNumber, validity, sourceRetailerFormat }) {
@@ -480,7 +562,7 @@ function buildCandidateFromPair({ productBlock, priceGroup, pageNumber, validity
     price: priceGroup.price,
     referencePrice: parseReferencePrice(priceGroup.lines),
     quantityText,
-    conditionsText: sanitizeWhitespace(priceGroup.lines.slice(1).join(' / ')),
+    conditionsText: buildBillaConditionsText(priceGroup.lines.slice(1)),
     rawText,
     validFrom: validity.validFrom,
     validTo: validity.validTo,
@@ -794,7 +876,7 @@ function normalizeBillaPdfCandidateToOffer({ candidate, pdfReference, source, cr
     customerProgramRequired: false,
     hasConditions: Boolean(conditionsText),
     isMultiBuy: /ab\s+\d|bei\s+\d|gratis/i.test(conditionsText),
-    minimumPurchaseQty: /(?:ab|bei)\s+2/i.test(conditionsText) ? 2 : 1,
+    minimumPurchaseQty: extractMinimumPurchaseQtyFromConditions(conditionsText),
     availabilityScope: region || 'Grossraum Graz',
     priceCurrent: {
       amount: candidate.price,
