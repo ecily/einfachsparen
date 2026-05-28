@@ -173,6 +173,9 @@ test('SPAR matching report shaping limits examples and omits full match rows', (
     unsafeExamples: [{ id: 1 }, { id: 2 }, { id: 3 }],
     topStrongExamples: [{ id: 's1' }, { id: 's2' }],
     topMediumExamples: [{ id: 'm1' }],
+    weakMatchExamples: [{ id: 'w1' }, { id: 'w2' }],
+    weakMatchClusters: [{ cluster: 'category-alias-artifact', count: 2 }],
+    blockerClusterHistogram: { 'category-alias-artifact': 2 },
     topNoMatchExamples: [{ id: 'n1' }],
     topRejectedCandidateSamples: [{ reason: 'generic-missing-quantity', snippet: 'short' }],
   };
@@ -189,10 +192,35 @@ test('SPAR matching report shaping limits examples and omits full match rows', (
   assert.equal(shaped.unsafeExamples, 3);
   assert.equal(shaped.topUnsafeExamples.length, 1);
   assert.equal(shaped.topStrongExamples.length, 1);
+  assert.equal(shaped.weakMatchExamples.length, 1);
+  assert.equal(shaped.weakMatchClusters.length, 1);
+  assert.equal(shaped.blockerClusterHistogram['category-alias-artifact'], 2);
   assert.equal(shaped.topRejectedCandidateSamples.length, 1);
   assert.equal(shaped.rejectionEvidenceAvailable, true);
   assert.equal(shaped.productionRejectionReasonHistogram['generic-missing-quantity'], 7);
   assert.equal(JSON.stringify(shaped).includes('full-row-not-returned'), false);
+});
+
+test('SPAR matching report shaping can suppress weak examples while keeping cluster counts', () => {
+  const shaped = shapeSparSourceMatchingReport({
+    ok: true,
+    readOnly: true,
+    mutatedCollections: [],
+    summary: {},
+    weakMatchExamples: [{ id: 'w1' }],
+    weakMatchClusters: [{ cluster: 'same-product-low-confidence', count: 1 }],
+    blockerClusterHistogram: { 'same-product-low-confidence': 1 },
+  }, {
+    includeSamples: false,
+    maxExamples: 10,
+    query: { retailer: 'all' },
+    fieldCoverage: {},
+    productionRejectionReasonHistogram: {},
+  });
+
+  assert.deepEqual(shaped.weakMatchExamples, []);
+  assert.equal(shaped.weakMatchClusters[0].count, 1);
+  assert.equal(shaped.fullMatchRowsReturned, false);
 });
 
 test('SPAR matching field coverage reports source and data field availability compactly', () => {

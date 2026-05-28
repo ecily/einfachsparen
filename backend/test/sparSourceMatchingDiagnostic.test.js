@@ -533,6 +533,182 @@ test('report aggregates transfer candidates breakdowns histograms and remains re
   assert.equal(report.topRejectedCandidateSamples.length, 1);
 });
 
+test('weak match diagnostic clusters risky blockers without enabling transfers', () => {
+  const variantPdf = offer({
+    _id: 'pdf-milka-vollmilch',
+    title: 'Milka Schokolade Vollmilch 100 g',
+    brand: 'Milka',
+    categoryKey: 'schokolade',
+    subcategoryKey: 'schokolade',
+    priceCurrent: { amount: 1.49, currency: 'EUR' },
+    quantityText: '100 g',
+    unitValue: 100,
+    unitType: 'g',
+    totalComparableAmount: 0.1,
+    comparableUnit: 'kg',
+  });
+  const variantAf = aggregator({
+    _id: 'af-milka-noisette',
+    title: 'Milka Schokolade Noisette 100 g',
+    brand: 'Milka',
+    categoryKey: 'schokolade',
+    subcategoryKey: 'schokolade',
+    priceCurrent: { amount: 1.49, currency: 'EUR' },
+    quantityText: '100 g',
+    unitValue: 100,
+    unitType: 'g',
+    totalComparableAmount: 0.1,
+    comparableUnit: 'kg',
+  });
+  const alcoholPdf = offer(textQuantity({
+    _id: 'pdf-goesser-radler',
+    title: 'Goesser Naturradler Zitrone 0.5 l',
+    brand: 'Goesser',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    priceCurrent: { amount: 0.99, currency: 'EUR' },
+  }));
+  const alcoholAf = aggregator(textQuantity({
+    _id: 'af-goesser-radler-frei',
+    title: 'Goesser Naturradler Zitrone alkoholfrei 0.5 l',
+    brand: 'Goesser',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    priceCurrent: { amount: 0.99, currency: 'EUR' },
+  }));
+
+  const report = buildSparSourceMatchingDiagnostic({
+    offers: [variantPdf, variantAf, alcoholPdf, alcoholAf],
+    maxExamples: 10,
+  });
+
+  assert.equal(report.matchedWeak, 2);
+  assert.equal(report.imageTransferCandidates, 0);
+  assert.equal(report.validityTransferCandidates, 0);
+  assert.equal(report.conditionTransferCandidates, 0);
+  assert.equal(report.blockerClusterHistogram['variant-or-flavor-risk'], 1);
+  assert.equal(report.blockerClusterHistogram['alcoholic-nonalcoholic-risk'], 1);
+  assert.ok(report.weakMatchClusters.some((cluster) => cluster.cluster === 'variant-or-flavor-risk'));
+  assert.ok(report.weakMatchClusters.some((cluster) => cluster.cluster === 'alcoholic-nonalcoholic-risk'));
+  assert.ok(report.weakMatchExamples.every((example) => example.shouldMergeLater === false));
+  assert.ok(report.weakMatchExamples.every((example) => example.canUseAggregatorImage === false));
+});
+
+test('weak match diagnostic surfaces category alias and generic diverse sorten clusters', () => {
+  const categoryPdf = offer({
+    _id: 'pdf-lavazza',
+    title: 'Lavazza Caffe Crema ganze Bohne 1 kg',
+    brand: 'Lavazza',
+    categoryKey: 'kaffee',
+    subcategoryKey: 'kaffee',
+    priceCurrent: { amount: 12.99, currency: 'EUR' },
+    quantityText: '1 kg',
+    unitValue: 1,
+    unitType: 'kg',
+    totalComparableAmount: 1,
+    comparableUnit: 'kg',
+  });
+  const categoryAf = aggregator({
+    _id: 'af-lavazza',
+    title: 'Lavazza Caffe Crema ganze Bohne 1 kg',
+    brand: 'Lavazza',
+    categoryPrimary: '',
+    categoryKey: 'suesswaren',
+    subcategoryKey: 'suesswaren',
+    priceCurrent: { amount: 12.99, currency: 'EUR' },
+    quantityText: '1 kg',
+    unitValue: 1,
+    unitType: 'kg',
+    totalComparableAmount: 1,
+    comparableUnit: 'kg',
+  });
+  const genericPdf = offer({
+    _id: 'pdf-joghurt-div',
+    title: 'Spar Natur Pur Joghurt div. Sorten 250 g',
+    brand: 'Spar Natur Pur',
+    categoryKey: 'joghurt',
+    subcategoryKey: 'joghurt',
+    priceCurrent: { amount: 0.69, currency: 'EUR' },
+    quantityText: '250 g',
+    unitValue: 250,
+    unitType: 'g',
+    totalComparableAmount: 0.25,
+    comparableUnit: 'kg',
+  });
+  const genericAf = aggregator({
+    _id: 'af-joghurt-erdbeer',
+    title: 'Spar Natur Pur Topfencreme Erdbeer 250 g',
+    brand: 'Spar Natur Pur',
+    categoryKey: 'joghurt',
+    subcategoryKey: 'joghurt',
+    priceCurrent: { amount: 0.69, currency: 'EUR' },
+    quantityText: '250 g',
+    unitValue: 250,
+    unitType: 'g',
+    totalComparableAmount: 0.25,
+    comparableUnit: 'kg',
+  });
+
+  const report = buildSparSourceMatchingDiagnostic({
+    offers: [categoryPdf, categoryAf, genericPdf, genericAf],
+    maxExamples: 10,
+  });
+
+  assert.equal(report.blockerClusterHistogram['category-alias-artifact'], 1);
+  assert.equal(report.blockerClusterHistogram['generic-diverse-sorten'], 1);
+  assert.equal(
+    report.weakMatchExamples.find((example) => example.blockerCluster === 'category-alias-artifact').recommendation,
+    'could-be-strong-with-normalization'
+  );
+  assert.equal(
+    report.weakMatchExamples.find((example) => example.blockerCluster === 'generic-diverse-sorten').recommendation,
+    'needs-more-evidence'
+  );
+});
+
+test('weak match examples are bounded and omit image URLs from review payload', () => {
+  const rows = [
+    ['Milka Schokolade Vollmilch 100 g', 'Milka Schokolade Noisette 100 g'],
+    ['Ritter Sport Vollmilch 100 g', 'Ritter Sport Nuss 100 g'],
+    ['Lindt Tafelschokolade Milch 100 g', 'Lindt Tafelschokolade Orange 100 g'],
+  ].flatMap(([pdfTitle, afTitle], index) => [
+    offer({
+      _id: `pdf-variant-${index}`,
+      title: pdfTitle,
+      brand: pdfTitle.split(' ')[0],
+      categoryKey: 'schokolade',
+      subcategoryKey: 'schokolade',
+      priceCurrent: { amount: 1.49, currency: 'EUR' },
+      quantityText: '100 g',
+      unitValue: 100,
+      unitType: 'g',
+      totalComparableAmount: 0.1,
+      comparableUnit: 'kg',
+    }),
+    aggregator({
+      _id: `af-variant-${index}`,
+      title: afTitle,
+      brand: pdfTitle.split(' ')[0],
+      categoryKey: 'schokolade',
+      subcategoryKey: 'schokolade',
+      priceCurrent: { amount: 1.49, currency: 'EUR' },
+      quantityText: '100 g',
+      unitValue: 100,
+      unitType: 'g',
+      totalComparableAmount: 0.1,
+      comparableUnit: 'kg',
+      imageUrl: `https://images.example.test/${index}.jpg`,
+    }),
+  ]);
+
+  const report = buildSparSourceMatchingDiagnostic({ offers: rows, maxExamples: 2 });
+
+  assert.equal(report.matchedWeak, 3);
+  assert.equal(report.weakMatchExamples.length, 2);
+  assert.equal(report.weakMatchExamples[0].aggregatorOffer.imageAvailable, true);
+  assert.equal(Object.prototype.hasOwnProperty.call(report.weakMatchExamples[0].aggregatorOffer, 'imageUrl'), false);
+});
+
 test('rejected candidate evidence is compact bounded and keeps parser metrics stable', () => {
   const largeText = `${'Raw SPAR flyer text '.repeat(80)} Lavazza Kaffee 1 kg ab 2 Packungen je 9,99`;
   const candidates = Array.from({ length: 7 }, (_, index) => ({

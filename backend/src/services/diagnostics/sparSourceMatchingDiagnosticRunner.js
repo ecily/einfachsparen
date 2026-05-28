@@ -207,6 +207,7 @@ function shapeSparSourceMatchingReport(report = {}, options = {}) {
     unsafeExamples = [],
     topStrongExamples = [],
     topMediumExamples = [],
+    weakMatchExamples = [],
     topNoMatchExamples = [],
     topRejectedCandidateSamples = [],
     ...safeReport
@@ -224,6 +225,7 @@ function shapeSparSourceMatchingReport(report = {}, options = {}) {
     topUnsafeExamples: trimExamples(unsafeExamples, { includeSamples, maxExamples }),
     topStrongExamples: trimExamples(topStrongExamples, { includeSamples, maxExamples }),
     topMediumExamples: trimExamples(topMediumExamples, { includeSamples, maxExamples }),
+    weakMatchExamples: trimExamples(weakMatchExamples, { includeSamples, maxExamples }),
     topNoMatchExamples: trimExamples(topNoMatchExamples, { includeSamples, maxExamples }),
     topRejectedCandidateSamples: trimExamples(topRejectedCandidateSamples, { includeSamples, maxExamples }),
     rejectionEvidenceAvailable: topRejectedCandidateSamples.length > 0,

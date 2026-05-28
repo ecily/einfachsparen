@@ -26,6 +26,130 @@ const FORMAT_BY_PDF_SOURCE_KEY = {
   'interspar-official-flyer-pdf': 'interspar',
   'eurospar-official-flyer-pdf': 'eurospar',
 };
+const WEAK_MATCH_CLUSTER_ORDER = [
+  'variant-or-flavor-risk',
+  'generic-diverse-sorten',
+  'category-alias-artifact',
+  'hard-category-conflict',
+  'retailer-format-conflict',
+  'price-conflict',
+  'price-only-match',
+  'bundle-condition-conflict',
+  'alcoholic-nonalcoholic-risk',
+  'same-product-low-confidence',
+  'likely-safe-after-product-normalization',
+  'no-actionable-pattern',
+];
+const WEAK_MATCH_CLUSTER_META = {
+  'variant-or-flavor-risk': {
+    typicalCause: 'Same brand or family, but titles point to different flavors, variants, pack formats, or sorts.',
+    trustRisk: true,
+    normalizationProblem: true,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'medium',
+    falsePositiveRisk: 'high',
+    recommendedNextStep: 'Add product-variant diagnostics and keep these out of transfer logic until variant identity is explicit.',
+  },
+  'generic-diverse-sorten': {
+    typicalCause: 'One side is generic, such as div. Sorten, so image and condition identity is not provable.',
+    trustRisk: true,
+    normalizationProblem: false,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'low',
+    falsePositiveRisk: 'high',
+    recommendedNextStep: 'Keep generic-sort offers weak unless another official evidence field names the exact same variant set.',
+  },
+  'category-alias-artifact': {
+    typicalCause: 'Product evidence is plausible, but category labels disagree at a broad or alias level.',
+    trustRisk: false,
+    normalizationProblem: true,
+    canBeImprovedSafely: true,
+    expectedBenefit: 'high',
+    falsePositiveRisk: 'medium',
+    recommendedNextStep: 'Improve category alias diagnostics with fixture-backed examples before changing match thresholds.',
+  },
+  'hard-category-conflict': {
+    typicalCause: 'Categories indicate different product domains, such as pet food versus food or meat versus fish.',
+    trustRisk: true,
+    normalizationProblem: false,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'low',
+    falsePositiveRisk: 'high',
+    recommendedNextStep: 'Do not merge; use these as guardrail regression tests.',
+  },
+  'retailer-format-conflict': {
+    typicalCause: 'PDF and aggregator source formats point to different SPAR banners.',
+    trustRisk: true,
+    normalizationProblem: false,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'low',
+    falsePositiveRisk: 'high',
+    recommendedNextStep: 'Do not merge across SPAR/INTERSPAR/EUROSPAR unless official banner evidence aligns.',
+  },
+  'price-conflict': {
+    typicalCause: 'Product evidence may overlap, but current prices differ beyond the conservative tolerance.',
+    trustRisk: true,
+    normalizationProblem: false,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'medium',
+    falsePositiveRisk: 'high',
+    recommendedNextStep: 'Keep blocked; inspect whether the mismatch is a bundle, deposit, or stale aggregator issue.',
+  },
+  'price-only-match': {
+    typicalCause: 'Same price is the main evidence and product identity is weak or absent.',
+    trustRisk: true,
+    normalizationProblem: false,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'none',
+    falsePositiveRisk: 'very-high',
+    recommendedNextStep: 'Treat as no-action unless additional identity evidence appears.',
+  },
+  'bundle-condition-conflict': {
+    typicalCause: 'Discount mechanics or minimum quantity conditions disagree.',
+    trustRisk: true,
+    normalizationProblem: true,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'medium',
+    falsePositiveRisk: 'high',
+    recommendedNextStep: 'Improve bundle-condition diagnostics; never transfer conditions from these rows.',
+  },
+  'alcoholic-nonalcoholic-risk': {
+    typicalCause: 'Alcohol-free and alcoholic variants are too easy to confuse.',
+    trustRisk: true,
+    normalizationProblem: true,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'medium',
+    falsePositiveRisk: 'high',
+    recommendedNextStep: 'Add explicit alcohol-free variant features and keep image transfer blocked.',
+  },
+  'same-product-low-confidence': {
+    typicalCause: 'Evidence points in the same direction, but title, quantity, or category confidence is not enough.',
+    trustRisk: true,
+    normalizationProblem: true,
+    canBeImprovedSafely: true,
+    expectedBenefit: 'medium',
+    falsePositiveRisk: 'medium',
+    recommendedNextStep: 'Use human-reviewed examples to decide product-normalization fixtures.',
+  },
+  'likely-safe-after-product-normalization': {
+    typicalCause: 'Brand, price, quantity, and category evidence are aligned, but identity normalization is still too weak.',
+    trustRisk: false,
+    normalizationProblem: true,
+    canBeImprovedSafely: true,
+    expectedBenefit: 'high',
+    falsePositiveRisk: 'low-medium',
+    recommendedNextStep: 'Add product normalization fixtures first; only then consider raising confidence.',
+  },
+  'no-actionable-pattern': {
+    typicalCause: 'No repeated blocker pattern is clear from current evidence.',
+    trustRisk: true,
+    normalizationProblem: false,
+    canBeImprovedSafely: false,
+    expectedBenefit: 'low',
+    falsePositiveRisk: 'medium',
+    recommendedNextStep: 'Leave weak/no-match and collect better source evidence.',
+  },
+};
 
 const STOP_WORDS = new Set([
   'ab',
@@ -913,6 +1037,207 @@ function buildBreakdown(rows = [], keyFn) {
   return Object.fromEntries([...map.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
+function bestPairForRow(row = {}) {
+  return row.bestAggregatorCandidates?.[0] || {};
+}
+
+function rowText(row = {}) {
+  const pair = bestPairForRow(row);
+  return normalizeText([
+    row.pdfOffer?.title,
+    row.pdfOffer?.brand,
+    row.pdfOffer?.quantityText,
+    row.pdfOffer?.conditionsText,
+    pair.aggregatorOffer?.title,
+    pair.aggregatorOffer?.brand,
+    pair.aggregatorOffer?.quantityText,
+    pair.aggregatorOffer?.conditionsText,
+  ].join(' '));
+}
+
+function categoryFamily(offer = {}) {
+  const text = categoryText(offer);
+  if (hasCategoryTerm(text, ['tierfutter', 'hundefutter', 'katzenfutter'])) return 'pet';
+  if (hasCategoryTerm(text, ['drogerie', 'haushalt', 'hygiene', 'waschmittel'])) return 'drugstore';
+  if (hasCategoryTerm(text, ['fleisch', 'wurst', 'grillfleisch'])) return 'meat';
+  if (hasCategoryTerm(text, ['fisch', 'lachs'])) return 'fish';
+  if (hasCategoryTerm(text, ['obst', 'gemuese', 'gemuse'])) return 'produce';
+  if (hasCategoryTerm(text, ['getraenke', 'bier', 'alkoholische getraenke', 'alkohol'])) return 'beverage';
+  if (hasCategoryTerm(text, ['lebensmittel', 'milch', 'butter', 'kaese', 'kaffee'])) return 'food';
+  return 'unknown';
+}
+
+function isHardCategoryConflict(row = {}) {
+  const pair = bestPairForRow(row);
+  const unsafe = row.unsafeReasons || [];
+  if (unsafe.includes('pet-food-human-food-collision') || unsafe.includes('meat-fish-sausage-category-risk')) return true;
+
+  const pdfFamily = categoryFamily(row.pdfOffer);
+  const aggregatorFamily = categoryFamily(pair.aggregatorOffer);
+  if (pdfFamily === 'unknown' || aggregatorFamily === 'unknown' || pdfFamily === aggregatorFamily) return false;
+  if ([pdfFamily, aggregatorFamily].includes('pet')) return true;
+  if ((pdfFamily === 'meat' && aggregatorFamily === 'fish') || (pdfFamily === 'fish' && aggregatorFamily === 'meat')) return true;
+  if ((pdfFamily === 'drugstore' && ['food', 'meat', 'fish', 'produce', 'beverage'].includes(aggregatorFamily))
+    || (aggregatorFamily === 'drugstore' && ['food', 'meat', 'fish', 'produce', 'beverage'].includes(pdfFamily))) {
+    return true;
+  }
+  return false;
+}
+
+function weakMatchBlockerCluster(row = {}) {
+  const pair = bestPairForRow(row);
+  const unsafe = row.unsafeReasons || [];
+  const reasons = row.reasons || [];
+  const text = rowText(row);
+  const sharedTokens = pair.sharedTokens || [];
+  const sameBrand = reasons.includes('same-brand');
+  const safePrice = reasons.includes('same-price') || reasons.includes('similar-price');
+  const safeQuantity = reasons.includes('same-quantity') || reasons.includes('quantity-partially-compatible');
+  const safeCategory = reasons.includes('same-category') || reasons.includes('category-compatible');
+
+  if (unsafe.includes('retailer-format-conflict')) return 'retailer-format-conflict';
+  if (unsafe.includes('alcoholic-nonalcoholic-variant-risk')) return 'alcoholic-nonalcoholic-risk';
+  if (unsafe.includes('promotion-mechanic-conflict')) return 'bundle-condition-conflict';
+  if (unsafe.includes('price-only-match')) return 'price-only-match';
+  if (unsafe.includes('price-conflict')) return 'price-conflict';
+  if (unsafe.includes('generic-diverse-sorten-title') || /\b(div|diverse|verschiedene|versch)\b.*\bsorten\b/.test(text)) return 'generic-diverse-sorten';
+  if (unsafe.includes('variant-or-sort-conflict')) return 'variant-or-flavor-risk';
+  if (unsafe.includes('category-conflict') && isHardCategoryConflict(row)) return 'hard-category-conflict';
+  if (unsafe.includes('category-conflict') && (sameBrand || sharedTokens.length >= 2)) return 'category-alias-artifact';
+  if (unsafe.includes('category-conflict')) return 'no-actionable-pattern';
+  if (sameBrand && safePrice && safeQuantity && safeCategory && sharedTokens.length >= 1) return 'likely-safe-after-product-normalization';
+  if (sameBrand || sharedTokens.length >= 2) return 'same-product-low-confidence';
+  return 'no-actionable-pattern';
+}
+
+function humanReviewLabelSuggestion(row = {}) {
+  const cluster = row.blockerCluster || weakMatchBlockerCluster(row);
+  const reasons = row.reasons || [];
+  const pair = bestPairForRow(row);
+  const sameBrand = reasons.includes('same-brand');
+  const samePrice = reasons.includes('same-price');
+  const sameQuantity = reasons.includes('same-quantity');
+  const safeCategory = reasons.includes('same-category') || reasons.includes('category-compatible');
+  const sharedCount = (pair.sharedTokens || []).length;
+
+  if (['hard-category-conflict', 'retailer-format-conflict', 'price-only-match'].includes(cluster)) return 'different';
+  if (['alcoholic-nonalcoholic-risk', 'price-conflict', 'variant-or-flavor-risk', 'bundle-condition-conflict'].includes(cluster)) return 'probably-different';
+  if (cluster === 'likely-safe-after-product-normalization' && sameBrand && samePrice && sameQuantity && safeCategory && sharedCount >= 2) return 'looks-same';
+  if (['likely-safe-after-product-normalization', 'category-alias-artifact'].includes(cluster) && sameBrand && sameQuantity && sharedCount >= 1) return 'probably-same';
+  return 'uncertain';
+}
+
+function weakMatchRecommendation(row = {}) {
+  const cluster = row.blockerCluster || weakMatchBlockerCluster(row);
+  if (['hard-category-conflict', 'retailer-format-conflict', 'price-conflict', 'price-only-match', 'variant-or-flavor-risk', 'bundle-condition-conflict', 'alcoholic-nonalcoholic-risk'].includes(cluster)) {
+    return 'do-not-merge';
+  }
+  if (['likely-safe-after-product-normalization', 'category-alias-artifact'].includes(cluster)) return 'could-be-strong-with-normalization';
+  if (cluster === 'generic-diverse-sorten' || cluster === 'same-product-low-confidence') return 'needs-more-evidence';
+  return 'safe-no-action';
+}
+
+function sameOfferBlockers(row = {}) {
+  const cluster = row.blockerCluster || weakMatchBlockerCluster(row);
+  const unsafe = row.unsafeReasons || [];
+  const blockers = [];
+  if (['category-alias-artifact', 'likely-safe-after-product-normalization', 'same-product-low-confidence'].includes(cluster)) blockers.push(cluster);
+  if (unsafe.includes('category-conflict') && cluster === 'category-alias-artifact') blockers.push('category-conflict');
+  if ((row.reasons || []).includes('quantity-missing-one-side')) blockers.push('quantity-missing-one-side');
+  return uniq(blockers);
+}
+
+function differentOfferReasons(row = {}) {
+  const cluster = row.blockerCluster || weakMatchBlockerCluster(row);
+  const unsafe = row.unsafeReasons || [];
+  const riskyClusters = [
+    'hard-category-conflict',
+    'retailer-format-conflict',
+    'price-conflict',
+    'price-only-match',
+    'variant-or-flavor-risk',
+    'bundle-condition-conflict',
+    'alcoholic-nonalcoholic-risk',
+    'generic-diverse-sorten',
+  ];
+  if (!riskyClusters.includes(cluster)) return [];
+  return uniq([cluster, ...unsafe]);
+}
+
+function compactOfferForWeakReview(offer = {}) {
+  return {
+    title: offer.title || '',
+    retailer: offer.retailerFormat || offer.retailerKey || '',
+    sourceKey: offer.sourceKey || '',
+    sourceType: offer.sourceType || '',
+    price: offer.priceCurrent ?? null,
+    quantity: offer.quantityText || '',
+    condition: truncate(offer.conditionsText || '', 180),
+    validity: [offer.validFrom, offer.validTo].filter(Boolean).join(' - '),
+    category: [offer.categoryPrimary, offer.categorySecondary, offer.categoryKey, offer.subcategoryKey]
+      .filter(Boolean)
+      .join(' / '),
+  };
+}
+
+function buildWeakMatchExample(row = {}) {
+  const pair = bestPairForRow(row);
+  const blockerCluster = weakMatchBlockerCluster(row);
+  const annotated = { ...row, blockerCluster };
+
+  return {
+    pdfOffer: compactOfferForWeakReview(row.pdfOffer),
+    aggregatorOffer: {
+      ...compactOfferForWeakReview(pair.aggregatorOffer),
+      imageAvailable: Boolean(pair.aggregatorOffer?.imageUrl),
+    },
+    matchScore: row.matchScore || 0,
+    titleSimilarity: pair.titleSimilarity ?? null,
+    sharedTokens: pair.sharedTokens || [],
+    reasons: row.reasons || [],
+    unsafeReasons: row.unsafeReasons || [],
+    conflictingFields: row.conflictingFields || [],
+    quantityDiagnostics: pair.quantityDiagnostics || null,
+    blockerCluster,
+    humanReviewLabelSuggestion: humanReviewLabelSuggestion(annotated),
+    recommendation: weakMatchRecommendation(annotated),
+    likelySameOfferButBlockedBy: sameOfferBlockers(annotated),
+    likelyDifferentOfferBecause: differentOfferReasons(annotated),
+    canUseAggregatorImage: false,
+    canUsePdfValidity: false,
+    canUsePdfConditions: false,
+    shouldMergeLater: false,
+  };
+}
+
+function buildWeakMatchClusters(weakRows = []) {
+  const buckets = new Map();
+  for (const row of weakRows) {
+    const example = buildWeakMatchExample(row);
+    const cluster = example.blockerCluster;
+    if (!buckets.has(cluster)) {
+      buckets.set(cluster, {
+        cluster,
+        count: 0,
+        ...WEAK_MATCH_CLUSTER_META[cluster],
+        example: {
+          pdfTitle: example.pdfOffer.title,
+          aggregatorTitle: example.aggregatorOffer.title,
+          matchScore: example.matchScore,
+          unsafeReasons: example.unsafeReasons,
+        },
+      });
+    }
+    buckets.get(cluster).count += 1;
+  }
+
+  return [...buckets.values()].sort((left, right) => {
+    const countDiff = right.count - left.count;
+    if (countDiff !== 0) return countDiff;
+    return WEAK_MATCH_CLUSTER_ORDER.indexOf(left.cluster) - WEAK_MATCH_CLUSTER_ORDER.indexOf(right.cluster);
+  });
+}
+
 function buildRecommendedNextActions(summary = {}) {
   const actions = [
     'Run this diagnostic read-only against current Production offers before any source merge or image fallback.',
@@ -950,6 +1275,11 @@ function buildSparSourceMatchingDiagnostic({
   const matchedWeak = rows.filter((row) => row.matchLevel === 'weak').length;
   const matchedNone = rows.filter((row) => row.matchLevel === 'none').length;
   const unsafeRows = rows.filter((row) => row.unsafeReasons.length > 0);
+  const weakRows = rows
+    .filter((row) => row.matchLevel === 'weak')
+    .sort((left, right) => right.matchScore - left.matchScore || left.pdfOffer.title.localeCompare(right.pdfOffer.title));
+  const weakMatchExamples = weakRows.map(buildWeakMatchExample);
+  const weakMatchClusters = buildWeakMatchClusters(weakRows);
   const summary = {
     totalPdfOffers: pdfOffers.length,
     totalAggregatorOffers: aggregatorOffers.length,
@@ -961,6 +1291,7 @@ function buildSparSourceMatchingDiagnostic({
     validityTransferCandidates: rows.filter((row) => row.canUsePdfValidity).length,
     conditionTransferCandidates: rows.filter((row) => row.canUsePdfConditions).length,
     unsafeExamples: unsafeRows.length,
+    weakMatchClusters: weakMatchClusters.length,
     topRejectedCandidateSamples: rejectedCandidateSamples.length,
   };
 
@@ -991,6 +1322,9 @@ function buildSparSourceMatchingDiagnostic({
       .slice(0, maxExamples),
     topStrongExamples: rows.filter((row) => row.matchLevel === 'strong').sort((left, right) => right.matchScore - left.matchScore).slice(0, maxExamples),
     topMediumExamples: rows.filter((row) => row.matchLevel === 'medium').sort((left, right) => right.matchScore - left.matchScore).slice(0, maxExamples),
+    weakMatchExamples: weakMatchExamples.slice(0, maxExamples),
+    weakMatchClusters,
+    blockerClusterHistogram: histogram(weakMatchExamples.map((example) => example.blockerCluster)),
     topNoMatchExamples: rows.filter((row) => row.matchLevel === 'none').slice(0, maxExamples),
     topRejectedCandidateSamples: rejectedCandidateSamples.slice(0, maxExamples),
     perRetailerBreakdown: {
