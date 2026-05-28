@@ -8,6 +8,7 @@ const { resolveReferencePrice } = require('../offers/promotionMath');
 const { buildOfferSearchTokens, SEARCH_TOKEN_VERSION } = require('../offers/searchTokens');
 
 const VALIDITY_INCOMPLETE_REVIEW_REASON = 'Gueltigkeitszeitraum unvollstaendig';
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function normalizeKey(value, fallback = '') {
   return normalizeTitleForMatch(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
@@ -83,19 +84,62 @@ function buildRetailerFormatScopeKey(formats = []) {
   return uniqueFormats(formats).sort().join('+');
 }
 
+function dateOnlyKey(value) {
+  return typeof value === 'string' && DATE_ONLY_PATTERN.test(value.trim()) ? value.trim() : '';
+}
+
+function viennaDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function validFromIsFuture(validFrom, now) {
+  const key = dateOnlyKey(validFrom);
+
+  if (key) {
+    const nowKey = viennaDateKey(now);
+    return Boolean(nowKey) && key > nowKey;
+  }
+
+  const date = validFrom ? new Date(validFrom) : null;
+  return Boolean(date && !Number.isNaN(date.getTime()) && date > now);
+}
+
+function validToIsExpired(validTo, now) {
+  const key = dateOnlyKey(validTo);
+
+  if (key) {
+    const nowKey = viennaDateKey(now);
+    return Boolean(nowKey) && key < nowKey;
+  }
+
+  const date = validTo ? new Date(validTo) : null;
+  return Boolean(date && !Number.isNaN(date.getTime()) && date < now);
+}
+
 function isCurrentlyRelevantOffer(offer, now = new Date()) {
   if (offer?.status === 'expired' || offer?.status === 'upcoming') {
     return false;
   }
 
-  const validFrom = offer?.validFrom ? new Date(offer.validFrom) : null;
-  const validTo = offer?.validTo ? new Date(offer.validTo) : null;
-
-  if (validFrom && !Number.isNaN(validFrom.getTime()) && validFrom > now) {
+  if (validFromIsFuture(offer?.validFrom, now)) {
     return false;
   }
 
-  if (validTo && !Number.isNaN(validTo.getTime()) && validTo < now) {
+  if (validToIsExpired(offer?.validTo, now)) {
     return false;
   }
 
@@ -461,4 +505,10 @@ module.exports = {
   buildRetailerFormatScopeKey,
   isCurrentlyRelevantOffer,
   isPriceOptionalPromotion,
+  _private: {
+    dateOnlyKey,
+    validFromIsFuture,
+    validToIsExpired,
+    viennaDateKey,
+  },
 };

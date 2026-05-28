@@ -1,7 +1,11 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { computeOfferSavings, extractPromotionRequirement } = require('../src/services/offers/promotionMath');
-const { enrichOfferForStorage, inferRetailerFormatMetadata } = require('../src/services/crawl/offerAuditEnrichment');
+const {
+  enrichOfferForStorage,
+  inferRetailerFormatMetadata,
+  isCurrentlyRelevantOffer,
+} = require('../src/services/crawl/offerAuditEnrichment');
 const { SEARCH_TOKEN_VERSION } = require('../src/services/offers/searchTokens');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 
@@ -414,6 +418,51 @@ test('does not store future or expired offers', () => {
   }), null);
 });
 
+test('date-only flyer validity is relevant for the whole local validity day', () => {
+  const morningOfStartDay = new Date('2026-05-28T08:59:00.000Z');
+
+  assert.equal(isCurrentlyRelevantOffer({
+    status: 'active',
+    validFrom: '2026-05-28',
+  }, morningOfStartDay), true);
+  assert.equal(isCurrentlyRelevantOffer({
+    status: 'active',
+    validFrom: '2026-05-28',
+    validTo: '2026-06-02',
+  }, morningOfStartDay), true);
+  assert.equal(isCurrentlyRelevantOffer({
+    status: 'active',
+    validFrom: '2026-05-29',
+  }, morningOfStartDay), false);
+  assert.equal(isCurrentlyRelevantOffer({
+    status: 'active',
+    validFrom: '2026-05-28',
+    validTo: '2026-06-02',
+  }, new Date('2026-06-02T21:30:00.000Z')), true);
+  assert.equal(isCurrentlyRelevantOffer({
+    status: 'active',
+    validFrom: '2026-05-28',
+    validTo: '2026-06-02',
+  }, new Date('2026-06-02T22:30:00.000Z')), false);
+});
+
+test('current-day flyer validity remains storable before noon UTC while future days stay blocked', () => {
+  const currentDayOffer = activeComparableOffer({
+    validFrom: '2026-05-28',
+    validTo: '2026-06-02',
+    status: 'active',
+  });
+  const futureDayOffer = activeComparableOffer({
+    validFrom: '2026-05-29',
+    validTo: '2026-06-02',
+    status: 'active',
+  });
+  const now = new Date('2026-05-28T08:59:00.000Z');
+
+  assert.equal(isCurrentlyRelevantOffer(currentDayOffer, now), true);
+  assert.equal(isCurrentlyRelevantOffer(futureDayOffer, now), false);
+});
+
 test('keeps BILLA and BILLA PLUS separate and disables low-yield sources', () => {
   const billa = RETAILER_DEFINITIONS.find((definition) => definition.retailerKey === 'billa' && definition.channel === 'official-site');
   const billaPlus = RETAILER_DEFINITIONS.find((definition) => definition.retailerKey === 'billa-plus' && definition.channel === 'official-site');
@@ -432,6 +481,20 @@ test('keeps BILLA and BILLA PLUS separate and disables low-yield sources', () =>
   assert.ok(marketguruSources.every((definition) => definition.enabled === false));
   assert.ok(adegSources.length >= 2);
   assert.ok(adegSources.every((definition) => definition.enabled === false));
+});
+
+test('official SPAR flyer source validity uses local-day boundaries', () => {
+  const morningOfStartDay = new Date('2026-05-28T08:59:00.000Z');
+  const endOfLastDay = new Date('2026-06-02T21:30:00.000Z');
+  const sparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'spar' && definition.sourceType === 'pdf');
+  const eurosparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'eurospar' && definition.sourceType === 'pdf');
+  const intersparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'interspar' && definition.sourceType === 'pdf');
+
+  for (const source of [sparPdf, intersparPdf]) {
+    assert.ok(new Date(source.crawlPolicy.validFrom) <= morningOfStartDay);
+    assert.ok(new Date(source.crawlPolicy.validTo) > endOfLastDay);
+  }
+  assert.ok(new Date(eurosparPdf.crawlPolicy.validTo) > endOfLastDay);
 });
 
 test('does not mark offers with clear validTo as incomplete validity', () => {
