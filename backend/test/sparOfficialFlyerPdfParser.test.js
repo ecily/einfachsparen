@@ -274,6 +274,67 @@ test('rejects generic PDF promotion fragments and cleans leading price/date arti
   assert.ok(accepted.some((candidate) => candidate.title === 'Recheis Familie 2-Ei Teigwaren versch. Sorten,'));
 });
 
+test('generic SPAR PDF extraction rejects fragment starts and merged product blocks', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 10,
+        text: [
+          'mit 100% Milch aus Österreich und Früchten aus anderer Herkunft,',
+          '500 g',
+          '1 Fl. 8,99',
+          'ab 2 Fl. je 4,49',
+          '1+1 GRATIS Poggi del Sole Chianti Riserva',
+          'Blue Star WC-Steine Doppelpackung, verschiedene Sorten oder Blue Star Spülkastenwürfel',
+          '4 x 50-g-Packung',
+          'SPAR Radieschen Bund Aus Österreich, per Bund Angebot gültig von Mo, 25.5. bis Sa, 30.5.',
+          '0,99',
+          'Coca-Cola Limonaden versch. Sorten, 1,5 Liter 6er-Tray',
+          '7,44',
+          'oder Monte Maxi Schoko',
+          '4 x 100 g',
+          '1,69',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted.some((candidate) => /^mit 100% Milch/.test(candidate.title)), false);
+  assert.equal(accepted.some((candidate) => /^Blue Star/.test(candidate.title)), false);
+  assert.equal(accepted.some((candidate) => /^oder Monte/.test(candidate.title)), false);
+  assert.ok(accepted.some((candidate) => candidate.title === 'Coca-Cola Limonaden versch. Sorten,'));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk'));
+});
+
+test('generic SPAR PDF candidates preserve visible multibuy conditions', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 11,
+        text: [
+          'Bio-Handsemmel SPAR Laugenstange nach original bayrischer Rezeptur',
+          '1 Stk.',
+          '1,25',
+          'bei 3 Stk. je 0,83',
+          '2 + 1 GRATIS',
+          '0,83',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted[0].title, 'Bio-Handsemmel SPAR Laugenstange nach original bayrischer Rezeptur');
+  assert.match(accepted[0].conditionsText, /2\+1 gratis/);
+  assert.match(accepted[0].conditionsText, /ab\/bei 3 Stueck/);
+});
+
 test('builds bounded SPAR PDF rejected-candidate samples for raw document diagnostics', () => {
   const candidates = extractSparPdfCandidates({
     sourceRetailerFormat: 'spar',

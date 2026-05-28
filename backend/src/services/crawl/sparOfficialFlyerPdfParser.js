@@ -324,16 +324,16 @@ function parseReferencePriceFromBlock(blockLines = []) {
 
 function extractQuantityTextFromBlock(blockLines = []) {
   const text = normalizePriceText(blockLines.join(' '));
-  const xPackMatch = text.match(/\b\d+\s*x\s*\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml)\b/i);
-  if (xPackMatch) return sanitizeWhitespace(xPackMatch[0]).replace(',', '.');
+  const xPackMatch = text.match(/\b\d+\s*x\s*\d+(?:[,.]\d+)?[-\s]*(?:kg|g|l|liter|ml)\b/i);
+  if (xPackMatch) return sanitizeWhitespace(xPackMatch[0]).replace(',', '.').replace(/\bliter\b/i, 'l');
 
-  const packMatch = text.match(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b/i);
-  if (packMatch) return sanitizeWhitespace(packMatch[0]).replace(',', '.');
+  const packMatch = text.match(/\b\d+(?:[,.]\d+)?[-\s]*(?:kg|g|l|liter|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b/i);
+  if (packMatch) return sanitizeWhitespace(packMatch[0]).replace(',', '.').replace(/\bliter\b/i, 'l');
 
-  const packageMatch = text.match(/\b\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|ml)[-\s]?(?:packung|flasche|dose|beutel|glas|pkg)\b/i);
+  const packageMatch = text.match(/\b\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|liter|ml)[-\s]?(?:packung|flasche|dose|beutel|glas|pkg)\b/i);
   if (packageMatch) {
-    const quantity = packageMatch[0].match(/\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|ml)/i)?.[0] || '';
-    return sanitizeWhitespace(quantity).replace(',', '.');
+    const quantity = packageMatch[0].match(/\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|liter|ml)/i)?.[0] || '';
+    return sanitizeWhitespace(quantity).replace(',', '.').replace(/\bliter\b/i, 'l');
   }
 
   return '';
@@ -353,8 +353,8 @@ function looksLikeNonProductLine(line = '') {
 }
 
 function lineContainsQuantity(line = '') {
-  return /\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b/i.test(line)
-    || /\b\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|ml)[-\s]?(?:packung|flasche|dose|beutel|glas|pkg)\b/i.test(line);
+  return /\b\d+(?:[,.]\d+)?[-\s]*(?:kg|g|l|liter|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b/i.test(line)
+    || /\b\d+(?:[,.]\d+)?[-\s]?(?:kg|g|l|liter|ml)[-\s]?(?:packung|flasche|dose|beutel|glas|pkg)\b/i.test(line);
 }
 
 function buildGenericTitle(blockLines = []) {
@@ -378,12 +378,55 @@ function buildGenericTitle(blockLines = []) {
     .replace(/^\d{1,3}[,.]\d{2}\s*\([^)]*\)\s*/i, '')
     .replace(/^ab\s+\d+\s+\S+\s+je\s+\d{1,3}[,.]\d{2}\s*/i, '')
     .replace(/^jetzt\s+probieren!?\s*/i, '')
-    .replace(/\b\d+(?:[,.]\d+)?[-\s]*(?:kg|g|l|ml|stk|stueck|kapseln|waschgaenge|waschgang)\b.*$/i, '')
-    .replace(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b.*$/i, '')
+    .replace(/^\(?=?\s*per\s+(?:kg|l|liter|100\s*g|100\s*ml)\s+\d{1,3}[,.]\d{2}\)?\s*/i, '')
+    .replace(/\b\d+(?:[,.]\d+)?[-\s]*(?:kg|g|l|liter|ml|stk|stueck|kapseln|waschgaenge|waschgang)\b.*$/i, '')
+    .replace(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|liter|ml|stk|stueck|kapseln|waschg.nge|waschgänge|waschgaenge|waschgang)\b.*$/i, '')
     .replace(/\b(?:ganze bohne|gemahlen|packung|flasche|dose|beutel|glas)\b[,\s]*$/i, '')
     .trim();
 
   return sanitizeWhitespace(rawTitle);
+}
+
+function hasUnsafeGenericTitleStart(title = '') {
+  const normalized = normalizeForScan(title);
+  const cleanTitle = sanitizeWhitespace(title);
+
+  return /^[a-zäöüß]/.test(cleanTitle)
+    || /^(?:mit|natur\s+xxl|geraeuchert|gerauchert|gefüllt|gefuellt|in\s+bedienung|per\s+kg)\b/i.test(normalized)
+    || /^(?:statt|aktion|ersparnis|bis\s+zu|gratis|artikel|neubei|immer\s+billig|preisgesenkt|olen|versch|oder)\b/i.test(normalized)
+    || /^f.{1,4}r\s+jeden\s+geschmack\b/i.test(cleanTitle)
+    || /^(?:fuer|für)\s+jeden\s+geschmack\b/i.test(normalized)
+    || /^alles\s+selbstgemacht\b/i.test(normalized)
+    || /^(?:smoothieflasche|geradehalsflaschen)\b/i.test(normalized)
+    || /\bimmer\s+billig\b/i.test(normalized);
+}
+
+function hasGenericMergeRisk(blockLines = [], quantityText = '') {
+  const text = normalizePriceText(blockLines.join(' '));
+  if (!quantityText) return false;
+
+  const quantityIndex = normalizeForScan(text).indexOf(normalizeForScan(quantityText));
+  if (quantityIndex < 0) return false;
+
+  const afterQuantity = text.slice(quantityIndex + quantityText.length);
+  return /\bangebote?\s+g(?:ü|u|ue)ltig\b/i.test(afterQuantity)
+    || /\bstattpreise\s+sind\b/i.test(afterQuantity)
+    || /\baktionen\s+nicht\s+g(?:ü|u|ue)ltig\b/i.test(afterQuantity);
+}
+
+function extractGenericConditionsText(blockLines = []) {
+  const text = normalizePriceText(blockLines.join(' '));
+  const conditions = [];
+
+  if (/\b1\s*\+\s*1\s*gratis\b/i.test(text)) conditions.push('1+1 gratis');
+  if (/\b2\s*\+\s*1\s*gratis\b/i.test(text) || /\b2\s*\+\s*1\b/i.test(text)) conditions.push('2+1 gratis');
+  if (/\b3\s*\+\s*3\s*gratis\b/i.test(text) || /\b3\s*\+\s*3\b/i.test(text)) conditions.push('3+3 gratis');
+  if (/\b12\s*\+\s*12\s*gratis\b/i.test(text) || /\b12\s*\+\s*12\b/i.test(text)) conditions.push('12+12 gratis');
+
+  const threshold = text.match(/\b(?:ab|bei)\s+(\d+)\s*(?:stk|stueck|fl|flaschen|ds|dosen|pkg|packungen|gl|glaeser)?\.?\s+(?:je\s+)?\d{1,3}[,.]\d{2}\b/i);
+  if (threshold) conditions.push(`ab/bei ${threshold[1]} Stueck laut Flugblatt`);
+
+  return sanitizeWhitespace([...new Set(conditions)].join(' / '));
 }
 
 function isPlausibleGenericFlyerTitle(title = '') {
@@ -436,9 +479,18 @@ function extractGenericFlyerCandidatesFromPage(page) {
     const blockLines = lines.slice(start, end);
     const title = buildGenericTitle(blockLines);
     const quantityText = extractQuantityTextFromBlock(blockLines);
+    const genericConditionsText = extractGenericConditionsText(blockLines);
 
     if (!isPlausibleGenericFlyerTitle(title)) {
       addRejectedCandidate(candidates, page.pageNumber, 'generic-unclear-product', blockLines.join(' '), {
+        blockIndex: index,
+        parserHint: 'generic-text-layer-price-block',
+      });
+      continue;
+    }
+
+    if (hasUnsafeGenericTitleStart(title)) {
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-fragment-title', blockLines.join(' '), {
         blockIndex: index,
         parserHint: 'generic-text-layer-price-block',
       });
@@ -453,6 +505,14 @@ function extractGenericFlyerCandidatesFromPage(page) {
       continue;
     }
 
+    if (hasGenericMergeRisk(blockLines, quantityText)) {
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-merge-risk', blockLines.join(' '), {
+        blockIndex: index,
+        parserHint: 'generic-text-layer-price-block',
+      });
+      continue;
+    }
+
     addCandidate(candidates, page.pageNumber, {
       productKind: 'generic-flyer-product',
       title,
@@ -460,7 +520,7 @@ function extractGenericFlyerCandidatesFromPage(page) {
       price,
       referencePrice: parseReferencePriceFromBlock(blockLines),
       quantityText,
-      conditionsText: '',
+      conditionsText: genericConditionsText,
       rawText: blockLines.join(' '),
       comparisonSafe: true,
       parserHint: 'generic-text-layer-price-block',
@@ -1011,6 +1071,18 @@ function normalizeSparPdfCandidateToOffer({
 
   if (categoryMismatchSignal && !issues.includes(PDF_CATEGORY_MISMATCH_REVIEW_REASON)) {
     issues.push(PDF_CATEGORY_MISMATCH_REVIEW_REASON);
+  }
+
+  if (
+    candidate.parserHint === 'generic-text-layer-price-block'
+    && (
+      categoryMismatchSignal
+      || categoryPrimary === 'Unkategorisiert'
+      || categorySecondary === 'Unkategorisiert'
+      || categoryPrimary === 'Technik / Elektronik'
+    )
+  ) {
+    return null;
   }
 
   const titleNormalized = normalizeTitleForMatch(candidate.title);
