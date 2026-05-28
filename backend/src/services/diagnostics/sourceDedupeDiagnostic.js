@@ -88,8 +88,22 @@ const SOURCE_PRIORITY_MATRIX = {
     ['aktionsfinder-json', 3, 'aggregator-json-current-primary'],
   ],
   spar: [
-    ['aktionsfinder-json', 2, 'aggregator-json-current-primary'],
-    ['spar-official-html', 5, 'official-html-not-yet-proven'],
+    ['official-action', 1, 'official-category-action-target'],
+    ['spar-official-html', 2, 'official-html-not-yet-proven'],
+    ['spar-official-pdf', 8, 'official-pdf-evidence-only'],
+    ['aktionsfinder-json', 5, 'aggregator-json-current-primary'],
+  ],
+  eurospar: [
+    ['official-action', 1, 'official-category-action-target'],
+    ['spar-official-html', 2, 'official-html-not-yet-proven'],
+    ['spar-official-pdf', 8, 'official-pdf-evidence-only'],
+    ['aktionsfinder-json', 5, 'aggregator-json-current-primary'],
+  ],
+  interspar: [
+    ['official-action', 1, 'official-category-action-target'],
+    ['spar-official-html', 2, 'official-html-not-yet-proven'],
+    ['spar-official-pdf', 8, 'official-pdf-evidence-only'],
+    ['aktionsfinder-json', 5, 'aggregator-json-current-primary'],
   ],
   hofer: [
     ['aktionsfinder-json', 2, 'aggregator-json-current-primary'],

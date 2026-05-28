@@ -41,7 +41,10 @@ test('source priority matrix exposes expected retailer source rules', () => {
   assert.equal(matrix.billa[0].sourceType, 'billa-official-algolia');
   assert.equal(matrix.lidl[0].sourceType, 'lidl-official-flyer-api');
   assert.equal(matrix.penny[0].sourceType, 'penny-official-html');
-  assert.equal(matrix.spar[0].sourceType, 'aktionsfinder-json');
+  assert.equal(matrix.spar[0].sourceType, 'official-action');
+  assert.equal(matrix.spar.some((entry) => entry.sourceType === 'spar-official-pdf'), true);
+  assert.equal(matrix.eurospar.some((entry) => entry.sourceType === 'spar-official-pdf'), true);
+  assert.equal(matrix.interspar.some((entry) => entry.sourceType === 'spar-official-pdf'), true);
   assert.equal(matrix.hofer[0].sourceType, 'aktionsfinder-json');
 });
 
