@@ -47,7 +47,11 @@ const STOP_WORDS = new Set([
   'extra',
   'gratis',
   'je',
+  'karton',
+  'kartons',
   'kg',
+  'kiste',
+  'kisten',
   'l',
   'liter',
   'mit',
@@ -55,16 +59,23 @@ const STOP_WORDS = new Set([
   'oder',
   'pack',
   'packung',
+  'packungen',
+  'pkg',
   'pro',
   'sorten',
   'statt',
   'stueck',
   'stk',
+  'stuck',
   'und',
   'versch',
   'verschiedene',
   'von',
   'zum',
+  'dose',
+  'dosen',
+  'flasche',
+  'flaschen',
 ]);
 
 function uniq(values = []) {
@@ -205,28 +216,371 @@ function quantityTextSignature(offer = {}) {
     .join('|');
 }
 
-function quantityState(left = {}, right = {}) {
-  const leftStructured = quantitySignature(left);
-  const rightStructured = quantitySignature(right);
-  const leftHasStructured = /[1-9]/.test(leftStructured);
-  const rightHasStructured = /[1-9]/.test(rightStructured);
+function normalizeQuantityText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\u00c3\u0178/g, 'ss')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u00d7]/g, 'x')
+    .replace(/[^a-z0-9.,+*x]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  if (leftHasStructured && rightHasStructured) {
-    return leftStructured === rightStructured ? 'same' : 'conflict';
+function diagnosticQuantityText(offer = {}) {
+  return normalizeQuantityText([
+    offer.title,
+    offer.titleNormalized,
+    offer.brand,
+    offer.quantityText,
+    offer.conditionsText,
+    offer.rawFacts?.validityText,
+    offer.rawFacts?.infoText,
+    offer.rawFacts?.minimumPurchaseQuantity,
+    offer.rawFacts?.requiredQuantity,
+  ].join(' '));
+}
+
+function parseDiagnosticNumber(value) {
+  const number = Number(String(value || '').replace(',', '.'));
+  return Number.isFinite(number) ? number : null;
+}
+
+function canonicalMeasure(unit) {
+  const normalized = normalizeQuantityText(unit);
+  if (normalized === 'l' || normalized === 'liter') return { baseUnit: 'l', factor: 1 };
+  if (normalized === 'ml') return { baseUnit: 'l', factor: 0.001 };
+  if (normalized === 'cl') return { baseUnit: 'l', factor: 0.01 };
+  if (normalized === 'kg') return { baseUnit: 'kg', factor: 1 };
+  if (normalized === 'g') return { baseUnit: 'kg', factor: 0.001 };
+  return { baseUnit: '', factor: 1 };
+}
+
+function canonicalContainer(value = '') {
+  const normalized = normalizeQuantityText(value);
+  if (['dose', 'dosen'].includes(normalized)) return 'dose';
+  if (['flasche', 'flaschen'].includes(normalized)) return 'flasche';
+  if (['kiste', 'kisten'].includes(normalized)) return 'kiste';
+  if (['packung', 'packungen', 'pkg', 'pack', 'packs', 'paket', 'pakete'].includes(normalized)) return 'packung';
+  if (['stueck', 'stuck', 'stk'].includes(normalized)) return 'stueck';
+  if (['karton', 'kartons'].includes(normalized)) return 'karton';
+  return normalized;
+}
+
+function nearlyEqual(left, right, tolerance = 0.001) {
+  if (!Number.isFinite(Number(left)) || !Number.isFinite(Number(right))) return false;
+  return Math.abs(Number(left) - Number(right)) <= tolerance;
+}
+
+function addMeasure(result, value, unit) {
+  const number = parseDiagnosticNumber(value);
+  const measure = canonicalMeasure(unit);
+  if (number === null || !measure.baseUnit) return;
+
+  const canonicalValue = Number((number * measure.factor).toFixed(4));
+  if (!result.unitSize) {
+    result.baseUnit = measure.baseUnit;
+    result.unitSize = canonicalValue;
+  }
+}
+
+function addPackCount(result, value, confidence = 0.82) {
+  const number = parseDiagnosticNumber(value);
+  if (number === null || number <= 0) return;
+
+  const count = Math.round(number);
+  if (!result.packCount || count > result.packCount) {
+    result.packCount = count;
+  }
+  result.quantityConfidence = Math.max(result.quantityConfidence, confidence);
+}
+
+function firstRegexMatch(text, regex) {
+  const matches = [...text.matchAll(regex)];
+  return matches.length > 0 ? matches[0] : null;
+}
+
+function detectBundleMechanic(text = '') {
+  const mechanics = [];
+  const plusGratis = firstRegexMatch(text, /\b(\d+)\s*\+\s*(\d+)\s*gratis\b/g);
+  const forOne = firstRegexMatch(text, /\b(\d+)\s*(?:fuer|fur)\s*(\d+)\b/g);
+
+  if (plusGratis) mechanics.push(`${plusGratis[1]}+${plusGratis[2]}-gratis`);
+  if (forOne) mechanics.push(`${forOne[1]}-for-${forOne[2]}`);
+  if (/\bab\s+\d+\b|\bbei\s+\d+\b|\bmindestkauf\b/.test(text)) mechanics.push('threshold');
+  if (/%|pickerl|rabattmarke|joker/.test(text)) mechanics.push('percent-or-sticker');
+
+  return uniq(mechanics).join('|');
+}
+
+function normalizeDiagnosticQuantity(offer = {}) {
+  const text = diagnosticQuantityText(offer);
+  const result = {
+    baseUnit: '',
+    unitSize: null,
+    packCount: null,
+    containerType: '',
+    totalQuantity: null,
+    quantityConfidence: 0,
+    conditionPackCount: null,
+    bundleMechanic: detectBundleMechanic(text),
+    normalizedQuantityKey: '',
+    unsafeQuantityReasons: [],
+  };
+
+  if (!text) {
+    result.unsafeQuantityReasons.push('quantity-missing');
+    return result;
   }
 
-  const leftText = quantityTextSignature(left);
-  const rightText = quantityTextSignature(right);
-  if (leftText && rightText) return leftText === rightText ? 'same' : 'conflict';
-  if (!leftText && !rightText && !leftHasStructured && !rightHasStructured) return 'missing';
-  return 'one-missing';
+  const structuredPackCount = Number(offer.packCount);
+  const structuredUnitValue = Number(offer.unitValue);
+  const structuredTotal = Number(offer.totalComparableAmount);
+  const structuredUnit = canonicalMeasure(offer.unitType || offer.comparableUnit || offer.normalizedUnitPrice?.unit || '');
+
+  if (Number.isFinite(structuredPackCount) && structuredPackCount > 0) {
+    result.packCount = Math.round(structuredPackCount);
+    result.quantityConfidence = Math.max(result.quantityConfidence, 0.95);
+  }
+  if (Number.isFinite(structuredUnitValue) && structuredUnitValue > 0 && structuredUnit.baseUnit) {
+    result.baseUnit = structuredUnit.baseUnit;
+    result.unitSize = Number((structuredUnitValue * structuredUnit.factor).toFixed(4));
+    result.quantityConfidence = Math.max(result.quantityConfidence, 0.9);
+  }
+  if (Number.isFinite(structuredTotal) && structuredTotal > 0 && (offer.comparableUnit || offer.normalizedUnitPrice?.unit)) {
+    const totalUnit = canonicalMeasure(offer.comparableUnit || offer.normalizedUnitPrice?.unit || '');
+    if (totalUnit.baseUnit) {
+      result.baseUnit = result.baseUnit || totalUnit.baseUnit;
+      result.totalQuantity = Number((structuredTotal * totalUnit.factor).toFixed(4));
+      result.quantityConfidence = Math.max(result.quantityConfidence, 0.9);
+    }
+  }
+
+  const containerPattern = '(stueck|stuck|stk|dose|dosen|flasche|flaschen|kiste|kisten|packung|packungen|pkg|pack|karton|kartons)';
+  const measurePattern = '(kg|g|l|liter|ml|cl)';
+  const numberPattern = '(\\d+(?:[,.]\\d+)?)';
+  const explicitContainer = firstRegexMatch(text, new RegExp(`\\b${containerPattern}\\b`, 'g'));
+  const crateContainer = firstRegexMatch(text, /\b(?:kiste|kisten)\b/g);
+
+  if (crateContainer) {
+    result.containerType = 'kiste';
+  } else if (explicitContainer) {
+    result.containerType = canonicalContainer(explicitContainer[1] || explicitContainer[0]);
+  }
+
+  const conditionCount = firstRegexMatch(text, new RegExp(`\\b(?:ab|bei)\\s+(\\d+)\\s*${containerPattern}\\b`, 'g'));
+  if (conditionCount) {
+    result.conditionPackCount = Number(conditionCount[1]);
+  }
+
+  const directMultipack = firstRegexMatch(text, new RegExp(`\\b${numberPattern}\\s*(?:x|\\*)\\s*${numberPattern}\\s*${measurePattern}\\b`, 'g'));
+  const containerThenMeasure = firstRegexMatch(text, new RegExp(`\\b${numberPattern}\\s*${containerPattern}\\s*(?:a|je|zu|mit)?\\s*${numberPattern}\\s*${measurePattern}\\b`, 'g'));
+  const measureThenContainer = firstRegexMatch(text, new RegExp(`\\b${numberPattern}\\s*${measurePattern}\\s*(?:\\/)?\\s*${numberPattern}\\s*${containerPattern}\\b`, 'g'));
+
+  if (directMultipack) {
+    addPackCount(result, directMultipack[1], 0.96);
+    addMeasure(result, directMultipack[2], directMultipack[3]);
+  } else if (containerThenMeasure) {
+    addPackCount(result, containerThenMeasure[1], 0.94);
+    result.containerType = result.containerType || canonicalContainer(containerThenMeasure[2]);
+    addMeasure(result, containerThenMeasure[3], containerThenMeasure[4]);
+  } else if (measureThenContainer) {
+    addMeasure(result, measureThenContainer[1], measureThenContainer[2]);
+    addPackCount(result, measureThenContainer[3], 0.94);
+    result.containerType = result.containerType || canonicalContainer(measureThenContainer[4]);
+  }
+
+  const packOnly = firstRegexMatch(text, new RegExp(`\\b(\\d+)\\s*${containerPattern}\\b`, 'g'));
+  if (!result.packCount && packOnly && !/\b(?:ab|bei)\s+$/.test(text.slice(0, packOnly.index))) {
+    addPackCount(result, packOnly[1], 0.72);
+    result.containerType = result.containerType || canonicalContainer(packOnly[2]);
+  }
+
+  const singleMeasure = firstRegexMatch(text, new RegExp(`\\b${numberPattern}\\s*${measurePattern}\\b`, 'g'));
+  if (!result.unitSize && singleMeasure) {
+    addMeasure(result, singleMeasure[1], singleMeasure[2]);
+    result.quantityConfidence = Math.max(result.quantityConfidence, 0.68);
+  }
+
+  const hasExplicitSingleContainer = /\b(?:einzel|einzeldose|einzelpackung)\b/.test(text)
+    || (!result.packCount && /\b(?:dose|flasche|packung)\b/.test(text) && Boolean(result.unitSize));
+
+  if (result.packCount && result.unitSize && result.baseUnit) {
+    result.totalQuantity = Number((result.packCount * result.unitSize).toFixed(4));
+  } else if (!result.totalQuantity && result.unitSize && result.baseUnit && !result.packCount) {
+    result.totalQuantity = result.unitSize;
+  }
+
+  if (!result.packCount && hasExplicitSingleContainer) {
+    result.packCount = 1;
+    result.quantityConfidence = Math.max(result.quantityConfidence, 0.7);
+  }
+
+  if (!result.baseUnit && result.packCount) {
+    result.quantityConfidence = Math.max(result.quantityConfidence, 0.58);
+  }
+
+  if (!result.unitSize && !result.packCount && !result.totalQuantity) {
+    result.unsafeQuantityReasons.push('quantity-missing');
+  }
+
+  if (hasExplicitSingleContainer && result.packCount === 1) {
+    result.unsafeQuantityReasons.push('single-unit-explicit');
+  }
+
+  result.normalizedQuantityKey = [
+    result.baseUnit || 'count',
+    result.unitSize ? result.unitSize.toFixed(4) : '',
+    result.packCount || '',
+    result.totalQuantity ? result.totalQuantity.toFixed(4) : '',
+    result.containerType || '',
+    result.conditionPackCount || '',
+    result.bundleMechanic || '',
+  ].join('|');
+
+  return result;
+}
+
+function diagnosticQuantityState(left = {}, right = {}) {
+  const leftQuantity = normalizeDiagnosticQuantity(left);
+  const rightQuantity = normalizeDiagnosticQuantity(right);
+  const leftHasQuantity = Boolean(leftQuantity.unitSize || leftQuantity.packCount || leftQuantity.totalQuantity);
+  const rightHasQuantity = Boolean(rightQuantity.unitSize || rightQuantity.packCount || rightQuantity.totalQuantity);
+
+  if (!leftHasQuantity && !rightHasQuantity) {
+    return { state: 'missing', leftQuantity, rightQuantity, unsafeQuantityReasons: ['quantity-missing-both'] };
+  }
+  if (!leftHasQuantity || !rightHasQuantity) {
+    return { state: 'one-missing', leftQuantity, rightQuantity, unsafeQuantityReasons: ['quantity-missing-one-side'] };
+  }
+
+  const unsafe = [];
+  const leftMultipack = Number(leftQuantity.packCount || 0) > 1;
+  const rightMultipack = Number(rightQuantity.packCount || 0) > 1;
+  const leftSingle = leftQuantity.unsafeQuantityReasons.includes('single-unit-explicit') || leftQuantity.packCount === 1;
+  const rightSingle = rightQuantity.unsafeQuantityReasons.includes('single-unit-explicit') || rightQuantity.packCount === 1;
+
+  if (leftQuantity.baseUnit && rightQuantity.baseUnit && leftQuantity.baseUnit !== rightQuantity.baseUnit) {
+    unsafe.push('quantity-base-unit-conflict');
+  }
+
+  if (leftQuantity.unitSize && rightQuantity.unitSize && leftQuantity.baseUnit === rightQuantity.baseUnit && !nearlyEqual(leftQuantity.unitSize, rightQuantity.unitSize)) {
+    const sameTotal = leftQuantity.totalQuantity && rightQuantity.totalQuantity && nearlyEqual(leftQuantity.totalQuantity, rightQuantity.totalQuantity);
+    if (!sameTotal) unsafe.push('quantity-unit-size-conflict');
+  }
+
+  if (leftQuantity.packCount && rightQuantity.packCount && leftQuantity.packCount !== rightQuantity.packCount) {
+    unsafe.push('quantity-pack-count-conflict');
+  }
+
+  if ((leftMultipack && rightSingle) || (rightMultipack && leftSingle)) {
+    unsafe.push('single-vs-multipack-risk');
+  }
+
+  if (
+    leftQuantity.totalQuantity
+    && rightQuantity.totalQuantity
+    && leftQuantity.baseUnit === rightQuantity.baseUnit
+    && !nearlyEqual(leftQuantity.totalQuantity, rightQuantity.totalQuantity)
+  ) {
+    unsafe.push('quantity-total-conflict');
+  }
+
+  if (unsafe.length > 0) {
+    return { state: 'conflict', leftQuantity, rightQuantity, unsafeQuantityReasons: uniq(unsafe) };
+  }
+
+  const sameUnit = leftQuantity.baseUnit && leftQuantity.baseUnit === rightQuantity.baseUnit;
+  const samePack = leftQuantity.packCount && rightQuantity.packCount && leftQuantity.packCount === rightQuantity.packCount;
+  const sameUnitSize = leftQuantity.unitSize && rightQuantity.unitSize && nearlyEqual(leftQuantity.unitSize, rightQuantity.unitSize);
+  const sameTotal = leftQuantity.totalQuantity && rightQuantity.totalQuantity && sameUnit && nearlyEqual(leftQuantity.totalQuantity, rightQuantity.totalQuantity);
+
+  if ((samePack && sameUnitSize && sameUnit) || (samePack && sameTotal) || (!leftMultipack && !rightMultipack && sameTotal)) {
+    return { state: 'same', leftQuantity, rightQuantity, unsafeQuantityReasons: [] };
+  }
+
+  if (sameTotal && (leftMultipack || rightMultipack)) {
+    return { state: 'partial', leftQuantity, rightQuantity, unsafeQuantityReasons: [] };
+  }
+
+  if ((sameUnitSize && sameUnit && !leftMultipack && !rightMultipack) || (samePack && !leftQuantity.unitSize && !rightQuantity.unitSize)) {
+    return { state: 'same', leftQuantity, rightQuantity, unsafeQuantityReasons: [] };
+  }
+
+  return { state: 'one-missing', leftQuantity, rightQuantity, unsafeQuantityReasons: ['quantity-partial-evidence'] };
+}
+
+function quantityState(left = {}, right = {}) {
+  return diagnosticQuantityState(left, right).state;
+}
+
+function categoryText(offer = {}) {
+  return normalizeText([
+    offer.categoryPrimary,
+    offer.categorySecondary,
+    offer.categoryKey,
+    offer.subcategoryKey,
+  ].join(' '));
+}
+
+function hasCategoryTerm(category, terms = []) {
+  const padded = ` ${category.replace(/-/g, ' ')} `;
+  return terms.some((term) => padded.includes(` ${normalizeText(term)} `));
+}
+
+function productTokenStrength(left = {}, right = {}) {
+  const leftTokens = offerTokens(left);
+  const rightTokens = offerTokens(right);
+  const shared = uniq(leftTokens.filter((token) => rightTokens.includes(token)));
+  return {
+    shared,
+    strong: shared.length >= 2 || (brandState(left, right) === 'same' && shared.length >= 1),
+  };
 }
 
 function categoryState(left = {}, right = {}) {
   const leftCategory = normalizeKey(left.subcategoryKey || left.categoryKey || left.categorySecondary || left.categoryPrimary || '');
   const rightCategory = normalizeKey(right.subcategoryKey || right.categoryKey || right.categorySecondary || right.categoryPrimary || '');
   if (!leftCategory || !rightCategory) return 'missing';
-  return leftCategory === rightCategory ? 'same' : 'conflict';
+  if (leftCategory === rightCategory) return 'same';
+
+  const leftText = categoryText(left);
+  const rightText = categoryText(right);
+  const combinedOfferText = normalizeText(`${offerText(left)} ${offerText(right)}`);
+  const tokens = productTokenStrength(left, right);
+  const leftPet = hasCategoryTerm(leftText, ['tierfutter', 'hundefutter', 'katzenfutter']);
+  const rightPet = hasCategoryTerm(rightText, ['tierfutter', 'hundefutter', 'katzenfutter']);
+  const leftDrugstore = hasCategoryTerm(leftText, ['drogerie', 'haushalt', 'hygiene', 'waschmittel']);
+  const rightDrugstore = hasCategoryTerm(rightText, ['drogerie', 'haushalt', 'hygiene', 'waschmittel']);
+  const leftFood = hasCategoryTerm(leftText, ['lebensmittel', 'fleisch', 'wurst', 'fisch', 'obst', 'gemuese', 'milch', 'butter', 'kaese', 'getraenke', 'bier']);
+  const rightFood = hasCategoryTerm(rightText, ['lebensmittel', 'fleisch', 'wurst', 'fisch', 'obst', 'gemuese', 'milch', 'butter', 'kaese', 'getraenke', 'bier']);
+
+  if ((leftPet && rightFood) || (rightPet && leftFood)) return 'conflict';
+  if ((leftDrugstore && rightFood) || (rightDrugstore && leftFood)) return tokens.strong ? 'compatible' : 'conflict';
+
+  const leftBeerFamily = hasCategoryTerm(leftText, ['bier', 'getraenke', 'alkoholische getraenke', 'alkohol']);
+  const rightBeerFamily = hasCategoryTerm(rightText, ['bier', 'getraenke', 'alkoholische getraenke', 'alkohol']);
+  if (leftBeerFamily && rightBeerFamily && /(bier|maerzen|radler|lager|pils|weizen)/.test(combinedOfferText)) return 'compatible';
+
+  const leftMeatFamily = hasCategoryTerm(leftText, ['fleisch', 'wurst', 'grillfleisch']);
+  const rightMeatFamily = hasCategoryTerm(rightText, ['fleisch', 'wurst', 'grillfleisch']);
+  const leftFishFamily = hasCategoryTerm(leftText, ['fisch', 'lachs']);
+  const rightFishFamily = hasCategoryTerm(rightText, ['fisch', 'lachs']);
+  const leftFrozen = hasCategoryTerm(leftText, ['tiefkuehl', 'tiefkuhl', 'tiefkuehlkost', 'tiefkuhlkost']);
+  const rightFrozen = hasCategoryTerm(rightText, ['tiefkuehl', 'tiefkuhl', 'tiefkuehlkost', 'tiefkuhlkost']);
+
+  if ((leftMeatFamily && rightFishFamily) || (rightMeatFamily && leftFishFamily)) return 'conflict';
+  if (leftMeatFamily && rightMeatFamily && tokens.strong) return 'compatible';
+  if (((leftFishFamily && (rightFishFamily || rightFrozen)) || (rightFishFamily && (leftFishFamily || leftFrozen))) && tokens.strong) return 'compatible';
+
+  const leftProduce = hasCategoryTerm(leftText, ['obst', 'gemuese', 'gemuse']);
+  const rightProduce = hasCategoryTerm(rightText, ['obst', 'gemuese', 'gemuse']);
+  if (leftProduce && rightProduce && tokens.strong) return 'compatible';
+
+  if ((leftFood && rightFood) && tokens.strong && hasCategoryTerm(`${leftText} ${rightText}`, ['lebensmittel'])) return 'compatible';
+
+  return 'conflict';
 }
 
 function brandState(left = {}, right = {}) {
@@ -246,8 +600,10 @@ function mechanicTokens(offer = {}) {
   const text = normalizeText(rawText);
   const tokens = [];
 
-  if (/\b1\s*\+\s*1\b|1\+1|2\s*fuer\s*1|2\s*fur\s*1/.test(rawText) || /\b1\s+1\s+gratis\b|\b2\s+fuer\s+1\b|\b2\s+fur\s+1\b/.test(text)) tokens.push('one-plus-one');
-  if (/\b4\s*\+\s*2\b|\b4\s*fuer\s*2\b|\b4\s*fur\s*2\b/.test(rawText) || /\b4\s+fuer\s+2\b|\b4\s+fur\s+2\b/.test(text)) tokens.push('four-for-two');
+  const plusGratis = rawText.match(/\b(\d+)\s*\+\s*(\d+)\b/);
+  const forMechanic = rawText.match(/\b(\d+)\s*f(?:ue|\u00fc|u)r\s*(\d+)\b/);
+  if (plusGratis) tokens.push(`${plusGratis[1]}+${plusGratis[2]}-gratis`);
+  if (forMechanic) tokens.push(`${forMechanic[1]}-for-${forMechanic[2]}`);
   if (/\bab\s+\d+\b|\bmindestkauf\b/.test(text)) tokens.push('threshold');
   if (/%|pickerl|rabattmarke|joker/.test(text)) tokens.push('percent-or-sticker');
   if (/kundenkarte|app|konto|s-budget-card|spar-app/.test(text)) tokens.push('loyalty');
@@ -262,9 +618,26 @@ function mechanicsCompatible(left = {}, right = {}) {
   return leftTokens.some((token) => rightTokens.includes(token));
 }
 
+const VARIANT_IGNORE_WORDS = new Set([
+  ...STOP_WORDS,
+  'einzel',
+  'einzeldose',
+  'gebinde',
+  'tray',
+  'trays',
+  'mehrweg',
+  'mw',
+  'pfand',
+  'preis',
+]);
+
+function identityTokens(offer = {}) {
+  return offerTokens(offer).filter((token) => !VARIANT_IGNORE_WORDS.has(token));
+}
+
 function variantConflict(left = {}, right = {}) {
-  const leftTokens = new Set(offerTokens(left));
-  const rightTokens = new Set(offerTokens(right));
+  const leftTokens = new Set(identityTokens(left));
+  const rightTokens = new Set(identityTokens(right));
   const shared = [...leftTokens].filter((token) => rightTokens.has(token));
   const leftOnly = [...leftTokens].filter((token) => !rightTokens.has(token));
   const rightOnly = [...rightTokens].filter((token) => !leftTokens.has(token));
@@ -272,6 +645,16 @@ function variantConflict(left = {}, right = {}) {
   if (shared.length < 1 || leftOnly.length === 0 || rightOnly.length === 0) return false;
   if (brandState(left, right) === 'same' && leftOnly.length <= 4 && rightOnly.length <= 4) return true;
   return shared.length >= 2 && leftOnly.length <= 3 && rightOnly.length <= 3;
+}
+
+function alcoholFreeConflict(left = {}, right = {}) {
+  const leftText = normalizeText(offerText(left));
+  const rightText = normalizeText(offerText(right));
+  const alcoholProduct = /(bier|maerzen|radler|lager|pils|weizen|alkoholisch)/;
+  const leftAlcoholFree = leftText.includes('alkoholfrei');
+  const rightAlcoholFree = rightText.includes('alkoholfrei');
+
+  return leftAlcoholFree !== rightAlcoholFree && (alcoholProduct.test(leftText) || alcoholProduct.test(rightText));
 }
 
 function detectUnsafeReasons(left = {}, right = {}, states = {}) {
@@ -287,8 +670,8 @@ function detectUnsafeReasons(left = {}, right = {}, states = {}) {
   if (!mechanicsCompatible(left, right)) unsafe.push('promotion-mechanic-conflict');
   if (hasAny(text, ['kaffee', 'caffe', 'espresso']) && hasAny(text, ['tee', 'teebutter'])) unsafe.push('coffee-tea-teebutter-collision');
   if (hasAny(text, ['hundefutter', 'katzenfutter', 'tierfutter']) && hasAny(text, ['fleisch', 'wurst', 'fisch', 'lebensmittel'])) unsafe.push('pet-food-human-food-collision');
-  if (normalizeText(text).includes('alkoholfrei') && /(bier|maerzen|märzen|radler|alkoholisch)/.test(normalizeText(text))) unsafe.push('alcoholic-nonalcoholic-variant-risk');
-  if (hasAny(text, ['fleisch']) && hasAny(text, ['fisch', 'wurst']) && states.category !== 'same') unsafe.push('meat-fish-sausage-category-risk');
+  if (alcoholFreeConflict(left, right)) unsafe.push('alcoholic-nonalcoholic-variant-risk');
+  if (hasAny(text, ['fleisch']) && hasAny(text, ['fisch']) && states.category !== 'same' && states.category !== 'compatible') unsafe.push('meat-fish-sausage-category-risk');
 
   const leftTitle = normalizeText(left.title || '');
   const rightTitle = normalizeText(right.title || '');
@@ -343,11 +726,13 @@ function scorePair(pdfOffer = {}, aggregatorOffer = {}) {
   const rightTokens = offerTokens(aggregatorOffer);
   const sharedTokens = uniq(leftTokens.filter((token) => rightTokens.includes(token))).sort();
   const titleSimilarity = Number(jaccard(leftTokens, rightTokens).toFixed(3));
+  const quantityDiagnostic = diagnosticQuantityState(pdfOffer, aggregatorOffer);
   const states = {
     format: pdfFormat && aggregatorFormat && pdfFormat === aggregatorFormat ? 'same' : 'conflict',
     brand: brandState(pdfOffer, aggregatorOffer),
     price: priceState(pdfOffer, aggregatorOffer),
-    quantity: quantityState(pdfOffer, aggregatorOffer),
+    quantity: quantityDiagnostic.state,
+    quantityUnsafeReasons: quantityDiagnostic.unsafeQuantityReasons,
     category: categoryState(pdfOffer, aggregatorOffer),
     titleSimilarity,
   };
@@ -384,6 +769,9 @@ function scorePair(pdfOffer = {}, aggregatorOffer = {}) {
   if (states.quantity === 'same') {
     score += 18;
     reasons.push('same-quantity');
+  } else if (states.quantity === 'partial') {
+    score += 10;
+    reasons.push('quantity-partially-compatible');
   } else if (states.quantity === 'one-missing') {
     score += 6;
     reasons.push('quantity-missing-one-side');
@@ -391,6 +779,9 @@ function scorePair(pdfOffer = {}, aggregatorOffer = {}) {
   if (states.category === 'same') {
     score += 5;
     reasons.push('same-category');
+  } else if (states.category === 'compatible') {
+    score += 4;
+    reasons.push('category-compatible');
   } else if (states.category === 'missing') {
     score += 2;
     reasons.push('category-missing-one-side');
@@ -455,6 +846,12 @@ function scorePair(pdfOffer = {}, aggregatorOffer = {}) {
     reasons: uniq(reasons),
     unsafeReasons: uniq(unsafeReasons),
     conflictingFields: conflictingFields(pdfOffer, aggregatorOffer, states),
+    quantityDiagnostics: {
+      state: states.quantity,
+      pdf: quantityDiagnostic.leftQuantity,
+      aggregator: quantityDiagnostic.rightQuantity,
+      unsafeQuantityReasons: quantityDiagnostic.unsafeQuantityReasons,
+    },
     sharedTokens,
     titleSimilarity,
     canUseAggregatorImage,

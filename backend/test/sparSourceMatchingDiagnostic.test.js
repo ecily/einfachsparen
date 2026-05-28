@@ -52,6 +52,19 @@ function aggregator(overrides = {}) {
   });
 }
 
+function textQuantity(overrides = {}) {
+  return {
+    quantityText: '',
+    packCount: null,
+    unitValue: null,
+    unitType: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    normalizedUnitPrice: null,
+    ...overrides,
+  };
+}
+
 test('strong match for same brand title quantity price and SPAR format allows image validity and merge suggestions', () => {
   const result = scorePair(
     offer({ _id: 'pdf-milch' }),
@@ -105,6 +118,120 @@ test('Puntigamer crate threshold offer can be strong when mechanics quantity and
   assert.equal(result.matchLevel, 'strong');
   assert.equal(result.canUseAggregatorImage, true);
   assert.equal(result.canUsePdfConditions, true);
+});
+
+test('SPAR diagnostic treats equivalent beer crate text quantities as same quantity', () => {
+  const result = scorePair(
+    offer(textQuantity({
+      _id: 'pdf-schwechater',
+      title: 'Schwechater Bier 20 x 0,5 Liter',
+      brand: 'Schwechater',
+      categorySecondary: 'Bier',
+      categoryKey: 'bier',
+      subcategoryKey: 'bier',
+      priceCurrent: { amount: 15.99, currency: 'EUR' },
+    })),
+    aggregator(textQuantity({
+      _id: 'af-schwechater',
+      title: 'Schwechater Bier 0.50 Liter 20 Stueck',
+      brand: 'Schwechater',
+      categorySecondary: 'Getraenke',
+      categoryKey: 'getraenke',
+      subcategoryKey: 'getraenke',
+      priceCurrent: { amount: 15.99, currency: 'EUR' },
+    }))
+  );
+
+  assert.equal(result.quantityDiagnostics.state, 'same');
+  assert.equal(result.matchLevel, 'strong');
+  assert.ok(result.reasons.includes('category-compatible'));
+  assert.equal(result.unsafeReasons.includes('quantity-conflict'), false);
+  assert.equal(result.canUseAggregatorImage, true);
+});
+
+test('Puntigamer crate threshold text matches only with compatible price and pack logic', () => {
+  const pdf = offer(textQuantity({
+    _id: 'pdf-puntigamer-text-kiste',
+    title: 'Puntigamer Maerzen 1 Kiste 20 x 0.5 l',
+    brand: 'Puntigamer',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    priceCurrent: { amount: 14.9, currency: 'EUR' },
+    conditionsText: 'ab 2 Kisten je 14,90',
+  }));
+  const matchingAggregator = aggregator(textQuantity({
+    _id: 'af-puntigamer-text-kiste',
+    title: 'Puntigamer Maerzen 0.5 Liter 20 Stueck',
+    brand: 'Puntigamer',
+    categorySecondary: 'Getraenke',
+    categoryKey: 'getraenke',
+    subcategoryKey: 'getraenke',
+    priceCurrent: { amount: 14.9, currency: 'EUR' },
+    conditionsText: 'ab 2 Kisten',
+  }));
+  const wrongPriceAggregator = aggregator(textQuantity({
+    _id: 'af-puntigamer-wrong-price',
+    title: 'Puntigamer Maerzen 0.5 Liter 20 Stueck',
+    brand: 'Puntigamer',
+    categorySecondary: 'Getraenke',
+    categoryKey: 'getraenke',
+    subcategoryKey: 'getraenke',
+    priceCurrent: { amount: 19.99, currency: 'EUR' },
+    conditionsText: 'ab 2 Kisten',
+  }));
+
+  const match = scorePair(pdf, matchingAggregator);
+  const wrongPrice = scorePair(pdf, wrongPriceAggregator);
+
+  assert.equal(match.matchLevel, 'strong');
+  assert.equal(match.quantityDiagnostics.state, 'same');
+  assert.notEqual(wrongPrice.matchLevel, 'strong');
+  assert.ok(wrongPrice.unsafeReasons.includes('price-conflict'));
+});
+
+test('SPAR diagnostic matches cans and bottle multipack notation variants', () => {
+  const cans = scorePair(
+    offer(textQuantity({
+      _id: 'pdf-cans',
+      title: 'Ottakringer Bier 24 Dosen a 0.5 l',
+      brand: 'Ottakringer',
+      categoryKey: 'bier',
+      subcategoryKey: 'bier',
+      priceCurrent: { amount: 18.99, currency: 'EUR' },
+    })),
+    aggregator(textQuantity({
+      _id: 'af-cans',
+      title: 'Ottakringer Bier 0.5 l 24 Stueck',
+      brand: 'Ottakringer',
+      categoryKey: 'getraenke',
+      subcategoryKey: 'getraenke',
+      priceCurrent: { amount: 18.99, currency: 'EUR' },
+    }))
+  );
+  const bottles = scorePair(
+    offer(textQuantity({
+      _id: 'pdf-bottles',
+      title: 'Goesser Naturradler 6 Flaschen 0.33 l',
+      brand: 'Goesser',
+      categoryKey: 'bier',
+      subcategoryKey: 'bier',
+      priceCurrent: { amount: 5.49, currency: 'EUR' },
+    })),
+    aggregator(textQuantity({
+      _id: 'af-bottles',
+      title: 'Goesser Naturradler 6 x 0.33 l',
+      brand: 'Goesser',
+      categoryKey: 'getraenke',
+      subcategoryKey: 'getraenke',
+      priceCurrent: { amount: 5.49, currency: 'EUR' },
+    }))
+  );
+
+  assert.equal(cans.quantityDiagnostics.state, 'same');
+  assert.equal(cans.matchLevel, 'strong');
+  assert.equal(bottles.quantityDiagnostics.state, 'same');
+  assert.equal(bottles.matchLevel, 'strong');
 });
 
 test('medium match when quantity is missing on one side but identity and price are strong', () => {
@@ -275,6 +402,55 @@ test('bundle conflict blocks conditions transfer', () => {
   assert.ok(result.unsafeReasons.includes('promotion-mechanic-conflict'));
 });
 
+test('single can is not a strong match for a 24 can multipack', () => {
+  const result = scorePair(
+    offer(textQuantity({
+      _id: 'pdf-single-can',
+      title: 'Goesser Bier 0.5 l Einzel-Dose',
+      brand: 'Goesser',
+      categoryKey: 'bier',
+      subcategoryKey: 'bier',
+      priceCurrent: { amount: 19.99, currency: 'EUR' },
+    })),
+    aggregator(textQuantity({
+      _id: 'af-can-pack',
+      title: 'Goesser Bier 24 Dosen a 0.5 l',
+      brand: 'Goesser',
+      categoryKey: 'bier',
+      subcategoryKey: 'bier',
+      priceCurrent: { amount: 19.99, currency: 'EUR' },
+    }))
+  );
+
+  assert.notEqual(result.matchLevel, 'strong');
+  assert.ok(result.unsafeReasons.includes('quantity-conflict'));
+  assert.ok(result.quantityDiagnostics.unsafeQuantityReasons.includes('single-vs-multipack-risk'));
+});
+
+test('same beer brand but different variant is unsafe and not strong', () => {
+  const result = scorePair(
+    offer(textQuantity({
+      _id: 'pdf-maerzen',
+      title: 'Puntigamer Maerzen 20 x 0.5 l',
+      brand: 'Puntigamer',
+      categoryKey: 'bier',
+      subcategoryKey: 'bier',
+      priceCurrent: { amount: 14.9, currency: 'EUR' },
+    })),
+    aggregator(textQuantity({
+      _id: 'af-radler',
+      title: 'Puntigamer Radler 20 x 0.5 l',
+      brand: 'Puntigamer',
+      categoryKey: 'bier',
+      subcategoryKey: 'bier',
+      priceCurrent: { amount: 14.9, currency: 'EUR' },
+    }))
+  );
+
+  assert.notEqual(result.matchLevel, 'strong');
+  assert.ok(result.unsafeReasons.includes('variant-or-sort-conflict'));
+});
+
 test('same price alone is never strong', () => {
   const result = scorePair(
     offer({
@@ -314,6 +490,21 @@ test('unsafe reasons detect tea coffee teebutter pet food and alcohol conflicts'
   assert.ok(coffeeTea.unsafeReasons.includes('coffee-tea-teebutter-collision'));
   assert.ok(petFood.unsafeReasons.includes('pet-food-human-food-collision'));
   assert.ok(alcohol.unsafeReasons.includes('alcoholic-nonalcoholic-variant-risk'));
+});
+
+test('hard category conflicts remain unsafe for pet food and meat fish mismatches', () => {
+  const petFood = scorePair(
+    offer({ _id: 'pdf-wurst', title: 'Tann Wurst 500 g', brand: 'Tann', categoryKey: 'wurst', subcategoryKey: 'wurst' }),
+    aggregator({ _id: 'af-dog', title: 'Cesar Hundefutter 500 g', brand: 'Cesar', categoryKey: 'tierfutter', subcategoryKey: 'hundefutter' })
+  );
+  const meatFish = scorePair(
+    offer({ _id: 'pdf-fleisch', title: 'Tann Rind Fleisch 1 kg', brand: 'Tann', categoryKey: 'fleisch', subcategoryKey: 'fleisch' }),
+    aggregator({ _id: 'af-lachs', title: 'Norway Lachs Filet 1 kg', brand: 'Norway', categoryKey: 'fisch', subcategoryKey: 'lachs' })
+  );
+
+  assert.ok(petFood.unsafeReasons.includes('pet-food-human-food-collision'));
+  assert.ok(meatFish.unsafeReasons.includes('category-conflict'));
+  assert.notEqual(meatFish.matchLevel, 'strong');
 });
 
 test('report aggregates transfer candidates breakdowns histograms and remains read-only', () => {
