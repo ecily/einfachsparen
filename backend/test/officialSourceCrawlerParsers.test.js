@@ -2117,6 +2117,57 @@ test('BILLA flyer PDF parser rejects clear title with missing quantity defensive
   assert.equal(offers.length, 0);
 });
 
+test('BILLA flyer PDF parser rejects implausible low statt-price pairing for large kg/l packs', () => {
+  const pdfReference = parseBillaPdfPage(`
+    Eskimo
+    Cremissimo
+    div. Sorten
+    1 Liter
+    079
+    -33 %
+    statt
+    1.19
+  `);
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_FB_KW22_2026.pdf',
+  });
+  const cremissimo = pdfReference.candidates.find((candidate) => /Cremissimo/i.test(candidate.title || ''));
+
+  assert.equal(cremissimo?.price, 0.79);
+  assert.equal(cremissimo?.quantityText, '1 l');
+  assert.equal(cremissimo?.conditionsText, 'statt 1.19');
+  assert.equal(cremissimo?.exclusionReason, 'price-quantity-implausible');
+  assert.equal(offers.some((offer) => /Cremissimo/i.test(offer.title)), false);
+});
+
+test('BILLA flyer PDF parser keeps plausible simple statt-price candidates below large-pack guard', () => {
+  const pdfReference = parseBillaPdfPage(`
+    Ja! Natürlich
+    Bio Joghurt
+    500 g
+    099
+    statt
+    1.19
+  `);
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(pdfReference.candidates.length, 1);
+  assert.equal(pdfReference.candidates[0].exclusionReason, undefined);
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Ja! Natürlich Bio Joghurt');
+  assert.equal(offers[0].priceCurrent.amount, 0.99);
+});
+
 test('BILLA flyer PDF parser rejects date-only alternative price pairing defensively', () => {
   const pdfReference = parseBillaPdfPage(`
     Eskimo

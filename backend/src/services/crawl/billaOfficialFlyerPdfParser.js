@@ -417,6 +417,33 @@ function addRejectedCandidate(candidates, pageNumber, reason, rawText) {
   });
 }
 
+function hasStrongBillaOfferAnchor(value = '') {
+  const text = normalizePdfText(value);
+  const normalized = normalizeForScan(text);
+
+  return Boolean(
+    /\b(?:ab|bei)\s+\d+\b/i.test(normalized)
+    || /\baktion\b/i.test(normalized)
+    || /\b1\s+(?:pkg|packung|fl|flasche|dose|stk|stueck|stÃƒÂ¼ck)\b.*â‚¬\s*\d/i.test(text)
+  );
+}
+
+function hasSuspiciousLowUnitPriceMismatch(candidate = {}) {
+  const price = Number(candidate.price);
+  const referencePrice = Number(candidate.referencePrice);
+
+  if (!Number.isFinite(price) || price >= 1) return false;
+  if (!Number.isFinite(referencePrice) || referencePrice > 1.5) return false;
+  if (!/^statt\b/i.test(normalizeForScan(candidate.conditionsText || ''))) return false;
+
+  const anchorText = [candidate.conditionsText, candidate.rawText].filter(Boolean).join(' ');
+  if (hasStrongBillaOfferAnchor(anchorText)) return false;
+
+  const quantity = parseQuantity(candidate.quantityText || '');
+  return ['kg', 'l'].includes(quantity.comparableUnit)
+    && Number(quantity.totalComparableAmount || 0) >= 0.75;
+}
+
 function addCandidate(candidates, pageNumber, data) {
   const candidate = {
     id: `billa-p${pageNumber}-${candidates.length + 1}`,
@@ -432,6 +459,8 @@ function addCandidate(candidates, pageNumber, data) {
     candidate.exclusionReason = 'price-missing';
   } else if (!candidate.quantityText) {
     candidate.exclusionReason = 'quantity-missing';
+  } else if (hasSuspiciousLowUnitPriceMismatch(candidate)) {
+    candidate.exclusionReason = 'price-quantity-implausible';
   } else if (!hasAnchoredBillaPriceContext(priceContextText)) {
     candidate.exclusionReason = 'product-price-ambiguous';
   } else if (!candidate.validFrom || !candidate.validTo) {
