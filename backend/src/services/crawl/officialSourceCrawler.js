@@ -44,6 +44,14 @@ const {
   summarizeRejections: summarizeSparPdfRejections,
 } = require('./sparOfficialFlyerPdfParser');
 const {
+  PARSER_VERSION: BILLA_PDF_PARSER_VERSION,
+  SOURCE_TYPE: BILLA_PDF_SOURCE_TYPE,
+  extractBillaPdfReference,
+  normalizeBillaPdfCandidatesToOffers,
+  sourceKeyForRetailer: billaSourceKeyForRetailer,
+  summarizeRejections: summarizeBillaPdfRejections,
+} = require('./billaOfficialFlyerPdfParser');
+const {
   PARSER_VERSION: CATEGORY_PROMOTION_PARSER_VERSION,
   SOURCE_TYPE: CATEGORY_PROMOTION_SOURCE_TYPE,
   extractAndNormalizeOfficialCategoryPromotions,
@@ -3622,7 +3630,7 @@ async function fetchDmSaleProductSearchPages({ sourceUrl }) {
 }
 
 async function fetchBinary(url, accept = 'application/pdf,*/*', { timeoutMs = 45000, maxContentLength = 40 * 1024 * 1024 } = {}) {
-  const response = await axios.get(url, {
+  const requestConfig = {
     timeout: timeoutMs,
     responseType: 'arraybuffer',
     maxContentLength,
@@ -3631,7 +3639,21 @@ async function fetchBinary(url, accept = 'application/pdf,*/*', { timeoutMs = 45
       Accept: accept,
       'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
     },
-  });
+  };
+  let response;
+
+  try {
+    response = await axios.get(url, requestConfig);
+  } catch (error) {
+    if (!isTlsLikeError(error)) {
+      throw error;
+    }
+
+    response = await axios.get(url, {
+      ...requestConfig,
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+    });
+  }
 
   return {
     response,
@@ -4580,6 +4602,176 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html =
     rawDocuments: 1,
     diagnostics: {
       htmlPromotions: htmlPromotionResult.diagnostics,
+    },
+    refreshResult,
+  };
+}
+
+function selectBillaFlyerPdfLinks({ links = [], source = {} } = {}) {
+  const retailerKey = String(source.retailerKey || '').toLowerCase();
+  const pdfLinks = links.filter((link) => link.type === 'pdf');
+  const wantedPattern = retailerKey === 'billa-plus'
+    ? /billa[_-]?plus|billaplus|plus[_-]?fb/i
+    : /billa[_-]?fb|billa[_-]?flugblatt|billa_fb/i;
+  const excludedPattern = retailerKey === 'billa-plus'
+    ? null
+    : /billa[_-]?plus|billaplus|plus[_-]?fb/i;
+
+  return pdfLinks
+    .filter((link) => wantedPattern.test(`${link.url} ${link.label || ''}`))
+    .filter((link) => !excludedPattern || !excludedPattern.test(`${link.url} ${link.label || ''}`))
+    .slice(0, 2);
+}
+
+async function crawlBillaOfficialFlyers({ source, crawlJobId, region, links }) {
+  const selectedLinks = selectBillaFlyerPdfLinks({ links, source });
+  const collectedOffers = [];
+  const pdfReports = [];
+  const rawDocuments = [];
+  const seenPdfUrls = new Set();
+  const sourceKey = billaSourceKeyForRetailer(source.retailerKey);
+
+  for (const link of selectedLinks) {
+    if (!link.url || seenPdfUrls.has(link.url)) {
+      continue;
+    }
+
+    seenPdfUrls.add(link.url);
+
+    try {
+      const { response, buffer, canonicalUrl } = await fetchBinary(link.url, 'application/pdf,*/*', {
+        timeoutMs: Number(source.crawlPolicy?.timeoutMs || 45000),
+        maxContentLength: Number(source.crawlPolicy?.maxPdfBytes || 60 * 1024 * 1024),
+      });
+      const pdfSha256 = createHash(buffer);
+      const pdfReference = await extractBillaPdfReference({
+        pdfBuffer: buffer,
+        sourceUrl: canonicalUrl || link.url,
+        sourceRetailerFormat: source.retailerKey,
+        maxPages: Number(source.crawlPolicy?.maxPdfPages || 8),
+      });
+      const normalizedOffers = normalizeBillaPdfCandidatesToOffers({
+        pdfReference,
+        source,
+        crawlJobId,
+        region,
+        pdfUrl: canonicalUrl || link.url,
+        pdfSha256,
+      });
+      const rejectionReasons = summarizeBillaPdfRejections(pdfReference.candidates);
+      const rawDocument = await createCompactRawDocument({
+        sourceId: source._id,
+        crawlJobId,
+        retailerKey: source.retailerKey,
+        region,
+        documentType: 'pdf',
+        sourceType: BILLA_PDF_SOURCE_TYPE,
+        url: link.url,
+        canonicalUrl: link.url,
+        finalUrl: canonicalUrl,
+        title: link.label || `${source.retailerName} official PDF flyer`,
+        httpStatus: response.status,
+        contentType: response.headers?.['content-type'] || '',
+        downloadBytes: buffer.length,
+        contentHash: pdfSha256,
+        contentSnippet: pdfReference.candidates.slice(0, 8).map((candidate) => candidate.title || candidate.exclusionReason).join(' | '),
+        extractedPreview: pdfReference.candidates.slice(0, 12).map((candidate) => candidate.title || candidate.exclusionReason).filter(Boolean),
+        foundRawItems: pdfReference.candidates.length,
+        parsedOffers: normalizedOffers.length,
+        rejectedOffers: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+        parserVersion: BILLA_PDF_PARSER_VERSION,
+        extractionConfidence: 0.66,
+        rejectionReasons,
+        payload: {
+          sourceKind: 'pdf',
+          sourceKey,
+          sourceType: BILLA_PDF_SOURCE_TYPE,
+          retailerKey: source.retailerKey,
+          retailerName: source.retailerName,
+          parserVersion: BILLA_PDF_PARSER_VERSION,
+          observedUrl: link.url,
+          detectedPageCount: pdfReference.file.pages,
+          detectedValidity: {
+            validFrom: pdfReference.validity.validFrom ? pdfReference.validity.validFrom.toISOString() : null,
+            validTo: pdfReference.validity.validTo ? pdfReference.validity.validTo.toISOString() : null,
+            validityText: pdfReference.validity.validityText,
+          },
+          pageCandidateCounts: pdfReference.pages,
+        },
+      });
+
+      rawDocuments.push(rawDocument);
+      collectedOffers.push(...normalizedOffers);
+      pdfReports.push({
+        sourceKey,
+        observedUrl: link.url,
+        status: 'success',
+        foundRawItems: pdfReference.candidates.length,
+        parsedOffers: normalizedOffers.length,
+        rejectedCandidates: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+        rejectionReasons: rejectionReasons.slice(0, 8),
+        pages: pdfReference.file.pages,
+      });
+      logger.info('BILLA PDF crawl parsed flyer', {
+        sourceKey,
+        observedUrl: link.url,
+        rawCandidates: pdfReference.candidates.length,
+        offersCreated: normalizedOffers.length,
+        rejectedCandidates: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+      });
+    } catch (error) {
+      pdfReports.push({
+        sourceKey,
+        observedUrl: link.url,
+        status: 'failed',
+        error: error.message,
+      });
+    }
+  }
+
+  const seen = new Set();
+  const offerDocuments = collectedOffers
+    .map((offer) => enrichOffersForStorage([offer], {
+      source,
+      sourceType: BILLA_PDF_SOURCE_TYPE,
+      parserVersion: BILLA_PDF_PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    })[0])
+    .filter(Boolean)
+    .filter((offer) => {
+      const key = [
+        offer.rawFacts?.candidateId || '',
+        offer.rawFacts?.page || '',
+        normalizeTitleForMatch(offer.title || ''),
+        String(offer.priceCurrent?.amount ?? ''),
+        String(offer.quantityText || ''),
+      ].join('::');
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
+
+  return {
+    offerDocuments,
+    rawDocuments: rawDocuments.length,
+    rawCandidateCount: pdfReports.reduce((sum, item) => sum + Number(item.foundRawItems || 0), 0),
+    pdfReports,
+    rejectionReasons: pdfReports.flatMap((report) => report.rejectionReasons || []),
+    diagnostics: {
+      selectedPdfCount: selectedLinks.length,
+      parsedPdfCount: pdfReports.filter((report) => report.status === 'success').length,
+      failedPdfCount: pdfReports.filter((report) => report.status === 'failed').length,
+      pdfReports,
+      refreshResult,
     },
     refreshResult,
   };
@@ -5790,6 +5982,25 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       allStoredOffers.push(...hoferResult.offerDocuments);
       parserDetails.hoferOfficial = hoferResult.diagnostics || {};
       extraRejectionReasons = extraRejectionReasons.concat(hoferResult.rejectionReasons || []);
+    } else if (source.retailerKey && /^billa(?:-plus)?$/.test(source.retailerKey) && source.channel === 'official-flyer') {
+      const billaFlyerResult = await crawlBillaOfficialFlyers({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        links,
+      });
+
+      offersStored += billaFlyerResult.offerDocuments.length;
+      extraRawDocuments += billaFlyerResult.rawDocuments;
+      rawCandidateCount += billaFlyerResult.rawCandidateCount || 0;
+      allStoredOffers.push(...billaFlyerResult.offerDocuments);
+      parserDetails.billaOfficialFlyer = billaFlyerResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(billaFlyerResult.rejectionReasons || []);
+      warningMessages = warningMessages.concat(
+        (billaFlyerResult.pdfReports || [])
+          .filter((item) => item.status === 'failed')
+          .map((item) => `BILLA PDF flyer could not be parsed: ${item.observedUrl || item.sourceKey} (${item.error})`)
+      );
     } else if (source.sourceUrl.includes('billa.at/unsere-aktionen/aktionen')) {
       const billaOfficialResult = await crawlBillaOfficialPromotions({
         source,
@@ -6094,6 +6305,8 @@ module.exports = {
     parseHoferOffersFromPage,
     dedupeHoferOffers,
     isHoferOfferPageUrl,
+    selectBillaFlyerPdfLinks,
+    crawlBillaOfficialFlyers,
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
     normalizeLidlProductToOffer,

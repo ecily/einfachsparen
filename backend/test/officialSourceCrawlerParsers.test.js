@@ -7,6 +7,13 @@ const { enrichOffersForStorage } = require('../src/services/crawl/offerAuditEnri
 const { buildValidityLabel } = require('../src/services/offers/offerRankingService');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 const { deriveSourceKey } = require('../src/services/crawl/crawlSourceSelection');
+const {
+  extractBillaPdfCandidates,
+  normalizeBillaPdfCandidatesToOffers,
+  parseCompressedPrice,
+  sourceKeyForRetailer: billaPdfSourceKeyForRetailer,
+  summarizeRejections: summarizeBillaPdfRejections,
+} = require('../src/services/crawl/billaOfficialFlyerPdfParser');
 
 function source(overrides = {}) {
   return {
@@ -1943,6 +1950,189 @@ function parseBillaActionHtml(bodyHtml, sourceOverrides = {}) {
     pageUrl: billaSource.sourceUrl,
   });
 }
+
+function billaFlyerSource(overrides = {}) {
+  return source({
+    retailerKey: 'billa',
+    retailerName: 'Billa',
+    channel: 'official-flyer',
+    sourceUrl: 'https://www.billa.at/unsere-aktionen/flugblatt',
+    label: 'BILLA Flugblatt',
+    sourceType: 'flyer',
+    ...overrides,
+  });
+}
+
+function currentBillaFlyerValidity() {
+  const now = new Date();
+  const validFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12, 0, 0));
+  const validTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 6, 23, 59, 59, 999));
+
+  return {
+    validFrom,
+    validTo,
+    validityText: `${validFrom.toISOString().slice(0, 10)} - ${validTo.toISOString().slice(0, 10)}`,
+    confidence: 0.84,
+  };
+}
+
+function parseBillaPdfPage(text, overrides = {}) {
+  const validity = overrides.validity || currentBillaFlyerValidity();
+
+  return {
+    validity,
+    candidates: extractBillaPdfCandidates({
+      pages: [{ pageNumber: 1, text }],
+      validity,
+      sourceRetailerFormat: overrides.sourceRetailerFormat || 'billa',
+      now: overrides.now || new Date(),
+    }),
+  };
+}
+
+test('BILLA flyer PDF parser extracts clear product and price candidates', () => {
+  const pdfReference = parseBillaPdfPage(`
+    clever
+    Lachsfilet
+    300 g
+    clever
+    Marmorkuchen
+    400 g Packung
+    499
+    AB 2 PKG. JE
+    1 PKG. € 6.99
+    299
+    AKTION
+  `);
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(parseCompressedPrice('499'), 4.99);
+  assert.equal(pdfReference.candidates.filter((candidate) => !candidate.exclusionReason).length, 2);
+  assert.equal(offers.length, 2);
+  assert.equal(offers[0].title, 'clever Lachsfilet');
+  assert.equal(offers[0].priceCurrent.amount, 4.99);
+  assert.equal(offers[0].quantityText, '300 g');
+  assert.equal(offers[0].rawFacts.sourceType, 'billa-official-flyer-pdf');
+  assert.equal(offers[0].rawFacts.sourceKey, 'billa-official-flyer-flyer');
+  assert.equal(offers[0].quality.comparisonSafe, true);
+});
+
+test('BILLA PLUS flyer PDF parser keeps retailer-specific source key', () => {
+  const sourceDef = billaFlyerSource({
+    retailerKey: 'billa-plus',
+    retailerName: 'Billa Plus',
+    label: 'BILLA PLUS Flugblatt',
+  });
+  const pdfReference = parseBillaPdfPage(`
+    Ja! Natürlich
+    Bio Joghurt
+    500 g
+    199
+    statt
+    2.49
+  `, { sourceRetailerFormat: 'billa-plus' });
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: sourceDef,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_PLUS_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(billaPdfSourceKeyForRetailer('billa-plus'), 'billa-plus-official-flyer-flyer');
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].retailerKey, 'billa-plus');
+  assert.equal(offers[0].rawFacts.sourceKey, 'billa-plus-official-flyer-flyer');
+  assert.equal(offers[0].priceCurrent.amount, 1.99);
+});
+
+test('BILLA PLUS flyer PDF parser removes known campaign prefix from product title', () => {
+  const sourceDef = billaFlyerSource({
+    retailerKey: 'billa-plus',
+    retailerName: 'Billa Plus',
+    label: 'BILLA PLUS Flugblatt',
+  });
+  const pdfReference = parseBillaPdfPage(`
+    FREI VON 1o0%
+    Vegavita Antipasti Selection
+    360 g
+    649
+    AKTION
+  `, { sourceRetailerFormat: 'billa-plus' });
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: sourceDef,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_PLUS_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Vegavita Antipasti Selection');
+  assert.equal(offers[0].priceCurrent.amount, 6.49);
+});
+
+test('BILLA flyer PDF parser reports specific rejections instead of all parser-no-offer-candidate', () => {
+  const pdfReference = parseBillaPdfPage(`
+    MEGA-WOCHENENDE
+    599
+    Unklares Produktfragment
+    199
+    clever
+    Preisloses Produkt
+    250 g
+  `);
+  const reasons = summarizeBillaPdfRejections(pdfReference.candidates);
+  const reasonKeys = reasons.map((item) => item.reason);
+
+  assert.equal(pdfReference.candidates.some((candidate) => candidate.exclusionReason), true);
+  assert.ok(reasonKeys.includes('product-unclear') || reasonKeys.includes('price-missing'));
+  assert.equal(reasonKeys.includes('parser-no-offer-candidate'), false);
+});
+
+test('BILLA flyer PDF parser rejects clear title with missing quantity defensively', () => {
+  const pdfReference = parseBillaPdfPage(`
+    clever
+    Datteln
+    139
+    statt
+    1.69
+  `);
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_FB_KW22_2026.pdf',
+  });
+
+  assert.equal(pdfReference.candidates.length, 1);
+  assert.equal(pdfReference.candidates[0].exclusionReason, 'quantity-missing');
+  assert.equal(offers.length, 0);
+});
+
+test('BILLA flyer source selects retailer-specific official PDF links', () => {
+  const links = [
+    { type: 'pdf', url: 'https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf', label: 'BILLA Flugblatt' },
+    { type: 'pdf', url: 'https://assets.example.test/BILLA_PLUS_FB_KW22_2026_Wien.pdf', label: 'BILLA PLUS Flugblatt' },
+    { type: 'html', url: 'https://www.billa.at/unsere-aktionen/flugblatt', label: 'Flugblatt' },
+  ];
+
+  const billaLinks = __private.selectBillaFlyerPdfLinks({ links, source: billaFlyerSource() });
+  const billaPlusLinks = __private.selectBillaFlyerPdfLinks({
+    links,
+    source: billaFlyerSource({ retailerKey: 'billa-plus', retailerName: 'Billa Plus' }),
+  });
+
+  assert.deepEqual(billaLinks.map((link) => link.url), ['https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf']);
+  assert.deepEqual(billaPlusLinks.map((link) => link.url), ['https://assets.example.test/BILLA_PLUS_FB_KW22_2026_Wien.pdf']);
+});
 
 test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 condition', () => {
   const result = parseBillaActionHtml(`
