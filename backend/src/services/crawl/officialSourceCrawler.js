@@ -19,7 +19,13 @@ const {
 } = require('./categoryClassifier');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
-const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+const {
+  NORMALIZATION_VERSION,
+  buildCoverageMetrics,
+  buildCrawlJobUpdate,
+  buildHttpLogFromResponse,
+  compactRejectionReasons,
+} = require('./crawlAudit');
 const { replaceOffersForSource } = require('./offerRefreshGuard');
 const {
   PARSER_VERSION: PENNY_PDF_PARSER_VERSION,
@@ -3642,6 +3648,34 @@ function isSparOfficialPdfSource(source = {}) {
     && /https:\/\/flugblatt\.(?:spar|interspar)\.at\//i.test(url);
 }
 
+function sourceCoverageFields({ foundRawItems = 0, parsedOffers = 0, offersStored = 0, rejectedOffers, offers = [], rejectionReasons = [] } = {}) {
+  const metrics = buildCoverageMetrics({
+    foundRawItems,
+    parsedOffers,
+    offersStored,
+    rejectedOffers,
+    offers,
+    rejectionReasons,
+  });
+
+  return {
+    rejectionReasons: compactRejectionReasons(rejectionReasons),
+    rejectedByReason: metrics.rejectedByReason,
+    missingImageCount: metrics.missingImageCount,
+    withImageCount: metrics.withImageCount,
+    missingQuantityCount: metrics.missingQuantityCount,
+    unclearProductCount: metrics.unclearProductCount,
+    upcomingCount: metrics.upcomingCount,
+    expiredCount: metrics.expiredCount,
+    parseFailedCount: metrics.parseFailedCount,
+    categoryUnclearCount: metrics.categoryUnclearCount,
+    storedRatio: metrics.storedRatio,
+    imageCoverageRatio: metrics.imageCoverageRatio,
+    freshnessStatus: metrics.freshnessStatus,
+    flags: metrics.flags,
+  };
+}
+
 async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
   const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
   const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
@@ -3768,6 +3802,7 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
     offerDocuments,
     rawDocuments: 1,
     rawCandidateCount: pdfReference.candidates.length,
+    rejectionReasons,
     pdfReports: [{
       sourceKey,
       sourceRetailerFormat,
@@ -5653,6 +5688,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         httpLog: sparPdfResult.httpLog || {},
         warningMessages,
         errorMessages: [],
+        extraRejectionReasons: sparPdfResult.rejectionReasons || [],
         metadata: {
           sourceLabel: source.label,
           sourceUrl: source.sourceUrl,
@@ -5679,6 +5715,14 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         foundRawItems: sparPdfResult.rawCandidateCount,
         parsedOffers: offersStored,
         rejectedOffers: Math.max(0, sparPdfResult.rawCandidateCount - offersStored),
+        ...sourceCoverageFields({
+          foundRawItems: sparPdfResult.rawCandidateCount,
+          parsedOffers: offersStored,
+          offersStored,
+          rejectedOffers: Math.max(0, sparPdfResult.rawCandidateCount - offersStored),
+          offers: sparPdfResult.offerDocuments,
+          rejectionReasons: sparPdfResult.rejectionReasons || [],
+        }),
         evidenceMatched: 0,
         discoveredLinks: 1,
         sourceUrl: source.sourceUrl,
@@ -5760,6 +5804,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       rawCandidateCount += billaOfficialResult.rawCandidateCount || billaOfficialResult.hitCount || billaOfficialResult.offerDocuments.length;
       allStoredOffers.push(...billaOfficialResult.offerDocuments);
       parserDetails.billaOfficial = billaOfficialResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(
+        Object.entries(billaOfficialResult.diagnostics?.htmlPromotions?.skipReasons || {})
+          .map(([reason, count]) => ({ reason, count }))
+      );
     } else if (source.retailerKey === 'penny' && source.channel === 'official-flyer') {
       const pennyFlyerResult = await crawlPennyOfficialFlyers({
         source,
@@ -5774,6 +5822,9 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       rawCandidateCount += pennyFlyerResult.rawCandidateCount || 0;
       allStoredOffers.push(...pennyFlyerResult.offerDocuments);
       parserDetails.pennyPdfReports = pennyFlyerResult.pdfReports;
+      extraRejectionReasons = extraRejectionReasons.concat(
+        (pennyFlyerResult.pdfReports || []).flatMap((report) => report.rejectionReasons || [])
+      );
       warningMessages = warningMessages.concat(
         pennyFlyerResult.pdfReports
           .filter((item) => item.status === 'failed')
@@ -5850,6 +5901,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       rawCandidateCount += lidlOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...lidlOfficialResult.offerDocuments);
       parserDetails.lidlOfficial = lidlOfficialResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(
+        Object.entries(lidlOfficialResult.diagnostics?.skipReasons || {})
+          .map(([reason, count]) => ({ reason, count }))
+      );
     } else if (source.retailerKey === 'dm' && source.sourceUrl.includes('dm.at/ausverkauf')) {
       const dmOfficialResult = await crawlDmOfficialSaleOffers({
         source,
@@ -5864,6 +5919,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       rawCandidateCount += dmOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...dmOfficialResult.offerDocuments);
       parserDetails.dmOfficialSale = dmOfficialResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(
+        Object.entries(dmOfficialResult.diagnostics?.skipReasons || {})
+          .map(([reason, count]) => ({ reason, count }))
+      );
       sourceMessage = dmOfficialResult.message || dmOfficialResult.diagnostics?.message || '';
     } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
@@ -5934,6 +5993,14 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       foundRawItems: rawCandidateCount,
       parsedOffers: offersStored,
       rejectedOffers: Math.max(0, rawCandidateCount - offersStored),
+      ...sourceCoverageFields({
+        foundRawItems: rawCandidateCount,
+        parsedOffers: offersStored,
+        offersStored,
+        rejectedOffers: Math.max(0, rawCandidateCount - offersStored),
+        offers: allStoredOffers,
+        rejectionReasons: extraRejectionReasons,
+      }),
       offersStored,
       evidenceMatched,
       discoveredLinks: links.length,

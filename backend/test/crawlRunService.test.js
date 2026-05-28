@@ -91,6 +91,106 @@ test('buildRunSummary aggregates source, retailer, type, dedupe and filter metad
   assert.equal(summary.sources[1].diagnostic.requestHeaders.Accept, 'text/html');
 });
 
+test('buildRunSummary exposes parser coverage rejection taxonomy and alert flags', () => {
+  const summary = _private.buildRunSummary({
+    matchedSources: [
+      { sourceId: 's1', sourceKey: 'billa-official-flyer-flyer', retailerKey: 'billa', channel: 'official-flyer', sourceType: 'flyer' },
+      { sourceId: 's2', sourceKey: 'spar-official-flyer-pdf', retailerKey: 'spar', channel: 'official-flyer', sourceType: 'pdf' },
+      { sourceId: 's3', sourceKey: 'penny-official-flyer', retailerKey: 'penny', channel: 'official-flyer', sourceType: 'pdf' },
+    ],
+    sources: [
+      {
+        sourceId: 's1',
+        sourceKey: 'billa-official-flyer-flyer',
+        retailerKey: 'billa',
+        channel: 'official-flyer',
+        sourceType: 'flyer',
+        status: 'success',
+        foundRawItems: 13,
+        parsedOffers: 0,
+        offersStored: 0,
+        rejectedOffers: 13,
+      },
+      {
+        sourceId: 's2',
+        sourceKey: 'spar-official-flyer-pdf',
+        retailerKey: 'spar',
+        channel: 'official-flyer',
+        sourceType: 'pdf',
+        status: 'success',
+        foundRawItems: 43,
+        parsedOffers: 18,
+        offersStored: 18,
+        rejectedOffers: 25,
+        rejectionReasons: [
+          { reason: 'generic-missing-quantity', count: 13 },
+          { reason: 'generic-unclear-product', count: 8 },
+          { reason: 'status-upcoming', count: 2 },
+          { reason: 'status-expired', count: 2 },
+        ],
+        offers: [
+          { title: 'Offer A', quantityText: '1 l', imageUrl: 'https://img.example.test/a.jpg' },
+          { title: 'Offer B', quantityText: '500 g', imageUrl: '' },
+          { title: 'Offer C', quantityText: '', imageUrl: '' },
+        ],
+      },
+      {
+        sourceId: 's3',
+        sourceKey: 'penny-official-flyer',
+        retailerKey: 'penny',
+        channel: 'official-flyer',
+        sourceType: 'pdf',
+        status: 'success',
+        foundRawItems: 5,
+        parsedOffers: 5,
+        offersStored: 5,
+        rejectedOffers: 0,
+        offers: [
+          { title: 'Offer 1', quantityText: '1 kg', imageUrl: '' },
+          { title: 'Offer 2', quantityText: '1 kg', imageUrl: '' },
+          { title: 'Offer 3', quantityText: '1 kg', imageUrl: '' },
+          { title: 'Offer 4', quantityText: '1 kg', imageUrl: '' },
+          { title: 'Offer 5', quantityText: '1 kg', imageUrl: '' },
+        ],
+      },
+    ],
+  });
+
+  const billa = summary.sources.find((source) => source.sourceKey === 'billa-official-flyer-flyer');
+  const spar = summary.sources.find((source) => source.sourceKey === 'spar-official-flyer-pdf');
+  const penny = summary.sources.find((source) => source.sourceKey === 'penny-official-flyer');
+
+  assert.equal(billa.rejectedByReason['parser-no-offer-candidate'], 13);
+  assert.equal(billa.flags.rawItemsFoundButZeroStored, true);
+  assert.equal(billa.flags.highRejectionRate, true);
+
+  assert.equal(spar.rejectedByReason['quantity-missing'], 13);
+  assert.equal(spar.rejectedByReason['product-unclear'], 8);
+  assert.equal(spar.upcomingCount, 2);
+  assert.equal(spar.expiredCount, 2);
+  assert.equal(spar.withImageCount, 1);
+  assert.equal(spar.missingImageCount, 2);
+  assert.equal(spar.imageCoverageRatio, 0.3333);
+  assert.equal(spar.flags.highRejectionRate, true);
+  assert.equal(spar.flags.highMissingImageRate, false);
+  assert.equal(penny.withImageCount, 0);
+  assert.equal(penny.missingImageCount, 5);
+  assert.equal(penny.flags.highMissingImageRate, true);
+
+  assert.equal(summary.summary.rejectedByReason['parser-no-offer-candidate'], 13);
+  assert.equal(summary.summary.rejectedByReason['quantity-missing'], 13);
+  assert.equal(summary.summary.rejectedByReason['product-unclear'], 8);
+  assert.equal(summary.summary.upcomingCountTotal, 2);
+  assert.equal(summary.summary.expiredCountTotal, 2);
+  assert.equal(summary.summary.withImageCountTotal, 1);
+  assert.equal(summary.summary.missingImageCountTotal, 7);
+  assert.equal(summary.summary.sourceFlags.rawItemsFoundButZeroStored, 1);
+  assert.equal(summary.summary.sourceFlags.highRejectionRate, 2);
+  assert.equal(summary.summary.sourceFlags.highMissingImageRate, 1);
+  assert.equal(summary.perRetailer.find((item) => item.retailerKey === 'spar').rejectedByReason['quantity-missing'], 13);
+  assert.equal(summary.sourceTypes.find((item) => item.sourceType === 'pdf').rejectedByReason['product-unclear'], 8);
+});
+
 test('determineFinalStatus is success only for complete successful crawl results', () => {
   assert.equal(_private.determineFinalStatus({
     mode: 'full',

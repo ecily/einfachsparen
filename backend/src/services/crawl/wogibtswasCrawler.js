@@ -7,7 +7,7 @@ const { normalizePromotionToOffer } = require('./offerNormalizer');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
 const { enrichOffersForStorage } = require('./offerAuditEnrichment');
-const { NORMALIZATION_VERSION, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
+const { NORMALIZATION_VERSION, buildCoverageMetrics, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
 const { replaceOffersForSource } = require('./offerRefreshGuard');
 
 const PARSER_VERSION = 'wogibtswas-v2-coverage';
@@ -308,6 +308,15 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
       latestStatus: status,
     });
 
+    const coverageMetrics = buildCoverageMetrics({
+      foundRawItems: promotions.length,
+      parsedOffers: offerDocuments.length,
+      offersStored: offerDocuments.length,
+      rejectedOffers: Math.max(0, promotions.length - offerDocuments.length),
+      offers: offerDocuments,
+      validTo,
+    });
+
     return {
       retailerKey: source.retailerKey,
       retailerName: source.retailerName,
@@ -319,6 +328,19 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
       parsedOffers: offerDocuments.length,
       rejectedOffers: Math.max(0, promotions.length - offerDocuments.length),
       offersStored: offerDocuments.length,
+      rejectedByReason: coverageMetrics.rejectedByReason,
+      missingImageCount: coverageMetrics.missingImageCount,
+      withImageCount: coverageMetrics.withImageCount,
+      missingQuantityCount: coverageMetrics.missingQuantityCount,
+      unclearProductCount: coverageMetrics.unclearProductCount,
+      upcomingCount: coverageMetrics.upcomingCount,
+      expiredCount: coverageMetrics.expiredCount,
+      parseFailedCount: coverageMetrics.parseFailedCount,
+      categoryUnclearCount: coverageMetrics.categoryUnclearCount,
+      storedRatio: coverageMetrics.storedRatio,
+      imageCoverageRatio: coverageMetrics.imageCoverageRatio,
+      freshnessStatus: coverageMetrics.freshnessStatus,
+      flags: coverageMetrics.flags,
       discoveredLinks: promotions.length,
       evidenceMatched: 0,
     };

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const CrawlRun = require('../../models/CrawlRun');
 const CrawlRunLock = require('../../models/CrawlRunLock');
 const { crawlAllSources } = require('./crawlDispatcher');
+const { buildCoverageMetrics, compactRejectionReasons } = require('./crawlAudit');
 const logger = require('../../lib/logger');
 
 const GLOBAL_CRAWL_LOCK_KEY = 'crawl-run-global';
@@ -51,6 +52,36 @@ function numberFrom(value, fallback = 0) {
 
 function compactErrorMessage(value) {
   return String(value || '').slice(0, 400);
+}
+
+function addReasonCounts(target = {}, source = {}) {
+  for (const [reason, count] of Object.entries(source || {})) {
+    const numeric = numberFrom(count);
+    if (reason && numeric > 0) {
+      target[reason] = numberFrom(target[reason]) + numeric;
+    }
+  }
+  return target;
+}
+
+function aggregateNullableCount(current, value) {
+  if (value === null || typeof value === 'undefined') {
+    return current;
+  }
+
+  return numberFrom(current) + numberFrom(value);
+}
+
+function mergeFlags(target = {}, source = {}) {
+  for (const [flag, value] of Object.entries(source || {})) {
+    target[flag] = Boolean(target[flag] || value);
+  }
+
+  return target;
+}
+
+function hasAnyFlag(flags = {}) {
+  return Object.values(flags || {}).some(Boolean);
 }
 
 function compactRecoveryReason(value) {
@@ -128,6 +159,33 @@ function normalizeSourceResult(source = {}) {
   const rejectedOffers = numberFrom(source.rejectedOffers ?? Math.max(0, foundRawItems - parsedOffers));
   const diagnostic = sanitizeDiagnosticValue(source.diagnostic || source.diagnostics || {});
   const httpStatus = source.httpStatus ?? diagnostic.httpStatus ?? null;
+  const rejectionReasons = compactRejectionReasons(source.rejectionReasons || diagnostic.rejectionReasons || []);
+  const coverage = buildCoverageMetrics({
+    foundRawItems,
+    parsedOffers,
+    offersStored,
+    rejectedOffers,
+    offers: source.offers || source.offerDocuments || [],
+    rejectionReasons,
+    validFrom: source.validFrom || diagnostic.validFrom || diagnostic.detectedValidity?.validFrom || null,
+    validTo: source.validTo || diagnostic.validTo || diagnostic.detectedValidity?.validTo || null,
+  });
+  const rejectedByReason = {
+    ...coverage.rejectedByReason,
+    ...(source.rejectedByReason || {}),
+  };
+  const missingImageCount = source.missingImageCount ?? coverage.missingImageCount;
+  const withImageCount = source.withImageCount ?? coverage.withImageCount;
+  const missingQuantityCount = numberFrom(source.missingQuantityCount ?? coverage.missingQuantityCount);
+  const unclearProductCount = numberFrom(source.unclearProductCount ?? coverage.unclearProductCount);
+  const upcomingCount = numberFrom(source.upcomingCount ?? coverage.upcomingCount);
+  const expiredCount = numberFrom(source.expiredCount ?? coverage.expiredCount);
+  const parseFailedCount = numberFrom(source.parseFailedCount ?? coverage.parseFailedCount);
+  const categoryUnclearCount = numberFrom(source.categoryUnclearCount ?? coverage.categoryUnclearCount);
+  const flags = {
+    ...coverage.flags,
+    ...(source.flags || {}),
+  };
 
   return {
     sourceId: asStringId(source.sourceId),
@@ -141,6 +199,20 @@ function normalizeSourceResult(source = {}) {
     parsedOffers,
     offersStored,
     rejectedOffers,
+    rejectionReasons: rejectionReasons.length > 0 ? rejectionReasons : coverage.rejectionReasons,
+    rejectedByReason,
+    missingImageCount,
+    withImageCount,
+    missingQuantityCount,
+    unclearProductCount,
+    upcomingCount,
+    expiredCount,
+    parseFailedCount,
+    categoryUnclearCount,
+    storedRatio: source.storedRatio ?? coverage.storedRatio,
+    imageCoverageRatio: source.imageCoverageRatio ?? coverage.imageCoverageRatio,
+    freshnessStatus: String(source.freshnessStatus || coverage.freshnessStatus || 'unknown'),
+    flags,
     skipped: Boolean(source.skipped),
     message: compactErrorMessage(source.message),
     error: compactErrorMessage(source.error),
@@ -165,6 +237,16 @@ function incrementRetailerSummary(map, retailerKey) {
       parsedOffers: 0,
       offersStored: 0,
       rejectedOffers: 0,
+      rejectedByReason: {},
+      missingImageCount: null,
+      withImageCount: null,
+      missingQuantityCount: 0,
+      unclearProductCount: 0,
+      upcomingCount: 0,
+      expiredCount: 0,
+      parseFailedCount: 0,
+      categoryUnclearCount: 0,
+      flags: {},
     });
   }
 
@@ -182,6 +264,11 @@ function incrementSourceTypeSummary(map, source) {
       successfulSources: 0,
       failedSources: 0,
       offersStored: 0,
+      rejectedOffers: 0,
+      rejectedByReason: {},
+      missingImageCount: null,
+      withImageCount: null,
+      flags: {},
     });
   }
 
@@ -228,13 +315,37 @@ function buildRunSummary(crawlResult = {}) {
     retailer.parsedOffers += source.parsedOffers;
     retailer.offersStored += source.offersStored;
     retailer.rejectedOffers += source.rejectedOffers;
+    addReasonCounts(retailer.rejectedByReason, source.rejectedByReason);
+    retailer.missingImageCount = aggregateNullableCount(retailer.missingImageCount, source.missingImageCount);
+    retailer.withImageCount = aggregateNullableCount(retailer.withImageCount, source.withImageCount);
+    retailer.missingQuantityCount += source.missingQuantityCount;
+    retailer.unclearProductCount += source.unclearProductCount;
+    retailer.upcomingCount += source.upcomingCount;
+    retailer.expiredCount += source.expiredCount;
+    retailer.parseFailedCount += source.parseFailedCount;
+    retailer.categoryUnclearCount += source.categoryUnclearCount;
+    mergeFlags(retailer.flags, source.flags);
     sourceType.offersStored += source.offersStored;
+    sourceType.rejectedOffers += source.rejectedOffers;
+    addReasonCounts(sourceType.rejectedByReason, source.rejectedByReason);
+    sourceType.missingImageCount = aggregateNullableCount(sourceType.missingImageCount, source.missingImageCount);
+    sourceType.withImageCount = aggregateNullableCount(sourceType.withImageCount, source.withImageCount);
+    mergeFlags(sourceType.flags, source.flags);
   }
 
   const failedSourcesCount = sources.filter((source) => source.status === 'failed').length;
   const partialSourcesCount = sources.filter((source) => source.status === 'partial').length;
   const successfulSourcesCount = sources.filter((source) => source.status === 'success').length;
   const filterMetadata = crawlResult.filterMetadata || {};
+  const rejectedByReasonTotal = sources.reduce((acc, source) => addReasonCounts(acc, source.rejectedByReason), {});
+  const sourceFlags = sources.reduce((acc, source) => {
+    for (const [flag, value] of Object.entries(source.flags || {})) {
+      if (value) {
+        acc[flag] = numberFrom(acc[flag]) + 1;
+      }
+    }
+    return acc;
+  }, {});
 
   return {
     sources,
@@ -251,6 +362,17 @@ function buildRunSummary(crawlResult = {}) {
       parsedOffersTotal: sources.reduce((sum, source) => sum + source.parsedOffers, 0),
       offersStoredTotal: sources.reduce((sum, source) => sum + source.offersStored, 0),
       rejectedOffersTotal: sources.reduce((sum, source) => sum + source.rejectedOffers, 0),
+      rejectedByReason: rejectedByReasonTotal,
+      missingImageCountTotal: sources.reduce((sum, source) => aggregateNullableCount(sum, source.missingImageCount), 0),
+      withImageCountTotal: sources.reduce((sum, source) => aggregateNullableCount(sum, source.withImageCount), 0),
+      missingQuantityCountTotal: sources.reduce((sum, source) => sum + source.missingQuantityCount, 0),
+      unclearProductCountTotal: sources.reduce((sum, source) => sum + source.unclearProductCount, 0),
+      upcomingCountTotal: sources.reduce((sum, source) => sum + source.upcomingCount, 0),
+      expiredCountTotal: sources.reduce((sum, source) => sum + source.expiredCount, 0),
+      parseFailedCountTotal: sources.reduce((sum, source) => sum + source.parseFailedCount, 0),
+      categoryUnclearCountTotal: sources.reduce((sum, source) => sum + source.categoryUnclearCount, 0),
+      sourceFlags,
+      flaggedSourcesCount: sources.filter((source) => hasAnyFlag(source.flags)).length,
       failedSourcesCount,
       successfulSourcesCount,
       partialSourcesCount,
