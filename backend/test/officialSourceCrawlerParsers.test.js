@@ -1949,7 +1949,7 @@ test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 c
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
     <div class="row">
       <h3>Extrem Aktion*</h3>
-      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+      <div>Gültig von Mittwoch, 27.5. bis Dienstag, 2.6.2026</div>
     </div>
     <div class="ws-slider-group">
       <article>
@@ -1979,8 +1979,8 @@ BEI 24 DOSEN JE
   assert.match(stored[0].conditionsText, /bei 24 Dosen/);
   assert.equal(stored[0].minimumPurchaseQty, 24);
   assert.equal(stored[0].isMultiBuy, true);
-  assert.equal(stored[0].validFrom.toISOString(), '2026-05-21T12:00:00.000Z');
-  assert.equal(stored[0].validTo.toISOString(), '2026-05-27T23:59:59.999Z');
+  assert.equal(stored[0].validFrom.toISOString(), '2026-05-27T12:00:00.000Z');
+  assert.equal(stored[0].validTo.toISOString(), '2026-06-02T23:59:59.999Z');
   assert.equal(stored[0].rawFacts.sourceType, 'billa-official-action-html');
 });
 
@@ -1989,7 +1989,7 @@ test('BILLA action HTML parser keeps global legal text out of product conditions
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
     <div class="row">
       <h3>Extrem Aktion*</h3>
-      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+      <div>Gültig von Mittwoch, 27.5. bis Dienstag, 2.6.2026</div>
     </div>
     <div class="legal">Rechtstext: 12+12 gratis bei 24 Dosen je 0,59, solange der Vorrat reicht.</div>
     <div class="ws-slider-group">
@@ -2009,7 +2009,7 @@ test('BILLA action HTML parser does not copy a neighbor product condition', () =
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
     <div class="row">
       <h3>Extrem Aktion*</h3>
-      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+      <div>Gültig von Mittwoch, 27.5. bis Dienstag, 2.6.2026</div>
     </div>
     <div class="ws-slider-group">
       <article><div data-teaser-name="Egger
@@ -2035,7 +2035,7 @@ test('BILLA action HTML parser allows offers without safe condition to stay unpa
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
     <div class="row">
       <h3>Extrem Aktion*</h3>
-      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+      <div>Gültig von Mittwoch, 27.5. bis Dienstag, 2.6.2026</div>
     </div>
     <div class="ws-slider-group">
       <article><div data-teaser-name="Normales Angebot
@@ -2052,7 +2052,7 @@ test('BILLA action HTML parser only takes section context from the nearest assig
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
     <div class="row">
       <h3>Extrem Aktion*</h3>
-      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+      <div>Gültig von Mittwoch, 27.5. bis Dienstag, 2.6.2026</div>
     </div>
     <div class="ws-slider-group">
       <article><div data-teaser-name="Egger
@@ -2065,7 +2065,7 @@ BEI 24 DOSEN JE
     </div>
     <div class="row">
       <h3>Grillzeit ist Genusszeit!</h3>
-      <div>Gültig von Donnerstag, 21.5. bis Mittwoch, 27.5.2026</div>
+      <div>Gültig von Mittwoch, 27.5. bis Dienstag, 2.6.2026</div>
     </div>
     <div class="ws-slider-group">
       <article><div data-teaser-name="Grill Produkt

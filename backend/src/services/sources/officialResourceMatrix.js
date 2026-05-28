@@ -58,7 +58,7 @@ const OFFICIAL_RESOURCE_MATRIX = [
         nextLever: 'Use allowed HTML/JSON snapshot, official API evidence, or official PDF links discovered without challenge bypass.',
       },
       {
-        url: 'https://flugblatt.spar.at/steiermark/spar/260521-1-flugblatt-kw-21/getPdf.ashx',
+        url: 'https://flugblatt.spar.at/steiermark/spar/260528-1-flugblatt-kw-22/getPdf.ashx',
         sourceClass: 'official-flyer',
         status: 'active',
         crawlable: 'yes',
@@ -204,7 +204,7 @@ const OFFICIAL_RESOURCE_MATRIX = [
         nextLever: 'Use only official offer/sale indicators for active offer storage; sitemap prices are absent.',
       },
       {
-        url: 'https://flugblatt.interspar.at/steiermark/steiermark_kw21/getPdf.ashx',
+        url: 'https://flugblatt.interspar.at/steiermark/steiermark_kw22/getPdf.ashx',
         sourceClass: 'official-flyer',
         status: 'active',
         crawlable: 'yes',

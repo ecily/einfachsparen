@@ -18,9 +18,9 @@ const {
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { normalizeImageUrl } = require('../images/imageUrl');
 
-const PARSER_VERSION = 'spar-official-flyer-pdf-v1';
+const PARSER_VERSION = 'spar-official-flyer-pdf-v2';
 const SOURCE_TYPE = 'spar-official-pdf';
-const MAX_PDF_BYTES = 40 * 1024 * 1024;
+const MAX_PDF_BYTES = 60 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 6;
 
 const SOURCE_KEYS_BY_FORMAT = {
@@ -92,10 +92,52 @@ function priceFromUnitPrice(quantityText, unitPriceText) {
 
 function parseQuantity(quantityText) {
   const normalized = normalizeForScan(quantityText);
+  const multipackMatch = normalized.match(/\b(\d+)\s*x\s*(\d+(?:[,.]\d+)?)\s*-?\s*(kg|g|l|liter|ml)\b/i);
+
+  if (multipackMatch) {
+    const packCount = Number(multipackMatch[1]);
+    let unitValue = Number(multipackMatch[2].replace(',', '.'));
+    let unit = multipackMatch[3].toLowerCase();
+
+    if (unit === 'liter') unit = 'l';
+
+    if (!Number.isFinite(packCount) || packCount <= 0 || !Number.isFinite(unitValue) || unitValue <= 0) {
+      return {
+        packCount: null,
+        unitValue: null,
+        unitType: '',
+        totalComparableAmount: null,
+        comparableUnit: '',
+      };
+    }
+
+    let comparableUnit = unit;
+    let totalComparableAmount = packCount * unitValue;
+
+    if (unit === 'g') {
+      comparableUnit = 'kg';
+      totalComparableAmount = (packCount * unitValue) / 1000;
+    }
+
+    if (unit === 'ml') {
+      comparableUnit = 'l';
+      totalComparableAmount = (packCount * unitValue) / 1000;
+    }
+
+    return {
+      packCount,
+      unitValue,
+      unitType: unit,
+      totalComparableAmount,
+      comparableUnit,
+    };
+  }
+
   const match = normalized.match(/\b(\d+(?:[,.]\d+)?)\s*-?\s*(kg|g|l|ml|kapseln|kapsel|stk|stueck|waschgange|waschgaenge|waschgang)\b/i);
 
   if (!match) {
     return {
+      packCount: null,
       unitValue: null,
       unitType: '',
       totalComparableAmount: null,
@@ -108,6 +150,7 @@ function parseQuantity(quantityText) {
 
   if (!Number.isFinite(value) || value <= 0) {
     return {
+      packCount: null,
       unitValue: null,
       unitType: '',
       totalComparableAmount: null,
@@ -138,6 +181,7 @@ function parseQuantity(quantityText) {
   }
 
   return {
+    packCount: null,
     unitValue: value,
     unitType: unit === 'stk' ? 'Stk' : unit,
     totalComparableAmount,
@@ -574,6 +618,28 @@ function extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat } = {})
   const candidates = [];
   const extraPercentCondition = 'Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026 laut Flugblatt';
 
+  const hasPuntigamerCrateDeal = hasText(text, /puntigamer/)
+    && hasText(text, /kiste/)
+    && hasText(text, /1\s*\+\s*1\s*gratis/)
+    && /29[,\s]*80/i.test(normalized)
+    && /(?:14[,\s]*90|1490)/i.test(normalized);
+
+  if (hasPuntigamerCrateDeal) {
+    const explicitTwentyPack = /20\s*x\s*0[,.]\s*5\s*-?\s*(?:liter|l)/i.test(normalized);
+    const title = hasText(text, /bierige/) ? 'Puntigamer das bierige Bier' : 'Puntigamer Maerzen';
+
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title,
+      brand: 'Puntigamer',
+      price: 14.90,
+      referencePrice: 29.80,
+      quantityText: explicitTwentyPack ? '20 x 0.5 l' : 'Kiste, 0.5 l Flaschen',
+      conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90 / Keine weiteren Rabatte/Joker moeglich',
+      rawText: `${title}, 0,5 Liter, 1+1 gratis, 1 Kiste 29,80, ab 2 Kisten je 14,90`,
+      comparisonSafe: explicitTwentyPack,
+    }));
+  }
+
   if (hasText(text, /puntigamer\s*(?:maerzen|marzen)/) && hasText(text, /0[,.]\s*5\s*liter/) && /ab\s+24\s+ds\.?\s+je\s*0[,.]\s*99/i.test(normalized)) {
     addCandidate(candidates, page.pageNumber, beerCandidate({
       title: 'Puntigamer Maerzen',
@@ -983,6 +1049,7 @@ function normalizeSparPdfCandidateToOffer({
     priceReferenceSource: candidate.referencePrice ? 'prospect' : '',
     priceReferenceConfidence: candidate.referencePrice ? 0.86 : 0,
     quantityText: candidate.quantityText,
+    packCount: parsedUnit.quantity.packCount || null,
     unitValue: parsedUnit.quantity.unitValue,
     unitType: parsedUnit.quantity.unitType,
     totalComparableAmount: parsedUnit.quantity.totalComparableAmount,

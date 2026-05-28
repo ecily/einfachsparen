@@ -52,7 +52,7 @@ test('SPAR source definitions include separated aggregators, PDF flyers and reso
   assert.match(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').parserOrAdapter, /text-layer/i);
 });
 
-test('SPAR official PDF source definitions carry current KW 21 validity and format metadata', () => {
+test('SPAR official PDF source definitions carry current flyer validity and format metadata', () => {
   const sources = getSparCodeSources().filter((source) => /official-flyer-pdf/.test(source.sourceKey));
 
   assert.equal(sources.length, 3);
@@ -60,7 +60,9 @@ test('SPAR official PDF source definitions carry current KW 21 validity and form
     sources.map((source) => source.sourceRetailerFormat).sort(),
     ['eurospar', 'interspar', 'spar']
   );
-  assert.ok(sources.every((source) => /kw-21|kw21/i.test(source.sourceUrl)));
+  assert.match(sources.find((source) => source.sourceRetailerFormat === 'spar').sourceUrl, /kw-22/i);
+  assert.match(sources.find((source) => source.sourceRetailerFormat === 'interspar').sourceUrl, /kw22/i);
+  assert.match(sources.find((source) => source.sourceRetailerFormat === 'eurospar').sourceUrl, /kw-21/i);
 });
 
 test('official SPAR Steiermark reference is recognized as exact configured action source', () => {

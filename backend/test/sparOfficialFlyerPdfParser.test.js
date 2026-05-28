@@ -94,6 +94,91 @@ test('extracts concrete beer offers from SPAR KW21 textlayer snippets', () => {
   assert.ok(candidates.every((candidate) => candidate.productKind === 'beer'));
 });
 
+test('extracts current Puntigamer 1+1 crate deal from SPAR flyer text', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: {
+      validFrom: new Date('2026-05-28T12:00:00.000Z'),
+      validTo: new Date('2026-06-02T12:00:00.000Z'),
+    },
+    pages: [
+      {
+        pageNumber: 1,
+        text: [
+          '1 Kiste 29,80',
+          'ab 2 Kisten je',
+          'Puntigamer',
+          'Maerzen',
+          '14, 90',
+          '(per 0,5 Liter 0,79)',
+          '1+1 GRATIS',
+          '0,5 Liter',
+          'Im Einzelverkauf: 1,49',
+          '(Keine weiteren Rabatte/Joker moeglich.)',
+        ].join('\n'),
+      },
+    ],
+  }).filter((candidate) => !candidate.exclusionReason);
+
+  const puntigamer = candidates.find((candidate) => candidate.title === 'Puntigamer Maerzen');
+
+  assert.ok(puntigamer);
+  assert.equal(puntigamer.price, 14.90);
+  assert.equal(puntigamer.referencePrice, 29.80);
+  assert.equal(puntigamer.quantityText, 'Kiste, 0.5 l Flaschen');
+  assert.equal(puntigamer.comparisonSafe, false);
+  assert.match(puntigamer.conditionsText, /1\+1 gratis/);
+  assert.match(puntigamer.conditionsText, /ab 2 Kisten/);
+});
+
+test('normalizes explicit Puntigamer 20 x 0.5 l crate deal as beer', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-28T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages: [
+      {
+        pageNumber: 3,
+        text: [
+          '1+1 GRATIS!',
+          '1 Kiste 29,80',
+          'Puntigamer das bierige Bier',
+          'ab 2 Kisten je',
+          '20 x 0,5-Liter-MEHRWEG-Flasche',
+          '1490',
+          '(= per 0,5 Liter 0,75)',
+          '0,5-Liter-Flasche im Einzelverkauf: 1,49',
+        ].join('\n'),
+      },
+    ],
+  });
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw22/getPdf.ashx',
+  });
+  assert.equal(offer.title, 'Puntigamer das bierige Bier');
+  assert.equal(offer.categorySecondary, 'Bier');
+  assert.equal(offer.categoryKey, 'bier');
+  assert.equal(offer.priceCurrent.amount, 14.90);
+  assert.equal(offer.priceReference.amount, 29.80);
+  assert.equal(offer.quantityText, '20 x 0.5 l');
+  assert.equal(offer.packCount, 20);
+  assert.equal(offer.totalComparableAmount, 10);
+  assert.equal(offer.normalizedUnitPrice.amount, 1.49);
+  assert.equal(offer.minimumPurchaseQty, 2);
+  assert.equal(offer.isMultiBuy, true);
+  assert.match(offer.conditionsText, /1\+1 gratis/);
+});
+
 test('extracts non-beer generic SPAR flyer offers from textlayer price blocks', () => {
   const candidates = extractSparPdfCandidates({
     sourceRetailerFormat: 'spar',
