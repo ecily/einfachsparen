@@ -188,7 +188,13 @@ function buildCoverageMetrics({
   };
 }
 
-function buildOfferAuditSummary({ rawCandidateCount = 0, offers = [], extraRejectionReasons = [] } = {}) {
+function buildOfferAuditSummary({
+  rawCandidateCount = 0,
+  offers = [],
+  extraRejectionReasons = [],
+  validFrom = null,
+  validTo = null,
+} = {}) {
   const productiveOffers = Array.isArray(offers) ? offers.length : 0;
   const inferredRejected = Math.max(0, Number(rawCandidateCount || 0) - productiveOffers);
   const reasons = compactRejectionReasons(extraRejectionReasons);
@@ -225,6 +231,8 @@ function buildOfferAuditSummary({ rawCandidateCount = 0, offers = [], extraRejec
     rejectedOffers: inferredRejected,
     offers,
     rejectionReasons: reasons,
+    validFrom,
+    validTo,
   });
 
   return {
@@ -253,11 +261,15 @@ function buildCrawlJobUpdate({
   httpLog = {},
   metadata = {},
   extraRejectionReasons = [],
+  validFrom = null,
+  validTo = null,
 }) {
   const audit = buildOfferAuditSummary({
     rawCandidateCount,
     offers,
     extraRejectionReasons,
+    validFrom,
+    validTo,
   });
   const warnings = audit.warningReasons.reduce((sum, item) => sum + item.count, 0);
   const errors = Array.isArray(errorMessages) ? errorMessages.length : 0;

@@ -3670,7 +3670,16 @@ function isSparOfficialPdfSource(source = {}) {
     && /https:\/\/flugblatt\.(?:spar|interspar)\.at\//i.test(url);
 }
 
-function sourceCoverageFields({ foundRawItems = 0, parsedOffers = 0, offersStored = 0, rejectedOffers, offers = [], rejectionReasons = [] } = {}) {
+function sourceCoverageFields({
+  foundRawItems = 0,
+  parsedOffers = 0,
+  offersStored = 0,
+  rejectedOffers,
+  offers = [],
+  rejectionReasons = [],
+  validFrom = null,
+  validTo = null,
+} = {}) {
   const metrics = buildCoverageMetrics({
     foundRawItems,
     parsedOffers,
@@ -3678,6 +3687,8 @@ function sourceCoverageFields({ foundRawItems = 0, parsedOffers = 0, offersStore
     rejectedOffers,
     offers,
     rejectionReasons,
+    validFrom,
+    validTo,
   });
 
   return {
@@ -3825,6 +3836,7 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
     rawDocuments: 1,
     rawCandidateCount: pdfReference.candidates.length,
     rejectionReasons,
+    validity,
     pdfReports: [{
       sourceKey,
       sourceRetailerFormat,
@@ -5881,10 +5893,17 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
         warningMessages,
         errorMessages: [],
         extraRejectionReasons: sparPdfResult.rejectionReasons || [],
+        validFrom: sparPdfResult.validity?.validFrom || null,
+        validTo: sparPdfResult.validity?.validTo || null,
         metadata: {
           sourceLabel: source.label,
           sourceUrl: source.sourceUrl,
           sourceKey,
+          detectedValidity: {
+            validFrom: sparPdfResult.validity?.validFrom ? sparPdfResult.validity.validFrom.toISOString() : null,
+            validTo: sparPdfResult.validity?.validTo ? sparPdfResult.validity.validTo.toISOString() : null,
+            validityText: sparPdfResult.validity?.validityText || '',
+          },
           sparPdfReports: sparPdfResult.pdfReports,
           replacementQuality,
           refreshResult: sparPdfResult.refreshResult,
@@ -5914,10 +5933,15 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
           rejectedOffers: Math.max(0, sparPdfResult.rawCandidateCount - offersStored),
           offers: sparPdfResult.offerDocuments,
           rejectionReasons: sparPdfResult.rejectionReasons || [],
+          validFrom: sparPdfResult.validity?.validFrom || null,
+          validTo: sparPdfResult.validity?.validTo || null,
         }),
         evidenceMatched: 0,
         discoveredLinks: 1,
         sourceUrl: source.sourceUrl,
+        validFrom: sparPdfResult.validity?.validFrom ? sparPdfResult.validity.validFrom.toISOString() : null,
+        validTo: sparPdfResult.validity?.validTo ? sparPdfResult.validity.validTo.toISOString() : null,
+        validityText: sparPdfResult.validity?.validityText || '',
         pdfReports: sparPdfResult.pdfReports,
       };
     }
@@ -6317,5 +6341,6 @@ module.exports = {
     parseBillaActionTeaserName,
     extractBillaActionTeasersFromHtml,
     normalizeImageUrl,
+    sourceCoverageFields,
   },
 };
