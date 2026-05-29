@@ -242,6 +242,13 @@ function buildSavingsLabel({ savingsAmount, reference, currency = 'EUR' } = {}) 
   return reference?.isApproximate ? `Spart ca. ${amount}` : `Spart ${amount}`;
 }
 
+function isSunProtectionPlusContext(value, matchIndex = 0) {
+  const text = String(value || '').toLowerCase();
+  const prefix = text.slice(Math.max(0, matchIndex - 36), matchIndex);
+
+  return /\b(?:lsf|spf|sonnenschutzfaktor|schutzfaktor)\s*$/i.test(prefix);
+}
+
 function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts = {}, benefitType = '' }) {
   const rawMinimum =
     parseNumericAmount(rawFacts?.minimalAcceptance)
@@ -274,9 +281,11 @@ function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts
   }
 
   const rawText = `${title} ${conditionsText}`;
-  const plusMatch = rawText.match(/\b(\d+)\s*\+\s*(\d+)\b/i);
+  for (const plusMatch of rawText.matchAll(/(?=\b(\d+)\s*\+\s*(\d+)\b)/gi)) {
+    if (isSunProtectionPlusContext(rawText, plusMatch.index || 0)) {
+      continue;
+    }
 
-  if (plusMatch) {
     const buyQuantity = Number(plusMatch[1]);
     const freeQuantity = Number(plusMatch[2]);
 
@@ -437,6 +446,7 @@ module.exports = {
   computeOfferSavings,
   extractPromotionRequirement,
   getDiscountPercent,
+  isSunProtectionPlusContext,
   isCampaignLevelDiscount,
   resolveReferencePrice,
 };

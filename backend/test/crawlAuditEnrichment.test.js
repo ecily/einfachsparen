@@ -179,6 +179,9 @@ test('does not show savings when comparison basis is missing', () => {
 
 test('clears comparisonSafe and normalized comparability when comparableUnit is missing', () => {
   const offer = enrichOfferForStorage(activeComparableOffer({
+    title: 'Testprodukt ohne sichere Menge',
+    quantityText: 'Packung',
+    totalComparableAmount: null,
     comparableUnit: '',
     normalizedUnitPrice: { amount: 7.96, unit: 'kg', comparable: true, confidence: 0.9 },
   }));
@@ -263,6 +266,21 @@ test('recognizes multi-buy and threshold promotion requirements conservatively',
     payableQuantity: null,
     mechanic: 'threshold',
   });
+  assert.deepEqual(extractPromotionRequirement({ title: 'Sonnenmilch Ultra Sensitive LSF 50+' }), {
+    requiredQuantity: 1,
+    payableQuantity: null,
+    mechanic: 'single',
+  });
+  assert.deepEqual(extractPromotionRequirement({ title: 'SPF 50+ Sun Spray' }), {
+    requiredQuantity: 1,
+    payableQuantity: null,
+    mechanic: 'single',
+  });
+  assert.deepEqual(extractPromotionRequirement({ title: 'Sonnenmilch Ultra Sensitive LSF 50+ 2+1 gratis' }), {
+    requiredQuantity: 3,
+    payableQuantity: 2,
+    mechanic: 'x-plus-y',
+  });
 });
 
 test('sets condition fields for multi-buy, minimum quantity and app or card prices', () => {
@@ -286,6 +304,31 @@ test('sets condition fields for multi-buy, minimum quantity and app or card pric
   assert.equal(appPrice.customerProgramRequired, true);
   assert.equal(appPrice.hasConditions, true);
   assert.equal(appPrice.effectiveDiscountType, 'card-required');
+});
+
+test('does not turn LSF or SPF protection factors into purchase conditions', () => {
+  const lsfOnly = enrichOfferForStorage(activeComparableOffer({
+    title: 'BI KIDS Sonnenmilch Ultra Sensitive LSF 50+',
+    conditionsText: '',
+  }));
+  const spfOnly = enrichOfferForStorage(activeComparableOffer({
+    title: 'SPF 50+ Sun Spray',
+    conditionsText: '',
+  }));
+  const realBundle = enrichOfferForStorage(activeComparableOffer({
+    title: 'BI KIDS Sonnenmilch Ultra Sensitive LSF 50+ 2+1 gratis',
+    conditionsText: '',
+  }));
+
+  assert.equal(lsfOnly.conditionsText, '');
+  assert.equal(lsfOnly.hasConditions, false);
+  assert.equal(lsfOnly.isMultiBuy, false);
+  assert.equal(lsfOnly.minimumPurchaseQty, 1);
+  assert.equal(spfOnly.conditionsText, '');
+  assert.equal(spfOnly.minimumPurchaseQty, 1);
+  assert.match(realBundle.conditionsText, /2\+1 gratis/);
+  assert.equal(realBundle.isMultiBuy, true);
+  assert.equal(realBundle.minimumPurchaseQty, 3);
 });
 
 test('extracts conservative German condition hints into stored condition text', () => {
@@ -312,6 +355,63 @@ test('extracts conservative German condition hints into stored condition text', 
       assert.equal(stored[field], expected, `${title} ${field}`);
     }
   }
+});
+
+test('infers safe quantity fields from common product text without treating LSF as quantity', () => {
+  const hugo = enrichOfferForStorage(activeComparableOffer({
+    title: 'Hugo Boss Hugo Man Eau de Toilette 75 ml',
+    quantityText: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    unitValue: null,
+    unitType: '',
+    priceCurrent: { amount: 26.99, currency: 'EUR', originalText: '26.99 EUR' },
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  }));
+  const davidoff = enrichOfferForStorage(activeComparableOffer({
+    title: 'Davidoff Cool Water Man Eau de Toilette 75 ml',
+    quantityText: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    unitValue: null,
+    unitType: '',
+    priceCurrent: { amount: 17.99, currency: 'EUR', originalText: '17.99 EUR' },
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  }));
+  const casePack = enrichOfferForStorage(activeComparableOffer({
+    title: 'Puntigamer 20 x 0,5 l',
+    quantityText: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    unitValue: null,
+    unitType: '',
+    priceCurrent: { amount: 19.8, currency: 'EUR', originalText: '19.80 EUR' },
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  }));
+  const lsf = enrichOfferForStorage(activeComparableOffer({
+    title: 'Sonnencreme LSF 50+',
+    quantityText: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    unitValue: null,
+    unitType: '',
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  }));
+
+  assert.equal(hugo.unitValue, 75);
+  assert.equal(hugo.unitType, 'ml');
+  assert.equal(hugo.totalComparableAmount, 0.075);
+  assert.equal(hugo.comparableUnit, 'l');
+  assert.equal(hugo.normalizedUnitPrice.amount, 359.87);
+  assert.equal(hugo.quality.comparisonSafe, true);
+  assert.equal(davidoff.normalizedUnitPrice.amount, 239.87);
+  assert.equal(casePack.packCount, 20);
+  assert.equal(casePack.unitValue, 0.5);
+  assert.equal(casePack.totalComparableAmount, 10);
+  assert.equal(casePack.normalizedUnitPrice.amount, 1.98);
+  assert.equal(lsf.totalComparableAmount, null);
+  assert.equal(lsf.comparableUnit, '');
+  assert.equal(lsf.quality.comparisonSafe, false);
 });
 
 test('keeps condition text when offer is normalized for storage', () => {

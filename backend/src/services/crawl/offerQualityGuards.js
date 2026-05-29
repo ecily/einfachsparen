@@ -1,5 +1,5 @@
 const { normalizeTitleForMatch, sanitizeWhitespace } = require('./sourceEvidence');
-const { extractPromotionRequirement } = require('../offers/promotionMath');
+const { extractPromotionRequirement, isSunProtectionPlusContext } = require('../offers/promotionMath');
 
 const CLEAR_COMPARABLE_UNITS = new Set(['kg', 'l', 'Stk']);
 const UNIT_UNCLEAR_REASON = 'Vergleichseinheit unklar';
@@ -45,6 +45,120 @@ function normalizeQuantityAmount(amount, unit) {
   if (normalizedUnit === 'l' || normalizedUnit.includes('liter')) return { amount: value, unit: 'l' };
 
   return null;
+}
+
+function roundQuantity(value) {
+  return Number.isFinite(value) ? Number(value.toFixed(4)) : null;
+}
+
+function displayUnitFromMatch(unit) {
+  const normalized = normalizeTitleForMatch(unit);
+
+  if (normalized === 'kg' || normalized.includes('kilogramm')) return 'kg';
+  if (normalized === 'g' || normalized.includes('gramm')) return 'g';
+  if (normalized === 'ml' || normalized.includes('milliliter')) return 'ml';
+  if (normalized === 'cl' || normalized.includes('zentiliter')) return 'cl';
+  if (normalized === 'l' || normalized.includes('liter')) return 'l';
+
+  return 'Stk';
+}
+
+function buildInferredQuantityFields({ amount, unit, packCount = null, packageType = '' } = {}) {
+  const displayUnit = displayUnitFromMatch(unit);
+  const comparableUnit = normalizeComparableUnit(displayUnit);
+  const count = parsePositiveNumber(packCount) || 1;
+
+  if (!amount || !comparableUnit) {
+    return null;
+  }
+
+  if (comparableUnit === 'Stk') {
+    const pieces = displayUnit === 'Stk' ? amount * count : count;
+
+    return {
+      packCount: pieces > 1 ? pieces : packCount,
+      unitValue: amount,
+      unitType: displayUnit,
+      totalComparableAmount: roundQuantity(pieces),
+      comparableUnit,
+      packageType: packageType || 'pack',
+    };
+  }
+
+  const normalized = normalizeQuantityAmount(amount, displayUnit);
+
+  if (!normalized || normalized.unit !== comparableUnit) {
+    return null;
+  }
+
+  return {
+    packCount: count > 1 ? count : packCount,
+    unitValue: amount,
+    unitType: displayUnit,
+    totalComparableAmount: roundQuantity(normalized.amount * count),
+    comparableUnit,
+    packageType,
+  };
+}
+
+function inferQuantityFieldsFromText(value = '') {
+  const text = sanitizeWhitespace(value).replace(/\u00d7/g, 'x');
+
+  if (!text) {
+    return null;
+  }
+
+  const multipackMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l|liter|gramm|kilogramm|milliliter|zentiliter)\b/i);
+
+  if (multipackMatch) {
+    return buildInferredQuantityFields({
+      packCount: parsePositiveNumber(multipackMatch[1]),
+      amount: parsePositiveNumber(multipackMatch[2]),
+      unit: multipackMatch[3],
+      packageType: 'pack',
+    });
+  }
+
+  const amountUnitMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l|liter|gramm|kilogramm|milliliter|zentiliter)\b/i);
+
+  if (amountUnitMatch) {
+    return buildInferredQuantityFields({
+      amount: parsePositiveNumber(amountUnitMatch[1]),
+      unit: amountUnitMatch[2],
+    });
+  }
+
+  const pieceMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(stk|stueck|stuck|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?|kisten?|sack|saecke|sacke)\b/i);
+
+  if (pieceMatch) {
+    return buildInferredQuantityFields({
+      amount: parsePositiveNumber(pieceMatch[1]),
+      unit: 'Stk',
+      packageType: normalizeTitleForMatch(pieceMatch[2]),
+    });
+  }
+
+  return null;
+}
+
+function inferMissingQuantityFields(offer = {}) {
+  const candidates = [
+    offer.quantityText,
+    offer.title,
+    offer.description,
+    offer.rawFacts?.infoText,
+    offer.rawFacts?.evidenceText,
+  ];
+
+  for (const candidate of candidates) {
+    const inferred = inferQuantityFieldsFromText(candidate);
+
+    if (inferred) {
+      return inferred;
+    }
+  }
+
+  return {};
 }
 
 function parseQuantityTextBasis(quantityText, targetUnit) {
@@ -201,7 +315,11 @@ function extractConditionHints(offer = {}) {
   const hints = [];
   const seen = new Set();
 
-  for (const match of rawLower.matchAll(/\b(\d+)\s*\+\s*(\d+)(?:\s*gratis)?\b/g)) {
+  for (const match of rawLower.matchAll(/(?=\b(\d+)\s*\+\s*(\d+)(?:\s*gratis)?\b)/g)) {
+    if (isSunProtectionPlusContext(rawLower, match.index || 0)) {
+      continue;
+    }
+
     addConditionHint(hints, seen, `${match[1]}+${match[2]} gratis`);
   }
 
@@ -428,6 +546,8 @@ module.exports = {
   assessComparableSafety,
   inferConditionFields,
   extractConditionHints,
+  inferMissingQuantityFields,
+  inferQuantityFieldsFromText,
   isOfferSafelyComparable,
   sanitizePublicOfferQuantityFields,
   sanitizePublicQuantityText,

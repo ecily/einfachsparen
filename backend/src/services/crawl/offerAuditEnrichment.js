@@ -3,6 +3,7 @@ const { NORMALIZATION_VERSION } = require('./crawlAudit');
 const {
   assessComparableSafety,
   inferConditionFields,
+  inferMissingQuantityFields,
 } = require('./offerQualityGuards');
 const { resolveReferencePrice } = require('../offers/promotionMath');
 const { buildOfferSearchTokens, SEARCH_TOKEN_VERSION } = require('../offers/searchTokens');
@@ -345,6 +346,64 @@ function buildReviewReasons({ offer, categoryConfidence, subcategoryConfidence, 
   return [...reasons];
 }
 
+function roundUnitPrice(value) {
+  return Number.isFinite(value) ? Number(value.toFixed(2)) : null;
+}
+
+function buildInferredComparisonAmountKey(amount, unit) {
+  const numericAmount = Number(amount);
+
+  if (!(numericAmount > 0) || !unit) {
+    return '';
+  }
+
+  return `${Number(numericAmount.toFixed(3))}-${unit}`;
+}
+
+function withInferredQuantityFields(document = {}) {
+  const inferred = inferMissingQuantityFields(document);
+  const next = { ...document };
+
+  for (const field of ['packCount', 'unitValue', 'unitType', 'totalComparableAmount', 'comparableUnit', 'packageType']) {
+    if ((next[field] === null || next[field] === undefined || next[field] === '') && inferred[field] !== undefined && inferred[field] !== null && inferred[field] !== '') {
+      next[field] = inferred[field];
+    }
+  }
+
+  const currentAmount = Number(next.priceCurrent?.amount);
+  const totalAmount = Number(next.totalComparableAmount);
+  const comparableUnit = next.comparableUnit || inferred.comparableUnit || '';
+  const existingUnitPrice = Number(next.normalizedUnitPrice?.amount);
+
+  if (
+    !(existingUnitPrice > 0)
+    && currentAmount > 0
+    && totalAmount > 0
+    && ['kg', 'l', 'Stk'].includes(comparableUnit)
+  ) {
+    next.normalizedUnitPrice = {
+      ...(next.normalizedUnitPrice || {}),
+      amount: roundUnitPrice(currentAmount / totalAmount),
+      unit: comparableUnit,
+      comparable: true,
+      confidence: Math.max(Number(next.normalizedUnitPrice?.confidence || 0), 0.78),
+    };
+  }
+
+  if (
+    !next.comparisonGroup
+    && next.comparisonSignature
+    && next.normalizedUnitPrice?.comparable
+    && Number(next.normalizedUnitPrice?.amount) > 0
+    && totalAmount > 0
+    && comparableUnit
+  ) {
+    next.comparisonGroup = `${next.comparisonSignature}::${buildInferredComparisonAmountKey(totalAmount, comparableUnit)}`;
+  }
+
+  return next;
+}
+
 function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion = '', normalizationVersion = NORMALIZATION_VERSION } = {}) {
   if (!offer) {
     return null;
@@ -357,7 +416,7 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
     return null;
   }
 
-  document = applyDerivedReferencePrice(document);
+  document = withInferredQuantityFields(applyDerivedReferencePrice(document));
 
   const resolvedSourceType = inferSourceType({ offer: document, source, sourceType });
   const formatMetadata = inferRetailerFormatMetadata({ offer: document, source });

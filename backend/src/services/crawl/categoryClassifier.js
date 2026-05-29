@@ -197,6 +197,26 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Kosmetik & Make-up',
   },
   {
+    patterns: [/\b(duftset|parfumset|eau de parfum set|eau de toilette set)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Kosmetik & Make-up',
+  },
+  {
+    patterns: [/\b(oral-b|oral b|zahnpasta|zahnburste|zahnbuerste|elektrische zahnburste|elektrische zahnbuerste|zahnseide|aufsteckbursten|aufsteckbuersten|mundpflege|mundspulung|mundspuelung)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Mund- & Zahnpflege',
+  },
+  {
+    patterns: [/\b(sonnencreme|sonnenmilch|sonnenspray|sonnenfluid|sonnenstick|sonnenschutz|after sun|sun spray|sunscreen|spf\s*\d{1,3}\+?|lsf\s*\d{1,3}\+?)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Koerperpflege',
+  },
+  {
+    patterns: [/\b(blue star|wc[-\s]?reiniger|wc[-\s]?steine|wc[-\s]?kraft[-\s]?tabs|spuelkastenwuerfel|spulkastenwurfel|spuelkastenwurfel|spulkastenwuerfel|badreiniger|power reiniger)\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
+  },
+  {
     patterns: [/\b(frottee|frotteewaren|handtuch|handtuecher|handtucher|strandtuch|strandtuecher|strandtucher|badematte|badematten|badetuch|badetuecher|badetucher)\b/],
     main: 'Haushalt',
     sub: 'Frotteewaren',

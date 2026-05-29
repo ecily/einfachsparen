@@ -343,6 +343,63 @@ test('BIPA category Mobify parser extracts product image, price fields and produ
   assert.equal(offers[0].rawFacts.bipaProductId, '716480');
 });
 
+test('BIPA official enrichment keeps perfume unit prices comparable and ignores LSF plus signs as quantities', () => {
+  const testSource = source({ sourceUrl: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion' });
+  const crawlJobId = new Types.ObjectId();
+  const offers = __private.parseBipaOffersFromHtml({
+    html: bipaMobifyHtml([
+      bipaMobifyHit('364935', {
+        c_brand: 'Hugo Boss',
+        productName: 'Hugo Boss Man Eau de Toilette 75ml',
+        c_kundenbezeichnung: 'Man Eau de Toilette',
+        c_inhalt: '75 ml',
+        c_category: 'parfum-herrenduefte',
+        c_displayedPrice: 26.99,
+        c_insteadPrice: 39.99,
+        c_basePrice: '',
+        c_effectivePriceBadges: ['Aktion'],
+      }),
+      bipaMobifyHit('681309', {
+        c_brand: 'BI CARE',
+        productName: 'BI CARE SUN After Sun Kuehlende Lotion 50ml',
+        c_kundenbezeichnung: 'After Sun Kuehlende Lotion LSF 50+',
+        c_inhalt: '50 ml',
+        c_category: 'pflege-sonnenschutz',
+        c_displayedPrice: 2.99,
+        c_insteadPrice: null,
+        c_basePrice: '',
+        c_effectivePriceBadges: ['2+1 Gratis'],
+      }),
+    ]),
+    source: testSource,
+    crawlJobId,
+    region: 'AT',
+    pageUrl: testSource.sourceUrl,
+  });
+  const stored = enrichOffersForStorage(offers, {
+    source: testSource,
+    sourceType: 'bipa-official-html',
+    parserVersion: 'official-v3-coverage',
+    normalizationVersion: 'v3-audit',
+  });
+  const hugo = stored.find((offer) => offer.brand === 'Hugo Boss');
+  const sun = stored.find((offer) => offer.brand === 'BI CARE');
+
+  assert.equal(hugo.quantityText, '75 ml');
+  assert.equal(hugo.totalComparableAmount, 0.075);
+  assert.equal(hugo.comparableUnit, 'l');
+  assert.equal(hugo.normalizedUnitPrice.amount, 359.87);
+  assert.equal(hugo.quality.comparisonSafe, true);
+  assert.equal(hugo.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(hugo.categorySecondary, 'Kosmetik & Make-up');
+  assert.equal(sun.conditionsText, '2+1 Gratis');
+  assert.equal(sun.minimumPurchaseQty, 3);
+  assert.equal(sun.isMultiBuy, true);
+  assert.doesNotMatch(sun.conditionsText, /50\+2/);
+  assert.equal(sun.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(sun.categorySecondary, 'Koerperpflege');
+});
+
 test('BIPA category Mobify parser keeps offers without image and rejects mismatched product image IDs', () => {
   const offers = __private.parseBipaOffersFromHtml({
     html: bipaMobifyHtml([

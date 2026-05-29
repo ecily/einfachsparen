@@ -124,6 +124,10 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
     'Versace Bright Crystal Eau de Toilette 30ml',
     'Calvin Klein One Eau de Toilette 100ml',
     'Joop Le Bain Eau de Parfum 75ml',
+    'Paco Rabanne 1 Million Eau de Toilette 100 ml',
+    'Davidoff Cool Water Man Eau de Toilette 75 ml',
+    'Joop! Homme Eau de Toilette 75 ml',
+    'Duftset Geschenkset fuer Herren',
   ];
 
   for (const title of cases) {
@@ -131,6 +135,26 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
 
     assert.equal(decision.primaryCategory, 'Drogerie / Hygiene', title);
     assert.equal(decision.secondaryCategory, 'Kosmetik & Make-up', title);
+  }
+});
+
+test('classifies dental, sunscreen and wc cleaning tracer products into safe non-food categories', () => {
+  const cases = [
+    ['Oral-B IO Series 10 elektrische Zahnbuerste', 'Drogerie / Hygiene', 'Mund- & Zahnpflege'],
+    ['Oral-B Pro Sensitive Clean Aufsteckbuersten 4 Stueck', 'Drogerie / Hygiene', 'Mund- & Zahnpflege'],
+    ['Sensodyne Proschmelz taegliche Zahnpasta 75 ml', 'Drogerie / Hygiene', 'Mund- & Zahnpflege'],
+    ['BI CARE SUN Sonnenmilch Ultra Sensitive LSF 50+', 'Drogerie / Hygiene', 'Koerperpflege'],
+    ['SPF 50+ Sun Spray', 'Drogerie / Hygiene', 'Koerperpflege'],
+    ['Blue Star WC-Reiniger Extra Power Gel 700 ml', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Blue Star Kraft Aktiv WC-Steine Morgen Frische', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Blue Star Spuelkastenwuerfel 4 x 50 g', 'Haushalt', 'Waschmittel & Reiniger'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
   }
 });
 
