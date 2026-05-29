@@ -3321,10 +3321,10 @@ test('coffee searches keep Teebutter from winning through coffee tea category si
     title: 'Oesterreichische Teebutter SPAR',
     retailerKey: 'spar',
     retailerName: 'SPAR',
-    categoryPrimary: 'Lebensmittel',
-    categorySecondary: 'Milchprodukte',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
     comparisonGroup: 'oesterreichische-teebutter::0.25-kg',
-    searchText: 'spar teebutter butter milchprodukte',
+    searchText: 'spar teebutter butter kaffee tee',
   });
   const sparCoffee = offer({
     title: 'Lavazza Kaffee Bohnen SPAR',
@@ -3349,6 +3349,7 @@ test('coffee searches keep Teebutter from winning through coffee tea category si
   assert.equal(applyQueryMatch([teebutter, sparCoffee], 'kaffee')[0].title, 'Lavazza Kaffee Bohnen SPAR');
   assert.equal(applyQueryMatch([teebutter, tea], 'tee')[0].title, 'Teekanne Teebeutel Schwarztee SPAR');
   assert.equal(applyQueryMatch([sparCoffee, teebutter], 'butter')[0].title, 'Oesterreichische Teebutter SPAR');
+  assert.equal(calculateOfferTermCoverage(teebutter, 'spar kaffee').coveredTerms, 1);
   assert.ok(scoreOfferAgainstQuery(teebutter, 'kaffee') < scoreOfferAgainstQuery(sparCoffee, 'kaffee'));
   assert.ok(scoreOfferAgainstQuery(teebutter, 'tee') < scoreOfferAgainstQuery(tea, 'tee'));
 });
@@ -5318,7 +5319,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v2-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
