@@ -94,14 +94,11 @@ const LIDL_OFFICIAL_CAMPAIGN_PAGES = [
 const LIDL_CAMPAIGN_PAGE_LIMIT = 14;
 const FETCH_DIAGNOSTIC_PREVIEW_LIMIT = 260;
 const BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE = 'bipa-official-category-html';
-const BIPA_OFFICIAL_PAGINATION_ENABLED = !/^(0|false|off|no)$/i.test(String(process.env.BIPA_OFFICIAL_PAGINATION_ENABLED || 'true').trim());
-const BIPA_OFFICIAL_PAGINATION_MODE = 'production-safe-priority-fragrance';
 const BIPA_CATEGORY_ACTION_PAGE_SIZE = 50;
-const BIPA_CATEGORY_ACTION_MAX_PAGINATED_CATEGORIES = 1;
-const BIPA_CATEGORY_ACTION_MAX_PAGES = 2;
-const BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY = 100;
-const BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES = 2;
-const BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS = 6000;
+const BIPA_CATEGORY_ACTION_MAX_PAGES = 5;
+const BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY = 250;
+const BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES = 30;
+const BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS = 8000;
 const BIPA_CATEGORY_ACTION_PAGE_URLS = [
   'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
   'https://www.bipa.at/c/haushalt?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
@@ -172,16 +169,6 @@ function buildBipaCategoryActionPageUrl(rawUrl = '', offset = 0) {
 
 const BIPA_CATEGORY_ACTION_PAGES = BIPA_CATEGORY_ACTION_PAGE_URLS.map(normalizeBipaCategoryActionUrl);
 
-function isBipaPriorityPaginationCategory(rawUrl = '', label = '') {
-  try {
-    const url = new URL(rawUrl);
-    const text = decodeURIComponent(`${url.pathname} ${url.search} ${label}`);
-    return /parfum|duft|fragrance/i.test(text);
-  } catch (error) {
-    return /parfum|duft|fragrance/i.test(`${rawUrl} ${label}`);
-  }
-}
-
 function compactBipaCategoryUrl(rawUrl = '') {
   try {
     const url = new URL(rawUrl);
@@ -193,28 +180,18 @@ function compactBipaCategoryUrl(rawUrl = '') {
 
 function createBipaPaginationDiagnostics() {
   return {
-    enabled: BIPA_OFFICIAL_PAGINATION_ENABLED,
-    mode: BIPA_OFFICIAL_PAGINATION_MODE,
     configured: {
       pageSize: BIPA_CATEGORY_ACTION_PAGE_SIZE,
-      maxPaginatedCategories: BIPA_CATEGORY_ACTION_MAX_PAGINATED_CATEGORIES,
       maxPagesPerCategory: BIPA_CATEGORY_ACTION_MAX_PAGES,
       maxProductsPerCategory: BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY,
       maxTotalPages: BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES,
       pageFetchTimeoutMs: BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS,
-      priorityCategoryPattern: 'parfum|duft|fragrance',
     },
     categoryUrlsSeen: 0,
     categoryUrlsFetched: 0,
-    categoryUrlsPaginated: 0,
-    categoryUrlsSkippedDisabled: 0,
-    categoryUrlsSkippedNonPriority: 0,
-    categoryUrlsSkippedLimit: 0,
     duplicateCategoryUrlsSkipped: 0,
     pagesAttempted: 0,
     pagesFetched: 0,
-    timeouts: 0,
-    errors: 0,
     rawHits: 0,
     stopReasons: {},
     sampleTotals: [],
@@ -239,50 +216,6 @@ function rememberBipaSampleTotal(diagnostics, total) {
 
   if (!diagnostics.sampleTotals.includes(numericTotal) && diagnostics.sampleTotals.length < 8) {
     diagnostics.sampleTotals.push(numericTotal);
-  }
-}
-
-function createTimeoutError(message, code = 'BIPA_PAGE_TIMEOUT') {
-  const error = new Error(message);
-  error.code = code;
-  error.isTimeout = true;
-  return error;
-}
-
-async function runWithHardTimeout(task, timeoutMs, timeoutMessage) {
-  const controller = typeof AbortController === 'function' ? new AbortController() : null;
-  let timeoutId;
-  let settled = false;
-
-  const timeoutPromise = new Promise((resolve, reject) => {
-    timeoutId = setTimeout(() => {
-      if (settled) {
-        return;
-      }
-
-      if (controller) {
-        controller.abort();
-      }
-
-      reject(createTimeoutError(timeoutMessage));
-    }, timeoutMs);
-  });
-
-  const taskPromise = Promise.resolve()
-    .then(() => task({ signal: controller?.signal }))
-    .catch((error) => {
-      if (settled) {
-        return undefined;
-      }
-
-      throw error;
-    });
-
-  try {
-    return await Promise.race([taskPromise, timeoutPromise]);
-  } finally {
-    settled = true;
-    clearTimeout(timeoutId);
   }
 }
 
@@ -2983,7 +2916,6 @@ function collectBipaPromotionLinks(html, baseUrl) {
 function collectUniqueBipaAdditionalLinks(html, baseUrl, diagnostics = null) {
   const seen = new Set();
   const links = [];
-  let paginatedCategoryLinks = 0;
   const candidates = [
     ...collectBipaPromotionLinks(html, baseUrl),
     ...BIPA_CATEGORY_ACTION_PAGES.map((url) => ({
@@ -3008,31 +2940,6 @@ function collectUniqueBipaAdditionalLinks(html, baseUrl, diagnostics = null) {
       continue;
     }
 
-    if (isBipaCategoryPricebadgeUrl(normalizedUrl)) {
-      if (!BIPA_OFFICIAL_PAGINATION_ENABLED) {
-        if (diagnostics) {
-          diagnostics.categoryUrlsSkippedDisabled += 1;
-        }
-        continue;
-      }
-
-      if (!isBipaPriorityPaginationCategory(normalizedUrl, candidate.label)) {
-        if (diagnostics) {
-          diagnostics.categoryUrlsSkippedNonPriority += 1;
-        }
-        continue;
-      }
-
-      if (paginatedCategoryLinks >= BIPA_CATEGORY_ACTION_MAX_PAGINATED_CATEGORIES) {
-        if (diagnostics) {
-          diagnostics.categoryUrlsSkippedLimit += 1;
-        }
-        continue;
-      }
-
-      paginatedCategoryLinks += 1;
-    }
-
     seen.add(normalizedUrl);
     links.push({
       ...candidate,
@@ -3043,12 +2950,7 @@ function collectUniqueBipaAdditionalLinks(html, baseUrl, diagnostics = null) {
   return links;
 }
 
-async function fetchBipaCategoryActionPages({
-  url,
-  fetchPage = null,
-  diagnostics = null,
-  pageTimeoutMs = BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS,
-} = {}) {
+async function fetchBipaCategoryActionPages({ url, fetchPage = null, diagnostics = null } = {}) {
   const pages = [];
   const seenOffsets = new Set();
   const categoryDiagnostics = {
@@ -3059,43 +2961,13 @@ async function fetchBipaCategoryActionPages({
     totals: [],
     stopReason: '',
   };
-  const pageFetcher = fetchPage || ((pageUrl, requestOptions = {}) => fetchHtml(pageUrl, {
-    timeoutMs: pageTimeoutMs,
-    signal: requestOptions.signal,
+  const pageFetcher = fetchPage || ((pageUrl) => fetchHtml(pageUrl, {
+    timeoutMs: BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS,
   }));
   let offset = 0;
 
-  if (!BIPA_OFFICIAL_PAGINATION_ENABLED) {
-    categoryDiagnostics.stopReason = 'disabled';
-    if (diagnostics) {
-      diagnostics.categoryUrlsSkippedDisabled += 1;
-      incrementBipaStopReason(diagnostics, categoryDiagnostics.stopReason);
-      diagnostics.categories.push(categoryDiagnostics);
-    }
-    return pages;
-  }
-
-  if (!isBipaPriorityPaginationCategory(url)) {
-    categoryDiagnostics.stopReason = 'non-priority-category';
-    if (diagnostics) {
-      diagnostics.categoryUrlsSkippedNonPriority += 1;
-      incrementBipaStopReason(diagnostics, categoryDiagnostics.stopReason);
-      diagnostics.categories.push(categoryDiagnostics);
-    }
-    return pages;
-  }
-
-  if (diagnostics && diagnostics.categoryUrlsPaginated >= BIPA_CATEGORY_ACTION_MAX_PAGINATED_CATEGORIES) {
-    categoryDiagnostics.stopReason = 'category-limit';
-    diagnostics.categoryUrlsSkippedLimit += 1;
-    incrementBipaStopReason(diagnostics, categoryDiagnostics.stopReason);
-    diagnostics.categories.push(categoryDiagnostics);
-    return pages;
-  }
-
   if (diagnostics) {
     diagnostics.categoryUrlsFetched += 1;
-    diagnostics.categoryUrlsPaginated += 1;
   }
 
   for (let pageIndex = 0; pageIndex < BIPA_CATEGORY_ACTION_MAX_PAGES; pageIndex += 1) {
@@ -3124,26 +2996,10 @@ async function fetchBipaCategoryActionPages({
     }
 
     try {
-      nested = await runWithHardTimeout(
-        ({ signal }) => pageFetcher(pageUrl, {
-          signal,
-          timeoutMs: pageTimeoutMs,
-        }),
-        pageTimeoutMs,
-        `BIPA category page timed out after ${pageTimeoutMs}ms`,
-      );
+      nested = await pageFetcher(pageUrl);
     } catch (error) {
-      const timedOut = error?.isTimeout
-        || /timeout|timed out|aborted/i.test(`${error?.code || ''} ${error?.message || ''}`);
-      categoryDiagnostics.stopReason = timedOut ? 'timeout' : 'error';
+      categoryDiagnostics.stopReason = 'error';
       categoryDiagnostics.error = sanitizeWhitespace(error.message || error.code || 'fetch failed').slice(0, 120);
-      if (diagnostics) {
-        if (timedOut) {
-          diagnostics.timeouts += 1;
-        } else {
-          diagnostics.errors += 1;
-        }
-      }
       break;
     }
 
@@ -3177,11 +3033,6 @@ async function fetchBipaCategoryActionPages({
       ? Number(summary.offset)
       : offset;
     const nextOffset = resultOffset + resultLimit;
-
-    if (seenOffsets.has(nextOffset)) {
-      categoryDiagnostics.stopReason = 'offset-repeat';
-      break;
-    }
 
     if (categoryDiagnostics.rawHits >= BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY) {
       categoryDiagnostics.stopReason = 'category-product-limit';
@@ -3804,13 +3655,12 @@ function parseHoferOffersFromPage({
   return offers;
 }
 
-async function fetchHtml(url, { timeoutMs = 30000, signal = undefined } = {}) {
+async function fetchHtml(url, { timeoutMs = 30000 } = {}) {
   let response;
 
   try {
     response = await axios.get(url, {
       timeout: timeoutMs,
-      signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/json',
@@ -6787,17 +6637,13 @@ module.exports = {
   crawlOfficialSource,
   __private: {
     parseBipaOffersFromHtml,
-    BIPA_OFFICIAL_PAGINATION_ENABLED,
-    BIPA_OFFICIAL_PAGINATION_MODE,
     BIPA_CATEGORY_ACTION_PAGES,
     BIPA_CATEGORY_ACTION_PAGE_SIZE,
-    BIPA_CATEGORY_ACTION_MAX_PAGINATED_CATEGORIES,
     BIPA_CATEGORY_ACTION_MAX_PAGES,
     BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY,
     BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES,
     BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS,
     BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE,
-    isBipaPriorityPaginationCategory,
     normalizeBipaCategoryActionUrl,
     buildBipaCategoryActionPageUrl,
     fetchBipaCategoryActionPages,
