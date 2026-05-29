@@ -70,14 +70,14 @@ function bipaMobifyHit(id, overrides = {}) {
   };
 }
 
-function bipaMobifyHtml(hits, { bodyPrefix = '' } = {}) {
+function bipaMobifyHtml(hits, { bodyPrefix = '', searchResult = {} } = {}) {
   const payload = {
     pageProps: {
       pageProps: {
         productSearchResult: {
-          limit: hits.length,
-          offset: 0,
-          total: hits.length,
+          limit: searchResult.limit ?? hits.length,
+          offset: searchResult.offset ?? 0,
+          total: searchResult.total ?? hits.length,
           hits,
         },
       },
@@ -508,24 +508,160 @@ test('BIPA category Mobify parser reads offers beyond the first 20 products', ()
   assert.equal(joop.validTo.toISOString(), '2026-06-10T23:59:59.999Z');
 });
 
+test('BIPA category action pagination follows official total and offset metadata', async () => {
+  const hits = Array.from({ length: 125 }, (_, index) => bipaMobifyHit(String(810000 + index), {
+    c_brand: 'BIPA',
+    productName: `BIPA Pagination Test ${index + 1}`,
+    c_kundenbezeichnung: `Pagination Test ${index + 1}`,
+    c_inhalt: '100 ml',
+    c_category: 'pflege-koerper-duschgel',
+    c_displayedPrice: 1 + index,
+    c_insteadPrice: 2 + index,
+    c_basePrice: '',
+  }));
+  hits[100] = bipaMobifyHit('421100', {
+    c_brand: 'Paco Rabanne',
+    productName: 'Paco Rabanne 1 Million Eau de Toilette 100 ml',
+    c_kundenbezeichnung: '1 Million Eau de Toilette 100 ml',
+    c_inhalt: '100 ml',
+    c_category: 'parfum-herrenduefte',
+    c_displayedPrice: 67.99,
+    c_insteadPrice: 79.99,
+    c_basePrice: '',
+    c_effectivePriceBadges: ['Aktion'],
+  });
+  hits[124] = bipaMobifyHit('421124', {
+    c_brand: 'Joop!',
+    productName: 'Joop! Homme Eau de Toilette 75 ml',
+    c_kundenbezeichnung: 'Homme Eau de Toilette 75 ml',
+    c_inhalt: '75 ml',
+    c_category: 'parfum-herrenduefte',
+    c_displayedPrice: 18.99,
+    c_insteadPrice: 31.99,
+    c_basePrice: '',
+    c_effectivePriceBadges: ['Aktion'],
+  });
+  const requestedUrls = [];
+  const fetchPage = async (url) => {
+    requestedUrls.push(url);
+    const offset = Number(new URL(url).searchParams.get('offset') || 0);
+    const pageHits = hits.slice(offset, offset + __private.BIPA_CATEGORY_ACTION_PAGE_SIZE);
+
+    return {
+      html: bipaMobifyHtml(pageHits, {
+        bodyPrefix: '<p>Gueltig bis 10.06.2026</p>',
+        searchResult: {
+          limit: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE,
+          offset,
+          total: hits.length,
+        },
+      }),
+      canonicalUrl: url,
+    };
+  };
+
+  const pages = await __private.fetchBipaCategoryActionPages({
+    url: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion',
+    fetchPage,
+  });
+  const testSource = source({ sourceUrl: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion' });
+  const offers = pages.flatMap((page) => __private.parseBipaOffersFromHtml({
+    html: page.html,
+    source: testSource,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: page.url,
+  }));
+  const paco = offers.find((offer) => offer.rawFacts.bipaProductId === '421100');
+  const joop = offers.find((offer) => offer.rawFacts.bipaProductId === '421124');
+
+  assert.equal(pages.length, 2);
+  assert.deepEqual(requestedUrls.map((url) => new URL(url).searchParams.get('offset') || '0'), ['0', '100']);
+  assert.ok(requestedUrls.every((url) => new URL(url).searchParams.get('limit') === '100'));
+  assert.equal(offers.length, 125);
+  assert.equal(`${paco.brand} ${paco.title}`, 'Paco Rabanne 1 Million Eau de Toilette 100 ml');
+  assert.equal(paco.priceCurrent.amount, 67.99);
+  assert.equal(paco.quantityText, '100 ml');
+  assert.equal(paco.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(paco.categorySecondary, 'Kosmetik & Make-up');
+  assert.equal(`${joop.brand} ${joop.title}`, 'Joop! Homme Eau de Toilette 75 ml');
+  assert.equal(joop.priceCurrent.amount, 18.99);
+  assert.equal(joop.quantityText, '75 ml');
+  assert.equal(joop.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(joop.categorySecondary, 'Kosmetik & Make-up');
+});
+
+test('BIPA category action pagination keeps partial pages on later fetch failure and is bounded', async () => {
+  const testUrl = 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion';
+  const firstPageOnly = await __private.fetchBipaCategoryActionPages({
+    url: testUrl,
+    fetchPage: async (url) => {
+      const offset = Number(new URL(url).searchParams.get('offset') || 0);
+
+      if (offset > 0) {
+        throw new Error('simulated page failure');
+      }
+
+      return {
+        html: bipaMobifyHtml(Array.from({ length: 100 }, (_, index) => bipaMobifyHit(String(910000 + index))), {
+          searchResult: {
+            limit: 100,
+            offset: 0,
+            total: 250,
+          },
+        }),
+        canonicalUrl: url,
+      };
+    },
+  });
+  let boundedCalls = 0;
+  const boundedPages = await __private.fetchBipaCategoryActionPages({
+    url: testUrl,
+    fetchPage: async (url) => {
+      boundedCalls += 1;
+      const offset = Number(new URL(url).searchParams.get('offset') || 0);
+
+      return {
+        html: bipaMobifyHtml(Array.from({ length: 100 }, (_, index) => bipaMobifyHit(String(920000 + offset + index))), {
+          searchResult: {
+            limit: 100,
+            offset,
+            total: 9999,
+          },
+        }),
+        canonicalUrl: url,
+      };
+    },
+  });
+
+  assert.equal(firstPageOnly.length, 1);
+  assert.equal(boundedPages.length, __private.BIPA_CATEGORY_ACTION_MAX_PAGES);
+  assert.equal(boundedCalls, __private.BIPA_CATEGORY_ACTION_MAX_PAGES);
+});
+
 test('BIPA category action URL config uses pricebadge filters', () => {
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.length >= 10);
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.startsWith('https://www.bipa.at/c/')));
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.includes('refine_0=c_pricebadges')));
-  assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => new URL(url).searchParams.get('limit') === String(__private.BIPA_CATEGORY_ACTION_PAGE_LIMIT)));
-  assert.equal(__private.BIPA_CATEGORY_ACTION_PAGE_LIMIT, 200);
+  assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => new URL(url).searchParams.get('limit') === String(__private.BIPA_CATEGORY_ACTION_PAGE_SIZE)));
+  assert.equal(__private.BIPA_CATEGORY_ACTION_PAGE_SIZE, 100);
+  assert.equal(__private.BIPA_CATEGORY_ACTION_MAX_PAGES, 20);
 });
 
 test('BIPA category action URL normalization expands only official pricebadge category links', () => {
   assert.equal(
     new URL(__private.normalizeBipaCategoryActionUrl('https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion')).searchParams.get('limit'),
-    '200',
+    '100',
   );
   assert.equal(
     __private.normalizeBipaCategoryActionUrl('https://www.bipa.at/c/parfum?limit=20'),
     'https://www.bipa.at/c/parfum?limit=20',
   );
   assert.equal(__private.normalizeBipaCategoryActionUrl('not a url'), 'not a url');
+  assert.equal(
+    __private.buildBipaCategoryActionPageUrl('https://www.bipa.at/c/parfum?limit=20&start=20&refine_0=c_pricebadges%3DAktion', 100),
+    'https://www.bipa.at/c/parfum?limit=100&refine_0=c_pricebadges%3DAktion&offset=100',
+  );
 });
 
 test('BIPA promotion link discovery ignores unfiltered category pages', () => {
@@ -536,7 +672,7 @@ test('BIPA promotion link discovery ignores unfiltered category pages', () => {
   `, 'https://www.bipa.at/cp/aktionen');
 
   assert.deepEqual(links.map((link) => link.url), [
-    'https://www.bipa.at/c/pflege?limit=200&refine_0=c_pricebadges%3DAktion',
+    'https://www.bipa.at/c/pflege?limit=100&refine_0=c_pricebadges%3DAktion',
     'https://www.bipa.at/cp/onlineonly',
   ]);
 });
