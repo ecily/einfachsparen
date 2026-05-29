@@ -175,7 +175,7 @@ export function getShoppingListItemPricing(item, quantity) {
   const offerTotalCents = offerUnitCents * breakdown.offerQuantity
   const remainderTotalCents = referenceUnitCents * breakdown.remainderQuantity
   const knownSavingsCents =
-    savings.type === 'known' ? toCents(savings.amount) * breakdown.offerQuantity : 0
+    savings.type === 'known' ? toCents(savings.amount) * breakdown.completeBlocks : 0
 
   return {
     ...breakdown,

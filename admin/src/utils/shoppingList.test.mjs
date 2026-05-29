@@ -16,7 +16,7 @@ const maggiOffer = {
   priceCurrent: { amount: 1.99, currency: 'EUR' },
   conditionsText: 'Gilt ab 2 Packungen',
   referencePrice: { amount: 2.49, allowsSavings: true },
-  savings: { amount: 0.5 },
+  savings: { amount: 1 },
 }
 
 test('shopping list item starts at recognized minimum quantity', () => {
