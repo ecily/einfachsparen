@@ -130,8 +130,9 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
+const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
 const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
@@ -5859,6 +5860,144 @@ function buildRankingCandidateFallbackMatch({
   });
 }
 
+function getSparFamilyQueryRetailerKeys(query = '') {
+  const text = normalizeConditionSignalText(query);
+  const keys = [];
+
+  if (/\binterspar\b/.test(text)) {
+    keys.push('interspar');
+  }
+
+  if (/\beurospar\b/.test(text)) {
+    keys.push('eurospar');
+  }
+
+  if (/\bspar\b/.test(text)) {
+    keys.push('spar', 'eurospar', 'interspar');
+  }
+
+  return [...new Set(keys)];
+}
+
+function hasSparConditionQueryIntent(query = '') {
+  const text = normalizeConditionSignalText(query);
+
+  return /\b1\s*\+\s*1\b/.test(text) ||
+    /\b2\s*\+\s*1\b/.test(text) ||
+    /\b12\s*\+\s*12\b/.test(text) ||
+    /\bgratis\b/.test(text) ||
+    /\bjoker\b/.test(text) ||
+    /\bkisten?\b/.test(text) ||
+    /\bab\s*2\b/.test(text) ||
+    /\bab\s*6\b/.test(text);
+}
+
+function shouldLoadSparConditionSupplementalCandidates({ query = '', selectedRetailers = [] } = {}) {
+  const queryRetailers = getSparFamilyQueryRetailerKeys(query);
+
+  if (queryRetailers.length === 0 || !hasSparConditionQueryIntent(query)) {
+    return false;
+  }
+
+  const selected = normalizeRetailerList(selectedRetailers);
+  return selected.length === 0 || selected.some((retailerKey) => SPAR_FORMAT_RETAILER_KEYS.has(retailerKey));
+}
+
+function buildSparConditionSupplementalRegex(query = '') {
+  const text = normalizeConditionSignalText(query);
+  const parts = [];
+
+  if (/\b1\s*\+\s*1\b/.test(text)) parts.push('1\\s*\\+\\s*1', 'gratis');
+  if (/\b2\s*\+\s*1\b/.test(text)) parts.push('2\\s*\\+\\s*1', 'gratis');
+  if (/\b12\s*\+\s*12\b/.test(text)) parts.push('12\\s*\\+\\s*12', 'gratis');
+  if (/\bgratis\b/.test(text)) parts.push('gratis', '1\\s*\\+\\s*1', '2\\s*\\+\\s*1', '12\\s*\\+\\s*12');
+  if (/\bjoker\b/.test(text)) parts.push('joker');
+  if (/\bab\s*2\b/.test(text)) parts.push('ab\\s*2');
+  if (/\bab\s*6\b/.test(text)) parts.push('ab\\s*6');
+  if (/\bkisten?\b/.test(text)) parts.push('kisten?', '20\\s*x\\s*0\\s*[,.]?\\s*5\\s*(?:l|liter)', '20er\\s*kiste');
+
+  return parts.length > 0 ? new RegExp(parts.join('|'), 'i') : null;
+}
+
+function buildSparOfficialPdfEvidenceMatch() {
+  const sourceRegex = /spar-official.*pdf|official.*(?:pdf|flyer)|(?:pdf|flyer).*official/i;
+
+  return {
+    $or: [
+      { sourceType: sourceRegex },
+      { sourceTypes: sourceRegex },
+      { 'rawFacts.sourceKey': sourceRegex },
+      { sourceUrl: sourceRegex },
+      { sourceUrls: sourceRegex },
+      { evidenceUrls: sourceRegex },
+    ],
+  };
+}
+
+function buildSparConditionSupplementalCandidateMatch({
+  selectedRetailers = [],
+  selectedCategories = [],
+  unit = 'all',
+  onlyWithoutProgram = false,
+  query = '',
+} = {}) {
+  if (!shouldLoadSparConditionSupplementalCandidates({ query, selectedRetailers })) {
+    return null;
+  }
+
+  const selected = normalizeRetailerList(selectedRetailers);
+  const queryRetailers = getSparFamilyQueryRetailerKeys(query);
+  const scopedRetailers = selected.length > 0
+    ? selected.filter((retailerKey) => SPAR_FORMAT_RETAILER_KEYS.has(retailerKey))
+    : queryRetailers;
+
+  if (scopedRetailers.length === 0) {
+    return null;
+  }
+
+  const match = buildRankingCandidateMatch({
+    selectedRetailers: scopedRetailers,
+    selectedCategories,
+    unit,
+    onlyWithoutProgram,
+    query: '',
+  });
+  const signalRegex = buildSparConditionSupplementalRegex(query);
+  const signalBranches = [
+    { hasConditions: true },
+    { isMultiBuy: true },
+    { minimumPurchaseQty: { $gt: 1 } },
+    {
+      $and: [
+        buildSparOfficialPdfEvidenceMatch(),
+        {
+          $or: [
+            { hasConditions: true },
+            { isMultiBuy: true },
+            { minimumPurchaseQty: { $gt: 1 } },
+          ],
+        },
+      ],
+    },
+  ];
+
+  if (signalRegex) {
+    signalBranches.unshift(
+      { conditionsText: signalRegex },
+      { quantityText: signalRegex },
+      { searchText: signalRegex },
+      { title: signalRegex },
+    );
+  }
+
+  match.$and = [
+    ...(Array.isArray(match.$and) ? match.$and : []),
+    { $or: signalBranches },
+  ];
+
+  return match;
+}
+
 function shouldRunSeparatedRegexFallback({ query = '', offers = [], queryMetadata = {} }) {
   if (!query || queryMetadata.candidateQueryMode !== 'searchTokensOnly') {
     return '';
@@ -6234,6 +6373,9 @@ async function findRankingCandidateOffers({
     let offers = primaryOffers;
     let fallbackMatch = null;
     let fallbackQueryMetadata = null;
+    let supplementalMatch = null;
+    let supplementalLoadMs = 0;
+    let supplementalLoadedDocumentCount = 0;
 
     if (fallbackReason) {
       fallbackMatch = buildRankingCandidateFallbackMatch({
@@ -6257,6 +6399,31 @@ async function findRankingCandidateOffers({
       fallbackQueryMetadata.loadedDocumentCount = fallbackOffers.length;
     }
 
+    supplementalMatch = buildSparConditionSupplementalCandidateMatch({
+      selectedRetailers,
+      selectedCategories,
+      unit,
+      onlyWithoutProgram,
+      query,
+    });
+
+    if (supplementalMatch) {
+      const supplementalQuery = buildRankingOfferQuery(supplementalMatch, SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT);
+      supplementalQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
+      const supplementalStartedAt = nowMs();
+      const supplementalOffers = await supplementalQuery;
+      supplementalLoadMs = nowMs() - supplementalStartedAt;
+      supplementalLoadedDocumentCount = supplementalOffers.length;
+      offers = mergeCandidateOffers(offers, supplementalOffers);
+      queryMetadata.supplementalUsed = true;
+      queryMetadata.supplementalReason = 'spar-family-condition-intent';
+      queryMetadata.supplementalLimit = SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT;
+    } else {
+      queryMetadata.supplementalUsed = false;
+      queryMetadata.supplementalReason = '';
+      queryMetadata.supplementalLimit = 0;
+    }
+
     if (!collectExecutionStats) {
       return offers;
     }
@@ -6265,8 +6432,10 @@ async function findRankingCandidateOffers({
       match: primaryMatch,
       primaryMatch,
       fallbackMatch,
+      supplementalMatch,
       sort: RANKING_SORT,
       limit: candidateLimit,
+      supplementalLimit: SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT,
       fields: OFFER_RANKING_FIELDS.split(' '),
       queryMetadata,
       fallbackQueryMetadata,
@@ -6274,14 +6443,17 @@ async function findRankingCandidateOffers({
         totalFindMs: nowMs() - queryStartedAt,
         primaryFindMs: primaryLoadMs,
         fallbackFindMs: fallbackQueryMetadata?.loadMs || 0,
+        supplementalFindMs: supplementalLoadMs,
         primaryLoadedDocumentCount: primaryOffers.length,
         fallbackLoadedDocumentCount: fallbackQueryMetadata?.loadedDocumentCount || 0,
+        supplementalLoadedDocumentCount,
         loadedDocumentCount: offers.length,
         loadedDocumentBytes: Buffer.byteLength(JSON.stringify(offers), 'utf8'),
       },
       executionStats: null,
       primaryExecutionStats: null,
       fallbackExecutionStats: null,
+      supplementalExecutionStats: null,
     };
 
     return {
@@ -7123,6 +7295,22 @@ async function buildOfferRanking({
         mongoDiagnostics.fallbackError = fallbackExplainResult.error;
       }
     }
+
+    if (mongoDiagnostics.supplementalMatch) {
+      const supplementalExplainResult = await explainRankingCandidateQuery({
+        selectedRetailers,
+        selectedCategories,
+        unit,
+        onlyWithoutProgram: withoutProgram,
+        query,
+        candidateLimit: mongoDiagnostics.supplementalLimit || SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT,
+        matchOverride: mongoDiagnostics.supplementalMatch,
+      });
+      mongoDiagnostics.supplementalExecutionStats = supplementalExplainResult.executionStats;
+      if (supplementalExplainResult.error) {
+        mongoDiagnostics.supplementalError = supplementalExplainResult.error;
+      }
+    }
     timings.explainMs = nowMs() - explainStartedAt;
 
     return {
@@ -7243,6 +7431,10 @@ module.exports = {
   buildRetailerScopeMatch,
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateQueryMetadata,
+  buildSparConditionSupplementalCandidateMatch,
+  hasSparConditionQueryIntent,
+  shouldLoadSparConditionSupplementalCandidates,
+  mergeCandidateOffers,
   paginateVisibleRankingOffers,
   buildRankingResponseFromStoredResultCache,
   buildRankingResponseFromBase,

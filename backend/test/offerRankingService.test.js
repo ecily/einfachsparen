@@ -6,6 +6,7 @@ const {
   buildRankingCandidateLimit,
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateMatch,
+  buildSparConditionSupplementalCandidateMatch,
   buildRetailerScopeMatch,
   buildRankedOffer,
   buildValidityLabel,
@@ -24,11 +25,14 @@ const {
   filterExpiredDateBoundConditionFragments,
   buildRankingCandidateQueryMetadata,
   hashRankingCacheKey,
+  hasSparConditionQueryIntent,
   buildRankingResponseFromBase,
   filterFreshActiveOffers,
   getRankingCacheCapabilities,
+  mergeCandidateOffers,
   normalizeSearchText,
   normalizeRetailerList,
+  shouldLoadSparConditionSupplementalCandidates,
   paginateVisibleRankingOffers,
   parseRankingCategories,
   prepareQueryOffersForResponse,
@@ -427,6 +431,153 @@ test('condition query scoring ranks SPAR beer crate context above generic SPAR h
     'pdf-puntigamer-kiste',
     'generic-spar-kiste',
   ]);
+});
+
+function genericSparCandidate(index, overrides = {}) {
+  return sparOffer({
+    _id: `generic-spar-${index}`,
+    title: `SPAR Markenartikel Aktion ${index}`,
+    brand: '',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Unkategorisiert',
+    categoryKey: 'unkategorisiert',
+    searchText: `spar angebot aktion ${index}`,
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+    sourceType: 'aktionsfinder-json',
+    sortScoreDefault: 250 - index,
+    ...overrides,
+  });
+}
+
+function assertSupplementRanksTopTen(query, genericOverrides, pdfOverrides) {
+  const primary = Array.from({ length: 220 }, (_, index) => genericSparCandidate(index, genericOverrides)).slice(0, 200);
+  const pdf = sparPdfOffer({
+    _id: `pdf-${query.replace(/[^a-z0-9]+/gi, '-')}`,
+    title: 'Puntigamer Maerzen',
+    brand: 'Puntigamer',
+    quantityText: '20 x 0.5 l',
+    searchText: 'spar puntigamer maerzen bier kiste 20 x 0.5 l',
+    searchTokens: ['bier', 'kiste', 'puntigamer', 'spar'],
+    searchTokenVersion: 2,
+    priceCurrent: { amount: 14.90, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true, confidence: 0.9 },
+    conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90 / Keine weiteren Rabatte / Joker moeglich',
+    hasConditions: true,
+    isMultiBuy: true,
+    minimumPurchaseQty: 2,
+    sourceType: 'spar-official-pdf',
+    rawFacts: { sourceKey: 'spar-official-flyer-pdf' },
+    ...pdfOverrides,
+  });
+
+  assert.equal(primary.some((item) => item._id === pdf._id), false);
+
+  const withoutSupplement = applyQueryMatch(primary, query);
+  assert.equal(withoutSupplement.some((item) => item._id === pdf._id), false);
+
+  const merged = mergeCandidateOffers(primary, [pdf]);
+  const ranked = applyQueryMatch(merged, query);
+
+  assert.equal(merged.some((item) => item._id === pdf._id), true);
+  assert.equal(ranked.slice(0, 10).some((item) => item._id === pdf._id), true);
+  assert.equal(ranked[0]._id, pdf._id);
+}
+
+test('SPAR condition supplemental query activates only for SPAR-family condition intent', () => {
+  assert.equal(hasSparConditionQueryIntent('spar 1+1'), true);
+  assert.equal(hasSparConditionQueryIntent('spar kiste'), true);
+  assert.equal(hasSparConditionQueryIntent('spar ab 2 kisten'), true);
+  assert.equal(hasSparConditionQueryIntent('spar kaffee'), false);
+
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'spar 1+1' }), true);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'spar kiste' }), true);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'interspar joker' }), true);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'eurospar ab 6' }), true);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: '1+1 gratis' }), false);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'kiste' }), false);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'spar' }), false);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'spar kaffee' }), false);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'spar 1+1', selectedRetailers: ['hofer'] }), false);
+  assert.equal(shouldLoadSparConditionSupplementalCandidates({ query: 'spar 1+1', selectedRetailers: ['spar'] }), true);
+});
+
+test('SPAR condition supplemental candidate match is scoped and condition-gated', () => {
+  const match = buildSparConditionSupplementalCandidateMatch({ query: 'spar 1+1' });
+  const serialized = JSON.stringify(match);
+
+  assert.equal(match.status, 'active');
+  assert.equal(match.isActiveNow, true);
+  assert.ok(serialized.includes('spar'));
+  assert.ok(serialized.includes('eurospar'));
+  assert.ok(serialized.includes('interspar'));
+  assert.ok(serialized.includes('conditionsText'));
+  assert.ok(serialized.includes('minimumPurchaseQty'));
+  assert.ok(serialized.includes('sourceType'));
+  assert.ok(serialized.includes('sourceUrls'));
+  assert.ok(serialized.includes('evidenceUrls'));
+  assert.equal(buildSparConditionSupplementalCandidateMatch({ query: 'spar kaffee' }), null);
+  assert.equal(buildSparConditionSupplementalCandidateMatch({ query: 'spar' }), null);
+  assert.equal(buildSparConditionSupplementalCandidateMatch({ query: 'kiste' }), null);
+});
+
+test('SPAR 1+1 supplemental candidates restore PDF condition ranking after primary cap', () => {
+  assertSupplementRanksTopTen('spar 1+1');
+});
+
+test('SPAR kiste supplemental candidates restore beer crate ranking after primary cap', () => {
+  assertSupplementRanksTopTen('spar kiste', {
+    title: 'SPAR Haushaltsbox Aktion',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Aufbewahrung',
+    categoryKey: 'aufbewahrung',
+    quantityText: '1 Kiste',
+    searchText: 'spar kiste haushalt aufbewahrung',
+  });
+});
+
+test('SPAR ab 2 kisten supplemental candidates restore threshold crate ranking after primary cap', () => {
+  assertSupplementRanksTopTen('spar ab 2 kisten', {
+    title: 'SPAR Haushaltsbox Aktion',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Aufbewahrung',
+    categoryKey: 'aufbewahrung',
+    quantityText: '1 Kiste',
+    searchText: 'spar kiste haushalt aufbewahrung',
+  });
+});
+
+test('existing condition-heavy queries keep PDF evidence ranked without SPAR supplement', () => {
+  const generic = genericSparCandidate(1, {
+    title: 'SPAR Markenartikel gratis Aktion',
+    searchText: 'spar gratis aktion',
+  });
+  const pdf = sparPdfOffer({
+    _id: 'pdf-existing-condition-query',
+    title: 'Puntigamer Maerzen',
+    brand: 'Puntigamer',
+    quantityText: '20 x 0.5 l',
+    conditionsText: '1+1 gratis / ab 2 Kisten je 14,90 / Joker moeglich',
+    hasConditions: true,
+    isMultiBuy: true,
+    minimumPurchaseQty: 2,
+    sourceType: 'spar-official-pdf',
+    rawFacts: { sourceKey: 'spar-official-flyer-pdf' },
+  });
+
+  for (const query of ['1+1 gratis', 'ab 2 kisten', 'puntigamer', 'joker']) {
+    assert.equal(shouldLoadSparConditionSupplementalCandidates({ query }), false);
+    assert.equal(applyQueryMatch([generic, pdf], query)[0]._id, 'pdf-existing-condition-query');
+  }
+});
+
+test('non-condition control queries do not activate SPAR condition supplement', () => {
+  for (const query of ['spar kaffee', 'kaffee', 'spar bier', 'butter', 'tee', 'wurst']) {
+    assert.equal(shouldLoadSparConditionSupplementalCandidates({ query }), false);
+    assert.equal(buildSparConditionSupplementalCandidateMatch({ query }), null);
+  }
 });
 
 test('SPAR condition merge keeps current dated condition sentences intact', () => {
@@ -5071,7 +5222,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
