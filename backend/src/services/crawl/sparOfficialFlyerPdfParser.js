@@ -345,24 +345,74 @@ function extractQuantityTextFromBlock(blockLines = []) {
   return '';
 }
 
-function buildTrustedFreshCandidateFromMergedBlock(blockLines = [], price = null) {
+function isSparFamilyPdfFormat(sourceRetailerFormat = '') {
+  return ['spar', 'eurospar', 'interspar'].includes(String(sourceRetailerFormat || '').toLowerCase());
+}
+
+function isTrustedRadieschenFreshLine(line = '') {
+  const normalized = normalizeForScan(line);
+
+  return /\bradieschen\b/.test(normalized) &&
+    /\bbund\b/.test(normalized) &&
+    (
+      /\baus\s+(?:oesterreich|osterreich)\b/.test(normalized) ||
+      /\baus\s+\S*sterreich\b/i.test(line)
+    );
+}
+
+function isClearFreshRadieschenBoundaryLine(line = '') {
+  const text = String(line || '');
+  const normalized = normalizeForScan(text);
+
+  if (!normalized || isTrustedRadieschenFreshLine(text)) {
+    return false;
+  }
+
+  return /\bblue\s+star\b/.test(normalized)
+    || /\bwc\b/.test(normalized)
+    || /\b(?:spuelkasten|sp.lkasten)\w*/.test(normalized)
+    || /\bduft\w*/.test(normalized)
+    || /\breinigung\w*/.test(normalized)
+    || /\bhygiene\b/.test(normalized);
+}
+
+function buildTrustedFreshRadieschenBlockLines(blockLines = [], freshIndex = -1, price = null) {
+  if (freshIndex < 0) {
+    return [];
+  }
+
+  const result = [blockLines[freshIndex]];
+  const priceIndex = blockLines.findIndex((line) => parsePriceAmountFromLine(line) === price);
+
+  if (
+    priceIndex >= 0 &&
+    priceIndex !== freshIndex &&
+    Math.abs(priceIndex - freshIndex) <= 2 &&
+    !isClearFreshRadieschenBoundaryLine(blockLines[priceIndex])
+  ) {
+    result.push(blockLines[priceIndex]);
+  }
+
+  return result;
+}
+
+function buildTrustedFreshCandidateFromMergedBlock(blockLines = [], price = null, { sourceRetailerFormat = 'spar' } = {}) {
   if (!(Number(price) > 0)) {
     return null;
   }
 
-  const freshLine = blockLines.find((line) => {
-    const normalized = normalizeForScan(line);
-    return /\bradieschen\b/.test(normalized) &&
-      /\bbund\b/.test(normalized) &&
-      (
-        /\baus\s+(?:oesterreich|osterreich)\b/.test(normalized) ||
-        /\baus\s+\S*sterreich\b/i.test(line)
-      );
-  });
+  if (!isSparFamilyPdfFormat(sourceRetailerFormat)) {
+    return null;
+  }
+
+  const freshIndex = blockLines.findIndex(isTrustedRadieschenFreshLine);
+  const freshLine = blockLines[freshIndex];
 
   if (!freshLine) {
     return null;
   }
+
+  const productBlockLines = buildTrustedFreshRadieschenBlockLines(blockLines, freshIndex, price);
 
   const title = sanitizeWhitespace(
     freshLine
@@ -380,10 +430,10 @@ function buildTrustedFreshCandidateFromMergedBlock(blockLines = [], price = null
     title,
     brand: /^spar\b/i.test(title) ? 'SPAR' : title.split(/\s+/)[0] || '',
     price,
-    referencePrice: parseReferencePriceFromBlock(blockLines),
+    referencePrice: parseReferencePriceFromBlock(productBlockLines),
     quantityText: '1 Bund',
-    conditionsText: extractGenericConditionsText(blockLines),
-    rawText: blockLines.join(' '),
+    conditionsText: extractGenericConditionsText(productBlockLines),
+    rawText: productBlockLines.join(' '),
     comparisonSafe: false,
     parserHint: 'generic-text-layer-price-block',
     searchKeywords: `${title} Radieschen Bund Aus Oesterreich Obst Gemuese`,
@@ -508,7 +558,7 @@ function isPlausibleGenericFlyerTitle(title = '') {
   );
 }
 
-function extractGenericFlyerCandidatesFromPage(page) {
+function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 'spar' } = {}) {
   const text = String(page.text || '').replace(/\u00a0/g, ' ');
   const lines = text
     .split(/\r?\n/)
@@ -532,7 +582,9 @@ function extractGenericFlyerCandidatesFromPage(page) {
     }
     const end = Math.min(lines.length, index + 4);
     const blockLines = lines.slice(start, end);
-    const trustedFreshCandidate = buildTrustedFreshCandidateFromMergedBlock(blockLines, price);
+    const trustedFreshCandidate = buildTrustedFreshCandidateFromMergedBlock(blockLines, price, {
+      sourceRetailerFormat,
+    });
 
     if (trustedFreshCandidate) {
       addCandidate(candidates, page.pageNumber, trustedFreshCandidate);
@@ -975,7 +1027,7 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
       ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
     ];
-    const genericCandidates = extractGenericFlyerCandidatesFromPage(page)
+    const genericCandidates = extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat })
       .filter((candidate) => !genericCandidateOverlapsKnown(candidate, knownCandidates));
     const pageCandidates = [
       ...knownCandidates,

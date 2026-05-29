@@ -420,7 +420,14 @@ test('generic SPAR PDF extraction rejects fragment starts and merged product blo
 
   assert.equal(accepted.some((candidate) => /^mit 100% Milch/.test(candidate.title)), false);
   assert.equal(accepted.some((candidate) => /^Blue Star/.test(candidate.title)), false);
-  assert.ok(accepted.some((candidate) => /^SPAR Radieschen Bund Aus .*sterreich$/.test(candidate.title)));
+  const radieschen = accepted.find((candidate) => /^SPAR Radieschen Bund Aus .*sterreich$/.test(candidate.title));
+  assert.ok(radieschen);
+  assert.equal(radieschen.price, 0.99);
+  assert.equal(radieschen.quantityText, '1 Bund');
+  assert.equal(radieschen.categorySecondary, 'Obst & Gemuese');
+  assert.doesNotMatch(radieschen.title, /Blue Star|WC-Steine|Sp(?:ÃƒÂ¼|Ã¼|ue)lkasten/i);
+  assert.doesNotMatch(radieschen.conditionsText, /1\+1 gratis|Blue Star|WC-Steine|Sp(?:ÃƒÂ¼|Ã¼|ue)lkasten/i);
+  assert.doesNotMatch(radieschen.rawText, /Blue Star|WC-Steine|Sp(?:ÃƒÂ¼|Ã¼|ue)lkasten/i);
   assert.equal(accepted.some((candidate) => /^oder Monte/.test(candidate.title)), false);
   assert.ok(accepted.some((candidate) => candidate.title === 'Coca-Cola Limonaden versch. Sorten,'));
   assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'));
@@ -453,9 +460,39 @@ test('generic SPAR PDF extraction keeps clear radieschen fresh candidate from me
 
   assert.equal(accepted.length, 1);
   assert.match(accepted[0].title, /^SPAR Radieschen Bund Aus .*sterreich$/);
+  assert.equal(accepted[0].price, 0.99);
   assert.equal(accepted[0].quantityText, '1 Bund');
   assert.equal(accepted[0].categorySecondary, 'Obst & Gemuese');
+  assert.doesNotMatch(accepted[0].title, /Blue Star|WC-Steine|Sp(?:ÃƒÂ¼|Ã¼|ue)lkasten/i);
+  assert.doesNotMatch(accepted[0].conditionsText, /Blue Star|WC-Steine|Sp(?:ÃƒÂ¼|Ã¼|ue)lkasten/i);
+  assert.doesNotMatch(accepted[0].rawText, /Blue Star|WC-Steine|Sp(?:ÃƒÂ¼|Ã¼|ue)lkasten/i);
   assert.equal(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk'), false);
+});
+
+test('generic SPAR PDF extraction does not attach neighboring multibuy condition to radieschen', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 3,
+        text: [
+          '1+1 GRATIS Poggi del Sole Chianti Riserva',
+          'Blue Star WC-Steine Doppelpackung, verschiedene Sorten oder Blue Star SpÃ¼lkastenwÃ¼rfel',
+          '4 x 50-g-Packung',
+          'SPAR Radieschen Bund Aus Ã–sterreich, per Bund Angebot gÃ¼ltig von Mo, 25.5. bis Sa, 30.5.',
+          '0,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const radieschen = candidates.find((candidate) => !candidate.exclusionReason && /Radieschen/i.test(candidate.title));
+
+  assert.ok(radieschen);
+  assert.equal(radieschen.price, 0.99);
+  assert.equal(radieschen.quantityText, '1 Bund');
+  assert.equal(radieschen.categorySecondary, 'Obst & Gemuese');
+  assert.doesNotMatch(radieschen.conditionsText, /1\+1 gratis/i);
 });
 
 test('generic SPAR PDF extraction still rejects unspecific merged non-fresh blocks', () => {
@@ -477,6 +514,27 @@ test('generic SPAR PDF extraction still rejects unspecific merged non-fresh bloc
 
   assert.equal(candidates.some((candidate) => candidate.title === 'Grabkerzen'), false);
   assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk'));
+});
+
+test('generic SPAR PDF extraction does not classify Blue Star WC offer as fresh radieschen', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 3,
+        text: [
+          'Blue Star WC-Steine Doppelpackung, verschiedene Sorten oder Blue Star SpÃ¼lkastenwÃ¼rfel',
+          '4 x 50-g-Packung',
+          '1,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted.some((candidate) => /Radieschen/i.test(candidate.title)), false);
+  assert.equal(accepted.some((candidate) => candidate.categorySecondary === 'Obst & Gemuese'), false);
 });
 
 test('generic SPAR PDF candidates preserve visible multibuy conditions', () => {
