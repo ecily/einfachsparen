@@ -575,13 +575,14 @@ function buildCompactRawFacts({ promotion, requirement, validityEvidence, condit
 function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourceId, crawlJobId, region, sourceUrl }) {
   const product = promotion.product || {};
   const productGroups = promotion.productGroups || product.productGroups || [];
+  const brand = sanitizeWhitespace(product.brand?.name || '');
   const priceCurrentAmount = parseNumericAmount(promotion.discountedPrice ?? promotion.newPrice);
   const comparableBase = buildComparableBase(product);
   const priceReferenceAmount = parseNumericAmount(promotion.originalPrice ?? promotion.oldPrice);
   const normalizedUnitPrice = buildNormalizedUnitPrice(promotion);
   const categoryDecision = determineCategoryDecision({
     title: promotion.title,
-    contextText: promotion.description || '',
+    contextText: [brand, promotion.description].filter(Boolean).join(' '),
     sourceCategory: productGroups[0]?.title || '',
     productGroups,
   });
@@ -604,7 +605,6 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     contextText: promotion.description || '',
     productGroups,
   });
-  const brand = sanitizeWhitespace(product.brand?.name || '');
   const categoryKey = buildCategoryKey({
     categoryPrimary,
     categorySecondary: comparisonCategory,

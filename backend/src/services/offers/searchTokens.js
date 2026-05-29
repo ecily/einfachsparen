@@ -146,6 +146,8 @@ const STOPWORDS = new Set([
   'versch',
 ]);
 
+const SHORT_TOKEN_ALLOWLIST = new Set(['wc']);
+
 const SYNONYMS = new Map([
   ['cafe', ['kaffee', 'caffe']],
   ['caffe', ['kaffee', 'cafe']],
@@ -232,7 +234,7 @@ function normalizeSearchTokenText(value) {
 }
 
 function addTokenWithSynonyms(tokens, token) {
-  if (!token || token.length < 3 || STOPWORDS.has(token) || /^\d+$/.test(token)) {
+  if (!token || (token.length < 3 && !SHORT_TOKEN_ALLOWLIST.has(token)) || STOPWORDS.has(token) || /^\d+$/.test(token)) {
     return;
   }
 
@@ -251,6 +253,10 @@ function addQueryTokenWithSynonyms(tokens, token) {
   for (const synonym of QUERY_SYNONYMS.get(token) || []) {
     addTokenWithSynonyms(tokens, synonym);
   }
+}
+
+function shouldExpandGenericDuftQuery(tokens = []) {
+  return tokens.includes('duft') && tokens.every((token) => ['bipa', 'duft'].includes(token));
 }
 
 function addConservativeCompoundTokens(tokens, token) {
@@ -330,9 +336,14 @@ function buildOfferSearchTokens(offer = {}) {
 
 function buildQuerySearchTokens(query) {
   const tokens = new Set();
+  const queryTokens = tokenizeValue(query).map((token) => (token === 'ol' ? 'oel' : token));
+  const expandGenericDuft = shouldExpandGenericDuftQuery(queryTokens);
 
-  for (const token of tokenizeValue(query)) {
-    const normalizedToken = token === 'ol' ? 'oel' : token;
+  for (const normalizedToken of queryTokens) {
+    if (normalizedToken === 'duft' && !expandGenericDuft) {
+      addTokenWithSynonyms(tokens, normalizedToken);
+      continue;
+    }
 
     addQueryTokenWithSynonyms(tokens, normalizedToken);
 

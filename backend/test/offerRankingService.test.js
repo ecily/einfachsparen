@@ -602,6 +602,8 @@ test('generic duft query ranks fragrances ahead of scented side hits without hid
   assert.equal(scoreOfferAgainstQuery(perfume, 'duft') > scoreOfferAgainstQuery(cleaner, 'duft'), true);
   assert.equal(scoreOfferAgainstQuery(litter, 'pinienduft') > 0, true);
   assert.equal(scoreOfferAgainstQuery(cleaner, 'wc duft') > 0, true);
+  assert.equal(scoreOfferAgainstQuery(cleaner, 'wc duft') > scoreOfferAgainstQuery(perfume, 'wc duft'), true);
+  assert.equal(applyQueryMatch([perfume, cleaner], 'wc duft')[0].title, cleaner.title);
 });
 
 test('specific room scent and cat litter queries remain findable', () => {

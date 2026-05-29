@@ -116,6 +116,27 @@ test('other retailers only get validity with the same direct offer-level proof',
   assert.equal(unsafeBilla.rawFacts.validitySource, undefined);
 });
 
+test('uses product brand as category context for oral care offers with generic titles', () => {
+  const offer = normalize({
+    id: 'aktionsfinder-bipa-oral-b-io',
+    title: 'IO Series 10 Black',
+    fullDisplayName: 'IO Series 10 Black',
+    description: '',
+    productGroups: [{ title: 'Drogerie' }],
+    product: {
+      brand: { name: 'Oral-B' },
+      productQuantity: 1,
+      productQuantityUnit: {
+        shortName: 'Stk',
+        type: 'PRODUCT',
+      },
+    },
+  }, 'bipa');
+
+  assert.equal(offer.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(offer.categorySecondary, 'Mund- & Zahnpflege');
+});
+
 test('Aktionsfinder URL ranges parse requested date formats until end of day', () => {
   const first = buildSafeOfferValidityEvidence({
     clickoutUrl: 'https://www.aktionsfinder.at/l/spar-flugblatt-16-04-2026-06-05-2026/',

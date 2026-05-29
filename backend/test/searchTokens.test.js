@@ -170,6 +170,18 @@ test('expands generic duft query to direct fragrance intent without room scent s
   assert.equal(litterTokens.includes('duft'), false);
 });
 
+test('does not expand duft to perfume intent when query has a cleaning or room-scent qualifier', () => {
+  const wcDuftTokens = buildQuerySearchTokens('wc duft');
+  const roomDuftTokens = buildQuerySearchTokens('raum duft');
+
+  assert.equal(wcDuftTokens.includes('duft'), true);
+  assert.equal(wcDuftTokens.includes('wc'), true);
+  assert.equal(wcDuftTokens.includes('parfum'), false);
+  assert.equal(wcDuftTokens.includes('eau'), false);
+  assert.equal(roomDuftTokens.includes('duft'), true);
+  assert.equal(roomDuftTokens.includes('parfum'), false);
+});
+
 test('keeps reis and milch query tokens and indexes conservative product compounds', () => {
   assert.deepEqual(buildQuerySearchTokens('reis'), ['reis']);
   assert.deepEqual(buildQuerySearchTokens('milch'), ['milch']);

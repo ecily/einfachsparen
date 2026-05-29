@@ -597,8 +597,13 @@ function buildTermCoverageTokens(values = []) {
   return tokenizeSearchText(values.filter(Boolean).join(' '));
 }
 
-function tokenMatchesCoverageTerm(fieldToken, queryTerm) {
+function isGenericDuftTermQuery(queryTerms = []) {
+  return queryTerms.includes('duft') && queryTerms.every((term) => ['bipa', 'duft'].includes(term));
+}
+
+function tokenMatchesCoverageTerm(fieldToken, queryTerm, { expandGenericDuft = false } = {}) {
   if (
+    expandGenericDuft &&
     queryTerm === 'duft'
     && DUFT_PRODUCT_TOKENS.includes(fieldToken)
     && !['duft'].includes(fieldToken)
@@ -616,11 +621,15 @@ function tokenMatchesCoverageTerm(fieldToken, queryTerm) {
     fieldToken.endsWith(queryTerm);
 }
 
-function hasTermCoverageMatch(fieldTokens, queryTerm) {
-  return fieldTokens.some((fieldToken) => tokenMatchesCoverageTerm(fieldToken, queryTerm));
+function hasTermCoverageMatch(fieldTokens, queryTerm, options = {}) {
+  return fieldTokens.some((fieldToken) => tokenMatchesCoverageTerm(fieldToken, queryTerm, options));
 }
 
-function buildCautiousQueryTermVariants(queryTerm) {
+function buildCautiousQueryTermVariants(queryTerm, { expandGenericDuft = false } = {}) {
+  if (queryTerm === 'duft' && !expandGenericDuft) {
+    return [];
+  }
+
   return buildQuerySearchTokens(queryTerm)
     .filter((token) => token !== queryTerm && token.length >= 3 && !SEARCH_TOKEN_STOPWORDS.has(token));
 }
@@ -662,13 +671,15 @@ function calculateOfferTermCoverage(offer, query) {
   let mediumTerms = 0;
   let directTerms = 0;
   let sourceScore = 0;
+  const expandGenericDuft = isGenericDuftTermQuery(queryTerms);
 
   for (const queryTerm of queryTerms) {
-    const strongMatched = hasTermCoverageMatch(strongTokens, queryTerm);
-    const mediumMatched = !strongMatched && hasTermCoverageMatch(mediumTokens, queryTerm);
+    const termOptions = { expandGenericDuft };
+    const strongMatched = hasTermCoverageMatch(strongTokens, queryTerm, termOptions);
+    const mediumMatched = !strongMatched && hasTermCoverageMatch(mediumTokens, queryTerm, termOptions);
     const cautiousMatched = !strongMatched && !mediumMatched &&
-      buildCautiousQueryTermVariants(queryTerm).some((variant) =>
-        hasTermCoverageMatch(strongTokens, variant) || hasTermCoverageMatch(mediumTokens, variant)
+      buildCautiousQueryTermVariants(queryTerm, termOptions).some((variant) =>
+        hasTermCoverageMatch(strongTokens, variant, termOptions) || hasTermCoverageMatch(mediumTokens, variant, termOptions)
       );
 
     if (!strongMatched && !mediumMatched && !cautiousMatched) {
@@ -2684,6 +2695,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericDuftQuery = context?.key === 'duft'
     && queryTokens.includes('duft')
     && queryTokens.every((token) => ['bipa', 'duft'].includes(token));
+  const contextApplies = Boolean(context && (context.key !== 'duft' || genericDuftQuery));
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
   const conservativeGenericOilQuery = genericOilQuery;
 
@@ -2710,13 +2722,13 @@ function scoreOfferAgainstQuery(offer, query) {
     return 0;
   }
 
-  const productIntentMatched = context
+  const productIntentMatched = contextApplies
     ? hasAnyTokenMatch(titleTokens.concat(comparisonTokens), context.productIntent, {
         exact: true,
         suffix: !genericMilkQuery,
       })
     : false;
-  const productContextMatched = context
+  const productContextMatched = contextApplies
     ? hasAnyTokenMatch(categoryTokens.concat(comparisonTokens), context.productContext, {
         exact: false,
         suffix: true,
@@ -2735,7 +2747,7 @@ function scoreOfferAgainstQuery(offer, query) {
     }
   }
 
-  if (context && (matchedStructuredTokens > 0 || matchedAggregateTokens > 0 || productIntentMatched)) {
+  if (contextApplies && (matchedStructuredTokens > 0 || matchedAggregateTokens > 0 || productIntentMatched)) {
     const strongContextMatches = countAnyTokenMatches(categoryTokens.concat(comparisonTokens), context.strongPreferred);
     const preferredContextMatches = countAnyTokenMatches(structuredTokens, context.preferred);
     const weakContextMatches = countAnyTokenMatches(titleTokens.concat(categoryTokens, comparisonTokens), context.weakContexts);
