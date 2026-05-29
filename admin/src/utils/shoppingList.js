@@ -1,8 +1,16 @@
 import dayjs from 'dayjs'
-import { SHOPPING_LIST_CHECKED_STORAGE_KEY, SHOPPING_LIST_STORAGE_KEY } from '../config/constants'
-import { getOfferCategoryLabel, getOfferStableId, getSavingsValue, hasKnownSavings, normalizeRetailerKey } from './offers'
+import { SHOPPING_LIST_CHECKED_STORAGE_KEY, SHOPPING_LIST_STORAGE_KEY } from '../config/constants.js'
+import {
+  getOfferCategoryLabel,
+  getOfferMinimumPurchaseInfo,
+  getOfferStableId,
+  getSavingsValue,
+  hasKnownSavings,
+  normalizeRetailerKey,
+} from './offers.js'
 
 const SAVINGS_SOURCE_BACKEND_REFERENCE = 'backend-reference-price'
+const MAX_SHOPPING_LIST_QUANTITY = 99
 
 function getOfferSavingsSnapshot(offer) {
   const savingsAmount = getSavingsValue(offer)
@@ -30,6 +38,7 @@ export function loadStoredShoppingList() {
 export function buildShoppingListItem(offer) {
   const id = getOfferStableId(offer)
   const savings = getOfferSavingsSnapshot(offer)
+  const minimumPurchaseInfo = getOfferMinimumPurchaseInfo(offer)
 
   return {
     id,
@@ -59,7 +68,8 @@ export function buildShoppingListItem(offer) {
     rawFacts: offer?.rawFacts || '',
     customerProgramRequired: Boolean(offer?.customerProgramRequired),
     isMultiBuy: Boolean(offer?.isMultiBuy),
-    minimumPurchaseQty: offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1,
+    minimumPurchaseQty: minimumPurchaseInfo?.quantity || offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1,
+    minimumPurchaseUnit: minimumPurchaseInfo?.unit || '',
     hasConditions: Boolean(offer?.hasConditions),
     referencePrice: offer?.referencePrice || null,
     savings: offer?.savings || null,
@@ -72,6 +82,165 @@ export function buildShoppingListItem(offer) {
     hasKnownSavings: savings.amount !== null,
     addedAt: new Date().toISOString(),
   }
+}
+
+function toCents(amount) {
+  const numericAmount = Number(amount)
+
+  return Number.isFinite(numericAmount) ? Math.round(numericAmount * 100) : 0
+}
+
+function fromCents(cents) {
+  return cents / 100
+}
+
+function getReferencePriceAmount(item) {
+  const candidates = [
+    item?.referencePrice?.amount,
+    item?.priceReference?.amount,
+    item?.priceOriginal?.amount,
+    item?.rawFacts && typeof item.rawFacts === 'object' ? item.rawFacts.referencePrice : null,
+  ]
+
+  for (const candidate of candidates) {
+    const amount = Number(candidate)
+
+    if (Number.isFinite(amount) && amount > 0) {
+      return amount
+    }
+  }
+
+  return null
+}
+
+export function getShoppingListMinimumQuantity(item) {
+  const info = getOfferMinimumPurchaseInfo(item)
+  const quantity = Number(info?.quantity)
+
+  if (Number.isFinite(quantity) && quantity > 1) {
+    return Math.min(Math.round(quantity), MAX_SHOPPING_LIST_QUANTITY)
+  }
+
+  return 1
+}
+
+export function getShoppingListItemQuantity(item, quantities = {}) {
+  const itemId = getShoppingListItemId(item)
+  const minimumQuantity = getShoppingListMinimumQuantity(item)
+  const storedQuantity = Number(quantities?.[itemId])
+  const quantity = Number.isFinite(storedQuantity) && storedQuantity > 0 ? Math.round(storedQuantity) : minimumQuantity
+
+  return Math.min(Math.max(quantity, minimumQuantity), MAX_SHOPPING_LIST_QUANTITY)
+}
+
+export function getShoppingListQuantityBreakdown(item, quantity) {
+  const minimumQuantity = getShoppingListMinimumQuantity(item)
+  const safeQuantity = Math.min(
+    Math.max(Number.isFinite(Number(quantity)) ? Math.round(Number(quantity)) : minimumQuantity, minimumQuantity),
+    MAX_SHOPPING_LIST_QUANTITY
+  )
+
+  if (minimumQuantity <= 1) {
+    return {
+      minimumQuantity,
+      quantity: safeQuantity,
+      offerQuantity: safeQuantity,
+      remainderQuantity: 0,
+      completeBlocks: safeQuantity,
+    }
+  }
+
+  const completeBlocks = Math.floor(safeQuantity / minimumQuantity)
+  const offerQuantity = completeBlocks * minimumQuantity
+  const remainderQuantity = safeQuantity - offerQuantity
+
+  return {
+    minimumQuantity,
+    quantity: safeQuantity,
+    offerQuantity,
+    remainderQuantity,
+    completeBlocks,
+  }
+}
+
+export function getShoppingListItemPricing(item, quantity) {
+  const breakdown = getShoppingListQuantityBreakdown(item, quantity)
+  const currentPrice = Number(item?.priceCurrent?.amount ?? item?.price?.amount ?? item?.price)
+  const referencePrice = getReferencePriceAmount(item)
+  const savings = getShoppingListItemSavingsInfo(item)
+  const hasCurrentPrice = Number.isFinite(currentPrice) && currentPrice > 0
+  const hasReferencePrice = Number.isFinite(referencePrice) && referencePrice > currentPrice
+  const offerUnitCents = hasCurrentPrice ? toCents(currentPrice) : 0
+  const referenceUnitCents = hasReferencePrice ? toCents(referencePrice) : offerUnitCents
+  const offerTotalCents = offerUnitCents * breakdown.offerQuantity
+  const remainderTotalCents = referenceUnitCents * breakdown.remainderQuantity
+  const knownSavingsCents =
+    savings.type === 'known' ? toCents(savings.amount) * breakdown.offerQuantity : 0
+
+  return {
+    ...breakdown,
+    hasCurrentPrice,
+    hasReferencePrice,
+    offerTotal: fromCents(offerTotalCents),
+    remainderTotal: fromCents(remainderTotalCents),
+    estimatedTotal: fromCents(offerTotalCents + remainderTotalCents),
+    knownSavings: fromCents(knownSavingsCents),
+    hasApproximateSavings: savings.type === 'known' && savings.isApproximate,
+    hasUncertainRemainder: breakdown.remainderQuantity > 0,
+    hasUnpricedRemainder: breakdown.remainderQuantity > 0 && !hasReferencePrice,
+  }
+}
+
+export function getShoppingListRemainderHint(item, quantity) {
+  const pricing = getShoppingListItemPricing(item, quantity)
+
+  if (!pricing.hasUncertainRemainder) return ''
+
+  const unit = item?.minimumPurchaseUnit === 'pack' ? 'Packung' : 'Stück'
+  const unitLabel = pricing.remainderQuantity === 1 ? unit : unit === 'Packung' ? 'Packungen' : 'Stück'
+
+  if (pricing.hasReferencePrice) {
+    return `Für ${pricing.remainderQuantity} zusätzliche ${unitLabel} ist nicht sicher, ob der Angebotspreis gilt.`
+  }
+
+  return `Für ${pricing.remainderQuantity} zusätzliche ${unitLabel} ist nicht sicher, ob sie vollständig vom Angebotspreis gedeckt sind.`
+}
+
+export function getShoppingListSummaryForQuantities(items = [], quantities = {}) {
+  return (items || []).reduce(
+    (summary, item) => {
+      const quantity = getShoppingListItemQuantity(item, quantities)
+      const pricing = getShoppingListItemPricing(item, quantity)
+
+      if (pricing.hasCurrentPrice) {
+        summary.offerTotal += pricing.estimatedTotal
+      }
+
+      if (pricing.knownSavings > 0) {
+        summary.knownSavings += pricing.knownSavings
+        summary.knownSavingsCount += 1
+        if (pricing.hasApproximateSavings) summary.approximateSavingsCount += 1
+      } else {
+        summary.actionWithoutNormalPriceCount += 1
+      }
+
+      if (pricing.hasUnpricedRemainder) {
+        summary.uncertainRemainderCount += 1
+      }
+
+      summary.itemCount += 1
+      return summary
+    },
+    {
+      itemCount: 0,
+      offerTotal: 0,
+      knownSavings: 0,
+      knownSavingsCount: 0,
+      approximateSavingsCount: 0,
+      actionWithoutNormalPriceCount: 0,
+      uncertainRemainderCount: 0,
+    }
+  )
 }
 
 export function buildShoppingListItemFromSnapshot(item) {

@@ -3254,6 +3254,24 @@ a {
   cursor: pointer;
 }
 
+.shopping-list-item__quantity-button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.shopping-list-item__quantity-note {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid var(--kk-condition-border-soft);
+  border-radius: 0.5rem;
+  background: var(--kk-condition-bg-soft);
+  color: var(--kk-condition-text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .shopping-list-item__remove {
   min-height: 2.45rem;
   padding: 0.52rem 0.78rem;

@@ -1,4 +1,4 @@
-import { formatCurrencyAmount } from './formatting'
+import { formatCurrencyAmount } from './formatting.js'
 
 export function normalizeRetailerKey(value) {
   return String(value || '')
@@ -191,6 +191,8 @@ function getExplicitMinimumQuantity(offer) {
       offer?.minimumOrderQuantity ||
       offer?.minimumPurchase?.quantity ||
       offer?.discount?.minimumQuantity ||
+      (offer?.rawFacts && typeof offer.rawFacts === 'object' ? offer.rawFacts.minimumPurchaseQuantity : null) ||
+      (offer?.rawFacts && typeof offer.rawFacts === 'object' ? offer.rawFacts.requiredQuantity : null) ||
       0
   )
 
@@ -252,6 +254,10 @@ function getDisplayMinimumConditionInfo(offer) {
     quantity: firstInfo.quantity,
     unit: parsedInfos.some((info) => info.quantity === firstInfo.quantity && info.unit === 'pack') ? 'pack' : firstInfo.unit,
   }
+}
+
+export function getOfferMinimumPurchaseInfo(offer) {
+  return getDisplayMinimumConditionInfo(offer)
 }
 
 function formatMinimumDisplayCondition(info) {

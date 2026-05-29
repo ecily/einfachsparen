@@ -7,9 +7,11 @@ import { formatRetailerName } from '../../utils/retailers'
 import {
   buildShareSnapshot,
   getRetailerGroupSummary,
+  getShoppingListItemQuantity,
   getShoppingListItemId,
-  getShoppingListItemSavingsInfo,
-  getShoppingListSummary,
+  getShoppingListMinimumQuantity,
+  getShoppingListRemainderHint,
+  getShoppingListSummaryForQuantities,
   groupShoppingListByRetailer,
   loadCheckedShoppingListItems,
   storeCheckedShoppingListItems,
@@ -90,64 +92,12 @@ function storeQuantities(quantities) {
   }
 }
 
-function getItemQuantity(quantities, itemId) {
-  const quantity = Number(quantities[itemId])
-
-  return Number.isFinite(quantity) && quantity > 0 ? Math.min(Math.round(quantity), 99) : 1
-}
-
-function toCents(amount) {
-  const numericAmount = Number(amount)
-
-  return Number.isFinite(numericAmount) ? Math.round(numericAmount * 100) : 0
-}
-
-function getOfferBasisQuantity(item) {
-  const candidates = [
-    item?.minimumPurchaseQty,
-    item?.minimumPurchaseQuantity,
-    item?.minQuantity,
-    item?.minimumQuantity,
-    item?.minimumOrderQuantity,
-    item?.minimumPurchase?.quantity,
-    item?.discount?.minimumQuantity,
-    item?.rawFacts && typeof item.rawFacts === 'object' ? item.rawFacts.minimumPurchaseQuantity : null,
-    item?.rawFacts && typeof item.rawFacts === 'object' ? item.rawFacts.requiredQuantity : null,
-  ]
-
-  for (const candidate of candidates) {
-    const quantity = Number(candidate)
-
-    if (Number.isFinite(quantity) && quantity > 1) {
-      return Math.min(Math.round(quantity), 99)
-    }
-  }
-
-  return 1
-}
-
 function getItemsTotal(items, quantities) {
-  const cents = (items || []).reduce((sum, item) => {
-    const price = Number(item?.priceCurrent?.amount)
-
-    if (!Number.isFinite(price)) {
-      return sum
-    }
-
-    return sum + toCents(price) * getOfferBasisQuantity(item) * getItemQuantity(quantities, getShoppingListItemId(item))
-  }, 0)
-
-  return cents / 100
+  return getShoppingListSummaryForQuantities(items, quantities).offerTotal
 }
 
 function getKnownSavingsTotal(items, quantities) {
-  const cents = (items || []).reduce((sum, item) => {
-    const savings = getShoppingListItemSavingsInfo(item)
-
-    return savings.type === 'known' ? sum + toCents(savings.amount) * getItemQuantity(quantities, getShoppingListItemId(item)) : sum
-  }, 0)
-
-  return cents / 100
+  return getShoppingListSummaryForQuantities(items, quantities).knownSavings
 }
 
 function getSavingsPercent(offerTotal, savingsTotal) {
@@ -162,11 +112,8 @@ function getSavingsPercent(offerTotal, savingsTotal) {
   return Math.round((saved / comparisonTotal) * 100)
 }
 
-function getApproximateSavingsCount(items = []) {
-  return (items || []).filter((item) => {
-    const savings = getShoppingListItemSavingsInfo(item)
-    return savings.type === 'known' && savings.isApproximate
-  }).length
+function getApproximateSavingsCount(items = [], quantities = {}) {
+  return getShoppingListSummaryForQuantities(items, quantities).approximateSavingsCount
 }
 
 function getMarketSummaryText({ groupSummary, knownSavingsTotal, approximateCount }) {
@@ -211,7 +158,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
     [checkedItemIds, hideCompleted, shoppingListItems]
   )
   const groupedItems = useMemo(() => groupShoppingListByRetailer(visibleItems), [visibleItems])
-  const summary = useMemo(() => getShoppingListSummary(shoppingListItems), [shoppingListItems])
+  const summary = useMemo(() => getShoppingListSummaryForQuantities(shoppingListItems, quantities), [quantities, shoppingListItems])
   const offerTotal = useMemo(() => getItemsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const knownSavingsTotal = useMemo(() => getKnownSavingsTotal(shoppingListItems, quantities), [quantities, shoppingListItems])
   const canShowOfferTotal = useMemo(() => hasKnownCurrentPrice(shoppingListItems), [shoppingListItems])
@@ -243,12 +190,14 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
 
   function handleQuantityChange(itemId, direction) {
     setQuantities((current) => {
-      const currentQuantity = getItemQuantity(current, itemId)
+      const item = shoppingListItems.find((candidate) => getShoppingListItemId(candidate) === itemId)
+      const minimumQuantity = getShoppingListMinimumQuantity(item)
+      const currentQuantity = getShoppingListItemQuantity(item, current)
       const nextQuantity = direction === 'increase' ? currentQuantity + 1 : currentQuantity - 1
 
       return {
         ...current,
-        [itemId]: Math.max(1, Math.min(nextQuantity, 99)),
+        [itemId]: Math.max(minimumQuantity, Math.min(nextQuantity, 99)),
       }
     })
   }
@@ -372,7 +321,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
         {groupedItems.map((group) => {
           const groupSummary = getRetailerGroupSummary(group.items)
           const groupKnownSavingsTotal = getKnownSavingsTotal(group.items, quantities)
-          const groupApproximateSavingsCount = getApproximateSavingsCount(group.items)
+          const groupApproximateSavingsCount = getApproximateSavingsCount(group.items, quantities)
           const retailerTheme = getRetailerTheme(group.retailerKey || group.retailerName)
 
           return (
@@ -404,7 +353,9 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                 {group.items.map((item) => {
                   const itemId = getShoppingListItemId(item)
                   const isChecked = checkedItemIds.has(itemId)
-                  const quantity = getItemQuantity(quantities, itemId)
+                  const quantity = getShoppingListItemQuantity(item, quantities)
+                  const minimumQuantity = getShoppingListMinimumQuantity(item)
+                  const remainderHint = getShoppingListRemainderHint(item, quantity)
                   const offer = buildShoppingListOffer(item)
 
                   return (
@@ -433,6 +384,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                               className="shopping-list-item__quantity-button"
                               aria-label="Menge verringern"
                               onClick={() => handleQuantityChange(itemId, 'decrease')}
+                              disabled={quantity <= minimumQuantity}
                             >
                               -
                             </button>
@@ -446,6 +398,8 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                               +
                             </button>
                           </div>
+
+                          {remainderHint ? <p className="shopping-list-item__quantity-note">{remainderHint}</p> : null}
 
                           <button type="button" className="ghost-button shopping-list-item__remove" onClick={() => onRemoveItem(itemId)}>
                             Entfernen
