@@ -3126,6 +3126,65 @@ test('wurst category remains a weak signal without outranking explicit salami', 
   ]);
 });
 
+test('wurst intent demotes bakery cheese side hits behind real sausage products', () => {
+  const butterCroissant = offer({
+    title: 'Schinken-Kaese-Buttercroissant SPAR 1 Stueck',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'schinken-kaese-buttercroissant::1-stueck',
+  });
+  const tannSalami = offer({
+    title: 'TANN Salami SPAR',
+    brand: 'TANN',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'tann-salami::0.1-kg',
+    searchText: 'spar tann salami wurst',
+  });
+  const cabanossi = offer({
+    title: 'Cabanossi SPAR',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'cabanossi::0.3-kg',
+    searchText: 'spar cabanossi wurst',
+  });
+  const frankfurter = offer({
+    title: 'Frankfurter Wuerstel SPAR',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'frankfurter-wuerstel::0.3-kg',
+    searchText: 'spar frankfurter wurst',
+  });
+
+  for (const query of ['wurst', 'spar wurst']) {
+    const sortedTitles = applyQueryMatch([butterCroissant, tannSalami, cabanossi, frankfurter], query)
+      .map((item) => item.title);
+
+    assert.ok(sortedTitles.indexOf('Schinken-Kaese-Buttercroissant SPAR 1 Stueck') > 2, query);
+    assert.deepEqual(new Set(sortedTitles.slice(0, 3)), new Set([
+      'Cabanossi SPAR',
+      'Frankfurter Wuerstel SPAR',
+      'TANN Salami SPAR',
+    ]), query);
+  }
+
+  assert.equal(applyQueryMatch([butterCroissant, tannSalami], 'tann')[0].title, 'TANN Salami SPAR');
+  assert.equal(applyQueryMatch([butterCroissant, tannSalami], 'salami')[0].title, 'TANN Salami SPAR');
+  assert.equal(applyQueryMatch([butterCroissant, cabanossi], 'cabanossi')[0].title, 'Cabanossi SPAR');
+  assert.equal(
+    applyQueryMatch([tannSalami, butterCroissant], 'schinken kaese buttercroissant')[0].title,
+    'Schinken-Kaese-Buttercroissant SPAR 1 Stueck'
+  );
+});
+
 test('tee search ranks real tea products ahead of coffee category side hits', () => {
   const offers = [
     offer({
@@ -3255,6 +3314,43 @@ test('tee context does not regress kaffee or eistee queries', () => {
   assert.deepEqual(applyQueryMatch([coffee, icedTea], 'eistee').map((item) => item.title), [
     'Eistee Gruener-Tee Zitrone',
   ]);
+});
+
+test('coffee searches keep Teebutter from winning through coffee tea category signals', () => {
+  const teebutter = offer({
+    title: 'Oesterreichische Teebutter SPAR',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    comparisonGroup: 'oesterreichische-teebutter::0.25-kg',
+    searchText: 'spar teebutter butter milchprodukte',
+  });
+  const sparCoffee = offer({
+    title: 'Lavazza Kaffee Bohnen SPAR',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'lavazza-kaffee-bohnen::1-kg',
+    searchText: 'spar lavazza kaffee bohnen',
+  });
+  const tea = offer({
+    title: 'Teekanne Teebeutel Schwarztee SPAR',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'teekanne-teebeutel-schwarztee::20-stueck',
+    searchText: 'spar tee teebeutel schwarztee',
+  });
+
+  assert.equal(applyQueryMatch([teebutter, sparCoffee], 'spar kaffee')[0].title, 'Lavazza Kaffee Bohnen SPAR');
+  assert.equal(applyQueryMatch([teebutter, sparCoffee], 'kaffee')[0].title, 'Lavazza Kaffee Bohnen SPAR');
+  assert.equal(applyQueryMatch([teebutter, tea], 'tee')[0].title, 'Teekanne Teebeutel Schwarztee SPAR');
+  assert.equal(applyQueryMatch([sparCoffee, teebutter], 'butter')[0].title, 'Oesterreichische Teebutter SPAR');
+  assert.ok(scoreOfferAgainstQuery(teebutter, 'kaffee') < scoreOfferAgainstQuery(sparCoffee, 'kaffee'));
+  assert.ok(scoreOfferAgainstQuery(teebutter, 'tee') < scoreOfferAgainstQuery(tea, 'tee'));
 });
 
 test('single-word core product searches keep direct product matches searchable', () => {
@@ -5222,7 +5318,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v2-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

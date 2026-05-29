@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v2-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
@@ -2290,7 +2290,35 @@ function getGenericWurstOfferIntent({ titleTokens, categoryTokens, comparisonTok
   const productTokens = titleTokens.concat(comparisonTokens);
   const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
   const productWurst = hasAnyTokenFamily(productTokens, WURST_PRODUCT_TOKENS);
+  const strongWurstContext = hasAnyTokenFamily(productTokens.concat(aggregateTokens), [
+    'aufschnitt',
+    'bratwurst',
+    'cabanossi',
+    'extrawurst',
+    'frankfurter',
+    'kantwurst',
+    'polnische',
+    'salami',
+    'tann',
+    'wurst',
+  ]);
   const categoryWurst = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['wurst', 'aufschnitt']);
+  const convenienceSide = hasAnyTokenFamily(productTokens, [
+    'baguette',
+    'broetchen',
+    'brotchen',
+    'buttercroissant',
+    'croissant',
+    'fertiggericht',
+    'kaese',
+    'kase',
+    'linsen',
+    'pizza',
+    'pizzakaese',
+    'pizzakase',
+    'suppe',
+    'wrap',
+  ]);
   const fishSide = hasAnyTokenFamily(productTokens, [
     'fisch',
     'forelle',
@@ -2318,7 +2346,8 @@ function getGenericWurstOfferIntent({ titleTokens, categoryTokens, comparisonTok
     'unterkeulen',
   ]);
   const categoryOnly = !productWurst && categoryWurst;
-  const clearSideHit = !productWurst && (fishSide || meatCutSide);
+  const clearSideHit = (!productWurst && (fishSide || meatCutSide)) ||
+    (convenienceSide && !strongWurstContext);
   const noProductSignal = !productWurst &&
     !hasAnyTokenFamily(allTokens, WURST_PRODUCT_TOKENS) &&
     categoryWurst;
@@ -2796,7 +2825,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericDogFoodQuery = context?.key === 'hundefutter' && queryTokens.length === 1 && queryTokens[0] === 'hundefutter';
   const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
   const genericBeerQuery = context?.key === 'bier' && queryTokens.length === 1 && queryTokens[0] === 'bier';
-  const genericWurstQuery = context?.key === 'wurst' && queryTokens.length === 1 && queryTokens[0] === 'wurst';
+  const wurstIntentQuery = context?.key === 'wurst' && queryTokens.includes('wurst');
   const genericTeeQuery = context?.key === 'tee' && queryTokens.length === 1 && queryTokens[0] === 'tee';
   const genericFischQuery = context?.key === 'fisch' && queryTokens.length === 1 && queryTokens[0] === 'fisch';
   const genericDuftQuery = context?.key === 'duft'
@@ -3005,7 +3034,7 @@ function scoreOfferAgainstQuery(offer, query) {
       });
     }
 
-    if (genericWurstQuery) {
+    if (wurstIntentQuery) {
       score += scoreWurstSearchIntent({
         titleTokens,
         categoryTokens,

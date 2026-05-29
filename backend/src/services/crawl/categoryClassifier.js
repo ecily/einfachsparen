@@ -8,7 +8,7 @@ const CATEGORY_TAXONOMY = [
       { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz|mango|mangos|nektarine|nektarinen|kresse)/] },
       { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast|baguette|kornspitz|weizenweckerl|striezel|brioche|tortilla|wrap)/] },
       { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
-      { label: 'Milchprodukte', patterns: [/\b(milch|heumilch|vollmilch|buttermilch|butter|joghurt|jogurt|topfen|sahne|rahm|quark|skyr|kefir|sauerrahm|schlagobers|obers|pudding|dessertcreme|milchreis)\b/] },
+      { label: 'Milchprodukte', patterns: [/\b(milch|heumilch|vollmilch|buttermilch|butter|teebutter|joghurt|jogurt|topfen|sahne|rahm|quark|skyr|kefir|sauerrahm|schlagobers|obers|pudding|dessertcreme|milchreis)\b/] },
       { label: 'Kaese', patterns: [/\b(kase|kaese|grosslochkaese|grosslochkase|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|bergkase|frischkaese|frischkase|schnittkaese|schnittkase|weinkaese|weinkase|oesterkron|osterkron|feta|ricotta|mascarpone|grana|cheddar|brie)\b/] },
       { label: 'Tiefkuehl- & Fertigprodukte', patterns: [/\b(tiefkuhl|tiefkuehl|pizza|fertig|mikrowelle|tk|frost|lasagne|pommes|eis|eiscreme|fischstaebchen|fischstabchen|fertiggericht|convenience|tiefgekuhlt|tiefgekuehlt)\b/] },
       { label: 'Suesswaren & Knabbereien', patterns: [/\b(schokolade|susswaren|suesswaren|fruchtgummi|gummibaer|gummibaeren|knabberei|chips|flips|brotchips|kekse|butterkeks|bonbon|zuckerl|praline|pralinen|nougat|snack|nusse|nuesse|erdnuss|erdnusse|erdnuesse|mandel|cashew|waffel|popcorn|soletti|cracker|riegel|muesliriegel|muesli riegel|proteinriegel)\b/] },
@@ -28,7 +28,7 @@ const CATEGORY_TAXONOMY = [
       { label: 'Bier', patterns: [/\b(bier|pils|weizen|radler|lager|helles|maerzen|marzen|flaschenbier|dosenbier|ottakringer|puntigamer|hirter|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/] },
       { label: 'Wein & Sekt', patterns: [/\b(wein|rotwein|weisswein|rosewein|rose|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|gruener veltliner|veltliner|hugo)\b/] },
       { label: 'Spirituosen', patterns: [/\b(whisky|whiskey|rum|gin|vodka|likor|likoer|spirituose|spirituosen|schnaps|johnnie walker|glenfiddich|jaegermeister|jagermeister)\b/] },
-      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|tee|matcha|bohne|kaffeekapsel|kapseln|nespresso|dolce gusto)/] },
+      { label: 'Kaffee & Tee', patterns: [/(kaffee|espresso|cappuccino|matcha|bohne|kaffeekapsel|kapseln|nespresso|dolce gusto|\btee\b|teebeutel|teekanne|eistee|kraeutertee|krautertee|schwarztee|gruentee|gruenentee|gruntee|fruechtetee|fruchtetee|kamillentee|pfefferminztee)/] },
       { label: 'Milchgetraenke', patterns: [/(kakao|milchdrink|milchgetrank|milchgetraenk|joghurtdrink|proteindrink|eiskaffee)/] },
     ],
   },
@@ -168,6 +168,11 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Koerperpflege',
   },
   {
+    patterns: [/\bteebutter\b/],
+    main: 'Lebensmittel',
+    sub: 'Milchprodukte',
+  },
+  {
     patterns: [/\bsommerbutter\b/],
     main: 'Lebensmittel',
     sub: 'Milchprodukte',
@@ -266,6 +271,11 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Wasser',
   },
   {
+    patterns: [/\b(tee|teebeutel|teekanne|eistee|kraeutertee|krautertee|schwarztee|gruentee|gruenentee|gruntee|fruechtetee|fruchtetee|kamillentee|pfefferminztee)\b/],
+    main: 'Getraenke',
+    sub: 'Kaffee & Tee',
+  },
+  {
     patterns: [/\b(schartner bombe|cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|isostar|powerade|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
     main: 'Getraenke',
     sub: 'Softdrinks & Energy',
@@ -306,7 +316,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Brot & Gebaeck',
   },
   {
-    patterns: [/\b(milch|heumilch|vollmilch|buttermilch|joghurt|jogurt|topfen|skyr|kefir|sauerrahm|schlagobers|obers|pudding|milchreis)\b/],
+    patterns: [/\b(milch|heumilch|vollmilch|buttermilch|teebutter|joghurt|jogurt|topfen|skyr|kefir|sauerrahm|schlagobers|obers|pudding|milchreis)\b/],
     main: 'Lebensmittel',
     sub: 'Milchprodukte',
   },
@@ -376,7 +386,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Pasta, Reis & Konserven',
   },
   {
-    patterns: [/\b(kaffee|cafe|caffe|moka|gemahlen|espresso|cappuccino|tee|matcha|kaffeekapsel|nespresso|dolce gusto|nescafe|jacobs|tchibo|illy|lavazza|dallmayr|prodomo|meinl|praesident|prasident)\b/],
+    patterns: [/\b(kaffee|cafe|caffe|moka|gemahlen|espresso|cappuccino|matcha|kaffeekapsel|nespresso|dolce gusto|nescafe|jacobs|tchibo|illy|lavazza|dallmayr|prodomo|meinl|praesident|prasident|teebeutel|teekanne|eistee|kraeutertee|krautertee|schwarztee|gruentee|gruenentee|gruntee|fruechtetee|fruchtetee|kamillentee|pfefferminztee|tee)\b/],
     main: 'Getraenke',
     sub: 'Kaffee & Tee',
   },

@@ -116,6 +116,37 @@ test('keeps critical side hits out of misleading butter and rice categories', ()
   assert.equal(sommerbutter.secondaryCategory, 'Milchprodukte');
 });
 
+test('classifies Teebutter as dairy butter instead of coffee and tea', () => {
+  for (const title of [
+    '\u00d6sterreichische Teebutter SPAR',
+    'Teebutter',
+  ]) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Lebensmittel', title);
+    assert.equal(decision.secondaryCategory, 'Milchprodukte', title);
+    assert.notEqual(decision.primaryCategory, 'Getraenke', title);
+    assert.notEqual(decision.secondaryCategory, 'Kaffee & Tee', title);
+  }
+});
+
+test('keeps real tea and coffee products in coffee and tea category', () => {
+  for (const title of [
+    'Eistee',
+    'Schwarztee',
+    'Kr\u00e4utertee',
+    'Teebeutel',
+    'Kaffee',
+    'Espresso',
+    'Cappuccino',
+  ]) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Getraenke', title);
+    assert.equal(decision.secondaryCategory, 'Kaffee & Tee', title);
+  }
+});
+
 test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', () => {
   const cases = [
     ['Hugo Boss Deep Red Eau de Parfum 50ml'],
