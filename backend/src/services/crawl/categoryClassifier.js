@@ -203,8 +203,9 @@ const HARD_CATEGORY_OVERRIDES = [
   },
   {
     patterns: [
-      /\bgeschenkset\b.*\b(eau de|parfum|duft|fragrance|pour homme|pour femme|homme|femme|bottled|million|cool water|phantom|devotion)\b/,
-      /\b(eau de|parfum|duft|fragrance|pour homme|pour femme|homme|femme|bottled|million|cool water|phantom|devotion)\b.*\bgeschenkset\b/,
+      /\bgeschenkset\b.*\b(eau de|parfum|duft|fragrance|herrenduft|damenduft|pour homme|pour femme|homme|femme)\b/,
+      /\b(eau de|parfum|duft|fragrance|herrenduft|damenduft|pour homme|pour femme|homme|femme)\b.*\bgeschenkset\b/,
+      /(?=.*\bgeschenkset\b)(?=.*\bbottled\b)(?=.*\b(hugo boss|hugo|boss|parfum|duft|fragrance|eau de)\b)/,
     ],
     main: 'Drogerie / Hygiene',
     sub: 'Kosmetik & Make-up',

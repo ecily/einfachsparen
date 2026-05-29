@@ -600,6 +600,42 @@ test('BIPA official parser derives ml unit price from package size when source b
   assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
 });
 
+test('BIPA official enrichment derives visible ml quantity from product title when package field is missing', () => {
+  const testSource = source({ sourceUrl: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion' });
+  const rawOffers = __private.parseBipaOffersFromHtml({
+    html: bipaMobifyHtml([
+      bipaMobifyHit('123456', {
+        c_brand: 'Hugo Boss',
+        productName: 'Hugo Boss Bottled Eau de Toilette 100ml',
+        c_kundenbezeichnung: 'Bottled Eau de Toilette 100ml',
+        c_inhalt: '',
+        c_category: 'parfum-herrenduefte',
+        c_displayedPrice: 57.99,
+        c_insteadPrice: 79.99,
+        c_basePrice: '',
+      }),
+    ]),
+    source: testSource,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: testSource.sourceUrl,
+  });
+  const offers = enrichOffersForStorage(rawOffers, {
+    source: testSource,
+    sourceType: 'bipa-official-html',
+    parserVersion: 'official-v3-coverage',
+    normalizationVersion: 'v3-audit',
+  });
+
+  assert.equal(rawOffers.length, 1);
+  assert.equal(rawOffers[0].quantityText, '');
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].quantityText, '100 ml');
+  assert.equal(offers[0].priceCurrent.amount, 57.99);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 579.9);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
+});
+
 test('dm official sale parser only treats Ausverkauf product text as offers and preserves previous price evidence', () => {
   const html = `
     <html><body>

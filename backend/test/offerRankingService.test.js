@@ -606,6 +606,99 @@ test('generic duft query ranks fragrances ahead of scented side hits without hid
   assert.equal(applyQueryMatch([perfume, cleaner], 'wc duft')[0].title, cleaner.title);
 });
 
+test('ranking response infers safe visible ml fields from fragrance titles', () => {
+  const cases = [
+    ['Boss Bottled Eau de Toilette 100ml', 57.99, '100 ml', 579.9],
+    ['My Land Eau de Toilette 50ml', 31.49, '50 ml', 629.8],
+    ['Boss Bottled Eau de Toilette 200ml', 76.99, '200 ml', 384.95],
+    ['Paco Rabanne Lady Million Eau de Parfum BIPA 50 Milliliter 1 Stueck', 62.99, '50 ml', 1259.8],
+    ['Jil Sander Sun Woman Eau de Toilette BIPA 75 Milliliter 1 Stueck', 34.99, '75 ml', 466.53],
+  ];
+
+  for (const [title, price, quantityText, unitPrice] of cases) {
+    const ranked = buildRankedOffer(offer({
+      retailerKey: 'bipa',
+      retailerName: 'BIPA',
+      title,
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Kosmetik & Make-up',
+      priceCurrent: { amount: price, currency: 'EUR' },
+      quantityText: title.includes('1 Stueck') ? '1 Stueck' : '',
+      unitType: title.includes('1 Stueck') ? 'Stk' : '',
+      totalComparableAmount: title.includes('1 Stueck') ? 1 : null,
+      comparableUnit: title.includes('1 Stueck') ? 'Stk' : '',
+      normalizedUnitPrice: title.includes('1 Stueck')
+        ? { amount: price, unit: 'Stk', comparable: true, confidence: 0.8 }
+        : { amount: null, unit: '', comparable: false, confidence: 0 },
+      quality: { comparisonSafe: false, issues: ['Vergleichseinheit unklar'] },
+    }));
+
+    assert.equal(ranked.quantityText, quantityText, title);
+    assert.equal(ranked.unitType, 'ml', title);
+    assert.equal(ranked.comparableUnit, 'l', title);
+    assert.equal(ranked.normalizedUnitPrice.amount, unitPrice, title);
+    assert.equal(ranked.normalizedUnitPrice.unit, 'l', title);
+    assert.equal(ranked.normalizedUnitPrice.comparable, true, title);
+    assert.equal(ranked.quality.comparisonSafe, true, title);
+  }
+});
+
+test('ranking response keeps unsafe plus and ambiguous set quantities hidden', () => {
+  const cases = [
+    'Sonnencreme LSF 50+',
+    'SPF 50+ Sun Spray',
+    'Vitamin C+ B-Vitamine',
+    'MCM Compact Mini Set Eau de Parfum BIPA 7 Milliliter 4 Stueck',
+  ];
+
+  for (const title of cases) {
+    const ranked = buildRankedOffer(offer({
+      retailerKey: 'bipa',
+      retailerName: 'BIPA',
+      title,
+      priceCurrent: { amount: 9.99, currency: 'EUR' },
+      quantityText: '',
+      totalComparableAmount: null,
+      comparableUnit: '',
+      unitType: '',
+      normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+      quality: { comparisonSafe: false },
+    }));
+
+    assert.equal(ranked.normalizedUnitPrice.amount, null, title);
+    assert.equal(ranked.comparableUnit, '', title);
+  }
+});
+
+test('ranking response corrects stale BIPA fragrance giftset wine category with context only', () => {
+  const bottled = buildRankedOffer(offer({
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    brand: 'Hugo Boss',
+    title: 'Bottled Geschenkset',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    subcategoryKey: 'wein-sekt',
+    rawFacts: { bipaCategory: 'parfum-herrenduefte' },
+  }));
+  const wine = buildRankedOffer(offer({
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    title: 'Wein Geschenkset',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    subcategoryKey: 'wein-sekt',
+  }));
+
+  assert.equal(bottled.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(bottled.categorySecondary, 'Kosmetik & Make-up');
+  assert.equal(bottled.displayCategory, 'Kosmetik & Make-up');
+  assert.equal(wine.categoryPrimary, 'Getraenke');
+  assert.equal(wine.categorySecondary, 'Wein & Sekt');
+});
+
 test('specific room scent and cat litter queries remain findable', () => {
   const roomScent = offer({
     title: 'Raumduft Lavendel',
@@ -4854,7 +4947,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v1-offer-quality-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

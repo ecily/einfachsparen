@@ -16,11 +16,17 @@ const {
   repairGermanSearchTextEncoding,
 } = require('./searchTokens');
 const {
+  PACKAGE_SIZE_UNCLEAR_REASON,
+  QUANTITY_INCOMPLETE_REASON,
+  UNIT_CONFLICT_REASON,
+  UNIT_UNCLEAR_REASON,
+  assessComparableSafety,
+  inferMissingQuantityFields,
   isOfferSafelyComparable,
   normalizeComparableUnit,
   sanitizePublicOfferQuantityFields,
 } = require('../crawl/offerQualityGuards');
-const { CATEGORY_TAXONOMY } = require('../crawl/categoryClassifier');
+const { CATEGORY_TAXONOMY, determineCategoryDecision } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { isExpiredValidToCompensatedByFreshCrawl, isOfferFreshForActiveUse } = require('./offerFreshness');
 const { classifyOfferSourceQuality } = require('./sourceQuality');
@@ -120,7 +126,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v1-offer-quality-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -3371,7 +3377,159 @@ function getPublicConditionsText(offer, options = {}) {
   });
 }
 
+function roundPublicUnitPrice(value) {
+  return Number.isFinite(value) ? Number(value.toFixed(2)) : null;
+}
+
+function buildPublicComparisonAmountKey(amount, unit) {
+  const numericAmount = Number(amount);
+
+  if (!(numericAmount > 0) || !unit) {
+    return '';
+  }
+
+  return `${Number(numericAmount.toFixed(3))}-${unit}`;
+}
+
+const PUBLIC_QUANTITY_REVIEW_REASONS = new Set([
+  UNIT_UNCLEAR_REASON,
+  UNIT_CONFLICT_REASON,
+  QUANTITY_INCOMPLETE_REASON,
+  PACKAGE_SIZE_UNCLEAR_REASON,
+  'missing-quantity',
+]);
+
+function withResponseInferredQuantityFields(offer = {}) {
+  const inferred = inferMissingQuantityFields(offer);
+
+  if (!inferred || Object.keys(inferred).length === 0) {
+    return offer;
+  }
+
+  const next = { ...offer };
+  const currentComparableUnit = normalizeComparableUnit(next.comparableUnit || next.normalizedUnitPrice?.unit);
+  const inferredComparableUnit = normalizeComparableUnit(inferred.comparableUnit);
+  const preferInferredMeasure = ['kg', 'l'].includes(inferredComparableUnit)
+    && (!currentComparableUnit || currentComparableUnit === 'Stk');
+
+  for (const field of ['packCount', 'unitValue', 'unitType', 'totalComparableAmount', 'comparableUnit', 'packageType']) {
+    if (
+      (preferInferredMeasure || next[field] === null || next[field] === undefined || next[field] === '')
+      && inferred[field] !== undefined
+      && inferred[field] !== null
+      && inferred[field] !== ''
+    ) {
+      next[field] = inferred[field];
+    }
+  }
+
+  if ((!next.quantityText || preferInferredMeasure) && inferred.quantityText) {
+    next.quantityText = inferred.quantityText;
+  }
+
+  const currentAmount = Number(next.priceCurrent?.amount);
+  const totalAmount = Number(next.totalComparableAmount);
+  const comparableUnit = next.comparableUnit || inferred.comparableUnit || '';
+  const existingUnitPrice = Number(next.normalizedUnitPrice?.amount);
+
+  if (
+    (preferInferredMeasure || !(existingUnitPrice > 0))
+    && currentAmount > 0
+    && totalAmount > 0
+    && ['kg', 'l', 'Stk'].includes(comparableUnit)
+  ) {
+    next.normalizedUnitPrice = {
+      ...(next.normalizedUnitPrice || {}),
+      amount: roundPublicUnitPrice(currentAmount / totalAmount),
+      unit: comparableUnit,
+      comparable: true,
+      confidence: Math.max(Number(next.normalizedUnitPrice?.confidence || 0), 0.78),
+    };
+  }
+
+  if (
+    (!next.comparisonGroup || preferInferredMeasure)
+    && next.comparisonSignature
+    && next.normalizedUnitPrice?.comparable
+    && Number(next.normalizedUnitPrice?.amount) > 0
+    && totalAmount > 0
+    && comparableUnit
+  ) {
+    next.comparisonGroup = `${next.comparisonSignature}::${buildPublicComparisonAmountKey(totalAmount, comparableUnit)}`;
+  }
+
+  const comparableSafety = assessComparableSafety(next);
+  if (comparableSafety.safe) {
+    next.comparableUnit = comparableSafety.comparableUnit;
+    next.normalizedUnitPrice = comparableSafety.normalizedUnitPrice;
+    next.quality = {
+      ...(next.quality || {}),
+      comparisonSafe: true,
+      parsingConfidence: Math.max(Number(next.quality?.parsingConfidence || 0), 0.78),
+      issues: Array.isArray(next.quality?.issues)
+        ? next.quality.issues.filter((reason) => !PUBLIC_QUANTITY_REVIEW_REASONS.has(reason))
+        : [],
+    };
+    next.reviewReasons = Array.isArray(next.reviewReasons)
+      ? next.reviewReasons.filter((reason) => !PUBLIC_QUANTITY_REVIEW_REASONS.has(reason))
+      : next.reviewReasons;
+  }
+
+  return next;
+}
+
+function withResponseCategoryGuardFields(offer = {}) {
+  if (String(offer?.retailerKey || '').toLowerCase() !== 'bipa') {
+    return offer;
+  }
+
+  const currentPrimary = normalizeSearchText(offer.categoryPrimary || '');
+  const currentSecondary = normalizeSearchText(offer.categorySecondary || '');
+  const isDrinkCategory = currentPrimary === 'getraenke' || currentSecondary === 'wein sekt';
+  const contextText = [
+    offer.brand,
+    offer.description,
+    offer.rawFacts?.bipaCategory,
+    offer.rawFacts?.sourceCategory,
+    offer.rawFacts?.infoText,
+    offer.sourceType,
+  ].filter(Boolean).join(' ');
+  const decision = determineCategoryDecision({
+    title: offer.title || '',
+    contextText,
+    sourceCategory: offer.rawFacts?.bipaCategory || offer.rawFacts?.sourceCategory || '',
+  });
+
+  if (
+    isDrinkCategory
+    && decision.primaryCategory === 'Drogerie / Hygiene'
+    && decision.secondaryCategory === 'Kosmetik & Make-up'
+    && decision.categoryConfidence >= 0.9
+  ) {
+    return {
+      ...offer,
+      categoryPrimary: decision.primaryCategory,
+      categorySecondary: decision.secondaryCategory,
+      categoryKey: 'kosmetik-make-up',
+      subcategoryKey: 'kosmetik-make-up',
+      categoryConfidence: Math.max(Number(offer.categoryConfidence || 0), decision.categoryConfidence),
+      subcategoryConfidence: Math.max(Number(offer.subcategoryConfidence || 0), decision.subcategoryConfidence),
+      rawFacts: {
+        ...(offer.rawFacts || {}),
+        responseCategoryGuard: 'bipa-fragrance-giftset',
+      },
+    };
+  }
+
+  return offer;
+}
+
+function withResponseInferredOfferFields(offer = {}) {
+  return withResponseCategoryGuardFields(withResponseInferredQuantityFields(offer));
+}
+
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
+  offer = withResponseInferredOfferFields(offer);
   const safelyComparable = isOfferSafelyComparable(offer);
   const publicQuantityFields = sanitizePublicOfferQuantityFields(offer, { safelyComparable });
   const publicConditionsText = getPublicConditionsText(offer, options);

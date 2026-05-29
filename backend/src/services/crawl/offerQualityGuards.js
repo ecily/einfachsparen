@@ -149,6 +149,14 @@ function inferQuantityFieldsFromText(value = '') {
   const amountUnitMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l|liter|gramm|kilogramm|milliliter|zentiliter)\b/i);
 
   if (amountUnitMatch) {
+    const trailingText = text.slice((amountUnitMatch.index || 0) + amountUnitMatch[0].length);
+    const trailingPieceMatch = trailingText.match(/^\s*(\d+(?:[.,]\d+)?)\s*(stk|stueck|stuck|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?|kisten?)\b/i);
+    const trailingPieceCount = parsePositiveNumber(trailingPieceMatch?.[1]);
+
+    if (trailingPieceCount && trailingPieceCount > 1) {
+      return null;
+    }
+
     const amount = parsePositiveNumber(amountUnitMatch[1]);
     const unit = amountUnitMatch[2];
     const inferred = buildInferredQuantityFields({

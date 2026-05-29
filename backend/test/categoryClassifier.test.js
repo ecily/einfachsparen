@@ -118,23 +118,23 @@ test('keeps critical side hits out of misleading butter and rice categories', ()
 
 test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', () => {
   const cases = [
-    'Hugo Boss Deep Red Eau de Parfum 50ml',
-    'Hugo Boss Femme Eau de Parfum 30ml',
-    'Hugo Boss Ma Vie Pour Femme Eau de Parfum 30ml',
-    'Versace Bright Crystal Eau de Toilette 30ml',
-    'Calvin Klein One Eau de Toilette 100ml',
-    'Joop Le Bain Eau de Parfum 75ml',
-    'Paco Rabanne 1 Million Eau de Toilette 100 ml',
-    'Davidoff Cool Water Man Eau de Toilette 75 ml',
-    'Joop! Homme Eau de Toilette 75 ml',
-    'Duftset Geschenkset fuer Herren',
-    'Bottled Geschenkset',
-    'Phantom Geschenkset',
-    'Devotion Pour Homme Geschenkset',
+    ['Hugo Boss Deep Red Eau de Parfum 50ml'],
+    ['Hugo Boss Femme Eau de Parfum 30ml'],
+    ['Hugo Boss Ma Vie Pour Femme Eau de Parfum 30ml'],
+    ['Versace Bright Crystal Eau de Toilette 30ml'],
+    ['Calvin Klein One Eau de Toilette 100ml'],
+    ['Joop Le Bain Eau de Parfum 75ml'],
+    ['Paco Rabanne 1 Million Eau de Toilette 100 ml'],
+    ['Davidoff Cool Water Man Eau de Toilette 75 ml'],
+    ['Joop! Homme Eau de Toilette 75 ml'],
+    ['Duftset Geschenkset fuer Herren'],
+    ['Bottled Geschenkset', 'Hugo Boss BIPA Parfum Herrenduft'],
+    ['Phantom Geschenkset', 'Paco Rabanne BIPA Parfum Herrenduft'],
+    ['Devotion Pour Homme Geschenkset'],
   ];
 
-  for (const title of cases) {
-    const decision = determineCategoryDecision({ title });
+  for (const [title, contextText = ''] of cases) {
+    const decision = determineCategoryDecision({ title, contextText });
 
     assert.equal(decision.primaryCategory, 'Drogerie / Hygiene', title);
     assert.equal(decision.secondaryCategory, 'Kosmetik & Make-up', title);
@@ -143,7 +143,10 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
 
 test('does not classify generic non-fragrance gift sets as cosmetics', () => {
   const cases = [
+    'Bottled Geschenkset',
+    'Phantom Geschenkset',
     'Wein Geschenkset',
+    'Sekt Geschenkset',
     'Schokolade Geschenkset',
     'Party Geschenkset',
   ];

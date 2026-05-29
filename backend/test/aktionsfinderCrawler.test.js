@@ -151,6 +151,43 @@ test('Aktionsfinder taxonomy reports expired and upcoming audit-filtered offers 
   assert.equal(classifyAktionsfinderAuditDrop({ status: 'active' }), 'audit-filtered');
 });
 
+test('Aktionsfinder BIPA enrichment lets title ml quantity override one piece package text', () => {
+  const normalizeResult = normalizeAktionsfinderPromotions({
+    promotions: [
+      promotion({
+        id: 'lady-million',
+        title: 'Paco Rabanne Lady Million Eau de Parfum BIPA 50 Milliliter 1 Stueck',
+        fullDisplayName: 'Paco Rabanne Lady Million Eau de Parfum BIPA 50 Milliliter 1 Stueck',
+        discountedPrice: 62.99,
+        product: {
+          productQuantity: null,
+          productQuantityUnit: null,
+          packageQuantity: 1,
+          packageQuantityUnit: { shortName: 'Stueck', type: 'PRODUCT' },
+          brand: { name: 'Paco Rabanne' },
+        },
+        validFrom: '2026-05-01T12:00:00.000Z',
+        validTo: '2099-05-02T23:59:59.999Z',
+        snapshotCurrent: false,
+      }),
+    ],
+    source: source(),
+    crawlJobId: 'crawl-a',
+    region: 'AT',
+  });
+  const enrichResult = enrichAktionsfinderOffersForStorage({
+    normalizedOffers: normalizeResult.normalizedOffers,
+    source: source(),
+  });
+  const offer = enrichResult.offerDocuments[0];
+
+  assert.equal(offer.quantityText, '50 ml');
+  assert.equal(offer.unitType, 'ml');
+  assert.equal(offer.comparableUnit, 'l');
+  assert.equal(offer.normalizedUnitPrice.amount, 1259.8);
+  assert.equal(offer.quality.comparisonSafe, true);
+});
+
 test('Aktionsfinder taxonomy counts source duplicate and id-less candidates before storage', () => {
   const diagnostics = {};
   const unique = uniquePromotions([
