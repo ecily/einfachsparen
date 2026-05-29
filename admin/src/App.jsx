@@ -203,7 +203,7 @@ function SearchLandingHero() {
               maxWidth: '46rem',
             }}
           >
-            Angebote finden. <span className="hero-headline-accent">Einfach sparen.</span>
+            Nicht blättern. Finden. <span className="hero-headline-accent">Einfach sparen.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
             Suche Supermarkt- und Drogerie-Angebote in Österreich und nutze kaufklug für deinen Einkauf.
