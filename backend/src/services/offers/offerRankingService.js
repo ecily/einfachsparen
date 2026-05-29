@@ -130,12 +130,37 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
 const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
+
+const COFFEE_TEA_PRODUCT_TERMS = [
+  'kaffee',
+  'cafe',
+  'caffe',
+  'espresso',
+  'cappuccino',
+  'matcha',
+  'kaffeekapsel',
+  'nespresso',
+  'dolce',
+  'teebeutel',
+  'teekanne',
+  'eistee',
+  'kraeutertee',
+  'krautertee',
+  'schwarztee',
+  'gruentee',
+  'gruenentee',
+  'gruntee',
+  'fruechtetee',
+  'fruchtetee',
+  'kamillentee',
+  'pfefferminztee',
+];
 
 function getRankingCacheCapabilities() {
   return {
@@ -683,30 +708,8 @@ function calculateOfferTermCoverage(offer, query) {
     offer.comparisonGroup,
   ]);
   const hasTeebutterProduct = hasAnyTokenMatch(productTokens, ['teebutter'], { exact: true, suffix: true });
-  const hasCoffeeOrTeaProduct = hasAnyTokenMatch(productTokens, [
-    'kaffee',
-    'cafe',
-    'caffe',
-    'espresso',
-    'cappuccino',
-    'matcha',
-    'kaffeekapsel',
-    'nespresso',
-    'dolce',
-    'teebeutel',
-    'teekanne',
-    'eistee',
-    'kraeutertee',
-    'krautertee',
-    'schwarztee',
-    'gruentee',
-    'gruenentee',
-    'gruntee',
-    'fruechtetee',
-    'fruchtetee',
-    'kamillentee',
-    'pfefferminztee',
-  ], { exact: true, suffix: true }) || hasAnyTokenMatch(productTokens, ['tee'], { exact: true, suffix: false });
+  const hasCoffeeOrTeaProduct = hasAnyTokenMatch(productTokens, COFFEE_TEA_PRODUCT_TERMS, { exact: true, suffix: true }) ||
+    hasAnyTokenMatch(productTokens, ['tee'], { exact: true, suffix: false });
   let coveredTerms = 0;
   let strongTerms = 0;
   let mediumTerms = 0;
@@ -2780,7 +2783,17 @@ function scoreOfferAgainstQuery(offer, query) {
   ].join(' '));
   const comparisonTokens = tokenizeSearchText(offer.comparisonGroup);
   const aggregateTokens = tokenizeSearchText(offer.searchText);
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const hasTeebutterProduct = hasAnyTokenMatch(productTokens, ['teebutter'], { exact: true, suffix: true });
+  const hasCoffeeOrTeaProduct = hasAnyTokenMatch(productTokens, COFFEE_TEA_PRODUCT_TERMS, { exact: true, suffix: true }) ||
+    hasAnyTokenMatch(productTokens, ['tee'], { exact: true, suffix: false });
+  const coffeeOrTeaQuery = queryTokens.some((token) => ['kaffee', 'cafe', 'caffe', 'tee'].includes(token));
+  const butterQuery = queryTokens.some((token) => ['butter', 'teebutter'].includes(token));
   let score = 0;
+
+  if (coffeeOrTeaQuery && !butterQuery && hasTeebutterProduct && !hasCoffeeOrTeaProduct) {
+    return 0;
+  }
 
   score += scoreFieldAgainstQuery(offer.title, queryTokens, {
     phrase: 260,
