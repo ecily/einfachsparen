@@ -94,7 +94,8 @@ const LIDL_OFFICIAL_CAMPAIGN_PAGES = [
 const LIDL_CAMPAIGN_PAGE_LIMIT = 14;
 const FETCH_DIAGNOSTIC_PREVIEW_LIMIT = 260;
 const BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE = 'bipa-official-category-html';
-const BIPA_CATEGORY_ACTION_PAGES = [
+const BIPA_CATEGORY_ACTION_PAGE_LIMIT = 200;
+const BIPA_CATEGORY_ACTION_PAGE_URLS = [
   'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
   'https://www.bipa.at/c/haushalt?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
   'https://www.bipa.at/c/mund--und-zahnpflege?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
@@ -106,6 +107,37 @@ const BIPA_CATEGORY_ACTION_PAGES = [
   'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion',
   'https://www.bipa.at/c/tier?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
 ];
+
+function isBipaCategoryPricebadgeUrl(rawUrl = '') {
+  try {
+    const url = new URL(rawUrl);
+    const hasPricebadgeRefinement = [...url.searchParams.entries()].some(([key, value]) =>
+      /^refine_\d+$/i.test(key) && /c_pricebadges/i.test(value)
+    );
+
+    return /(^|\.)bipa\.at$/i.test(url.hostname)
+      && url.pathname.startsWith('/c/')
+      && hasPricebadgeRefinement;
+  } catch (error) {
+    return false;
+  }
+}
+
+function normalizeBipaCategoryActionUrl(rawUrl = '') {
+  if (!isBipaCategoryPricebadgeUrl(rawUrl)) {
+    return rawUrl;
+  }
+
+  try {
+    const url = new URL(rawUrl);
+    url.searchParams.set('limit', String(BIPA_CATEGORY_ACTION_PAGE_LIMIT));
+    return url.toString();
+  } catch (error) {
+    return rawUrl;
+  }
+}
+
+const BIPA_CATEGORY_ACTION_PAGES = BIPA_CATEGORY_ACTION_PAGE_URLS.map(normalizeBipaCategoryActionUrl);
 
 function responseContentType(response = {}) {
   return response.headers?.['content-type'] || response.headers?.['Content-Type'] || '';
@@ -2757,7 +2789,7 @@ function collectBipaPromotionLinks(html, baseUrl) {
     const text = sanitizeWhitespace($(element).text());
     const absoluteUrl = toAbsoluteUrl(href, baseUrl);
 
-    if (!absoluteUrl || seen.has(absoluteUrl)) {
+    if (!absoluteUrl) {
       return;
     }
 
@@ -2766,9 +2798,15 @@ function collectBipaPromotionLinks(html, baseUrl) {
     }
 
     if (/\/cp\/aktionen|\/cp\/onlineonly|prefn0=pricebadges|c_pricebadges|refine_\d*=c_pricebadges/i.test(absoluteUrl)) {
-      seen.add(absoluteUrl);
+      const normalizedUrl = normalizeBipaCategoryActionUrl(absoluteUrl);
+
+      if (seen.has(normalizedUrl)) {
+        return;
+      }
+
+      seen.add(normalizedUrl);
       links.push({
-        url: absoluteUrl,
+        url: normalizedUrl,
         label: text || absoluteUrl,
       });
     }
@@ -6332,7 +6370,9 @@ module.exports = {
   __private: {
     parseBipaOffersFromHtml,
     BIPA_CATEGORY_ACTION_PAGES,
+    BIPA_CATEGORY_ACTION_PAGE_LIMIT,
     BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE,
+    normalizeBipaCategoryActionUrl,
     dedupeBipaOffers,
     collectBipaPromotionLinks,
     parsePennyOffersFromHtml,

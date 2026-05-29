@@ -445,10 +445,87 @@ test('BIPA category Mobify parser does not copy global page badges as product co
   assert.deepEqual(offers[0].rawFacts.priceBadges, []);
 });
 
+test('BIPA category Mobify parser reads offers beyond the first 20 products', () => {
+  const hits = Array.from({ length: 25 }, (_, index) => bipaMobifyHit(String(800000 + index), {
+    c_brand: 'BIPA',
+    productName: `BIPA Reihenfolge Test ${index + 1}`,
+    c_kundenbezeichnung: `Reihenfolge Test ${index + 1}`,
+    c_inhalt: '100 ml',
+    c_category: 'pflege-koerper-duschgel',
+    c_displayedPrice: 1 + index,
+    c_insteadPrice: 2 + index,
+    c_basePrice: '',
+  }));
+  hits[20] = bipaMobifyHit('321020', {
+    c_brand: 'Paco Rabanne',
+    productName: 'Paco Rabanne 1 Million Eau de Toilette 100 ml',
+    c_kundenbezeichnung: '1 Million Eau de Toilette 100 ml',
+    c_inhalt: '100 ml',
+    c_category: 'parfum-herrenduefte',
+    c_displayedPrice: 67.99,
+    c_insteadPrice: 79.99,
+    c_basePrice: '',
+    c_effectivePriceBadges: ['Aktion'],
+  });
+  hits[24] = bipaMobifyHit('321024', {
+    c_brand: 'Joop!',
+    productName: 'Joop! Homme Eau de Toilette 75 ml',
+    c_kundenbezeichnung: 'Homme Eau de Toilette 75 ml',
+    c_inhalt: '75 ml',
+    c_category: 'parfum-herrenduefte',
+    c_displayedPrice: 18.99,
+    c_insteadPrice: 31.99,
+    c_basePrice: '',
+    c_effectivePriceBadges: ['Aktion'],
+  });
+
+  const offers = __private.parseBipaOffersFromHtml({
+    html: bipaMobifyHtml(hits, {
+      bodyPrefix: '<p>Gueltig bis 10.06.2026</p>',
+    }),
+    source: source({ sourceUrl: 'https://www.bipa.at/c/parfum?limit=200&refine_0=c_pricebadges%3DAktion' }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.bipa.at/c/parfum?limit=200&refine_0=c_pricebadges%3DAktion',
+  });
+  const paco = offers.find((offer) => offer.rawFacts.bipaProductId === '321020');
+  const joop = offers.find((offer) => offer.rawFacts.bipaProductId === '321024');
+
+  assert.equal(offers.length, 25);
+  assert.ok(paco);
+  assert.equal(`${paco.brand} ${paco.title}`, 'Paco Rabanne 1 Million Eau de Toilette 100 ml');
+  assert.equal(paco.priceCurrent.amount, 67.99);
+  assert.equal(paco.quantityText, '100 ml');
+  assert.equal(paco.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(paco.categorySecondary, 'Kosmetik & Make-up');
+  assert.equal(paco.validTo.toISOString(), '2026-06-10T23:59:59.999Z');
+  assert.ok(joop);
+  assert.equal(`${joop.brand} ${joop.title}`, 'Joop! Homme Eau de Toilette 75 ml');
+  assert.equal(joop.priceCurrent.amount, 18.99);
+  assert.equal(joop.quantityText, '75 ml');
+  assert.equal(joop.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(joop.categorySecondary, 'Kosmetik & Make-up');
+  assert.equal(joop.validTo.toISOString(), '2026-06-10T23:59:59.999Z');
+});
+
 test('BIPA category action URL config uses pricebadge filters', () => {
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.length >= 10);
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.startsWith('https://www.bipa.at/c/')));
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.includes('refine_0=c_pricebadges')));
+  assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => new URL(url).searchParams.get('limit') === String(__private.BIPA_CATEGORY_ACTION_PAGE_LIMIT)));
+  assert.equal(__private.BIPA_CATEGORY_ACTION_PAGE_LIMIT, 200);
+});
+
+test('BIPA category action URL normalization expands only official pricebadge category links', () => {
+  assert.equal(
+    new URL(__private.normalizeBipaCategoryActionUrl('https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion')).searchParams.get('limit'),
+    '200',
+  );
+  assert.equal(
+    __private.normalizeBipaCategoryActionUrl('https://www.bipa.at/c/parfum?limit=20'),
+    'https://www.bipa.at/c/parfum?limit=20',
+  );
+  assert.equal(__private.normalizeBipaCategoryActionUrl('not a url'), 'not a url');
 });
 
 test('BIPA promotion link discovery ignores unfiltered category pages', () => {
@@ -459,7 +536,7 @@ test('BIPA promotion link discovery ignores unfiltered category pages', () => {
   `, 'https://www.bipa.at/cp/aktionen');
 
   assert.deepEqual(links.map((link) => link.url), [
-    'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion',
+    'https://www.bipa.at/c/pflege?limit=200&refine_0=c_pricebadges%3DAktion',
     'https://www.bipa.at/cp/onlineonly',
   ]);
 });
