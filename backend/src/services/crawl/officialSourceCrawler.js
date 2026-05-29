@@ -94,11 +94,8 @@ const LIDL_OFFICIAL_CAMPAIGN_PAGES = [
 const LIDL_CAMPAIGN_PAGE_LIMIT = 14;
 const FETCH_DIAGNOSTIC_PREVIEW_LIMIT = 260;
 const BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE = 'bipa-official-category-html';
-const BIPA_CATEGORY_ACTION_PAGE_SIZE = 50;
-const BIPA_CATEGORY_ACTION_MAX_PAGES = 5;
-const BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY = 250;
-const BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES = 30;
-const BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS = 8000;
+const BIPA_CATEGORY_ACTION_PAGE_SIZE = 100;
+const BIPA_CATEGORY_ACTION_MAX_PAGES = 20;
 const BIPA_CATEGORY_ACTION_PAGE_URLS = [
   'https://www.bipa.at/c/pflege?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
   'https://www.bipa.at/c/haushalt?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
@@ -168,56 +165,6 @@ function buildBipaCategoryActionPageUrl(rawUrl = '', offset = 0) {
 }
 
 const BIPA_CATEGORY_ACTION_PAGES = BIPA_CATEGORY_ACTION_PAGE_URLS.map(normalizeBipaCategoryActionUrl);
-
-function compactBipaCategoryUrl(rawUrl = '') {
-  try {
-    const url = new URL(rawUrl);
-    return `${url.pathname}${url.searchParams.get('refine_0') ? '?refine_0=c_pricebadges' : ''}`;
-  } catch (error) {
-    return String(rawUrl || '').slice(0, 120);
-  }
-}
-
-function createBipaPaginationDiagnostics() {
-  return {
-    configured: {
-      pageSize: BIPA_CATEGORY_ACTION_PAGE_SIZE,
-      maxPagesPerCategory: BIPA_CATEGORY_ACTION_MAX_PAGES,
-      maxProductsPerCategory: BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY,
-      maxTotalPages: BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES,
-      pageFetchTimeoutMs: BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS,
-    },
-    categoryUrlsSeen: 0,
-    categoryUrlsFetched: 0,
-    duplicateCategoryUrlsSkipped: 0,
-    pagesAttempted: 0,
-    pagesFetched: 0,
-    rawHits: 0,
-    stopReasons: {},
-    sampleTotals: [],
-    categories: [],
-  };
-}
-
-function incrementBipaStopReason(diagnostics, reason) {
-  if (!diagnostics || !reason) {
-    return;
-  }
-
-  diagnostics.stopReasons[reason] = (diagnostics.stopReasons[reason] || 0) + 1;
-}
-
-function rememberBipaSampleTotal(diagnostics, total) {
-  const numericTotal = Number(total);
-
-  if (!diagnostics || !Number.isFinite(numericTotal) || numericTotal <= 0) {
-    return;
-  }
-
-  if (!diagnostics.sampleTotals.includes(numericTotal) && diagnostics.sampleTotals.length < 8) {
-    diagnostics.sampleTotals.push(numericTotal);
-  }
-}
 
 function responseContentType(response = {}) {
   return response.headers?.['content-type'] || response.headers?.['Content-Type'] || '';
@@ -2913,76 +2860,13 @@ function collectBipaPromotionLinks(html, baseUrl) {
   return links.slice(0, 10);
 }
 
-function collectUniqueBipaAdditionalLinks(html, baseUrl, diagnostics = null) {
-  const seen = new Set();
-  const links = [];
-  const candidates = [
-    ...collectBipaPromotionLinks(html, baseUrl),
-    ...BIPA_CATEGORY_ACTION_PAGES.map((url) => ({
-      url,
-      label: 'BIPA Kategorie-Aktionsseite',
-    })),
-  ];
-
-  for (const candidate of candidates) {
-    const normalizedUrl = isBipaCategoryPricebadgeUrl(candidate.url)
-      ? normalizeBipaCategoryActionUrl(candidate.url)
-      : candidate.url;
-
-    if (isBipaCategoryPricebadgeUrl(normalizedUrl) && diagnostics) {
-      diagnostics.categoryUrlsSeen += 1;
-    }
-
-    if (seen.has(normalizedUrl)) {
-      if (isBipaCategoryPricebadgeUrl(normalizedUrl) && diagnostics) {
-        diagnostics.duplicateCategoryUrlsSkipped += 1;
-      }
-      continue;
-    }
-
-    seen.add(normalizedUrl);
-    links.push({
-      ...candidate,
-      url: normalizedUrl,
-    });
-  }
-
-  return links;
-}
-
-async function fetchBipaCategoryActionPages({ url, fetchPage = null, diagnostics = null } = {}) {
+async function fetchBipaCategoryActionPages({ url, fetchPage = fetchHtml } = {}) {
   const pages = [];
   const seenOffsets = new Set();
-  const categoryDiagnostics = {
-    url: compactBipaCategoryUrl(url),
-    offsets: [],
-    pagesFetched: 0,
-    rawHits: 0,
-    totals: [],
-    stopReason: '',
-  };
-  const pageFetcher = fetchPage || ((pageUrl) => fetchHtml(pageUrl, {
-    timeoutMs: BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS,
-  }));
   let offset = 0;
 
-  if (diagnostics) {
-    diagnostics.categoryUrlsFetched += 1;
-  }
-
   for (let pageIndex = 0; pageIndex < BIPA_CATEGORY_ACTION_MAX_PAGES; pageIndex += 1) {
-    if (diagnostics && diagnostics.pagesAttempted >= BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES) {
-      categoryDiagnostics.stopReason = 'source-page-limit';
-      break;
-    }
-
-    if (categoryDiagnostics.rawHits >= BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY) {
-      categoryDiagnostics.stopReason = 'category-product-limit';
-      break;
-    }
-
     if (seenOffsets.has(offset)) {
-      categoryDiagnostics.stopReason = 'offset-repeat';
       break;
     }
 
@@ -2990,16 +2874,9 @@ async function fetchBipaCategoryActionPages({ url, fetchPage = null, diagnostics
     const pageUrl = buildBipaCategoryActionPageUrl(url, offset);
     let nested;
 
-    categoryDiagnostics.offsets.push(offset);
-    if (diagnostics) {
-      diagnostics.pagesAttempted += 1;
-    }
-
     try {
-      nested = await pageFetcher(pageUrl);
+      nested = await fetchPage(pageUrl);
     } catch (error) {
-      categoryDiagnostics.stopReason = 'error';
-      categoryDiagnostics.error = sanitizeWhitespace(error.message || error.code || 'fetch failed').slice(0, 120);
       break;
     }
 
@@ -3012,55 +2889,23 @@ async function fetchBipaCategoryActionPages({ url, fetchPage = null, diagnostics
       pagination: summary,
     });
 
-    categoryDiagnostics.pagesFetched += 1;
-    categoryDiagnostics.rawHits += summary.hitCount;
-    categoryDiagnostics.totals.push(summary.total);
-    rememberBipaSampleTotal(diagnostics, summary.total);
-    if (diagnostics) {
-      diagnostics.pagesFetched += 1;
-      diagnostics.rawHits += summary.hitCount;
-    }
-
     if (summary.hitCount === 0) {
-      categoryDiagnostics.stopReason = 'empty-page';
       break;
     }
 
-    const resultLimit = Number.isFinite(Number(summary.limit)) && Number(summary.limit) > 0
-      ? Number(summary.limit)
-      : BIPA_CATEGORY_ACTION_PAGE_SIZE;
-    const resultOffset = Number.isFinite(Number(summary.offset)) && Number(summary.offset) >= 0
-      ? Number(summary.offset)
-      : offset;
+    const resultLimit = summary.limit || BIPA_CATEGORY_ACTION_PAGE_SIZE;
+    const resultOffset = summary.offset || offset;
     const nextOffset = resultOffset + resultLimit;
 
-    if (categoryDiagnostics.rawHits >= BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY) {
-      categoryDiagnostics.stopReason = 'category-product-limit';
-      break;
-    }
-
     if (summary.total > 0 && nextOffset >= summary.total) {
-      categoryDiagnostics.stopReason = 'total';
       break;
     }
 
-    if (summary.hitCount < resultLimit) {
-      categoryDiagnostics.stopReason = 'short-page';
+    if (summary.hitCount < BIPA_CATEGORY_ACTION_PAGE_SIZE) {
       break;
     }
 
     offset = nextOffset;
-  }
-
-  if (!categoryDiagnostics.stopReason) {
-    categoryDiagnostics.stopReason = 'max-pages';
-  }
-
-  categoryDiagnostics.offsets = categoryDiagnostics.offsets.slice(0, 8);
-  categoryDiagnostics.totals = [...new Set(categoryDiagnostics.totals.filter((total) => total > 0))].slice(0, 4);
-  if (diagnostics) {
-    incrementBipaStopReason(diagnostics, categoryDiagnostics.stopReason);
-    diagnostics.categories.push(categoryDiagnostics);
   }
 
   return pages;
@@ -3655,12 +3500,12 @@ function parseHoferOffersFromPage({
   return offers;
 }
 
-async function fetchHtml(url, { timeoutMs = 30000 } = {}) {
+async function fetchHtml(url) {
   let response;
 
   try {
     response = await axios.get(url, {
-      timeout: timeoutMs,
+      timeout: 30000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/json',
@@ -5589,11 +5434,16 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
 async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
   const collectedOffers = [];
   const validToHint = extractBipaValidityDate(html);
-  const bipaPagination = createBipaPaginationDiagnostics();
   const pageCandidates = [
     { url: canonicalUrl || source.sourceUrl, html },
   ];
-  const additionalLinks = collectUniqueBipaAdditionalLinks(html, canonicalUrl || source.sourceUrl, bipaPagination);
+  const additionalLinks = [
+    ...collectBipaPromotionLinks(html, canonicalUrl || source.sourceUrl),
+    ...BIPA_CATEGORY_ACTION_PAGES.map((url) => ({
+      url,
+      label: 'BIPA Kategorie-Aktionsseite',
+    })),
+  ];
 
   for (const link of additionalLinks) {
     if (pageCandidates.some((item) => item.url === link.url)) {
@@ -5602,10 +5452,7 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
 
     try {
       if (isBipaCategoryPricebadgeUrl(link.url)) {
-        const pages = await fetchBipaCategoryActionPages({
-          url: link.url,
-          diagnostics: bipaPagination,
-        });
+        const pages = await fetchBipaCategoryActionPages({ url: link.url });
 
         for (const page of pages) {
           if (pageCandidates.some((item) => item.url === page.url)) {
@@ -5669,9 +5516,6 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
     rawCandidateCount: collectedOffers.length,
     rejectionReasons,
     refreshResult,
-    diagnostics: {
-      bipaPagination,
-    },
   };
 }
 
@@ -6499,7 +6343,6 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += bipaOfficialResult.rawDocuments;
       rawCandidateCount += bipaOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...bipaOfficialResult.offerDocuments);
-      parserDetails.bipaPagination = bipaOfficialResult.diagnostics?.bipaPagination || {};
       extraRejectionReasons = extraRejectionReasons.concat(bipaOfficialResult.rejectionReasons || []);
     } else {
       const nestedDocuments = await fetchNestedHtmlDocuments({
@@ -6640,15 +6483,10 @@ module.exports = {
     BIPA_CATEGORY_ACTION_PAGES,
     BIPA_CATEGORY_ACTION_PAGE_SIZE,
     BIPA_CATEGORY_ACTION_MAX_PAGES,
-    BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY,
-    BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES,
-    BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS,
     BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE,
     normalizeBipaCategoryActionUrl,
     buildBipaCategoryActionPageUrl,
     fetchBipaCategoryActionPages,
-    collectUniqueBipaAdditionalLinks,
-    createBipaPaginationDiagnostics,
     dedupeBipaOffers,
     collectBipaPromotionLinks,
     parsePennyOffersFromHtml,

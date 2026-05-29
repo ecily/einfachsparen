@@ -542,7 +542,6 @@ test('BIPA category action pagination follows official total and offset metadata
     c_effectivePriceBadges: ['Aktion'],
   });
   const requestedUrls = [];
-  const diagnostics = __private.createBipaPaginationDiagnostics();
   const fetchPage = async (url) => {
     requestedUrls.push(url);
     const offset = Number(new URL(url).searchParams.get('offset') || 0);
@@ -564,7 +563,6 @@ test('BIPA category action pagination follows official total and offset metadata
   const pages = await __private.fetchBipaCategoryActionPages({
     url: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion',
     fetchPage,
-    diagnostics,
   });
   const testSource = source({ sourceUrl: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion' });
   const offers = pages.flatMap((page) => __private.parseBipaOffersFromHtml({
@@ -577,14 +575,10 @@ test('BIPA category action pagination follows official total and offset metadata
   const paco = offers.find((offer) => offer.rawFacts.bipaProductId === '421100');
   const joop = offers.find((offer) => offer.rawFacts.bipaProductId === '421124');
 
-  assert.equal(pages.length, 3);
-  assert.deepEqual(requestedUrls.map((url) => new URL(url).searchParams.get('offset') || '0'), ['0', '50', '100']);
-  assert.ok(requestedUrls.every((url) => new URL(url).searchParams.get('limit') === '50'));
+  assert.equal(pages.length, 2);
+  assert.deepEqual(requestedUrls.map((url) => new URL(url).searchParams.get('offset') || '0'), ['0', '100']);
+  assert.ok(requestedUrls.every((url) => new URL(url).searchParams.get('limit') === '100'));
   assert.equal(offers.length, 125);
-  assert.equal(diagnostics.pagesAttempted, 3);
-  assert.equal(diagnostics.pagesFetched, 3);
-  assert.deepEqual(diagnostics.stopReasons, { total: 1 });
-  assert.deepEqual(diagnostics.categories[0].offsets, [0, 50, 100]);
   assert.equal(`${paco.brand} ${paco.title}`, 'Paco Rabanne 1 Million Eau de Toilette 100 ml');
   assert.equal(paco.priceCurrent.amount, 67.99);
   assert.equal(paco.quantityText, '100 ml');
@@ -599,10 +593,8 @@ test('BIPA category action pagination follows official total and offset metadata
 
 test('BIPA category action pagination keeps partial pages on later fetch failure and is bounded', async () => {
   const testUrl = 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion';
-  const failureDiagnostics = __private.createBipaPaginationDiagnostics();
   const firstPageOnly = await __private.fetchBipaCategoryActionPages({
     url: testUrl,
-    diagnostics: failureDiagnostics,
     fetchPage: async (url) => {
       const offset = Number(new URL(url).searchParams.get('offset') || 0);
 
@@ -611,9 +603,9 @@ test('BIPA category action pagination keeps partial pages on later fetch failure
       }
 
       return {
-        html: bipaMobifyHtml(Array.from({ length: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE }, (_, index) => bipaMobifyHit(String(910000 + index))), {
+        html: bipaMobifyHtml(Array.from({ length: 100 }, (_, index) => bipaMobifyHit(String(910000 + index))), {
           searchResult: {
-            limit: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE,
+            limit: 100,
             offset: 0,
             total: 250,
           },
@@ -623,18 +615,16 @@ test('BIPA category action pagination keeps partial pages on later fetch failure
     },
   });
   let boundedCalls = 0;
-  const boundedDiagnostics = __private.createBipaPaginationDiagnostics();
   const boundedPages = await __private.fetchBipaCategoryActionPages({
     url: testUrl,
-    diagnostics: boundedDiagnostics,
     fetchPage: async (url) => {
       boundedCalls += 1;
       const offset = Number(new URL(url).searchParams.get('offset') || 0);
 
       return {
-        html: bipaMobifyHtml(Array.from({ length: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE }, (_, index) => bipaMobifyHit(String(920000 + offset + index))), {
+        html: bipaMobifyHtml(Array.from({ length: 100 }, (_, index) => bipaMobifyHit(String(920000 + offset + index))), {
           searchResult: {
-            limit: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE,
+            limit: 100,
             offset,
             total: 9999,
           },
@@ -645,111 +635,8 @@ test('BIPA category action pagination keeps partial pages on later fetch failure
   });
 
   assert.equal(firstPageOnly.length, 1);
-  assert.deepEqual(failureDiagnostics.stopReasons, { error: 1 });
   assert.equal(boundedPages.length, __private.BIPA_CATEGORY_ACTION_MAX_PAGES);
   assert.equal(boundedCalls, __private.BIPA_CATEGORY_ACTION_MAX_PAGES);
-  assert.deepEqual(boundedDiagnostics.stopReasons, { 'category-product-limit': 1 });
-});
-
-test('BIPA category action pagination stops on short page and offset repetition', async () => {
-  const testUrl = 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion';
-  const shortPageDiagnostics = __private.createBipaPaginationDiagnostics();
-  const shortPages = await __private.fetchBipaCategoryActionPages({
-    url: testUrl,
-    diagnostics: shortPageDiagnostics,
-    fetchPage: async (url) => {
-      const offset = Number(new URL(url).searchParams.get('offset') || 0);
-
-      return {
-        html: bipaMobifyHtml(Array.from({ length: 12 }, (_, index) => bipaMobifyHit(String(930000 + offset + index))), {
-          searchResult: {
-            limit: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE,
-            offset,
-            total: 9999,
-          },
-        }),
-        canonicalUrl: url,
-      };
-    },
-  });
-  const repeatDiagnostics = __private.createBipaPaginationDiagnostics();
-  const repeatPages = await __private.fetchBipaCategoryActionPages({
-    url: testUrl,
-    diagnostics: repeatDiagnostics,
-    fetchPage: async (url) => {
-      const requestedOffset = Number(new URL(url).searchParams.get('offset') || 0);
-
-      return {
-        html: bipaMobifyHtml(
-          Array.from({ length: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE }, (_, index) => bipaMobifyHit(String(940000 + requestedOffset + index))),
-          {
-            searchResult: {
-              limit: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE,
-              offset: 0,
-              total: 9999,
-            },
-          },
-        ),
-        canonicalUrl: url,
-      };
-    },
-  });
-
-  assert.equal(shortPages.length, 1);
-  assert.deepEqual(shortPageDiagnostics.stopReasons, { 'short-page': 1 });
-  assert.equal(repeatPages.length, 2);
-  assert.deepEqual(repeatDiagnostics.stopReasons, { 'offset-repeat': 1 });
-  assert.deepEqual(repeatDiagnostics.categories[0].offsets, [0, 50]);
-});
-
-test('BIPA category action pagination respects source-wide page budget and keeps diagnostics compact', async () => {
-  const diagnostics = __private.createBipaPaginationDiagnostics();
-
-  diagnostics.pagesAttempted = __private.BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES - 1;
-
-  const pages = await __private.fetchBipaCategoryActionPages({
-    url: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion',
-    diagnostics,
-    fetchPage: async (url) => {
-      const offset = Number(new URL(url).searchParams.get('offset') || 0);
-
-      return {
-        html: bipaMobifyHtml(
-          Array.from({ length: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE }, (_, index) => bipaMobifyHit(String(950000 + offset + index))),
-          {
-            searchResult: {
-              limit: __private.BIPA_CATEGORY_ACTION_PAGE_SIZE,
-              offset,
-              total: 9999,
-            },
-          },
-        ),
-        canonicalUrl: url,
-      };
-    },
-  });
-
-  assert.equal(pages.length, 1);
-  assert.equal(diagnostics.pagesAttempted, __private.BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES);
-  assert.deepEqual(diagnostics.stopReasons, { 'source-page-limit': 1 });
-  assert.ok(diagnostics.categories[0].offsets.length <= 8);
-  assert.ok(diagnostics.sampleTotals.length <= 8);
-});
-
-test('BIPA category action links are normalized and deduped before pagination', () => {
-  const diagnostics = __private.createBipaPaginationDiagnostics();
-  const links = __private.collectUniqueBipaAdditionalLinks(`
-    <a href="/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion">Parfum Aktionen</a>
-    <a href="/c/parfum?limit=100&offset=50&refine_0=c_pricebadges%3DAktion">Parfum Aktionen doppelt</a>
-    <a href="/cp/onlineonly">Online Only</a>
-  `, 'https://www.bipa.at/cp/aktionen', diagnostics);
-  const parfumLinks = links.filter((link) => link.url.includes('/c/parfum?'));
-
-  assert.equal(parfumLinks.length, 1);
-  assert.equal(new URL(parfumLinks[0].url).searchParams.get('limit'), '50');
-  assert.equal(new URL(parfumLinks[0].url).searchParams.has('offset'), false);
-  assert.ok(diagnostics.categoryUrlsSeen > __private.BIPA_CATEGORY_ACTION_PAGES.length);
-  assert.ok(diagnostics.duplicateCategoryUrlsSkipped >= 1);
 });
 
 test('BIPA category action URL config uses pricebadge filters', () => {
@@ -757,17 +644,14 @@ test('BIPA category action URL config uses pricebadge filters', () => {
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.startsWith('https://www.bipa.at/c/')));
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => url.includes('refine_0=c_pricebadges')));
   assert.ok(__private.BIPA_CATEGORY_ACTION_PAGES.every((url) => new URL(url).searchParams.get('limit') === String(__private.BIPA_CATEGORY_ACTION_PAGE_SIZE)));
-  assert.equal(__private.BIPA_CATEGORY_ACTION_PAGE_SIZE, 50);
-  assert.equal(__private.BIPA_CATEGORY_ACTION_MAX_PAGES, 5);
-  assert.equal(__private.BIPA_CATEGORY_ACTION_MAX_PRODUCTS_PER_CATEGORY, 250);
-  assert.equal(__private.BIPA_CATEGORY_ACTION_MAX_TOTAL_PAGES, 30);
-  assert.equal(__private.BIPA_CATEGORY_ACTION_PAGE_FETCH_TIMEOUT_MS, 8000);
+  assert.equal(__private.BIPA_CATEGORY_ACTION_PAGE_SIZE, 100);
+  assert.equal(__private.BIPA_CATEGORY_ACTION_MAX_PAGES, 20);
 });
 
 test('BIPA category action URL normalization expands only official pricebadge category links', () => {
   assert.equal(
     new URL(__private.normalizeBipaCategoryActionUrl('https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion')).searchParams.get('limit'),
-    '50',
+    '100',
   );
   assert.equal(
     __private.normalizeBipaCategoryActionUrl('https://www.bipa.at/c/parfum?limit=20'),
@@ -775,8 +659,8 @@ test('BIPA category action URL normalization expands only official pricebadge ca
   );
   assert.equal(__private.normalizeBipaCategoryActionUrl('not a url'), 'not a url');
   assert.equal(
-    __private.buildBipaCategoryActionPageUrl('https://www.bipa.at/c/parfum?limit=20&start=20&refine_0=c_pricebadges%3DAktion', 50),
-    'https://www.bipa.at/c/parfum?limit=50&refine_0=c_pricebadges%3DAktion&offset=50',
+    __private.buildBipaCategoryActionPageUrl('https://www.bipa.at/c/parfum?limit=20&start=20&refine_0=c_pricebadges%3DAktion', 100),
+    'https://www.bipa.at/c/parfum?limit=100&refine_0=c_pricebadges%3DAktion&offset=100',
   );
 });
 
@@ -788,7 +672,7 @@ test('BIPA promotion link discovery ignores unfiltered category pages', () => {
   `, 'https://www.bipa.at/cp/aktionen');
 
   assert.deepEqual(links.map((link) => link.url), [
-    'https://www.bipa.at/c/pflege?limit=50&refine_0=c_pricebadges%3DAktion',
+    'https://www.bipa.at/c/pflege?limit=100&refine_0=c_pricebadges%3DAktion',
     'https://www.bipa.at/cp/onlineonly',
   ]);
 });
