@@ -128,6 +128,9 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
     'Davidoff Cool Water Man Eau de Toilette 75 ml',
     'Joop! Homme Eau de Toilette 75 ml',
     'Duftset Geschenkset fuer Herren',
+    'Bottled Geschenkset',
+    'Phantom Geschenkset',
+    'Devotion Pour Homme Geschenkset',
   ];
 
   for (const title of cases) {
@@ -135,6 +138,20 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
 
     assert.equal(decision.primaryCategory, 'Drogerie / Hygiene', title);
     assert.equal(decision.secondaryCategory, 'Kosmetik & Make-up', title);
+  }
+});
+
+test('does not classify generic non-fragrance gift sets as cosmetics', () => {
+  const cases = [
+    'Wein Geschenkset',
+    'Schokolade Geschenkset',
+    'Party Geschenkset',
+  ];
+
+  for (const title of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.notEqual(decision.secondaryCategory, 'Kosmetik & Make-up', title);
   }
 });
 

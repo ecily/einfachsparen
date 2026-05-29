@@ -8,6 +8,7 @@ const { computeOfferSavings } = require('./promotionMath');
 const {
   SEARCH_TOKEN_VERSION,
   STOPWORDS: SEARCH_TOKEN_STOPWORDS,
+  DUFT_PRODUCT_TOKENS,
   FISCH_PRODUCT_TOKENS,
   TEE_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
@@ -119,7 +120,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-offer-quality-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v1-offer-quality-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -597,6 +598,14 @@ function buildTermCoverageTokens(values = []) {
 }
 
 function tokenMatchesCoverageTerm(fieldToken, queryTerm) {
+  if (
+    queryTerm === 'duft'
+    && DUFT_PRODUCT_TOKENS.includes(fieldToken)
+    && !['duft'].includes(fieldToken)
+  ) {
+    return true;
+  }
+
   if (tokenMatchesQueryToken(fieldToken, queryTerm, { allowPrefix: true })) {
     return true;
   }
@@ -1092,6 +1101,17 @@ const QUERY_CONTEXTS = [
       'unterkeulen',
       'wuerstel',
     ],
+  },
+  {
+    key: 'duft',
+    tokens: ['duft'],
+    preferred: ['duft', 'duftset', 'duftsets', 'parfum', 'eau', 'toilette', 'fragrance', 'edt', 'edp', 'homme', 'kosmetik', 'make'],
+    strongPreferred: ['duft', 'duftset', 'duftsets', 'parfum', 'eau', 'toilette', 'fragrance', 'edt', 'edp', 'kosmetik'],
+    productIntent: DUFT_PRODUCT_TOKENS,
+    exactProductIntent: DUFT_PRODUCT_TOKENS.filter((token) => token !== 'duft'),
+    productContext: ['kosmetik', 'make', 'parfum', 'duft'],
+    weakContexts: ['pinienduft', 'zitronenduft', 'raumduft', 'wc', 'duftspueler', 'duftspuler', 'katzenstreu', 'klumpstreu', 'reiniger', 'toilettenpapier', 'desinfektionstuecher', 'desinfektionstucher'],
+    severeWeakContexts: ['katzenstreu', 'klumpstreu', 'reiniger', 'toilettenpapier', 'desinfektionstuecher', 'desinfektionstucher', 'brausetabletten', 'nahrungsergaenzung', 'nahrungserganzung', 'vitamin', 'magnesium', 'windeln'],
   },
   {
     key: 'wurst',
@@ -2457,6 +2477,72 @@ function scoreFischSearchIntent({ titleTokens, categoryTokens, comparisonTokens,
   return adjustment;
 }
 
+function getGenericDuftOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
+  const productDuft = hasAnyTokenMatch(productTokens, DUFT_PRODUCT_TOKENS, { exact: true, suffix: false })
+    || hasTokenSequence(titleTokens, ['eau', 'de', 'toilette'])
+    || hasTokenSequence(titleTokens, ['eau', 'de', 'parfum']);
+  const categoryDuft = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['kosmetik', 'parfum', 'duft']);
+  const clearSideHit = hasAnyTokenFamily(productTokens, [
+    'pinienduft',
+    'zitronenduft',
+    'raumduft',
+    'duftspueler',
+    'duftspuler',
+    'katzenstreu',
+    'klumpstreu',
+    'reiniger',
+    'toilettenpapier',
+    'desinfektionstuecher',
+    'desinfektionstucher',
+    'brausetabletten',
+    'nahrungsergaenzung',
+    'nahrungserganzung',
+    'vitamin',
+    'magnesium',
+    'windeln',
+  ]);
+  const categoryOnly = !productDuft && categoryDuft;
+  const noProductSignal = !productDuft &&
+    !hasAnyTokenMatch(allTokens, DUFT_PRODUCT_TOKENS, { exact: true, suffix: false }) &&
+    categoryDuft;
+
+  return {
+    categoryOnly,
+    clearSideHit,
+    productDuft,
+    weakCategoryOnly: noProductSignal && !clearSideHit,
+  };
+}
+
+function scoreDuftSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const {
+    categoryOnly,
+    clearSideHit,
+    productDuft,
+    weakCategoryOnly,
+  } = getGenericDuftOfferIntent({
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  let adjustment = 0;
+
+  if (productDuft) {
+    adjustment += 6200;
+  }
+
+  if (clearSideHit) {
+    adjustment -= 5200;
+  } else if (categoryOnly) {
+    adjustment -= weakCategoryOnly ? 2600 : 1400;
+  }
+
+  return adjustment;
+}
+
 function scoreFieldAgainstQuery(value, queryTokens, weights) {
   const fieldTokens = tokenizeSearchText(value);
 
@@ -2595,6 +2681,9 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericWurstQuery = context?.key === 'wurst' && queryTokens.length === 1 && queryTokens[0] === 'wurst';
   const genericTeeQuery = context?.key === 'tee' && queryTokens.length === 1 && queryTokens[0] === 'tee';
   const genericFischQuery = context?.key === 'fisch' && queryTokens.length === 1 && queryTokens[0] === 'fisch';
+  const genericDuftQuery = context?.key === 'duft'
+    && queryTokens.includes('duft')
+    && queryTokens.every((token) => ['bipa', 'duft'].includes(token));
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
   const conservativeGenericOilQuery = genericOilQuery;
 
@@ -2817,6 +2906,15 @@ function scoreOfferAgainstQuery(offer, query) {
 
     if (genericFischQuery) {
       score += scoreFischSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
+    if (genericDuftQuery) {
+      score += scoreDuftSearchIntent({
         titleTokens,
         categoryTokens,
         comparisonTokens,

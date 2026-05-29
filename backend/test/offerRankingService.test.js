@@ -567,6 +567,69 @@ test('beer query rejects hair care weizen false positives even when category is 
   ]);
 });
 
+test('generic duft query ranks fragrances ahead of scented side hits without hiding specific side queries', () => {
+  const perfume = offer({
+    title: 'Boss Bottled Eau de Toilette 100ml',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Kosmetik & Make-up',
+    categoryKey: 'kosmetik-make-up',
+    searchTokens: ['boss', 'bottled', 'eau', 'toilette', 'parfum', 'kosmetik', 'bipa'],
+    retailerName: 'BIPA',
+  });
+  const litter = offer({
+    title: 'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenstreu & Pflege',
+    categoryKey: 'katzenstreu-pflege',
+    searchTokens: ['zooroyal', 'klumpstreu', 'pinienduft', 'katzenstreu', 'bipa'],
+    retailerName: 'BIPA',
+  });
+  const cleaner = offer({
+    title: 'WC-Duft Reiniger Zitrone',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Waschmittel & Reiniger',
+    categoryKey: 'waschmittel-reiniger',
+    searchTokens: ['wc', 'duft', 'reiniger', 'bipa'],
+    retailerName: 'BIPA',
+  });
+
+  const generic = applyQueryMatch([litter, cleaner, perfume], 'bipa duft');
+
+  assert.equal(generic[0].title, perfume.title);
+  assert.equal(generic.some((item) => item.title === litter.title), true);
+  assert.equal(generic.some((item) => item.title === cleaner.title), true);
+  assert.equal(scoreOfferAgainstQuery(perfume, 'duft') > scoreOfferAgainstQuery(litter, 'duft'), true);
+  assert.equal(scoreOfferAgainstQuery(perfume, 'duft') > scoreOfferAgainstQuery(cleaner, 'duft'), true);
+  assert.equal(scoreOfferAgainstQuery(litter, 'pinienduft') > 0, true);
+  assert.equal(scoreOfferAgainstQuery(cleaner, 'wc duft') > 0, true);
+});
+
+test('specific room scent and cat litter queries remain findable', () => {
+  const roomScent = offer({
+    title: 'Raumduft Lavendel',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Lufterfrischer & Raumduft',
+    searchTokens: ['raumduft', 'lufterfrischer'],
+  });
+  const litter = offer({
+    title: 'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenstreu & Pflege',
+    searchTokens: ['zooroyal', 'klumpstreu', 'pinienduft', 'katzenstreu'],
+  });
+  const softener = offer({
+    title: 'Duftspueler Frische',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Waschmittel & Reiniger',
+    searchTokens: ['duftspueler', 'weichspueler'],
+  });
+
+  assert.equal(applyQueryMatch([roomScent], 'raumduft')[0].title, roomScent.title);
+  assert.equal(applyQueryMatch([litter], 'katzenstreu')[0].title, litter.title);
+  assert.equal(applyQueryMatch([litter], 'pinienduft')[0].title, litter.title);
+  assert.equal(applyQueryMatch([softener], 'duftspueler')[0].title, softener.title);
+});
+
 test('multi-term ranking prefers offers covering all original query terms via strong fields and search tokens', () => {
   const fullIntent = offer({
     title: 'ZZZ Milka Aktion',
@@ -4789,7 +4852,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-offer-quality-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v1-offer-quality-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

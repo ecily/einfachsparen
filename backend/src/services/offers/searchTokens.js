@@ -101,6 +101,19 @@ const FISCH_PRODUCT_TOKENS = [
   'zanderfilet',
 ];
 
+const DUFT_PRODUCT_TOKENS = [
+  'duft',
+  'duftset',
+  'duftsets',
+  'eau',
+  'edt',
+  'edp',
+  'fragrance',
+  'homme',
+  'parfum',
+  'toilette',
+];
+
 const STOPWORDS = new Set([
   'ab',
   'aktion',
@@ -172,6 +185,7 @@ const QUERY_SYNONYMS = new Map([
   ['fisch', FISCH_PRODUCT_TOKENS.filter((token) => token !== 'fisch')],
   ['tee', TEE_PRODUCT_TOKENS.filter((token) => token !== 'tee')],
   ['wurst', WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst')],
+  ['duft', DUFT_PRODUCT_TOKENS.filter((token) => token !== 'duft')],
 ]);
 
 const COMPOUND_PRODUCT_TOKENS = new Set([
@@ -299,6 +313,18 @@ function buildOfferSearchTokens(offer = {}) {
     }
   }
 
+  const fragranceText = normalizeSearchTokenText([
+    offer.title,
+    offer.brand,
+    offer.categoryPrimary,
+    offer.categorySecondary,
+    offer.description,
+  ].join(' '));
+
+  if (/\b(eau de parfum|eau de toilette|parfum|fragrance|duftset|duftsets|edt|edp)\b/.test(fragranceText)) {
+    addTokenWithSynonyms(tokens, 'duft');
+  }
+
   return [...tokens].sort();
 }
 
@@ -339,6 +365,7 @@ function withOfferSearchTokens(offer = {}) {
 module.exports = {
   SEARCH_TOKEN_VERSION,
   FOOD_OIL_PRODUCT_TOKENS,
+  DUFT_PRODUCT_TOKENS,
   FISCH_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
   TEE_PRODUCT_TOKENS,

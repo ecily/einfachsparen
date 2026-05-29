@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   FISCH_PRODUCT_TOKENS,
   FOOD_OIL_PRODUCT_TOKENS,
+  DUFT_PRODUCT_TOKENS,
   SEARCH_TOKEN_VERSION,
   TEE_PRODUCT_TOKENS,
   buildOfferSearchTokens,
@@ -147,6 +148,26 @@ test('expands tee query to direct tea product tokens without coffee or Teebutter
   }
 
   assert.deepEqual(new Set(teeTokens), new Set(TEE_PRODUCT_TOKENS));
+});
+
+test('expands generic duft query to direct fragrance intent without room scent side hits', () => {
+  const duftTokens = buildQuerySearchTokens('duft');
+
+  for (const token of ['duft', 'parfum', 'eau', 'toilette', 'fragrance', 'edt', 'edp']) {
+    assert.equal(duftTokens.includes(token), true);
+  }
+
+  for (const sideHitToken of ['pinienduft', 'raumduft', 'katzenstreu', 'reiniger', 'duftspueler']) {
+    assert.equal(duftTokens.includes(sideHitToken), false);
+  }
+
+  assert.deepEqual(new Set(duftTokens), new Set(DUFT_PRODUCT_TOKENS));
+
+  const perfumeTokens = buildOfferSearchTokens({ title: 'Boss Bottled Eau de Toilette 100ml' });
+  const litterTokens = buildOfferSearchTokens({ title: 'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter' });
+
+  assert.equal(perfumeTokens.includes('duft'), true);
+  assert.equal(litterTokens.includes('duft'), false);
 });
 
 test('keeps reis and milch query tokens and indexes conservative product compounds', () => {

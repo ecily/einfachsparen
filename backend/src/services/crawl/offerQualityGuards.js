@@ -101,6 +101,21 @@ function buildInferredQuantityFields({ amount, unit, packCount = null, packageTy
   };
 }
 
+function buildQuantityText({ amount, unit, packCount = null } = {}) {
+  const displayUnit = displayUnitFromMatch(unit);
+  const amountText = String(amount ?? '').replace('.', ',');
+
+  if (!amountText || !displayUnit) {
+    return '';
+  }
+
+  if (parsePositiveNumber(packCount) > 1) {
+    return `${parsePositiveNumber(packCount)} x ${amountText} ${displayUnit}`;
+  }
+
+  return `${amountText} ${displayUnit}`;
+}
+
 function inferQuantityFieldsFromText(value = '') {
   const text = sanitizeWhitespace(value).replace(/\u00d7/g, 'x');
 
@@ -111,31 +126,56 @@ function inferQuantityFieldsFromText(value = '') {
   const multipackMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l|liter|gramm|kilogramm|milliliter|zentiliter)\b/i);
 
   if (multipackMatch) {
-    return buildInferredQuantityFields({
-      packCount: parsePositiveNumber(multipackMatch[1]),
-      amount: parsePositiveNumber(multipackMatch[2]),
-      unit: multipackMatch[3],
+    const packCount = parsePositiveNumber(multipackMatch[1]);
+    const amount = parsePositiveNumber(multipackMatch[2]);
+    const unit = multipackMatch[3];
+    const inferred = buildInferredQuantityFields({
+      packCount,
+      amount,
+      unit,
       packageType: 'pack',
     });
+
+    if (!inferred) {
+      return null;
+    }
+
+    return {
+      ...inferred,
+      quantityText: buildQuantityText({ amount, unit, packCount }),
+    };
   }
 
   const amountUnitMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l|liter|gramm|kilogramm|milliliter|zentiliter)\b/i);
 
   if (amountUnitMatch) {
-    return buildInferredQuantityFields({
-      amount: parsePositiveNumber(amountUnitMatch[1]),
-      unit: amountUnitMatch[2],
+    const amount = parsePositiveNumber(amountUnitMatch[1]);
+    const unit = amountUnitMatch[2];
+    const inferred = buildInferredQuantityFields({
+      amount,
+      unit,
     });
+
+    return inferred && {
+      ...inferred,
+      quantityText: buildQuantityText({ amount, unit }),
+    };
   }
 
   const pieceMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(stk|stueck|stuck|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?|kisten?|sack|saecke|sacke)\b/i);
 
   if (pieceMatch) {
-    return buildInferredQuantityFields({
-      amount: parsePositiveNumber(pieceMatch[1]),
+    const amount = parsePositiveNumber(pieceMatch[1]);
+    const inferred = buildInferredQuantityFields({
+      amount,
       unit: 'Stk',
       packageType: normalizeTitleForMatch(pieceMatch[2]),
     });
+
+    return inferred && {
+      ...inferred,
+      quantityText: buildQuantityText({ amount, unit: 'Stk' }),
+    };
   }
 
   return null;
@@ -149,16 +189,23 @@ function inferMissingQuantityFields(offer = {}) {
     offer.rawFacts?.infoText,
     offer.rawFacts?.evidenceText,
   ];
+  let fallback = null;
 
   for (const candidate of candidates) {
     const inferred = inferQuantityFieldsFromText(candidate);
 
-    if (inferred) {
+    if (!inferred) {
+      continue;
+    }
+
+    if (['kg', 'l'].includes(inferred.comparableUnit)) {
       return inferred;
     }
+
+    fallback = fallback || inferred;
   }
 
-  return {};
+  return fallback || {};
 }
 
 function parseQuantityTextBasis(quantityText, targetUnit) {

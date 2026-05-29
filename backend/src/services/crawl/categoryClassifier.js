@@ -202,6 +202,14 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Kosmetik & Make-up',
   },
   {
+    patterns: [
+      /\bgeschenkset\b.*\b(eau de|parfum|duft|fragrance|pour homme|pour femme|homme|femme|bottled|million|cool water|phantom|devotion)\b/,
+      /\b(eau de|parfum|duft|fragrance|pour homme|pour femme|homme|femme|bottled|million|cool water|phantom|devotion)\b.*\bgeschenkset\b/,
+    ],
+    main: 'Drogerie / Hygiene',
+    sub: 'Kosmetik & Make-up',
+  },
+  {
     patterns: [/\b(oral-b|oral b|zahnpasta|zahnburste|zahnbuerste|elektrische zahnburste|elektrische zahnbuerste|zahnseide|aufsteckbursten|aufsteckbuersten|mundpflege|mundspulung|mundspuelung)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Mund- & Zahnpflege',

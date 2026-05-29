@@ -378,6 +378,46 @@ test('infers safe quantity fields from common product text without treating LSF 
     priceCurrent: { amount: 17.99, currency: 'EUR', originalText: '17.99 EUR' },
     normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
   }));
+  const boss100 = enrichOfferForStorage(activeComparableOffer({
+    title: 'Boss Bottled Eau de Toilette 100ml',
+    quantityText: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    unitValue: null,
+    unitType: '',
+    priceCurrent: { amount: 57.99, currency: 'EUR', originalText: '57.99 EUR' },
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  }));
+  const boss200 = enrichOfferForStorage(activeComparableOffer({
+    title: 'Boss Bottled Eau de Toilette 200ml',
+    quantityText: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    unitValue: null,
+    unitType: '',
+    priceCurrent: { amount: 76.99, currency: 'EUR', originalText: '76.99 EUR' },
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  }));
+  const myLand = enrichOfferForStorage(activeComparableOffer({
+    title: 'My Land Eau de Toilette 50ml',
+    quantityText: '',
+    totalComparableAmount: null,
+    comparableUnit: '',
+    unitValue: null,
+    unitType: '',
+    priceCurrent: { amount: 31.49, currency: 'EUR', originalText: '31.49 EUR' },
+    normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+  }));
+  const ladyMillion = enrichOfferForStorage(activeComparableOffer({
+    title: 'Paco Rabanne Lady Million Eau de Parfum BIPA 50 Milliliter 1 Stueck',
+    quantityText: '1 Stueck',
+    totalComparableAmount: 1,
+    comparableUnit: 'Stk',
+    unitValue: 1,
+    unitType: 'Stk',
+    priceCurrent: { amount: 62.99, currency: 'EUR', originalText: '62.99 EUR' },
+    normalizedUnitPrice: { amount: 62.99, unit: 'Stk', comparable: true, confidence: 0.8 },
+  }));
   const casePack = enrichOfferForStorage(activeComparableOffer({
     title: 'Puntigamer 20 x 0,5 l',
     quantityText: '',
@@ -399,13 +439,27 @@ test('infers safe quantity fields from common product text without treating LSF 
   }));
 
   assert.equal(hugo.unitValue, 75);
+  assert.equal(hugo.quantityText, '75 ml');
   assert.equal(hugo.unitType, 'ml');
   assert.equal(hugo.totalComparableAmount, 0.075);
   assert.equal(hugo.comparableUnit, 'l');
   assert.equal(hugo.normalizedUnitPrice.amount, 359.87);
   assert.equal(hugo.quality.comparisonSafe, true);
   assert.equal(davidoff.normalizedUnitPrice.amount, 239.87);
+  assert.equal(davidoff.quantityText, '75 ml');
+  assert.equal(boss100.quantityText, '100 ml');
+  assert.equal(boss100.normalizedUnitPrice.amount, 579.9);
+  assert.equal(boss100.quality.comparisonSafe, true);
+  assert.equal(boss200.quantityText, '200 ml');
+  assert.equal(boss200.normalizedUnitPrice.amount, 384.95);
+  assert.equal(myLand.quantityText, '50 ml');
+  assert.equal(myLand.normalizedUnitPrice.amount, 629.8);
+  assert.equal(ladyMillion.quantityText, '50 ml');
+  assert.equal(ladyMillion.unitType, 'ml');
+  assert.equal(ladyMillion.comparableUnit, 'l');
+  assert.equal(ladyMillion.normalizedUnitPrice.amount, 1259.8);
   assert.equal(casePack.packCount, 20);
+  assert.equal(casePack.quantityText, '20 x 0,5 l');
   assert.equal(casePack.unitValue, 0.5);
   assert.equal(casePack.totalComparableAmount, 10);
   assert.equal(casePack.normalizedUnitPrice.amount, 1.98);

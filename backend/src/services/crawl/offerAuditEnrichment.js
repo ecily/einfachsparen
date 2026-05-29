@@ -4,6 +4,7 @@ const {
   assessComparableSafety,
   inferConditionFields,
   inferMissingQuantityFields,
+  normalizeComparableUnit,
 } = require('./offerQualityGuards');
 const { resolveReferencePrice } = require('../offers/promotionMath');
 const { buildOfferSearchTokens, SEARCH_TOKEN_VERSION } = require('../offers/searchTokens');
@@ -324,7 +325,7 @@ function buildQualityWithComparableSafety(offer, reviewReasons, comparableSafety
     quality.issues = [...new Set([...quality.issues, ...comparableSafety.reviewReasons])];
     comparableSafety.reviewReasons.forEach((reason) => reviewReasons.add(reason));
   } else {
-    quality.comparisonSafe = Boolean(quality.comparisonSafe && offer?.comparisonGroup);
+    quality.comparisonSafe = Boolean(offer?.comparisonGroup || offer?.comparisonSignature);
   }
 
   return quality;
@@ -363,11 +364,23 @@ function buildInferredComparisonAmountKey(amount, unit) {
 function withInferredQuantityFields(document = {}) {
   const inferred = inferMissingQuantityFields(document);
   const next = { ...document };
+  const currentComparableUnit = normalizeComparableUnit(next.comparableUnit || next.normalizedUnitPrice?.unit);
+  const inferredComparableUnit = normalizeComparableUnit(inferred.comparableUnit);
+  const preferInferredMeasure = ['kg', 'l'].includes(inferredComparableUnit) && (!currentComparableUnit || currentComparableUnit === 'Stk');
 
   for (const field of ['packCount', 'unitValue', 'unitType', 'totalComparableAmount', 'comparableUnit', 'packageType']) {
-    if ((next[field] === null || next[field] === undefined || next[field] === '') && inferred[field] !== undefined && inferred[field] !== null && inferred[field] !== '') {
+    if (
+      (preferInferredMeasure || next[field] === null || next[field] === undefined || next[field] === '')
+      && inferred[field] !== undefined
+      && inferred[field] !== null
+      && inferred[field] !== ''
+    ) {
       next[field] = inferred[field];
     }
+  }
+
+  if ((!next.quantityText || preferInferredMeasure) && inferred.quantityText) {
+    next.quantityText = inferred.quantityText;
   }
 
   const currentAmount = Number(next.priceCurrent?.amount);
@@ -376,7 +389,7 @@ function withInferredQuantityFields(document = {}) {
   const existingUnitPrice = Number(next.normalizedUnitPrice?.amount);
 
   if (
-    !(existingUnitPrice > 0)
+    (preferInferredMeasure || !(existingUnitPrice > 0))
     && currentAmount > 0
     && totalAmount > 0
     && ['kg', 'l', 'Stk'].includes(comparableUnit)
@@ -391,7 +404,7 @@ function withInferredQuantityFields(document = {}) {
   }
 
   if (
-    !next.comparisonGroup
+    (!next.comparisonGroup || preferInferredMeasure)
     && next.comparisonSignature
     && next.normalizedUnitPrice?.comparable
     && Number(next.normalizedUnitPrice?.amount) > 0
