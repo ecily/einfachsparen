@@ -199,10 +199,17 @@ function getExplicitMinimumQuantity(offer) {
   return Number.isFinite(quantity) && quantity > 1 ? Math.round(quantity) : 0
 }
 
-const minimumUnitPattern = '(stuck|stueck|stk\\.?|st\\.?|packungen?|pkg\\.?|pckg\\.?)'
+const minimumUnitPattern = '(stuck|stueck|stk\\.?|st\\.?|packungen?|pkg\\.?|pckg\\.?|beutel|dosen?|flaschen?|kisten?)'
 
-function isPackUnit(value) {
-  return /\b(?:packungen?|pkg\.?|pckg\.?)\b/i.test(normalizeConditionParseText(value))
+function getMinimumConditionUnit(value) {
+  const text = normalizeConditionParseText(value)
+
+  if (/\bkisten?\b/.test(text)) return 'crate'
+  if (/\bdosen?\b/.test(text)) return 'can'
+  if (/\bflaschen?\b/.test(text)) return 'bottle'
+  if (/\b(?:packungen?|pkg\.?|pckg\.?|beutel)\b/i.test(text)) return 'pack'
+
+  return 'piece'
 }
 
 function getMinimumConditionInfoFromText(value) {
@@ -224,7 +231,7 @@ function getMinimumConditionInfoFromText(value) {
 
       return {
         quantity: Math.round(quantity),
-        unit: isPackUnit(unit) ? 'pack' : 'piece',
+        unit: getMinimumConditionUnit(unit),
       }
     }
   }
@@ -240,10 +247,9 @@ function getDisplayMinimumConditionInfo(offer) {
   if (explicitQuantity) {
     return {
       quantity: explicitQuantity,
-      unit: parsedInfos.some((info) => info.quantity === explicitQuantity && info.unit === 'pack') ||
-        sourceTexts.some(isPackUnit)
-        ? 'pack'
-        : 'piece',
+      unit: parsedInfos.find((info) => info.quantity === explicitQuantity)?.unit ||
+        sourceTexts.map(getMinimumConditionUnit).find((unit) => unit !== 'piece') ||
+        'piece',
     }
   }
 
@@ -252,7 +258,7 @@ function getDisplayMinimumConditionInfo(offer) {
 
   return {
     quantity: firstInfo.quantity,
-    unit: parsedInfos.some((info) => info.quantity === firstInfo.quantity && info.unit === 'pack') ? 'pack' : firstInfo.unit,
+    unit: parsedInfos.find((info) => info.quantity === firstInfo.quantity && info.unit !== 'piece')?.unit || firstInfo.unit,
   }
 }
 
@@ -263,7 +269,15 @@ export function getOfferMinimumPurchaseInfo(offer) {
 function formatMinimumDisplayCondition(info) {
   if (!info?.quantity) return ''
 
-  return `Gilt ab ${info.quantity} ${info.unit === 'pack' ? 'Packungen' : 'Stück'}`
+  const unitLabels = {
+    bottle: 'Flaschen',
+    can: 'Dosen',
+    crate: 'Kisten',
+    pack: 'Packungen',
+    piece: 'Stück',
+  }
+
+  return `Gilt ab ${info.quantity} ${unitLabels[info.unit] || unitLabels.piece}`
 }
 
 function hasAdditionalConditionSignal(value) {

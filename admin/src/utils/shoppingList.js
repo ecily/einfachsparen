@@ -97,8 +97,10 @@ function fromCents(cents) {
 function getReferencePriceAmount(item) {
   const candidates = [
     item?.referencePrice?.amount,
+    item?.pricePrevious?.amount,
     item?.priceReference?.amount,
     item?.priceOriginal?.amount,
+    item?.previousPrice?.amount,
     item?.rawFacts && typeof item.rawFacts === 'object' ? item.rawFacts.referencePrice : null,
   ]
 
@@ -111,6 +113,20 @@ function getReferencePriceAmount(item) {
   }
 
   return null
+}
+
+function getMinimumQuantityUnitLabels(item, count) {
+  const unit = item?.minimumPurchaseUnit || getOfferMinimumPurchaseInfo(item)?.unit || 'piece'
+  const labels = {
+    bottle: ['Flasche', 'Flaschen'],
+    can: ['Dose', 'Dosen'],
+    crate: ['Kiste', 'Kisten'],
+    pack: ['Packung', 'Packungen'],
+    piece: ['Stück', 'Stück'],
+  }
+  const [singular, plural] = labels[unit] || labels.piece
+
+  return count === 1 ? singular : plural
 }
 
 export function getShoppingListMinimumQuantity(item) {
@@ -174,8 +190,13 @@ export function getShoppingListItemPricing(item, quantity) {
   const referenceUnitCents = hasReferencePrice ? toCents(referencePrice) : offerUnitCents
   const offerTotalCents = offerUnitCents * breakdown.offerQuantity
   const remainderTotalCents = referenceUnitCents * breakdown.remainderQuantity
-  const knownSavingsCents =
-    savings.type === 'known' ? toCents(savings.amount) * breakdown.completeBlocks : 0
+  const estimatedTotalCents = offerTotalCents + remainderTotalCents
+  const referenceTotalCents = hasReferencePrice ? toCents(referencePrice) * breakdown.quantity : 0
+  const fallbackSavingsCents =
+    breakdown.minimumQuantity <= 1 && savings.type === 'known' ? toCents(savings.amount) * breakdown.quantity : 0
+  const knownSavingsCents = hasReferencePrice
+    ? Math.max(0, referenceTotalCents - estimatedTotalCents)
+    : fallbackSavingsCents
 
   return {
     ...breakdown,
@@ -183,7 +204,8 @@ export function getShoppingListItemPricing(item, quantity) {
     hasReferencePrice,
     offerTotal: fromCents(offerTotalCents),
     remainderTotal: fromCents(remainderTotalCents),
-    estimatedTotal: fromCents(offerTotalCents + remainderTotalCents),
+    estimatedTotal: fromCents(estimatedTotalCents),
+    referenceTotal: fromCents(referenceTotalCents),
     knownSavings: fromCents(knownSavingsCents),
     hasApproximateSavings: savings.type === 'known' && savings.isApproximate,
     hasUncertainRemainder: breakdown.remainderQuantity > 0,
@@ -196,14 +218,15 @@ export function getShoppingListRemainderHint(item, quantity) {
 
   if (!pricing.hasUncertainRemainder) return ''
 
-  const unit = item?.minimumPurchaseUnit === 'pack' ? 'Packung' : 'Stück'
-  const unitLabel = pricing.remainderQuantity === 1 ? unit : unit === 'Packung' ? 'Packungen' : 'Stück'
+  const missingToNextBlock = pricing.minimumQuantity - pricing.remainderQuantity
+  const unitLabel = getMinimumQuantityUnitLabels(item, missingToNextBlock)
+  const blockHint = `Nimm noch ${missingToNextBlock} ${unitLabel} dazu, damit der nächste Angebotsblock vollständig ist.`
 
   if (pricing.hasReferencePrice) {
-    return `Für ${pricing.remainderQuantity} zusätzliche ${unitLabel} ist nicht sicher, ob der Angebotspreis gilt.`
+    return `${blockHint} Die übrige Menge rechnen wir vorsichtig zum Vergleichspreis.`
   }
 
-  return `Für ${pricing.remainderQuantity} zusätzliche ${unitLabel} ist nicht sicher, ob sie vollständig vom Angebotspreis gedeckt sind.`
+  return `${blockHint} Bitte prüfe im Markt, ob die übrige Menge den Angebotspreis bekommt.`
 }
 
 export function getShoppingListSummaryForQuantities(items = [], quantities = {}) {
