@@ -5,7 +5,7 @@ const CATEGORY_TAXONOMY = [
     main: 'Lebensmittel',
     patterns: [/(lebensmittel|essen|nahrung|bio|genuss|feinkost|frisch|vegetarisch|vegan|backshop|kuehlregal|kuhlregal)/],
     subcategories: [
-      { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz|mango|mangos|nektarine|nektarinen|kresse)/] },
+      { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|radieschen|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz|mango|mangos|nektarine|nektarinen|kresse)/] },
       { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast|baguette|kornspitz|weizenweckerl|striezel|brioche|tortilla|wrap)/] },
       { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|frankfurter|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
       { label: 'Milchprodukte', patterns: [/\b(milch|heumilch|vollmilch|buttermilch|butter|teebutter|joghurt|jogurt|topfen|sahne|rahm|quark|skyr|kefir|sauerrahm|schlagobers|obers|pudding|dessertcreme|milchreis)\b/] },
@@ -401,7 +401,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Milchgetraenke',
   },
   {
-    patterns: [/\b(paradeiser|tomate|tomaten|gurke|paprika|salat|kartoffel|erdapfel|zwiebel|apfel|banane|zitrone|beere|erdbeere|erdbeeren|mango|mangos|nektarine|nektarinen|kresse)\b/],
+    patterns: [/\b(paradeiser|tomate|tomaten|gurke|paprika|salat|kartoffel|erdapfel|zwiebel|karotte|moehre|mohre|radieschen|apfel|banane|zitrone|beere|erdbeere|erdbeeren|mango|mangos|nektarine|nektarinen|kresse)\b/],
     main: 'Lebensmittel',
     sub: 'Obst & Gemuese',
   },

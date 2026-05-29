@@ -580,6 +580,232 @@ test('non-condition control queries do not activate SPAR condition supplement', 
   }
 });
 
+test('SPAR-family retailer prefixes are not treated as dominant product tokens', () => {
+  const genericSpar = sparOffer({
+    _id: 'generic-spar-bread',
+    title: 'SPAR Olivenstange SPAR 1 Stueck',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Brot & Gebaeck',
+    categoryKey: 'brot-gebaeck',
+    searchText: 'spar olivenstange angebot',
+    searchTokens: ['aktion', 'olivenstange', 'spar'],
+    searchTokenVersion: 2,
+  });
+  const tomato = sparOffer({
+    _id: 'interspar-tomaten',
+    retailerKey: 'interspar',
+    retailerName: 'INTERSPAR',
+    sourceRetailerFormat: 'interspar',
+    title: 'Frische Tomaten INTERSPAR 1 kg',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+    searchText: 'frische tomaten interspar obst gemuese',
+    searchTokens: ['frisch', 'gemuese', 'interspar', 'obst', 'tomaten'],
+    searchTokenVersion: 2,
+  });
+
+  assert.deepEqual(applyQueryMatch([genericSpar], 'spar gurke'), []);
+  assert.equal(applyQueryMatch([genericSpar, tomato], 'interspar tomaten')[0]._id, 'interspar-tomaten');
+
+  const intersparMetadata = buildRankingCandidateQueryMetadata({ query: 'interspar tomaten' });
+  assert.ok(intersparMetadata.queryTokens.includes('tomaten'));
+  assert.equal(intersparMetadata.queryTokens.includes('interspar'), false);
+
+  const eurosparMetadata = buildRankingCandidateQueryMetadata({ query: 'eurospar bananen' });
+  assert.ok(eurosparMetadata.queryTokens.includes('bananen'));
+  assert.equal(eurosparMetadata.queryTokens.includes('eurospar'), false);
+
+  const match = buildRankingCandidateMatch({ query: 'spar gurke' });
+  const serialized = JSON.stringify(match);
+  assert.ok(serialized.includes('sourceRetailerFormat'));
+  assert.ok(serialized.includes('searchTokens'));
+  assert.ok(serialized.includes('gurke'));
+
+  const sparMetadata = buildRankingCandidateQueryMetadata({ query: 'spar gurke' });
+  assert.ok(sparMetadata.queryTokens.includes('gurke'));
+  assert.equal(sparMetadata.queryTokens.includes('spar'), false);
+});
+
+test('SPAR non-condition control queries still match product intent', () => {
+  const beer = sparOffer({ _id: 'spar-bier', title: 'Goesser Maerzen SPAR 0.50 Liter 1 Dose' });
+  const coffee = sparOffer({
+    _id: 'spar-kaffee',
+    title: 'Lavazza Kaffee Bohnen SPAR 1 Kilogramm',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    categoryKey: 'kaffee-tee',
+    searchText: 'lavazza kaffee bohnen spar',
+  });
+  const wurst = sparOffer({
+    _id: 'spar-wurst',
+    title: 'TANN Salami SPAR 100 Gramm',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    categoryKey: 'fleisch-wurst-fisch',
+    searchText: 'tann salami wurst spar',
+  });
+
+  assert.equal(applyQueryMatch([beer], 'spar bier')[0]._id, 'spar-bier');
+  assert.equal(applyQueryMatch([coffee], 'spar kaffee')[0]._id, 'spar-kaffee');
+  assert.equal(applyQueryMatch([wurst], 'spar wurst')[0]._id, 'spar-wurst');
+  assert.equal(applyQueryMatch([beer], 'spar kiste').length, 0);
+  assert.equal(scoreOfferAgainstQuery(sparPdfOffer({ conditionsText: '1+1 gratis' }), 'spar 1+1') > 0, true);
+});
+
+function freshFoodOffer(overrides = {}) {
+  return offer({
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+    sourceType: 'aktionsfinder-json',
+    quantityText: '500 g',
+    normalizedUnitPrice: { amount: 2.98, unit: 'kg', comparable: true, confidence: 0.9 },
+    ...overrides,
+  });
+}
+
+test('fresh-intent ranking keeps true fresh bananas before chocolate bananas', () => {
+  const fresh = freshFoodOffer({
+    _id: 'fresh-bananas',
+    title: 'Frische Bananen aus Oesterreich 1 kg',
+    searchText: 'frische bananen obst gemuese kg',
+  });
+  const sidehit = offer({
+    _id: 'schoko-bananas',
+    title: 'Casali Schoko-Bananen 600 Gramm 1 Packung',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+    categoryKey: 'suesswaren-knabbereien',
+    searchText: 'casali schoko bananen suesswaren',
+    normalizedUnitPrice: { amount: 11.65, unit: 'kg', comparable: true, confidence: 0.9 },
+  });
+
+  assert.deepEqual(applyQueryMatch([sidehit, fresh], 'bananen').map((item) => item._id), [
+    'fresh-bananas',
+    'schoko-bananas',
+  ]);
+});
+
+test('fresh-intent ranking keeps fresh paprika before chips and cheese paprika sidehits', () => {
+  const fresh = freshFoodOffer({
+    _id: 'fresh-paprika',
+    title: 'Frische Paprika rot Klasse I 500 g',
+    searchText: 'frische paprika obst gemuese klasse 500 g',
+  });
+  const chips = offer({
+    _id: 'chips-paprika',
+    title: 'S-BUDGET Chips Salz oder Paprika 300 Gramm',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+    categoryKey: 'suesswaren-knabbereien',
+    searchText: 'chips paprika snack',
+  });
+  const quargel = offer({
+    _id: 'quargel-paprika',
+    title: 'SPAR Quargel Natur oder Paprika 200 Gramm',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Kaese',
+    categoryKey: 'kaese',
+    searchText: 'quargel paprika kaese',
+  });
+
+  assert.deepEqual(applyQueryMatch([chips, quargel, fresh], 'paprika').map((item) => item._id), [
+    'fresh-paprika',
+    'chips-paprika',
+    'quargel-paprika',
+  ]);
+});
+
+test('fresh-intent ranking keeps fresh tomatoes before processed tomato sidehits', () => {
+  const fresh = freshFoodOffer({
+    _id: 'fresh-tomatoes',
+    title: 'Rispentomaten aus Oesterreich 500 g',
+    searchText: 'rispentomaten frisch obst gemuese 500 g',
+  });
+  const passata = offer({
+    _id: 'passierte-tomaten',
+    title: 'Passierte Tomaten 500 Gramm',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Pasta, Reis & Konserven',
+    categoryKey: 'pasta-reis-konserven',
+    searchText: 'passierte tomaten sugo sauce',
+  });
+  const tuna = offer({
+    _id: 'thunfisch-tomaten',
+    title: 'Thunfisch Getrocknete Tomaten und Kraeuter',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    categoryKey: 'fleisch-wurst-fisch',
+    searchText: 'thunfisch getrocknete tomaten',
+  });
+
+  assert.deepEqual(applyQueryMatch([passata, tuna, fresh], 'tomaten').map((item) => item._id), [
+    'fresh-tomatoes',
+    'passierte-tomaten',
+    'thunfisch-tomaten',
+  ]);
+});
+
+test('fresh-intent ranking keeps fresh carrots before bakery carrot sidehits', () => {
+  const fresh = freshFoodOffer({
+    _id: 'fresh-carrots',
+    title: 'Karotten Bund aus Oesterreich',
+    quantityText: '1 Bund',
+    searchText: 'karotten bund frisch obst gemuese',
+  });
+  const bakery = offer({
+    _id: 'karotten-dinkelknopf',
+    title: 'SPAR Dinkelknopf mit Karotten und Buchweizen 350 Gramm',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Brot & Gebaeck',
+    categoryKey: 'brot-gebaeck',
+    searchText: 'dinkelknopf gebaeck karotten',
+  });
+
+  assert.deepEqual(applyQueryMatch([bakery, fresh], 'karotten').map((item) => item._id), [
+    'fresh-carrots',
+    'karotten-dinkelknopf',
+  ]);
+});
+
+test('fresh-intent ranking keeps fresh strawberries before Haribo strawberry sweets', () => {
+  const fresh = freshFoodOffer({
+    _id: 'fresh-strawberries',
+    title: 'Erdbeeren 500 g 1 Packung',
+    searchText: 'erdbeeren frisch obst gemuese 500 g',
+  });
+  const sweets = offer({
+    _id: 'haribo-strawberries',
+    title: 'Haribo Primavera Erdbeeren',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+    categoryKey: 'suesswaren-knabbereien',
+    searchText: 'haribo primavera erdbeeren suesswaren',
+  });
+
+  assert.deepEqual(applyQueryMatch([sweets, fresh], 'erdbeeren').map((item) => item._id), [
+    'fresh-strawberries',
+    'haribo-strawberries',
+  ]);
+});
+
+test('fresh sidehits remain searchable when no true fresh offer is present', () => {
+  const sidehit = offer({
+    _id: 'only-schoko-bananas',
+    title: 'Casali Schoko-Bananen 600 Gramm 1 Packung',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+    categoryKey: 'suesswaren-knabbereien',
+    searchText: 'casali schoko bananen suesswaren',
+  });
+
+  const ranked = applyQueryMatch([sidehit], 'bananen');
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]._id, 'only-schoko-bananas');
+  assert.equal(scoreOfferAgainstQuery(sidehit, 'bananen') > 0, true);
+});
+
 test('SPAR condition merge keeps current dated condition sentences intact', () => {
   const aktionsfinder = sparOffer({
     brand: 'Goesser',
@@ -3456,7 +3682,7 @@ test('coffee searches keep Teebutter from winning through coffee tea category si
   assert.equal(applyQueryMatch([teebutter, tea], 'tee')[0].title, 'Teekanne Teebeutel Schwarztee SPAR');
   assert.equal(applyQueryMatch([sparCoffee, teebutter], 'butter')[0].title, 'Oesterreichische Teebutter SPAR');
   assert.equal(applyQueryMatch([teebutter], 'spar kaffee').length, 0);
-  assert.equal(calculateOfferTermCoverage(teebutter, 'spar kaffee').coveredTerms, 1);
+  assert.equal(calculateOfferTermCoverage(teebutter, 'spar kaffee').coveredTerms, 0);
   assert.ok(scoreOfferAgainstQuery(teebutter, 'kaffee') < scoreOfferAgainstQuery(sparCoffee, 'kaffee'));
   assert.ok(scoreOfferAgainstQuery(teebutter, 'tee') < scoreOfferAgainstQuery(tea, 'tee'));
 });

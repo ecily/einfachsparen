@@ -591,6 +591,145 @@ function tokenizeSearchText(value) {
   return normalizeSearchText(value).split(/\s+/).filter(Boolean);
 }
 
+const SPAR_RETAILER_QUERY_PREFIXES = new Map([
+  ['spar', ['spar']],
+  ['eurospar', ['eurospar']],
+  ['interspar', ['interspar']],
+]);
+
+const FRESH_INTENT_TOKENS = new Set([
+  'banane',
+  'bananen',
+  'paprika',
+  'tomate',
+  'tomaten',
+  'paradeiser',
+  'gurke',
+  'gurken',
+  'salatgurke',
+  'radieschen',
+  'karotte',
+  'karotten',
+  'zwiebel',
+  'zwiebeln',
+  'salat',
+  'aepfel',
+  'apfel',
+  'erdbeere',
+  'erdbeeren',
+  'zucchini',
+  'kartoffel',
+  'kartoffeln',
+]);
+
+const NON_FRESH_QUERY_CONTEXT_TOKENS = new Set([
+  'gewuerz',
+  'gewuerze',
+  'sauce',
+  'saucen',
+  'sugo',
+  'suppe',
+  'suppen',
+  'chips',
+  'schokolade',
+  'schoko',
+  'konserve',
+  'konserven',
+]);
+
+const FRESH_SIDEHIT_TOKENS = [
+  'schoko',
+  'schokolade',
+  'casali',
+  'haribo',
+  'chips',
+  'snack',
+  'quargel',
+  'thunfisch',
+  'passiert',
+  'passierte',
+  'getrocknet',
+  'getrocknete',
+  'sugo',
+  'sauce',
+  'suppe',
+  'dinkelknopf',
+  'gebaeck',
+  'geback',
+  'semmel',
+  'pizza',
+  'fertig',
+  'konserviert',
+  'glas',
+  'eingelegt',
+];
+
+const STRONG_FRESH_CONTEXT_TOKENS = [
+  'frisch',
+  'bund',
+  'klasse',
+  'kg',
+  'obst',
+  'gemuese',
+  'gemuse',
+  'salatgurke',
+  'cocktailtomaten',
+  'rispentomaten',
+  'cherry',
+  'paradeiser',
+  'oesterreich',
+  'osterreich',
+];
+
+function parseRetailerPrefixedQuery(query = '') {
+  const rawQuery = String(query || '').trim();
+  const [firstToken = ''] = tokenizeSearchText(rawQuery);
+  const retailerKeys = SPAR_RETAILER_QUERY_PREFIXES.get(firstToken);
+
+  if (!retailerKeys || retailerKeys.length === 0) {
+    return {
+      retailerKeys: [],
+      queryWithoutRetailerPrefix: rawQuery,
+      hasRetailerPrefix: false,
+    };
+  }
+
+  const prefixMatch = rawQuery.match(/^\s*\S+\s*(.*)$/);
+  const queryWithoutRetailerPrefix = String(prefixMatch?.[1] || '').trim();
+
+  if (!queryWithoutRetailerPrefix) {
+    return {
+      retailerKeys: [],
+      queryWithoutRetailerPrefix: rawQuery,
+      hasRetailerPrefix: false,
+    };
+  }
+
+  return {
+    retailerKeys,
+    queryWithoutRetailerPrefix,
+    hasRetailerPrefix: true,
+  };
+}
+
+function getProductScoringQuery(query = '') {
+  const intent = parseRetailerPrefixedQuery(query);
+  if (!intent.hasRetailerPrefix) {
+    return String(query || '');
+  }
+
+  if (
+    hasSparConditionQueryIntent(query) &&
+    tokenizeSearchText(intent.queryWithoutRetailerPrefix)
+      .filter((token) => /[a-z]/.test(token) && token.length >= 3)
+      .length === 0
+  ) {
+    return String(query || '');
+  }
+
+  return intent.queryWithoutRetailerPrefix;
+}
+
 function expandScoringQueryTokens(tokens = []) {
   const expanded = new Set(tokens);
 
@@ -609,7 +748,7 @@ function buildMeaningfulQueryTerms(query) {
   const seen = new Set();
   const terms = [];
 
-  for (const token of tokenizeSearchText(query)) {
+  for (const token of tokenizeSearchText(getProductScoringQuery(query))) {
     const normalizedToken = token === 'ol' ? 'oel' : token;
 
     if (
@@ -1393,6 +1532,57 @@ function isGenericMilkQuery(queryTokens) {
 
 function hasAnyTokenFamily(fieldTokens, expectedTokens = []) {
   return hasAnyTokenMatch(fieldTokens, expectedTokens, { exact: false, suffix: true });
+}
+
+function hasFreshQueryIntent(queryTokens = []) {
+  return queryTokens.some((token) => FRESH_INTENT_TOKENS.has(token)) &&
+    !queryTokens.some((token) => NON_FRESH_QUERY_CONTEXT_TOKENS.has(token));
+}
+
+function scoreFreshSearchIntent({
+  titleTokens = [],
+  categoryTokens = [],
+  comparisonTokens = [],
+  aggregateTokens = [],
+} = {}) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const structuredTokens = titleTokens.concat(categoryTokens, comparisonTokens);
+  const allTokens = structuredTokens.concat(aggregateTokens);
+  const productMatched = hasAnyTokenMatch(productTokens, [...FRESH_INTENT_TOKENS], {
+    exact: true,
+    suffix: true,
+  });
+
+  if (!productMatched) {
+    return 0;
+  }
+
+  const strongFreshContext = hasAnyTokenMatch(allTokens, STRONG_FRESH_CONTEXT_TOKENS, {
+    exact: true,
+    suffix: true,
+  });
+  const categoryFreshContext = hasAnyTokenMatch(categoryTokens, ['obst', 'gemuese', 'gemuse'], {
+    exact: false,
+    suffix: true,
+  });
+  const sidehitContext = hasAnyTokenMatch(allTokens, FRESH_SIDEHIT_TOKENS, {
+    exact: true,
+    suffix: true,
+  });
+
+  if ((strongFreshContext || categoryFreshContext) && !sidehitContext) {
+    return 1800;
+  }
+
+  if (sidehitContext && !(strongFreshContext || categoryFreshContext)) {
+    return -1400;
+  }
+
+  if (sidehitContext) {
+    return -500;
+  }
+
+  return 250;
 }
 
 function hasTokenSequence(fieldTokens, expectedTokens = []) {
@@ -2759,10 +2949,11 @@ function scoreConditionQuerySignal(offer, query) {
 }
 
 function scoreOfferAgainstQuery(offer, query) {
-  const queryTokens = expandScoringQueryTokens(tokenizeSearchText(query));
+  const productScoringQuery = getProductScoringQuery(query);
+  const queryTokens = expandScoringQueryTokens(tokenizeSearchText(productScoringQuery));
 
   if (queryTokens.length === 0) {
-    return 1;
+    return scoreConditionQuerySignal(offer, query) || 1;
   }
 
   const context = getQueryContext(queryTokens);
@@ -2878,6 +3069,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericDuftQuery = context?.key === 'duft'
     && queryTokens.includes('duft')
     && queryTokens.every((token) => ['bipa', 'duft'].includes(token));
+  const freshQueryIntent = hasFreshQueryIntent(queryTokens);
   const contextApplies = Boolean(context && (context.key !== 'duft' || genericDuftQuery));
   const conservativeFalsePositiveQuery = context && ['eier', 'fleisch', 'gemuese', 'obst'].includes(context.key);
   const conservativeGenericOilQuery = genericOilQuery;
@@ -3116,6 +3308,15 @@ function scoreOfferAgainstQuery(offer, query) {
         aggregateTokens,
       });
     }
+  }
+
+  if (freshQueryIntent) {
+    score += scoreFreshSearchIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+    });
   }
 
   if (score <= 0 && genericButterQuery) {
@@ -5900,16 +6101,17 @@ function buildMongoQuerySearchFilter(query) {
 }
 
 function buildTokenizedSearchFilter(query) {
-  const queryTokens = buildQuerySearchTokens(query).slice(0, 24);
+  const effectiveQuery = getProductScoringQuery(query);
+  const queryTokens = buildQuerySearchTokens(effectiveQuery).slice(0, 24);
 
   if (queryTokens.length === 0) {
     return {
-      filter: buildMongoQuerySearchFilter(query),
+      filter: buildMongoQuerySearchFilter(effectiveQuery),
       queryTokens,
-      candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+      candidateQueryMode: effectiveQuery ? 'fallbackRegex' : 'noTextQuery',
       usesSearchTokens: false,
-      fallbackUsed: Boolean(query),
-      fallbackReason: query ? 'no-query-tokens' : '',
+      fallbackUsed: Boolean(effectiveQuery),
+      fallbackReason: effectiveQuery ? 'no-query-tokens' : '',
     };
   }
 
@@ -5937,17 +6139,22 @@ function buildRankingCandidateMatch({
 }) {
   const match = buildCurrentAvailabilityMatch();
   const selectedCategoryKeys = selectedCategories.map((category) => category.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+  const retailerPrefixIntent = parseRetailerPrefixedQuery(query);
+  const effectiveSelectedRetailers = selectedRetailers.length > 0 ? selectedRetailers : retailerPrefixIntent.retailerKeys;
+  const effectiveQuery = retailerPrefixIntent.hasRetailerPrefix
+    ? retailerPrefixIntent.queryWithoutRetailerPrefix
+    : query;
   const querySearch = useSearchTokens ? buildTokenizedSearchFilter(query) : {
-    filter: buildMongoQuerySearchFilter(query),
-    queryTokens: tokenizeSearchText(query).slice(0, 5),
-    candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+    filter: buildMongoQuerySearchFilter(effectiveQuery),
+    queryTokens: tokenizeSearchText(effectiveQuery).slice(0, 5),
+    candidateQueryMode: effectiveQuery ? 'fallbackRegex' : 'noTextQuery',
     usesSearchTokens: false,
-    fallbackUsed: Boolean(query),
-    fallbackReason: query ? 'legacy-regex-mode' : '',
+    fallbackUsed: Boolean(effectiveQuery),
+    fallbackReason: effectiveQuery ? 'legacy-regex-mode' : '',
   };
 
-  if (selectedRetailers.length > 0) {
-    applyRetailerScopeMatch(match, selectedRetailers);
+  if (effectiveSelectedRetailers.length > 0) {
+    applyRetailerScopeMatch(match, effectiveSelectedRetailers);
   }
 
   if (selectedCategoryKeys.length > 0) {
@@ -5973,13 +6180,14 @@ function buildRankingCandidateMatch({
 }
 
 function buildRankingCandidateQueryMetadata({ query = '', useSearchTokens = true } = {}) {
+  const effectiveQuery = getProductScoringQuery(query);
   const querySearch = useSearchTokens ? buildTokenizedSearchFilter(query) : {
-    filter: buildMongoQuerySearchFilter(query),
-    queryTokens: tokenizeSearchText(query).slice(0, 5),
-    candidateQueryMode: query ? 'fallbackRegex' : 'noTextQuery',
+    filter: buildMongoQuerySearchFilter(effectiveQuery),
+    queryTokens: tokenizeSearchText(effectiveQuery).slice(0, 5),
+    candidateQueryMode: effectiveQuery ? 'fallbackRegex' : 'noTextQuery',
     usesSearchTokens: false,
-    fallbackUsed: Boolean(query),
-    fallbackReason: query ? 'legacy-regex-mode' : '',
+    fallbackUsed: Boolean(effectiveQuery),
+    fallbackReason: effectiveQuery ? 'legacy-regex-mode' : '',
   };
 
   return {

@@ -420,9 +420,62 @@ test('generic SPAR PDF extraction rejects fragment starts and merged product blo
 
   assert.equal(accepted.some((candidate) => /^mit 100% Milch/.test(candidate.title)), false);
   assert.equal(accepted.some((candidate) => /^Blue Star/.test(candidate.title)), false);
+  assert.ok(accepted.some((candidate) => /^SPAR Radieschen Bund Aus .*sterreich$/.test(candidate.title)));
   assert.equal(accepted.some((candidate) => /^oder Monte/.test(candidate.title)), false);
   assert.ok(accepted.some((candidate) => candidate.title === 'Coca-Cola Limonaden versch. Sorten,'));
   assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'));
+  assert.equal(
+    candidates.some((candidate) =>
+      candidate.exclusionReason === 'generic-merge-risk' &&
+      /Radieschen/i.test(candidate.rawText || '')
+    ),
+    false
+  );
+});
+
+test('generic SPAR PDF extraction keeps clear radieschen fresh candidate from merged text block', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 3,
+        text: [
+          'Blue Star WC-Steine Doppelpackung, verschiedene Sorten oder Blue Star SpÃ¼lkastenwÃ¼rfel',
+          '4 x 50-g-Packung',
+          'SPAR Radieschen Bund Aus Ã–sterreich, per Bund Angebot gÃ¼ltig von Mo, 25.5. bis Sa, 30.5.',
+          '0,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted.length, 1);
+  assert.match(accepted[0].title, /^SPAR Radieschen Bund Aus .*sterreich$/);
+  assert.equal(accepted[0].quantityText, '1 Bund');
+  assert.equal(accepted[0].categorySecondary, 'Obst & Gemuese');
+  assert.equal(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk'), false);
+});
+
+test('generic SPAR PDF extraction still rejects unspecific merged non-fresh blocks', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 3,
+        text: [
+          'Blue Star WC-Steine Doppelpackung, verschiedene Sorten oder Blue Star SpÃ¼lkastenwÃ¼rfel',
+          '4 x 50-g-Packung',
+          'Grabkerzen Angebote gÃ¼ltig von Do, 28.5. bis Di, 2.6.',
+          '0,99',
+        ].join('\n'),
+      },
+    ],
+  });
+
+  assert.equal(candidates.some((candidate) => candidate.title === 'Grabkerzen'), false);
   assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk'));
 });
 

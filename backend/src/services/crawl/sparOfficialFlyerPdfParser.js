@@ -345,6 +345,54 @@ function extractQuantityTextFromBlock(blockLines = []) {
   return '';
 }
 
+function buildTrustedFreshCandidateFromMergedBlock(blockLines = [], price = null) {
+  if (!(Number(price) > 0)) {
+    return null;
+  }
+
+  const freshLine = blockLines.find((line) => {
+    const normalized = normalizeForScan(line);
+    return /\bradieschen\b/.test(normalized) &&
+      /\bbund\b/.test(normalized) &&
+      (
+        /\baus\s+(?:oesterreich|osterreich)\b/.test(normalized) ||
+        /\baus\s+\S*sterreich\b/i.test(line)
+      );
+  });
+
+  if (!freshLine) {
+    return null;
+  }
+
+  const title = sanitizeWhitespace(
+    freshLine
+      .replace(/\bangebot\s+g(?:Ã¼|u|ue|ü)ltig\b.*$/i, '')
+      .replace(/\bper\s+bund\b.*$/i, '')
+      .replace(/[,.]\s*$/, '')
+  );
+
+  if (!/\bradieschen\b/i.test(title) || !/\bbund\b/i.test(title)) {
+    return null;
+  }
+
+  return {
+    productKind: 'generic-flyer-product',
+    title,
+    brand: /^spar\b/i.test(title) ? 'SPAR' : title.split(/\s+/)[0] || '',
+    price,
+    referencePrice: parseReferencePriceFromBlock(blockLines),
+    quantityText: '1 Bund',
+    conditionsText: extractGenericConditionsText(blockLines),
+    rawText: blockLines.join(' '),
+    comparisonSafe: false,
+    parserHint: 'generic-text-layer-price-block',
+    searchKeywords: `${title} Radieschen Bund Aus Oesterreich Obst Gemuese`,
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+  };
+}
+
 function looksLikeNonProductLine(line = '') {
   const normalized = normalizeForScan(line);
 
@@ -408,16 +456,17 @@ function hasUnsafeGenericTitleStart(title = '') {
 }
 
 function hasGenericMergeRisk(blockLines = [], quantityText = '') {
-  const text = normalizePriceText(blockLines.join(' '));
   if (!quantityText) return false;
 
-  const quantityIndex = normalizeForScan(text).indexOf(normalizeForScan(quantityText));
+  const text = normalizeForScan(blockLines.join(' '));
+  const quantity = normalizeForScan(quantityText);
+  const quantityIndex = text.indexOf(quantity);
   if (quantityIndex < 0) return false;
 
-  const afterQuantity = text.slice(quantityIndex + quantityText.length);
-  return /\bangebote?\s+g(?:ü|u|ue)ltig\b/i.test(afterQuantity)
+  const afterQuantity = text.slice(quantityIndex + quantity.length);
+  return /\bangebote?\s+g.{0,6}ltig\b/i.test(afterQuantity)
     || /\bstattpreise\s+sind\b/i.test(afterQuantity)
-    || /\baktionen\s+nicht\s+g(?:ü|u|ue)ltig\b/i.test(afterQuantity);
+    || /\baktionen\s+nicht\s+g.{0,6}ltig\b/i.test(afterQuantity);
 }
 
 function extractGenericConditionsText(blockLines = []) {
@@ -483,6 +532,13 @@ function extractGenericFlyerCandidatesFromPage(page) {
     }
     const end = Math.min(lines.length, index + 4);
     const blockLines = lines.slice(start, end);
+    const trustedFreshCandidate = buildTrustedFreshCandidateFromMergedBlock(blockLines, price);
+
+    if (trustedFreshCandidate) {
+      addCandidate(candidates, page.pageNumber, trustedFreshCandidate);
+      continue;
+    }
+
     const title = buildGenericTitle(blockLines);
     const quantityText = extractQuantityTextFromBlock(blockLines);
     const genericConditionsText = extractGenericConditionsText(blockLines);
