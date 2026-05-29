@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const crawlJobSchema = new mongoose.Schema(
   {
+    crawlRunId: { type: mongoose.Schema.Types.ObjectId, ref: 'CrawlRun', default: null, index: true },
     sourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Source', required: true, index: true },
     retailerKey: { type: String, required: true, index: true },
     region: { type: String, required: true },

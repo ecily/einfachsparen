@@ -174,6 +174,8 @@ test('pushes ranking query into Mongo searchTokens candidate filtering before JS
 
   assert.equal(match.status, 'active');
   assert.equal(match.isActiveNow, true);
+  assert.equal(match.crawlRunId, undefined);
+  assert.equal(match.publishStatus, undefined);
   assert.deepEqual(match.retailerKey, { $in: ['hofer'] });
   assert.deepEqual(match.categoryKey, { $in: ['kaffee-tee'] });
   assert.equal(match.comparableUnit, 'kg');
@@ -3768,6 +3770,23 @@ test('fresh active filter removes expired and stale offers but keeps recent miss
     filterFreshActiveOffers([current, expiredByDate, expiredByUrl, staleSnapshot], now).map((item) => item.title),
     ['BILLA Snapshot aktuell']
   );
+});
+
+test('ranking visibility remains compatible with legacy offers without CrawlRun lineage', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'legacy-offer',
+    title: 'Legacy Kaffee',
+    status: 'active',
+    isActiveNow: true,
+    crawlRunId: null,
+    publishStatus: undefined,
+  }), 1, 2);
+
+  assert.equal(ranked.id, 'legacy-offer');
+  assert.equal(ranked.status, 'active');
+  assert.equal(ranked.isActiveNow, true);
+  assert.equal(ranked.crawlRunId, null);
+  assert.equal(ranked.publishStatus, 'unknown');
 });
 
 test('fresh active filter removes soft-deactivated repair offers', () => {

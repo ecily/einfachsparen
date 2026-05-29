@@ -3,9 +3,13 @@ const test = require('node:test');
 const mongoose = require('mongoose');
 
 const {
+  executeCrawlRun,
   serializeCrawlRun,
   _private,
 } = require('../src/services/crawl/crawlRunService');
+const CrawlRun = require('../src/models/CrawlRun');
+const CrawlRunLock = require('../src/models/CrawlRunLock');
+const Offer = require('../src/models/Offer');
 
 test('determineMode marks full and scoped CrawlRuns correctly', () => {
   assert.equal(_private.determineMode({}), 'full');
@@ -391,4 +395,97 @@ test('explicit stale recovery classifies active orphan runs conservatively', () 
     now,
     staleAfterMs: 30 * 60 * 1000,
   }).reason, 'lock-owned-by-different-run');
+});
+
+test('markOfferPublishStatusForRun marks stale and failed run lineage without changing visibility fields', async () => {
+  const calls = [];
+  const runId = new mongoose.Types.ObjectId();
+  const now = new Date('2026-05-21T12:00:00.000Z');
+  const OfferModel = {
+    async updateMany(filter, update) {
+      calls.push({ filter, update });
+      return { matchedCount: 3, modifiedCount: 3 };
+    },
+  };
+
+  const result = await _private.markOfferPublishStatusForRun({
+    runId,
+    runStatus: 'stale',
+    OfferModel,
+    now,
+  });
+
+  assert.equal(result.modifiedCount, 3);
+  assert.deepEqual(calls[0].filter, { crawlRunId: runId });
+  assert.equal(calls[0].update.$set.publishStatus, 'crawl-run-stale');
+  assert.equal(calls[0].update.$set.publishStatusUpdatedAt, now);
+  assert.equal(calls[0].update.$set.status, undefined);
+  assert.equal(calls[0].update.$set.isActiveNow, undefined);
+  assert.equal(calls[0].update.$set.isActiveToday, undefined);
+});
+
+test('executeCrawlRun passes the top-level crawlRunId into source crawling and marks successful publish lineage', async () => {
+  const runId = new mongoose.Types.ObjectId();
+  const originals = {
+    crawlRunFindByIdAndUpdate: CrawlRun.findByIdAndUpdate,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const offerUpdates = [];
+  let receivedCrawlArgs = null;
+
+  CrawlRunLock.updateOne = async () => ({ modifiedCount: 1 });
+  CrawlRun.findByIdAndUpdate = async () => ({ modifiedCount: 1 });
+  CrawlRun.findById = async () => ({ _id: runId, mode: 'scoped' });
+  Offer.updateMany = async (filter, update) => {
+    offerUpdates.push({ filter, update });
+    return { matchedCount: 2, modifiedCount: 2 };
+  };
+
+  try {
+    await executeCrawlRun({
+      runId,
+      trigger: 'manual',
+      region: 'Steiermark',
+      options: { sourceKeys: ['bipa-official'] },
+      crawlAllSourcesImpl: async (args) => {
+        receivedCrawlArgs = args;
+        return {
+          sources: [
+            {
+              sourceId: 'source-1',
+              sourceKey: 'bipa-official',
+              retailerKey: 'bipa',
+              channel: 'official-site',
+              sourceType: 'offers-page',
+              status: 'success',
+              foundRawItems: 2,
+              parsedOffers: 2,
+              offersStored: 2,
+            },
+          ],
+          matchedSources: [
+            { sourceId: 'source-1', sourceKey: 'bipa-official', retailerKey: 'bipa', channel: 'official-site', sourceType: 'offers-page' },
+          ],
+          sourceCoverage: { activeEligibleSources: 1 },
+          filterMetadata: { ok: true },
+        };
+      },
+    });
+  } finally {
+    CrawlRun.findByIdAndUpdate = originals.crawlRunFindByIdAndUpdate;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+
+  assert.equal(receivedCrawlArgs.crawlRunId, runId);
+  assert.equal(receivedCrawlArgs.region, 'Steiermark');
+  assert.equal(receivedCrawlArgs.trigger, 'manual');
+  assert.deepEqual(receivedCrawlArgs.sourceKeys, ['bipa-official']);
+  assert.equal(offerUpdates.length, 1);
+  assert.deepEqual(offerUpdates[0].filter, { crawlRunId: runId });
+  assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-success');
+  assert.ok(offerUpdates[0].update.$set.publishStatusUpdatedAt instanceof Date);
 });

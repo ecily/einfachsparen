@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Offer = require('../../models/Offer');
+const CrawlJob = require('../../models/CrawlJob');
 const { hasCurrentSearchTokens, withOfferSearchTokens } = require('../offers/searchTokens');
 
 function isTransactionUnsupportedError(error) {
@@ -110,17 +111,44 @@ async function assessReplacementCoverage({
   });
 }
 
+async function resolveCrawlRunId({
+  documents = [],
+  explicitCrawlRunId = null,
+  crawlJobId = null,
+  CrawlJobModel = CrawlJob,
+} = {}) {
+  const documentCrawlRunId = documents.find((document) => document?.crawlRunId)?.crawlRunId;
+
+  if (documentCrawlRunId) return documentCrawlRunId;
+  if (explicitCrawlRunId) return explicitCrawlRunId;
+  if (!crawlJobId || !mongoose.Types.ObjectId.isValid(String(crawlJobId))) return null;
+  if (!CrawlJobModel || typeof CrawlJobModel.findById !== 'function') return null;
+
+  const query = CrawlJobModel.findById(crawlJobId);
+  const selected = query && typeof query.select === 'function'
+    ? query.select('crawlRunId')
+    : query;
+  const job = selected && typeof selected.lean === 'function'
+    ? await selected.lean()
+    : await selected;
+
+  return job?.crawlRunId || null;
+}
+
 async function replaceOffersForSource({
   sourceId,
   offerDocuments = [],
   crawlJobId: explicitCrawlJobId = null,
+  crawlRunId: explicitCrawlRunId = null,
   allowEmptyReplacement = false,
   emptyReplacementVerified = false,
   sourceRunStatus = 'success',
+  publishStatus = 'source-written',
   replacementQuality = 'complete',
   deactivationReason = 'source-replacement-not-seen',
   coverageGuard = {},
   OfferModel = Offer,
+  CrawlJobModel = CrawlJob,
 } = {}) {
   const documents = Array.isArray(offerDocuments) ? offerDocuments.filter(Boolean) : [];
   const crawlJobId = documents.find((document) => document?.crawlJobId)?.crawlJobId || explicitCrawlJobId || null;
@@ -177,6 +205,13 @@ async function replaceOffersForSource({
     };
   }
 
+  const crawlRunId = await resolveCrawlRunId({
+    documents,
+    explicitCrawlRunId,
+    crawlJobId,
+    CrawlJobModel,
+  });
+
   const coverageRisk = await assessReplacementCoverage({
     sourceId,
     documents,
@@ -203,14 +238,22 @@ async function replaceOffersForSource({
     const updateOptions = session ? { session } : {};
     const now = new Date();
     const crawlJobIdString = String(crawlJobId || '');
+    const crawlRunIdString = crawlRunId ? String(crawlRunId) : '';
     const inserted = documents.length > 0
       ? await OfferModel.insertMany(
-        documents.map((document) => ({
-          ...(hasCurrentSearchTokens(document) ? document : withOfferSearchTokens(document)),
-          sourceId: document.sourceId || sourceId,
-          lastSeenRunId: document.lastSeenRunId || crawlJobIdString,
-          lastSeenSourceRunId: document.lastSeenSourceRunId || crawlJobIdString,
-        })),
+        documents.map((document) => {
+          const enriched = hasCurrentSearchTokens(document) ? document : withOfferSearchTokens(document);
+
+          return {
+            ...enriched,
+            ...(crawlRunId ? { crawlRunId: enriched.crawlRunId || crawlRunId } : {}),
+            sourceId: enriched.sourceId || sourceId,
+            sourceRunStatus: enriched.sourceRunStatus || sourceRunStatus || 'success',
+            publishStatus: enriched.publishStatus || publishStatus || 'source-written',
+            lastSeenRunId: enriched.lastSeenRunId || crawlRunIdString || crawlJobIdString,
+            lastSeenSourceRunId: enriched.lastSeenSourceRunId || crawlJobIdString,
+          };
+        }),
         options
       )
       : [];
@@ -229,6 +272,7 @@ async function replaceOffersForSource({
           'rawFacts.deactivationMetadata': {
             reason: deactivationReason,
             replacementCrawlJobId: crawlJobIdString,
+            replacementCrawlRunId: crawlRunIdString,
             sourceId: String(sourceId || ''),
             deactivatedAt: now.toISOString(),
           },
@@ -256,6 +300,7 @@ module.exports = {
     buildActiveSourceOfferFilter,
     evaluateReplacementCoverageRisk,
     isTransactionUnsupportedError,
+    resolveCrawlRunId,
     runWithOptionalTransaction,
   },
 };

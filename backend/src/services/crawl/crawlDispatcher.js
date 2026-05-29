@@ -14,24 +14,24 @@ const {
 } = require('./crawlSourceSelection');
 const logger = require('../../lib/logger');
 
-async function crawlSource({ source, region, trigger = 'manual' }) {
+async function crawlSource({ source, region, trigger = 'manual', crawlRunId = null }) {
   if (source.channel === 'aggregator') {
     if (String(source.sourceUrl || '').includes('marktguru.at/')) {
-      return crawlMarktguruSource({ source, region, trigger });
+      return crawlMarktguruSource({ source, region, trigger, crawlRunId });
     }
 
     if (String(source.sourceUrl || '').includes('wogibtswas.at/')) {
-      return crawlWogibtswasSource({ source, region, trigger });
+      return crawlWogibtswasSource({ source, region, trigger, crawlRunId });
     }
 
-    return crawlAktionsfinderSource({ source, region, trigger });
+    return crawlAktionsfinderSource({ source, region, trigger, crawlRunId });
   }
 
   if (source.channel === 'official-site' || source.channel === 'official-flyer') {
-    return crawlOfficialSource({ source, region, trigger });
+    return crawlOfficialSource({ source, region, trigger, crawlRunId });
   }
 
-  return crawlOfficialSource({ source, region, trigger });
+  return crawlOfficialSource({ source, region, trigger, crawlRunId });
 }
 
 async function fetchDisabledSourcesForRetailers({ retailerKeys = [] } = {}) {
@@ -54,6 +54,7 @@ async function crawlAllSources({
   dryRun = false,
   sourceSelectionRequested: explicitSourceSelectionRequested = false,
   trigger = 'manual',
+  crawlRunId = null,
 } = {}) {
   const sourceCoverage = {
     totalRegisteredSources: await Source.countDocuments({ active: true }),
@@ -130,7 +131,7 @@ async function crawlAllSources({
     const sourceSummary = summarizeSource(source);
 
     try {
-      const result = await crawlSource({ source, region, trigger });
+      const result = await crawlSource({ source, region, trigger, crawlRunId });
       results.push({
         ...sourceSummary,
         ...result,

@@ -187,8 +187,9 @@ function parseProductLinks({ html, source, validTo }) {
   return promotions;
 }
 
-async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
+async function crawlWogibtswasSource({ source, region, trigger = 'manual', crawlRunId = null }) {
   const crawlJob = await CrawlJob.create({
+    crawlRunId,
     sourceId: source._id,
     retailerKey: source.retailerKey,
     region,
@@ -278,6 +279,7 @@ async function crawlWogibtswasSource({ source, region, trigger = 'manual' }) {
     const refreshResult = await replaceOffersForSource({
       sourceId: source._id,
       offerDocuments,
+      crawlRunId,
     });
 
     const status = offerDocuments.length > 0 ? 'success' : 'partial';

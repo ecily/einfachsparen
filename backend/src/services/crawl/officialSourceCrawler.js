@@ -5870,8 +5870,9 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
   };
 }
 
-async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
+async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRunId = null }) {
   const crawlJob = await CrawlJob.create({
+    crawlRunId,
     sourceId: source._id,
     retailerKey: source.retailerKey,
     region,

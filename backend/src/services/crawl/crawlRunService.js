@@ -2,6 +2,7 @@ const os = require('node:os');
 const mongoose = require('mongoose');
 const CrawlRun = require('../../models/CrawlRun');
 const CrawlRunLock = require('../../models/CrawlRunLock');
+const Offer = require('../../models/Offer');
 const { crawlAllSources } = require('./crawlDispatcher');
 const { buildCoverageMetrics, compactRejectionReasons } = require('./crawlAudit');
 const logger = require('../../lib/logger');
@@ -12,6 +13,13 @@ const LOCK_STALE_MS = 18 * 60 * 60 * 1000;
 const EXPLICIT_RECOVERY_MIN_STALE_MS = 30 * 60 * 1000;
 const PROCESS_STARTED_AT = new Date();
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
+const OFFER_PUBLISH_STATUS_BY_RUN_STATUS = {
+  success: 'crawl-run-success',
+  partial: 'crawl-run-partial',
+  failed: 'crawl-run-failed',
+  stale: 'crawl-run-stale',
+  skipped: 'crawl-run-skipped',
+};
 
 function compactStrings(values = []) {
   if (!Array.isArray(values)) return [];
@@ -520,8 +528,34 @@ async function failStaleRun(run) {
       ],
     },
   });
+  await markOfferPublishStatusForRun({
+    runId: run._id,
+    runStatus: 'failed',
+  });
   await releaseCrawlRunLock(run._id);
   return true;
+}
+
+async function markOfferPublishStatusForRun({
+  runId,
+  runStatus,
+  OfferModel = Offer,
+  now = new Date(),
+} = {}) {
+  if (!runId || !OfferModel || typeof OfferModel.updateMany !== 'function') {
+    return { matchedCount: 0, modifiedCount: 0, skipped: true };
+  }
+
+  const publishStatus = OFFER_PUBLISH_STATUS_BY_RUN_STATUS[runStatus] || 'crawl-run-unknown';
+  return OfferModel.updateMany(
+    { crawlRunId: runId },
+    {
+      $set: {
+        publishStatus,
+        publishStatusUpdatedAt: now,
+      },
+    }
+  );
 }
 
 function buildLockExpiry(now = new Date()) {
@@ -720,6 +754,11 @@ async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now
       errorMessages: 'CrawlRun was marked stale by admin recovery; no automatic replacement crawl was started.',
     },
   });
+  await markOfferPublishStatusForRun({
+    runId: run._id,
+    runStatus: 'stale',
+    now,
+  });
 
   if (!lock?.runId || String(lock.runId) === String(run._id)) {
     await releaseCrawlRunLock(run._id);
@@ -776,6 +815,7 @@ async function executeCrawlRun({
       ...options,
       region,
       trigger,
+      crawlRunId: runId,
     });
     const run = await CrawlRun.findById(runId);
     const aggregation = buildRunSummary(crawlResult);
@@ -813,6 +853,11 @@ async function executeCrawlRun({
         warnings,
       },
     });
+    await markOfferPublishStatusForRun({
+      runId,
+      runStatus: status,
+      now: finishedAt,
+    });
 
     logger.info('CrawlRun completed', {
       runId: String(runId),
@@ -837,6 +882,11 @@ async function executeCrawlRun({
         errorMessages: [compactErrorMessage(error.message)],
         warnings: ['CrawlRun failed before a complete crawl result was available; existing live offers were not globally cleared.'],
       },
+    });
+    await markOfferPublishStatusForRun({
+      runId,
+      runStatus: 'failed',
+      now: finishedAt,
     });
 
     logger.error('CrawlRun failed', {
@@ -959,6 +1009,7 @@ module.exports = {
     failStaleRun,
     isRecoverableStaleRun,
     isRunStale,
+    markOfferPublishStatusForRun,
     normalizeSourceResult,
     parseExplicitRecoveryStaleMs,
     sanitizeJsonValue,

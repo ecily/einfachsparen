@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const mongoose = require('mongoose');
 
 const { replaceOffersForSource } = require('../src/services/crawl/offerRefreshGuard');
 const { SEARCH_TOKEN_VERSION } = require('../src/services/offers/searchTokens');
@@ -137,6 +138,65 @@ test('replaceOffersForSource inserts the new source snapshot before soft-deactiv
       { isActiveToday: true },
     ],
   });
+});
+
+test('replaceOffersForSource stores top-level CrawlRun lineage separately from source CrawlJob lineage', async () => {
+  const calls = buildCalls();
+  const crawlRunId = new mongoose.Types.ObjectId();
+  const crawlJobId = new mongoose.Types.ObjectId();
+
+  const result = await replaceOffersForSource({
+    sourceId: 'source-1',
+    crawlRunId,
+    offerDocuments: [
+      { sourceId: 'source-1', crawlJobId, title: 'Kaffee' },
+    ],
+    OfferModel: buildOfferModel(calls),
+  });
+
+  assert.equal(result.insertedOffers, 1);
+  assert.equal(calls.insertMany.length, 1);
+  assert.equal(calls.insertMany[0].documents[0].crawlRunId, crawlRunId);
+  assert.equal(calls.insertMany[0].documents[0].crawlJobId, crawlJobId);
+  assert.equal(calls.insertMany[0].documents[0].lastSeenRunId, String(crawlRunId));
+  assert.equal(calls.insertMany[0].documents[0].lastSeenSourceRunId, String(crawlJobId));
+  assert.equal(calls.insertMany[0].documents[0].sourceRunStatus, 'success');
+  assert.equal(calls.insertMany[0].documents[0].publishStatus, 'source-written');
+  assert.equal(calls.updateMany[0].update.$set['rawFacts.deactivationMetadata'].replacementCrawlRunId, String(crawlRunId));
+});
+
+test('replaceOffersForSource can resolve CrawlRun lineage from CrawlJob when callers only pass the job id', async () => {
+  const calls = buildCalls();
+  const crawlRunId = new mongoose.Types.ObjectId();
+  const crawlJobId = new mongoose.Types.ObjectId();
+  const CrawlJobModel = {
+    findById(id) {
+      assert.equal(String(id), String(crawlJobId));
+      return {
+        select(field) {
+          assert.equal(field, 'crawlRunId');
+          return {
+            async lean() {
+              return { crawlRunId };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  await replaceOffersForSource({
+    sourceId: 'source-1',
+    offerDocuments: [
+      { sourceId: 'source-1', crawlJobId, title: 'Reis' },
+    ],
+    OfferModel: buildOfferModel(calls),
+    CrawlJobModel,
+  });
+
+  assert.equal(calls.insertMany[0].documents[0].crawlRunId, crawlRunId);
+  assert.equal(calls.insertMany[0].documents[0].lastSeenRunId, String(crawlRunId));
+  assert.equal(calls.insertMany[0].documents[0].lastSeenSourceRunId, String(crawlJobId));
 });
 
 test('replaceOffersForSource scopes soft-deactivation to exactly one sourceId', async () => {

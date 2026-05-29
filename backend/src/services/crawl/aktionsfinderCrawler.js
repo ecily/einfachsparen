@@ -448,8 +448,9 @@ async function fetchAdegFallbackSnapshot() {
   };
 }
 
-async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) {
+async function crawlAktionsfinderSource({ source, region, trigger = 'manual', crawlRunId = null }) {
   const crawlJob = await CrawlJob.create({
+    crawlRunId,
     sourceId: source._id,
     retailerKey: source.retailerKey,
     region,
@@ -583,6 +584,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       sourceId: source._id,
       offerDocuments,
       crawlJobId: crawlJob._id,
+      crawlRunId,
       allowEmptyReplacement: normalizedOffers.length > 0,
     });
 

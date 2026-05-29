@@ -47,6 +47,7 @@ const seenInSourceSchema = new mongoose.Schema(
 
 const offerSchema = new mongoose.Schema(
   {
+    crawlRunId: { type: mongoose.Schema.Types.ObjectId, ref: 'CrawlRun', default: null, index: true },
     crawlJobId: { type: mongoose.Schema.Types.ObjectId, ref: 'CrawlJob', required: true, index: true },
     sourceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Source', required: true, index: true },
     retailerKey: { type: String, required: true, index: true },
@@ -161,6 +162,9 @@ const offerSchema = new mongoose.Schema(
     lastSeenAt: { type: Date, default: Date.now, index: true },
     lastSeenRunId: { type: String, default: '', index: true },
     lastSeenSourceRunId: { type: String, default: '', index: true },
+    sourceRunStatus: { type: String, default: 'unknown', index: true },
+    publishStatus: { type: String, default: 'unknown', index: true },
+    publishStatusUpdatedAt: { type: Date, default: null, index: true },
     deactivatedAt: { type: Date, default: null, index: true },
     deactivationReason: { type: String, default: '', index: true },
     needsReview: { type: Boolean, default: false, index: true },
@@ -181,6 +185,7 @@ const offerSchema = new mongoose.Schema(
 
 offerSchema.index({ retailerKey: 1, validFrom: 1, validTo: 1 });
 offerSchema.index({ status: 1, isActiveNow: 1, retailerKey: 1 });
+offerSchema.index({ crawlRunId: 1, publishStatus: 1 });
 offerSchema.index({ retailerKey: 1, categoryKey: 1, isActiveNow: 1 });
 offerSchema.index({ comparisonGroup: 1, isActiveNow: 1 });
 offerSchema.index({ dedupeKey: 1 });
