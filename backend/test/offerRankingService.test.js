@@ -719,6 +719,113 @@ test('buildRankedOffer filters expired date-bound Zusatz condition text in API r
   assert.equal(ranked.conditionsText, 'ab 6 Dosen');
 });
 
+test('buildRankedOffer removes expired SPAR PDF Zusatz fragments from public title and keeps product name', () => {
+  const ranked = buildRankedOffer(
+    sparPdfOffer({
+      brand: 'Felix',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      title: 'Felix Katzennahrung versch. Sorten, 12x85 g *Heidelbeer-Angebot g\u00fcltig bis Sa., 23.5.2026 ab 2 Pkg. je 3,74(per kg 3,67) Noch zus\u00e4tzlich',
+      quantityText: '12 x 85 g',
+      conditionsText: 'ab 2 Packungen',
+      validTo: '2026-06-02T12:00:00.000Z',
+    }),
+    4.89,
+    4.89,
+    { now: new Date('2026-05-29T10:00:00.000Z') },
+  );
+
+  assert.equal(ranked.title, 'Felix Katzennahrung versch. Sorten, 12x85 g');
+  assert.doesNotMatch(ranked.title, /23\.5|zus(?:ae|a|\u00e4)tzlich|Heidelbeer/i);
+  assert.match(ranked.title, /Felix Katzennahrung/);
+  assert.equal(ranked.conditionsText, 'ab 2 Packungen');
+});
+
+test('buildRankedOffer keeps fragment-only expired SPAR PDF titles instead of returning an empty public title', () => {
+  const rawTitle = 'Noch zus\u00e4tzlich -25%am Fr., 22.5. und Sa., 23.5. ab 2 Ds. je';
+  const ranked = buildRankedOffer(
+    sparPdfOffer({
+      title: rawTitle,
+      quantityText: '4 Stk',
+      conditionsText: 'ab 4 Stueck',
+      validTo: '2026-06-02T12:00:00.000Z',
+    }),
+    3.49,
+    3.49,
+    { now: new Date('2026-05-29T10:00:00.000Z') },
+  );
+
+  assert.equal(ranked.title, rawTitle);
+  assert.notEqual(ranked.title.trim(), '');
+  assert.equal(ranked.conditionsText, 'ab 4 Stueck');
+});
+
+test('buildRankedOffer keeps current and future SPAR PDF Zusatz title dates intact', () => {
+  const rawTitle = 'Felix Katzennahrung 12 x 85 g Zusaetzlich -25% am Fr., 29.5. und Sa., 30.5.2026';
+  const ranked = buildRankedOffer(
+    sparPdfOffer({
+      title: rawTitle,
+      quantityText: '12 x 85 g',
+    }),
+    4.89,
+    4.89,
+    { now: new Date('2026-05-29T10:00:00.000Z') },
+  );
+
+  assert.equal(ranked.title, rawTitle);
+});
+
+test('buildRankedOffer leaves non-SPAR or non-official-PDF titles unchanged', () => {
+  const rawTitle = 'Felix Katzennahrung 12 x 85 g Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026';
+  const billa = buildRankedOffer(
+    offer({
+      retailerKey: 'billa',
+      retailerName: 'BILLA',
+      title: rawTitle,
+      sourceType: 'billa-official-pdf',
+      rawFacts: { sourceKey: 'billa-official-flyer-pdf' },
+      priceCurrent: { amount: 4.99, currency: 'EUR' },
+      normalizedUnitPrice: { amount: 4.89, unit: 'kg', comparable: true },
+    }),
+    4.89,
+    4.89,
+    { now: new Date('2026-05-29T10:00:00.000Z') },
+  );
+  const aktionsfinder = buildRankedOffer(
+    sparOffer({
+      title: rawTitle,
+      sourceType: 'aktionsfinder-json',
+      rawFacts: { sourceKey: 'aktionsfinder-spar' },
+    }),
+    4.89,
+    4.89,
+    { now: new Date('2026-05-29T10:00:00.000Z') },
+  );
+
+  assert.equal(billa.title, rawTitle);
+  assert.equal(aktionsfinder.title, rawTitle);
+});
+
+test('buildRankedOffer public title cleanup does not change normal numbers, percentages or base conditions', () => {
+  const rawTitle = 'Puntigamer 20 x 0.5 l Kiste -25% und Felix 12 x 85 g';
+  const ranked = buildRankedOffer(
+    sparPdfOffer({
+      title: rawTitle,
+      quantityText: '20 x 0.5 l',
+      conditionsText: '1+1 gratis / ab 2 Kisten / Joker moeglich / ab 2 Packungen',
+    }),
+    1.49,
+    1.49,
+    { now: new Date('2026-05-29T10:00:00.000Z') },
+  );
+
+  assert.equal(ranked.title, rawTitle);
+  assert.match(ranked.title, /20 x 0\.5 l/);
+  assert.match(ranked.title, /12 x 85 g/);
+  assert.match(ranked.title, /-25%/);
+  assert.equal(ranked.conditionsText, '1+1 gratis / ab 2 Kisten / Joker moeglich / ab 2 Packungen');
+});
+
 test('buildRankedOffer repairs legacy SPAR beer crate unit price only with safe crate context', () => {
   const ranked = buildRankedOffer(
     sparPdfOffer({

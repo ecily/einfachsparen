@@ -3554,6 +3554,88 @@ function getPublicConditionsText(offer, options = {}) {
   });
 }
 
+function hasReliablePublicTitleRemainder(value = '') {
+  const normalized = normalizeSearchText(value);
+
+  if (!normalized) {
+    return false;
+  }
+
+  const meaningfulTokens = normalized
+    .split(/\s+/)
+    .filter((token) => (
+      token.length >= 3
+      && !/^\d+$/.test(token)
+      && ![
+        'ab',
+        'aktion',
+        'angebot',
+        'bis',
+        'fr',
+        'gueltig',
+        'je',
+        'dose',
+        'dosen',
+        'flasche',
+        'flaschen',
+        'kiste',
+        'kisten',
+        'noch',
+        'packung',
+        'packungen',
+        'pkg',
+        'sa',
+        'stueck',
+        'stk',
+        'zus',
+        'zusaetzlich',
+      ].includes(token)
+    ));
+
+  return meaningfulTokens.length > 0;
+}
+
+function removeExpiredDateBoundPublicTitleFragments(title, { offer = {}, now = new Date() } = {}) {
+  let cleaned = String(title || '');
+  const replaceIfExpired = (fragment) => (
+    isExpiredDateBoundConditionFragment(fragment, { offer, now }) ? '' : fragment
+  );
+
+  cleaned = cleaned.replace(
+    /\s*\*?[\w\u00c0-\u017f-]{0,80}\s*angebot\s+g(?:\u00fc|ue)ltig\s+bis[\s\S]*$/gi,
+    replaceIfExpired,
+  );
+  cleaned = cleaned.replace(
+    /\b(?:noch\s+)?zus(?:ae|a|\u00e4)tzlich\s*-?\s*\d{1,2}\s*%[\s\S]*?(?=$|[.;*]\s*|\s+\bab\s+\d+|\s+\b(?:1|2|4|12)\s*\+\s*(?:1|2|12)|\s+\bjoker\b)/gi,
+    replaceIfExpired,
+  );
+  cleaned = cleaned.replace(
+    /\b(?:noch\s+)?zus(?:ae|a|\u00e4)tzlich\b[\s\S]*?(?:\d{1,2}\.\s*\d{1,2}\.?\s*(?:\d{2,4})?)[\s\S]*$/gi,
+    replaceIfExpired,
+  );
+
+  return normalizeConditionTextAfterFragmentRemoval(cleaned);
+}
+
+function getPublicTitle(offer, options = {}) {
+  const rawTitle = String(offer?.title || '').trim();
+
+  if (!rawTitle || !isSparFamilyRetailer(offer) || !isOfficialPdfEvidence(offer)) {
+    return rawTitle;
+  }
+
+  const cleanedTitle = removeExpiredDateBoundPublicTitleFragments(rawTitle, {
+    offer,
+    now: options.now || new Date(),
+  });
+
+  if (!cleanedTitle || cleanedTitle === rawTitle || !hasReliablePublicTitleRemainder(cleanedTitle)) {
+    return rawTitle;
+  }
+
+  return cleanedTitle;
+}
+
 function roundPublicUnitPrice(value) {
   return Number.isFinite(value) ? Number(value.toFixed(2)) : null;
 }
@@ -3779,7 +3861,7 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
     marketFormat: offer.sourceRetailerFormat || '',
     retailerFormatLabel: offer.retailerFormatLabel || '',
     appliesToRetailerFormats: offer.appliesToRetailerFormats || [],
-    title: offer.title,
+    title: getPublicTitle(offer, options),
     titleNormalized: offer.titleNormalized || '',
     brand: offer.brand,
     offerType: offer.offerType || 'product',
