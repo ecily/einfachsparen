@@ -126,10 +126,54 @@ test('extracts current Puntigamer 1+1 crate deal from SPAR flyer text', () => {
   assert.ok(puntigamer);
   assert.equal(puntigamer.price, 14.90);
   assert.equal(puntigamer.referencePrice, 29.80);
-  assert.equal(puntigamer.quantityText, 'Kiste, 0.5 l Flaschen');
-  assert.equal(puntigamer.comparisonSafe, false);
+  assert.equal(puntigamer.quantityText, '20 x 0.5 l');
+  assert.equal(puntigamer.comparisonSafe, true);
   assert.match(puntigamer.conditionsText, /1\+1 gratis/);
   assert.match(puntigamer.conditionsText, /ab 2 Kisten/);
+});
+
+test('normalizes safe SPAR Puntigamer crate fallback from Kiste and half-liter bottle context', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-28T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates: [
+        {
+          id: 'puntigamer-kiste',
+          page: 1,
+          productKind: 'beer',
+          categoryPrimary: 'Getraenke',
+          categorySecondary: 'Bier',
+          categoryKey: 'bier',
+          title: 'Puntigamer Maerzen',
+          brand: 'Puntigamer',
+          price: 14.90,
+          referencePrice: 29.80,
+          quantityText: 'Kiste, 0.5 l Flaschen',
+          conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90 / Joker moeglich',
+          rawText: 'Puntigamer Maerzen, 0,5 Liter, 1+1 gratis, 1 Kiste 29,80, ab 2 Kisten je 14,90',
+          comparisonSafe: false,
+        },
+      ],
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260528-1-flugblatt-kw-22/getPdf.ashx',
+  });
+
+  assert.equal(offer.quantityText, 'Kiste, 0.5 l Flaschen');
+  assert.equal(offer.packCount, 20);
+  assert.equal(offer.unitValue, 0.5);
+  assert.equal(offer.totalComparableAmount, 10);
+  assert.equal(offer.comparableUnit, 'l');
+  assert.equal(offer.normalizedUnitPrice.amount, 1.49);
+  assert.match(offer.conditionsText, /1\+1 gratis/);
+  assert.match(offer.conditionsText, /ab 2 Kisten/);
+  assert.match(offer.conditionsText, /Joker moeglich/);
 });
 
 test('normalizes explicit Puntigamer 20 x 0.5 l crate deal as beer', () => {
@@ -178,6 +222,78 @@ test('normalizes explicit Puntigamer 20 x 0.5 l crate deal as beer', () => {
   assert.equal(offer.minimumPurchaseQty, 2);
   assert.equal(offer.isMultiBuy, true);
   assert.match(offer.conditionsText, /1\+1 gratis/);
+});
+
+test('does not infer Austrian beer crate packcount for non-beer Kiste text', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-28T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates: [
+        {
+          id: 'haushalt-kiste',
+          page: 4,
+          productKind: 'generic-flyer-product',
+          title: 'Aufbewahrungskiste transparent',
+          brand: '',
+          price: 3.99,
+          quantityText: 'Kiste',
+          conditionsText: '',
+          rawText: 'Aufbewahrungskiste transparent, 1 Stueck, 3,99',
+          comparisonSafe: false,
+        },
+      ],
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260528-1-flugblatt-kw-22/getPdf.ashx',
+  });
+
+  assert.notEqual(offer.packCount, 20);
+  assert.notEqual(offer.totalComparableAmount, 10);
+  assert.equal(offer.normalizedUnitPrice.comparable, false);
+});
+
+test('keeps 12+12 gratis beer conditions without crate packcount distortion', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-21T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates: [
+        {
+          id: 'ottakringer-12-12',
+          page: 3,
+          productKind: 'beer',
+          categoryPrimary: 'Getraenke',
+          categorySecondary: 'Bier',
+          categoryKey: 'bier',
+          title: 'Ottakringer Helles oder Frucade Radler',
+          brand: 'Ottakringer',
+          price: 0.69,
+          quantityText: '0.5 l',
+          conditionsText: '12+12 gratis bzw. Mengenpreis laut Flugblatt',
+          rawText: 'Ottakringer Helles oder Frucade Radler, 0,5 Liter, 12+12 gratis',
+          comparisonSafe: true,
+        },
+      ],
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260521-1-flugblatt-kw-21/getPdf.ashx',
+  });
+
+  assert.equal(offer.packCount, null);
+  assert.equal(offer.totalComparableAmount, 0.5);
+  assert.equal(offer.normalizedUnitPrice.amount, 1.38);
+  assert.match(offer.conditionsText, /12\+12 gratis/);
 });
 
 test('extracts non-beer generic SPAR flyer offers from textlayer price blocks', () => {

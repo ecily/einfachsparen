@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
@@ -682,11 +682,18 @@ function calculateOfferTermCoverage(offer, query) {
   let directTerms = 0;
   let sourceScore = 0;
   const expandGenericDuft = isGenericDuftTermQuery(queryTerms);
+  const conditionSignalScore = scoreConditionQuerySignal(offer, query);
 
   for (const queryTerm of queryTerms) {
     const termOptions = { expandGenericDuft };
-    const strongMatched = hasTermCoverageMatch(strongTokens, queryTerm, termOptions);
-    const mediumMatched = !strongMatched && hasTermCoverageMatch(mediumTokens, queryTerm, termOptions);
+    let strongMatched = hasTermCoverageMatch(strongTokens, queryTerm, termOptions);
+    let mediumMatched = !strongMatched && hasTermCoverageMatch(mediumTokens, queryTerm, termOptions);
+    const signalTermMatched = conditionSignalScore > 0 && ['gratis', 'joker', 'kiste', 'kisten'].includes(queryTerm);
+
+    if (!strongMatched && mediumMatched && signalTermMatched) {
+      strongMatched = true;
+      mediumMatched = false;
+    }
     const cautiousMatched = !strongMatched && !mediumMatched &&
       buildCautiousQueryTermVariants(queryTerm, termOptions).some((variant) =>
         hasTermCoverageMatch(strongTokens, variant, termOptions) || hasTermCoverageMatch(mediumTokens, variant, termOptions)
@@ -2596,6 +2603,94 @@ function scoreFieldAgainstQuery(value, queryTokens, weights) {
   return score;
 }
 
+function normalizeConditionSignalText(value = '') {
+  return repairGermanSearchTextEncoding(value)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u00e4/g, 'ae')
+    .replace(/\u00f6/g, 'oe')
+    .replace(/\u00fc/g, 'ue')
+    .replace(/\u00df/g, 'ss')
+    .replace(/Ã¤/g, 'ae')
+    .replace(/Ã¶/g, 'oe')
+    .replace(/Ã¼/g, 'ue')
+    .replace(/ÃŸ/g, 'ss');
+}
+
+function hasBeerCrateRankingSignal(offer) {
+  const text = normalizeConditionSignalText([
+    offer?.title,
+    offer?.brand,
+    offer?.categoryPrimary,
+    offer?.categorySecondary,
+    offer?.quantityText,
+    offer?.conditionsText,
+    offer?.searchText,
+  ].join(' '));
+
+  const beerSignal = /\b(?:bier|maerzen|marzen|pils|radler|helles|puntigamer|goesser|gosser|schwechater|ottakringer|stiegl|hirter)\b/.test(text);
+  const crateSignal = /\bkisten?\b/.test(text)
+    || /\b20\s*x\s*0\s*[,.]?\s*5\s*(?:l|liter)\b/.test(text)
+    || /\b20er\s*kiste\b/.test(text);
+
+  return beerSignal && crateSignal;
+}
+
+function scoreConditionQuerySignal(offer, query) {
+  const queryText = normalizeConditionSignalText(query);
+  const conditionText = normalizeConditionSignalText([
+    offer?.conditionsText,
+    offer?.conditionLabel,
+  ].join(' '));
+  const offerText = normalizeConditionSignalText([
+    offer?.title,
+    offer?.brand,
+    offer?.quantityText,
+    offer?.conditionsText,
+    offer?.searchText,
+  ].join(' '));
+  const sparFamily = isSparFamilyRetailer(offer);
+  let score = 0;
+
+  const conditionSignals = [
+    { query: /\b1\s*\+\s*1\b/, offer: /\b1\s*\+\s*1\b/ },
+    { query: /\b2\s*\+\s*1\b/, offer: /\b2\s*\+\s*1\b/ },
+    { query: /\b12\s*\+\s*12\b/, offer: /\b12\s*\+\s*12\b/ },
+    { query: /\bab\s*2\b/, offer: /\bab\s*2\b/ },
+    { query: /\bab\s*6\b/, offer: /\bab\s*6\b/ },
+    { query: /\bjoker\b/, offer: /\bjoker\b/ },
+  ];
+
+  for (const signal of conditionSignals) {
+    if (signal.query.test(queryText) && signal.offer.test(conditionText)) {
+      score += 2200;
+    }
+  }
+
+  if (/\bkisten?\b/.test(queryText) && hasBeerCrateRankingSignal(offer)) {
+    score += 2000;
+  }
+
+  if (score > 0 && sparFamily) {
+    score += 450;
+  }
+
+  if (score > 0 && isOfficialPdfEvidence(offer)) {
+    score += 350;
+  }
+
+  if (score > 0 && /gratis\b/.test(queryText) && /gratis\b/.test(conditionText)) {
+    score += 250;
+  }
+
+  if (score > 0 && /\bspar\b|\beurospar\b|\binterspar\b/.test(queryText) && !sparFamily && !/\bspar\b/.test(offerText)) {
+    return 0;
+  }
+
+  return score;
+}
+
 function scoreOfferAgainstQuery(offer, query) {
   const queryTokens = expandScoringQueryTokens(tokenizeSearchText(query));
 
@@ -2679,6 +2774,7 @@ function scoreOfferAgainstQuery(offer, query) {
     prefix: 1,
     substring: 0,
   });
+  score += scoreConditionQuerySignal(offer, query);
 
   const matchedStructuredTokens = countTokenMatches(structuredTokens, queryTokens, { allowPrefix: true });
   const matchedAggregateTokens = countTokenMatches(aggregateTokens, queryTokens, { allowSubstring: true });
@@ -3330,7 +3426,7 @@ function normalizeConditionTextAfterFragmentRemoval(value = '') {
 }
 
 function removeExpiredDateBoundFragmentsFromPart(part, { offer = {}, now = new Date() } = {}) {
-  const extraConditionPattern = /\b(?:noch\s+)?zus(?:ae|a|\u00e4)tzlich\s+-?\s*\d{1,2}\s*%[\s\S]*?laut\s+flugblatt\b/gi;
+  const extraConditionPattern = /\b(?:noch\s+)?zus(?:ae|a|\u00e4)tzlich\s+-?\s*\d{1,2}\s*%[\s\S]*?(?:laut\s+flugblatt\b|(?=$|[.;]\s*(?:ab\s+\d+|1\s*\+\s*1|2\s*\+\s*1|12\s*\+\s*12|joker\b)))/gi;
 
   return normalizeConditionTextAfterFragmentRemoval(
     String(part || '').replace(extraConditionPattern, (fragment) => (
@@ -3413,8 +3509,21 @@ function withResponseInferredQuantityFields(offer = {}) {
   const next = { ...offer };
   const currentComparableUnit = normalizeComparableUnit(next.comparableUnit || next.normalizedUnitPrice?.unit);
   const inferredComparableUnit = normalizeComparableUnit(inferred.comparableUnit);
+  const inferredPackCount = Number(inferred.packCount || 0);
+  const currentPackCount = Number(next.packCount || 0);
+  const currentTotalAmount = Number(next.totalComparableAmount || 0);
+  const inferredTotalAmount = Number(inferred.totalComparableAmount || 0);
   const preferInferredMeasure = ['kg', 'l'].includes(inferredComparableUnit)
-    && (!currentComparableUnit || currentComparableUnit === 'Stk');
+    && (
+      !currentComparableUnit
+      || currentComparableUnit === 'Stk'
+      || (
+        inferredPackCount > 1
+        && currentPackCount <= 1
+        && inferredTotalAmount > 0
+        && (!currentTotalAmount || currentTotalAmount < inferredTotalAmount)
+      )
+    );
 
   for (const field of ['packCount', 'unitValue', 'unitType', 'totalComparableAmount', 'comparableUnit', 'packageType']) {
     if (

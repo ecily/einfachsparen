@@ -116,6 +116,62 @@ function buildQuantityText({ amount, unit, packCount = null } = {}) {
   return `${amountText} ${displayUnit}`;
 }
 
+function normalizeCrateContextText(value = '') {
+  return sanitizeWhitespace(value)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u00e4/g, 'ae')
+    .replace(/\u00f6/g, 'oe')
+    .replace(/\u00fc/g, 'ue')
+    .replace(/\u00df/g, 'ss')
+    .replace(/Ã¤/g, 'ae')
+    .replace(/Ã¶/g, 'oe')
+    .replace(/Ã¼/g, 'ue')
+    .replace(/ÃŸ/g, 'ss');
+}
+
+function hasHalfLiterBottleCrateSignal(text = '') {
+  return /\bkisten?\b/.test(text)
+    && /\bflaschen?\b/.test(text)
+    && /\b0\s*[,.]\s*5\s*(?:l|liter)\b/.test(text);
+}
+
+function hasAustrianBeerContext(text = '') {
+  return /\b(?:bier|maerzen|marzen|pils|radler|helles|lager|flaschenbier|puntigamer|goesser|gosser|schwechater|ottakringer|stiegl|zipfer|wieselburger|hirter)\b/.test(text);
+}
+
+function inferAustrianBeerCrateQuantityFields(offer = {}) {
+  const context = normalizeCrateContextText([
+    offer.quantityText,
+    offer.title,
+    offer.brand,
+    offer.description,
+    offer.conditionsText,
+    offer.searchText,
+    offer.rawFacts?.infoText,
+    offer.rawFacts?.conditionsText,
+    offer.rawFacts?.evidenceText,
+    offer.rawFacts?.sourceText,
+  ].join(' '));
+
+  if (!hasHalfLiterBottleCrateSignal(context) || !hasAustrianBeerContext(context)) {
+    return null;
+  }
+
+  const inferred = buildInferredQuantityFields({
+    packCount: 20,
+    amount: 0.5,
+    unit: 'l',
+    packageType: 'kiste',
+  });
+
+  return inferred && {
+    ...inferred,
+    quantityText: '20 x 0.5 l',
+  };
+}
+
 function inferQuantityFieldsFromText(value = '') {
   const text = sanitizeWhitespace(value).replace(/\u00d7/g, 'x');
 
@@ -198,6 +254,7 @@ function inferMissingQuantityFields(offer = {}) {
     offer.rawFacts?.evidenceText,
   ];
   let fallback = null;
+  let firstMeasure = null;
 
   for (const candidate of candidates) {
     const inferred = inferQuantityFieldsFromText(candidate);
@@ -206,14 +263,24 @@ function inferMissingQuantityFields(offer = {}) {
       continue;
     }
 
-    if (['kg', 'l'].includes(inferred.comparableUnit)) {
+    if (['kg', 'l'].includes(inferred.comparableUnit) && Number(inferred.packCount || 0) > 1) {
       return inferred;
+    }
+
+    if (['kg', 'l'].includes(inferred.comparableUnit)) {
+      firstMeasure = firstMeasure || inferred;
+      continue;
     }
 
     fallback = fallback || inferred;
   }
 
-  return fallback || {};
+  const beerCrate = inferAustrianBeerCrateQuantityFields(offer);
+  if (beerCrate) {
+    return beerCrate;
+  }
+
+  return firstMeasure || fallback || {};
 }
 
 function parseQuantityTextBasis(quantityText, targetUnit) {
@@ -601,6 +668,7 @@ module.exports = {
   assessComparableSafety,
   inferConditionFields,
   extractConditionHints,
+  inferAustrianBeerCrateQuantityFields,
   inferMissingQuantityFields,
   inferQuantityFieldsFromText,
   isOfferSafelyComparable,

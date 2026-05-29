@@ -15,6 +15,7 @@ const {
   determineOfferSubcategory,
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
+const { inferAustrianBeerCrateQuantityFields } = require('./offerQualityGuards');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { normalizeImageUrl } = require('../images/imageUrl');
 
@@ -189,10 +190,15 @@ function parseQuantity(quantityText) {
   };
 }
 
-function buildNormalizedUnitPrice({ price, quantityText, comparisonSafe }) {
-  const quantity = parseQuantity(quantityText);
+function buildNormalizedUnitPrice({ price, quantityText, comparisonSafe, context = {} }) {
+  const inferredCrateQuantity = inferAustrianBeerCrateQuantityFields({
+    ...context,
+    quantityText,
+  });
+  const quantity = inferredCrateQuantity || parseQuantity(quantityText);
+  const effectiveComparisonSafe = Boolean(comparisonSafe || inferredCrateQuantity);
 
-  if (!comparisonSafe || !price || !quantity.totalComparableAmount || !['kg', 'l', 'Stk', 'waschgang'].includes(quantity.comparableUnit)) {
+  if (!effectiveComparisonSafe || !price || !quantity.totalComparableAmount || !['kg', 'l', 'Stk', 'waschgang'].includes(quantity.comparableUnit)) {
     return {
       quantity,
       normalizedUnitPrice: {
@@ -695,16 +701,24 @@ function extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat } = {})
   if (hasPuntigamerCrateDeal) {
     const explicitTwentyPack = /20\s*x\s*0[,.]\s*5\s*-?\s*(?:liter|l)/i.test(normalized);
     const title = hasText(text, /bierige/) ? 'Puntigamer das bierige Bier' : 'Puntigamer Maerzen';
+    const fallbackCrateQuantity = inferAustrianBeerCrateQuantityFields({
+      title,
+      brand: 'Puntigamer',
+      quantityText: 'Kiste, 0.5 l Flaschen',
+      conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90 / Keine weiteren Rabatte/Joker moeglich',
+      rawFacts: { sourceText: text },
+    });
+    const safeCrateQuantityText = explicitTwentyPack ? '20 x 0.5 l' : fallbackCrateQuantity?.quantityText || 'Kiste, 0.5 l Flaschen';
 
     addCandidate(candidates, page.pageNumber, beerCandidate({
       title,
       brand: 'Puntigamer',
       price: 14.90,
       referencePrice: 29.80,
-      quantityText: explicitTwentyPack ? '20 x 0.5 l' : 'Kiste, 0.5 l Flaschen',
+      quantityText: safeCrateQuantityText,
       conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90 / Keine weiteren Rabatte/Joker moeglich',
       rawText: `${title}, 0,5 Liter, 1+1 gratis, 1 Kiste 29,80, ab 2 Kisten je 14,90`,
-      comparisonSafe: explicitTwentyPack,
+      comparisonSafe: Boolean(explicitTwentyPack || fallbackCrateQuantity),
     }));
   }
 
@@ -1015,6 +1029,7 @@ function normalizeSparPdfCandidateToOffer({
     price: candidate.price,
     quantityText: candidate.quantityText,
     comparisonSafe: candidate.comparisonSafe !== false,
+    context: candidate,
   });
   const conditionsText = sanitizeWhitespace(candidate.conditionsText || '');
   const issues = [];

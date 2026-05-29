@@ -367,6 +367,68 @@ test('SPAR condition merge deduplicates overlapping condition text', () => {
   assert.equal(merged.minimumPurchaseQty, 6);
 });
 
+test('condition query scoring ranks SPAR PDF 1+1 condition above generic SPAR hits', () => {
+  const generic = sparOffer({
+    _id: 'generic-spar',
+    title: 'SPAR Markenartikel Aktion',
+    brand: '',
+    categorySecondary: 'Lebensmittel',
+    categoryKey: 'lebensmittel',
+    searchText: 'spar angebot aktion',
+    conditionsText: '',
+    hasConditions: false,
+    sourceType: 'aktionsfinder-json',
+  });
+  const pdf = sparPdfOffer({
+    _id: 'pdf-puntigamer',
+    title: 'Puntigamer Maerzen',
+    brand: 'Puntigamer',
+    quantityText: 'Kiste, 0.5 l Flaschen',
+    conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90',
+    hasConditions: true,
+    isMultiBuy: true,
+    minimumPurchaseQty: 2,
+    sourceType: 'spar-official-pdf',
+    rawFacts: { sourceKey: 'spar-official-flyer-pdf' },
+  });
+
+  assert.deepEqual(applyQueryMatch([generic, pdf], 'spar 1+1').map((item) => item._id), [
+    'pdf-puntigamer',
+    'generic-spar',
+  ]);
+  assert.equal(scoreOfferAgainstQuery(pdf, '1+1 gratis') > scoreOfferAgainstQuery(generic, '1+1 gratis'), true);
+});
+
+test('condition query scoring ranks SPAR beer crate context above generic SPAR hits', () => {
+  const generic = sparOffer({
+    _id: 'generic-spar-kiste',
+    title: 'SPAR Haushaltsbox Aktion',
+    brand: '',
+    categorySecondary: 'Haushalt',
+    categoryKey: 'haushalt',
+    quantityText: '1 Kiste',
+    searchText: 'spar kiste haushalt',
+    conditionsText: '',
+    hasConditions: false,
+    sourceType: 'aktionsfinder-json',
+  });
+  const pdf = sparPdfOffer({
+    _id: 'pdf-puntigamer-kiste',
+    title: 'Puntigamer Maerzen',
+    brand: 'Puntigamer',
+    quantityText: '20 x 0.5 l',
+    conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90',
+    searchText: 'puntigamer maerzen bier kiste 20 x 0.5 l spar',
+    sourceType: 'spar-official-pdf',
+    rawFacts: { sourceKey: 'spar-official-flyer-pdf' },
+  });
+
+  assert.deepEqual(applyQueryMatch([generic, pdf], 'spar kiste').map((item) => item._id), [
+    'pdf-puntigamer-kiste',
+    'generic-spar-kiste',
+  ]);
+});
+
 test('SPAR condition merge keeps current dated condition sentences intact', () => {
   const aktionsfinder = sparOffer({
     brand: 'Goesser',
@@ -408,6 +470,20 @@ test('SPAR condition guard removes expired Zusaetzlich fragments and keeps basis
       },
     ),
     'ab 6 Dosen',
+  );
+});
+
+test('SPAR condition guard removes expired Zusatz fragments without laut Flugblatt suffix', () => {
+  const pdf = sparPdfOffer({
+    conditionsText: 'ab 2 Kisten je 14,90. Zusaetzlich -25% am Fr., 22.5. und Sa., 23.5.2026',
+  });
+
+  assert.equal(
+    filterExpiredDateBoundConditionFragments(pdf.conditionsText, {
+      offer: pdf,
+      now: new Date('2026-05-29T10:00:00.000Z'),
+    }),
+    'ab 2 Kisten je 14,90',
   );
 });
 
@@ -490,6 +566,35 @@ test('buildRankedOffer filters expired date-bound Zusatz condition text in API r
   );
 
   assert.equal(ranked.conditionsText, 'ab 6 Dosen');
+});
+
+test('buildRankedOffer repairs legacy SPAR beer crate unit price only with safe crate context', () => {
+  const ranked = buildRankedOffer(
+    sparPdfOffer({
+      _id: 'spar-puntigamer-kiste',
+      title: 'Puntigamer Maerzen',
+      brand: 'Puntigamer',
+      priceCurrent: { amount: 14.90, currency: 'EUR' },
+      quantityText: 'Kiste, 0.5 l Flaschen',
+      packCount: null,
+      unitValue: 0.5,
+      unitType: 'l',
+      totalComparableAmount: 0.5,
+      comparableUnit: 'l',
+      normalizedUnitPrice: { amount: 29.8, unit: 'l', comparable: true, confidence: 0.5 },
+      conditionsText: '1+1 gratis / 1 Kiste 29,80 / ab 2 Kisten je 14,90 / Joker moeglich',
+      quality: { comparisonSafe: false, issues: ['Packungsgroesse unklar'] },
+    }),
+    1.49,
+    1.49,
+  );
+
+  assert.equal(ranked.packCount, 20);
+  assert.equal(ranked.totalComparableAmount, 10);
+  assert.equal(ranked.normalizedUnitPrice.amount, 1.49);
+  assert.equal(ranked.normalizedUnitPrice.unit, 'l');
+  assert.match(ranked.conditionsText, /1\+1 gratis/);
+  assert.match(ranked.conditionsText, /Joker moeglich/);
 });
 
 test('SPAR condition guard can return an empty condition text when only expired Zusatz remains', () => {
@@ -4966,7 +5071,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v1-wurst-context-v1-tee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
