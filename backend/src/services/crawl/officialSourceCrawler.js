@@ -5349,6 +5349,12 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
     })[0])
     .filter(Boolean);
   const offerDocuments = dedupeBipaOffers(enrichedOffers);
+  const auditFilteredCount = Math.max(0, collectedOffers.length - enrichedOffers.length);
+  const dedupeDroppedCount = Math.max(0, enrichedOffers.length - offerDocuments.length);
+  const rejectionReasons = [
+    ...(auditFilteredCount > 0 ? [{ reason: 'audit-filtered', count: auditFilteredCount }] : []),
+    ...(dedupeDroppedCount > 0 ? [{ reason: 'dedupe-dropped', count: dedupeDroppedCount }] : []),
+  ];
 
   const refreshResult = await replaceOffersForSource({
     sourceId: source._id,
@@ -5359,6 +5365,7 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
     offerDocuments,
     rawDocuments: 0,
     rawCandidateCount: collectedOffers.length,
+    rejectionReasons,
     refreshResult,
   };
 }
@@ -6187,6 +6194,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual' }) {
       extraRawDocuments += bipaOfficialResult.rawDocuments;
       rawCandidateCount += bipaOfficialResult.rawCandidateCount || 0;
       allStoredOffers.push(...bipaOfficialResult.offerDocuments);
+      extraRejectionReasons = extraRejectionReasons.concat(bipaOfficialResult.rejectionReasons || []);
     } else {
       const nestedDocuments = await fetchNestedHtmlDocuments({
         source,

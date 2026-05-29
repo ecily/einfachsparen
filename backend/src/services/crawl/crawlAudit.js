@@ -84,8 +84,7 @@ function offerHasMissingQuantitySignal(offer = {}) {
 }
 
 function offerHasUnclearProductSignal(offer = {}) {
-  return (offer?.reviewReasons || []).some((reason) => canonicalRejectionReason(reason) === 'product-unclear')
-    || Number(offer?.quality?.parsingConfidence || 1) < 0.75;
+  return (offer?.reviewReasons || []).some((reason) => canonicalRejectionReason(reason) === 'product-unclear');
 }
 
 function offerHasCategoryUnclearSignal(offer = {}) {

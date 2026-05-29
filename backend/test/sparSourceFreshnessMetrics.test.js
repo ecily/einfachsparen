@@ -48,6 +48,38 @@ test('crawl job update persists source validity freshness in coverage metrics', 
   assert.equal(update.metadata.qualityFlags.sourcePossiblyStale, true);
 });
 
+test('coverage metrics do not confuse unsafe quantity with unclear product', () => {
+  const metrics = buildCoverageMetrics({
+    foundRawItems: 1,
+    parsedOffers: 1,
+    offersStored: 1,
+    offers: [{
+      title: 'BIPA Sonnencreme SPF 50+',
+      quantityText: '',
+      normalizedUnitPrice: { comparable: false },
+      quality: { parsingConfidence: 0.72 },
+      reviewReasons: ['Vergleichseinheit unklar'],
+    }],
+  });
+
+  assert.equal(metrics.missingQuantityCount, 1);
+  assert.equal(metrics.unclearProductCount, 0);
+});
+
+test('coverage metrics keep explicit dedupe drops out of parse-failed', () => {
+  const metrics = buildCoverageMetrics({
+    foundRawItems: 5,
+    parsedOffers: 3,
+    offersStored: 3,
+    rejectedOffers: 2,
+    rejectionReasons: [{ reason: 'dedupe-dropped', count: 2 }],
+  });
+
+  assert.equal(metrics.rejectedByReason['dedupe-dropped'], 2);
+  assert.equal(metrics.parseFailedCount, 0);
+  assert.equal(metrics.rejectedByReason['parse-failed'], undefined);
+});
+
 test('SPAR official source coverage fields use PDF source validity', () => {
   const fields = __private.sourceCoverageFields({
     foundRawItems: 8,
