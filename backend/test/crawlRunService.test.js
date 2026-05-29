@@ -191,6 +191,46 @@ test('buildRunSummary exposes parser coverage rejection taxonomy and alert flags
   assert.equal(summary.sourceTypes.find((item) => item.sourceType === 'pdf').rejectedByReason['product-unclear'], 8);
 });
 
+test('buildRunSummary aggregates granular aggregator rejection reasons', () => {
+  const summary = _private.buildRunSummary({
+    matchedSources: [
+      { sourceId: 's1', sourceKey: 'aktionsfinder-bipa', retailerKey: 'bipa', channel: 'aggregator', sourceType: 'aggregator' },
+    ],
+    sources: [
+      {
+        sourceId: 's1',
+        sourceKey: 'aktionsfinder-bipa',
+        retailerKey: 'bipa',
+        channel: 'aggregator',
+        sourceType: 'aggregator',
+        status: 'success',
+        foundRawItems: 8,
+        parsedOffers: 4,
+        offersStored: 4,
+        rejectedOffers: 4,
+        rejectionReasons: [
+          { reason: 'price-missing', count: 1 },
+          { reason: 'title-missing', count: 1 },
+          { reason: 'validity-expired', count: 1 },
+          { reason: 'dedupe-dropped', count: 1 },
+        ],
+      },
+    ],
+  });
+
+  const source = summary.sources[0];
+
+  assert.equal(source.rejectedByReason['price-missing'], 1);
+  assert.equal(source.rejectedByReason['title-missing'], 1);
+  assert.equal(source.rejectedByReason['validity-expired'], 1);
+  assert.equal(source.rejectedByReason['dedupe-dropped'], 1);
+  assert.equal(source.parseFailedCount, 0);
+  assert.equal(summary.summary.rejectedByReason['price-missing'], 1);
+  assert.equal(summary.summary.rejectedByReason['dedupe-dropped'], 1);
+  assert.equal(summary.perRetailer[0].rejectedByReason['validity-expired'], 1);
+  assert.equal(summary.sourceTypes[0].rejectedByReason['title-missing'], 1);
+});
+
 test('determineFinalStatus is success only for complete successful crawl results', () => {
   assert.equal(_private.determineFinalStatus({
     mode: 'full',

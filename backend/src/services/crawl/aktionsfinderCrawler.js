@@ -12,7 +12,7 @@ const {
 const { normalizePromotionToOffer } = require('./offerNormalizer');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 const { sanitizeWhitespace, normalizeTitleForMatch } = require('./sourceEvidence');
-const { enrichOffersForStorage } = require('./offerAuditEnrichment');
+const { enrichOfferForStorage } = require('./offerAuditEnrichment');
 const { NORMALIZATION_VERSION, buildCoverageMetrics, buildCrawlJobUpdate, buildHttpLogFromResponse } = require('./crawlAudit');
 const { replaceOffersForSource } = require('./offerRefreshGuard');
 const { parseAktionsfinderDateRange } = require('../offers/offerFreshness');
@@ -245,20 +245,56 @@ function parsePromotionsFromCategoryPage({ html, source, pageUrl }) {
   return promotions;
 }
 
-function uniquePromotions(promotions) {
+function addRejectionReason(reasons, reason, count = 1) {
+  if (!reason || !(Number(count) > 0)) {
+    return;
+  }
+
+  reasons.push({ reason, count: Number(count) });
+}
+
+function uniquePromotions(promotions, diagnostics = null) {
   const seen = new Map();
+  let duplicateCount = 0;
+  let missingIdCount = 0;
 
   for (const promotion of promotions) {
     if (!promotion?.id) {
+      missingIdCount += 1;
       continue;
     }
 
     if (!seen.has(promotion.id)) {
       seen.set(promotion.id, promotion);
+    } else {
+      duplicateCount += 1;
     }
   }
 
+  if (diagnostics && duplicateCount > 0) {
+    diagnostics.dedupeDropped = (diagnostics.dedupeDropped || 0) + duplicateCount;
+  }
+
+  if (diagnostics && missingIdCount > 0) {
+    diagnostics.parserNoOfferCandidate = (diagnostics.parserNoOfferCandidate || 0) + missingIdCount;
+  }
+
   return [...seen.values()];
+}
+
+function collectAllPromotions(recordStrings, fallbackSections) {
+  const parsed = parseAllPromotionSections(recordStrings);
+  const sectionPromotions = parsed.sectionRecords.flatMap((record) => record?.initialData?.content || []);
+  const groupedPromotions = parsed.groupRecords.flatMap(
+    (record) => record?.initialPromotionGroupList?.content?.flatMap((item) => item.items || []) || []
+  );
+  const fallbackPromotions = [
+    ...(fallbackSections.popular?.initialData?.content || []),
+    ...(fallbackSections.assortment?.initialData?.content || []),
+    ...(fallbackSections.grouped?.initialPromotionGroupList?.content?.flatMap((item) => item.items || []) || []),
+  ];
+
+  return [...sectionPromotions, ...groupedPromotions, ...fallbackPromotions];
 }
 
 function extractSections(recordStrings, retailerName) {
@@ -276,18 +312,7 @@ function extractSections(recordStrings, retailerName) {
 }
 
 function extractAllPromotions(recordStrings, fallbackSections) {
-  const parsed = parseAllPromotionSections(recordStrings);
-  const sectionPromotions = parsed.sectionRecords.flatMap((record) => record?.initialData?.content || []);
-  const groupedPromotions = parsed.groupRecords.flatMap(
-    (record) => record?.initialPromotionGroupList?.content?.flatMap((item) => item.items || []) || []
-  );
-  const fallbackPromotions = [
-    ...(fallbackSections.popular?.initialData?.content || []),
-    ...(fallbackSections.assortment?.initialData?.content || []),
-    ...(fallbackSections.grouped?.initialPromotionGroupList?.content?.flatMap((item) => item.items || []) || []),
-  ];
-
-  return uniquePromotions([...sectionPromotions, ...groupedPromotions, ...fallbackPromotions]);
+  return uniquePromotions(collectAllPromotions(recordStrings, fallbackSections));
 }
 
 function buildEssence({ retailerName, promotions, grouped, categoryPageCount = 0, categoryPagePromotions = 0 }) {
@@ -301,6 +326,101 @@ function buildEssence({ retailerName, promotions, grouped, categoryPageCount = 0
     categoryPageCount > 0 ? `${categoryPagePromotions} weitere Treffer aus ${categoryPageCount} Kategorie-Unterseiten.` : '',
     groupNames.length > 0 ? `Schwerpunktgruppen: ${groupNames.join(', ')}.` : 'Keine Produktgruppen erkannt.',
   ].filter(Boolean).join(' ');
+}
+
+function classifyAktionsfinderNormalizationDrop(promotion = {}) {
+  const title = sanitizeWhitespace(promotion.fullDisplayName || promotion.title);
+  const priceCurrentAmount = parseNumericAmount(promotion.discountedPrice ?? promotion.newPrice);
+
+  if (!title && !priceCurrentAmount) {
+    return 'parser-no-offer-candidate';
+  }
+
+  if (!title) {
+    return 'title-missing';
+  }
+
+  if (!priceCurrentAmount) {
+    return 'price-missing';
+  }
+
+  return 'parse-failed';
+}
+
+function classifyAktionsfinderAuditDrop(offer = {}) {
+  if (offer?.status === 'expired') {
+    return 'validity-expired';
+  }
+
+  if (offer?.status === 'upcoming') {
+    return 'validity-upcoming';
+  }
+
+  return 'audit-filtered';
+}
+
+function normalizeAktionsfinderPromotions({
+  promotions = [],
+  source,
+  region,
+  crawlJobId,
+} = {}) {
+  const normalizedOffers = [];
+  const rejectionReasons = [];
+
+  for (const promotion of promotions) {
+    const offer = normalizePromotionToOffer({
+      promotion,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      sourceId: source._id,
+      crawlJobId,
+      region,
+      sourceUrl: source.sourceUrl,
+    });
+
+    if (offer) {
+      normalizedOffers.push(offer);
+    } else {
+      addRejectionReason(rejectionReasons, classifyAktionsfinderNormalizationDrop(promotion));
+    }
+  }
+
+  return {
+    normalizedOffers,
+    rejectionReasons,
+  };
+}
+
+function enrichAktionsfinderOffersForStorage({
+  normalizedOffers = [],
+  source,
+  sourceType = 'aktionsfinder-json',
+  parserVersion = PARSER_VERSION,
+  normalizationVersion = NORMALIZATION_VERSION,
+} = {}) {
+  const offerDocuments = [];
+  const rejectionReasons = [];
+
+  for (const offer of normalizedOffers) {
+    const document = enrichOfferForStorage(offer, {
+      source,
+      sourceType,
+      parserVersion,
+      normalizationVersion,
+    });
+
+    if (document) {
+      offerDocuments.push(document);
+    } else {
+      addRejectionReason(rejectionReasons, classifyAktionsfinderAuditDrop(offer));
+    }
+  }
+
+  return {
+    offerDocuments,
+    rejectionReasons,
+  };
 }
 
 async function fetchAdegFallbackSnapshot() {
@@ -356,11 +476,12 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     const httpLog = buildHttpLogFromResponse(response, html);
     const recordStrings = getScriptPushStrings(html);
     const sections = extractSections(recordStrings, source.retailerName);
-    const basePromotions = extractAllPromotions(recordStrings, sections);
+    const basePromotionCandidates = collectAllPromotions(recordStrings, sections);
     const categoryPageLinks = buildCategoryPageLinks(html, source)
       .slice(0, source.retailerKey === 'pagro' ? 18 : 14);
     const categoryPagePromotions = [];
     const digest = buildPayloadDigest(html);
+    const dedupeDiagnostics = {};
     let fallbackOfficial = null;
 
     for (const categoryPageUrl of categoryPageLinks) {
@@ -386,7 +507,8 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       }
     }
 
-    const promotions = uniquePromotions([...basePromotions, ...categoryPagePromotions]);
+    const rawPromotionCandidates = [...basePromotionCandidates, ...categoryPagePromotions];
+    const promotions = uniquePromotions(rawPromotionCandidates, dedupeDiagnostics);
 
     if (source.retailerKey === 'adeg' && promotions.length === 0) {
       try {
@@ -417,11 +539,14 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       contentHash: digest.contentHash,
       contentSnippet: digest.contentSnippet,
       extractedPreview: promotions.slice(0, 5).map((promotion) => promotion.title).filter(Boolean),
-      foundRawItems: promotions.length,
+      foundRawItems: rawPromotionCandidates.length,
       parserVersion: PARSER_VERSION,
-      payload: {
-        promotionCount: promotions.length,
-        categoryPageCount: categoryPageLinks.length,
+        payload: {
+          promotionCount: promotions.length,
+          rawPromotionCandidateCount: rawPromotionCandidates.length,
+          dedupeDropped: dedupeDiagnostics.dedupeDropped || 0,
+          parserNoOfferCandidate: dedupeDiagnostics.parserNoOfferCandidate || 0,
+          categoryPageCount: categoryPageLinks.length,
         categoryPagePromotionCount: categoryPagePromotions.length,
         popularSectionTitle: sections.popular?.title || null,
         assortmentSectionTitle: sections.assortment?.title || null,
@@ -432,25 +557,27 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       },
     });
 
-    const normalizedOffers = promotions
-      .map((promotion) =>
-        normalizePromotionToOffer({
-          promotion,
-          retailerKey: source.retailerKey,
-          retailerName: source.retailerName,
-          sourceId: source._id,
-          crawlJobId: crawlJob._id,
-          region,
-          sourceUrl: source.sourceUrl,
-        })
-      )
-      .filter(Boolean);
-    const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+    const normalizationResult = normalizeAktionsfinderPromotions({
+      promotions,
+      source,
+      crawlJobId: crawlJob._id,
+      region,
+    });
+    const normalizedOffers = normalizationResult.normalizedOffers;
+    const enrichmentResult = enrichAktionsfinderOffersForStorage({
+      normalizedOffers,
       source,
       sourceType: 'aktionsfinder-json',
       parserVersion: PARSER_VERSION,
       normalizationVersion: NORMALIZATION_VERSION,
     });
+    const offerDocuments = enrichmentResult.offerDocuments;
+    const extraRejectionReasons = [
+      ...(dedupeDiagnostics.dedupeDropped > 0 ? [{ reason: 'dedupe-dropped', count: dedupeDiagnostics.dedupeDropped }] : []),
+      ...(dedupeDiagnostics.parserNoOfferCandidate > 0 ? [{ reason: 'parser-no-offer-candidate', count: dedupeDiagnostics.parserNoOfferCandidate }] : []),
+      ...normalizationResult.rejectionReasons,
+      ...enrichmentResult.rejectionReasons,
+    ];
 
     const refreshResult = await replaceOffersForSource({
       sourceId: source._id,
@@ -473,7 +600,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       status,
       discoveredPages: 1 + categoryPageLinks.length,
       rawDocuments: 1,
-      rawCandidateCount: promotions.length,
+      rawCandidateCount: rawPromotionCandidates.length,
       offers: offerDocuments,
       source,
       sourceType: 'aggregator',
@@ -484,6 +611,7 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         ...(fallbackOfficial ? ['ADEG liefert aktuell nur einen offiziellen Flugblatt-Hinweis, aber keine extrahierbaren Einzelangebote.'] : []),
       ],
       errorMessages: [],
+      extraRejectionReasons,
       metadata: {
         sourceLabel: source.label,
         sourceUrl: source.sourceUrl,
@@ -491,6 +619,14 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
         essence,
         refreshResult,
         fallbackOfficial,
+        aktionsfinderAudit: {
+          rawPromotionCandidateCount: rawPromotionCandidates.length,
+          uniquePromotionCount: promotions.length,
+          normalizedOfferCount: normalizedOffers.length,
+          offerDocumentCount: offerDocuments.length,
+          dedupeDropped: dedupeDiagnostics.dedupeDropped || 0,
+          parserNoOfferCandidate: dedupeDiagnostics.parserNoOfferCandidate || 0,
+        },
       },
     }));
 
@@ -500,11 +636,12 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
     });
 
     const coverageMetrics = buildCoverageMetrics({
-      foundRawItems: promotions.length,
+      foundRawItems: rawPromotionCandidates.length,
       parsedOffers: offerDocuments.length,
       offersStored: offerDocuments.length,
-      rejectedOffers: Math.max(0, promotions.length - offerDocuments.length),
+      rejectedOffers: Math.max(0, rawPromotionCandidates.length - offerDocuments.length),
       offers: offerDocuments,
+      rejectionReasons: extraRejectionReasons,
     });
 
     return {
@@ -513,10 +650,11 @@ async function crawlAktionsfinderSource({ source, region, trigger = 'manual' }) 
       channel: source.channel,
       sourceType: source.sourceType || source.channel,
       status,
-      foundRawItems: promotions.length,
+      foundRawItems: rawPromotionCandidates.length,
       parsedOffers: offerDocuments.length,
-      rejectedOffers: Math.max(0, promotions.length - offerDocuments.length),
+      rejectedOffers: Math.max(0, rawPromotionCandidates.length - offerDocuments.length),
       offersStored: offerDocuments.length,
+      rejectionReasons: coverageMetrics.rejectionReasons,
       rejectedByReason: coverageMetrics.rejectedByReason,
       missingImageCount: coverageMetrics.missingImageCount,
       withImageCount: coverageMetrics.withImageCount,
@@ -585,8 +723,15 @@ module.exports = {
   crawlAllAktionsfinderSources,
   crawlAktionsfinderSource,
   _private: {
+    addRejectionReason,
     buildCategoryPageLinks,
     buildSupplementalCategoryPageLinks,
+    classifyAktionsfinderAuditDrop,
+    classifyAktionsfinderNormalizationDrop,
+    collectAllPromotions,
+    enrichAktionsfinderOffersForStorage,
     extractCategoryPageLinks,
+    normalizeAktionsfinderPromotions,
+    uniquePromotions,
   },
 };
