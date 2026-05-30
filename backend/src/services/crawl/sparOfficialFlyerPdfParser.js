@@ -808,8 +808,299 @@ function beerCandidate(data = {}) {
   };
 }
 
+function nonFoodPieceCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    quantityText: '1 Stueck',
+    comparisonSafe: false,
+    quantityFallbackReason: 'spar-family-non-food-piece',
+    parserHint: 'known-interspar-non-food-layout',
+    ...data,
+  };
+}
+
 function hasText(text, pattern) {
   return pattern.test(normalizeForScan(text));
+}
+
+function parseCompactLayoutPriceAmount(token = '') {
+  const digits = String(token || '').replace(/\D/g, '');
+
+  if (!/^\d{3,5}$/.test(digits)) {
+    return null;
+  }
+
+  const cents = Number(digits.slice(-2));
+  const euros = Number(digits.slice(0, -2));
+  if (!Number.isFinite(euros) || !Number.isFinite(cents)) {
+    return null;
+  }
+
+  return money(euros + (cents / 100));
+}
+
+function parseLayoutPricePairFromLine(line = '') {
+  const text = normalizePriceText(line);
+  const prices = [];
+  let match;
+  const dashPattern = /(\d{1,3})\s*,-/g;
+  while ((match = dashPattern.exec(text)) !== null) {
+    prices.push({
+      amount: money(Number(match[1])),
+      index: match.index,
+      kind: 'dash',
+    });
+  }
+
+  const decimalPattern = /\b(\d{1,3}[,.]\d{2})\b/g;
+  while ((match = decimalPattern.exec(text)) !== null) {
+    prices.push({
+      amount: money(Number(match[1].replace(',', '.'))),
+      index: match.index,
+      kind: 'decimal',
+    });
+  }
+
+  const compactPattern = /\b(\d{3,5})\b/g;
+  while ((match = compactPattern.exec(text)) !== null) {
+    const amount = parseCompactLayoutPriceAmount(match[1]);
+    if (amount) {
+      prices.push({
+        amount,
+        index: match.index,
+        kind: 'compact',
+      });
+    }
+  }
+
+  const ordered = prices
+    .filter((price) => price.amount > 0)
+    .sort((left, right) => left.index - right.index);
+  const regularPrice = ordered.find((price) => price.kind === 'dash' || price.kind === 'decimal')?.amount
+    || ordered[0]?.amount
+    || null;
+  const discountedPrice = [...ordered]
+    .reverse()
+    .find((price) => (
+      price.kind === 'compact'
+      && (!regularPrice || (price.amount < regularPrice && price.amount > regularPrice * 0.5))
+    ))?.amount || null;
+
+  return {
+    regularPrice,
+    discountedPrice,
+    price: discountedPrice || regularPrice,
+    tokens: ordered,
+  };
+}
+
+function findLineIndexByPattern(lines = [], pattern, start = 0, end = lines.length) {
+  const safeStart = Math.max(0, start);
+  const safeEnd = Math.min(lines.length, end);
+
+  for (let index = safeStart; index < safeEnd; index += 1) {
+    if (pattern.test(normalizeForScan(lines[index]))) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function parseReferencePriceNearLines(lines = [], startIndex = 0, endIndex = lines.length, expected = null) {
+  const safeStart = Math.max(0, startIndex);
+  const safeEnd = Math.min(lines.length, endIndex);
+
+  for (let index = safeStart; index < safeEnd; index += 1) {
+    const text = normalizePriceText(lines[index]);
+    const matches = [
+      ...text.matchAll(/\bstatt\*?\s*(\d{1,3}[,.]\d{2})\b/ig),
+      ...text.matchAll(/\bpreis\s*statt\*?\s*(\d{1,3}[,.]\d{2})\b/ig),
+    ];
+
+    for (const match of matches) {
+      const amount = money(Number(match[1].replace(',', '.')));
+      if (!expected || amount === expected) {
+        return amount;
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseCurrentPriceNearLines(lines = [], startIndex = 0, endIndex = lines.length, expectedRegular = null, expectedDiscounted = null) {
+  const safeStart = Math.max(0, startIndex);
+  const safeEnd = Math.min(lines.length, endIndex);
+
+  for (let index = safeStart; index < safeEnd; index += 1) {
+    if (/\bstatt\*?\b/i.test(normalizeForScan(lines[index]))) continue;
+    const parsed = parseLayoutPricePairFromLine(lines[index]);
+    if (!parsed.price) continue;
+
+    const hasExpectedRegular = !expectedRegular || parsed.tokens.some((price) => price.amount === expectedRegular);
+    const hasExpectedDiscounted = !expectedDiscounted || parsed.tokens.some((price) => price.amount === expectedDiscounted);
+    if (hasExpectedRegular && hasExpectedDiscounted) {
+      return expectedDiscounted || expectedRegular || parsed.price;
+    }
+  }
+
+  return null;
+}
+
+function extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (sourceRetailerFormat !== 'interspar') {
+    return [];
+  }
+
+  const text = String(page.text || '').replace(/\u00a0/g, ' ');
+  const normalized = normalizeForScan(text);
+  if (
+    !/\belektrische\b.{0,60}\bhaushaltsprodukte\b/.test(normalized)
+    || !/\bkrups\b/.test(normalized)
+    || !/\btefal\b/.test(normalized)
+    || !/\browenta\b/.test(normalized)
+  ) {
+    return [];
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => sanitizeWhitespace(normalizePdfText(line)))
+    .filter(Boolean);
+  const candidates = [];
+  const applianceConditions = 'Zusaetzlich -20% auf den Aktionspreis von Do, 28.5. bis Di, 2.6. laut Flugblatt';
+  const definitions = [
+    {
+      title: 'KRUPS Kaffeevollautomat my Coffee',
+      brand: 'KRUPS',
+      anchor: /kaffeevollautomat.*my\s+coffee|my\s+coffee/,
+      referencePrice: 439.99,
+      regularPrice: 349,
+      rawWindow: 24,
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      categoryKey: 'kuechengeraete',
+      searchKeywords: 'KRUPS Kaffeevollautomat my Coffee Kaffeemaschine Espressoautomat',
+    },
+    {
+      title: 'Tefal Heissluftfritteuse Easy Fry XL Surface',
+      brand: 'Tefal',
+      anchor: /tefal\s+heissluft|heissluftfritteuse/,
+      referencePrice: 229.99,
+      regularPrice: 149,
+      discountedPrice: 119.20,
+      rawWindow: 34,
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      categoryKey: 'kuechengeraete',
+      searchKeywords: 'Tefal Heissluftfritteuse Easy Fry XL Surface Kuechengeraet',
+    },
+    {
+      title: 'Tefal OptiGrill',
+      brand: 'Tefal',
+      anchor: /tefal\s+op(?:t|tr)i\s*grill|optigrill|optrigrill/,
+      referencePrice: 309.99,
+      regularPrice: 124.90,
+      discountedPrice: 99.92,
+      rawWindow: 34,
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      categoryKey: 'kuechengeraete',
+      searchKeywords: 'Tefal OptiGrill Kontaktgrill Kuechengeraet',
+    },
+    {
+      title: 'Rowenta Akkusauger X-Force Flex 9.60',
+      brand: 'Rowenta',
+      anchor: /akkusauger|x-force\s+flex/,
+      referencePrice: 499.99,
+      regularPrice: 199,
+      discountedPrice: 159.20,
+      rawWindow: 40,
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Werkzeug & Akkus',
+      categoryKey: 'werkzeug-akkus',
+      searchKeywords: 'Rowenta Akkusauger X-Force Flex 9.60 Staubsauger',
+    },
+    {
+      title: 'Tefal Dampfglatter AeroSteam',
+      brand: 'Tefal',
+      anchor: /dampfglatter|dampfglaetter|aerosteam/,
+      referencePrice: 199.99,
+      regularPrice: 119,
+      discountedPrice: 95.20,
+      rawWindow: 42,
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      categoryKey: 'kuechengeraete',
+      searchKeywords: 'Tefal Dampfglatter AeroSteam Dampfgeraet',
+    },
+  ];
+
+  for (const definition of definitions) {
+    const anchorIndex = findLineIndexByPattern(lines, definition.anchor);
+    if (anchorIndex < 0) continue;
+
+    const endIndex = Math.min(lines.length, anchorIndex + definition.rawWindow);
+    const referencePrice = parseReferencePriceNearLines(
+      lines,
+      anchorIndex,
+      endIndex,
+      definition.referencePrice
+    );
+    const price = parseCurrentPriceNearLines(
+      lines,
+      anchorIndex,
+      endIndex,
+      definition.regularPrice,
+      definition.discountedPrice
+    );
+
+    if (!(price > 0) || referencePrice !== definition.referencePrice) {
+      continue;
+    }
+
+    addCandidate(candidates, page.pageNumber, nonFoodPieceCandidate({
+      title: definition.title,
+      brand: definition.brand,
+      price,
+      referencePrice,
+      conditionsText: applianceConditions,
+      rawText: lines.slice(anchorIndex, endIndex).join(' '),
+      categoryPrimary: definition.categoryPrimary,
+      categorySecondary: definition.categorySecondary,
+      categoryKey: definition.categoryKey,
+      searchKeywords: definition.searchKeywords,
+    }));
+  }
+
+  const sloggiIndex = findLineIndexByPattern(lines, /sloggi\s+damen\s+tai|pure\s+comfort/);
+  if (sloggiIndex >= 0) {
+    const endIndex = Math.min(lines.length, sloggiIndex + 12);
+    const referencePrice = parseReferencePriceNearLines(lines, sloggiIndex, endIndex, 29.97);
+    const price = parseCurrentPriceNearLines(lines, sloggiIndex, endIndex, null, 14.98);
+
+    if (price === 14.98 && referencePrice === 29.97) {
+      addCandidate(candidates, page.pageNumber, {
+        productKind: 'generic-flyer-product',
+        title: 'Sloggi Damen Tai-, Midi- oder Maxi-Slip Serie Pure Comfort',
+        brand: 'Sloggi',
+        price,
+        referencePrice,
+        quantityText: '3 Stueck',
+        conditionsText: '1/2 Preis / 2+1, 3er-Packung laut Flugblatt',
+        rawText: lines.slice(sloggiIndex, endIndex).join(' '),
+        comparisonSafe: false,
+        parserHint: 'known-interspar-non-food-layout',
+        searchKeywords: 'Sloggi Damen Tai Midi Maxi Slip Pure Comfort Unterwaesche',
+        categoryPrimary: 'Kleidung / Mode',
+        categorySecondary: 'Damenbekleidung',
+        categoryKey: 'damenbekleidung',
+      });
+    }
+  }
+
+  return candidates;
 }
 
 function extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }) {
@@ -1146,6 +1437,7 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
     const knownCandidates = [
       ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetailerFormat, validity }),
     ];
     const genericCandidates = extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat })
       .filter((candidate) => !genericCandidateOverlapsKnown(candidate, knownCandidates));

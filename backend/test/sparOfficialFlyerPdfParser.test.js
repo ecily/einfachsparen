@@ -703,6 +703,107 @@ test('accepts clear INTERSPAR PDF non-food piece offers without explicit quantit
   assert.equal(offers.find((item) => item.title === 'Tefal Heissluftfritteuse Easy Fry XL Surface').priceCurrent.amount, 129.99);
 });
 
+test('accepts real INTERSPAR KW22 page 16 non-food layout blocks', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-27T22:00:00.000Z'),
+    validTo: new Date('2026-06-02T21:59:59.999Z'),
+    validityText: 'Do., 28.05.26 - Di., 02.06.26',
+    validitySource: 'crawlPolicy',
+    confidence: 0.62,
+  };
+  const page16Text = [
+    'ANGEBOTE GUELTIG BIS Mi, 17.6.                                             ALLES DA DA DA',
+    '                                                       -20 % bis zu auf ALLE elektrische Haushaltsprodukte von Krups, Tefal & Rowenta',
+    '                                                     Gueltig von Do, 28.5. bis Di, 2.6.',
+    '  Kaffeevollautomat »My Coffee«',
+    '                                                   20% billiger!',
+    '                                                   statt* 439,99',
+    '  Extrem kompaktes Design nur 18,5 cm Breite, Sensor-Touchscreen, 3 Kaffeespezialitaeten auf Knopfdruck',
+    '                                                   349,- 7920',
+    '  integrierter Luefter zur verbesserten Trocknung des Kaffeesatzes nach der Extraktion Mod.-Nr.: EA2004E0, 2 Jahre Garantie',
+    '  Prozentaktion gilt auch auf Aktionspreise und bereits reduzierte Ware. Nicht mit anderen Prozentaktionen und Gutscheinen kombinierbar.',
+    '                                                   1,5 Liter Wassertank',
+    '  Tefal Heissluft-',
+    '  fritteuse »Easy Fry                         Zusaetzlich                         Tefal OptriGrill',
+    '  XL Surface«',
+    '  Die kompakte Heissluftfritteuse mit 35% billiger!  -20% auf den Aktionspreis     Der Tefal Optigrill GC7058 passt',
+    '  extra grosser Garflaeche, die auch',
+    '  eine perfekte glutenfreie Pizza statt* 229,99                                      statt* 309,99',
+    '                                      149,- 11920',
+    '  backen kann All-in-One-Geraet: 10                                                  Steaks, Fisch und Gemuese genau',
+    '                                                                                     12490 9992',
+    '  voreingestellte Programme Intuitives, digitales Touchdisplay                       nach Wunsch, waehrend das Tefal Ice Force Kochmesser das Schneiden kinderleicht macht.',
+    '  Mod.Nr.: FW402H, 2 Jahre Garantie                                                  Mod.Nr.: GC7058.MES2, 2 Jahre Garantie',
+    '                                      Akkusauger                                      Feuchte Reinigungstuecher',
+    '                                      X-Force Flex 9.60                              Feuchte Ersatztuecher fuer Reinigungssysteme oder auch ohne Geraet',
+    '                                                                                     Dampfglaetter',
+    '                                      Leistungsstufen: 3                              »Aerosteam«',
+    '                                      Bis zu 45 Min Laufzeit                          3 Betriebsmodi: Nur Dampf, Dampf + sanftes Saugen',
+    '                                      statt* 499,99                                   40% billiger!',
+    '                                                                                     statt* 199,99',
+    '                                      199,- 15920                                     119,- 9520',
+    '                                                                                     Sloggi Damen Tai-, Midi- oder',
+    '                                                                                     Maxi-Slip Serie »Pure Comfort«',
+    '                                                                                     PREISstatt* 29,97',
+    '                                                                                     2+1, 3er-Packung',
+    '                                                                                     Zertifizierte Bio-Baumwolle - 95% Baumwolle, 5% Elasthan',
+    '                                                                                     1498',
+  ].join('\n');
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages: [
+      {
+        pageNumber: 16,
+        text: page16Text,
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw22/getPdf.ashx',
+  });
+  const offerByTitle = new Map(offers.map((offer) => [offer.title, offer]));
+
+  for (const [title, price, referencePrice] of [
+    ['KRUPS Kaffeevollautomat my Coffee', 349],
+    ['Tefal Heissluftfritteuse Easy Fry XL Surface', 119.20, 229.99],
+    ['Tefal OptiGrill', 99.92, 309.99],
+    ['Rowenta Akkusauger X-Force Flex 9.60', 159.20, 499.99],
+    ['Tefal Dampfglatter AeroSteam', 95.20, 199.99],
+  ]) {
+    const candidate = candidates.find((item) => item.title === title && !item.exclusionReason);
+    const offer = offerByTitle.get(title);
+
+    assert.ok(candidate, title);
+    assert.ok(offer, title);
+    assert.equal(offer.priceCurrent.amount, price, title);
+    if (referencePrice) assert.equal(offer.priceReference.amount, referencePrice, title);
+    assert.equal(offer.quantityText, '1 Stueck', title);
+    assert.equal(offer.quality.comparisonSafe, false, title);
+    assert.doesNotMatch(offer.title, /statt/i, title);
+    assert.match(offer.conditionsText, /-20% auf den Aktionspreis/, title);
+  }
+
+  const sloggi = offerByTitle.get('Sloggi Damen Tai-, Midi- oder Maxi-Slip Serie Pure Comfort');
+  assert.ok(sloggi);
+  assert.equal(sloggi.priceCurrent.amount, 14.98);
+  assert.equal(sloggi.priceReference.amount, 29.97);
+  assert.equal(sloggi.quantityText, '3 Stueck');
+  assert.equal(sloggi.quality.comparisonSafe, false);
+  assert.equal(sloggi.categoryPrimary, 'Kleidung / Mode');
+
+  assert.equal(offers.some((offer) => /^-20%/.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /1\+1\s+gratis/i.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /1\/2\s+Preis/i.test(offer.title)), false);
+});
+
 test('classifies SPAR PDF household cleaning and textile anchors without unsafe comparison', () => {
   const currentValidity = {
     validFrom: new Date('2026-05-28T12:00:00.000Z'),
