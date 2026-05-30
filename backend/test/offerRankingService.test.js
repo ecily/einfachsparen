@@ -4743,6 +4743,102 @@ test('SPAR official PDF evidence does not suppress structured Aktionsfinder dupl
   assert.equal(prepared[0]._id, 'spar-aktionsfinder-json');
 });
 
+test('weak Aggregator offers stay visible but rank below trusted official PDF evidence', () => {
+  const aggregator = sparOffer({
+    _id: 'spar-aggregator-weak-butter',
+    title: 'Oesterreichische Teebutter SPAR 250 Gramm 1 Packung',
+    brand: 'Schaerdinger',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    categoryKey: 'butter',
+    searchText: 'spar teebutter butter 250 gramm',
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/butter/spar/',
+    rawFacts: { sourceKey: 'aktionsfinder-spar', sourceType: 'aktionsfinder-json' },
+    imageUrl: 'https://img.example.test/butter.jpg',
+    validFrom: null,
+    validTo: null,
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+  });
+  const officialPdf = sparPdfOffer({
+    _id: 'spar-official-trusted-butter',
+    title: 'Oesterreichische Teebutter',
+    brand: 'Schaerdinger',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+    categoryKey: 'butter',
+    searchText: 'spar teebutter butter 250 gramm',
+    quantityText: '250 g',
+    sourceType: 'spar-official-pdf',
+    rawFacts: { sourceKey: 'spar-official-flyer-pdf' },
+    imageUrl: '',
+    validFrom: '2026-05-27T22:00:00.000Z',
+    validTo: '2026-06-02T21:59:59.999Z',
+    conditionsText: 'Joker moeglich',
+    hasConditions: true,
+  });
+
+  assert.deepEqual(applyQueryMatch([aggregator], 'spar butter').map((item) => item._id), [
+    'spar-aggregator-weak-butter',
+  ]);
+  assert.deepEqual(applyQueryMatch([aggregator, officialPdf], 'spar butter').map((item) => item._id), [
+    'spar-official-trusted-butter',
+    'spar-aggregator-weak-butter',
+  ]);
+});
+
+test('trusted official PDF stays ahead of weak Aggregator image-only match', () => {
+  const officialPdf = offer({
+    _id: 'spar-official-pdf-trusted-duplicate',
+    title: 'Puntigamer Maerzen',
+    titleNormalized: 'puntigamer maerzen',
+    retailerKey: 'spar',
+    sourceType: 'spar-official-pdf',
+    rawFacts: { sourceKey: 'spar-official-flyer-pdf' },
+    priceCurrent: { amount: 14.9 },
+    quantityText: '20 x 0.5 l',
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
+    validFrom: new Date('2026-05-27T22:00:00.000Z'),
+    validTo: new Date('2026-06-02T21:59:59.999Z'),
+    conditionsText: 'Joker moeglich',
+    hasConditions: true,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+  });
+  const aggregator = {
+    ...officialPdf,
+    _id: 'spar-aktionsfinder-weak-duplicate',
+    sourceType: 'aktionsfinder-json',
+    sourceUrl: 'https://www.aktionsfinder.at/ppcv/bier/spar/',
+    rawFacts: { sourceKey: 'aktionsfinder-spar', sourceType: 'aktionsfinder-json' },
+    imageUrl: 'https://img.example.test/puntigamer.jpg',
+    validFrom: null,
+    validTo: null,
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+  };
+  const ranked = [aggregator, officialPdf].sort((left, right) => compareOffersByRanking(left, right, { query: 'puntigamer' }));
+
+  assert.equal(ranked.length, 2);
+  assert.equal(ranked[0]._id, 'spar-official-pdf-trusted-duplicate');
+});
+
+test('broad SPAR-family Aggregator coverage remains searchable without trusted official duplicate', () => {
+  const offers = [
+    sparOffer({ _id: 'spar-coverage', retailerKey: 'spar', title: 'SPAR Olivenstange SPAR 1 Stueck', searchText: 'spar olivenstange' }),
+    sparOffer({ _id: 'interspar-coverage', retailerKey: 'interspar', retailerName: 'INTERSPAR', title: 'Interspar Backstube Weckerl INTERSPAR 1 Stueck', searchText: 'interspar backstube weckerl' }),
+    sparOffer({ _id: 'eurospar-coverage', retailerKey: 'eurospar', retailerName: 'EUROSPAR', title: 'EUROSPAR Kornsemmel EUROSPAR 1 Stueck', searchText: 'eurospar kornsemmel' }),
+  ];
+
+  assert.equal(applyQueryMatch(offers, 'spar').length > 0, true);
+  assert.equal(applyQueryMatch(offers, 'interspar').length > 0, true);
+  assert.equal(applyQueryMatch(offers, 'eurospar').length > 0, true);
+});
+
 test('final response dedupe keeps the same offer id only once', () => {
   const duplicate = offer({
     _id: 'same-offer-id',
@@ -5652,7 +5748,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

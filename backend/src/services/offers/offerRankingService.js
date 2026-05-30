@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
@@ -4391,11 +4391,32 @@ function getSourcePriorityRank(offer) {
   return getSourcePriorityEntry(offer).rank;
 }
 
+function isAggregatorSourceQuality(quality = {}) {
+  return quality.sourceClass === 'aggregator' || quality.sourceClass === 'aggregator-ppcv';
+}
+
+function isWeakEvidenceAggregatorOffer(offer) {
+  const quality = classifyOfferSourceQuality(offer);
+
+  return isAggregatorSourceQuality(quality)
+    && !quality.hasValidityEvidence
+    && !hasConditionEvidence(offer);
+}
+
+function hasTrustedOfficialValidityAndConditions(offer) {
+  const quality = classifyOfferSourceQuality(offer);
+
+  return quality.hasOfficialEvidence
+    && hasSafeValidityWindow(offer)
+    && hasConditionEvidence(offer);
+}
+
 function buildSourceQualityScore(offer) {
   const rank = getSourcePriorityRank(offer);
   const quality = classifyOfferSourceQuality(offer);
 
   if (quality.isLowConfidenceAggregator) return -500;
+  if (isAggregatorSourceQuality(quality) && !quality.hasValidityEvidence && !hasConditionEvidence(offer)) return -120;
 
   if (rank === 1) return 220;
   if (rank === 2) return 180;
@@ -5535,6 +5556,19 @@ function compareResponseDuplicatePreference(left, right, query) {
     return rightHasPrice - leftHasPrice;
   }
 
+  const leftTrustedOfficial = hasTrustedOfficialValidityAndConditions(left);
+  const rightTrustedOfficial = hasTrustedOfficialValidityAndConditions(right);
+  const leftWeakAggregator = isWeakEvidenceAggregatorOffer(left);
+  const rightWeakAggregator = isWeakEvidenceAggregatorOffer(right);
+
+  if (leftTrustedOfficial && rightWeakAggregator) {
+    return -1;
+  }
+
+  if (rightTrustedOfficial && leftWeakAggregator) {
+    return 1;
+  }
+
   const leftSourceRank = getSourcePriorityRank(left);
   const rightSourceRank = getSourcePriorityRank(right);
 
@@ -5567,6 +5601,19 @@ function visibleQuantityTextCompletenessScore(offer) {
 }
 
 function compareVisibleCardDuplicatePreference(left, right, query) {
+  const leftTrustedOfficial = hasTrustedOfficialValidityAndConditions(left);
+  const rightTrustedOfficial = hasTrustedOfficialValidityAndConditions(right);
+  const leftWeakAggregator = isWeakEvidenceAggregatorOffer(left);
+  const rightWeakAggregator = isWeakEvidenceAggregatorOffer(right);
+
+  if (leftTrustedOfficial && rightWeakAggregator) {
+    return -1;
+  }
+
+  if (rightTrustedOfficial && leftWeakAggregator) {
+    return 1;
+  }
+
   const leftSourceRank = getSourcePriorityRank(left);
   const rightSourceRank = getSourcePriorityRank(right);
 
