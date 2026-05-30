@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const CrawlRun = require('../../models/CrawlRun');
 const CrawlRunLock = require('../../models/CrawlRunLock');
 const Offer = require('../../models/Offer');
+const env = require('../../config/env');
 const { crawlAllSources } = require('./crawlDispatcher');
 const { buildCoverageMetrics, compactRejectionReasons } = require('./crawlAudit');
 const logger = require('../../lib/logger');
@@ -11,6 +12,7 @@ const GLOBAL_CRAWL_LOCK_KEY = 'crawl-run-global';
 const ACTIVE_RUN_STATUSES = ['queued', 'running'];
 const LOCK_STALE_MS = 18 * 60 * 60 * 1000;
 const EXPLICIT_RECOVERY_MIN_STALE_MS = 30 * 60 * 1000;
+const DEFAULT_MAX_RUNTIME_MS = env.CRAWL_RUN_MAX_RUNTIME_MINUTES * 60 * 1000;
 const PROCESS_STARTED_AT = new Date();
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
 const OFFER_PUBLISH_STATUS_BY_RUN_STATUS = {
@@ -94,6 +96,38 @@ function hasAnyFlag(flags = {}) {
 
 function compactRecoveryReason(value) {
   return compactErrorMessage(value || 'Admin-triggered stale CrawlRun recovery.');
+}
+
+function createCrawlRunTimeoutError(timeoutMs) {
+  const error = new Error(`CrawlRun exceeded maximum runtime of ${timeoutMs}ms.`);
+  error.code = 'CRAWL_RUN_TIMEOUT';
+  error.timeoutMs = timeoutMs;
+  return error;
+}
+
+async function withCrawlRunTimeout(task, timeoutMs = DEFAULT_MAX_RUNTIME_MS) {
+  const effectiveTimeoutMs = Number(timeoutMs);
+
+  if (!Number.isFinite(effectiveTimeoutMs) || effectiveTimeoutMs <= 0) {
+    return task();
+  }
+
+  let timeoutId = null;
+
+  try {
+    return await Promise.race([
+      task(),
+      new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(createCrawlRunTimeoutError(effectiveTimeoutMs));
+        }, effectiveTimeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function sanitizeJsonValue(value, seen = new WeakSet()) {
@@ -799,6 +833,7 @@ async function executeCrawlRun({
   trigger,
   region,
   crawlAllSourcesImpl = crawlAllSources,
+  maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
 } = {}) {
   const startedAt = new Date();
 
@@ -811,12 +846,12 @@ async function executeCrawlRun({
   });
 
   try {
-    const crawlResult = await crawlAllSourcesImpl({
+    const crawlResult = await withCrawlRunTimeout(() => crawlAllSourcesImpl({
       ...options,
       region,
       trigger,
       crawlRunId: runId,
-    });
+    }), maxRuntimeMs);
     const run = await CrawlRun.findById(runId);
     const aggregation = buildRunSummary(crawlResult);
     const status = determineFinalStatus({
@@ -869,6 +904,7 @@ async function executeCrawlRun({
   } catch (error) {
     const finishedAt = new Date();
     const details = error?.details || {};
+    const timedOut = error?.code === 'CRAWL_RUN_TIMEOUT';
 
     await CrawlRun.findByIdAndUpdate(runId, {
       $set: {
@@ -880,7 +916,17 @@ async function executeCrawlRun({
           unknownSourceIds: details.unknownSourceIds || [],
         },
         errorMessages: [compactErrorMessage(error.message)],
-        warnings: ['CrawlRun failed before a complete crawl result was available; existing live offers were not globally cleared.'],
+        warnings: [
+          timedOut
+            ? 'CrawlRun exceeded maximum runtime and was marked failed; existing live offers were not globally cleared.'
+            : 'CrawlRun failed before a complete crawl result was available; existing live offers were not globally cleared.',
+        ],
+        ...(timedOut ? {
+          'metadata.timeout': {
+            timeoutMs: error.timeoutMs,
+            failedAt: finishedAt,
+          },
+        } : {}),
       },
     });
     await markOfferPublishStatusForRun({
@@ -893,6 +939,7 @@ async function executeCrawlRun({
       runId: String(runId),
       trigger,
       message: error.message,
+      code: error.code,
       stack: error.stack,
     });
   } finally {
@@ -1015,5 +1062,6 @@ module.exports = {
     sanitizeJsonValue,
     sanitizeDiagnosticValue,
     serializeLockForAudit,
+    withCrawlRunTimeout,
   },
 };

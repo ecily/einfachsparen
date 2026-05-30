@@ -489,3 +489,54 @@ test('executeCrawlRun passes the top-level crawlRunId into source crawling and m
   assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-success');
   assert.ok(offerUpdates[0].update.$set.publishStatusUpdatedAt instanceof Date);
 });
+
+test('executeCrawlRun marks timed-out runs failed and releases the global lock', async () => {
+  const runId = new mongoose.Types.ObjectId();
+  const originals = {
+    crawlRunFindByIdAndUpdate: CrawlRun.findByIdAndUpdate,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const runUpdates = [];
+  const lockUpdates = [];
+  const offerUpdates = [];
+
+  CrawlRunLock.updateOne = async (filter, update) => {
+    lockUpdates.push({ filter, update });
+    return { modifiedCount: 1 };
+  };
+  CrawlRun.findByIdAndUpdate = async (id, update) => {
+    runUpdates.push({ id, update });
+    return { modifiedCount: 1 };
+  };
+  CrawlRun.findById = async () => ({ _id: runId, mode: 'full' });
+  Offer.updateMany = async (filter, update) => {
+    offerUpdates.push({ filter, update });
+    return { matchedCount: 0, modifiedCount: 0 };
+  };
+
+  try {
+    await executeCrawlRun({
+      runId,
+      trigger: 'scheduled',
+      region: 'AT',
+      maxRuntimeMs: 20,
+      crawlAllSourcesImpl: async () => new Promise(() => {}),
+    });
+  } finally {
+    CrawlRun.findByIdAndUpdate = originals.crawlRunFindByIdAndUpdate;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+
+  const failedUpdate = runUpdates.find((call) => call.update?.$set?.status === 'failed');
+
+  assert.ok(failedUpdate);
+  assert.match(failedUpdate.update.$set.errorMessages[0], /maximum runtime/i);
+  assert.equal(failedUpdate.update.$set['metadata.timeout'].timeoutMs, 20);
+  assert.equal(offerUpdates.length, 1);
+  assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-failed');
+  assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
+});
