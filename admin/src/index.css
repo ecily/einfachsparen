@@ -1,20 +1,17 @@
 :root {
-  color: #18201c;
+  color: #151d18;
   background:
-    radial-gradient(circle at 8% 0%, rgba(31, 90, 75, 0.16), transparent 23rem),
-    radial-gradient(circle at 92% 6%, rgba(226, 185, 111, 0.22), transparent 22rem),
-    linear-gradient(180deg, #f7f4ee 0%, #f1ebe0 48%, #e9e1d4 100%);
+    radial-gradient(circle at 8% 0%, rgba(24, 89, 67, 0.15), transparent 23rem),
+    radial-gradient(circle at 92% 6%, rgba(214, 174, 105, 0.2), transparent 22rem),
+    linear-gradient(180deg, #f8f4ec 0%, #f1e9dc 48%, #e9dfd0 100%);
   font-family:
-    "Inter var",
     Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
+    "Segoe UI Variable",
     "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -24,35 +21,32 @@
   -moz-osx-font-smoothing: grayscale;
 
   --kk-font:
-    "Inter var",
     Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
+    "Segoe UI Variable",
     "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
     sans-serif;
-  --kk-ink: #18201c;
-  --kk-ink-soft: #26312d;
-  --kk-muted: #66706a;
-  --kk-muted-2: #747c76;
-  --kk-soft: #fffcf7;
-  --kk-bg-soft: #f7f4ee;
-  --kk-card: rgba(255, 252, 247, 0.94);
-  --kk-card-strong: rgba(255, 252, 247, 0.99);
-  --kk-border: rgba(128, 112, 88, 0.22);
-  --kk-border-strong: rgba(128, 112, 88, 0.32);
-  --kk-green: #1f5a4b;
-  --kk-green-dark: #123d34;
-  --kk-green-2: #3f7868;
-  --kk-green-3: #e4f0ea;
-  --kk-green-4: #f2f7f4;
-  --kk-gold: #b07a22;
-  --kk-gold-soft: #fff1d6;
-  --kk-red: #922d2d;
+  --kk-ink: #151d18;
+  --kk-ink-soft: #25302a;
+  --kk-muted: #5f6962;
+  --kk-muted-2: #737c75;
+  --kk-soft: #fffdf8;
+  --kk-bg-soft: #f8f4ec;
+  --kk-card: rgba(255, 253, 248, 0.95);
+  --kk-card-strong: rgba(255, 253, 248, 0.99);
+  --kk-border: rgba(122, 111, 91, 0.2);
+  --kk-border-strong: rgba(122, 111, 91, 0.3);
+  --kk-green: #185943;
+  --kk-green-dark: #0f3d31;
+  --kk-green-2: #3c7562;
+  --kk-green-3: #e5f0ea;
+  --kk-green-4: #f3f8f5;
+  --kk-gold: #a97622;
+  --kk-gold-soft: #fff0d3;
+  --kk-red: #8d2f2f;
   --kk-red-soft: #fff0ec;
   --kk-brand-primary: var(--kk-green);
   --kk-brand-primary-dark: var(--kk-green-dark);
@@ -69,15 +63,15 @@
   --kk-condition-border-soft: rgba(226, 185, 111, 0.38);
   --kk-condition-text: #5b3b00;
   --kk-condition-text-strong: #4b3100;
-  --kk-value-bg: rgba(228, 240, 234, 0.9);
-  --kk-value-border: rgba(47, 111, 78, 0.2);
-  --kk-value-text: #2f6f4e;
-  --kk-shadow: 0 18px 46px rgba(62, 51, 36, 0.1);
-  --kk-shadow-soft: 0 12px 30px rgba(62, 51, 36, 0.065);
-  --kk-shadow-card: 0 10px 26px rgba(62, 51, 36, 0.07);
-  --kk-shadow-hover: 0 14px 34px rgba(62, 51, 36, 0.1);
-  --kk-control-bg: rgba(255, 252, 247, 0.92);
-  --kk-control-border: rgba(128, 112, 88, 0.24);
+  --kk-value-bg: rgba(229, 240, 234, 0.92);
+  --kk-value-border: rgba(40, 107, 72, 0.22);
+  --kk-value-text: #286b48;
+  --kk-shadow: 0 18px 46px rgba(55, 47, 36, 0.105);
+  --kk-shadow-soft: 0 12px 30px rgba(55, 47, 36, 0.07);
+  --kk-shadow-card: 0 10px 26px rgba(55, 47, 36, 0.075);
+  --kk-shadow-hover: 0 14px 34px rgba(55, 47, 36, 0.105);
+  --kk-control-bg: rgba(255, 253, 248, 0.93);
+  --kk-control-border: rgba(122, 111, 91, 0.24);
   --kk-radius-xl: 1.65rem;
   --kk-radius-lg: 1.2rem;
   --kk-radius-md: 0.95rem;
@@ -398,10 +392,10 @@ a {
 .eyebrow {
   margin: 0 0 0.5rem;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.145em;
   font-size: 0.74rem;
-  color: #5b6a54;
-  font-weight: 850;
+  color: #536257;
+  font-weight: 830;
 }
 
 .hero h1,
@@ -409,17 +403,18 @@ a {
 .shopping-list-hero h1 {
   margin: 0;
   font-family: var(--kk-font);
-  font-weight: 850;
+  font-weight: 860;
   font-size: clamp(2.15rem, 5.6vw, 4.15rem);
-  line-height: 0.99;
-  letter-spacing: -0.055em;
+  line-height: 1;
+  letter-spacing: -0.052em;
   color: var(--kk-ink);
 }
 
 .subtitle {
   max-width: 58rem;
-  color: #4f5a54;
+  color: #4b5750;
   font-size: clamp(1rem, 1.3vw, 1.1rem);
+  line-height: 1.54;
 }
 
 .panel,
@@ -427,9 +422,9 @@ a {
 .job-card,
 .offer-card,
 .hero__status > div {
-  border: 1px solid rgba(128, 112, 88, 0.2);
+  border: 1px solid var(--kk-border-subtle);
   border-radius: var(--kk-radius-xl);
-  background: rgba(255, 252, 247, 0.96);
+  background: rgba(255, 253, 248, 0.96);
   backdrop-filter: blur(14px);
   box-shadow: var(--kk-shadow-soft);
 }
@@ -506,7 +501,7 @@ a {
   background: linear-gradient(135deg, var(--kk-brand-primary), var(--kk-green-2));
   color: var(--kk-soft);
   font: inherit;
-  font-weight: 850;
+  font-weight: 830;
   padding: 1rem 1.15rem;
   text-align: center;
   box-shadow: 0 14px 28px rgba(31, 90, 75, 0.22);
@@ -547,7 +542,7 @@ a {
   background: var(--kk-control-bg);
   color: var(--kk-brand-primary);
   font: inherit;
-  font-weight: 780;
+  font-weight: 770;
   padding: 0.72rem 1rem;
   cursor: pointer;
   transition:
@@ -583,7 +578,7 @@ a {
   background: var(--kk-control-bg);
   color: var(--kk-brand-primary);
   font: inherit;
-  font-weight: 800;
+  font-weight: 790;
   padding: 0.82rem 1.05rem;
   cursor: pointer;
   transition:
@@ -878,10 +873,10 @@ a {
 }
 
 .search-landing-hero {
-  border-color: rgba(31, 90, 75, 0.16);
+  border-color: rgba(24, 89, 67, 0.16);
   background:
-    radial-gradient(circle at top left, rgba(226, 185, 111, 0.1), transparent 32%),
-    linear-gradient(135deg, rgba(255, 252, 247, 0.99), rgba(244, 248, 245, 0.96));
+    radial-gradient(circle at top left, rgba(214, 174, 105, 0.1), transparent 32%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.99), rgba(244, 248, 245, 0.96));
   max-width: 100%;
   overflow: hidden;
   box-shadow:
@@ -915,13 +910,13 @@ a {
   align-content: center;
   padding: 0.85rem;
   border-radius: 1.15rem;
-  background: rgba(255, 252, 247, 0.72);
-  border: 1px solid rgba(31, 90, 75, 0.1);
+  background: rgba(255, 253, 248, 0.74);
+  border: 1px solid rgba(24, 89, 67, 0.1);
   box-shadow: none;
 }
 
 .search-landing-hero__mobile .eyebrow {
-  color: #747c76;
+  color: var(--kk-muted-2);
   font-size: 0.68rem;
   letter-spacing: 0.12em;
 }
@@ -993,7 +988,7 @@ a {
 }
 
 .search-landing-hero__mobile h2 {
-  color: #293627;
+  color: var(--kk-ink-soft);
   font-weight: 820;
   letter-spacing: 0;
 }
@@ -1036,15 +1031,17 @@ a {
 .hero-benefit-card {
   padding: 0.95rem 1rem;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.68);
-  border: 1px solid rgba(22, 33, 24, 0.08);
-  box-shadow: 0 8px 22px rgba(83, 63, 34, 0.045);
+  background: rgba(255, 253, 248, 0.76);
+  border: 1px solid rgba(122, 111, 91, 0.13);
+  box-shadow: 0 8px 22px rgba(55, 47, 36, 0.05);
 }
 
 .hero-benefit-card strong {
   display: block;
   margin-bottom: 0.25rem;
   font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--kk-ink);
 }
 
 .hero-benefit-card span {
@@ -1737,10 +1734,10 @@ a {
   align-items: start;
   padding: 1.05rem;
   border-radius: var(--kk-radius-lg);
-  border: 1px solid rgba(128, 112, 88, 0.2);
+  border: 1px solid var(--kk-border-subtle);
   background:
     radial-gradient(circle at top right, var(--retailer-glow-color, rgba(255, 255, 255, 0.68)), transparent 13.5rem),
-    rgba(255, 252, 247, 0.97);
+    rgba(255, 253, 248, 0.97);
   box-shadow: var(--kk-shadow-card);
   content-visibility: auto;
   contain-intrinsic-size: 280px;
@@ -1769,14 +1766,14 @@ a {
 .user-card--known-savings {
   background:
     radial-gradient(circle at top right, var(--retailer-glow-color, rgba(146, 201, 101, 0.16)), transparent 15rem),
-    linear-gradient(180deg, rgba(247, 244, 238, 0.96), rgba(255, 252, 247, 0.96));
+    linear-gradient(180deg, rgba(248, 244, 236, 0.96), rgba(255, 253, 248, 0.96));
   border-color: var(--retailer-border-color, rgba(31, 90, 75, 0.2));
 }
 
 .user-card--action-price {
   background:
-    radial-gradient(circle at top right, rgba(255, 230, 172, 0.22), transparent 15rem),
-    rgba(255, 252, 247, 0.96);
+    radial-gradient(circle at top right, rgba(255, 229, 166, 0.2), transparent 15rem),
+    rgba(255, 253, 248, 0.96);
 }
 
 .user-card__content {
@@ -1832,7 +1829,7 @@ a {
 }
 
 .user-card__validity {
-  color: #66706a;
+  color: var(--kk-muted);
   font-size: 0.88rem;
   font-weight: 720;
 }
@@ -1841,6 +1838,7 @@ a {
   max-width: 100%;
   margin: 0.3rem 0 0;
   font-size: 1.16rem;
+  font-weight: 760;
   line-height: 1.22;
   letter-spacing: 0;
   overflow-wrap: anywhere;
@@ -1849,7 +1847,7 @@ a {
 
 .user-card__title-quantity {
   margin: 0.22rem 0 0;
-  color: #66706a;
+  color: var(--kk-muted);
   font-size: 0.92rem;
   font-weight: 760;
   line-height: 1.28;
@@ -1973,6 +1971,7 @@ a {
   display: block;
   white-space: nowrap;
   font-size: clamp(1.72rem, 3.2vw, 2.2rem);
+  font-weight: 850;
   line-height: 1;
   letter-spacing: 0;
   color: var(--kk-value-text);
@@ -1987,7 +1986,7 @@ a {
   border-radius: 999px;
   background: var(--retailer-soft-color, rgba(228, 240, 234, 0.95));
   border: 1px solid var(--retailer-border-color, rgba(31, 90, 75, 0.16));
-  color: #18201c;
+  color: var(--kk-ink);
   font-size: clamp(0.95rem, 1.8vw, 1.08rem);
   font-weight: 900;
   line-height: 1;
@@ -2028,7 +2027,7 @@ a {
 }
 
 .user-card__reference-price {
-  color: #4f5a54 !important;
+  color: var(--kk-ink-soft) !important;
   font-size: 0.92rem;
   font-weight: 850 !important;
   line-height: 1.25;
@@ -2068,7 +2067,7 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  color: #4f5a54;
+  color: var(--kk-ink-soft);
   line-height: 1.45;
 }
 
@@ -2095,7 +2094,7 @@ a {
 
 .user-card__meta-pill--category {
   background: rgba(247, 244, 236, 0.72) !important;
-  color: #66706a !important;
+  color: var(--kk-muted) !important;
   font-size: 0.82rem !important;
   font-weight: 700 !important;
 }
@@ -3210,7 +3209,7 @@ a {
   padding: 0.32rem 0.58rem;
   border-radius: 999px;
   background: rgba(247, 244, 236, 0.86);
-  color: #4f5a54;
+  color: var(--kk-ink-soft);
   font-size: 0.82rem;
   font-weight: 720;
   line-height: 1.25;
