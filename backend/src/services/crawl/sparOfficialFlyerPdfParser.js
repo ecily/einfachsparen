@@ -454,6 +454,7 @@ function looksLikeNonProductLine(line = '') {
     || /\bersparnis\b/i.test(normalized)
     || /^bis\s+zu\b/i.test(normalized)
     || /\bangebote?\s+gueltig\b/i.test(normalized)
+    || /^statt\s+\d{1,3}[,.]\d{2}\b/i.test(normalized)
     || /^(?:statt|per|= per|angebot|aktion|gueltig|gilt|noch|zusaetzlich|mengenvorteil|im einzelverkauf|ab \d+|je|nur|-?\d+\s*%|seite \d+)$/i.test(normalized)
     || /^\d{1,3}[,.]\d{2}$/.test(normalized)
     || /\b(?:do|fr|sa|so|mo|di|mi)[,.]?\s*\d{1,2}[,.]\d{1,2}/i.test(normalized);
@@ -585,6 +586,9 @@ function isPlausibleGenericFlyerTitle(title = '') {
     || /so\s+spart\s+oesterreich/i.test(normalized)
     || /so\s+spart\s+osterreich/i.test(normalized)
     || /^(?:ersparnis|bis\s+zu|aktion|statt|mit\s+%-?aktion)\b/i.test(normalized)
+    || /^-?\s*\d{1,2}\s*%\s+auf\b/i.test(normalized)
+    || /^(?:1\/2\s+preis|halbpreis|rabattmarken?|prozentpickerl|joker)\b/i.test(normalized)
+    || /\bauf\s+alle\s+(?:elektrische\s+)?(?:haushaltsprodukte|haushaltsgeraete|haushaltsgerate|artikel|produkte)\b/i.test(normalized)
     || /^ab\s+\d+\b/i.test(normalized)
     || /^ganze\s+bohne\s+oder$/i.test(normalized)
     || /^aus\s+oesterreich\b/i.test(normalized)
@@ -593,6 +597,74 @@ function isPlausibleGenericFlyerTitle(title = '') {
     || /^tem\s+kunststoff\b/i.test(normalized)
     || /^nahrung\s+versch\b/i.test(normalized)
   );
+}
+
+function hasExplicitQuantityHint(text = '') {
+  return /\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|liter|ml|stk|stueck|kapseln|waschg.nge|waschgÃ¤nge|waschgaenge|waschgang|packungen?|pkg|flaschen?|dosen?|beutel|rollen?)\b/i.test(text)
+    || /\b\d+\s*x\s*\d+(?:[,.]\d+)?\s*(?:kg|g|l|liter|ml)\b/i.test(text);
+}
+
+function hasCriticalFoodOrDrinkSignal(title = '') {
+  const normalized = normalizeForScan(title);
+
+  return /\b(joghurt|jogurt|milch|butter|kaese|kase|wurst|schinken|fleisch|huhn|pute|rind|schwein|fisch|lachs|brot|semmel|toast|nudeln|pasta|reis|mehl|zucker|schokolade|kekse|chips|bier|radler|wein|sekt|wasser|cola|limonade|saft|sirup|kaffee|espresso|tee)\b/.test(normalized)
+    && !/\b(kaffeevollautomat|kaffee vollautomat|kaffeemaschine|espressoautomat)\b/.test(normalized);
+}
+
+function hasNonFoodPieceSignal(title = '', blockLines = []) {
+  const normalized = normalizeForScan([title, ...blockLines].join(' '));
+
+  return /\b(kaffeevollautomat|kaffee vollautomat|kaffeemaschine|espressoautomat|heissluftfritteuse|heisluftfritteuse|optigrill|kontaktgrill|akkusauger|akku sauger|staubsauger|handstaubsauger|dampfglatter|dampfglaetter|dampfglÃ¤tter|aerosteam|einweghandschuhe|reinigungstucher|reinigungstuecher|putztucher|putztuecher|wischtucher|wischtuecher|sloggi|slip|tai|midi|maxi)\b/.test(normalized);
+}
+
+function inferSparFamilyNonFoodPieceQuantity({
+  title = '',
+  blockLines = [],
+  sourceRetailerFormat = 'spar',
+} = {}) {
+  if (!isSparFamilyPdfFormat(sourceRetailerFormat)) {
+    return '';
+  }
+
+  if (!title || hasCriticalFoodOrDrinkSignal(title) || !hasNonFoodPieceSignal(title, blockLines)) {
+    return '';
+  }
+
+  if (hasExplicitQuantityHint(blockLines.join(' '))) {
+    return '';
+  }
+
+  return '1 Stueck';
+}
+
+function isTrustedSparFamilyNonFoodGenericCandidate(candidate = {}, categoryPrimary = '', categorySecondary = '') {
+  if (candidate.productKind !== 'generic-flyer-product') {
+    return false;
+  }
+
+  if (!isSparFamilyPdfFormat(candidate.sourceRetailerFormat)) {
+    return false;
+  }
+
+  if (!candidate.title || !(Number(candidate.price) > 0) || !candidate.quantityText) {
+    return false;
+  }
+
+  if (!hasNonFoodPieceSignal(candidate.title, [candidate.rawText || ''])) {
+    return false;
+  }
+
+  const allowedPrimaryCategories = new Set([
+    'Haushalt',
+    'Technik / Elektronik',
+    'Kleidung / Mode',
+    'Drogerie / Hygiene',
+    'Non-Food',
+  ]);
+
+  return allowedPrimaryCategories.has(categoryPrimary)
+    && categoryPrimary !== 'Unkategorisiert'
+    && categorySecondary !== 'Unkategorisiert';
 }
 
 function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 'spar' } = {}) {
@@ -629,7 +701,15 @@ function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 's
     }
 
     const rawTitle = buildGenericTitle(blockLines);
-    const quantityText = extractQuantityTextFromBlock(blockLines);
+    const extractedQuantityText = extractQuantityTextFromBlock(blockLines);
+    const fallbackQuantityText = !extractedQuantityText
+      ? inferSparFamilyNonFoodPieceQuantity({
+        title: rawTitle,
+        blockLines,
+        sourceRetailerFormat,
+      })
+      : '';
+    const quantityText = extractedQuantityText || fallbackQuantityText;
     const title = stripGenericPriceReducedMarketingPrefix(rawTitle, { price, quantityText });
     const genericConditionsText = extractGenericConditionsText(blockLines);
 
@@ -667,6 +747,7 @@ function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 's
 
     addCandidate(candidates, page.pageNumber, {
       productKind: 'generic-flyer-product',
+      sourceRetailerFormat,
       title,
       brand: title.split(/\s+/)[0] || '',
       price,
@@ -674,7 +755,8 @@ function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 's
       quantityText,
       conditionsText: genericConditionsText,
       rawText: blockLines.join(' '),
-      comparisonSafe: true,
+      comparisonSafe: fallbackQuantityText ? false : true,
+      quantityFallbackReason: fallbackQuantityText ? 'spar-family-non-food-piece' : '',
       parserHint: 'generic-text-layer-price-block',
     });
   }
@@ -1239,6 +1321,14 @@ function normalizeSparPdfCandidateToOffer({
     categorySecondary,
     categoryKey,
   });
+  const trustedNonFoodGeneric = isTrustedSparFamilyNonFoodGenericCandidate(
+    {
+      ...candidate,
+      sourceRetailerFormat,
+    },
+    categoryPrimary,
+    categorySecondary
+  );
 
   if (categoryMismatchSignal && !issues.includes(PDF_CATEGORY_MISMATCH_REVIEW_REASON)) {
     issues.push(PDF_CATEGORY_MISMATCH_REVIEW_REASON);
@@ -1247,10 +1337,10 @@ function normalizeSparPdfCandidateToOffer({
   if (
     candidate.parserHint === 'generic-text-layer-price-block'
     && (
-      categoryMismatchSignal
-      || categoryPrimary === 'Unkategorisiert'
-      || categorySecondary === 'Unkategorisiert'
-      || categoryPrimary === 'Technik / Elektronik'
+      (categoryMismatchSignal && !trustedNonFoodGeneric)
+      || (categoryPrimary === 'Unkategorisiert' && !trustedNonFoodGeneric)
+      || (categorySecondary === 'Unkategorisiert' && !trustedNonFoodGeneric)
+      || (categoryPrimary === 'Technik / Elektronik' && !trustedNonFoodGeneric)
     )
   ) {
     return null;
@@ -1389,6 +1479,7 @@ function normalizeSparPdfCandidateToOffer({
       sourceRetailerFormat,
       sourceText: candidate.rawText,
       parserHint: candidate.parserHint || '',
+      quantityFallbackReason: candidate.quantityFallbackReason || '',
       evidenceText: sourceMetadata.evidence,
       page: candidate.page,
       pageNumber: candidate.page,

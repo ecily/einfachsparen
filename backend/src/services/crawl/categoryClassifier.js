@@ -178,6 +178,21 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Koerperpflege',
   },
   {
+    patterns: [/\b(einweghandschuhe|reinigungstucher|reinigungstuecher|putztucher|putztuecher|wischtucher|wischtuecher)\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
+  },
+  {
+    patterns: [/\b(kaffeevollautomat|kaffee vollautomat|kaffeemaschine|espressoautomat|heissluftfritteuse|heisluftfritteuse|optigrill|kontaktgrill|dampfglatter|dampfglaetter|dampfglÃ¤tter|aerosteam)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Kuechengeraete',
+  },
+  {
+    patterns: [/\b(akkusauger|akku sauger|staubsauger|handstaubsauger)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Werkzeug & Akkus',
+  },
+  {
     patterns: [/\bteebutter\b/],
     main: 'Lebensmittel',
     sub: 'Milchprodukte',

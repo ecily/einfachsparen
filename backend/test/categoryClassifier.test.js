@@ -287,6 +287,26 @@ test('classifies official resource-matrix non-food categories without polluting 
   }
 });
 
+test('classifies clear SPAR-family non-food flyer anchors narrowly', () => {
+  const cases = [
+    ['Splendid Einweghandschuhe', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Splendid Feuchte Reinigungstuecher', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Rowenta Akkusauger X-Force Flex 9.60', 'Technik / Elektronik', 'Werkzeug & Akkus'],
+    ['Tefal Dampfglatter AeroSteam', 'Technik / Elektronik', 'Kuechengeraete'],
+    ['Tefal OptiGrill', 'Technik / Elektronik', 'Kuechengeraete'],
+    ['KRUPS Kaffeevollautomat my Coffee', 'Technik / Elektronik', 'Kuechengeraete'],
+    ['Tefal Heissluftfritteuse Easy Fry XL Surface', 'Technik / Elektronik', 'Kuechengeraete'],
+    ['Sloggi Damen Tai-, Midi- oder Maxi-Slip Serie Pure Comfort', 'Kleidung / Mode', 'Damenbekleidung'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+  }
+});
+
 test('classifies dog food brands as pet food and does not let generic snacks become pet food', () => {
   for (const title of [
     'Pedigree Hundefutter 2 kg',

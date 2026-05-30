@@ -649,6 +649,155 @@ test('generic SPAR PDF extraction does not classify Blue Star WC offer as fresh 
   assert.equal(accepted.some((candidate) => candidate.categorySecondary === 'Obst & Gemuese'), false);
 });
 
+test('accepts clear INTERSPAR PDF non-food piece offers without explicit quantity', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-28T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const pages = [
+    ['KRUPS Kaffeevollautomat my Coffee', 'statt 399,99', '299,00'],
+    ['Tefal Heissluftfritteuse Easy Fry XL Surface', 'statt 179,99', '129,99'],
+    ['Tefal OptiGrill', 'statt 129,99', '89,99'],
+    ['Rowenta Akkusauger X-Force Flex 9.60', 'statt 299,99', '199,99'],
+    ['Tefal Dampfglatter AeroSteam', 'statt 129,99', '99,99'],
+  ].map((lines, index) => ({
+    pageNumber: 20 + index,
+    text: lines.join('\n'),
+  }));
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages,
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw22/getPdf.ashx',
+  });
+
+  for (const title of [
+    'KRUPS Kaffeevollautomat my Coffee',
+    'Tefal Heissluftfritteuse Easy Fry XL Surface',
+    'Tefal OptiGrill',
+    'Rowenta Akkusauger X-Force Flex 9.60',
+    'Tefal Dampfglatter AeroSteam',
+  ]) {
+    const candidate = candidates.find((item) => item.title === title && !item.exclusionReason);
+    const offer = offers.find((item) => item.title === title);
+
+    assert.ok(candidate, title);
+    assert.ok(offer, title);
+    assert.equal(candidate.quantityText, '1 Stueck', title);
+    assert.equal(offer.quantityText, '1 Stueck', title);
+    assert.equal(offer.categoryPrimary, 'Technik / Elektronik', title);
+    assert.equal(offer.normalizedUnitPrice.comparable, false, title);
+    assert.equal(offer.quality.comparisonSafe, false, title);
+  }
+
+  assert.equal(offers.find((item) => item.title === 'KRUPS Kaffeevollautomat my Coffee').priceReference.amount, 399.99);
+  assert.equal(offers.find((item) => item.title === 'Tefal Heissluftfritteuse Easy Fry XL Surface').priceCurrent.amount, 129.99);
+});
+
+test('classifies SPAR PDF household cleaning and textile anchors without unsafe comparison', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-28T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages: [
+      {
+        pageNumber: 31,
+        text: ['Splendid Einweghandschuhe', '1,99'].join('\n'),
+      },
+      {
+        pageNumber: 32,
+        text: ['Splendid Feuchte Reinigungstuecher', '1,49'].join('\n'),
+      },
+      {
+        pageNumber: 33,
+        text: ['Sloggi Damen Tai-, Midi- oder Maxi-Slip Serie Pure Comfort', '9,99'].join('\n'),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw22/getPdf.ashx',
+  });
+  const gloves = offers.find((offer) => offer.title === 'Splendid Einweghandschuhe');
+  const wipes = offers.find((offer) => offer.title === 'Splendid Feuchte Reinigungstuecher');
+  const sloggi = offers.find((offer) => offer.title === 'Sloggi Damen Tai-, Midi- oder Maxi-Slip Serie Pure Comfort');
+
+  assert.ok(gloves);
+  assert.equal(gloves.categoryPrimary, 'Haushalt');
+  assert.equal(gloves.categorySecondary, 'Waschmittel & Reiniger');
+  assert.notEqual(gloves.categoryPrimary, 'Kleidung / Mode');
+  assert.equal(gloves.quantityText, '1 Stueck');
+
+  assert.ok(wipes);
+  assert.equal(wipes.categoryPrimary, 'Haushalt');
+  assert.equal(wipes.categorySecondary, 'Waschmittel & Reiniger');
+  assert.equal(wipes.quantityText, '1 Stueck');
+
+  assert.ok(sloggi);
+  assert.equal(sloggi.categoryPrimary, 'Kleidung / Mode');
+  assert.equal(sloggi.quantityText, '1 Stueck');
+  assert.equal(sloggi.quality.comparisonSafe, false);
+});
+
+test('keeps SPAR PDF promotion fragments rejected and food without quantity unfixed', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-28T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages: [
+      {
+        pageNumber: 34,
+        text: ['-20% auf alle elektrische Haushaltsprodukte', '299,00'].join('\n'),
+      },
+      {
+        pageNumber: 35,
+        text: ['SPAR Naturjoghurt cremig', '1,29'].join('\n'),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw22/getPdf.ashx',
+  });
+
+  assert.equal(offers.length, 0);
+  assert.equal(
+    candidates.some((candidate) => candidate.exclusionReason && /elektrische Haushaltsprodukte/i.test(candidate.rawText || '')),
+    true
+  );
+  assert.equal(
+    candidates.some((candidate) => candidate.exclusionReason === 'generic-missing-quantity' && /Naturjoghurt/i.test(candidate.rawText || '')),
+    true
+  );
+});
+
 test('generic SPAR PDF candidates preserve visible multibuy conditions', () => {
   const candidates = extractSparPdfCandidates({
     sourceRetailerFormat: 'spar',
