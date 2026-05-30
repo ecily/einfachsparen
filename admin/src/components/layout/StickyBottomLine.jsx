@@ -4,7 +4,7 @@ export function StickyBottomLine({ onNavigate }) {
     margin: '0 0 0 0.45rem',
     padding: 0,
     border: 0,
-    color: '#315e2a',
+    color: 'var(--kk-primary)',
     font: 'inherit',
     fontWeight: 850,
     textDecoration: 'none',
@@ -26,14 +26,14 @@ export function StickyBottomLine({ onNavigate }) {
         justifyContent: 'center',
         minHeight: '2.55rem',
         padding: '0.48rem 1rem calc(0.48rem + env(safe-area-inset-bottom))',
-        color: '#485344',
+        color: 'var(--kk-text-muted)',
         fontSize: '0.84rem',
         fontWeight: 650,
         lineHeight: 1.35,
         textAlign: 'center',
-        background: 'rgba(255, 252, 247, 0.94)',
-        borderTop: '1px solid rgba(22, 33, 24, 0.1)',
-        boxShadow: '0 -10px 26px rgba(83, 63, 34, 0.09)',
+        background: 'rgba(255, 255, 255, 0.92)',
+        borderTop: '1px solid var(--kk-border)',
+        boxShadow: '0 -10px 26px rgba(36, 52, 71, 0.08)',
         backdropFilter: 'blur(14px)',
       }}
     >
@@ -44,7 +44,7 @@ export function StickyBottomLine({ onNavigate }) {
           target="_blank"
           rel="noreferrer"
           style={{
-            color: '#315e2a',
+            color: 'var(--kk-primary)',
             fontWeight: 850,
             textDecoration: 'none',
           }}

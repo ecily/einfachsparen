@@ -238,7 +238,7 @@ function SearchLandingHero() {
             <h2 style={{ fontSize: 'clamp(1.05rem, 2.4vw, 1.35rem)', lineHeight: 1.14, margin: 0 }}>
               Am Handy direkt nutzen
             </h2>
-            <p style={{ color: '#5c6658', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
+            <p style={{ color: 'var(--kk-text-muted)', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
               {MOBILE_BROWSER_NOTICE}
             </p>
           </div>
@@ -310,16 +310,16 @@ function TrustAndFaqSection() {
     <section className="panel faq-section" style={{ display: 'grid', gap: '1rem', marginTop: '1rem', padding: '1rem' }}>
       <div style={{ display: 'grid', gap: '0.45rem' }}>
         <h2 style={{ margin: 0 }}>Kurz erklärt</h2>
-        <p style={{ color: '#5c6658', margin: 0, maxWidth: '48rem' }}>
+        <p style={{ color: 'var(--kk-text-muted)', margin: 0, maxWidth: '48rem' }}>
           kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.
         </p>
       </div>
 
       <div style={{ display: 'grid', gap: '0.65rem' }}>
         {faqItems.map((item) => (
-          <details key={item.question} style={{ borderTop: '1px solid rgba(22,33,24,0.1)', paddingTop: '0.65rem' }}>
+          <details key={item.question} style={{ borderTop: '1px solid var(--kk-border)', paddingTop: '0.65rem' }}>
             <summary style={{ cursor: 'pointer', fontWeight: 800 }}>{item.question}</summary>
-            <p style={{ color: '#5c6658', lineHeight: 1.5, margin: '0.45rem 0 0' }}>{item.answer}</p>
+            <p style={{ color: 'var(--kk-text-muted)', lineHeight: 1.5, margin: '0.45rem 0 0' }}>{item.answer}</p>
           </details>
         ))}
       </div>

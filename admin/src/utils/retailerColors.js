@@ -37,7 +37,7 @@ function hexToRgb(hexColor) {
 function withAlpha(hexColor, alpha) {
   const rgb = hexToRgb(hexColor)
 
-  if (!rgb) return `rgba(49, 88, 44, ${alpha})`
+  if (!rgb) return `rgba(72, 101, 129, ${alpha})`
 
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`
 }
@@ -45,7 +45,7 @@ function withAlpha(hexColor, alpha) {
 export function getRetailerColor(retailerKeyOrName) {
   const key = normalizeColorKey(retailerKeyOrName)
 
-  return RETAILER_COLORS[key] || '#31582c'
+  return RETAILER_COLORS[key] || '#486581'
 }
 
 export function getRetailerTextColor(retailerKeyOrName) {

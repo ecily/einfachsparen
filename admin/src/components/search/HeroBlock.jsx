@@ -19,8 +19,8 @@ export function HeroBlock() {
     <SectionCard
       style={{
         marginBottom: '1rem',
-        background: 'linear-gradient(180deg, rgba(255,252,247,0.98), rgba(250,246,238,0.94))',
-        border: '1px solid rgba(22,33,24,0.08)',
+        background: 'rgba(255, 255, 255, 0.94)',
+        border: '1px solid var(--kk-border)',
       }}
     >
       <div
@@ -109,7 +109,7 @@ export function HeroBlock() {
             Am Handy direkt nutzen
           </h2>
 
-          <p style={{ maxWidth: '280px', margin: 0, color: '#5c6658', fontSize: '0.92rem', lineHeight: 1.4 }}>
+          <p style={{ maxWidth: '280px', margin: 0, color: 'var(--kk-text-muted)', fontSize: '0.92rem', lineHeight: 1.4 }}>
             {MOBILE_BROWSER_NOTICE}
           </p>
           {appDownload ? (

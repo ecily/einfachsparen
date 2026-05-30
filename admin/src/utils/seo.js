@@ -181,7 +181,7 @@ export function updateSeoMetadata(activePage) {
     'robots',
     meta.robots || (isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
   )
-  setOrCreateMeta('name', 'theme-color', '#f7f1e6')
+  setOrCreateMeta('name', 'theme-color', '#f7f9fb')
 
   setOrCreateMeta('property', 'og:type', 'website')
   setOrCreateMeta('property', 'og:site_name', 'kaufklug.at')
