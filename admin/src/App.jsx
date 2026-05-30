@@ -162,11 +162,11 @@ function SearchLandingHero() {
         style={{
           alignItems: 'center',
           display: 'grid',
-          gap: 'clamp(1rem, 3vw, 1.5rem)',
+          gap: 'clamp(1.1rem, 3vw, 1.65rem)',
           gridTemplateColumns: 'minmax(0, 1.95fr) minmax(240px, 0.95fr)',
           marginBottom: '1rem',
           minWidth: 0,
-          padding: 'clamp(1rem, 3vw, 1.5rem)',
+          padding: 'clamp(1.05rem, 3vw, 1.7rem)',
           width: '100%',
         }}
       >
@@ -203,7 +203,7 @@ function SearchLandingHero() {
               maxWidth: '46rem',
             }}
           >
-            Nicht blättern. Finden. <span className="hero-headline-accent">Was sich gerade lohnt.</span>
+            Nicht blättern. <span className="hero-headline-accent">Finden, was sich gerade lohnt.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
             Finde aktuelle Angebote von Supermärkten und Drogerien in Österreich – spare Zeit beim Suchen und Geld beim
