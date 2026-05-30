@@ -508,6 +508,40 @@ function hasUnsafeGenericTitleStart(title = '') {
     || /\bimmer\s+billig\b/i.test(normalized);
 }
 
+function hasPlausibleProductCoreAfterMarketingPrefix(title = '') {
+  const normalized = normalizeForScan(title);
+  const meaningfulWords = normalized
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !/^(?:versch|verschiedene|sorten|oder|und|ganze|bohne|gemahlen|packung|pkg)$/.test(word));
+
+  return meaningfulWords.length >= 2;
+}
+
+function stripGenericPriceReducedMarketingPrefix(title = '', { price = null, quantityText = '' } = {}) {
+  const cleanTitle = sanitizeWhitespace(title);
+
+  if (!(Number(price) > 0) || !quantityText) {
+    return cleanTitle;
+  }
+
+  const match = cleanTitle.match(/^preis\s*gesenkt\s+seit\s+\d{1,2}\s*\.\s*\d{1,2}\s*\.\s*(?:\d{2}|\d{4})\s+(.+)$/i);
+  if (!match) {
+    return cleanTitle;
+  }
+
+  const strippedTitle = sanitizeWhitespace(match[1]);
+  if (
+    !hasPlausibleProductCoreAfterMarketingPrefix(strippedTitle)
+    || !isPlausibleGenericFlyerTitle(strippedTitle)
+    || hasUnsafeGenericTitleStart(strippedTitle)
+  ) {
+    return cleanTitle;
+  }
+
+  return strippedTitle;
+}
+
 function hasGenericMergeRisk(blockLines = [], quantityText = '') {
   if (!quantityText) return false;
 
@@ -594,8 +628,9 @@ function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 's
       continue;
     }
 
-    const title = buildGenericTitle(blockLines);
+    const rawTitle = buildGenericTitle(blockLines);
     const quantityText = extractQuantityTextFromBlock(blockLines);
+    const title = stripGenericPriceReducedMarketingPrefix(rawTitle, { price, quantityText });
     const genericConditionsText = extractGenericConditionsText(blockLines);
 
     if (!isPlausibleGenericFlyerTitle(title)) {

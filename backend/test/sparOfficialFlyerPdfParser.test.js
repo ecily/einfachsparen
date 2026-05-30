@@ -358,6 +358,118 @@ test('normalizes generic non-beer candidates into broad categories', () => {
   assert.match(offer.searchText, /waschmittel/);
 });
 
+test('accepts SPAR price-reduced S-BUDGET Caffe Crema after marketing prefix removal', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-28T12:00:00.000Z'),
+    validTo: new Date('2026-06-02T12:00:00.000Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: currentValidity,
+    pages: [
+      {
+        pageNumber: 10,
+        text: [
+          'Preisgesenkt seit',
+          '5.5.2026',
+          'S-BUDGET',
+          'Caff\u00e8 Crema',
+          'ganze Bohne, 500 g',
+          '5,49',
+          'statt 5,99',
+          '-8%',
+          '(per kg 10,98)',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+  const candidate = accepted.find((item) => item.title === 'S-BUDGET Caff\u00e8 Crema');
+
+  assert.ok(candidate);
+  assert.doesNotMatch(candidate.title, /Preisgesenkt seit/i);
+  assert.equal(candidate.price, 5.49);
+  assert.equal(candidate.referencePrice, 5.99);
+  assert.equal(candidate.quantityText, '500 g');
+
+  const [offer] = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260528-1-flugblatt-kw-22/getPdf.ashx',
+  });
+
+  assert.equal(offer.title, 'S-BUDGET Caff\u00e8 Crema');
+  assert.equal(offer.categoryPrimary, 'Getraenke');
+  assert.equal(offer.categorySecondary, 'Kaffee & Tee');
+  assert.equal(offer.normalizedUnitPrice.unit, 'kg');
+  assert.ok(Math.abs(offer.normalizedUnitPrice.amount - 10.98) < 0.01);
+  assert.equal(offer.normalizedUnitPrice.comparable, true);
+  assert.equal(offer.conditionsText, '');
+});
+
+test('rejects price-reduced generic fragments without a safe product core', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 10,
+        text: [
+          'Preisgesenkt seit',
+          '5.5.2026',
+          'statt 5,99',
+          '-8%',
+          '5,49',
+          'Preisgesenkt seit',
+          '05.05.2026',
+          'versch. Sorten',
+          '500 g',
+          '5,49',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted.length, 0);
+  assert.equal(candidates.some((candidate) => candidate.title === '' && candidate.exclusionReason), true);
+  assert.equal(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'), true);
+});
+
+test('generic SPAR PDF extraction keeps unsafe fragment starts rejected', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 10,
+        text: [
+          'gratis',
+          '500 g',
+          '1,99',
+          'versch. Sorten',
+          '500 g',
+          '2,99',
+          'oder',
+          '500 g',
+          '3,99',
+          'immer billig',
+          '500 g',
+          '4,99',
+        ].join('\n'),
+      },
+    ],
+  });
+
+  assert.equal(candidates.some((candidate) => !candidate.exclusionReason), false);
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'));
+});
+
 test('rejects generic PDF promotion fragments and cleans leading price/date artifacts', () => {
   const candidates = extractSparPdfCandidates({
     sourceRetailerFormat: 'spar',
