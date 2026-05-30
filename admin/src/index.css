@@ -3726,7 +3726,7 @@ textarea:focus {
   .search-landing-hero__usp .subtitle {
     font-size: 0.98rem;
     line-height: 1.42;
-    max-width: min(100%, 21rem);
+    max-width: min(100%, 21rem) !important;
   }
 
   .hero-trust-row {
