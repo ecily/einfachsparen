@@ -3582,6 +3582,127 @@ test('wurst intent demotes bakery cheese side hits behind real sausage products'
   );
 });
 
+test('wurst intent demotes cheese, prepared speck and snack side hits behind sausage products', () => {
+  const cheeseAufschnitt = offer({
+    title: 'Schaerdinger 3-Kaese Aufschnitt',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Kaese',
+    comparisonGroup: 'schaerdinger-3-kaese-aufschnitt::0.15-kg',
+  });
+  const speckSoup = offer({
+    title: 'Knorr Kartoffel-Lauchsuppe mit Speck',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'knorr-kartoffel-lauchsuppe-speck::1-stk',
+  });
+  const baconBalls = offer({
+    title: 'Bacon Balls Gouda',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Kaese',
+    comparisonGroup: 'bacon-balls-gouda::1-stk',
+  });
+  const salamiWrap = offer({
+    title: 'Knabber Nossi Salami Wrap',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Brot & Gebaeck',
+    comparisonGroup: 'knabber-nossi-salami-wrap::0.035-kg',
+  });
+  const extrawurst = offer({
+    title: 'TANN Extrawurst',
+    brand: 'TANN',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'tann-extrawurst::0.5-kg',
+  });
+  const frankfurter = offer({
+    title: 'Frankfurter Wuerstel',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'frankfurter-wuerstel::0.3-kg',
+  });
+  const cabanossi = offer({
+    title: 'Cabanossi Classic mit Kaese',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Kaese',
+    comparisonGroup: 'cabanossi-classic-kaese::0.3-kg',
+  });
+  const salami = offer({
+    title: 'Frische Salami od. Kantwurst',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'frische-salami-kantwurst::0.1-kg',
+  });
+  const sortedTitles = applyQueryMatch([
+    cheeseAufschnitt,
+    speckSoup,
+    baconBalls,
+    salamiWrap,
+    extrawurst,
+    frankfurter,
+    cabanossi,
+    salami,
+  ], 'wurst').map((item) => item.title);
+  const rankOf = (title) => {
+    const index = sortedTitles.indexOf(title);
+    return index === -1 ? Number.POSITIVE_INFINITY : index;
+  };
+
+  assert.deepEqual(new Set(sortedTitles.slice(0, 4)), new Set([
+    'Cabanossi Classic mit Kaese',
+    'Frische Salami od. Kantwurst',
+    'Frankfurter Wuerstel',
+    'TANN Extrawurst',
+  ]));
+  for (const sideHit of [
+    'Bacon Balls Gouda',
+    'Knabber Nossi Salami Wrap',
+    'Knorr Kartoffel-Lauchsuppe mit Speck',
+    'Schaerdinger 3-Kaese Aufschnitt',
+  ]) {
+    assert.ok(rankOf(sideHit) > 3, sideHit);
+  }
+});
+
+test('specific side-hit queries remain findable after wurst demotion', () => {
+  const cheeseAufschnitt = offer({
+    title: 'Schaerdinger 3-Kaese Aufschnitt',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Kaese',
+    comparisonGroup: 'schaerdinger-3-kaese-aufschnitt::0.15-kg',
+  });
+  const speckSoup = offer({
+    title: 'Knorr Kartoffel-Lauchsuppe mit Speck',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Saucen, Oele & Gewuerze',
+    comparisonGroup: 'knorr-kartoffel-lauchsuppe-speck::1-stk',
+  });
+  const cabanossi = offer({
+    title: 'Cabanossi Classic mit Kaese',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Kaese',
+    comparisonGroup: 'cabanossi-classic-kaese::0.3-kg',
+  });
+  const salami = offer({
+    title: 'Frische Salami od. Kantwurst',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'frische-salami-kantwurst::0.1-kg',
+  });
+  const frankfurter = offer({
+    title: 'Frankfurter Wuerstel',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch, Wurst & Fisch',
+    comparisonGroup: 'frankfurter-wuerstel::0.3-kg',
+  });
+
+  assert.equal(applyQueryMatch([salami, cabanossi], 'cabanossi')[0].title, 'Cabanossi Classic mit Kaese');
+  assert.equal(applyQueryMatch([salami, speckSoup], 'speck')[0].title, 'Knorr Kartoffel-Lauchsuppe mit Speck');
+  assert.equal(applyQueryMatch([salami, speckSoup], 'knorr')[0].title, 'Knorr Kartoffel-Lauchsuppe mit Speck');
+  assert.equal(applyQueryMatch([salami, cheeseAufschnitt], 'kaese aufschnitt')[0].title, 'Schaerdinger 3-Kaese Aufschnitt');
+  assert.equal(applyQueryMatch([cheeseAufschnitt, salami], 'salami')[0].title, 'Frische Salami od. Kantwurst');
+  assert.equal(applyQueryMatch([cheeseAufschnitt, frankfurter], 'frankfurter')[0].title, 'Frankfurter Wuerstel');
+});
+
 test('tee search ranks real tea products ahead of coffee category side hits', () => {
   const offers = [
     offer({
@@ -5812,7 +5933,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

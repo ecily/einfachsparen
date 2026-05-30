@@ -327,3 +327,18 @@ test('keeps unreadable offers uncategorized instead of forcing Sonstiges', () =>
   assert.equal(decision.secondaryCategory, '');
   assert.equal(decision.needsReview, true);
 });
+
+test('classifies sausage products with cheese variants as meat and sausage', () => {
+  for (const title of [
+    'Ich bin Oesterreich Cabanossi Classic, Kaese od. Chili',
+    'Landhof Cabanossi original, Cabanossi mit Kaese oder Putencabanossi',
+    'TANN Extrawurst 500 g',
+    'Tirol Kantwurst oder Polnische Spezial',
+    'Wiener Wuerstel 300 g',
+  ]) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Lebensmittel', title);
+    assert.equal(decision.secondaryCategory, 'Fleisch, Wurst & Fisch', title);
+  }
+});

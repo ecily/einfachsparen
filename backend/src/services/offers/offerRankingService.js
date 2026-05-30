@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v2-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
@@ -2513,38 +2513,123 @@ function scoreRiceSearchIntent({ titleTokens, categoryTokens, comparisonTokens, 
   return adjustment;
 }
 
+const CORE_WURST_INTENT_TOKENS = [
+  'bratwurst',
+  'cabanossi',
+  'extrawurst',
+  'frankfurter',
+  'grillwurst',
+  'haussalami',
+  'hauswurst',
+  'kabanossi',
+  'kaesekrainer',
+  'kasekrainer',
+  'kaesewurst',
+  'kantwurst',
+  'krakauer',
+  'leberwurst',
+  'mortadella',
+  'polnische',
+  'presswurst',
+  'putensalami',
+  'salami',
+  'streichwurst',
+  'tann',
+  'wiener',
+  'wuerstel',
+  'wuerstl',
+  'wurst',
+  'wurstl',
+];
+
+const WEAK_WURST_INTENT_TOKENS = [
+  'aufschnitt',
+  'bacon',
+  'bierschinken',
+  'leberkaese',
+  'leberkase',
+  'schinken',
+  'speck',
+];
+
+const WURST_CHEESE_SIDE_TOKENS = [
+  'cheese',
+  'gouda',
+  'kaese',
+  'kase',
+  'mozzarella',
+  'schaerdinger',
+  'schardinger',
+];
+
+const WURST_PREPARED_SIDE_TOKENS = [
+  'baguette',
+  'balls',
+  'broetchen',
+  'brotchen',
+  'buttercroissant',
+  'chips',
+  'croissant',
+  'fertiggericht',
+  'kartoffel',
+  'kartoffel-lauch',
+  'knorr',
+  'lauch',
+  'linsen',
+  'pizza',
+  'pizzakaese',
+  'pizzakase',
+  'snack',
+  'suppe',
+  'wrap',
+];
+
 function getGenericWurstOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
   const productTokens = titleTokens.concat(comparisonTokens);
   const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
-  const productWurst = hasAnyTokenFamily(productTokens, WURST_PRODUCT_TOKENS);
+  const coreProductWurst = hasAnyTokenFamily(productTokens, CORE_WURST_INTENT_TOKENS);
+  const weakProductWurst = hasAnyTokenFamily(productTokens, WEAK_WURST_INTENT_TOKENS);
+  const productWurst = coreProductWurst || weakProductWurst;
   const strongWurstContext = hasAnyTokenFamily(productTokens.concat(aggregateTokens), [
-    'aufschnitt',
     'bratwurst',
     'cabanossi',
     'extrawurst',
     'frankfurter',
+    'kabanossi',
     'kantwurst',
     'polnische',
     'salami',
     'tann',
+    'wiener',
+    'wuerstel',
+    'wuerstl',
     'wurst',
   ]);
   const categoryWurst = hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), ['wurst', 'aufschnitt']);
-  const convenienceSide = hasAnyTokenFamily(productTokens, [
-    'baguette',
-    'broetchen',
-    'brotchen',
-    'buttercroissant',
-    'croissant',
-    'fertiggericht',
-    'kaese',
-    'kase',
-    'linsen',
-    'pizza',
-    'pizzakaese',
-    'pizzakase',
-    'suppe',
-    'wrap',
+  const cheeseSide = hasAnyTokenFamily(productTokens, WURST_CHEESE_SIDE_TOKENS);
+  const preparedSide = hasAnyTokenFamily(productTokens, WURST_PREPARED_SIDE_TOKENS);
+  const cheeseOnlyAufschnitt = hasAnyTokenFamily(productTokens, ['aufschnitt']) &&
+    cheeseSide &&
+    !coreProductWurst &&
+    !hasAnyTokenFamily(productTokens, ['bacon', 'bierschinken', 'schinken', 'speck']);
+  const speckPreparedSide = hasAnyTokenFamily(productTokens, ['bacon', 'speck']) && preparedSide;
+  const preparedSausageSide = preparedSide && !hasAnyTokenFamily(productTokens, [
+    'bratwurst',
+    'cabanossi',
+    'extrawurst',
+    'frankfurter',
+    'kabanossi',
+    'kaesekrainer',
+    'kasekrainer',
+    'kantwurst',
+    'krakauer',
+    'leberwurst',
+    'polnische',
+    'presswurst',
+    'wiener',
+    'wuerstel',
+    'wuerstl',
+    'wurst',
   ]);
   const fishSide = hasAnyTokenFamily(productTokens, [
     'fisch',
@@ -2574,7 +2659,10 @@ function getGenericWurstOfferIntent({ titleTokens, categoryTokens, comparisonTok
   ]);
   const categoryOnly = !productWurst && categoryWurst;
   const clearSideHit = (!productWurst && (fishSide || meatCutSide)) ||
-    (convenienceSide && !strongWurstContext);
+    cheeseOnlyAufschnitt ||
+    speckPreparedSide ||
+    preparedSausageSide ||
+    (preparedSide && !strongWurstContext);
   const noProductSignal = !productWurst &&
     !hasAnyTokenFamily(allTokens, WURST_PRODUCT_TOKENS) &&
     categoryWurst;
@@ -2582,7 +2670,9 @@ function getGenericWurstOfferIntent({ titleTokens, categoryTokens, comparisonTok
   return {
     categoryOnly,
     clearSideHit,
+    coreProductWurst,
     productWurst,
+    weakProductWurst,
     weakCategoryOnly: noProductSignal && !clearSideHit,
   };
 }
@@ -2591,7 +2681,9 @@ function scoreWurstSearchIntent({ titleTokens, categoryTokens, comparisonTokens,
   const {
     categoryOnly,
     clearSideHit,
+    coreProductWurst,
     productWurst,
+    weakProductWurst,
     weakCategoryOnly,
   } = getGenericWurstOfferIntent({
     titleTokens,
@@ -2601,12 +2693,14 @@ function scoreWurstSearchIntent({ titleTokens, categoryTokens, comparisonTokens,
   });
   let adjustment = 0;
 
-  if (productWurst) {
-    adjustment += 5200;
+  if (coreProductWurst) {
+    adjustment += 5600;
+  } else if (weakProductWurst || productWurst) {
+    adjustment += 2600;
   }
 
   if (clearSideHit) {
-    adjustment -= 6200;
+    adjustment -= 7200;
   } else if (categoryOnly) {
     adjustment -= weakCategoryOnly ? 3600 : 2400;
   }

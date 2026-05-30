@@ -113,7 +113,7 @@ test('expands nudeln query only to direct pasta product tokens', () => {
 test('expands wurst query to direct sausage and cold-cut product tokens only', () => {
   const wurstTokens = buildQuerySearchTokens('wurst');
 
-  for (const token of ['wurst', 'salami', 'frankfurter', 'wuerstel', 'aufschnitt', 'schinken', 'speck']) {
+  for (const token of ['wurst', 'salami', 'frankfurter', 'wuerstel', 'aufschnitt', 'schinken', 'speck', 'kabanossi', 'wiener']) {
     assert.equal(wurstTokens.includes(token), true);
   }
 
