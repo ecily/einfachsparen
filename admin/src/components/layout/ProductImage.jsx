@@ -17,7 +17,7 @@ export function ProductImage({ offerId, src, alt, compact = false }) {
         aria-label="Kein Produktbild verfuegbar"
       >
         <span className="product-image__placeholder-icon" aria-hidden="true" />
-        <span>Bild folgt</span>
+        <span>Kein Bild</span>
       </div>
     )
   }

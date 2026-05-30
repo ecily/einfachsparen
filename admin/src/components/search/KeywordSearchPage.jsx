@@ -757,7 +757,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             ) : needsMarketSelection ? null : (
               <div className="empty-state">
                 <h3>Aktuell kein passendes Angebot gefunden.</h3>
-                <p>Bitte prüfe später erneut oder suche allgemeiner.</p>
+                <p>Wir zeigen lieber keine Treffer als unsichere Angebote. Suche allgemeiner oder prüfe es später erneut.</p>
                 <button type="button" className="primary-action-button" onClick={() => setQueryInput(submittedQuery)}>
                   Suche ändern
                 </button>
