@@ -3826,11 +3826,92 @@ test('tee context does not regress kaffee or eistee queries', () => {
 
   assert.deepEqual(applyQueryMatch([tea, coffee], 'kaffee').map((item) => item.title), [
     'Lavazza Kaffee Bohnen',
-    'Ceylon-Tee',
   ]);
   assert.deepEqual(applyQueryMatch([coffee, icedTea], 'eistee').map((item) => item.title), [
     'Eistee Gruener-Tee Zitrone',
   ]);
+});
+
+test('kaffee search excludes tea and category-only coffee-tea side hits without hiding tea searches', () => {
+  const coffee = offer({
+    title: 'Lavazza Kaffee Bohnen',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'lavazza-kaffee-bohnen::1-kg',
+  });
+  const icedTea = offer({
+    title: 'S-BUDGET Eistee Pfirsich SPAR',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 's-budget-eistee-pfirsich::1.5-l',
+    searchText: 'spar eistee tee getraenke',
+  });
+  const categoryOnly = offer({
+    title: 'Sortiment Angebot SPAR',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'sortiment-angebot::1-stueck',
+    searchText: 'spar kaffee tee getraenke',
+  });
+
+  assert.deepEqual(applyQueryMatch([icedTea, categoryOnly, coffee], 'kaffee').map((item) => item.title), [
+    'Lavazza Kaffee Bohnen',
+  ]);
+  assert.deepEqual(applyQueryMatch([categoryOnly], 'spar kaffee').map((item) => item.title), []);
+  assert.deepEqual(applyQueryMatch([icedTea], 'spar kaffee').map((item) => item.title), []);
+  assert.equal(applyQueryMatch([coffee, icedTea], 'tee')[0].title, 'S-BUDGET Eistee Pfirsich SPAR');
+  assert.equal(applyQueryMatch([coffee, icedTea], 'eistee')[0].title, 'S-BUDGET Eistee Pfirsich SPAR');
+});
+
+test('kaffee searches keep specific coffee products findable and reject cosmetic espresso side hits', () => {
+  const espresso = offer({
+    title: 'Lavazza Espresso Italiano Classico',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'lavazza-espresso-italiano::0.25-kg',
+  });
+  const capsules = offer({
+    title: 'Nespresso Kaffee Kapseln',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'nespresso-kaffee-kapseln::10-stueck',
+  });
+  const caffeCrema = offer({
+    title: 'Jacobs Caffe Crema Ganze Bohnen',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'jacobs-caffe-crema-bohnen::1-kg',
+  });
+  const jacobs = offer({
+    title: 'Jacobs Auslese Klassisch Pads',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'jacobs-auslese-pads::0.25-kg',
+  });
+  const juliusMeinl = offer({
+    title: 'Julius Meinl Praesident gemahlen',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'julius-meinl-praesident::0.5-kg',
+  });
+  const eyeliner = offer({
+    title: 'Gel Eyeliner Cozy Chic Espresso',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Kosmetik & Make-up',
+    comparisonGroup: 'gel-eyeliner-espresso::1-stueck',
+  });
+
+  assert.equal(applyQueryMatch([eyeliner, espresso], 'espresso')[0].title, 'Lavazza Espresso Italiano Classico');
+  assert.equal(applyQueryMatch([eyeliner], 'espresso').length, 0);
+  assert.equal(applyQueryMatch([eyeliner, capsules], 'kaffeekapseln')[0].title, 'Nespresso Kaffee Kapseln');
+  assert.equal(applyQueryMatch([eyeliner, caffeCrema], 'caffe crema')[0].title, 'Jacobs Caffe Crema Ganze Bohnen');
+  assert.equal(applyQueryMatch([eyeliner, jacobs], 'jacobs')[0].title, 'Jacobs Auslese Klassisch Pads');
+  assert.equal(applyQueryMatch([eyeliner, espresso], 'lavazza')[0].title, 'Lavazza Espresso Italiano Classico');
+  assert.equal(applyQueryMatch([eyeliner, juliusMeinl], 'julius meinl')[0].title, 'Julius Meinl Praesident gemahlen');
 });
 
 test('coffee searches keep Teebutter from winning through coffee tea category signals', () => {
@@ -5933,7 +6014,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

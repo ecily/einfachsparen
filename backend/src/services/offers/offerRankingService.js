@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
@@ -160,6 +160,70 @@ const COFFEE_TEA_PRODUCT_TERMS = [
   'fruchtetee',
   'kamillentee',
   'pfefferminztee',
+];
+
+const KAFFEE_PRODUCT_TOKENS = [
+  'barista',
+  'bohne',
+  'bohnen',
+  'cafe',
+  'caffe',
+  'caffissimo',
+  'cafissimo',
+  'cappuccino',
+  'crema',
+  'eduscho',
+  'espresso',
+  'filterkaffee',
+  'gemahlen',
+  'hochlandkaffee',
+  'jacobs',
+  'kaffee',
+  'kaffeekapsel',
+  'kaffeekapseln',
+  'kapsel',
+  'kapseln',
+  'lavazza',
+  'lungo',
+  'meinl',
+  'melange',
+  'nescafe',
+  'nespresso',
+  'nespressokompatible',
+  'pads',
+  'praesident',
+  'prasident',
+  'segafredo',
+  'tassimo',
+  'tchibo',
+];
+
+const KAFFEE_TEA_SIDE_TOKENS = [
+  'ceylon',
+  'eistee',
+  'fruechtetee',
+  'fruchtetee',
+  'gruentee',
+  'gruenentee',
+  'gruntee',
+  'kamillentee',
+  'kraeutertee',
+  'krautertee',
+  'pfefferminztee',
+  'schwarztee',
+  'tee',
+  'teebeutel',
+  'teekanne',
+];
+
+const KAFFEE_COSMETIC_SIDE_TOKENS = [
+  'eyeliner',
+  'gel',
+  'kosmetik',
+  'make',
+  'mascara',
+  'parfum',
+  'stift',
 ];
 
 function getRankingCacheCapabilities() {
@@ -1077,13 +1141,19 @@ const QUERY_CONTEXTS = [
     severeWeakContexts: ['teebutter', 'kidneybohnen'],
   },
   {
-    tokens: ['kaffee', 'cafe', 'caffe'],
-    preferred: ['kaffee', 'tee', 'getraenke', 'getranke', 'fruehstueck', 'fruhstuck', 'caffe'],
-    strongPreferred: ['kaffee', 'tee', 'caffe'],
-    productIntent: ['kaffee', 'cafe', 'caffe', 'espresso', 'bohnen', 'bohne', 'gemahlen', 'kapseln', 'kapsel', 'pads', 'crema'],
-    exactProductIntent: ['espresso', 'bohnen', 'bohne', 'gemahlen', 'kapseln', 'kapsel', 'pads', 'crema'],
-    productContext: ['kaffee', 'tee', 'fruehstueck', 'fruhstuck'],
+    key: 'kaffee',
+    tokens: ['kaffee', 'cafe', 'caffe', 'espresso', 'cappuccino', 'kaffeekapsel', 'kaffeekapseln'],
+    anyTokenSequences: [
+      ['caffe', 'crema'],
+      ['kaffee', 'kapseln'],
+    ],
+    preferred: ['kaffee', 'cafe', 'caffe', 'espresso', 'cappuccino', 'bohnen', 'gemahlen', 'kapseln', 'getraenke', 'getranke', 'fruehstueck', 'fruhstuck'],
+    strongPreferred: ['kaffee', 'cafe', 'caffe', 'espresso', 'cappuccino', 'bohnen', 'gemahlen', 'kapseln'],
+    productIntent: KAFFEE_PRODUCT_TOKENS,
+    exactProductIntent: KAFFEE_PRODUCT_TOKENS.filter((token) => !['cafe', 'caffe', 'kaffee'].includes(token)),
+    productContext: ['kaffee', 'cafe', 'caffe', 'fruehstueck', 'fruhstuck'],
     weakContexts: ['eiskaffee', 'drink', 'pflanze', 'zierpflanze', 'duftgeranie', 'tomate', 'erdbeere', 'banane'],
+    severeWeakContexts: ['eistee', 'teebeutel', 'teekanne', 'schwarztee', 'kraeutertee', 'krautertee', 'fruechtetee', 'fruchtetee', 'kamillentee', 'pfefferminztee', 'eyeliner', 'mascara', 'parfum'],
   },
   {
     key: 'milch',
@@ -3042,6 +3112,65 @@ function scoreConditionQuerySignal(offer, query) {
   return score;
 }
 
+function getKaffeeOfferIntent({ titleTokens, comparisonTokens, aggregateTokens }) {
+  const productTokens = titleTokens.concat(comparisonTokens);
+  const coffeeProduct = hasAnyTokenMatch(productTokens, KAFFEE_PRODUCT_TOKENS, {
+    exact: true,
+    suffix: true,
+  });
+  const teaSide = hasAnyTokenMatch(productTokens, KAFFEE_TEA_SIDE_TOKENS, {
+    exact: true,
+    suffix: true,
+  });
+  const cosmeticSide = hasAnyTokenMatch(productTokens.concat(aggregateTokens), KAFFEE_COSMETIC_SIDE_TOKENS, {
+    exact: true,
+    suffix: false,
+  });
+
+  return {
+    coffeeProduct,
+    cosmeticSide,
+    teaSide,
+  };
+}
+
+function isUnsupportedKaffeeSideHit({ titleTokens, comparisonTokens, aggregateTokens }) {
+  const {
+    coffeeProduct,
+    cosmeticSide,
+    teaSide,
+  } = getKaffeeOfferIntent({ titleTokens, comparisonTokens, aggregateTokens });
+
+  return cosmeticSide || !coffeeProduct;
+}
+
+function scoreKaffeeSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
+  const { coffeeProduct, cosmeticSide, teaSide } = getKaffeeOfferIntent({
+    titleTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+  const categoryCoffeeOnly = !coffeeProduct && hasAnyTokenMatch(categoryTokens.concat(comparisonTokens), ['kaffee'], {
+    exact: true,
+    suffix: false,
+  });
+  let adjustment = 0;
+
+  if (coffeeProduct) {
+    adjustment += 4800;
+  }
+
+  if (cosmeticSide || (teaSide && !coffeeProduct)) {
+    adjustment -= 7000;
+  } else if (categoryCoffeeOnly) {
+    adjustment -= 3000;
+  } else if (teaSide) {
+    adjustment -= 1800;
+  }
+
+  return adjustment;
+}
+
 function scoreOfferAgainstQuery(offer, query) {
   const productScoringQuery = getProductScoringQuery(query);
   const queryTokens = expandScoringQueryTokens(tokenizeSearchText(productScoringQuery));
@@ -3074,9 +3203,19 @@ function scoreOfferAgainstQuery(offer, query) {
     hasAnyTokenMatch(productTokens, ['tee'], { exact: true, suffix: false });
   const coffeeOrTeaQuery = queryTokens.some((token) => ['kaffee', 'cafe', 'caffe', 'tee'].includes(token));
   const butterQuery = queryTokens.some((token) => ['butter', 'teebutter'].includes(token));
+  const kaffeeIntentQuery = context?.key === 'kaffee' && queryTokens.some((token) =>
+    ['cafe', 'caffe', 'cappuccino', 'espresso', 'kaffee', 'kaffeekapsel', 'kaffeekapseln'].includes(token)
+  );
   let score = 0;
 
   if (coffeeOrTeaQuery && !butterQuery && hasTeebutterProduct && !hasCoffeeOrTeaProduct) {
+    return 0;
+  }
+
+  if (
+    kaffeeIntentQuery &&
+    isUnsupportedKaffeeSideHit({ titleTokens, comparisonTokens, aggregateTokens })
+  ) {
     return 0;
   }
 
@@ -3360,6 +3499,15 @@ function scoreOfferAgainstQuery(offer, query) {
 
     if (genericRiceQuery) {
       score += scoreRiceSearchIntent({
+        titleTokens,
+        categoryTokens,
+        comparisonTokens,
+        aggregateTokens,
+      });
+    }
+
+    if (kaffeeIntentQuery) {
+      score += scoreKaffeeSearchIntent({
         titleTokens,
         categoryTokens,
         comparisonTokens,

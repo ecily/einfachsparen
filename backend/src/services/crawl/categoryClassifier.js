@@ -153,6 +153,11 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Pasta, Reis & Konserven',
   },
   {
+    patterns: [/\b(eyeliner|mascara|kajal|lipliner|lippenstift)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Kosmetik & Make-up',
+  },
+  {
     patterns: [/\b(cabanossi|kabanossi|extrawurst|kantwurst|wiener\s+(?:wuerstel|wuerstl|wurst)|wuerstel|wuerstl)\b/],
     main: 'Lebensmittel',
     sub: 'Fleisch, Wurst & Fisch',

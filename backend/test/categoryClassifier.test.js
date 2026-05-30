@@ -172,6 +172,15 @@ test('classifies perfume and fragrance offers as drogerie cosmetics, not wine', 
   }
 });
 
+test('classifies espresso cosmetic color names as cosmetics instead of coffee', () => {
+  const decision = determineCategoryDecision({
+    title: 'Gel Eyeliner Cozy & Chic 020 Espresso, 3 g',
+  });
+
+  assert.equal(decision.primaryCategory, 'Drogerie / Hygiene');
+  assert.equal(decision.secondaryCategory, 'Kosmetik & Make-up');
+});
+
 test('does not classify generic non-fragrance gift sets as cosmetics', () => {
   const cases = [
     'Bottled Geschenkset',

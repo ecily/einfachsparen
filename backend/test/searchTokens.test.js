@@ -17,6 +17,8 @@ test('normalizes coffee accents and conservative coffee synonyms', () => {
   assert.equal(normalizeSearchTokenText('Caf\u00e9 Cr\u00e8me'), 'cafe creme');
   assert.deepEqual(new Set(buildQuerySearchTokens('Caf\u00e9')), new Set(['cafe', 'caffe', 'kaffee']));
   assert.deepEqual(new Set(buildQuerySearchTokens('Kaffee')), new Set(['cafe', 'caffe', 'kaffee']));
+  assert.equal(buildQuerySearchTokens('Kaffeekapseln').includes('kaffee'), true);
+  assert.equal(buildQuerySearchTokens('Kaffeekapseln').includes('kapseln'), true);
 });
 
 test('normalizes kaese and oel variants conservatively', () => {

@@ -154,6 +154,8 @@ const SYNONYMS = new Map([
   ['cafe', ['kaffee', 'caffe']],
   ['caffe', ['kaffee', 'cafe']],
   ['kaffee', ['cafe', 'caffe']],
+  ['kaffeekapsel', ['kaffee', 'kapsel']],
+  ['kaffeekapseln', ['kaffee', 'kapseln', 'kaffeekapsel']],
   ['haaroel', ['haarol']],
   ['haarol', ['haaroel']],
   ['katzenstreu', ['klumpstreu']],
