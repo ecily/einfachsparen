@@ -203,10 +203,11 @@ function SearchLandingHero() {
               maxWidth: '46rem',
             }}
           >
-            Nicht blättern. Finden. <span className="hero-headline-accent">Einfach sparen.</span>
+            Nicht blättern. Finden. <span className="hero-headline-accent">Was sich gerade lohnt.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
-            Suche Supermarkt- und Drogerie-Angebote in Österreich und nutze kaufklug für deinen Einkauf.
+            Finde aktuelle Angebote von Supermärkten und Drogerien in Österreich – spare Zeit beim Suchen und Geld beim
+            Einkaufen.
           </p>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (

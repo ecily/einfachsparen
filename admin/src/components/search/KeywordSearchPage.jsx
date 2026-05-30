@@ -507,7 +507,6 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
       <section className="panel keyword-search-hero">
         <div className="keyword-search-hero__copy">
           <h1>Wonach suchst du heute?</h1>
-          <p className="subtitle">Suche nach Produkt, Marke oder Kategorie, zum Beispiel Kaffee, Milka oder Waschmittel.</p>
         </div>
 
         <form className="keyword-search-form" onSubmit={handleSubmit}>
@@ -520,7 +519,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                 id="keyword-search-input"
                 type="search"
                 value={queryInput}
-                placeholder="Produkt oder Marke suchen"
+                placeholder="Zum Beispiel Kaffee, Milka oder Waschmittel ..."
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
               />
