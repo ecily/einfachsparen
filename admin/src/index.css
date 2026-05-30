@@ -3724,8 +3724,18 @@ textarea:focus {
   }
 
   .search-landing-hero__usp .subtitle {
-    font-size: 1rem;
+    font-size: 0.98rem;
     line-height: 1.42;
+  }
+
+  .hero-trust-row {
+    gap: 0.34rem;
+  }
+
+  .hero-trust-row span {
+    min-height: 1.76rem;
+    padding: 0.34rem 0.54rem;
+    font-size: 0.78rem;
   }
 
   .search-landing-hero__mobile {
