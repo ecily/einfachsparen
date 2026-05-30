@@ -19,6 +19,16 @@ function roundMoney(value) {
   return Number(value.toFixed(2));
 }
 
+function toCents(amount) {
+  const numericAmount = Number(amount);
+
+  return Number.isFinite(numericAmount) ? Math.round(numericAmount * 100) : 0;
+}
+
+function fromCents(cents) {
+  return roundMoney(cents / 100);
+}
+
 function firstNumericAmount(values = []) {
   for (const value of values) {
     const numeric = parseNumericAmount(value);
@@ -352,6 +362,160 @@ function extractPromotionRequirement({ title = '', conditionsText = '', rawFacts
   };
 }
 
+function extractPlusFreeRequirementFromText(offer = {}) {
+  const rawText = `${offer?.title || ''} ${offer?.conditionsText || ''}`;
+
+  for (const plusMatch of rawText.matchAll(/(?=\b(\d+)\s*\+\s*(\d+)\b)/gi)) {
+    if (isSunProtectionPlusContext(rawText, plusMatch.index || 0)) {
+      continue;
+    }
+
+    const buyQuantity = Number(plusMatch[1]);
+    const freeQuantity = Number(plusMatch[2]);
+
+    if (
+      Number.isFinite(buyQuantity)
+      && Number.isFinite(freeQuantity)
+      && buyQuantity > 0
+      && freeQuantity > 0
+    ) {
+      return {
+        requiredQuantity: buyQuantity + freeQuantity,
+        payableQuantity: buyQuantity,
+        mechanic: 'x-plus-y',
+      };
+    }
+  }
+
+  return null;
+}
+
+function isBlockOrMultibuyRequirement(offer = {}, requirement = {}) {
+  const text = normalizeTitleForMatch([
+    offer?.title,
+    offer?.conditionsText,
+    offer?.conditionLabel,
+    offer?.discountMechanic,
+    offer?.discountType,
+    offer?.effectiveDiscountType,
+    offer?.benefitType,
+    offer?.rawFacts,
+  ].join(' '));
+
+  return (
+    Boolean(offer?.isMultiBuy)
+    || ['multi-buy', 'x-plus-y', 'x-for-y', 'threshold'].includes(requirement.mechanic)
+    || Number(requirement.requiredQuantity || 1) > 1
+    || /\b\d+\s*\+\s*\d+\b/.test(text)
+    || /\b\d+\s*(?:fur|fuer)\s*\d+\b/.test(text)
+    || /\b(?:gratis|ab\s+\d+|bei\s+\d+)\b/.test(text)
+  );
+}
+
+function isUnsafeBlockReference({ offer = {}, reference = {}, priceCurrentAmount = null, requirement = {} } = {}) {
+  if (!reference?.allowsSavings || !(reference.amount > 0) || !(priceCurrentAmount > 0)) {
+    return false;
+  }
+
+  return isBlockOrMultibuyRequirement(offer, requirement) && reference.amount / priceCurrentAmount > 3;
+}
+
+function buildNoSavingsResult({ requirement = {}, reference = {}, isApproximate = false } = {}) {
+  return {
+    requiredQuantity: requirement.requiredQuantity,
+    payableQuantity: requirement.payableQuantity,
+    mechanic: requirement.mechanic,
+    referencePrice: reference,
+    savingsAmount: null,
+    savingsPercent: null,
+    savings: {
+      amount: null,
+      percent: null,
+      isApproximate,
+      basis: 'none',
+      label: 'Aktionspreis',
+    },
+    totalCurrentAmount: null,
+    totalReferenceAmount: null,
+  };
+}
+
+function buildUnsafeBlockReference(reference = {}) {
+  return {
+    ...reference,
+    amount: null,
+    type: 'none',
+    source: '',
+    confidence: 0,
+    isApproximate: false,
+    allowsSavings: false,
+    label: '',
+    unsafeReason: 'block-reference-price-not-unit-safe',
+  };
+}
+
+function computeDerivedPlusSavings({ offer = {}, priceCurrentAmount = null, reference = {}, requirement = {} } = {}) {
+  const plusRequirement = requirement.mechanic === 'x-plus-y'
+    ? requirement
+    : extractPlusFreeRequirementFromText(offer);
+  const effectiveRequirement = plusRequirement
+    ? {
+      ...plusRequirement,
+      requiredQuantity: Math.max(
+        Number(plusRequirement.requiredQuantity || 0),
+        Number(requirement.requiredQuantity || 0),
+      ),
+    }
+    : requirement;
+
+  if (
+    effectiveRequirement.mechanic !== 'x-plus-y'
+    || !(effectiveRequirement.requiredQuantity > 0)
+    || !(effectiveRequirement.payableQuantity > 0)
+    || effectiveRequirement.payableQuantity >= effectiveRequirement.requiredQuantity
+    || !(priceCurrentAmount > 0)
+  ) {
+    return null;
+  }
+
+  const requiredQuantity = Math.round(effectiveRequirement.requiredQuantity);
+  const payableQuantity = Math.round(effectiveRequirement.payableQuantity);
+  const freeQuantity = requiredQuantity - payableQuantity;
+  const currentUnitCents = toCents(priceCurrentAmount);
+  const inferredNormalUnitCents = Math.round((currentUnitCents * requiredQuantity) / payableQuantity);
+  const totalCurrentCents = currentUnitCents * requiredQuantity;
+  const totalReferenceCents = inferredNormalUnitCents * requiredQuantity;
+  const savingsCents = inferredNormalUnitCents * freeQuantity;
+
+  if (!(savingsCents > 0) || !(totalReferenceCents > totalCurrentCents)) {
+    return null;
+  }
+
+  const savingsAmount = fromCents(savingsCents);
+  const savingsPercent = roundMoney((savingsCents / totalReferenceCents) * 100);
+  const currency = offer?.priceCurrent?.currency || offer?.priceReference?.currency || 'EUR';
+  const safeReference = buildUnsafeBlockReference(reference);
+
+  return {
+    requiredQuantity,
+    payableQuantity,
+    mechanic: requirement.mechanic,
+    referencePrice: safeReference,
+    savingsAmount,
+    savingsPercent,
+    savings: {
+      amount: savingsAmount,
+      percent: savingsPercent,
+      isApproximate: true,
+      basis: 'derived_x_plus_y_block',
+      label: buildSavingsLabel({ savingsAmount, reference: { isApproximate: true }, currency }),
+    },
+    totalCurrentAmount: fromCents(totalCurrentCents),
+    totalReferenceAmount: fromCents(totalReferenceCents),
+    unsafeReferenceSuppressed: true,
+  };
+}
+
 function computeOfferSavings(offer = {}) {
   const priceCurrentAmount = parseNumericAmount(offer?.priceCurrent?.amount);
   const reference = resolveReferencePrice(offer);
@@ -364,24 +528,30 @@ function computeOfferSavings(offer = {}) {
 
   const referenceUnitPrice = reference.allowsSavings ? reference.amount : null;
 
-  if (!referenceUnitPrice || !priceCurrentAmount || referenceUnitPrice <= 0) {
+  if (isUnsafeBlockReference({ offer, reference, priceCurrentAmount, requirement })) {
+    const derivedSavings = computeDerivedPlusSavings({
+      offer,
+      priceCurrentAmount,
+      reference,
+      requirement,
+    });
+
+    if (derivedSavings) {
+      return derivedSavings;
+    }
+
     return {
-      requiredQuantity: requirement.requiredQuantity,
-      payableQuantity: requirement.payableQuantity,
-      mechanic: requirement.mechanic,
-      referencePrice: reference,
-      savingsAmount: null,
-      savingsPercent: null,
-      savings: {
-        amount: null,
-        percent: null,
+      ...buildNoSavingsResult({
+        requirement,
+        reference: buildUnsafeBlockReference(reference),
         isApproximate: false,
-        basis: 'none',
-        label: 'Aktionspreis',
-      },
-      totalCurrentAmount: null,
-      totalReferenceAmount: null,
+      }),
+      unsafeReferenceSuppressed: true,
     };
+  }
+
+  if (!referenceUnitPrice || !priceCurrentAmount || referenceUnitPrice <= 0) {
+    return buildNoSavingsResult({ requirement, reference, isApproximate: false });
   }
 
   let totalReferenceAmount = referenceUnitPrice * requirement.requiredQuantity;

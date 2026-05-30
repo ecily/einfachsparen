@@ -4006,16 +4006,13 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
   const safelyComparable = isOfferSafelyComparable(offer);
   const publicQuantityFields = sanitizePublicOfferQuantityFields(offer, { safelyComparable });
   const publicConditionsText = getPublicConditionsText(offer, options);
-  const computedPromotion = computeOfferSavings(offer);
+  const computedPromotion = computeOfferSavings({
+    ...offer,
+    conditionsText: publicConditionsText || offer?.conditionsText || '',
+  });
   const legacySavings = {
-    savingsAmount:
-      offer?.savingsAmount !== undefined && offer?.savingsAmount !== null
-        ? offer.savingsAmount
-        : computedPromotion?.savingsAmount ?? null,
-    savingsPercent:
-      offer?.savingsPercent !== undefined && offer?.savingsPercent !== null
-        ? offer.savingsPercent
-        : computedPromotion?.savingsPercent ?? null,
+    savingsAmount: computedPromotion?.savingsAmount ?? null,
+    savingsPercent: computedPromotion?.savingsPercent ?? null,
     requiredQuantity:
       offer?.minimumPurchaseQuantity !== undefined && offer?.minimumPurchaseQuantity !== null
         ? offer.minimumPurchaseQuantity

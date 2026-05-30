@@ -1589,6 +1589,70 @@ test('ranked offer keeps direct source savings even when cross-offer comparabili
   assert.equal(ranked.savingsAmount, 6);
 });
 
+test('ranked offer suppresses unsafe multibuy block reference savings in public response', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'puntigamer-unsafe-block-reference',
+    title: 'Puntigamer Maerzen',
+    retailerKey: 'billa',
+    retailerName: 'Billa',
+    priceCurrent: { amount: 0.77, currency: 'EUR' },
+    priceReference: { amount: 11.54, currency: 'EUR' },
+    priceReferenceSource: 'prospect',
+    priceReferenceConfidence: 0.95,
+    savingsDisplayType: 'prospect-saving',
+    savingsAmount: 258.48,
+    savingsPercent: 93.33,
+    conditionsText: 'Extrem Aktion; 12+12 gratis; bei 24 Dosen je 0,77 / 12+12 gratis / bei 24 Dosen',
+    minimumPurchaseQty: 24,
+    isMultiBuy: true,
+    effectiveDiscountType: 'multi-buy',
+    rawFacts: {
+      minimumPurchaseQuantity: 24,
+    },
+    quantityText: '0,5 Liter / 1 DOSE',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 0.15, unit: 'l', comparable: true, confidence: 0.86 },
+    quality: { comparisonSafe: true },
+  }), 0.15, 1.49);
+
+  assert.equal(ranked.minimumPurchaseQuantity, 24);
+  assert.equal(ranked.savingsAmount, 18.48);
+  assert.equal(ranked.savings.amount, 18.48);
+  assert.equal(ranked.savings.basis, 'derived_x_plus_y_block');
+  assert.equal(ranked.savings.isApproximate, true);
+  assert.equal(ranked.referencePrice.amount, null);
+  assert.equal(ranked.referencePrice.allowsSavings, false);
+  assert.equal(ranked.referencePrice.unsafeReason, 'block-reference-price-not-unit-safe');
+  assert.notEqual(ranked.savingsAmount, 258.48);
+});
+
+test('ranked offer drops unsafe threshold block savings without clear gratis mechanic', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'threshold-unsafe-block-reference',
+    title: 'Blockangebot ohne klare Gratis-Mechanik',
+    retailerKey: 'billa',
+    retailerName: 'Billa',
+    priceCurrent: { amount: 0.77, currency: 'EUR' },
+    priceReference: { amount: 11.54, currency: 'EUR' },
+    priceReferenceSource: 'prospect',
+    savingsDisplayType: 'prospect-saving',
+    savingsAmount: 258.48,
+    conditionsText: 'Gilt ab 24 Dosen / bei 24 Dosen je 0,77',
+    minimumPurchaseQty: 24,
+    isMultiBuy: true,
+    effectiveDiscountType: 'multi-buy',
+    normalizedUnitPrice: { amount: 0.15, unit: 'l', comparable: true, confidence: 0.86 },
+    quality: { comparisonSafe: true },
+  }), 0.15, 1.49);
+
+  assert.equal(ranked.savingsAmount, null);
+  assert.equal(ranked.savings.amount, null);
+  assert.equal(ranked.savings.label, 'Aktionspreis');
+  assert.equal(ranked.referencePrice.amount, null);
+  assert.equal(ranked.referencePrice.unsafeReason, 'block-reference-price-not-unit-safe');
+});
+
 test('ranked offer response carries category promotion fields without invented price savings', () => {
   const ranked = buildRankedOffer(offer({
     _id: 'spar-beer-category-promo',

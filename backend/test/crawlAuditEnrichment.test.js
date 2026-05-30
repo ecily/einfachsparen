@@ -124,6 +124,50 @@ test('computes exact savings from direct prospect reference prices', () => {
   assert.equal(savings.savings.basis, 'direct_source_reference_price');
 });
 
+test('computes conservative savings for clear x plus y block when source reference is not unit-safe', () => {
+  const savings = computeOfferSavings({
+    title: 'Puntigamer Maerzen',
+    priceCurrent: { amount: 0.77, currency: 'EUR' },
+    priceReference: { amount: 11.54, currency: 'EUR' },
+    priceReferenceSource: 'prospect',
+    savingsDisplayType: 'prospect-saving',
+    conditionsText: 'Extrem Aktion; 12+12 gratis; bei 24 Dosen je 0,77 / 12+12 gratis / bei 24 Dosen',
+    isMultiBuy: true,
+    effectiveDiscountType: 'multi-buy',
+    rawFacts: {
+      minimumPurchaseQuantity: 24,
+    },
+  });
+
+  assert.equal(savings.requiredQuantity, 24);
+  assert.equal(savings.payableQuantity, 12);
+  assert.equal(savings.referencePrice.amount, null);
+  assert.equal(savings.referencePrice.unsafeReason, 'block-reference-price-not-unit-safe');
+  assert.equal(savings.savingsAmount, 18.48);
+  assert.equal(savings.savingsPercent, 50);
+  assert.equal(savings.savings.isApproximate, true);
+  assert.equal(savings.savings.basis, 'derived_x_plus_y_block');
+  assert.notEqual(savings.savingsAmount, 258.48);
+});
+
+test('does not count unsafe block reference savings without clear plus-free mechanic', () => {
+  const savings = computeOfferSavings({
+    title: 'Blockangebot ohne klare Gratis-Mechanik',
+    priceCurrent: { amount: 0.77, currency: 'EUR' },
+    priceReference: { amount: 11.54, currency: 'EUR' },
+    priceReferenceSource: 'prospect',
+    savingsDisplayType: 'prospect-saving',
+    conditionsText: 'Gilt ab 24 Dosen / bei 24 Dosen je 0,77',
+    isMultiBuy: true,
+    effectiveDiscountType: 'multi-buy',
+  });
+
+  assert.equal(savings.referencePrice.amount, null);
+  assert.equal(savings.referencePrice.unsafeReason, 'block-reference-price-not-unit-safe');
+  assert.equal(savings.savingsAmount, null);
+  assert.equal(savings.savings.basis, 'none');
+});
+
 test('derives approximate reference price and savings from product-level percent discount', () => {
   const enriched = enrichOfferForStorage(activeComparableOffer({
     title: 'Dallmayr Prodomo 500 g',
