@@ -18,6 +18,7 @@ const {
 const { inferAustrianBeerCrateQuantityFields } = require('./offerQualityGuards');
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { normalizeImageUrl } = require('../images/imageUrl');
+const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidity');
 
 const PARSER_VERSION = 'spar-official-flyer-pdf-v2';
 const SOURCE_TYPE = 'spar-official-pdf';
@@ -227,6 +228,7 @@ function inferValidity(candidate, fallbackValidity = {}) {
       validFrom: fallbackValidity.validFrom || null,
       validTo: candidate.validToOverride,
       validityText: `${dateKey(fallbackValidity.validFrom)} - ${dateKey(candidate.validToOverride)}`,
+      validitySource: 'offer-level-pdf-condition',
       confidence: 0.86,
     };
   }
@@ -235,7 +237,8 @@ function inferValidity(candidate, fallbackValidity = {}) {
     validFrom: fallbackValidity.validFrom || null,
     validTo: fallbackValidity.validTo || null,
     validityText: [dateKey(fallbackValidity.validFrom), dateKey(fallbackValidity.validTo)].filter(Boolean).join(' - '),
-    confidence: fallbackValidity.validFrom && fallbackValidity.validTo ? 0.82 : 0,
+    validitySource: fallbackValidity.validitySource || '',
+    confidence: fallbackValidity.validityConfidence ?? (fallbackValidity.validFrom && fallbackValidity.validTo ? 0.82 : 0),
   };
 }
 
@@ -1090,10 +1093,20 @@ async function extractSparPdfReference({
       }
     }
 
+    const pdfValidity = extractOfficialFlyerValidityFromPages(pages, {
+      contextYear: validity.validTo?.getUTCFullYear?.() || validity.validFrom?.getUTCFullYear?.(),
+    });
+    const effectiveValidity = pdfValidity.validTo
+      ? {
+        ...pdfValidity,
+        confidence: pdfValidity.validityConfidence,
+      }
+      : validity;
+
     const candidates = extractSparPdfCandidates({
       pages,
       sourceRetailerFormat,
-      validity,
+      validity: effectiveValidity,
     });
 
     return {
@@ -1102,7 +1115,7 @@ async function extractSparPdfReference({
         bytes: pdfBuffer.length,
         pages: pages.length,
       },
-      validity,
+      validity: effectiveValidity,
       pages: pages.map((page) => ({
         page: page.pageNumber,
         charCount: page.charCount,
@@ -1350,6 +1363,7 @@ function normalizeSparPdfCandidateToOffer({
       pdfSha256,
       sourceMetadata,
       validityText: validity.validityText,
+      validitySource: validity.validitySource,
       validityConfidence: validity.confidence,
       parserVersion: PARSER_VERSION,
       extractionMethod: 'text-layer',
@@ -1387,6 +1401,8 @@ function buildValidityFromSource(source = {}) {
     validFrom: parseDate(source.crawlPolicy?.validFrom),
     validTo: parseDate(source.crawlPolicy?.validTo),
     validityText: source.crawlPolicy?.validityText || '',
+    validitySource: source.crawlPolicy?.validFrom || source.crawlPolicy?.validTo ? 'crawlPolicy' : '',
+    validityConfidence: source.crawlPolicy?.validFrom && source.crawlPolicy?.validTo ? 0.62 : 0,
   };
 }
 
