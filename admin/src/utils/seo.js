@@ -1,4 +1,9 @@
 import { CONTACT_EMAIL, SITE_URL } from '../config/constants'
+import {
+  getSeoLandingPageByPath,
+  getSeoLandingPageByRouteId,
+  getSeoLandingPageRouteId,
+} from '../config/seoLandingPages'
 
 const FAQ_ITEMS = [
   {
@@ -35,6 +40,17 @@ const BASE_DESCRIPTION =
   'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Suche nach Produkten und Marken, prüfe Aktionen und merke Angebote für deine Einkaufsliste.'
 
 export function getPageMeta(activePage) {
+  const seoLandingPage = getSeoLandingPageByRouteId(activePage)
+
+  if (seoLandingPage) {
+    return {
+      title: seoLandingPage.title,
+      description: seoLandingPage.description,
+      path: seoLandingPage.path,
+      robots: seoLandingPage.robots,
+    }
+  }
+
   const pages = {
     search: {
       title: SEO_TITLE,
@@ -156,11 +172,15 @@ export function updateSeoMetadata(activePage) {
   const isInternalPage = activePage === 'quality' || activePage === 'diagnostics'
   const isSharedListPage = activePage === 'shared-shopping-list'
 
-  document.title = TAB_TITLE
+  document.title = meta.title || TAB_TITLE
 
   setOrCreateMeta('name', 'title', meta.title)
   setOrCreateMeta('name', 'description', meta.description)
-  setOrCreateMeta('name', 'robots', isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
+  setOrCreateMeta(
+    'name',
+    'robots',
+    meta.robots || (isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
+  )
   setOrCreateMeta('name', 'theme-color', '#f7f1e6')
 
   setOrCreateMeta('property', 'og:type', 'website')
@@ -253,6 +273,9 @@ export function updateSeoMetadata(activePage) {
 }
 
 export function getInitialPageFromPathname(pathname) {
+  const seoLandingPage = getSeoLandingPageByPath(pathname)
+  if (seoLandingPage) return getSeoLandingPageRouteId(seoLandingPage.key)
+
   if (/^\/liste\/?$/.test(pathname)) return 'shopping-list'
   if (pathname.includes('/liste/')) return 'shared-shopping-list'
   if (pathname.includes('ecily_web')) return 'diagnostics'
@@ -275,6 +298,9 @@ export function getSharedListIdFromPathname(pathname) {
 }
 
 export function getPathForPage(nextPage) {
+  const seoLandingPage = getSeoLandingPageByRouteId(nextPage)
+  if (seoLandingPage) return seoLandingPage.path
+
   if (nextPage === 'quality') return '/quality'
   if (nextPage === 'diagnostics') return '/ecily_web'
   if (nextPage === 'product-search') return '/suche'

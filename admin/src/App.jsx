@@ -10,9 +10,11 @@ import {
 } from './api'
 import { SHOPPING_LIST_STORAGE_KEY } from './config/constants'
 import { CookieStorageNotice } from './components/layout/CookieStorageNotice'
+import { SeoFooterLinks } from './components/layout/SeoFooterLinks'
 import { StickyBottomLine } from './components/layout/StickyBottomLine'
 import { SearchPage } from './components/search/SearchPage'
 import { KeywordSearchPage } from './components/search/KeywordSearchPage'
+import { SeoOfferLandingPage } from './components/search/SeoOfferLandingPage'
 import { ShoppingListPage } from './components/shopping/ShoppingListPage'
 import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
@@ -38,6 +40,7 @@ import {
 import { areStringSetsEqual, flattenRankingOffers, getRankingPagination, mergePaginatedRankingResults } from './utils/offers'
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
+import { getSeoLandingPageByRouteId, SEO_LANDING_PAGE_PREFIX } from './config/seoLandingPages'
 import { getRetailerTheme } from './utils/retailerColors'
 import { shouldSeparateRetailerGroups } from './utils/retailers'
 
@@ -413,6 +416,13 @@ function App() {
     }
 
     if (activePage === 'product-search') {
+      return
+    }
+
+    if (activePage.startsWith(SEO_LANDING_PAGE_PREFIX)) {
+      trackAnalyticsEvent('landing_page_view', {
+        page: activePage,
+      })
       return
     }
 
@@ -1006,6 +1016,7 @@ function App() {
   const hasPendingChanges =
     !areStringSetsEqual(draftSelectedRetailers, appliedSelectedRetailers) ||
     !areStringSetsEqual(draftSelectedCategoryLabels, appliedSelectedCategoryLabels)
+  const activeSeoLandingPage = getSeoLandingPageByRouteId(activePage)
 
   useEffect(() => {
     if (
@@ -1144,6 +1155,13 @@ function App() {
           />
           <TrustAndFaqSection />
         </div>
+      ) : activeSeoLandingPage ? (
+        <SeoOfferLandingPage
+          page={activeSeoLandingPage}
+          categories={categories}
+          shoppingListIds={shoppingListIds}
+          onAddToShoppingList={handleAddToShoppingList}
+        />
       ) : activePage === 'shopping-list' ? (
         <ShoppingListPage
           shoppingListItems={shoppingListItems}
@@ -1192,6 +1210,7 @@ function App() {
         </>
       )}
 
+      <SeoFooterLinks />
       <CookieStorageNotice onNavigate={handleNavigate} />
       <StickyBottomLine onNavigate={handleNavigate} />
     </main>
