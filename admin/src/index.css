@@ -828,7 +828,9 @@ a {
 .hero-headline-accent {
   display: block;
   color: var(--kk-brand-primary);
+  overflow-wrap: normal;
   text-shadow: 0 0.06em 0 rgba(228, 240, 234, 0.72);
+  text-wrap: balance;
 }
 
 .hero-trust-line {
@@ -896,6 +898,11 @@ a {
   display: grid;
   gap: 0.86rem;
   min-width: 0;
+}
+
+.search-landing-hero__usp h1 {
+  overflow-wrap: normal;
+  text-wrap: balance;
 }
 
 .search-landing-hero__usp .subtitle {
