@@ -7,6 +7,7 @@ import { formatRetailerName } from '../../utils/retailers'
 import {
   buildShareSnapshot,
   getRetailerGroupSummary,
+  getShoppingListDisplaySavingsOverride,
   getShoppingListItemQuantity,
   getShoppingListItemId,
   getShoppingListMinimumQuantity,
@@ -131,8 +132,9 @@ function hasKnownCurrentPrice(items = []) {
   return (items || []).some((item) => Number.isFinite(Number(item?.priceCurrent?.amount)))
 }
 
-function buildShoppingListOffer(item) {
+function buildShoppingListOffer(item, quantity) {
   const itemId = getShoppingListItemId(item)
+  const displaySavingsOverride = getShoppingListDisplaySavingsOverride(item, quantity)
 
   return {
     ...item,
@@ -144,6 +146,7 @@ function buildShoppingListOffer(item) {
       amount: item?.savingsAmount,
       isApproximate: Boolean(item?.savingsIsApproximate),
     },
+    ...(displaySavingsOverride || {}),
   }
 }
 
@@ -356,7 +359,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                   const quantity = getShoppingListItemQuantity(item, quantities)
                   const minimumQuantity = getShoppingListMinimumQuantity(item)
                   const remainderHint = getShoppingListRemainderHint(item, quantity)
-                  const offer = buildShoppingListOffer(item)
+                  const offer = buildShoppingListOffer(item, quantity)
 
                   return (
                     <OfferCardConsumer

@@ -11,6 +11,7 @@ import {
 
 const SAVINGS_SOURCE_BACKEND_REFERENCE = 'backend-reference-price'
 const MAX_SHOPPING_LIST_QUANTITY = 99
+const MAX_BLOCK_REFERENCE_UNIT_RATIO = 3
 
 function getOfferSavingsSnapshot(offer) {
   const savingsAmount = getSavingsValue(offer)
@@ -92,6 +93,101 @@ function toCents(amount) {
 
 function fromCents(cents) {
   return cents / 100
+}
+
+function flattenSavingsText(value) {
+  if (Array.isArray(value)) {
+    return value.map(flattenSavingsText).filter(Boolean).join(' ')
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value).map(flattenSavingsText).filter(Boolean).join(' ')
+  }
+
+  return String(value || '')
+}
+
+function getSavingsConditionText(item) {
+  return [
+    item?.title,
+    item?.conditionsText,
+    item?.conditionLabel,
+    item?.discountMechanic,
+    item?.discountType,
+    item?.effectiveDiscountType,
+    item?.rawFacts,
+  ]
+    .map(flattenSavingsText)
+    .filter(Boolean)
+    .join(' ')
+}
+
+function hasBlockOrMultibuyCondition(item, minimumQuantity) {
+  const text = getSavingsConditionText(item).toLowerCase()
+
+  return (
+    Boolean(item?.isMultiBuy) ||
+    minimumQuantity > 1 ||
+    /\b\d+\s*\+\s*\d+\s*(?:gratis)?\b/.test(text) ||
+    /\b\d+\s*(?:f[üu]r|fuer|fur)\s*\d+\b/.test(text) ||
+    /\b(?:gratis|ab\s+\d+|bei\s+\d+)\b/.test(text)
+  )
+}
+
+function getPlusGratisMechanic(item) {
+  const text = getSavingsConditionText(item)
+  const plusMatch = text.match(/\b(\d+)\s*\+\s*(\d+)\s*(?:gratis)?\b/i)
+  const buyQuantity = Number(plusMatch?.[1])
+  const freeQuantity = Number(plusMatch?.[2])
+
+  if (!Number.isFinite(buyQuantity) || !Number.isFinite(freeQuantity) || buyQuantity <= 0 || freeQuantity <= 0) {
+    return null
+  }
+
+  return {
+    buyQuantity,
+    freeQuantity,
+    requiredQuantity: buyQuantity + freeQuantity,
+  }
+}
+
+function getReferencePriceSafety({ item, currentPrice, referencePrice, minimumQuantity }) {
+  const hasReferencePrice = Number.isFinite(referencePrice) && referencePrice > currentPrice
+
+  if (!hasReferencePrice) {
+    return {
+      usable: false,
+      reason: 'missing-reference-price',
+    }
+  }
+
+  const isBlockOrMultibuy = hasBlockOrMultibuyCondition(item, minimumQuantity)
+  const ratio = referencePrice / currentPrice
+
+  if (isBlockOrMultibuy && ratio > MAX_BLOCK_REFERENCE_UNIT_RATIO) {
+    return {
+      usable: false,
+      reason: 'block-reference-price-not-unit-safe',
+    }
+  }
+
+  return {
+    usable: true,
+    reason: '',
+  }
+}
+
+function getDerivedPlusGratisSavingsCents({ item, currentPrice, completeBlocks, minimumQuantity }) {
+  const mechanic = getPlusGratisMechanic(item)
+
+  if (!mechanic || mechanic.requiredQuantity !== minimumQuantity || completeBlocks <= 0) {
+    return 0
+  }
+
+  const currentUnitCents = toCents(currentPrice)
+  const inferredNormalUnitCents = Math.round((currentUnitCents * mechanic.requiredQuantity) / mechanic.buyQuantity)
+
+  return Math.max(0, inferredNormalUnitCents * mechanic.freeQuantity * completeBlocks)
 }
 
 function getReferencePriceAmount(item) {
@@ -185,7 +281,15 @@ export function getShoppingListItemPricing(item, quantity) {
   const referencePrice = getReferencePriceAmount(item)
   const savings = getShoppingListItemSavingsInfo(item)
   const hasCurrentPrice = Number.isFinite(currentPrice) && currentPrice > 0
-  const hasReferencePrice = Number.isFinite(referencePrice) && referencePrice > currentPrice
+  const referenceSafety = hasCurrentPrice
+    ? getReferencePriceSafety({
+        item,
+        currentPrice,
+        referencePrice,
+        minimumQuantity: breakdown.minimumQuantity,
+      })
+    : { usable: false, reason: 'missing-current-price' }
+  const hasReferencePrice = referenceSafety.usable
   const offerUnitCents = hasCurrentPrice ? toCents(currentPrice) : 0
   const referenceUnitCents = hasReferencePrice ? toCents(referencePrice) : offerUnitCents
   const offerTotalCents = offerUnitCents * breakdown.offerQuantity
@@ -194,8 +298,18 @@ export function getShoppingListItemPricing(item, quantity) {
   const referenceTotalCents = hasReferencePrice ? toCents(referencePrice) * breakdown.quantity : 0
   const fallbackSavingsCents =
     breakdown.minimumQuantity <= 1 && savings.type === 'known' ? toCents(savings.amount) * breakdown.quantity : 0
+  const derivedPlusGratisSavingsCents = !hasReferencePrice
+    ? getDerivedPlusGratisSavingsCents({
+        item,
+        currentPrice,
+        completeBlocks: breakdown.completeBlocks,
+        minimumQuantity: breakdown.minimumQuantity,
+      })
+    : 0
   const knownSavingsCents = hasReferencePrice
     ? Math.max(0, referenceTotalCents - estimatedTotalCents)
+    : derivedPlusGratisSavingsCents > 0
+      ? derivedPlusGratisSavingsCents
     : fallbackSavingsCents
 
   return {
@@ -207,9 +321,36 @@ export function getShoppingListItemPricing(item, quantity) {
     estimatedTotal: fromCents(estimatedTotalCents),
     referenceTotal: fromCents(referenceTotalCents),
     knownSavings: fromCents(knownSavingsCents),
-    hasApproximateSavings: savings.type === 'known' && savings.isApproximate,
+    hasApproximateSavings: (savings.type === 'known' && savings.isApproximate) || derivedPlusGratisSavingsCents > 0,
     hasUncertainRemainder: breakdown.remainderQuantity > 0,
     hasUnpricedRemainder: breakdown.remainderQuantity > 0 && !hasReferencePrice,
+    referencePriceSafetyReason: referenceSafety.reason,
+  }
+}
+
+export function getShoppingListDisplaySavingsOverride(item, quantity) {
+  const pricing = getShoppingListItemPricing(item, quantity)
+
+  if (pricing.referencePriceSafetyReason !== 'block-reference-price-not-unit-safe') {
+    return null
+  }
+
+  if (pricing.knownSavings <= 0) {
+    return {
+      referencePrice: null,
+      savings: { amount: null, isApproximate: false },
+      savingsAmount: null,
+      savingsIsApproximate: false,
+      hasKnownSavings: false,
+    }
+  }
+
+  return {
+    referencePrice: null,
+    savings: { amount: pricing.knownSavings, isApproximate: true },
+    savingsAmount: pricing.knownSavings,
+    savingsIsApproximate: true,
+    hasKnownSavings: true,
   }
 }
 
