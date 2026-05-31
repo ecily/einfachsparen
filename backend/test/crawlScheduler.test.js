@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   executeScheduledCrawl,
   startCrawlScheduler,
+  _private,
 } = require('../src/services/crawl/crawlScheduler');
 
 function env(overrides = {}) {
@@ -143,4 +144,50 @@ test('CRAWL_RUN_ON_START is separate from daily scheduler and is suppressed in p
 
   assert.equal(handle, null);
   assert.equal(cronCalls.length, 0);
+});
+
+test('scheduler startup runs interrupted CrawlRun recovery without starting replacement crawl', async () => {
+  const calls = [];
+  const cronCalls = [];
+  const recoveryCalls = [];
+  const handle = startCrawlScheduler({
+    envConfig: env({
+      CRAWL_SCHEDULE_ENABLED: false,
+    }),
+    crawlRunServiceImpl: {
+      async recoverInterruptedCrawlRunsAfterRestart(payload) {
+        recoveryCalls.push(payload);
+        return { recovered: [], skipped: [] };
+      },
+      async startCrawlRun(payload) {
+        calls.push(payload);
+        return {
+          accepted: true,
+          alreadyRunning: false,
+          run: { _id: 'run-1', status: 'queued', result: {} },
+        };
+      },
+      serializeCrawlRun(run) {
+        return run ? { id: String(run._id || ''), status: run.status || '' } : null;
+      },
+    },
+    cronImpl: {
+      validate() { return true; },
+      schedule(...args) { cronCalls.push(args); },
+    },
+  });
+
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(handle, null);
+  assert.equal(recoveryCalls.length, 1);
+  assert.match(recoveryCalls[0].reason, /Scheduler startup/i);
+  assert.equal(calls.length, 0);
+  assert.equal(cronCalls.length, 0);
+});
+
+test('scheduler startup recovery helper tolerates services without recovery support', () => {
+  assert.equal(_private.recoverInterruptedCrawlRunsOnSchedulerStart({
+    crawlRunServiceImpl: {},
+  }), null);
 });

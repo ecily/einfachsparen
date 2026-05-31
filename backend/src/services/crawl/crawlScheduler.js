@@ -54,11 +54,27 @@ function scheduleStartupCrawl({ envConfig = env, crawlRunServiceImpl = crawlRunS
   }, 1500);
 }
 
+function recoverInterruptedCrawlRunsOnSchedulerStart({ crawlRunServiceImpl = crawlRunService } = {}) {
+  if (typeof crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart !== 'function') {
+    return null;
+  }
+
+  return crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart({
+    reason: 'Scheduler startup found an active CrawlRun from a previous process after the maximum runtime.',
+  }).catch((error) => {
+    logger.error('Interrupted CrawlRun startup recovery failed', {
+      message: error.message,
+    });
+  });
+}
+
 function startCrawlScheduler({
   envConfig = env,
   crawlRunServiceImpl = crawlRunService,
   cronImpl = cron,
 } = {}) {
+  recoverInterruptedCrawlRunsOnSchedulerStart({ crawlRunServiceImpl });
+
   const startupHandle = scheduleStartupCrawl({ envConfig, crawlRunServiceImpl });
 
   if (envConfig.CRAWL_SCHEDULE_ENABLED !== true) {
@@ -109,6 +125,7 @@ module.exports = {
   executeScheduledCrawl,
   startCrawlScheduler,
   _private: {
+    recoverInterruptedCrawlRunsOnSchedulerStart,
     scheduleStartupCrawl,
   },
 };

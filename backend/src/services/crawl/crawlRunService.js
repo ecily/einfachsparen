@@ -723,6 +723,74 @@ function isRecoverableStaleRun({ run, lock, now = new Date(), staleAfterMs = EXP
   };
 }
 
+function isRecoverableInterruptedRunAfterRestart({
+  run,
+  lock,
+  now = new Date(),
+  staleAfterMs = DEFAULT_MAX_RUNTIME_MS,
+} = {}) {
+  if (!run || !ACTIVE_RUN_STATUSES.includes(run.status)) {
+    return {
+      recoverable: false,
+      reason: 'not-active',
+      ageMs: null,
+      startedBeforeProcess: false,
+    };
+  }
+
+  const reference = getRunReferenceDate(run);
+  const referenceTime = reference ? new Date(reference).getTime() : 0;
+  const lockHeartbeatTime = lock?.heartbeatAt ? new Date(lock.heartbeatAt).getTime() : 0;
+  const ageMs = referenceTime > 0 ? now.getTime() - referenceTime : null;
+  const lockBelongsToRun = !lock?.runId || String(lock.runId) === String(run._id);
+  const ageExpired = ageMs !== null && ageMs >= staleAfterMs;
+  const startedBeforeProcess = referenceTime > 0 && referenceTime < PROCESS_STARTED_AT.getTime();
+  const lockHeartbeatBeforeProcess = !lockHeartbeatTime || lockHeartbeatTime < PROCESS_STARTED_AT.getTime();
+
+  if (!lockBelongsToRun) {
+    return {
+      recoverable: false,
+      reason: 'lock-owned-by-different-run',
+      ageMs,
+      startedBeforeProcess,
+    };
+  }
+
+  if (!startedBeforeProcess) {
+    return {
+      recoverable: false,
+      reason: 'started-in-current-process',
+      ageMs,
+      startedBeforeProcess,
+    };
+  }
+
+  if (!lockHeartbeatBeforeProcess) {
+    return {
+      recoverable: false,
+      reason: 'lock-heartbeat-in-current-process',
+      ageMs,
+      startedBeforeProcess,
+    };
+  }
+
+  if (!ageExpired) {
+    return {
+      recoverable: false,
+      reason: 'not-stale-enough',
+      ageMs,
+      startedBeforeProcess,
+    };
+  }
+
+  return {
+    recoverable: true,
+    reason: 'process-restart-max-runtime-exceeded',
+    ageMs,
+    startedBeforeProcess,
+  };
+}
+
 async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now = new Date() } = {}) {
   if (!mongoose.Types.ObjectId.isValid(String(runId || ''))) {
     return {
@@ -808,6 +876,110 @@ async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now
     processStartedAt: PROCESS_STARTED_AT,
     lock: serializeLockForAudit(lock),
     run: recoveredRun,
+  };
+}
+
+async function recoverInterruptedCrawlRunsAfterRestart({
+  now = new Date(),
+  staleAfterMs = DEFAULT_MAX_RUNTIME_MS,
+  reason = 'CrawlRun was interrupted by process restart and exceeded maximum runtime.',
+} = {}) {
+  const activeRuns = await CrawlRun.find({ status: { $in: ACTIVE_RUN_STATUSES } })
+    .sort({ startedAt: 1, createdAt: 1 });
+  const lock = await CrawlRunLock.findById(GLOBAL_CRAWL_LOCK_KEY).lean();
+  const recovered = [];
+  const skipped = [];
+
+  for (const run of activeRuns) {
+    const recoverable = isRecoverableInterruptedRunAfterRestart({
+      run,
+      lock,
+      now,
+      staleAfterMs,
+    });
+
+    if (!recoverable.recoverable) {
+      skipped.push({
+        runId: asStringId(run._id),
+        reason: recoverable.reason,
+        ageMs: recoverable.ageMs,
+      });
+      continue;
+    }
+
+    const reference = getRunReferenceDate(run) || now;
+    const durationMs = Math.max(0, now.getTime() - new Date(reference).getTime());
+    const auditReason = compactRecoveryReason(reason);
+    const auditMessage = `Stale CrawlRun recovery after restart: ${auditReason}`;
+    const updatedRun = await CrawlRun.findOneAndUpdate(
+      {
+        _id: run._id,
+        status: { $in: ACTIVE_RUN_STATUSES },
+      },
+      {
+        $set: {
+          status: 'stale',
+          finishedAt: now,
+          durationMs,
+          'metadata.staleRecovery': {
+            reason: auditReason,
+            recoveredAt: now,
+            recoveredBy: 'startup-recovery',
+            previousStatus: run.status,
+            staleAfterMs,
+            ageMs: recoverable.ageMs,
+            processStartedAt: PROCESS_STARTED_AT,
+            detectionReason: recoverable.reason,
+            lock: serializeLockForAudit(lock),
+          },
+        },
+        $push: {
+          warnings: auditMessage,
+          errorMessages: 'CrawlRun was marked stale after process restart; no automatic replacement crawl was started.',
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedRun) {
+      skipped.push({
+        runId: asStringId(run._id),
+        reason: 'status-changed-before-recovery',
+        ageMs: recoverable.ageMs,
+      });
+      continue;
+    }
+
+    await markOfferPublishStatusForRun({
+      runId: run._id,
+      runStatus: 'stale',
+      now,
+    });
+
+    if (!lock?.runId || String(lock.runId) === String(run._id)) {
+      await releaseCrawlRunLock(run._id);
+    }
+
+    recovered.push({
+      runId: asStringId(run._id),
+      reason: recoverable.reason,
+      ageMs: recoverable.ageMs,
+      staleAfterMs,
+    });
+  }
+
+  if (recovered.length > 0) {
+    logger.warn('Recovered interrupted CrawlRuns after restart', {
+      recovered,
+      skipped,
+    });
+  }
+
+  return {
+    recovered,
+    skipped,
+    staleAfterMs,
+    processStartedAt: PROCESS_STARTED_AT,
   };
 }
 
@@ -1042,6 +1214,7 @@ module.exports = {
   executeCrawlRun,
   getLatestCrawlRun,
   getCrawlRunById,
+  recoverInterruptedCrawlRunsAfterRestart,
   recoverStaleCrawlRun,
   serializeCrawlRun,
   _private: {
@@ -1054,6 +1227,7 @@ module.exports = {
     determineFinalStatus,
     determineMode,
     failStaleRun,
+    isRecoverableInterruptedRunAfterRestart,
     isRecoverableStaleRun,
     isRunStale,
     markOfferPublishStatusForRun,

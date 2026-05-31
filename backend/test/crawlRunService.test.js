@@ -397,6 +397,205 @@ test('explicit stale recovery classifies active orphan runs conservatively', () 
   }).reason, 'lock-owned-by-different-run');
 });
 
+test('restart recovery classifies only old interrupted active CrawlRuns as recoverable', () => {
+  const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 2 * 60 * 60 * 1000);
+  const oldInterruptedRun = {
+    _id: new mongoose.Types.ObjectId(),
+    status: 'running',
+    startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 2 * 60 * 1000),
+  };
+  const freshInterruptedRun = {
+    _id: new mongoose.Types.ObjectId(),
+    status: 'running',
+    startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 2 * 60 * 1000),
+  };
+  const currentProcessRun = {
+    _id: new mongoose.Types.ObjectId(),
+    status: 'running',
+    startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() + 60 * 1000),
+  };
+
+  assert.equal(_private.isRecoverableInterruptedRunAfterRestart({
+    run: oldInterruptedRun,
+    lock: {
+      runId: oldInterruptedRun._id,
+      status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+    },
+    now,
+    staleAfterMs: 60 * 60 * 1000,
+  }).reason, 'process-restart-max-runtime-exceeded');
+
+  assert.equal(_private.isRecoverableInterruptedRunAfterRestart({
+    run: freshInterruptedRun,
+    lock: {
+      runId: freshInterruptedRun._id,
+      status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+    },
+    now,
+    staleAfterMs: 4 * 60 * 60 * 1000,
+  }).reason, 'not-stale-enough');
+
+  assert.equal(_private.isRecoverableInterruptedRunAfterRestart({
+    run: currentProcessRun,
+    lock: {
+      runId: currentProcessRun._id,
+      status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() + 2 * 60 * 1000),
+    },
+    now,
+    staleAfterMs: 60 * 60 * 1000,
+  }).reason, 'started-in-current-process');
+});
+
+test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs stale and releases matching lock idempotently', async () => {
+  const { recoverInterruptedCrawlRunsAfterRestart } = require('../src/services/crawl/crawlRunService');
+  const runId = new mongoose.Types.ObjectId();
+  const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 2 * 60 * 60 * 1000);
+  const run = {
+    _id: runId,
+    status: 'running',
+    startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 2 * 60 * 1000),
+    warnings: [],
+    errorMessages: [],
+  };
+  const lock = {
+    runId,
+    status: 'running',
+    heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+  };
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindOneAndUpdate: CrawlRun.findOneAndUpdate,
+    crawlRunLockFindById: CrawlRunLock.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const runUpdates = [];
+  const lockUpdates = [];
+  const offerUpdates = [];
+  let activeRuns = [run];
+
+  CrawlRun.find = () => ({
+    sort() {
+      return activeRuns;
+    },
+  });
+  CrawlRun.findOneAndUpdate = async (filter, update, options) => {
+    runUpdates.push({ filter, update, options });
+    if (!activeRuns.some((item) => String(item._id) === String(filter._id) && item.status === 'running')) {
+      return null;
+    }
+    activeRuns = [];
+    return { ...run, status: 'stale' };
+  };
+  CrawlRunLock.findById = () => ({
+    lean: async () => lock,
+  });
+  CrawlRunLock.updateOne = async (filter, update) => {
+    lockUpdates.push({ filter, update });
+    return { modifiedCount: 1 };
+  };
+  Offer.updateMany = async (filter, update) => {
+    offerUpdates.push({ filter, update });
+    return { matchedCount: 2, modifiedCount: 2 };
+  };
+
+  try {
+    const first = await recoverInterruptedCrawlRunsAfterRestart({
+      now,
+      staleAfterMs: 60 * 60 * 1000,
+      reason: 'test restart recovery',
+    });
+    const second = await recoverInterruptedCrawlRunsAfterRestart({
+      now,
+      staleAfterMs: 60 * 60 * 1000,
+      reason: 'test restart recovery',
+    });
+
+    assert.equal(first.recovered.length, 1);
+    assert.equal(first.recovered[0].runId, String(runId));
+    assert.equal(second.recovered.length, 0);
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
+    CrawlRunLock.findById = originals.crawlRunLockFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+
+  assert.equal(runUpdates.length, 1);
+  assert.equal(runUpdates[0].update.$set.status, 'stale');
+  assert.equal(runUpdates[0].update.$set.finishedAt, now);
+  assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].recoveredBy, 'startup-recovery');
+  assert.match(runUpdates[0].update.$push.warnings, /after restart/i);
+  assert.equal(offerUpdates.length, 1);
+  assert.deepEqual(offerUpdates[0].filter, { crawlRunId: runId });
+  assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-stale');
+  assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
+});
+
+test('recoverInterruptedCrawlRunsAfterRestart leaves fresh active runs and current heartbeats untouched', async () => {
+  const { recoverInterruptedCrawlRunsAfterRestart } = require('../src/services/crawl/crawlRunService');
+  const runId = new mongoose.Types.ObjectId();
+  const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 30 * 60 * 1000);
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindOneAndUpdate: CrawlRun.findOneAndUpdate,
+    crawlRunLockFindById: CrawlRunLock.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  let updateCalled = false;
+
+  CrawlRun.find = () => ({
+    sort() {
+      return [{
+        _id: runId,
+        status: 'running',
+        startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+      }];
+    },
+  });
+  CrawlRun.findOneAndUpdate = async () => {
+    updateCalled = true;
+    return null;
+  };
+  CrawlRunLock.findById = () => ({
+    lean: async () => ({
+      runId,
+      status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() + 60 * 1000),
+    }),
+  });
+  CrawlRunLock.updateOne = async () => {
+    updateCalled = true;
+    return { modifiedCount: 0 };
+  };
+  Offer.updateMany = async () => {
+    updateCalled = true;
+    return { matchedCount: 0, modifiedCount: 0 };
+  };
+
+  try {
+    const result = await recoverInterruptedCrawlRunsAfterRestart({
+      now,
+      staleAfterMs: 60 * 60 * 1000,
+    });
+
+    assert.equal(result.recovered.length, 0);
+    assert.equal(result.skipped[0].reason, 'lock-heartbeat-in-current-process');
+    assert.equal(updateCalled, false);
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
+    CrawlRunLock.findById = originals.crawlRunLockFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+});
+
 test('markOfferPublishStatusForRun marks stale and failed run lineage without changing visibility fields', async () => {
   const calls = [];
   const runId = new mongoose.Types.ObjectId();
