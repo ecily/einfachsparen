@@ -198,6 +198,11 @@ function SearchLandingHero() {
               )
             })}
           </div>
+          <div className="hero-trust-row" aria-label="Nutzungshinweise">
+            {trustItems.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
           <h1
             style={{
               fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
@@ -212,11 +217,6 @@ function SearchLandingHero() {
             Finde aktuelle Angebote von Supermärkten und Drogerien in Österreich – spare Zeit beim Suchen und Geld beim
             Einkaufen.
           </p>
-          <div className="hero-trust-row" aria-label="Nutzungshinweise">
-            {trustItems.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-          </div>
           <p className="hero-trust-line">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
         </div>
 
