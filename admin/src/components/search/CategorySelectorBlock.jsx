@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { areAllCategoryGroupsSelected, getGroupSelectionState } from '../../utils/categories'
 import { SectionCard } from '../layout/SectionCard'
 
@@ -12,6 +12,7 @@ export function CategorySelectorBlock({
   loading,
   disabled,
 }) {
+  const componentId = useId()
   const [openCategoryKeys, setOpenCategoryKeys] = useState([])
 
   const openCategoryKeySet = useMemo(() => new Set(openCategoryKeys), [openCategoryKeys])
@@ -35,6 +36,11 @@ export function CategorySelectorBlock({
     }
 
     onSelectAllCategories?.()
+  }
+
+  function getCategoryPanelId(mainCategoryKey) {
+    const safeKey = String(mainCategoryKey || 'category').replace(/[^a-zA-Z0-9_-]+/g, '-')
+    return `${componentId}-${safeKey}-subcategories`
   }
 
   return (
@@ -69,6 +75,12 @@ export function CategorySelectorBlock({
               const isPartiallySelected = selectionState.partialSelected
               const hasSubcategories = group.subcategories.length > 0
               const isOpen = openCategoryKeySet.has(group.mainCategoryKey)
+              const categoryPanelId = getCategoryPanelId(group.mainCategoryKey)
+              const selectionDescription = isMainSelected
+                ? 'alle Produkte ausgewählt'
+                : isPartiallySelected
+                  ? 'teilweise ausgewählt'
+                  : 'nicht ausgewählt'
               const categoryStateClass = isMainSelected
                 ? 'category-card--selected'
                 : isPartiallySelected
@@ -86,6 +98,10 @@ export function CategorySelectorBlock({
                       }`}
                       onClick={() => handleToggleOpenCategory(group.mainCategoryKey)}
                       aria-expanded={hasSubcategories ? isOpen : undefined}
+                      aria-controls={hasSubcategories && isOpen ? categoryPanelId : undefined}
+                      aria-label={`${group.mainCategoryLabel}, ${selectionDescription}, ${group.offerCount} ${
+                        group.offerCount === 1 ? 'Angebot' : 'Angebote'
+                      }${hasSubcategories ? `, ${isOpen ? 'aufgeklappt' : 'eingeklappt'}` : ''}`}
                     >
                       <span className="category-main-button__label">{group.mainCategoryLabel}</span>
                       <span className="category-main-button__meta">
@@ -110,7 +126,7 @@ export function CategorySelectorBlock({
                   </div>
 
                   {hasSubcategories && isOpen ? (
-                    <div className="category-card__subcategories">
+                    <div id={categoryPanelId} className="category-card__subcategories">
                       <div className="category-card__subheader">Genauer ausw&auml;hlen</div>
 
                       <div className="chip-grid chip-grid--subcategories">

@@ -1070,6 +1070,7 @@ function App() {
           <button
             className={`page-nav__button${activePage === 'product-search' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('product-search')}
+            aria-current={activePage === 'product-search' ? 'page' : undefined}
           >
             Suche
           </button>
@@ -1077,6 +1078,7 @@ function App() {
           <button
             className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('search')}
+            aria-current={activePage === 'search' ? 'page' : undefined}
           >
             Stöbern
           </button>
@@ -1085,6 +1087,7 @@ function App() {
             className={`page-nav__button${activePage === 'shopping-list' ? ' page-nav__button--active' : ''}`}
             onClick={() => handleNavigate('shopping-list')}
             aria-label="Einkaufsliste"
+            aria-current={activePage === 'shopping-list' ? 'page' : undefined}
           >
             Liste
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}

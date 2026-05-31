@@ -15,6 +15,7 @@ export function ProductImage({ offerId, src, alt, compact = false }) {
       <div
         className={`product-image product-image--placeholder ${compact ? 'product-image--compact' : ''}`}
         aria-label="Kein Produktbild verfuegbar"
+        role="img"
       >
         <span className="product-image__placeholder-icon" aria-hidden="true" />
         <span>Kein Bild</span>
@@ -26,7 +27,7 @@ export function ProductImage({ offerId, src, alt, compact = false }) {
     <div className={`product-image ${compact ? 'product-image--compact' : ''}`}>
       <img
         src={currentSrc}
-        alt={alt}
+        alt={alt || ''}
         loading="lazy"
         onError={() => {
           failedImageSourceCache.add(currentSrc)

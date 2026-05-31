@@ -58,6 +58,7 @@ export function RetailerSelectorBlock({
                         '--retailer-soft-color': retailerTheme.softColor,
                       }}
                       aria-pressed={selected}
+                      aria-label={`${retailer.retailerName} ${selected ? 'ausgewählt' : 'auswählen'}`}
                       onClick={() => onToggleRetailer(retailer.retailerKey)}
                     >
                       <span className="retailer-chip__dot" aria-hidden="true" />

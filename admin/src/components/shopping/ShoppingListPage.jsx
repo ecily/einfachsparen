@@ -303,7 +303,12 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
           <ShareIcon />
           {shareState.status === 'loading' ? 'Liste wird geteilt ...' : 'Liste teilen'}
         </button>
-        <button type="button" className="ghost-button" onClick={() => setHideCompleted((current) => !current)}>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => setHideCompleted((current) => !current)}
+          aria-pressed={hideCompleted}
+        >
           <CheckIcon />
           {hideCompleted ? 'Erledigte anzeigen' : 'Erledigte ausblenden'}
         </button>
@@ -313,7 +318,9 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
       </div>
 
       {shareState.message ? (
-        <p className={`shopping-list-feedback shopping-list-feedback--${shareState.status}`}>{shareState.message}</p>
+        <p className={`shopping-list-feedback shopping-list-feedback--${shareState.status}`} role="status" aria-live="polite">
+          {shareState.message}
+        </p>
       ) : null}
 
       {hideCompleted && visibleItems.length === 0 ? (
@@ -385,7 +392,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
                             <button
                               type="button"
                               className="shopping-list-item__quantity-button"
-                              aria-label="Menge verringern"
+                              aria-label={`Menge für ${item.title} verringern`}
                               onClick={() => handleQuantityChange(itemId, 'decrease')}
                               disabled={quantity <= minimumQuantity}
                             >
@@ -404,7 +411,12 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
 
                           {remainderHint ? <p className="shopping-list-item__quantity-note">{remainderHint}</p> : null}
 
-                          <button type="button" className="ghost-button shopping-list-item__remove" onClick={() => onRemoveItem(itemId)}>
+                          <button
+                            type="button"
+                            className="ghost-button shopping-list-item__remove"
+                            aria-label={`${item.title} aus der Einkaufsliste entfernen`}
+                            onClick={() => onRemoveItem(itemId)}
+                          >
                             Entfernen
                           </button>
                         </div>

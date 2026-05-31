@@ -520,6 +520,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                 type="search"
                 value={queryInput}
                 placeholder="Zum Beispiel Kaffee, Milka oder Waschmittel ..."
+                aria-label="Suchbegriff für Angebote"
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
               />
@@ -604,6 +605,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                       '--retailer-soft-color': retailerTheme.softColor,
                     }}
                     aria-pressed={selected}
+                    aria-label={`${retailer.label} ${selected ? 'ausgewählt' : 'auswählen'}`}
                     onClick={() => handleToggleRetailer(retailer.key)}
                   >
                     <span className="retailer-chip__dot" aria-hidden="true" />
