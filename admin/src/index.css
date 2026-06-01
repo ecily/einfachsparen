@@ -3652,6 +3652,10 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+.op-table--compact {
+  min-width: 420px;
+}
+
 .op-table th,
 .op-table td {
   border-bottom: 1px solid var(--kk-border);

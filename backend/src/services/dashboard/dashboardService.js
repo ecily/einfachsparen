@@ -3,6 +3,7 @@ const CrawlJob = require('../../models/CrawlJob');
 const RawDocument = require('../../models/RawDocument');
 const Offer = require('../../models/Offer');
 const AdminFeedback = require('../../models/AdminFeedback');
+const OfferFeedback = require('../../models/OfferFeedback');
 const Retailer = require('../../models/Retailer');
 const CrawlRun = require('../../models/CrawlRun');
 const CrawlRunLock = require('../../models/CrawlRunLock');
@@ -25,6 +26,9 @@ const FINAL_PUBLISH_STATUSES = new Set([
 ]);
 const INTERMEDIATE_PUBLISH_STATUSES = new Set(['', 'unknown', 'source-written', 'queued', 'running']);
 const PROMOTION_TYPES = new Set(['multi-buy', 'threshold', 'card-required', 'conditional-price', 'sticker']);
+const FEEDBACK_OPEN_STATUSES = new Set(['new', 'reviewing']);
+const FEEDBACK_RESOLVED_STATUSES = new Set(['resolved', 'ignored']);
+const FEEDBACK_DOCUMENT_LIMIT = 5000;
 
 function buildCurrentAvailabilityMatch() {
   const now = new Date();
@@ -86,6 +90,76 @@ function compactStrings(values = [], limit = 6) {
 function truncate(value, maxLength = 320) {
   const text = String(value || '').trim();
   return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
+function toDayKey(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function createCountRowsFromMap(map, keyName, limit = 20) {
+  return [...map.entries()]
+    .map(([key, count]) => ({ [keyName]: key || 'unknown', count }))
+    .sort((left, right) => right.count - left.count || String(left[keyName]).localeCompare(String(right[keyName])))
+    .slice(0, limit);
+}
+
+function collectStructuredFeedbackNote(structuredDetails = {}, reasons = []) {
+  const reasonList = Array.isArray(reasons) ? reasons : [];
+
+  for (const reason of reasonList) {
+    const details = structuredDetails?.[reason];
+    const note = details?.userNote
+      || details?.userExpectedConditionText
+      || details?.userSawDifferentCondition
+      || details?.duplicateReason
+      || details?.checkedWhere
+      || '';
+
+    if (note) return note;
+  }
+
+  for (const details of Object.values(structuredDetails || {})) {
+    if (details?.userNote) return details.userNote;
+  }
+
+  return '';
+}
+
+function sanitizeLatestFeedbackDocument(doc = {}) {
+  const reasons = compactStrings(doc.reasons || [], 6);
+  const offerSnapshot = doc.offerSnapshot || {};
+  const offerRef = doc.offerRef || {};
+  const pageContext = doc.pageContext || {};
+  const snippetSource = doc.freeText || collectStructuredFeedbackNote(doc.structuredDetails, reasons);
+
+  return {
+    id: asStringId(doc._id || doc.id),
+    createdAt: toIsoOrNull(doc.createdAt),
+    updatedAt: toIsoOrNull(doc.updatedAt),
+    type: doc.type || 'offer_feedback',
+    status: doc.status || 'unknown',
+    reasons,
+    primaryReason: reasons[0] || 'unknown',
+    retailerKey: offerSnapshot.retailerKey || '',
+    retailerLabel: offerSnapshot.retailerLabel || offerSnapshot.retailerKey || '',
+    offerId: offerRef.offerId || '',
+    offerTitle: truncate(offerSnapshot.title || offerSnapshot.displayTitle || '', 120),
+    query: truncate(pageContext.query || doc.structuredDetails?.search_result_wrong?.query || '', 120),
+    path: truncate(pageContext.path || '', 160),
+    snippet: truncate(snippetSource, 180),
+  };
 }
 
 function serializeCrawlRun(run) {
@@ -472,6 +546,199 @@ function buildTrendSeries(crawlRuns = [], activeOffers = []) {
   return [...dayMap.values()].sort((left, right) => left.date.localeCompare(right.date)).slice(-14);
 }
 
+function buildFeedbackSummaryFromDocuments(documents = [], {
+  now = new Date(),
+  totalFeedback = null,
+  exactCounts = {},
+  capped = false,
+} = {}) {
+  const nowDate = new Date(now);
+  const todayStart = startOfUtcDay(nowDate);
+  const last24hStart = new Date(nowDate.getTime() - 24 * 60 * 60 * 1000);
+  const last7DaysStart = new Date(nowDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const last30DaysStart = new Date(nowDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const trendStart = addDays(startOfUtcDay(nowDate), -29);
+  const statusMap = new Map();
+  const typeMap = new Map();
+  const retailerMap = new Map();
+  const offerMap = new Map();
+  const dailyMap = new Map();
+  let computedToday = 0;
+  let computedLast24h = 0;
+  let computedLast7Days = 0;
+  let computedLast30Days = 0;
+
+  for (let cursor = new Date(trendStart); cursor <= todayStart; cursor = addDays(cursor, 1)) {
+    dailyMap.set(toDayKey(cursor), {
+      date: toDayKey(cursor),
+      count: 0,
+      openCount: 0,
+      resolvedCount: 0,
+    });
+  }
+
+  for (const doc of documents || []) {
+    const createdAt = doc.createdAt ? new Date(doc.createdAt) : null;
+    const status = doc.status || 'unknown';
+    const reasons = Array.isArray(doc.reasons) && doc.reasons.length ? doc.reasons : ['unknown'];
+    const retailerKey = doc.offerSnapshot?.retailerKey || '';
+    const retailerLabel = doc.offerSnapshot?.retailerLabel || retailerKey;
+    const offerId = doc.offerRef?.offerId || '';
+
+    incrementCount(statusMap, status);
+    for (const reason of reasons) {
+      incrementCount(typeMap, reason);
+    }
+
+    if (retailerKey) {
+      if (!retailerMap.has(retailerKey)) {
+        retailerMap.set(retailerKey, { retailerKey, retailerLabel, count: 0 });
+      }
+      retailerMap.get(retailerKey).count += 1;
+    }
+
+    if (offerId) {
+      if (!offerMap.has(offerId)) {
+        offerMap.set(offerId, {
+          offerId,
+          title: truncate(doc.offerSnapshot?.title || doc.offerSnapshot?.displayTitle || '', 120),
+          retailerKey,
+          retailerLabel,
+          count: 0,
+          reasons: new Set(),
+        });
+      }
+
+      const offer = offerMap.get(offerId);
+      offer.count += 1;
+      for (const reason of reasons) offer.reasons.add(reason);
+    }
+
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      continue;
+    }
+
+    if (createdAt >= todayStart) computedToday += 1;
+    if (createdAt >= last24hStart) computedLast24h += 1;
+    if (createdAt >= last7DaysStart) computedLast7Days += 1;
+    if (createdAt >= last30DaysStart) computedLast30Days += 1;
+
+    const dayKey = toDayKey(createdAt);
+    if (dailyMap.has(dayKey)) {
+      const day = dailyMap.get(dayKey);
+      day.count += 1;
+      if (FEEDBACK_OPEN_STATUSES.has(status)) day.openCount += 1;
+      if (FEEDBACK_RESOLVED_STATUSES.has(status)) day.resolvedCount += 1;
+    }
+  }
+
+  const feedbackByStatus = createCountRowsFromMap(statusMap, 'status');
+  const feedbackByType = createCountRowsFromMap(typeMap, 'type');
+  const openFeedback = feedbackByStatus
+    .filter((row) => FEEDBACK_OPEN_STATUSES.has(row.status))
+    .reduce((sum, row) => sum + row.count, 0);
+  const resolvedFeedback = feedbackByStatus
+    .filter((row) => FEEDBACK_RESOLVED_STATUSES.has(row.status))
+    .reduce((sum, row) => sum + row.count, 0);
+  const feedbackByRetailer = [...retailerMap.values()]
+    .sort((left, right) => right.count - left.count || left.retailerKey.localeCompare(right.retailerKey))
+    .slice(0, 12);
+  const feedbackByOffer = [...offerMap.values()]
+    .map((item) => ({
+      ...item,
+      reasons: [...item.reasons].slice(0, 6),
+    }))
+    .sort((left, right) => right.count - left.count || left.offerId.localeCompare(right.offerId))
+    .slice(0, 10);
+  const dailyFeedbackTrend = [...dailyMap.values()].sort((left, right) => left.date.localeCompare(right.date));
+  const latestFeedback = (documents || [])
+    .slice()
+    .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())
+    .slice(0, 5)
+    .map(sanitizeLatestFeedbackDocument);
+  const total = totalFeedback ?? documents.length;
+  const feedbackDataWarnings = [
+    capped ? `Feedback-Auswertung ist auf die letzten ${FEEDBACK_DOCUMENT_LIMIT} Eintraege begrenzt; Gesamtzahl bleibt exakt.` : '',
+    total > 0 && feedbackByStatus.length === 0 ? 'Status wird aktuell nicht strukturiert erfasst.' : '',
+    total > 0 && feedbackByType.length === 0 ? 'Kategorie/Grund wird aktuell nicht strukturiert erfasst.' : '',
+    total > 0 && feedbackByRetailer.length === 0 ? 'Haendlerbezug ist nicht fuer alle Feedbacks vorhanden.' : '',
+    dailyFeedbackTrend.filter((row) => row.count > 0).length < 2 ? 'Noch nicht genug historische Feedback-Tage fuer belastbare Trends vorhanden.' : '',
+  ].filter(Boolean);
+
+  return {
+    totalFeedback: total,
+    newToday: exactCounts.newToday ?? computedToday,
+    newLast24h: exactCounts.newLast24h ?? computedLast24h,
+    newLast7Days: exactCounts.newLast7Days ?? computedLast7Days,
+    newLast30Days: exactCounts.newLast30Days ?? computedLast30Days,
+    openFeedback,
+    resolvedFeedback,
+    feedbackByStatus,
+    feedbackByType,
+    feedbackByRetailer,
+    feedbackByOffer,
+    dailyFeedbackTrend,
+    latestFeedback,
+    feedbackDataWarnings,
+    source: 'OfferFeedback',
+    generatedAt: nowDate.toISOString(),
+  };
+}
+
+async function buildFeedbackSummary({
+  OfferFeedbackModel = OfferFeedback,
+  now = new Date(),
+} = {}) {
+  const todayStart = startOfUtcDay(now);
+  const last24hStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const last7DaysStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const last30DaysStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const projection = {
+    _id: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    type: 1,
+    status: 1,
+    reasons: 1,
+    offerRef: 1,
+    offerSnapshot: 1,
+    pageContext: 1,
+    structuredDetails: 1,
+    freeText: 1,
+  };
+
+  const [
+    totalFeedback,
+    newToday,
+    newLast24h,
+    newLast7Days,
+    newLast30Days,
+    documents,
+  ] = await Promise.all([
+    OfferFeedbackModel.countDocuments({}),
+    OfferFeedbackModel.countDocuments({ createdAt: { $gte: todayStart } }),
+    OfferFeedbackModel.countDocuments({ createdAt: { $gte: last24hStart } }),
+    OfferFeedbackModel.countDocuments({ createdAt: { $gte: last7DaysStart } }),
+    OfferFeedbackModel.countDocuments({ createdAt: { $gte: last30DaysStart } }),
+    OfferFeedbackModel.find({}, projection)
+      .sort({ createdAt: -1 })
+      .limit(FEEDBACK_DOCUMENT_LIMIT)
+      .lean(),
+  ]);
+
+  return buildFeedbackSummaryFromDocuments(documents, {
+    now,
+    totalFeedback,
+    exactCounts: {
+      newToday,
+      newLast24h,
+      newLast7Days,
+      newLast30Days,
+    },
+    capped: totalFeedback > documents.length,
+  });
+}
+
 function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCrawlRun, lockStatus, publishStatusSummary }) {
   const referenceRun = latestScheduledFullCrawl || latestCrawl;
   const reasons = [];
@@ -532,7 +799,7 @@ function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCra
   };
 }
 
-function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, retailerMatrix, offerSummary }) {
+function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, retailerMatrix, offerSummary, feedbackSummary }) {
   const issues = [];
 
   if (latestCrawl?.status === 'stale') {
@@ -602,6 +869,31 @@ function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, 
       severity: 'yellow',
       title: 'Viele Angebote nicht comparisonSafe',
       detail: `Comparison Safety liegt bei ${Math.round(offerSummary.comparisonSafetyRate * 100)}%.`,
+    });
+  }
+
+  if (feedbackSummary?.newLast24h > 0) {
+    issues.push({
+      severity: 'yellow',
+      title: 'Neue Beta-Feedbacks eingelangt',
+      detail: `${feedbackSummary.newLast24h} neue Fehler-melden-Eintraege in den letzten 24 Stunden pruefen.`,
+    });
+  }
+
+  if (feedbackSummary?.openFeedback >= 10) {
+    issues.push({
+      severity: feedbackSummary.openFeedback >= 25 ? 'red' : 'yellow',
+      title: 'Viele offene Feedbacks',
+      detail: `${feedbackSummary.openFeedback} Feedbacks sind neu oder in Bearbeitung.`,
+    });
+  }
+
+  const topRetailerFeedback = feedbackSummary?.feedbackByRetailer?.[0];
+  if (topRetailerFeedback?.count >= 3) {
+    issues.push({
+      severity: 'yellow',
+      title: `Feedback-Haeufung bei ${topRetailerFeedback.retailerLabel || topRetailerFeedback.retailerKey}`,
+      detail: `${topRetailerFeedback.count} Fehler-melden-Eintraege betreffen diesen Haendler.`,
     });
   }
 
@@ -694,6 +986,7 @@ async function buildDashboardSnapshot() {
     recentFeedback,
     retailerSummary,
     retailerCoverage,
+    feedbackSummary,
     comparisonSnapshot,
   ] = await Promise.all([
     Source.find().sort({ active: -1, retailerName: 1 }).lean(),
@@ -771,6 +1064,7 @@ async function buildDashboardSnapshot() {
       .select('retailerKey retailerName totalOffers activeOffers offersBySource offersByChannel firstSeenAt lastSeenAt lastSuccessfulCrawlAt activeCoverageSignal coverageStatus coveragePriorityScore coverageGapReasons activeCoverageTarget activeCoverageRatio sourceDiversity channelDiversity parsingConfidenceAverage comparisonSafeShare usableOfferShare crawlStabilityScore recentSuccessfulCrawlCount recentFailedCrawlCount repeatedLowYield')
       .sort({ coveragePriorityScore: -1, retailerName: 1 })
       .lean(),
+    buildFeedbackSummary(),
     buildComparisonSnapshotSafely(),
   ]);
 
@@ -825,6 +1119,7 @@ async function buildDashboardSnapshot() {
     publishStatusSummary,
     retailerMatrix,
     offerSummary,
+    feedbackSummary,
   });
   const dataCompletenessWarnings = [
     trendSeries.length < 2
@@ -854,6 +1149,7 @@ async function buildDashboardSnapshot() {
     sourceTypeSummary,
     qualityKpis,
     trendSeries,
+    feedbackSummary,
     actionableIssues,
     dataCompletenessWarnings,
     qualitySummary,
@@ -873,6 +1169,8 @@ module.exports = {
   _private: {
     buildActionableIssues,
     buildExecutiveStatus,
+    buildFeedbackSummary,
+    buildFeedbackSummaryFromDocuments,
     buildOfferDiagnostics,
     buildQualityKpis,
     buildTrendSeries,

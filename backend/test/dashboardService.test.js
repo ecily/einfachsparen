@@ -89,3 +89,144 @@ test('dashboard lock serialization marks stale heartbeat locks as blocked', () =
   assert.equal(lock.staleHeartbeat, true);
   assert.equal(lock.state, 'blocked-stale-heartbeat');
 });
+
+test('dashboard feedback summary handles empty feedback data', () => {
+  const summary = _private.buildFeedbackSummaryFromDocuments([], {
+    now: new Date('2026-06-01T12:00:00.000Z'),
+    totalFeedback: 0,
+  });
+
+  assert.equal(summary.totalFeedback, 0);
+  assert.equal(summary.newToday, 0);
+  assert.equal(summary.newLast24h, 0);
+  assert.equal(summary.newLast7Days, 0);
+  assert.equal(summary.newLast30Days, 0);
+  assert.deepEqual(summary.feedbackByStatus, []);
+  assert.deepEqual(summary.latestFeedback, []);
+  assert.ok(summary.feedbackDataWarnings.some((warning) => /historische Feedback-Tage/i.test(warning)));
+});
+
+test('dashboard feedback summary counts today, rolling windows, status and categories', () => {
+  const now = new Date('2026-06-01T12:00:00.000Z');
+  const docs = [
+    {
+      _id: 'feedback-1',
+      createdAt: new Date('2026-06-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-06-01T10:01:00.000Z'),
+      type: 'offer_feedback',
+      status: 'new',
+      reasons: ['price_wrong', 'image_wrong'],
+      offerRef: { offerId: 'offer-1' },
+      offerSnapshot: {
+        title: 'Spar Kaffee',
+        retailerKey: 'spar',
+        retailerLabel: 'SPAR',
+      },
+      pageContext: {
+        query: 'kaffee',
+        path: '/suche',
+        url: 'https://www.kaufklug.at/suche?q=kaffee&secret=not-returned',
+      },
+      freeText: 'x'.repeat(500),
+      clientContext: {
+        userAgent: 'not-returned',
+        sessionIdHash: 'not-returned',
+      },
+    },
+    {
+      _id: 'feedback-2',
+      createdAt: new Date('2026-05-29T10:00:00.000Z'),
+      status: 'resolved',
+      reasons: ['category_wrong'],
+      offerRef: { offerId: 'offer-1' },
+      offerSnapshot: {
+        title: 'Spar Kaffee',
+        retailerKey: 'spar',
+        retailerLabel: 'SPAR',
+      },
+      structuredDetails: {
+        category_wrong: {
+          userNote: 'Ist Kaffee.',
+        },
+      },
+    },
+    {
+      _id: 'feedback-3',
+      createdAt: new Date('2026-05-10T10:00:00.000Z'),
+      status: 'ignored',
+      reasons: ['other'],
+      offerRef: { offerId: 'offer-2' },
+      offerSnapshot: {
+        title: 'Billa Milch',
+        retailerKey: 'billa',
+        retailerLabel: 'BILLA',
+      },
+    },
+    {
+      _id: 'feedback-4',
+      createdAt: new Date('2026-04-01T10:00:00.000Z'),
+      status: 'reviewing',
+      reasons: ['condition_wrong'],
+      offerSnapshot: {},
+    },
+  ];
+
+  const summary = _private.buildFeedbackSummaryFromDocuments(docs, { now });
+
+  assert.equal(summary.totalFeedback, 4);
+  assert.equal(summary.newToday, 1);
+  assert.equal(summary.newLast24h, 1);
+  assert.equal(summary.newLast7Days, 2);
+  assert.equal(summary.newLast30Days, 3);
+  assert.equal(summary.openFeedback, 2);
+  assert.equal(summary.resolvedFeedback, 2);
+  assert.deepEqual(summary.feedbackByStatus.find((row) => row.status === 'new'), { status: 'new', count: 1 });
+  assert.deepEqual(summary.feedbackByType.find((row) => row.type === 'price_wrong'), { type: 'price_wrong', count: 1 });
+  assert.equal(summary.feedbackByRetailer[0].retailerKey, 'spar');
+  assert.equal(summary.feedbackByOffer[0].offerId, 'offer-1');
+  assert.equal(summary.feedbackByOffer[0].count, 2);
+  assert.equal(summary.dailyFeedbackTrend.length, 30);
+  assert.equal(summary.dailyFeedbackTrend.find((row) => row.date === '2026-06-01').count, 1);
+  assert.equal(summary.latestFeedback.length, 4);
+  assert.equal(summary.latestFeedback[0].snippet.length <= 180, true);
+  assert.equal(JSON.stringify(summary).includes('not-returned'), false);
+  assert.equal(JSON.stringify(summary).includes('secret=not-returned'), false);
+});
+
+test('dashboard feedback summary handles missing optional fields as unknown or empty', () => {
+  const summary = _private.buildFeedbackSummaryFromDocuments([
+    {
+      _id: 'feedback-unknown',
+      createdAt: new Date('2026-06-01T10:00:00.000Z'),
+      offerSnapshot: {},
+      pageContext: {},
+    },
+  ], {
+    now: new Date('2026-06-01T12:00:00.000Z'),
+  });
+
+  assert.equal(summary.feedbackByStatus[0].status, 'unknown');
+  assert.equal(summary.feedbackByType[0].type, 'unknown');
+  assert.deepEqual(summary.feedbackByRetailer, []);
+  assert.equal(summary.latestFeedback[0].status, 'unknown');
+  assert.equal(summary.latestFeedback[0].primaryReason, 'unknown');
+});
+
+test('dashboard actionable issues include beta feedback signals only when data supports them', () => {
+  const issues = _private.buildActionableIssues({
+    latestCrawl: { status: 'success' },
+    lockStatus: { isBlocked: false },
+    publishStatusSummary: { openCount: 0 },
+    retailerMatrix: [],
+    offerSummary: {},
+    feedbackSummary: {
+      newLast24h: 2,
+      openFeedback: 11,
+      feedbackByRetailer: [{ retailerKey: 'spar', retailerLabel: 'SPAR', count: 4 }],
+    },
+  });
+
+  assert.ok(issues.some((issue) => /Neue Beta-Feedbacks/i.test(issue.title)));
+  assert.ok(issues.some((issue) => /Viele offene Feedbacks/i.test(issue.title)));
+  assert.ok(issues.some((issue) => /SPAR/i.test(issue.title)));
+});

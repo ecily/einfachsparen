@@ -203,6 +203,173 @@ function KpiPanel({ kpis }) {
   )
 }
 
+function FeedbackBreakdownTable({ title, rows, columns, emptyMessage, renderRow }) {
+  return (
+    <article className="op-kpi">
+      <div className="op-kpi__head">
+        <strong>{title}</strong>
+      </div>
+      {rows.length ? (
+        <div className="op-table-wrap">
+          <table className="op-table op-table--compact">
+            <thead>
+              <tr>
+                {columns.map((column) => <th key={column}>{column}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(renderRow)}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p>{emptyMessage}</p>
+      )}
+    </article>
+  )
+}
+
+function FeedbackPanel({ feedback }) {
+  const totalFeedback = Number(feedback?.totalFeedback || 0)
+  const statusRows = feedback?.feedbackByStatus || []
+  const typeRows = feedback?.feedbackByType || []
+  const retailerRows = feedback?.feedbackByRetailer || []
+  const offerRows = feedback?.feedbackByOffer || []
+  const trendRows = feedback?.dailyFeedbackTrend || []
+  const latestRows = feedback?.latestFeedback || []
+  const warnings = feedback?.feedbackDataWarnings || []
+  const openFeedback = Number(feedback?.openFeedback || 0)
+
+  return (
+    <section className="panel">
+      <div className="panel__header">
+        <h2>Feedback / Beta-Test</h2>
+        <p>Diese Kennzahlen messen, ob Beta-Tester ueber "Fehler melden" aktiv Rueckmeldungen geben. Sie messen nicht den gesamten Traffic.</p>
+      </div>
+
+      <section className="metrics">
+        <MetricCard label="Heute" value={formatInteger(feedback?.newToday)} note="Neue Fehler-melden-Eintraege" status={feedback?.newToday > 0 ? 'yellow' : 'green'} />
+        <MetricCard label="Letzte 7 Tage" value={formatInteger(feedback?.newLast7Days)} note="Beta-Feedbacks" />
+        <MetricCard label="Letzte 30 Tage" value={formatInteger(feedback?.newLast30Days)} note="Beta-Feedbacks" />
+        <MetricCard label="Offen" value={formatInteger(openFeedback)} note="Status new/reviewing" status={openFeedback >= 25 ? 'red' : openFeedback >= 10 ? 'yellow' : 'green'} />
+        <MetricCard label="Gesamt" value={formatInteger(totalFeedback)} note={feedback?.source || 'OfferFeedback'} />
+      </section>
+
+      {totalFeedback === 0 ? <p className="status">Noch keine Feedback-Eintraege vorhanden.</p> : null}
+
+      <div className="op-split">
+        <MiniTrend rows={trendRows} valueKey="count" label="Feedback pro Tag" />
+        <article className="op-trend">
+          <strong>Einordnung</strong>
+          <p className="offer-card__meta">
+            Offene Feedbacks werden nur aus vorhandenen Statuswerten abgeleitet. Es werden keine IPs, User-Agents,
+            Session-Hashes oder langen Freitexte im Dashboard angezeigt.
+          </p>
+          {warnings.length ? (
+            <div className="op-warning-list">
+              {warnings.map((warning) => <p key={warning} className="status">{warning}</p>)}
+            </div>
+          ) : null}
+        </article>
+      </div>
+
+      <div className="op-split op-split--three">
+        <FeedbackBreakdownTable
+          title="Nach Status"
+          rows={statusRows}
+          columns={['Status', 'Feedbacks']}
+          emptyMessage="Status wird aktuell nicht strukturiert erfasst."
+          renderRow={(row) => (
+            <tr key={row.status}>
+              <td><StatusPill value={row.status}>{row.status}</StatusPill></td>
+              <td>{formatInteger(row.count)}</td>
+            </tr>
+          )}
+        />
+        <FeedbackBreakdownTable
+          title="Nach Typ/Kategorie"
+          rows={typeRows}
+          columns={['Typ', 'Feedbacks']}
+          emptyMessage="Status/Kategorie werden aktuell nicht strukturiert erfasst."
+          renderRow={(row) => (
+            <tr key={row.type}>
+              <td>{row.type || 'unknown'}</td>
+              <td>{formatInteger(row.count)}</td>
+            </tr>
+          )}
+        />
+        <FeedbackBreakdownTable
+          title="Betroffene Haendler"
+          rows={retailerRows}
+          columns={['Haendler', 'Feedbacks']}
+          emptyMessage="Kein Haendlerbezug vorhanden."
+          renderRow={(row) => (
+            <tr key={row.retailerKey}>
+              <td>{row.retailerLabel || row.retailerKey}</td>
+              <td>{formatInteger(row.count)}</td>
+            </tr>
+          )}
+        />
+      </div>
+
+      {offerRows.length ? (
+        <div className="op-table-wrap">
+          <table className="op-table">
+            <thead>
+              <tr>
+                <th>Top Angebot</th>
+                <th>Haendler</th>
+                <th>Feedbacks</th>
+                <th>Gruende</th>
+              </tr>
+            </thead>
+            <tbody>
+              {offerRows.map((row) => (
+                <tr key={row.offerId}>
+                  <td>{row.title || row.offerId}</td>
+                  <td>{row.retailerLabel || row.retailerKey || '-'}</td>
+                  <td>{formatInteger(row.count)}</td>
+                  <td>{(row.reasons || []).join(', ') || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {latestRows.length ? (
+        <div className="op-table-wrap">
+          <table className="op-table">
+            <thead>
+              <tr>
+                <th>Zeit</th>
+                <th>Status</th>
+                <th>Grund</th>
+                <th>Bezug</th>
+                <th>Kurznotiz</th>
+              </tr>
+            </thead>
+            <tbody>
+              {latestRows.map((row) => (
+                <tr key={row.id || `${row.createdAt}-${row.offerId}`}>
+                  <td>{formatDateTime(row.createdAt)}</td>
+                  <td><StatusPill value={row.status}>{row.status || 'unknown'}</StatusPill></td>
+                  <td>{row.primaryReason || 'unknown'}</td>
+                  <td>
+                    {row.retailerLabel || row.retailerKey || '-'}<br />
+                    <small>{row.offerTitle || row.query || row.path || '-'}</small>
+                  </td>
+                  <td>{row.snippet || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 export function DiagnosticsPage({
   health,
   snapshot,
@@ -226,6 +393,7 @@ export function DiagnosticsPage({
   const lock = snapshot?.lockStatus || {}
   const kpis = snapshot?.qualityKpis || []
   const trendRows = snapshot?.trendSeries || []
+  const feedback = snapshot?.feedbackSummary || {}
   const issues = snapshot?.actionableIssues || []
   const dataWarnings = snapshot?.dataCompletenessWarnings || []
   const hasAdminApiKey = adminApiKeyInput.trim().length > 0
@@ -397,6 +565,8 @@ export function DiagnosticsPage({
           ))}
         </div>
       </section>
+
+      <FeedbackPanel feedback={feedback} />
 
       <section className="panel">
         <div className="panel__header">
