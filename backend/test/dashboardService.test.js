@@ -230,3 +230,176 @@ test('dashboard actionable issues include beta feedback signals only when data s
   assert.ok(issues.some((issue) => /Viele offene Feedbacks/i.test(issue.title)));
   assert.ok(issues.some((issue) => /SPAR/i.test(issue.title)));
 });
+
+test('dashboard analysis essence text contains required sections and feedback instruction', () => {
+  const { analysisEssence, analysisEssenceText } = _private.buildAnalysisEssencePayload({
+    generatedAt: '2026-06-01T12:00:00.000Z',
+    buildInfo: { buildTime: '2026-06-01T11:59:00.000Z' },
+    executiveStatus: { level: 'red', reason: 'Last scheduled full crawl is stale.' },
+    latestScheduledFullCrawl: {
+      id: 'run-1',
+      status: 'stale',
+      trigger: 'scheduled',
+      mode: 'full',
+      dryRun: false,
+      startedAt: '2026-06-01T00:00:00.000Z',
+      finishedAt: '2026-06-01T13:47:00.000Z',
+      durationMs: 49620000,
+      summary: {
+        successfulSourcesCount: 4,
+        failedSourcesCount: 2,
+        staleReason: 'heartbeat stale',
+      },
+      warnings: ['one warning'],
+      errorMessages: ['one error'],
+    },
+    crawlHistory: [
+      {
+        id: 'run-1',
+        status: 'stale',
+        trigger: 'scheduled',
+        mode: 'full',
+        dryRun: false,
+        startedAt: '2026-06-01T00:00:00.000Z',
+        durationMs: 49620000,
+      },
+      {
+        id: 'run-2',
+        status: 'success',
+        trigger: 'manual',
+        mode: 'scoped',
+        dryRun: false,
+        startedAt: '2026-05-31T00:00:00.000Z',
+        durationMs: 2000,
+      },
+    ],
+    lockStatus: { state: 'free', isBlocked: false },
+    publishStatusSummary: { status: 'open', finalCount: 10, openCount: 5 },
+    offerSummary: {
+      activeOffers: 15,
+      officialOffers: 5,
+      officialCoverageRate: 0.333,
+      validityConfidenceRate: 0.2,
+      missingValidToOffers: 12,
+      conditionDetectionRate: 0.4,
+      comparisonSafetyRate: 0.5,
+      imageCoverageRate: 0.8,
+      aggregatorRiskRate: 0.31,
+    },
+    qualityKpis: [{ key: 'officialCoverageRate' }],
+    retailerMatrix: [
+      {
+        retailerKey: 'spar',
+        retailerName: 'SPAR',
+        activeOffers: 12,
+        officialCoverageRate: 0.2,
+        validityConfidenceRate: 0.3,
+        conditionDetectionRate: 0.4,
+        imageCoverageRate: 0.9,
+        aggregatorOffers: 8,
+        aggregatorRiskRate: 0.5,
+        warningStatus: 'red',
+      },
+    ],
+    trendSeries: [{ date: '2026-06-01', crawlStatus: 'stale' }],
+    actionableIssues: [
+      {
+        severity: 'red',
+        title: 'Letzter Crawl stale',
+        detail: 'Daily Crawl Reliability pruefen.',
+      },
+    ],
+    dataCompletenessWarnings: ['Trend data limited.'],
+    feedbackSummary: {
+      totalFeedback: 106,
+      newToday: 1,
+      newLast24h: 2,
+      newLast7Days: 106,
+      newLast30Days: 106,
+      openFeedback: 106,
+      resolvedFeedback: 0,
+      feedbackByStatus: [{ status: 'new', count: 106 }],
+      feedbackByType: [{ type: 'price_wrong', count: 12 }],
+      feedbackByRetailer: [{ retailerKey: 'spar', retailerLabel: 'SPAR', count: 8 }],
+      feedbackByOffer: [{ offerId: 'offer-1', retailerKey: 'spar', retailerLabel: 'SPAR', count: 3, reasons: ['price_wrong'] }],
+      latestFeedback: [
+        {
+          createdAt: '2026-06-01T10:00:00.000Z',
+          status: 'new',
+          reasons: ['price_wrong'],
+          retailerLabel: 'SPAR',
+          offerId: 'offer-1',
+          offerTitle: 'Kaffee',
+          query: 'kaffee',
+          snippet: 'Preis stimmt nicht.',
+        },
+      ],
+    },
+    latestEssence: [{ retailerKey: 'spar', essence: 'SPAR source summary.' }],
+  });
+
+  assert.equal(Boolean(analysisEssence), true);
+  assert.match(analysisEssenceText, /executive_health:/);
+  assert.match(analysisEssenceText, /latest_scheduled_full_crawl:/);
+  assert.match(analysisEssenceText, /offer_quality_kpi:/);
+  assert.match(analysisEssenceText, /feedback_beta_test:/);
+  assert.match(analysisEssenceText, /feedback_processing_instruction:/);
+  assert.match(analysisEssenceText, /# Aufgabe an ChatGPT/);
+  assert.match(analysisEssenceText, /requiredForNextCodexPrompt: true/);
+  assert.match(analysisEssenceText, /unprocessedFeedbackAvailable: true/);
+});
+
+test('dashboard analysis essence uses unknown fallbacks and excludes sensitive tokens', () => {
+  const { analysisEssenceText } = _private.buildAnalysisEssencePayload({
+    generatedAt: '2026-06-01T12:00:00.000Z',
+    buildInfo: {},
+    executiveStatus: {},
+    latestScheduledFullCrawl: null,
+    crawlHistory: [],
+    lockStatus: {},
+    publishStatusSummary: {},
+    offerSummary: {},
+    qualityKpis: [],
+    retailerMatrix: [],
+    trendSeries: [],
+    actionableIssues: [],
+    dataCompletenessWarnings: [],
+    feedbackSummary: {
+      totalFeedback: 1,
+      openFeedback: 0,
+      latestFeedback: [
+        {
+          status: 'new',
+          reasons: ['other'],
+          snippet: 'Contains userAgent, sessionIdHash, ipAddress, adminKey, ADMIN_API_KEY and https://example.test/path?secret=1',
+        },
+      ],
+    },
+    latestEssence: [
+      {
+        retailerKey: 'billa',
+        essence: 'Source at https://example.test/private?token=1',
+      },
+    ],
+  });
+  const forbiddenTokens = [
+    'ipAddress',
+    'remoteAddress',
+    'userAgent',
+    'sessionId',
+    'sessionIdHash',
+    'clientContext',
+    'adminKey',
+    'ADMIN_API_KEY',
+    'https://example.test',
+  ];
+
+  assert.match(analysisEssenceText, /runId: "not_available"/);
+  assert.match(analysisEssenceText, /buildTime: unknown/);
+  assert.match(analysisEssenceText, /unprocessedFeedbackAvailable: false/);
+  assert.match(analysisEssenceText, /instructionStillApplies: true/);
+
+  for (const token of forbiddenTokens) {
+    assert.equal(analysisEssenceText.includes(token), false, `contains forbidden token ${token}`);
+  }
+});

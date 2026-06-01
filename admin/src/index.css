@@ -3849,6 +3849,13 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+.essence-box--analysis {
+  max-height: 38rem;
+  overflow: auto;
+  line-height: 1.45;
+  tab-size: 2;
+}
+
 .feedback-box {
   display: grid;
   gap: 0.75rem;
@@ -3863,6 +3870,13 @@ textarea:focus {
 .feedback-box__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.feedback-box__actions--copy {
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+  flex-wrap: wrap;
 }
 
 /* Legacy compatibility */

@@ -397,6 +397,8 @@ export function DiagnosticsPage({
   const issues = snapshot?.actionableIssues || []
   const dataWarnings = snapshot?.dataCompletenessWarnings || []
   const hasAdminApiKey = adminApiKeyInput.trim().length > 0
+  const analysisEssenceText = snapshot?.analysisEssenceText || ''
+  const [analysisCopyState, setAnalysisCopyState] = useState('idle')
 
   function handleSaveAdminApiKey() {
     const savedKey = setStoredAdminApiKey(adminApiKeyInput)
@@ -408,6 +410,34 @@ export function DiagnosticsPage({
     clearStoredAdminApiKey()
     setAdminApiKeyInput('')
     setAdminKeyMessage('Admin-Key wurde entfernt.')
+  }
+
+  async function handleCopyAnalysisEssence() {
+    if (!analysisEssenceText) return
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(analysisEssenceText)
+      } else if (typeof document !== 'undefined') {
+        const textarea = document.createElement('textarea')
+        textarea.value = analysisEssenceText
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      } else {
+        throw new Error('Clipboard unavailable')
+      }
+
+      setAnalysisCopyState('copied')
+      if (typeof window !== 'undefined') window.setTimeout(() => setAnalysisCopyState('idle'), 1800)
+    } catch {
+      setAnalysisCopyState('failed')
+      if (typeof window !== 'undefined') window.setTimeout(() => setAnalysisCopyState('idle'), 2400)
+    }
   }
 
   return (
@@ -592,6 +622,33 @@ export function DiagnosticsPage({
           <p>Kompakte Zusammenfassung fuer manuelle Analyse und Admin-Feedback.</p>
         </div>
         <pre className="essence-box">{essence || 'Noch keine Essenz vorhanden.'}</pre>
+      </section>
+
+      <section className="panel">
+        <div className="panel__header">
+          <h2>ChatGPT-Analyse-Essenz</h2>
+          <p>Diesen Block kopieren und in ChatGPT einfuegen, um Muster, Root Causes und naechste Codex-Prompts abzuleiten.</p>
+        </div>
+        <pre className="essence-box essence-box--analysis">{analysisEssenceText || 'Noch keine Analyse-Essenz im Snapshot vorhanden.'}</pre>
+        <div className="feedback-box__actions feedback-box__actions--copy">
+          {analysisCopyState === 'copied' ? <span className="status">Analyse-Essenz kopiert.</span> : null}
+          {analysisCopyState === 'failed' ? <span className="status status--error">Kopieren fehlgeschlagen.</span> : null}
+          <button
+            type="button"
+            className="crawl-button"
+            onClick={handleCopyAnalysisEssence}
+            disabled={!analysisEssenceText}
+          >
+            Analyse-Essenz kopieren
+          </button>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel__header">
+          <h2>Admin-Feedback</h2>
+          <p>Rueckmeldungen zur Dashboard-Qualitaet werden separat gespeichert.</p>
+        </div>
         <div className="feedback-box">
           <textarea
             value={feedbackNote}

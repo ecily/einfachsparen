@@ -7,6 +7,7 @@ const OfferFeedback = require('../../models/OfferFeedback');
 const Retailer = require('../../models/Retailer');
 const CrawlRun = require('../../models/CrawlRun');
 const CrawlRunLock = require('../../models/CrawlRunLock');
+const mongoose = require('mongoose');
 const env = require('../../config/env');
 const { buildSafeBuildInfo } = require('../buildInfo');
 const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
@@ -29,6 +30,20 @@ const PROMOTION_TYPES = new Set(['multi-buy', 'threshold', 'card-required', 'con
 const FEEDBACK_OPEN_STATUSES = new Set(['new', 'reviewing']);
 const FEEDBACK_RESOLVED_STATUSES = new Set(['resolved', 'ignored']);
 const FEEDBACK_DOCUMENT_LIMIT = 5000;
+const ANALYSIS_FEEDBACK_SNIPPET_LIMIT = 160;
+const SPAR_FAMILY_KEYS = new Set(['spar', 'eurospar', 'interspar']);
+const SENSITIVE_ANALYSIS_PATTERNS = [
+  /ipAddress/gi,
+  /remoteAddress/gi,
+  /userAgent/gi,
+  /sessionIdHash/gi,
+  /sessionId/gi,
+  /clientContext/gi,
+  /adminKey/gi,
+  /ADMIN_API_KEY/g,
+  /https?:\/\/[^\s"']+/gi,
+  /www\.[^\s"']+/gi,
+];
 
 function buildCurrentAvailabilityMatch() {
   const now = new Date();
@@ -90,6 +105,49 @@ function compactStrings(values = [], limit = 6) {
 function truncate(value, maxLength = 320) {
   const text = String(value || '').trim();
   return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
+function sanitizeAnalysisText(value, maxLength = 320) {
+  let text = String(value || '').replace(/\s+/g, ' ').trim();
+
+  for (const pattern of SENSITIVE_ANALYSIS_PATTERNS) {
+    text = text.replace(pattern, '[redacted]');
+  }
+
+  return truncate(text, maxLength);
+}
+
+function quoteYaml(value) {
+  if (value === true || value === false) return String(value);
+  if (value === null || value === undefined || value === '') return 'unknown';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return JSON.stringify(sanitizeAnalysisText(value, 1000));
+}
+
+function scalarYaml(value) {
+  if (value === true || value === false) return String(value);
+  if (value === null || value === undefined || value === '') return 'unknown';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return sanitizeAnalysisText(value, 1000);
+}
+
+function percentText(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 'unknown';
+  return `${Math.round(numeric * 100)}%`;
+}
+
+function durationText(ms) {
+  const numeric = Number(ms);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'unknown';
+  const seconds = Math.round(numeric / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const restSeconds = seconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${restSeconds}s`;
+  return `${restSeconds}s`;
 }
 
 function toDayKey(value) {
@@ -908,6 +966,698 @@ function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, 
   return issues;
 }
 
+function summarizeCrawlSources(run = {}) {
+  const sources = Array.isArray(run?.sources) ? run.sources : [];
+  const sourceOk = numberFrom(run?.summary?.successfulSourcesCount, null);
+  const sourceFail = numberFrom(run?.summary?.failedSourcesCount, null);
+  const countedOk = sources.filter((source) => ['success', 'skipped'].includes(source.status)).length;
+  const countedFail = sources.filter((source) => !['success', 'skipped', 'unknown'].includes(source.status)).length;
+
+  return {
+    sourceOk: sourceOk === null ? countedOk : sourceOk,
+    sourceFail: sourceFail === null ? countedFail : sourceFail,
+    warningSummary: compactStrings([...(run?.errorMessages || []), ...(run?.warnings || [])].map((item) => sanitizeAnalysisText(item, 180)), 5),
+    staleOrRecoveryReason: sanitizeAnalysisText(
+      run?.summary?.staleReason
+      || run?.summary?.recoveryReason
+      || run?.summary?.markStaleReason
+      || '',
+      180
+    ) || 'unknown',
+  };
+}
+
+function buildCrawlHistorySummary(crawlHistory = []) {
+  const scheduledFullRuns = crawlHistory.filter((run) => (
+    run.trigger === 'scheduled'
+    && run.mode === 'full'
+    && run.dryRun === false
+  ));
+  const manualScopedRuns = crawlHistory.filter((run) => (
+    run.trigger === 'manual'
+    || run.mode === 'scoped'
+    || run.mode === 'retailer'
+  ));
+  const statusCounts = scheduledFullRuns.reduce((counts, run) => {
+    const status = run.status || 'unknown';
+    counts[status] = numberFrom(counts[status]) + 1;
+    return counts;
+  }, {});
+  const staleCount = numberFrom(statusCounts.stale);
+  const failedCount = numberFrom(statusCounts.failed);
+  const successCount = numberFrom(statusCounts.success);
+  const partialCount = numberFrom(statusCounts.partial);
+  const manualSuccessCount = manualScopedRuns.filter((run) => run.status === 'success').length;
+  const pattern = staleCount >= 2
+    ? 'Repeated scheduled full crawls became stale.'
+    : staleCount === 1
+      ? 'Latest observed scheduled full crawl became stale.'
+      : failedCount > 0
+        ? 'At least one scheduled full crawl failed.'
+        : scheduledFullRuns.length > 0
+          ? 'Scheduled full crawl history is present.'
+          : 'No scheduled full crawl history in snapshot window.';
+
+  return {
+    scheduledFull: {
+      lastRuns: scheduledFullRuns.slice(0, 6).map((run) => ({
+        date: run.startedAt ? String(run.startedAt).slice(0, 10) : 'unknown',
+        status: run.status || 'unknown',
+        duration: durationText(run.durationMs),
+      })),
+      statusCounts: {
+        success: successCount,
+        partial: partialCount,
+        failed: failedCount,
+        stale: staleCount,
+        unknown: numberFrom(statusCounts.unknown),
+      },
+    },
+    manualScoped: {
+      count: manualScopedRuns.length,
+      success: manualSuccessCount,
+      failedOrStale: manualScopedRuns.filter((run) => ['failed', 'stale'].includes(run.status)).length,
+    },
+    pattern,
+    interpretationHint: staleCount > 0 || failedCount > 0
+      ? 'Pipeline reliability must be verified by the next scheduled daily crawl before coverage work.'
+      : 'Keep monitoring scheduled daily crawl terminal status before broadening coverage work.',
+  };
+}
+
+function buildInterpretationFlags({
+  latestScheduledFullCrawl,
+  lockStatus,
+  publishStatusSummary,
+  offerSummary,
+  retailerMatrix,
+  trendSeries,
+  dataCompletenessWarnings,
+  feedbackSummary,
+}) {
+  const flags = [];
+  const latestStatus = latestScheduledFullCrawl?.status;
+
+  if (['stale', 'failed'].includes(latestStatus)) {
+    flags.push({
+      flag: 'pipeline_unstable',
+      severity: 'red',
+      evidence: `latest scheduled full crawl ${latestStatus}`,
+    });
+  }
+
+  if (publishStatusSummary?.status === 'open' || numberFrom(publishStatusSummary?.openCount) > 0) {
+    flags.push({
+      flag: 'publish_status_open',
+      severity: 'red',
+      evidence: `${numberFrom(publishStatusSummary?.openCount)} active offers are not final`,
+    });
+  }
+
+  if (lockStatus?.isBlocked) {
+    flags.push({
+      flag: 'lock_blocked',
+      severity: 'red',
+      evidence: lockStatus.reason || 'global crawl lock is blocked',
+    });
+  }
+
+  if (numberFrom(offerSummary?.validityConfidenceRate) > 0 && offerSummary.validityConfidenceRate < 0.6) {
+    flags.push({
+      flag: 'validity_confidence_critical',
+      severity: 'red',
+      evidence: `${percentText(offerSummary.validityConfidenceRate)} validity confidence; ${numberFrom(offerSummary.missingValidToOffers)} offers without validTo`,
+    });
+  }
+
+  if (numberFrom(offerSummary?.aggregatorRiskRate) >= 0.3) {
+    flags.push({
+      flag: 'aggregator_risk_high',
+      severity: offerSummary.aggregatorRiskRate >= 0.5 ? 'red' : 'yellow',
+      evidence: `${percentText(offerSummary.aggregatorRiskRate)} aggregator risk`,
+    });
+  }
+
+  const sparRows = (retailerMatrix || []).filter((row) => SPAR_FAMILY_KEYS.has(row.retailerKey));
+  if (sparRows.length > 0 && sparRows.some((row) => row.activeOffers >= 10 && (row.officialCoverageRate < 0.35 || row.validityConfidenceRate < 0.6))) {
+    flags.push({
+      flag: 'spar_family_official_coverage_critical',
+      severity: 'red',
+      evidence: 'SPAR/EUROSPAR/INTERSPAR show low official evidence or weak validity with active offer volume',
+    });
+  }
+
+  const bipa = (retailerMatrix || []).find((row) => row.retailerKey === 'bipa');
+  if (bipa && bipa.warningStatus === 'green' && bipa.officialCoverageRate >= 0.7 && bipa.validityConfidenceRate >= 0.75) {
+    flags.push({
+      flag: 'bipa_currently_best_quality',
+      severity: 'green',
+      evidence: 'BIPA has green retailer status with strong official and validity rates',
+    });
+  }
+
+  if (numberFrom(offerSummary?.imageCoverageRate) >= 0.8) {
+    flags.push({
+      flag: 'image_coverage_strong',
+      severity: 'green',
+      evidence: `${percentText(offerSummary.imageCoverageRate)} image coverage`,
+    });
+  }
+
+  if ((trendSeries || []).length < 7 || (dataCompletenessWarnings || []).length > 0) {
+    flags.push({
+      flag: 'historical_trends_incomplete',
+      severity: 'yellow',
+      evidence: (dataCompletenessWarnings || [])[0] || 'limited trend history in snapshot',
+    });
+  }
+
+  if (numberFrom(feedbackSummary?.openFeedback) >= 10) {
+    flags.push({
+      flag: 'feedback_unprocessed_high',
+      severity: feedbackSummary.openFeedback >= 25 ? 'red' : 'yellow',
+      evidence: `${feedbackSummary.openFeedback} open or reviewing OfferFeedback entries`,
+    });
+  }
+
+  return flags;
+}
+
+function buildRetailerMatrixSummary(retailerMatrix = []) {
+  const rows = retailerMatrix.map((row) => {
+    const diagnoses = [];
+    if (row.activeOffers < 10) diagnoses.push('low active offer volume');
+    if (row.officialCoverageRate < 0.35) diagnoses.push('low official evidence');
+    if (row.validityConfidenceRate < 0.6) diagnoses.push('weak validity confidence');
+    if (row.aggregatorRiskRate >= 0.3) diagnoses.push('high aggregator risk');
+    if (row.imageCoverageRate < 0.4) diagnoses.push('weak image coverage');
+
+    return {
+      retailerKey: row.retailerKey,
+      retailerName: row.retailerName || row.retailerKey,
+      active: numberFrom(row.activeOffers),
+      officialRate: percentText(row.officialCoverageRate),
+      validityRate: percentText(row.validityConfidenceRate),
+      conditionRate: percentText(row.conditionDetectionRate),
+      imageRate: percentText(row.imageCoverageRate),
+      aggregatorCount: numberFrom(row.aggregatorOffers),
+      warningStatus: row.warningStatus || 'unknown',
+      shortDiagnosis: diagnoses.length ? diagnoses.join('; ') : 'no major issue from available retailer KPIs',
+    };
+  });
+  const sparRows = rows.filter((row) => SPAR_FAMILY_KEYS.has(row.retailerKey));
+  const sparCritical = sparRows.some((row) => row.warningStatus === 'red');
+
+  return {
+    rows,
+    sparFamily: {
+      status: sparRows.length ? (sparCritical ? 'red' : sparRows.some((row) => row.warningStatus === 'yellow') ? 'yellow' : 'green') : 'unknown',
+      diagnosis: sparRows.length
+        ? 'SPAR/EUROSPAR/INTERSPAR are interpreted together because source quality and validity work are coupled.'
+        : 'No SPAR family rows available in retailer matrix.',
+      likelyNextWork: sparCritical
+        ? 'Official source discovery and validity propagation, but only after daily crawl reliability is confirmed.'
+        : 'Continue observing SPAR family quality after crawl reliability is confirmed.',
+    },
+  };
+}
+
+function buildTrendSummary(trendSeries = [], dataCompletenessWarnings = []) {
+  const rows = Array.isArray(trendSeries) ? trendSeries : [];
+  const unknownDays = rows.filter((row) => row.crawlStatus === 'unknown').map((row) => row.date);
+  const successDays = rows.filter((row) => row.crawlStatus === 'success').map((row) => row.date);
+  const staleDays = rows.filter((row) => row.crawlStatus === 'stale').map((row) => row.date);
+  const historicalOfferSnapshotsAvailable = false;
+  const reliability = historicalOfferSnapshotsAvailable && rows.length >= 7 && staleDays.length === 0 && unknownDays.length === 0
+    ? 'usable'
+    : 'limited';
+
+  return {
+    historicalOfferSnapshotsAvailable,
+    unknownDays,
+    successDays,
+    staleDays,
+    reliability,
+    interpretation: reliability === 'limited'
+      ? 'Trend charts are structurally useful but not yet statistically reliable.'
+      : 'Trend charts have enough recent signal for cautious interpretation.',
+    warnings: dataCompletenessWarnings || [],
+  };
+}
+
+function priorityForIssue(issue = {}) {
+  if (/crawl|lock|publish/i.test(issue.title || '') && issue.severity === 'red') return 'P0';
+  if (/feedback/i.test(issue.title || '') && issue.severity === 'red') return 'P1';
+  if (issue.severity === 'red') return 'P1';
+  if (issue.severity === 'yellow') return 'P2';
+  return 'P2';
+}
+
+function enrichActionableIssues(issues = []) {
+  return issues.map((issue) => {
+    const title = issue.title || 'Unknown issue';
+    const isCrawl = /crawl/i.test(title);
+    const isPublish = /publish/i.test(title);
+    const isFeedback = /feedback/i.test(title);
+    const isLock = /lock/i.test(title);
+
+    return {
+      priority: priorityForIssue(issue),
+      severity: issue.severity || 'unknown',
+      title,
+      evidence: sanitizeAnalysisText(issue.detail || 'unknown', 240),
+      likelyRootCauseClass: isCrawl
+        ? 'pipeline/orchestrator/deploy interaction'
+        : isPublish
+          ? 'publish-state/finalization'
+          : isFeedback
+            ? 'beta-feedback-triage'
+            : isLock
+              ? 'crawl-lock/orchestrator'
+              : 'data-quality/source-evidence',
+      recommendedNextAction: isCrawl
+        ? 'Wait for the next scheduled crawl and verify terminal status, lock and publishStatus.'
+        : isPublish
+          ? 'Inspect publish finalization state read-only before running any repair.'
+          : isFeedback
+            ? 'Build or use a read-only triage summary before changing parsers, ranking or coverage.'
+            : 'Use read-only diagnostics to confirm evidence before implementation work.',
+      forbiddenActionsUntilResolved: isCrawl
+        ? ['no manual replacement crawl unless explicitly approved', 'no coverage work before next daily crawl is evaluated']
+        : isPublish
+          ? ['no productive repair without explicit approval', 'no data deletion']
+          : [],
+    };
+  });
+}
+
+function buildFeedbackBetaSummary(feedbackSummary = {}) {
+  const latest = (feedbackSummary.latestFeedback || [])
+    .filter((item) => FEEDBACK_OPEN_STATUSES.has(item.status))
+    .slice(0, 5)
+    .map((item) => ({
+      createdAt: item.createdAt || 'unknown',
+      status: item.status || 'unknown',
+      reasons: item.reasons || [],
+      retailer: item.retailerLabel || item.retailerKey || 'unknown',
+      offerReference: item.offerId || 'unknown',
+      offerTitle: sanitizeAnalysisText(item.offerTitle, 100),
+      query: sanitizeAnalysisText(item.query, 80),
+      snippet: sanitizeAnalysisText(item.snippet, ANALYSIS_FEEDBACK_SNIPPET_LIMIT),
+    }));
+
+  return {
+    totalFeedback: numberFrom(feedbackSummary.totalFeedback),
+    newToday: numberFrom(feedbackSummary.newToday),
+    newLast24h: numberFrom(feedbackSummary.newLast24h),
+    newLast7Days: numberFrom(feedbackSummary.newLast7Days),
+    newLast30Days: numberFrom(feedbackSummary.newLast30Days),
+    openFeedback: numberFrom(feedbackSummary.openFeedback),
+    resolvedFeedback: numberFrom(feedbackSummary.resolvedFeedback),
+    feedbackByStatus: feedbackSummary.feedbackByStatus || [],
+    feedbackByType: feedbackSummary.feedbackByType || [],
+    feedbackByRetailer: feedbackSummary.feedbackByRetailer || [],
+    topAffectedOffers: feedbackSummary.feedbackByOffer || [],
+    latestFeedbackCount: latest.length,
+    latestOpenFeedbackSnippets: latest,
+    interpretation: numberFrom(feedbackSummary.openFeedback) > 0
+      ? 'Beta-test feedback is being collected, but unprocessed feedback must be triaged before next implementation prompts.'
+      : 'No open beta-test feedback is visible, but the read-only feedback check still applies before next implementation prompts.',
+    recommendedNextAction: numberFrom(feedbackSummary.openFeedback) > 0
+      ? 'Build or use feedback triage status workflow: new -> reviewing -> resolved/ignored/duplicate.'
+      : 'Keep checking OfferFeedback read-only before formulating the next Codex prompt.',
+  };
+}
+
+function buildSourceExtractionSummary(latestEssence = []) {
+  const summary = {};
+  const knownKeys = ['billa-plus', 'billa', 'hofer', 'bipa', 'pagro', 'dm', 'penny', 'lidl', 'interspar', 'eurospar', 'spar'];
+
+  for (const key of knownKeys) {
+    summary[key] = 'not_available';
+  }
+
+  for (const item of latestEssence || []) {
+    const key = item.retailerKey || 'unknown';
+    summary[key] = sanitizeAnalysisText(item.essence || 'not_available', 280) || 'not_available';
+  }
+
+  return summary;
+}
+
+function buildFeedbackProcessingInstruction(feedbackSummary = {}) {
+  const unprocessed = numberFrom(feedbackSummary.openFeedback) > 0;
+
+  return {
+    requiredForNextCodexPrompt: true,
+    unprocessedFeedbackAvailable: unprocessed,
+    instructionStillApplies: true,
+    instruction: 'Before formulating the next Codex prompt, read and consider current unprocessed OfferFeedback entries.',
+    scope: 'read-only',
+    collection: 'OfferFeedback',
+    includeOnly: [
+      'new/open/unprocessed feedback',
+      'reason/type/category',
+      'retailer',
+      'offer reference',
+      'query/context if available',
+      'short text snippet if available',
+    ],
+    exclude: [
+      'IP addresses',
+      'user agents',
+      'session ids',
+      'raw client-side context',
+      'long free-text dumps',
+    ],
+    purpose: 'Use real beta-user feedback to prioritize root-cause analysis and next actions.',
+  };
+}
+
+function buildAnalysisEssence({
+  generatedAt,
+  buildInfo,
+  executiveStatus,
+  latestScheduledFullCrawl,
+  crawlHistory,
+  lockStatus,
+  publishStatusSummary,
+  offerSummary,
+  qualityKpis,
+  retailerMatrix,
+  trendSeries,
+  actionableIssues,
+  dataCompletenessWarnings,
+  feedbackSummary,
+  latestEssence,
+} = {}) {
+  const latestSourceSummary = summarizeCrawlSources(latestScheduledFullCrawl);
+  const crawlHistorySummary = buildCrawlHistorySummary(crawlHistory);
+  const interpretationFlags = buildInterpretationFlags({
+    latestScheduledFullCrawl,
+    lockStatus,
+    publishStatusSummary,
+    offerSummary,
+    retailerMatrix,
+    trendSeries,
+    dataCompletenessWarnings,
+    feedbackSummary,
+  });
+  const retailerSummary = buildRetailerMatrixSummary(retailerMatrix);
+  const trendSummary = buildTrendSummary(trendSeries, dataCompletenessWarnings);
+  const feedbackBetaSummary = buildFeedbackBetaSummary(feedbackSummary);
+  const feedbackProcessingInstruction = buildFeedbackProcessingInstruction(feedbackSummary);
+
+  return {
+    header: {
+      snapshotAt: generatedAt || new Date().toISOString(),
+      buildTime: buildInfo?.buildTime || 'unknown',
+      dashboardVersion: 'v1.2-chatgpt-analysis-essence',
+      dataMode: 'read-only',
+      tracking: 'none',
+    },
+    executiveHealth: {
+      level: executiveStatus?.level || 'unknown',
+      reason: executiveStatus?.reason || 'unknown',
+      backend: 'online',
+      mongo: mongoose.connection.readyState === 1 ? 'connected' : 'unknown',
+      globalLock: lockStatus?.state || 'unknown',
+      publishStatus: publishStatusSummary?.status || 'unknown',
+      publishFinalOffers: numberFrom(publishStatusSummary?.finalCount),
+      publishOpenOffers: numberFrom(publishStatusSummary?.openCount),
+      finalOffers: numberFrom(publishStatusSummary?.finalCount),
+      openOffers: numberFrom(publishStatusSummary?.openCount),
+      nextCrawlBlocked: lockStatus?.isBlocked === true ? true : lockStatus?.isBlocked === false ? false : 'unknown',
+      latestBuildTime: buildInfo?.buildTime || 'unknown',
+      latestHealthTime: generatedAt || 'unknown',
+    },
+    latestScheduledFullCrawl: {
+      runId: latestScheduledFullCrawl?.id || 'not_available',
+      status: latestScheduledFullCrawl?.status || 'not_available',
+      trigger: latestScheduledFullCrawl?.trigger || 'not_available',
+      mode: latestScheduledFullCrawl?.mode || 'not_available',
+      dryRun: latestScheduledFullCrawl ? Boolean(latestScheduledFullCrawl.dryRun) : 'unknown',
+      startedAt: latestScheduledFullCrawl?.startedAt || 'not_available',
+      finishedAt: latestScheduledFullCrawl?.finishedAt || 'not_available',
+      duration: durationText(latestScheduledFullCrawl?.durationMs),
+      sourceOk: latestSourceSummary.sourceOk,
+      sourceFail: latestSourceSummary.sourceFail,
+      warningErrorSummary: latestSourceSummary.warningSummary,
+      staleRecoveryReason: latestSourceSummary.staleOrRecoveryReason,
+      automaticReplacementCrawlStarted: 'unknown',
+    },
+    crawlHistorySummary,
+    offerQualityKpi: {
+      activeOffers: numberFrom(offerSummary?.activeOffers),
+      officialOffers: numberFrom(offerSummary?.officialOffers),
+      officialCoverageRate: percentText(offerSummary?.officialCoverageRate),
+      validityConfidenceRate: percentText(offerSummary?.validityConfidenceRate),
+      offersWithoutValidTo: numberFrom(offerSummary?.missingValidToOffers),
+      conditionDetectionRate: percentText(offerSummary?.conditionDetectionRate),
+      comparisonSafetyRate: percentText(offerSummary?.comparisonSafetyRate),
+      imageCoverageRate: percentText(offerSummary?.imageCoverageRate),
+      aggregatorRiskRate: percentText(offerSummary?.aggregatorRiskRate),
+      qualityKpiKeys: (qualityKpis || []).map((kpi) => kpi.key),
+    },
+    interpretationFlags,
+    retailerMatrixSummary: retailerSummary.rows,
+    sparFamily: retailerSummary.sparFamily,
+    trendSummary,
+    actionableIssues: enrichActionableIssues(actionableIssues),
+    feedbackBetaTest: feedbackBetaSummary,
+    feedbackProcessingInstruction,
+    sourceExtractionSummary: buildSourceExtractionSummary(latestEssence),
+    safety: {
+      excludesSensitiveFields: true,
+      snippetsMaxCharacters: ANALYSIS_FEEDBACK_SNIPPET_LIMIT,
+      completeUrlsIncluded: false,
+      secretsIncluded: false,
+    },
+  };
+}
+
+function appendList(lines, list, indent = '  ') {
+  if (!Array.isArray(list) || list.length === 0) {
+    lines.push(`${indent}- none`);
+    return;
+  }
+
+  for (const item of list) {
+    lines.push(`${indent}- ${quoteYaml(item)}`);
+  }
+}
+
+function renderAnalysisEssenceText(essence = {}) {
+  const lines = [];
+  const header = essence.header || {};
+  const health = essence.executiveHealth || {};
+  const latest = essence.latestScheduledFullCrawl || {};
+  const history = essence.crawlHistorySummary || {};
+  const offerKpi = essence.offerQualityKpi || {};
+  const feedback = essence.feedbackBetaTest || {};
+  const instruction = essence.feedbackProcessingInstruction || {};
+
+  lines.push('# kaufklug.at Dashboard Analyse-Essenz');
+  lines.push(`snapshotAt: ${scalarYaml(header.snapshotAt)}`);
+  lines.push(`buildTime: ${scalarYaml(header.buildTime)}`);
+  lines.push(`dashboardVersion: ${scalarYaml(header.dashboardVersion)}`);
+  lines.push(`dataMode: ${scalarYaml(header.dataMode)}`);
+  lines.push(`tracking: ${scalarYaml(header.tracking)}`);
+  lines.push('');
+  lines.push('executive_health:');
+  lines.push(`  level: ${scalarYaml(health.level)}`);
+  lines.push(`  reason: ${quoteYaml(health.reason)}`);
+  lines.push(`  backend: ${scalarYaml(health.backend)}`);
+  lines.push(`  mongo: ${scalarYaml(health.mongo)}`);
+  lines.push(`  globalLock: ${scalarYaml(health.globalLock)}`);
+  lines.push(`  publishStatus: ${scalarYaml(health.publishStatus)}`);
+  lines.push(`  publishFinalOffers: ${scalarYaml(health.publishFinalOffers)}`);
+  lines.push(`  publishOpenOffers: ${scalarYaml(health.publishOpenOffers)}`);
+  lines.push(`  finalOffers: ${scalarYaml(health.finalOffers)}`);
+  lines.push(`  openOffers: ${scalarYaml(health.openOffers)}`);
+  lines.push(`  nextCrawlBlocked: ${scalarYaml(health.nextCrawlBlocked)}`);
+  lines.push(`  latestBuildTime: ${scalarYaml(health.latestBuildTime)}`);
+  lines.push(`  latestHealthTime: ${scalarYaml(health.latestHealthTime)}`);
+  lines.push('');
+  lines.push('latest_scheduled_full_crawl:');
+  lines.push(`  runId: ${quoteYaml(latest.runId)}`);
+  lines.push(`  status: ${scalarYaml(latest.status)}`);
+  lines.push(`  trigger: ${scalarYaml(latest.trigger)}`);
+  lines.push(`  mode: ${scalarYaml(latest.mode)}`);
+  lines.push(`  dryRun: ${scalarYaml(latest.dryRun)}`);
+  lines.push(`  startedAt: ${scalarYaml(latest.startedAt)}`);
+  lines.push(`  finishedAt: ${scalarYaml(latest.finishedAt)}`);
+  lines.push(`  duration: ${quoteYaml(latest.duration)}`);
+  lines.push(`  sourceOk: ${scalarYaml(latest.sourceOk)}`);
+  lines.push(`  sourceFail: ${scalarYaml(latest.sourceFail)}`);
+  lines.push('  warningErrorSummary:');
+  appendList(lines, latest.warningErrorSummary, '    ');
+  lines.push(`  staleRecoveryReason: ${quoteYaml(latest.staleRecoveryReason)}`);
+  lines.push(`  automaticReplacementCrawlStarted: ${scalarYaml(latest.automaticReplacementCrawlStarted)}`);
+  lines.push('');
+  lines.push('crawl_history_summary:');
+  lines.push('  scheduledFull:');
+  lines.push('    lastRuns:');
+  for (const run of history.scheduledFull?.lastRuns || []) {
+    lines.push(`      - date: ${quoteYaml(run.date)}`);
+    lines.push(`        status: ${scalarYaml(run.status)}`);
+    lines.push(`        duration: ${quoteYaml(run.duration)}`);
+  }
+  if (!(history.scheduledFull?.lastRuns || []).length) lines.push('      - none');
+  lines.push('    statusCounts:');
+  for (const [key, value] of Object.entries(history.scheduledFull?.statusCounts || {})) {
+    lines.push(`      ${key}: ${scalarYaml(value)}`);
+  }
+  lines.push('  manualScoped:');
+  lines.push(`    count: ${scalarYaml(history.manualScoped?.count)}`);
+  lines.push(`    success: ${scalarYaml(history.manualScoped?.success)}`);
+  lines.push(`    failedOrStale: ${scalarYaml(history.manualScoped?.failedOrStale)}`);
+  lines.push(`  pattern: ${quoteYaml(history.pattern)}`);
+  lines.push(`  interpretationHint: ${quoteYaml(history.interpretationHint)}`);
+  lines.push('');
+  lines.push('offer_quality_kpi:');
+  for (const [key, value] of Object.entries(offerKpi)) {
+    if (Array.isArray(value)) continue;
+    lines.push(`  ${key}: ${quoteYaml(value)}`);
+  }
+  lines.push('');
+  lines.push('interpretation_flags:');
+  for (const flag of essence.interpretationFlags || []) {
+    lines.push(`  - flag: ${scalarYaml(flag.flag)}`);
+    lines.push(`    severity: ${scalarYaml(flag.severity)}`);
+    lines.push(`    evidence: ${quoteYaml(flag.evidence)}`);
+  }
+  if (!(essence.interpretationFlags || []).length) lines.push('  - none');
+  lines.push('');
+  lines.push('retailer_matrix_summary:');
+  for (const row of essence.retailerMatrixSummary || []) {
+    lines.push(`  - retailer: ${quoteYaml(row.retailerName || row.retailerKey)}`);
+    lines.push(`    key: ${quoteYaml(row.retailerKey)}`);
+    lines.push(`    active: ${scalarYaml(row.active)}`);
+    lines.push(`    officialRate: ${quoteYaml(row.officialRate)}`);
+    lines.push(`    validityRate: ${quoteYaml(row.validityRate)}`);
+    lines.push(`    conditionRate: ${quoteYaml(row.conditionRate)}`);
+    lines.push(`    imageRate: ${quoteYaml(row.imageRate)}`);
+    lines.push(`    aggregatorCount: ${scalarYaml(row.aggregatorCount)}`);
+    lines.push(`    warningStatus: ${scalarYaml(row.warningStatus)}`);
+    lines.push(`    shortDiagnosis: ${quoteYaml(row.shortDiagnosis)}`);
+  }
+  if (!(essence.retailerMatrixSummary || []).length) lines.push('  - none');
+  lines.push('spar_family:');
+  lines.push(`  status: ${scalarYaml(essence.sparFamily?.status)}`);
+  lines.push(`  diagnosis: ${quoteYaml(essence.sparFamily?.diagnosis)}`);
+  lines.push(`  likelyNextWork: ${quoteYaml(essence.sparFamily?.likelyNextWork)}`);
+  lines.push('');
+  lines.push('trend_summary:');
+  lines.push(`  historicalOfferSnapshotsAvailable: ${scalarYaml(essence.trendSummary?.historicalOfferSnapshotsAvailable)}`);
+  lines.push(`  reliability: ${scalarYaml(essence.trendSummary?.reliability)}`);
+  lines.push(`  unknownDays: [${(essence.trendSummary?.unknownDays || []).map(quoteYaml).join(', ')}]`);
+  lines.push(`  successDays: [${(essence.trendSummary?.successDays || []).map(quoteYaml).join(', ')}]`);
+  lines.push(`  staleDays: [${(essence.trendSummary?.staleDays || []).map(quoteYaml).join(', ')}]`);
+  lines.push(`  interpretation: ${quoteYaml(essence.trendSummary?.interpretation)}`);
+  lines.push('');
+  lines.push('actionable_issues:');
+  for (const issue of essence.actionableIssues || []) {
+    lines.push(`  - priority: ${scalarYaml(issue.priority)}`);
+    lines.push(`    severity: ${scalarYaml(issue.severity)}`);
+    lines.push(`    title: ${quoteYaml(issue.title)}`);
+    lines.push(`    evidence: ${quoteYaml(issue.evidence)}`);
+    lines.push(`    likelyRootCauseClass: ${quoteYaml(issue.likelyRootCauseClass)}`);
+    lines.push(`    recommendedNextAction: ${quoteYaml(issue.recommendedNextAction)}`);
+    if (issue.forbiddenActionsUntilResolved?.length) {
+      lines.push('    forbiddenActionsUntilResolved:');
+      appendList(lines, issue.forbiddenActionsUntilResolved, '      ');
+    }
+  }
+  if (!(essence.actionableIssues || []).length) lines.push('  - none');
+  lines.push('');
+  lines.push('feedback_beta_test:');
+  lines.push(`  totalFeedback: ${scalarYaml(feedback.totalFeedback)}`);
+  lines.push(`  newToday: ${scalarYaml(feedback.newToday)}`);
+  lines.push(`  newLast24h: ${scalarYaml(feedback.newLast24h)}`);
+  lines.push(`  newLast7Days: ${scalarYaml(feedback.newLast7Days)}`);
+  lines.push(`  newLast30Days: ${scalarYaml(feedback.newLast30Days)}`);
+  lines.push(`  openFeedback: ${scalarYaml(feedback.openFeedback)}`);
+  lines.push(`  resolvedFeedback: ${scalarYaml(feedback.resolvedFeedback)}`);
+  lines.push('  feedbackByStatus:');
+  for (const row of feedback.feedbackByStatus || []) lines.push(`    - ${quoteYaml(row.status)}: ${scalarYaml(row.count)}`);
+  if (!(feedback.feedbackByStatus || []).length) lines.push('    - none');
+  lines.push('  feedbackByType:');
+  for (const row of feedback.feedbackByType || []) lines.push(`    - ${quoteYaml(row.type)}: ${scalarYaml(row.count)}`);
+  if (!(feedback.feedbackByType || []).length) lines.push('    - none');
+  lines.push('  feedbackByRetailer:');
+  for (const row of feedback.feedbackByRetailer || []) lines.push(`    - ${quoteYaml(row.retailerLabel || row.retailerKey)}: ${scalarYaml(row.count)}`);
+  if (!(feedback.feedbackByRetailer || []).length) lines.push('    - none');
+  lines.push('  topAffectedOffers:');
+  for (const row of feedback.topAffectedOffers || []) {
+    lines.push(`    - offerReference: ${quoteYaml(row.offerId)}`);
+    lines.push(`      retailer: ${quoteYaml(row.retailerLabel || row.retailerKey)}`);
+    lines.push(`      count: ${scalarYaml(row.count)}`);
+    lines.push(`      reasons: [${(row.reasons || []).map(quoteYaml).join(', ')}]`);
+  }
+  if (!(feedback.topAffectedOffers || []).length) lines.push('    - none');
+  lines.push(`  latestFeedbackCount: ${scalarYaml(feedback.latestFeedbackCount)}`);
+  lines.push('  latestOpenFeedbackSnippets:');
+  for (const item of feedback.latestOpenFeedbackSnippets || []) {
+    lines.push(`    - createdAt: ${scalarYaml(item.createdAt)}`);
+    lines.push(`      status: ${scalarYaml(item.status)}`);
+    lines.push(`      reasons: [${(item.reasons || []).map(quoteYaml).join(', ')}]`);
+    lines.push(`      retailer: ${quoteYaml(item.retailer)}`);
+    lines.push(`      offerReference: ${quoteYaml(item.offerReference)}`);
+    lines.push(`      query: ${quoteYaml(item.query)}`);
+    lines.push(`      snippet: ${quoteYaml(item.snippet)}`);
+  }
+  if (!(feedback.latestOpenFeedbackSnippets || []).length) lines.push('    - none');
+  lines.push(`  interpretation: ${quoteYaml(feedback.interpretation)}`);
+  lines.push(`  recommendedNextAction: ${quoteYaml(feedback.recommendedNextAction)}`);
+  lines.push('');
+  lines.push('feedback_processing_instruction:');
+  lines.push(`  requiredForNextCodexPrompt: ${scalarYaml(instruction.requiredForNextCodexPrompt)}`);
+  lines.push(`  unprocessedFeedbackAvailable: ${scalarYaml(instruction.unprocessedFeedbackAvailable)}`);
+  lines.push(`  instructionStillApplies: ${scalarYaml(instruction.instructionStillApplies)}`);
+  lines.push(`  instruction: ${quoteYaml(instruction.instruction)}`);
+  lines.push(`  scope: ${quoteYaml(instruction.scope)}`);
+  lines.push(`  collection: ${quoteYaml(instruction.collection)}`);
+  lines.push('  includeOnly:');
+  appendList(lines, instruction.includeOnly, '    ');
+  lines.push('  exclude:');
+  appendList(lines, instruction.exclude, '    ');
+  lines.push(`  purpose: ${quoteYaml(instruction.purpose)}`);
+  lines.push('');
+  lines.push('source_extraction_summary:');
+  for (const [key, value] of Object.entries(essence.sourceExtractionSummary || {})) {
+    lines.push(`  ${key}: ${quoteYaml(value)}`);
+  }
+  lines.push('');
+  lines.push('safety:');
+  lines.push(`  excludesSensitiveFields: ${scalarYaml(essence.safety?.excludesSensitiveFields)}`);
+  lines.push(`  snippetsMaxCharacters: ${scalarYaml(essence.safety?.snippetsMaxCharacters)}`);
+  lines.push(`  completeUrlsIncluded: ${scalarYaml(essence.safety?.completeUrlsIncluded)}`);
+  lines.push(`  secretsIncluded: ${scalarYaml(essence.safety?.secretsIncluded)}`);
+  lines.push('');
+  lines.push('# Aufgabe an ChatGPT');
+  lines.push('Analysiere diese Dashboard-Essenz.');
+  lines.push('Beruecksichtige dabei ausdruecklich die aktuellen, noch nicht verarbeiteten User-Feedbacks aus OfferFeedback, sofern sie in der Essenz enthalten sind. Falls sie nicht enthalten sind, fordere im naechsten Codex-Prompt read-only an, diese Feedbacks auszulesen und bei der Priorisierung zu beruecksichtigen.');
+  lines.push('');
+  lines.push('Bitte liefere:');
+  lines.push('1. Kurzfazit Gruen/Gelb/Rot');
+  lines.push('2. wichtigste Muster');
+  lines.push('3. wahrscheinlichste Root Causes');
+  lines.push('4. Prioritaeten nach P0/P1/P2');
+  lines.push('5. welche Arbeiten jetzt ausdruecklich NICHT gemacht werden sollen');
+  lines.push('6. den idealen naechsten Codex-Prompt mit maximaler Effizienz und minimalem Risiko');
+
+  return lines.join('\n');
+}
+
+function buildAnalysisEssencePayload(context = {}) {
+  const analysisEssence = buildAnalysisEssence(context);
+  return {
+    analysisEssence,
+    analysisEssenceText: renderAnalysisEssenceText(analysisEssence),
+  };
+}
+
 function createEmptyComparisonSnapshot(message) {
   return {
     generatedAt: new Date().toISOString(),
@@ -1130,12 +1880,34 @@ async function buildDashboardSnapshot() {
       : '',
     latestScheduledFullCrawl ? '' : 'Kein scheduled/full CrawlRun gefunden; Ampel nutzt den neuesten CrawlRun als Fallback.',
   ].filter(Boolean);
+  const generatedAt = new Date().toISOString();
+  const buildInfo = buildSafeBuildInfo();
+  const {
+    analysisEssence,
+    analysisEssenceText,
+  } = buildAnalysisEssencePayload({
+    generatedAt,
+    buildInfo,
+    executiveStatus,
+    latestScheduledFullCrawl,
+    crawlHistory,
+    lockStatus,
+    publishStatusSummary,
+    offerSummary,
+    qualityKpis,
+    retailerMatrix,
+    trendSeries,
+    actionableIssues,
+    dataCompletenessWarnings,
+    feedbackSummary,
+    latestEssence,
+  });
 
   return {
     ok: true,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     health: {
-      build: buildSafeBuildInfo(),
+      build: buildInfo,
     },
     executiveStatus,
     latestCrawl,
@@ -1161,6 +1933,8 @@ async function buildDashboardSnapshot() {
     offerSamples,
     latestEssence,
     recentFeedback,
+    analysisEssence,
+    analysisEssenceText,
   };
 }
 
@@ -1171,9 +1945,11 @@ module.exports = {
     buildExecutiveStatus,
     buildFeedbackSummary,
     buildFeedbackSummaryFromDocuments,
+    buildAnalysisEssencePayload,
     buildOfferDiagnostics,
     buildQualityKpis,
     buildTrendSeries,
+    renderAnalysisEssenceText,
     hasConditionEvidence,
     hasSafeValidity,
     isComparisonSafe,
