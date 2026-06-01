@@ -62,6 +62,11 @@ export async function saveFeedback(payload) {
   return response.data
 }
 
+export async function saveBetaFeedback(payload) {
+  const response = await api.post('/feedback', payload)
+  return response.data
+}
+
 export async function fetchOfferRanking(params = {}) {
   const response = await api.get('/offers/ranking', {
     params,

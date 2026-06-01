@@ -69,6 +69,12 @@ export function getPageMeta(activePage) {
         'Merke Angebote für deinen Einkauf, organisiere deine Einkaufsliste und teile sie bei Bedarf per Link.',
       path: '/einkaufsliste',
     },
+    feedback: {
+      title: 'Feedback senden | kaufklug.at',
+      description:
+        'Sende Ideen, Wuensche und Hinweise fuer die kaufklug Beta und hilf mit, den Angebotsfinder gezielt zu verbessern.',
+      path: '/feedback',
+    },
     'shared-shopping-list': {
       title: SEO_TITLE,
       description:
@@ -278,6 +284,7 @@ export function getInitialPageFromPathname(pathname) {
   if (pathname.includes('datenschutz') || pathname.includes('privacy')) return 'privacy'
   if (pathname.includes('nutzung') || pathname.includes('haftung') || pathname.includes('legal')) return 'liability'
   if (pathname.includes('cookies') || pathname.includes('cookie')) return 'cookies'
+  if (pathname.includes('feedback')) return 'feedback'
   if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
   if (pathname.includes('stoebern') || pathname.includes('stobern')) return 'search'
   if (pathname.includes('suche')) return 'product-search'
@@ -303,6 +310,7 @@ export function getPathForPage(nextPage) {
   if (nextPage === 'privacy') return '/datenschutz'
   if (nextPage === 'liability') return '/nutzungshinweise'
   if (nextPage === 'cookies') return '/cookies'
+  if (nextPage === 'feedback') return '/feedback'
 
   return '/'
 }

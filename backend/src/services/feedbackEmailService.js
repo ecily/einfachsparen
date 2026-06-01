@@ -1,0 +1,219 @@
+const net = require('node:net');
+const tls = require('node:tls');
+const env = require('../config/env');
+
+const DEFAULT_FEEDBACK_EMAIL_TO = 'andreas.franz@ecily.com';
+
+function hasSmtpConfig(envConfig = env) {
+  return Boolean(envConfig.SMTP_HOST && envConfig.SMTP_PORT && envConfig.SMTP_FROM);
+}
+
+function sanitizeHeader(value) {
+  return String(value || '').replace(/[\r\n]+/g, ' ').trim();
+}
+
+function shortError(error) {
+  return String(error?.message || error || 'email delivery failed').replace(/\s+/g, ' ').slice(0, 240);
+}
+
+function formatDate(value = new Date()) {
+  const date = value ? new Date(value) : new Date();
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
+function buildBetaFeedbackEmailText(feedback = {}) {
+  const featureInterests = Array.isArray(feedback.featureInterests) && feedback.featureInterests.length
+    ? feedback.featureInterests.join(', ')
+    : '-';
+
+  return [
+    'Neues kaufklug Beta-Feedback',
+    '',
+    `Zeitpunkt: ${formatDate(feedback.createdAt)}`,
+    `Name: ${feedback.name || '-'}`,
+    `E-Mail: ${feedback.email || '-'}`,
+    `Feedback-Typ: ${feedback.feedbackType || 'other'}`,
+    `Feature-Interessen: ${featureInterests}`,
+    `Gewuenschte Maerkte / Haendler: ${feedback.requestedMarkets || '-'}`,
+    `Mongo-ID: ${feedback._id || feedback.id || '-'}`,
+    '',
+    'Nachricht:',
+    String(feedback.message || '').trim(),
+    '',
+    'Gesendet ueber kaufklug.at/feedback',
+  ].join('\n');
+}
+
+function readLine(socket, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    let buffer = '';
+    let timer = null;
+
+    function cleanup() {
+      if (timer) clearTimeout(timer);
+      socket.off('data', handleData);
+      socket.off('error', handleError);
+      socket.off('end', handleEnd);
+    }
+
+    function handleData(chunk) {
+      buffer += chunk.toString('utf8');
+      const lines = buffer.split(/\r?\n/).filter(Boolean);
+      const lastLine = lines[lines.length - 1] || '';
+
+      if (/^\d{3} /.test(lastLine)) {
+        cleanup();
+        resolve(buffer);
+      }
+    }
+
+    function handleError(error) {
+      cleanup();
+      reject(error);
+    }
+
+    function handleEnd() {
+      cleanup();
+      reject(new Error('SMTP connection ended unexpectedly'));
+    }
+
+    timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('SMTP response timeout'));
+    }, timeoutMs);
+
+    socket.on('data', handleData);
+    socket.on('error', handleError);
+    socket.on('end', handleEnd);
+  });
+}
+
+async function expectSmtp(socket, expectedCodes, command) {
+  const response = await readLine(socket);
+  const code = Number(response.slice(0, 3));
+  const allowedCodes = Array.isArray(expectedCodes) ? expectedCodes : [expectedCodes];
+
+  if (!allowedCodes.includes(code)) {
+    throw new Error(`SMTP ${command} failed with ${code}`);
+  }
+
+  return response;
+}
+
+async function writeSmtp(socket, command, expectedCodes) {
+  socket.write(`${command}\r\n`);
+  return expectSmtp(socket, expectedCodes, command.split(' ')[0]);
+}
+
+function connectSocket({ host, port, secure }) {
+  return new Promise((resolve, reject) => {
+    const socket = secure
+      ? tls.connect({ host, port, servername: host })
+      : net.connect({ host, port });
+
+    socket.once('connect', () => {
+      if (!secure) resolve(socket);
+    });
+    socket.once('secureConnect', () => resolve(socket));
+    socket.once('error', reject);
+  });
+}
+
+function upgradeToTls(socket, host) {
+  return new Promise((resolve, reject) => {
+    const secureSocket = tls.connect({
+      socket,
+      servername: host,
+    });
+
+    secureSocket.once('secureConnect', () => resolve(secureSocket));
+    secureSocket.once('error', reject);
+  });
+}
+
+function buildMimeMessage({ from, to, subject, text }) {
+  const safeFrom = sanitizeHeader(from);
+  const safeTo = sanitizeHeader(to);
+  const safeSubject = sanitizeHeader(subject);
+
+  return [
+    `From: ${safeFrom}`,
+    `To: ${safeTo}`,
+    `Subject: ${safeSubject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    String(text || ''),
+  ].join('\r\n');
+}
+
+async function sendSmtpMail({ envConfig = env, subject, text }) {
+  const host = envConfig.SMTP_HOST;
+  const port = Number(envConfig.SMTP_PORT);
+  const secure = envConfig.SMTP_SECURE === true || port === 465;
+  const requireStartTls = envConfig.SMTP_REQUIRE_TLS === true || (!secure && port === 587);
+  const from = envConfig.SMTP_FROM;
+  const to = envConfig.FEEDBACK_EMAIL_TO || DEFAULT_FEEDBACK_EMAIL_TO;
+  let socket = await connectSocket({ host, port, secure });
+
+  try {
+    await expectSmtp(socket, 220, 'connect');
+    await writeSmtp(socket, `EHLO ${sanitizeHeader(envConfig.SMTP_HELO_NAME || 'kaufklug.at')}`, 250);
+
+    if (requireStartTls) {
+      await writeSmtp(socket, 'STARTTLS', 220);
+      socket = await upgradeToTls(socket, host);
+      await writeSmtp(socket, `EHLO ${sanitizeHeader(envConfig.SMTP_HELO_NAME || 'kaufklug.at')}`, 250);
+    }
+
+    if (envConfig.SMTP_USER || envConfig.SMTP_PASS) {
+      const auth = Buffer.from(`\u0000${envConfig.SMTP_USER || ''}\u0000${envConfig.SMTP_PASS || ''}`, 'utf8').toString('base64');
+      await writeSmtp(socket, `AUTH PLAIN ${auth}`, 235);
+    }
+
+    await writeSmtp(socket, `MAIL FROM:<${sanitizeHeader(from)}>`, 250);
+    await writeSmtp(socket, `RCPT TO:<${sanitizeHeader(to)}>`, [250, 251]);
+    await writeSmtp(socket, 'DATA', 354);
+    socket.write(`${buildMimeMessage({ from, to, subject, text })}\r\n.\r\n`);
+    await expectSmtp(socket, 250, 'DATA body');
+    socket.write('QUIT\r\n');
+  } finally {
+    socket.end();
+  }
+}
+
+async function sendBetaFeedbackEmail(feedback, { envConfig = env, smtpSender = sendSmtpMail } = {}) {
+  if (!hasSmtpConfig(envConfig)) {
+    return {
+      status: 'not_configured',
+      error: null,
+    };
+  }
+
+  try {
+    await smtpSender({
+      envConfig,
+      subject: 'Neues kaufklug Beta-Feedback',
+      text: buildBetaFeedbackEmailText(feedback),
+    });
+
+    return {
+      status: 'sent',
+      error: null,
+    };
+  } catch (error) {
+    return {
+      status: 'failed',
+      error: shortError(error),
+    };
+  }
+}
+
+module.exports = {
+  DEFAULT_FEEDBACK_EMAIL_TO,
+  buildBetaFeedbackEmailText,
+  hasSmtpConfig,
+  sendBetaFeedbackEmail,
+  sendSmtpMail,
+};

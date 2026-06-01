@@ -13,6 +13,7 @@ import { KeywordSearchPage } from './components/search/KeywordSearchPage'
 import { SeoOfferLandingPage } from './components/search/SeoOfferLandingPage'
 import { ShoppingListPage } from './components/shopping/ShoppingListPage'
 import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
+import { FeedbackPage } from './components/feedback/FeedbackPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
 import {
@@ -1022,6 +1023,8 @@ function App() {
           onGoToOffers={() => handleNavigate('product-search')}
           onNavigate={handleNavigate}
         />
+      ) : activePage === 'feedback' ? (
+        <FeedbackPage />
       ) : activePage === 'impressum' ? (
         <ImpressumPage />
       ) : activePage === 'privacy' ? (

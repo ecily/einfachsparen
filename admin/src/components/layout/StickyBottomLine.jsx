@@ -64,8 +64,8 @@ export function StickyBottomLine({ onNavigate }) {
         <button type="button" style={footerButtonStyle} onClick={() => onNavigate('cookies')}>
           Cookies
         </button>
-        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('liability')}>
-          Fehler melden
+        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('feedback')}>
+          Feedback senden
         </button>
       </span>
     </div>
