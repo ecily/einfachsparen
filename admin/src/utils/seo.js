@@ -96,11 +96,6 @@ export function getPageMeta(activePage) {
       description: 'Informationen zu Cookies, lokaler Speicherung und Nutzungsmessung bei kaufklug.at.',
       path: '/cookies',
     },
-    quality: {
-      title: SEO_TITLE,
-      description: 'Interne Qualitätsansicht für kaufklug.at.',
-      path: '/quality',
-    },
     diagnostics: {
       title: SEO_TITLE,
       description: 'Interner KPI- und Administrationsbereich für kaufklug.at.',
@@ -169,7 +164,7 @@ export function updateSeoMetadata(activePage) {
 
   const meta = getPageMeta(activePage)
   const canonicalUrl = `${SITE_URL}${meta.path}`
-  const isInternalPage = activePage === 'quality' || activePage === 'diagnostics'
+  const isInternalPage = activePage === 'diagnostics'
   const isSharedListPage = activePage === 'shared-shopping-list'
 
   document.title = meta.title || TAB_TITLE
@@ -283,7 +278,6 @@ export function getInitialPageFromPathname(pathname) {
   if (pathname.includes('datenschutz') || pathname.includes('privacy')) return 'privacy'
   if (pathname.includes('nutzung') || pathname.includes('haftung') || pathname.includes('legal')) return 'liability'
   if (pathname.includes('cookies') || pathname.includes('cookie')) return 'cookies'
-  if (pathname.includes('quality')) return 'quality'
   if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
   if (pathname.includes('stoebern') || pathname.includes('stobern')) return 'search'
   if (pathname.includes('suche')) return 'product-search'
@@ -301,7 +295,6 @@ export function getPathForPage(nextPage) {
   const seoLandingPage = getSeoLandingPageByRouteId(nextPage)
   if (seoLandingPage) return seoLandingPage.path
 
-  if (nextPage === 'quality') return '/quality'
   if (nextPage === 'diagnostics') return '/ecily_web'
   if (nextPage === 'product-search') return '/suche'
   if (nextPage === 'search') return '/stoebern'

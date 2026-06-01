@@ -2,11 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import './index.css'
 import {
   fetchHealth,
-  fetchQualitySnapshot,
-  ignoreArticleQualityItem,
-  saveArticleSubcategoryOverride,
   saveFeedback,
-  saveSubcategoryCategoryOverride,
 } from './api'
 import { SHOPPING_LIST_STORAGE_KEY } from './config/constants'
 import { CookieStorageNotice } from './components/layout/CookieStorageNotice'
@@ -19,7 +15,6 @@ import { ShoppingListPage } from './components/shopping/ShoppingListPage'
 import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
-import { QualityPage } from './components/admin/QualityPage'
 import {
   buildTrackedApkDownloadUrl,
   fetchAdminJson,
@@ -71,10 +66,6 @@ function getFriendlyErrorMessage(error, fallback) {
 
 async function fetchAdminDashboardSnapshot() {
   return fetchAdminJson('/dashboard/snapshot')
-}
-
-async function fetchAdminAnalyticsSummary() {
-  return fetchAdminJson('/analytics/summary')
 }
 
 async function fetchAdminEssence() {
@@ -349,7 +340,8 @@ function App() {
   const rawPathname = typeof window !== 'undefined' ? window.location.pathname : ''
   const pathname = rawPathname.toLowerCase()
   const routedInitialPage = getInitialPageFromPathname(pathname)
-  const isDiagnosticsPath = pathname === '/ecily_web'
+  const isLegacyQualityPath = pathname === '/quality'
+  const isDiagnosticsPath = pathname === '/ecily_web' || isLegacyQualityPath
   const initialPage =
     isDiagnosticsPath ? 'diagnostics' : routedInitialPage === 'search' && pathname === '/' ? 'product-search' : routedInitialPage
   const initialSharedListId = getSharedListIdFromPathname(rawPathname)
@@ -361,8 +353,6 @@ function App() {
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
-  const [qualitySnapshot, setQualitySnapshot] = useState(null)
-  const [analyticsSummary, setAnalyticsSummary] = useState(null)
   const [ranking, setRanking] = useState(null)
   const [navSearchQuery, setNavSearchQuery] = useState('')
   const [keywordSearchRequest, setKeywordSearchRequest] = useState({ query: '', nonce: 0 })
@@ -377,15 +367,6 @@ function App() {
   const [rankingLoadingMore, setRankingLoadingMore] = useState(false)
   const [browseAutoRefreshEnabled, setBrowseAutoRefreshEnabled] = useState(false)
   const [isHeaderBetaInfoOpen, setIsHeaderBetaInfoOpen] = useState(false)
-  const [qualityLoading, setQualityLoading] = useState(false)
-  const [analyticsLoading, setAnalyticsLoading] = useState(false)
-  const [qualitySavingKey, setQualitySavingKey] = useState('')
-  const [qualityFilters, setQualityFilters] = useState({
-    query: '',
-    retailerKey: '',
-    categoryPrimary: '',
-    limit: 100,
-  })
   const [draftSelectedRetailers, setDraftSelectedRetailers] = useState([])
   const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
   const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
@@ -406,7 +387,7 @@ function App() {
   }, [activePage])
 
   useEffect(() => {
-    if (activePage === 'quality' || activePage === 'diagnostics') return
+    if (activePage === 'diagnostics') return
 
     if (activePage === 'search') {
       trackAnalyticsEvent('landing_page_view', {
@@ -490,13 +471,11 @@ function App() {
     async function loadDiagnostics() {
       try {
         setLoading(true)
-        setAnalyticsLoading(true)
 
-        const [healthResult, snapshotResult, essenceResult, analyticsResult] = await Promise.all([
+        const [healthResult, snapshotResult, essenceResult] = await Promise.all([
           fetchHealth(),
           fetchAdminDashboardSnapshot(),
           fetchAdminEssence(),
-          fetchAdminAnalyticsSummary(),
         ])
 
         if (!active) return
@@ -504,7 +483,6 @@ function App() {
         setHealth(healthResult)
         setSnapshot(snapshotResult)
         setEssence(essenceResult)
-        setAnalyticsSummary(analyticsResult)
         setError('')
       } catch (loadError) {
         if (!active) return
@@ -520,7 +498,6 @@ function App() {
       } finally {
         if (active) {
           setLoading(false)
-          setAnalyticsLoading(false)
         }
       }
     }
@@ -533,42 +510,6 @@ function App() {
       clearInterval(interval)
     }
   }, [activePage])
-
-  useEffect(() => {
-    if (activePage !== 'quality') {
-      return undefined
-    }
-
-    let active = true
-
-    async function loadQualitySnapshot() {
-      try {
-        setQualityLoading(true)
-        const nextSnapshot = await fetchQualitySnapshot({
-          q: qualityFilters.query,
-          retailerKey: qualityFilters.retailerKey,
-          categoryPrimary: qualityFilters.categoryPrimary,
-          limit: qualityFilters.limit,
-        })
-
-        if (!active) return
-
-        setQualitySnapshot(nextSnapshot)
-        setError('')
-      } catch (loadError) {
-        if (!active) return
-        setError(getFriendlyErrorMessage(loadError, 'Die Qualitätsansicht konnte nicht geladen werden.'))
-      } finally {
-        if (active) setQualityLoading(false)
-      }
-    }
-
-    loadQualitySnapshot()
-
-    return () => {
-      active = false
-    }
-  }, [activePage, qualityFilters])
 
   useEffect(() => {
     let active = true
@@ -668,29 +609,16 @@ function App() {
   }, [activePage, appliedSelectedRetailers.length, ranking, rankingLoading])
 
   async function reloadAll() {
-    const [healthResult, snapshotResult, essenceResult, analyticsResult] = await Promise.all([
+    const [healthResult, snapshotResult, essenceResult] = await Promise.all([
       fetchHealth(),
       fetchAdminDashboardSnapshot(),
       fetchAdminEssence(),
-      fetchAdminAnalyticsSummary(),
     ])
 
     setHealth(healthResult)
     setSnapshot(snapshotResult)
     setEssence(essenceResult)
-    setAnalyticsSummary(analyticsResult)
     setError('')
-  }
-
-  async function reloadAnalyticsSummary() {
-    try {
-      setAnalyticsLoading(true)
-      await reloadAll()
-    } catch (analyticsError) {
-      setError(getFriendlyErrorMessage(analyticsError, 'Die Kennzahlen konnten nicht geladen werden.'))
-    } finally {
-      setAnalyticsLoading(false)
-    }
   }
 
   function handleNavigate(nextPage) {
@@ -734,17 +662,6 @@ function App() {
     const nextPath = nextQuery ? `/suche?q=${encodeURIComponent(nextQuery)}` : '/suche'
     window.history.replaceState({}, '', nextPath)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  function handleQualityFilterChange(key, value) {
-    setQualityFilters((current) => ({
-      ...current,
-      [key]: value,
-    }))
-  }
-
-  async function refreshQualitySnapshot() {
-    setQualityFilters((current) => ({ ...current }))
   }
 
   function handleToggleDraftRetailer(retailerKey) {
@@ -940,83 +857,15 @@ function App() {
     }
   }
 
-  async function handleSaveSubcategoryOverride({ item, targetCategoryPrimary, note, rowKey }) {
-    try {
-      setQualitySavingKey(rowKey)
-      await saveSubcategoryCategoryOverride({
-        matchSubcategoryLabel: item.subcategoryLabel,
-        targetCategoryPrimary,
-        note,
-      })
-      const nextSnapshot = await fetchQualitySnapshot({
-        q: qualityFilters.query,
-        retailerKey: qualityFilters.retailerKey,
-        categoryPrimary: qualityFilters.categoryPrimary,
-        limit: qualityFilters.limit,
-      })
-      setQualitySnapshot(nextSnapshot)
-      setError('')
-    } catch (saveError) {
-      setError(getFriendlyErrorMessage(saveError, 'Subkategorie-Korrektur konnte nicht gespeichert werden.'))
-    } finally {
-      setQualitySavingKey('')
-    }
-  }
-
-  async function handleSaveArticleOverride({ item, targetCategoryPrimary, targetCategorySecondary, note, rowKey }) {
-    try {
-      setQualitySavingKey(rowKey)
-      await saveArticleSubcategoryOverride({
-        retailerKey: item.retailerKey,
-        titleNormalized: item.titleNormalized,
-        titleDisplay: item.titleDisplay,
-        targetCategoryPrimary,
-        targetCategorySecondary,
-        note,
-      })
-      const nextSnapshot = await fetchQualitySnapshot({
-        q: qualityFilters.query,
-        retailerKey: qualityFilters.retailerKey,
-        categoryPrimary: qualityFilters.categoryPrimary,
-        limit: qualityFilters.limit,
-      })
-      setQualitySnapshot(nextSnapshot)
-      setError('')
-    } catch (saveError) {
-      setError(getFriendlyErrorMessage(saveError, 'Artikel-Korrektur konnte nicht gespeichert werden.'))
-    } finally {
-      setQualitySavingKey('')
-    }
-  }
-
-  async function handleDeleteArticle({ item, note, rowKey }) {
-    try {
-      setQualitySavingKey(rowKey)
-      await ignoreArticleQualityItem({
-        retailerKey: item.retailerKey,
-        titleNormalized: item.titleNormalized,
-        titleDisplay: item.titleDisplay,
-        note,
-      })
-      const nextSnapshot = await fetchQualitySnapshot({
-        q: qualityFilters.query,
-        retailerKey: qualityFilters.retailerKey,
-        categoryPrimary: qualityFilters.categoryPrimary,
-        limit: qualityFilters.limit,
-      })
-      setQualitySnapshot(nextSnapshot)
-      setError('')
-    } catch (saveError) {
-      setError(getFriendlyErrorMessage(saveError, 'Artikel konnte nicht gelöscht werden.'))
-    } finally {
-      setQualitySavingKey('')
-    }
-  }
-
   const hasPendingChanges =
     !areStringSetsEqual(draftSelectedRetailers, appliedSelectedRetailers) ||
     !areStringSetsEqual(draftSelectedCategoryLabels, appliedSelectedCategoryLabels)
   const activeSeoLandingPage = getSeoLandingPageByRouteId(activePage)
+
+  useEffect(() => {
+    if (!isLegacyQualityPath || typeof window === 'undefined') return
+    window.history.replaceState({}, '', '/ecily_web')
+  }, [isLegacyQualityPath])
 
   useEffect(() => {
     if (
@@ -1181,19 +1030,6 @@ function App() {
         <LiabilityPage />
       ) : activePage === 'cookies' ? (
         <CookiesPage />
-      ) : activePage === 'quality' ? (
-        <QualityPage
-          snapshot={qualitySnapshot}
-          loading={qualityLoading}
-          error={error}
-          filters={qualityFilters}
-          onFilterChange={handleQualityFilterChange}
-          onReload={refreshQualitySnapshot}
-          onSaveSubcategoryOverride={handleSaveSubcategoryOverride}
-          onSaveArticleOverride={handleSaveArticleOverride}
-          onDeleteArticle={handleDeleteArticle}
-          savingKey={qualitySavingKey}
-        />
       ) : (
         <>
           {loading && !snapshot ? <p className="status">Lade Ansicht …</p> : null}
@@ -1201,14 +1037,13 @@ function App() {
             health={health}
             snapshot={snapshot}
             essence={essence}
-            analyticsSummary={analyticsSummary}
-            analyticsLoading={analyticsLoading}
             error={error}
             feedbackState={feedbackState}
             feedbackNote={feedbackNote}
             setFeedbackNote={setFeedbackNote}
             handleSaveFeedback={handleSaveFeedback}
-            onReloadAnalytics={reloadAnalyticsSummary}
+            onReload={reloadAll}
+            loading={loading}
           />
         </>
       )}

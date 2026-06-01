@@ -3,7 +3,6 @@ Allow: /
 
 Disallow: /admin
 Disallow: /ecily_web
-Disallow: /quality
 Disallow: /diagnose
 
 Sitemap: https://www.kaufklug.at/sitemap.xml
