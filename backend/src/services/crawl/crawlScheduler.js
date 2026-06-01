@@ -60,7 +60,7 @@ function recoverInterruptedCrawlRunsOnSchedulerStart({ crawlRunServiceImpl = cra
   }
 
   return crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart({
-    reason: 'Scheduler startup found an active CrawlRun from a previous process after the maximum runtime.',
+    reason: 'Scheduler startup found an active CrawlRun from a previous process with a stale lock heartbeat.',
   }).catch((error) => {
     logger.error('Interrupted CrawlRun startup recovery failed', {
       message: error.message,

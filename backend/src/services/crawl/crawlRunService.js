@@ -13,7 +13,10 @@ const ACTIVE_RUN_STATUSES = ['queued', 'running'];
 const LOCK_STALE_MS = 18 * 60 * 60 * 1000;
 const EXPLICIT_RECOVERY_MIN_STALE_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_RUNTIME_MS = env.CRAWL_RUN_MAX_RUNTIME_MINUTES * 60 * 1000;
+const DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS = env.CRAWL_RUN_LOCK_HEARTBEAT_INTERVAL_SECONDS * 1000;
+const DEFAULT_STALE_HEARTBEAT_MS = env.CRAWL_RUN_STALE_HEARTBEAT_MINUTES * 60 * 1000;
 const PROCESS_STARTED_AT = new Date();
+const CURRENT_PROCESS_OWNER_PREFIX = `${os.hostname()}:${process.pid}:`;
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
 const OFFER_PUBLISH_STATUS_BY_RUN_STATUS = {
   success: 'crawl-run-success',
@@ -96,6 +99,14 @@ function hasAnyFlag(flags = {}) {
 
 function compactRecoveryReason(value) {
   return compactErrorMessage(value || 'Admin-triggered stale CrawlRun recovery.');
+}
+
+function buildLockOwner(trigger = '') {
+  return `${CURRENT_PROCESS_OWNER_PREFIX}${String(trigger || 'unknown')}`;
+}
+
+function isCurrentProcessLockOwner(lock) {
+  return typeof lock?.owner === 'string' && lock.owner.startsWith(CURRENT_PROCESS_OWNER_PREFIX);
 }
 
 function createCrawlRunTimeoutError(timeoutMs) {
@@ -617,7 +628,7 @@ async function acquireCrawlRunLock({ runId, trigger }) {
           acquiredAt: now,
           heartbeatAt: now,
           expiresAt: buildLockExpiry(now),
-          owner: `${os.hostname()}:${process.pid}:${trigger}`,
+          owner: buildLockOwner(trigger),
         },
       },
       {
@@ -655,6 +666,85 @@ async function releaseCrawlRunLock(runId) {
       },
     }
   );
+}
+
+async function updateCrawlRunLockHeartbeat(runId, { trigger = '', now = new Date() } = {}) {
+  return CrawlRunLock.updateOne(
+    {
+      _id: GLOBAL_CRAWL_LOCK_KEY,
+      runId,
+      status: 'running',
+    },
+    {
+      $set: {
+        heartbeatAt: now,
+        expiresAt: buildLockExpiry(now),
+        owner: buildLockOwner(trigger),
+      },
+    }
+  );
+}
+
+function startCrawlRunLockHeartbeat({
+  runId,
+  trigger = '',
+  intervalMs = DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS,
+  updateHeartbeat = updateCrawlRunLockHeartbeat,
+  loggerImpl = logger,
+} = {}) {
+  const effectiveIntervalMs = Number(intervalMs);
+
+  if (!runId || !Number.isFinite(effectiveIntervalMs) || effectiveIntervalMs <= 0) {
+    return {
+      stop() {},
+    };
+  }
+
+  let stopped = false;
+  let inFlight = false;
+
+  const beat = async () => {
+    if (stopped || inFlight) {
+      return;
+    }
+
+    inFlight = true;
+
+    try {
+      const result = await updateHeartbeat(runId, { trigger, now: new Date() });
+
+      if (Number(result?.matchedCount ?? result?.n ?? 1) === 0) {
+        loggerImpl.warn('CrawlRun lock heartbeat did not match an active lock', {
+          runId: String(runId),
+          trigger,
+        });
+      }
+    } catch (error) {
+      loggerImpl.error('CrawlRun lock heartbeat failed', {
+        runId: String(runId),
+        trigger,
+        message: error.message,
+      });
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  const intervalId = setInterval(() => {
+    beat();
+  }, effectiveIntervalMs);
+
+  if (typeof intervalId.unref === 'function') {
+    intervalId.unref();
+  }
+
+  return {
+    stop() {
+      stopped = true;
+      clearInterval(intervalId);
+    },
+    beat,
+  };
 }
 
 function serializeLockForAudit(lock) {
@@ -727,7 +817,7 @@ function isRecoverableInterruptedRunAfterRestart({
   run,
   lock,
   now = new Date(),
-  staleAfterMs = DEFAULT_MAX_RUNTIME_MS,
+  staleAfterMs = DEFAULT_STALE_HEARTBEAT_MS,
 } = {}) {
   if (!run || !ACTIVE_RUN_STATUSES.includes(run.status)) {
     return {
@@ -742,16 +832,21 @@ function isRecoverableInterruptedRunAfterRestart({
   const referenceTime = reference ? new Date(reference).getTime() : 0;
   const lockHeartbeatTime = lock?.heartbeatAt ? new Date(lock.heartbeatAt).getTime() : 0;
   const ageMs = referenceTime > 0 ? now.getTime() - referenceTime : null;
+  const heartbeatAgeMs = lockHeartbeatTime > 0 ? now.getTime() - lockHeartbeatTime : ageMs;
   const lockBelongsToRun = !lock?.runId || String(lock.runId) === String(run._id);
-  const ageExpired = ageMs !== null && ageMs >= staleAfterMs;
+  const heartbeatExpired = heartbeatAgeMs !== null && heartbeatAgeMs >= staleAfterMs;
   const startedBeforeProcess = referenceTime > 0 && referenceTime < PROCESS_STARTED_AT.getTime();
   const lockHeartbeatBeforeProcess = !lockHeartbeatTime || lockHeartbeatTime < PROCESS_STARTED_AT.getTime();
+  const lockOwnerIsCurrentProcess =
+    isCurrentProcessLockOwner(lock)
+    && lockHeartbeatTime >= PROCESS_STARTED_AT.getTime();
 
   if (!lockBelongsToRun) {
     return {
       recoverable: false,
       reason: 'lock-owned-by-different-run',
       ageMs,
+      heartbeatAgeMs,
       startedBeforeProcess,
     };
   }
@@ -761,6 +856,17 @@ function isRecoverableInterruptedRunAfterRestart({
       recoverable: false,
       reason: 'started-in-current-process',
       ageMs,
+      heartbeatAgeMs,
+      startedBeforeProcess,
+    };
+  }
+
+  if (lockOwnerIsCurrentProcess) {
+    return {
+      recoverable: false,
+      reason: 'lock-owned-by-current-process',
+      ageMs,
+      heartbeatAgeMs,
       startedBeforeProcess,
     };
   }
@@ -770,23 +876,26 @@ function isRecoverableInterruptedRunAfterRestart({
       recoverable: false,
       reason: 'lock-heartbeat-in-current-process',
       ageMs,
+      heartbeatAgeMs,
       startedBeforeProcess,
     };
   }
 
-  if (!ageExpired) {
+  if (!heartbeatExpired) {
     return {
       recoverable: false,
       reason: 'not-stale-enough',
       ageMs,
+      heartbeatAgeMs,
       startedBeforeProcess,
     };
   }
 
   return {
     recoverable: true,
-    reason: 'process-restart-max-runtime-exceeded',
+    reason: 'process-restart-stale-heartbeat',
     ageMs,
+    heartbeatAgeMs,
     startedBeforeProcess,
   };
 }
@@ -881,8 +990,8 @@ async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now
 
 async function recoverInterruptedCrawlRunsAfterRestart({
   now = new Date(),
-  staleAfterMs = DEFAULT_MAX_RUNTIME_MS,
-  reason = 'CrawlRun was interrupted by process restart and exceeded maximum runtime.',
+  staleAfterMs = DEFAULT_STALE_HEARTBEAT_MS,
+  reason = 'CrawlRun was interrupted by process restart and its lock heartbeat is stale.',
 } = {}) {
   const activeRuns = await CrawlRun.find({ status: { $in: ACTIVE_RUN_STATUSES } })
     .sort({ startedAt: 1, createdAt: 1 });
@@ -903,6 +1012,7 @@ async function recoverInterruptedCrawlRunsAfterRestart({
         runId: asStringId(run._id),
         reason: recoverable.reason,
         ageMs: recoverable.ageMs,
+        heartbeatAgeMs: recoverable.heartbeatAgeMs,
       });
       continue;
     }
@@ -928,8 +1038,14 @@ async function recoverInterruptedCrawlRunsAfterRestart({
             previousStatus: run.status,
             staleAfterMs,
             ageMs: recoverable.ageMs,
+            heartbeatAt: lock?.heartbeatAt || null,
+            heartbeatAgeMs: recoverable.heartbeatAgeMs,
+            heartbeatAgeMinutes: recoverable.heartbeatAgeMs === null ? null : Math.round((recoverable.heartbeatAgeMs / 60 / 1000) * 100) / 100,
+            thresholdMs: staleAfterMs,
+            thresholdMinutes: Math.round((staleAfterMs / 60 / 1000) * 100) / 100,
             processStartedAt: PROCESS_STARTED_AT,
             detectionReason: recoverable.reason,
+            lockOwner: lock?.owner || '',
             lock: serializeLockForAudit(lock),
           },
         },
@@ -946,6 +1062,7 @@ async function recoverInterruptedCrawlRunsAfterRestart({
         runId: asStringId(run._id),
         reason: 'status-changed-before-recovery',
         ageMs: recoverable.ageMs,
+        heartbeatAgeMs: recoverable.heartbeatAgeMs,
       });
       continue;
     }
@@ -964,6 +1081,7 @@ async function recoverInterruptedCrawlRunsAfterRestart({
       runId: asStringId(run._id),
       reason: recoverable.reason,
       ageMs: recoverable.ageMs,
+      heartbeatAgeMs: recoverable.heartbeatAgeMs,
       staleAfterMs,
     });
   }
@@ -983,7 +1101,7 @@ async function recoverInterruptedCrawlRunsAfterRestart({
   };
 }
 
-async function markLockRunning(runId) {
+async function markLockRunning(runId, { trigger = '' } = {}) {
   await CrawlRunLock.updateOne(
     {
       _id: GLOBAL_CRAWL_LOCK_KEY,
@@ -994,6 +1112,7 @@ async function markLockRunning(runId) {
         status: 'running',
         heartbeatAt: new Date(),
         expiresAt: buildLockExpiry(),
+        owner: buildLockOwner(trigger),
       },
     }
   );
@@ -1006,16 +1125,19 @@ async function executeCrawlRun({
   region,
   crawlAllSourcesImpl = crawlAllSources,
   maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
+  heartbeatIntervalMs = DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS,
 } = {}) {
   const startedAt = new Date();
+  let heartbeat = null;
 
-  await markLockRunning(runId);
+  await markLockRunning(runId, { trigger });
   await CrawlRun.findByIdAndUpdate(runId, {
     $set: {
       status: 'running',
       startedAt,
     },
   });
+  heartbeat = startCrawlRunLockHeartbeat({ runId, trigger, intervalMs: heartbeatIntervalMs });
 
   try {
     const crawlResult = await withCrawlRunTimeout(() => crawlAllSourcesImpl({
@@ -1115,6 +1237,9 @@ async function executeCrawlRun({
       stack: error.stack,
     });
   } finally {
+    if (heartbeat) {
+      heartbeat.stop();
+    }
     await releaseCrawlRunLock(runId);
   }
 }
@@ -1219,14 +1344,19 @@ module.exports = {
   serializeCrawlRun,
   _private: {
     ACTIVE_RUN_STATUSES,
+    CURRENT_PROCESS_OWNER_PREFIX,
+    DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS,
+    DEFAULT_STALE_HEARTBEAT_MS,
     EXPLICIT_RECOVERY_MIN_STALE_MS,
     LOCK_STALE_MS,
     PROCESS_STARTED_AT,
+    buildLockOwner,
     buildRunDocument,
     buildRunSummary,
     determineFinalStatus,
     determineMode,
     failStaleRun,
+    isCurrentProcessLockOwner,
     isRecoverableInterruptedRunAfterRestart,
     isRecoverableStaleRun,
     isRunStale,
@@ -1236,6 +1366,8 @@ module.exports = {
     sanitizeJsonValue,
     sanitizeDiagnosticValue,
     serializeLockForAudit,
+    startCrawlRunLockHeartbeat,
+    updateCrawlRunLockHeartbeat,
     withCrawlRunTimeout,
   },
 };

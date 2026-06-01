@@ -424,7 +424,7 @@ test('restart recovery classifies only old interrupted active CrawlRuns as recov
     },
     now,
     staleAfterMs: 60 * 60 * 1000,
-  }).reason, 'process-restart-max-runtime-exceeded');
+  }).reason, 'process-restart-stale-heartbeat');
 
   assert.equal(_private.isRecoverableInterruptedRunAfterRestart({
     run: freshInterruptedRun,
@@ -447,6 +447,30 @@ test('restart recovery classifies only old interrupted active CrawlRuns as recov
     now,
     staleAfterMs: 60 * 60 * 1000,
   }).reason, 'started-in-current-process');
+
+  assert.equal(_private.isRecoverableInterruptedRunAfterRestart({
+    run: oldInterruptedRun,
+    lock: {
+      runId: oldInterruptedRun._id,
+      status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() + 60 * 1000),
+      owner: _private.buildLockOwner('scheduled'),
+    },
+    now,
+    staleAfterMs: 60 * 60 * 1000,
+  }).reason, 'lock-owned-by-current-process');
+
+  assert.equal(_private.isRecoverableInterruptedRunAfterRestart({
+    run: oldInterruptedRun,
+    lock: {
+      runId: oldInterruptedRun._id,
+      status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+      owner: _private.buildLockOwner('scheduled'),
+    },
+    now,
+    staleAfterMs: 60 * 60 * 1000,
+  }).reason, 'process-restart-stale-heartbeat');
 });
 
 test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs stale and releases matching lock idempotently', async () => {
@@ -529,6 +553,10 @@ test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs stale a
   assert.equal(runUpdates[0].update.$set.status, 'stale');
   assert.equal(runUpdates[0].update.$set.finishedAt, now);
   assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].recoveredBy, 'startup-recovery');
+  assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].heartbeatAt, lock.heartbeatAt);
+  assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].heartbeatAgeMs, now.getTime() - lock.heartbeatAt.getTime());
+  assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].thresholdMs, 60 * 60 * 1000);
+  assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].lockOwner, '');
   assert.match(runUpdates[0].update.$push.warnings, /after restart/i);
   assert.equal(offerUpdates.length, 1);
   assert.deepEqual(offerUpdates[0].filter, { crawlRunId: runId });
@@ -596,6 +624,66 @@ test('recoverInterruptedCrawlRunsAfterRestart leaves fresh active runs and curre
   }
 });
 
+test('recoverInterruptedCrawlRunsAfterRestart does not alter terminal runs returned by a stale read', async () => {
+  const { recoverInterruptedCrawlRunsAfterRestart } = require('../src/services/crawl/crawlRunService');
+  const runId = new mongoose.Types.ObjectId();
+  const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 2 * 60 * 60 * 1000);
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindOneAndUpdate: CrawlRun.findOneAndUpdate,
+    crawlRunLockFindById: CrawlRunLock.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  let updateCalled = false;
+
+  CrawlRun.find = () => ({
+    sort() {
+      return [{
+        _id: runId,
+        status: 'success',
+        startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 2 * 60 * 1000),
+      }];
+    },
+  });
+  CrawlRun.findOneAndUpdate = async () => {
+    updateCalled = true;
+    return null;
+  };
+  CrawlRunLock.findById = () => ({
+    lean: async () => ({
+      runId,
+      status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+    }),
+  });
+  CrawlRunLock.updateOne = async () => {
+    updateCalled = true;
+    return { modifiedCount: 0 };
+  };
+  Offer.updateMany = async () => {
+    updateCalled = true;
+    return { matchedCount: 0, modifiedCount: 0 };
+  };
+
+  try {
+    const result = await recoverInterruptedCrawlRunsAfterRestart({
+      now,
+      staleAfterMs: 15 * 60 * 1000,
+    });
+
+    assert.equal(result.recovered.length, 0);
+    assert.equal(result.skipped[0].reason, 'not-active');
+    assert.equal(updateCalled, false);
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
+    CrawlRunLock.findById = originals.crawlRunLockFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+});
+
 test('markOfferPublishStatusForRun marks stale and failed run lineage without changing visibility fields', async () => {
   const calls = [];
   const runId = new mongoose.Types.ObjectId();
@@ -621,6 +709,71 @@ test('markOfferPublishStatusForRun marks stale and failed run lineage without ch
   assert.equal(calls[0].update.$set.status, undefined);
   assert.equal(calls[0].update.$set.isActiveNow, undefined);
   assert.equal(calls[0].update.$set.isActiveToday, undefined);
+});
+
+test('executeCrawlRun starts periodic lock heartbeat and stops it after completion', async () => {
+  const runId = new mongoose.Types.ObjectId();
+  const originals = {
+    crawlRunFindByIdAndUpdate: CrawlRun.findByIdAndUpdate,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const lockUpdates = [];
+
+  CrawlRunLock.updateOne = async (filter, update) => {
+    lockUpdates.push({ filter, update, at: Date.now() });
+    return { matchedCount: 1, modifiedCount: 1 };
+  };
+  CrawlRun.findByIdAndUpdate = async () => ({ modifiedCount: 1 });
+  CrawlRun.findById = async () => ({ _id: runId, mode: 'scoped' });
+  Offer.updateMany = async () => ({ matchedCount: 1, modifiedCount: 1 });
+
+  try {
+    await executeCrawlRun({
+      runId,
+      trigger: 'scheduled',
+      region: 'Steiermark',
+      heartbeatIntervalMs: 10,
+      crawlAllSourcesImpl: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 35));
+        return {
+          sources: [
+            {
+              sourceId: 'source-1',
+              sourceKey: 'bipa-official',
+              retailerKey: 'bipa',
+              channel: 'official-site',
+              sourceType: 'offers-page',
+              status: 'success',
+              foundRawItems: 1,
+              parsedOffers: 1,
+              offersStored: 1,
+            },
+          ],
+          matchedSources: [
+            { sourceId: 'source-1', sourceKey: 'bipa-official', retailerKey: 'bipa', channel: 'official-site', sourceType: 'offers-page' },
+          ],
+          sourceCoverage: { activeEligibleSources: 1 },
+          filterMetadata: { ok: true },
+        };
+      },
+    });
+
+    const heartbeatUpdatesAtCompletion = lockUpdates.filter((call) => call.update?.$set?.heartbeatAt && !call.update.$set.status).length;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const heartbeatUpdatesAfterStop = lockUpdates.filter((call) => call.update?.$set?.heartbeatAt && !call.update.$set.status).length;
+
+    assert.ok(heartbeatUpdatesAtCompletion >= 1);
+    assert.equal(heartbeatUpdatesAfterStop, heartbeatUpdatesAtCompletion);
+    assert.ok(lockUpdates.some((call) => call.update?.$set?.owner === _private.buildLockOwner('scheduled')));
+    assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
+  } finally {
+    CrawlRun.findByIdAndUpdate = originals.crawlRunFindByIdAndUpdate;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
 });
 
 test('executeCrawlRun passes the top-level crawlRunId into source crawling and marks successful publish lineage', async () => {

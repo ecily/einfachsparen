@@ -38,6 +38,8 @@ const envSchema = z.object({
   CRAWL_SCHEDULE_TIMEZONE: z.string().trim().default('Europe/Vienna'),
   CRAWL_INTERVAL_MINUTES: z.coerce.number().int().min(15).max(1440).default(360),
   CRAWL_RUN_MAX_RUNTIME_MINUTES: z.coerce.number().int().min(5).max(1440).default(240),
+  CRAWL_RUN_LOCK_HEARTBEAT_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(300).default(45),
+  CRAWL_RUN_STALE_HEARTBEAT_MINUTES: z.coerce.number().int().min(2).max(180).default(15),
 }).superRefine((value, context) => {
   if (value.NODE_ENV === 'production' && !value.ADMIN_API_KEY) {
     context.addIssue({
