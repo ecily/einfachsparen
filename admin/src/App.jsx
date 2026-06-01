@@ -211,7 +211,7 @@ function SearchLandingHero() {
               maxWidth: '46rem',
             }}
           >
-            Nicht blättern. <span className="hero-headline-accent">Finden, was sich gerade lohnt.</span>
+            Nicht blättern. <span className="hero-headline-accent">Finden, was sich wirklich lohnt.</span>
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
             Finde aktuelle Angebote von Supermärkten und Drogerien in Österreich – spare Zeit beim Suchen und Geld beim
