@@ -1204,10 +1204,22 @@ async function executeCrawlRun({
         warnings,
       },
     });
-    await markOfferPublishStatusForRun({
+    await updateCrawlRunProgress(runId, {
+      stage: 'publish-status-started',
+      trigger,
+      runStatus: status,
+    });
+    const publishResult = await markOfferPublishStatusForRun({
       runId,
       runStatus: status,
       now: finishedAt,
+    });
+    await updateCrawlRunProgress(runId, {
+      stage: 'publish-status-finished',
+      trigger,
+      runStatus: status,
+      matchedCount: publishResult?.matchedCount ?? publishResult?.n ?? null,
+      modifiedCount: publishResult?.modifiedCount ?? publishResult?.nModified ?? null,
     });
 
     logger.info('CrawlRun completed', {
@@ -1245,10 +1257,22 @@ async function executeCrawlRun({
         } : {}),
       },
     });
-    await markOfferPublishStatusForRun({
+    await updateCrawlRunProgress(runId, {
+      stage: 'publish-status-started',
+      trigger,
+      runStatus: 'failed',
+    });
+    const publishResult = await markOfferPublishStatusForRun({
       runId,
       runStatus: 'failed',
       now: finishedAt,
+    });
+    await updateCrawlRunProgress(runId, {
+      stage: 'publish-status-finished',
+      trigger,
+      runStatus: 'failed',
+      matchedCount: publishResult?.matchedCount ?? publishResult?.n ?? null,
+      modifiedCount: publishResult?.modifiedCount ?? publishResult?.nModified ?? null,
     });
 
     logger.error('CrawlRun failed', {

@@ -854,6 +854,16 @@ test('executeCrawlRun passes the top-level crawlRunId into source crawling and m
   assert.equal(progressUpdate.update.$set['metadata.progress'].stage, 'dedupe-started');
   assert.equal(progressUpdate.update.$set['metadata.progress'].apiKey, '[redacted]');
   assert.match(progressUpdate.update.$set['metadata.progress'].updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+  const publishStartedUpdate = runUpdates.find((call) =>
+    call.update?.$set?.['metadata.progress']?.stage === 'publish-status-started'
+  );
+  const publishFinishedUpdate = runUpdates.find((call) =>
+    call.update?.$set?.['metadata.progress']?.stage === 'publish-status-finished'
+  );
+  assert.equal(publishStartedUpdate.update.$set['metadata.progress'].runStatus, 'success');
+  assert.equal(publishFinishedUpdate.update.$set['metadata.progress'].runStatus, 'success');
+  assert.equal(publishFinishedUpdate.update.$set['metadata.progress'].matchedCount, 2);
+  assert.equal(publishFinishedUpdate.update.$set['metadata.progress'].modifiedCount, 2);
   assert.equal(offerUpdates.length, 1);
   assert.deepEqual(offerUpdates[0].filter, { crawlRunId: runId });
   assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-success');
@@ -906,6 +916,14 @@ test('executeCrawlRun marks timed-out runs failed and releases the global lock',
   assert.ok(failedUpdate);
   assert.match(failedUpdate.update.$set.errorMessages[0], /maximum runtime/i);
   assert.equal(failedUpdate.update.$set['metadata.timeout'].timeoutMs, 20);
+  assert.ok(runUpdates.some((call) =>
+    call.update?.$set?.['metadata.progress']?.stage === 'publish-status-started'
+    && call.update.$set['metadata.progress'].runStatus === 'failed'
+  ));
+  assert.ok(runUpdates.some((call) =>
+    call.update?.$set?.['metadata.progress']?.stage === 'publish-status-finished'
+    && call.update.$set['metadata.progress'].runStatus === 'failed'
+  ));
   assert.equal(offerUpdates.length, 1);
   assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-failed');
   assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
