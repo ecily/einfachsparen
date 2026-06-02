@@ -96,6 +96,13 @@ function withFilterMetadataMaxTime(query) {
     : query;
 }
 
+function buildFilterMetadataOfferMatch() {
+  return {
+    status: 'active',
+    isActiveNow: true,
+  };
+}
+
 function normalizeFilterKey(value, fallback = 'unknown') {
   const normalized = normalizeTitleForMatch(value).replace(/\s+/g, '-');
   return normalized || fallback;
@@ -966,7 +973,7 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
   const now = new Date();
   const [offers, existingRetailers, sources, crawlJobs] = await Promise.all([
     withFilterMetadataMaxTime(
-      Offer.find({})
+      Offer.find(buildFilterMetadataOfferMatch())
         .select(FILTER_METADATA_OFFER_SELECT_FIELDS.join(' '))
     ).lean(),
     withFilterMetadataMaxTime(
@@ -1169,6 +1176,7 @@ module.exports = {
     FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT,
     FILTER_METADATA_OFFER_SELECT_FIELDS,
     FILTER_METADATA_QUERY_MAX_TIME_MS,
+    buildFilterMetadataOfferMatch,
     buildRetailerDocuments,
     buildKeyFilter,
     buildStableKey,

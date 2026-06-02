@@ -8,6 +8,7 @@ const {
   getCategoryFilters,
   _private: {
     FILTER_METADATA_OFFER_SELECT_FIELDS,
+    buildFilterMetadataOfferMatch,
     buildRetailerDocuments,
     syncFilterMetadataCollection,
   },
@@ -241,6 +242,13 @@ test('filter metadata offer select keeps crawl freshness fields aligned with ran
   for (const field of ['crawlJobId', 'lastSeenAt', 'lastSeenRunId', 'lastSeenSourceRunId']) {
     assert.equal(FILTER_METADATA_OFFER_SELECT_FIELDS.includes(field), true);
   }
+});
+
+test('filter metadata rebuild scopes offer input to current active offers', () => {
+  assert.deepEqual(buildFilterMetadataOfferMatch(), {
+    status: 'active',
+    isActiveNow: true,
+  });
 });
 
 test('filter metadata rebuild does not use a full transaction or mutate offers', () => {

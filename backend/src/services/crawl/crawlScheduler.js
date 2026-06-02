@@ -68,12 +68,41 @@ function recoverInterruptedCrawlRunsOnSchedulerStart({ crawlRunServiceImpl = cra
   });
 }
 
+function scheduleInterruptedCrawlRunRecovery({
+  envConfig = env,
+  crawlRunServiceImpl = crawlRunService,
+  setIntervalImpl = setInterval,
+} = {}) {
+  if (typeof crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart !== 'function') {
+    return null;
+  }
+
+  const staleHeartbeatMinutes = Number(envConfig.CRAWL_RUN_STALE_HEARTBEAT_MINUTES || 15);
+  const intervalMs = Math.max(60 * 1000, staleHeartbeatMinutes * 60 * 1000);
+  const interval = setIntervalImpl(() => {
+    crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart({
+      reason: 'Scheduler periodic recovery found an active CrawlRun from a previous process with a stale lock heartbeat.',
+    }).catch((error) => {
+      logger.error('Interrupted CrawlRun periodic recovery failed', {
+        message: error.message,
+      });
+    });
+  }, intervalMs);
+
+  if (interval && typeof interval.unref === 'function') {
+    interval.unref();
+  }
+
+  return interval;
+}
+
 function startCrawlScheduler({
   envConfig = env,
   crawlRunServiceImpl = crawlRunService,
   cronImpl = cron,
 } = {}) {
   recoverInterruptedCrawlRunsOnSchedulerStart({ crawlRunServiceImpl });
+  scheduleInterruptedCrawlRunRecovery({ envConfig, crawlRunServiceImpl });
 
   const startupHandle = scheduleStartupCrawl({ envConfig, crawlRunServiceImpl });
 
@@ -126,6 +155,7 @@ module.exports = {
   startCrawlScheduler,
   _private: {
     recoverInterruptedCrawlRunsOnSchedulerStart,
+    scheduleInterruptedCrawlRunRecovery,
     scheduleStartupCrawl,
   },
 };

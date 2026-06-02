@@ -186,6 +186,37 @@ test('scheduler startup runs interrupted CrawlRun recovery without starting repl
   assert.equal(cronCalls.length, 0);
 });
 
+test('scheduler periodically retries interrupted CrawlRun recovery for fresh restart orphans', async () => {
+  const recoveryCalls = [];
+  const intervals = [];
+  const intervalHandle = { unrefCalled: false, unref() { this.unrefCalled = true; } };
+
+  const handle = _private.scheduleInterruptedCrawlRunRecovery({
+    envConfig: env({ CRAWL_RUN_STALE_HEARTBEAT_MINUTES: 2 }),
+    crawlRunServiceImpl: {
+      async recoverInterruptedCrawlRunsAfterRestart(payload) {
+        recoveryCalls.push(payload);
+        return { recovered: [], skipped: [] };
+      },
+    },
+    setIntervalImpl(callback, intervalMs) {
+      intervals.push({ callback, intervalMs });
+      return intervalHandle;
+    },
+  });
+
+  assert.equal(handle, intervalHandle);
+  assert.equal(intervalHandle.unrefCalled, true);
+  assert.equal(intervals.length, 1);
+  assert.equal(intervals[0].intervalMs, 120000);
+
+  intervals[0].callback();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(recoveryCalls.length, 1);
+  assert.match(recoveryCalls[0].reason, /periodic recovery/i);
+});
+
 test('scheduler startup recovery helper tolerates services without recovery support', () => {
   assert.equal(_private.recoverInterruptedCrawlRunsOnSchedulerStart({
     crawlRunServiceImpl: {},
