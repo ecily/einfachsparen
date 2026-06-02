@@ -44,6 +44,22 @@ test('dashboard offer diagnostics aggregate official, validity, comparison, imag
   assert.equal(result.retailerMatrix.find((row) => row.retailerKey === 'billa').warningStatus, 'red');
 });
 
+test('dashboard publish status summary classifies final and open aggregate rows', () => {
+  const summary = _private.buildPublishStatusSummaryFromRows([
+    { status: 'crawl-run-success', count: 8 },
+    { status: 'source-written', count: 2 },
+    { status: null, count: 1 },
+  ]);
+
+  assert.equal(summary.totalActiveOffers, 11);
+  assert.equal(summary.finalCount, 8);
+  assert.equal(summary.openCount, 3);
+  assert.equal(summary.status, 'open');
+  assert.equal(summary.statuses.find((row) => row.status === 'crawl-run-success').final, true);
+  assert.equal(summary.statuses.find((row) => row.status === 'source-written').intermediate, true);
+  assert.equal(summary.statuses.find((row) => row.status === 'unknown').final, false);
+});
+
 test('dashboard executive status turns red for stale crawl, blocked lock or open publish status', () => {
   const status = _private.buildExecutiveStatus({
     latestCrawl: null,

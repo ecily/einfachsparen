@@ -14,7 +14,9 @@ const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
 const { classifyOfferSourceQuality } = require('../offers/sourceQuality');
 const logger = require('../../lib/logger');
 
-const COMPARISON_SNAPSHOT_TIMEOUT_MS = 8000;
+const COMPARISON_SNAPSHOT_TIMEOUT_MS = 3000;
+const DASHBOARD_QUERY_MAX_TIME_MS = 5000;
+const ACTIVE_OFFER_DIAGNOSTIC_LIMIT = 5000;
 const GLOBAL_CRAWL_LOCK_KEY = 'crawl-run-global';
 const TERMINAL_CRAWL_STATUSES = new Set(['success', 'partial', 'failed', 'skipped', 'stale']);
 const ACTIVE_CRAWL_STATUSES = new Set(['queued', 'running']);
@@ -773,15 +775,15 @@ async function buildFeedbackSummary({
     newLast30Days,
     documents,
   ] = await Promise.all([
-    OfferFeedbackModel.countDocuments({}),
-    OfferFeedbackModel.countDocuments({ createdAt: { $gte: todayStart } }),
-    OfferFeedbackModel.countDocuments({ createdAt: { $gte: last24hStart } }),
-    OfferFeedbackModel.countDocuments({ createdAt: { $gte: last7DaysStart } }),
-    OfferFeedbackModel.countDocuments({ createdAt: { $gte: last30DaysStart } }),
-    OfferFeedbackModel.find({}, projection)
+    withQueryMaxTime(OfferFeedbackModel.countDocuments({})),
+    withQueryMaxTime(OfferFeedbackModel.countDocuments({ createdAt: { $gte: todayStart } })),
+    withQueryMaxTime(OfferFeedbackModel.countDocuments({ createdAt: { $gte: last24hStart } })),
+    withQueryMaxTime(OfferFeedbackModel.countDocuments({ createdAt: { $gte: last7DaysStart } })),
+    withQueryMaxTime(OfferFeedbackModel.countDocuments({ createdAt: { $gte: last30DaysStart } })),
+    withQueryMaxTime(OfferFeedbackModel.find({}, projection)
       .sort({ createdAt: -1 })
       .limit(FEEDBACK_DOCUMENT_LIMIT)
-      .lean(),
+      .lean()),
   ]);
 
   return buildFeedbackSummaryFromDocuments(documents, {
@@ -1718,8 +1720,68 @@ async function buildComparisonSnapshotSafely() {
   }
 }
 
+function withQueryMaxTime(query) {
+  return typeof query.maxTimeMS === 'function'
+    ? query.maxTimeMS(DASHBOARD_QUERY_MAX_TIME_MS)
+    : query;
+}
+
+function buildPublishStatusSummaryFromRows(rows = []) {
+  const publishStatuses = rows
+    .map((row) => {
+      const status = row.status || row._id || 'unknown';
+
+      return {
+        status,
+        count: numberFrom(row.count),
+        final: isFinalPublishStatus(status),
+        intermediate: isIntermediatePublishStatus(status),
+      };
+    })
+    .sort((left, right) => right.count - left.count || left.status.localeCompare(right.status));
+  const totalActiveOffers = publishStatuses.reduce((sum, item) => sum + item.count, 0);
+  const openPublishCount = publishStatuses
+    .filter((item) => item.intermediate || !item.final)
+    .reduce((sum, item) => sum + item.count, 0);
+
+  return {
+    totalActiveOffers,
+    finalCount: totalActiveOffers - openPublishCount,
+    openCount: openPublishCount,
+    finalRate: rate(totalActiveOffers - openPublishCount, totalActiveOffers),
+    status: openPublishCount > 0 ? 'open' : totalActiveOffers > 0 ? 'final' : 'unknown',
+    statuses: publishStatuses,
+  };
+}
+
+async function buildActivePublishStatusSummary(currentAvailabilityMatch) {
+  const rows = await Offer.aggregate([
+    { $match: currentAvailabilityMatch },
+    { $group: { _id: '$publishStatus', count: { $sum: 1 } } },
+    { $project: { _id: 0, status: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
+    { $sort: { count: -1, status: 1 } },
+  ]).option({ maxTimeMS: DASHBOARD_QUERY_MAX_TIME_MS });
+
+  return buildPublishStatusSummaryFromRows(rows);
+}
+
+async function safeDashboardQuery(name, promise, fallback, warnings = []) {
+  try {
+    return await promise;
+  } catch (error) {
+    const message = `${name} unavailable: ${error.message}`;
+    warnings.push(message);
+    logger.warn('Dashboard snapshot section unavailable', {
+      section: name,
+      message: error.message,
+    });
+    return fallback;
+  }
+}
+
 async function buildDashboardSnapshot() {
   const currentAvailabilityMatch = buildCurrentAvailabilityMatch();
+  const dashboardWarnings = [];
   const [
     sources,
     latestJobs,
@@ -1732,6 +1794,7 @@ async function buildDashboardSnapshot() {
     offersPendingReview,
     offersWithIssues,
     activeOffers,
+    exactPublishStatusSummary,
     offerSamples,
     recentFeedback,
     retailerSummary,
@@ -1739,21 +1802,21 @@ async function buildDashboardSnapshot() {
     feedbackSummary,
     comparisonSnapshot,
   ] = await Promise.all([
-    Source.find().sort({ active: -1, retailerName: 1 }).lean(),
-    CrawlJob.find().sort({ startedAt: -1 }).limit(20).lean(),
-    CrawlRun.find().sort({ startedAt: -1, createdAt: -1 }).limit(14).lean(),
-    CrawlRun.findOne({
+    safeDashboardQuery('sources', withQueryMaxTime(Source.find().sort({ active: -1, retailerName: 1 }).lean()), [], dashboardWarnings),
+    safeDashboardQuery('latestJobs', withQueryMaxTime(CrawlJob.find().sort({ startedAt: -1 }).limit(20).lean()), [], dashboardWarnings),
+    safeDashboardQuery('crawlRuns', withQueryMaxTime(CrawlRun.find().sort({ startedAt: -1, createdAt: -1 }).limit(14).lean()), [], dashboardWarnings),
+    safeDashboardQuery('latestScheduledFullCrawl', withQueryMaxTime(CrawlRun.findOne({
       trigger: 'scheduled',
       mode: 'full',
       dryRun: false,
-    }).sort({ startedAt: -1, createdAt: -1 }).lean(),
-    CrawlRun.findOne({ status: { $in: ['queued', 'running'] } }).sort({ startedAt: -1, createdAt: -1 }).lean(),
-    CrawlRunLock.findById(GLOBAL_CRAWL_LOCK_KEY).lean(),
-    RawDocument.countDocuments(),
-    Offer.countDocuments(),
-    Offer.countDocuments({ 'adminReview.status': 'pending' }),
-    Offer.countDocuments({ 'quality.issues.0': { $exists: true } }),
-    Offer.find(
+    }).sort({ startedAt: -1, createdAt: -1 }).lean()), null, dashboardWarnings),
+    safeDashboardQuery('activeCrawlRun', withQueryMaxTime(CrawlRun.findOne({ status: { $in: ['queued', 'running'] } }).sort({ startedAt: -1, createdAt: -1 }).lean()), null, dashboardWarnings),
+    safeDashboardQuery('crawlLock', withQueryMaxTime(CrawlRunLock.findById(GLOBAL_CRAWL_LOCK_KEY).lean()), null, dashboardWarnings),
+    safeDashboardQuery('rawCount', withQueryMaxTime(RawDocument.countDocuments()), 0, dashboardWarnings),
+    safeDashboardQuery('storedOfferCount', withQueryMaxTime(Offer.countDocuments()), 0, dashboardWarnings),
+    safeDashboardQuery('offersPendingReview', withQueryMaxTime(Offer.countDocuments({ 'adminReview.status': 'pending' })), 0, dashboardWarnings),
+    safeDashboardQuery('offersWithIssues', withQueryMaxTime(Offer.countDocuments({ 'quality.issues.0': { $exists: true } })), 0, dashboardWarnings),
+    safeDashboardQuery('activeOffers', withQueryMaxTime(Offer.find(
       currentAvailabilityMatch,
       {
         retailerKey: 1,
@@ -1782,8 +1845,12 @@ async function buildDashboardSnapshot() {
         updatedAt: 1,
         crawlRunId: 1,
       }
-    ).lean(),
-    Offer.find(
+    )
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(ACTIVE_OFFER_DIAGNOSTIC_LIMIT)
+      .lean()), [], dashboardWarnings),
+    safeDashboardQuery('publishStatusSummary', buildActivePublishStatusSummary(currentAvailabilityMatch), buildPublishStatusSummaryFromRows([]), dashboardWarnings),
+    safeDashboardQuery('offerSamples', withQueryMaxTime(Offer.find(
       {},
       {
         retailerName: 1,
@@ -1804,17 +1871,19 @@ async function buildDashboardSnapshot() {
     )
       .sort({ createdAt: -1 })
       .limit(24)
-      .lean(),
-    AdminFeedback.find().sort({ createdAt: -1 }).limit(10).lean(),
-    Retailer.find({})
+      .lean()), [], dashboardWarnings),
+    safeDashboardQuery('recentFeedback', withQueryMaxTime(AdminFeedback.find().sort({ createdAt: -1 }).limit(10).lean()), [], dashboardWarnings),
+    safeDashboardQuery('retailerSummary', withQueryMaxTime(Retailer.find({})
       .select('retailerKey retailerName offerCount activeOfferCount comparisonSafeShare usableOfferShare coverageStatus activeCoverageSignal coverageGapReasons coveragePriorityScore sourceDiversity lastSuccessfulCrawlAt')
       .sort({ retailerName: 1 })
-      .lean(),
-    Retailer.find({})
+      .lean()), [], dashboardWarnings),
+    safeDashboardQuery('retailerCoverage', withQueryMaxTime(Retailer.find({})
       .select('retailerKey retailerName totalOffers activeOffers offersBySource offersByChannel firstSeenAt lastSeenAt lastSuccessfulCrawlAt activeCoverageSignal coverageStatus coveragePriorityScore coverageGapReasons activeCoverageTarget activeCoverageRatio sourceDiversity channelDiversity parsingConfidenceAverage comparisonSafeShare usableOfferShare crawlStabilityScore recentSuccessfulCrawlCount recentFailedCrawlCount repeatedLowYield')
       .sort({ coveragePriorityScore: -1, retailerName: 1 })
-      .lean(),
-    buildFeedbackSummary(),
+      .lean()), [], dashboardWarnings),
+    safeDashboardQuery('feedbackSummary', buildFeedbackSummary(), buildFeedbackSummaryFromDocuments([], {
+      totalFeedback: 0,
+    }), dashboardWarnings),
     buildComparisonSnapshotSafely(),
   ]);
 
@@ -1829,10 +1898,12 @@ async function buildDashboardSnapshot() {
     offerSummary,
     retailerMatrix,
     sourceTypeSummary,
-    publishStatusSummary,
   } = buildOfferDiagnostics(activeOffers);
+  const publishStatusSummary = exactPublishStatusSummary || buildPublishStatusSummaryFromRows([]);
   const qualityKpis = buildQualityKpis(offerSummary);
   const trendSeries = buildTrendSeries(crawlRuns, activeOffers);
+  const activeOfferDiagnosticsCapped = activeOffers.length >= ACTIVE_OFFER_DIAGNOSTIC_LIMIT
+    && publishStatusSummary.totalActiveOffers > ACTIVE_OFFER_DIAGNOSTIC_LIMIT;
 
   const qualitySummary = {
     sourceCount: activeSourceCount,
@@ -1841,7 +1912,7 @@ async function buildDashboardSnapshot() {
     crawlJobCount: latestJobs.length,
     rawDocumentCount: rawCount,
     storedOfferCount,
-    activeOfferCount: offerSummary.activeOffers,
+    activeOfferCount: publishStatusSummary.totalActiveOffers || offerSummary.activeOffers,
     offersPendingReview,
     comparisonSafeOffers: offerSummary.comparisonSafeOffers,
     offersWithIssues,
@@ -1878,6 +1949,10 @@ async function buildDashboardSnapshot() {
     activeOffers.length === 0
       ? 'Keine aktiven Angebote in der aktuellen Verfuegbarkeitslogik gefunden.'
       : '',
+    activeOfferDiagnosticsCapped
+      ? `Aktive Offer-Diagnose ist auf die neuesten ${ACTIVE_OFFER_DIAGNOSTIC_LIMIT} Angebote begrenzt; PublishStatus-Zaehlung bleibt exakt aggregiert.`
+      : '',
+    ...dashboardWarnings.map((warning) => `Dashboard partial: ${warning}`),
     latestScheduledFullCrawl ? '' : 'Kein scheduled/full CrawlRun gefunden; Ampel nutzt den neuesten CrawlRun als Fallback.',
   ].filter(Boolean);
   const generatedAt = new Date().toISOString();
@@ -1925,6 +2000,15 @@ async function buildDashboardSnapshot() {
     actionableIssues,
     dataCompletenessWarnings,
     qualitySummary,
+    dashboardDiagnostics: {
+      activeOfferDiagnosticsLimit: ACTIVE_OFFER_DIAGNOSTIC_LIMIT,
+      activeOfferDiagnosticsCount: activeOffers.length,
+      activeOfferDiagnosticsCapped,
+      queryMaxTimeMs: DASHBOARD_QUERY_MAX_TIME_MS,
+      comparisonSnapshotTimeoutMs: COMPARISON_SNAPSHOT_TIMEOUT_MS,
+      partial: dashboardWarnings.length > 0,
+      warnings: dashboardWarnings,
+    },
     sources,
     latestJobs,
     retailerSummary,
@@ -1947,6 +2031,7 @@ module.exports = {
     buildFeedbackSummaryFromDocuments,
     buildAnalysisEssencePayload,
     buildOfferDiagnostics,
+    buildPublishStatusSummaryFromRows,
     buildQualityKpis,
     buildTrendSeries,
     renderAnalysisEssenceText,
