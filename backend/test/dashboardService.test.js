@@ -90,6 +90,73 @@ test('dashboard executive status turns red for stale crawl, blocked lock or open
   assert.ok(blocked.reasons.some((reason) => /blockiert/i.test(reason)));
 });
 
+test('dashboard crawl reliability separates scheduled stale from current free terminal manual crawl', () => {
+  const latestManualFull = {
+    id: 'manual-full-1',
+    status: 'partial',
+    trigger: 'manual',
+    mode: 'full',
+    dryRun: false,
+    startedAt: '2026-06-02T07:46:53.003Z',
+    finishedAt: '2026-06-02T08:05:35.848Z',
+    durationMs: 1122845,
+    lastStage: 'publish-status-finished',
+    publishStatusFinished: true,
+    publishMatchedCount: 2904,
+    publishModifiedCount: 2904,
+    summary: {
+      successfulSourcesCount: 14,
+      failedSourcesCount: 11,
+    },
+    sources: [
+      {
+        sourceKey: 'aktionsfinder-spar',
+        sourceType: 'aggregator',
+        channel: 'aggregator',
+        status: 'failed',
+        failureStage: 'fetch',
+        error: 'Request failed with status code 404',
+      },
+    ],
+  };
+
+  const reliability = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: {
+      id: 'scheduled-full-1',
+      status: 'stale',
+      trigger: 'scheduled',
+      mode: 'full',
+      dryRun: false,
+      startedAt: '2026-06-01T23:00:00.077Z',
+      finishedAt: '2026-06-02T02:03:24.358Z',
+    },
+    latestCrawl: latestManualFull,
+    crawlHistory: [latestManualFull],
+    activeCrawlRun: null,
+    lockStatus: {
+      state: 'free',
+      isBlocked: false,
+      reason: 'Globaler Crawl-Lock ist frei.',
+    },
+  });
+
+  assert.equal(reliability.scheduledDaily.level, 'red');
+  assert.equal(reliability.scheduledDaily.status, 'stale');
+  assert.equal(reliability.currentCrawlSystem.level, 'green');
+  assert.equal(reliability.currentCrawlSystem.lockFree, true);
+  assert.equal(reliability.currentCrawlSystem.activeRunBlocked, false);
+  assert.equal(reliability.currentCrawlSystem.latestManualFullCrawl.status, 'partial');
+  assert.equal(reliability.currentCrawlSystem.latestManualFullCrawl.terminal, true);
+  assert.equal(reliability.currentCrawlSystem.latestManualFullCrawl.publishStatusFinished, true);
+  assert.equal(reliability.currentCrawlSystem.finalizationLockBlocker, 'green');
+  assert.equal(reliability.currentCrawlSystem.awaitingNextScheduledDailyConfirmation, true);
+  assert.equal(reliability.sourceFailures.level, 'yellow');
+  assert.equal(reliability.sourceFailures.p0ReliabilityCount, 0);
+  assert.equal(reliability.sourceFailures.p1SourceCoverageCount, 1);
+  assert.equal(reliability.sourceFailures.groups[0].errorType, 'http-404');
+  assert.equal(reliability.sourceFailures.groups[0].classification, 'P1 Source/Coverage');
+});
+
 test('dashboard lock serialization marks stale heartbeat locks as blocked', () => {
   const now = new Date('2026-06-01T13:00:00.000Z');
   const lock = _private.serializeLock({
@@ -252,6 +319,39 @@ test('dashboard analysis essence text contains required sections and feedback in
     generatedAt: '2026-06-01T12:00:00.000Z',
     buildInfo: { buildTime: '2026-06-01T11:59:00.000Z' },
     executiveStatus: { level: 'red', reason: 'Last scheduled full crawl is stale.' },
+    crawlReliability: {
+      scheduledDaily: {
+        level: 'red',
+        status: 'stale',
+        runId: 'run-1',
+        reason: 'Latest scheduled full crawl is stale.',
+      },
+      currentCrawlSystem: {
+        level: 'green',
+        lockState: 'free',
+        lockFree: true,
+        activeRunBlocked: false,
+        finalizationLockBlocker: 'green',
+        awaitingNextScheduledDailyConfirmation: true,
+        reason: 'Current crawl system is not blocked.',
+        latestManualFullCrawl: {
+          id: 'run-2',
+          status: 'partial',
+          terminal: true,
+          lastStage: 'publish-status-finished',
+          publishStatusFinished: true,
+          successfulSourcesCount: 14,
+          failedSourcesCount: 11,
+        },
+      },
+      sourceFailures: {
+        level: 'yellow',
+        failedSourcesCount: 11,
+        p0ReliabilityCount: 0,
+        p1SourceCoverageCount: 11,
+        reason: 'Aggregator 404s are P1 Source/Coverage.',
+      },
+    },
     latestScheduledFullCrawl: {
       id: 'run-1',
       status: 'stale',
@@ -356,6 +456,9 @@ test('dashboard analysis essence text contains required sections and feedback in
 
   assert.equal(Boolean(analysisEssence), true);
   assert.match(analysisEssenceText, /executive_health:/);
+  assert.match(analysisEssenceText, /crawl_reliability:/);
+  assert.match(analysisEssenceText, /finalizationLockBlocker: green/);
+  assert.match(analysisEssenceText, /p1SourceCoverageCount: 11/);
   assert.match(analysisEssenceText, /latest_scheduled_full_crawl:/);
   assert.match(analysisEssenceText, /offer_quality_kpi:/);
   assert.match(analysisEssenceText, /feedback_beta_test:/);

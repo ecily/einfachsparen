@@ -227,6 +227,7 @@ function serializeCrawlRun(run) {
   if (!run) return null;
   const plain = typeof run.toObject === 'function' ? run.toObject({ getters: false, virtuals: false }) : run;
   const sources = Array.isArray(plain.result?.sources) ? plain.result.sources : [];
+  const progress = plain.metadata?.progress || {};
 
   return {
     id: asStringId(plain._id || plain.id),
@@ -240,6 +241,12 @@ function serializeCrawlRun(run) {
     durationMs: plain.durationMs ?? null,
     warnings: compactStrings(plain.warnings || [], 8),
     errorMessages: compactStrings(plain.errorMessages || [], 8),
+    lastStage: progress.stage || '',
+    publishStatusFinished: progress.stage === 'publish-status-finished',
+    publishRunStatus: progress.runStatus || '',
+    publishMatchedCount: progress.matchedCount ?? null,
+    publishModifiedCount: progress.modifiedCount ?? null,
+    publishStatusUpdatedAt: toIsoOrNull(progress.updatedAt),
     summary: plain.summary || {},
     perRetailer: Array.isArray(plain.perRetailer) ? plain.perRetailer : [],
     sourceTypes: Array.isArray(plain.sourceTypes) ? plain.sourceTypes : [],
@@ -257,6 +264,149 @@ function serializeCrawlRun(run) {
       failureStage: source.failureStage || '',
       httpStatus: source.httpStatus ?? null,
     })),
+  };
+}
+
+function crawlStatusLevel(run) {
+  if (!run) return 'yellow';
+  if (run.status === 'failed' || run.status === 'stale') return 'red';
+  if (run.status === 'partial' || run.status === 'skipped') return 'yellow';
+  if (run.status === 'success') return 'green';
+  return 'red';
+}
+
+function findLatestManualFullCrawl(crawlHistory = []) {
+  return (crawlHistory || []).find((run) => (
+    run?.trigger === 'manual'
+    && run?.mode === 'full'
+    && run?.dryRun !== true
+  )) || null;
+}
+
+function detectSourceErrorType(source = {}) {
+  const text = `${source.failureStage || ''} ${source.error || ''}`.toLowerCase();
+
+  if (source.httpStatus) return `http-${source.httpStatus}`;
+  if (/\b404\b/.test(text)) return 'http-404';
+  if (/timeout|timed out/.test(text)) return 'timeout';
+  if (/fetch|network|socket|econn/.test(text)) return 'fetch';
+  if (/parse|parser/.test(text)) return 'parse';
+  return source.failureStage || 'source-error';
+}
+
+function buildSourceFailureDiagnosis(run) {
+  const failedSources = (run?.sources || []).filter((source) => source.status === 'failed');
+  const groups = new Map();
+
+  for (const source of failedSources) {
+    const errorType = detectSourceErrorType(source);
+    const sourceType = source.sourceType || source.channel || 'unknown';
+    const key = `${sourceType}:${errorType}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        sourceType,
+        errorType,
+        count: 0,
+        severity: 'yellow',
+        classification: 'P1 Source/Coverage',
+        sourceKeys: [],
+      });
+    }
+
+    const group = groups.get(key);
+    group.count += 1;
+    group.sourceKeys.push(source.sourceKey || 'unknown');
+  }
+
+  const p1SourceCoverageCount = [...groups.values()]
+    .filter((group) => group.classification === 'P1 Source/Coverage')
+    .reduce((sum, group) => sum + group.count, 0);
+
+  return {
+    level: failedSources.length > 0 ? 'yellow' : 'green',
+    failedSourcesCount: failedSources.length,
+    p0ReliabilityCount: 0,
+    p1SourceCoverageCount,
+    reason: failedSources.length > 0
+      ? `${failedSources.length} failed source(s) are classified separately from crawl finalization/lock reliability.`
+      : 'No failed sources in the reference crawl.',
+    groups: [...groups.values()],
+  };
+}
+
+function buildCrawlReliabilityStatus({
+  latestScheduledFullCrawl,
+  latestCrawl,
+  crawlHistory,
+  activeCrawlRun,
+  lockStatus,
+} = {}) {
+  const latestManualFullCrawl = findLatestManualFullCrawl(crawlHistory) || (
+    latestCrawl?.trigger === 'manual' && latestCrawl?.mode === 'full' && latestCrawl?.dryRun !== true
+      ? latestCrawl
+      : null
+  );
+  const scheduledLevel = crawlStatusLevel(latestScheduledFullCrawl);
+  const lockFree = lockStatus?.isBlocked === false;
+  const hasActiveBlockedRun = Boolean(activeCrawlRun && ACTIVE_CRAWL_STATUSES.has(activeCrawlRun.status));
+  const manualFullTerminal = latestManualFullCrawl
+    ? TERMINAL_CRAWL_STATUSES.has(latestManualFullCrawl.status) && Boolean(latestManualFullCrawl.finishedAt)
+    : false;
+  const finalizationComplete = Boolean(latestManualFullCrawl?.publishStatusFinished);
+  const currentStateLevel = lockFree && !hasActiveBlockedRun && manualFullTerminal && finalizationComplete
+    ? 'green'
+    : 'red';
+  const awaitingNextScheduledDailyConfirmation = Boolean(
+    latestScheduledFullCrawl
+    && latestScheduledFullCrawl.status === 'stale'
+    && currentStateLevel === 'green'
+  );
+  const sourceFailures = buildSourceFailureDiagnosis(latestManualFullCrawl || latestCrawl);
+
+  return {
+    scheduledDaily: {
+      level: scheduledLevel,
+      status: latestScheduledFullCrawl?.status || 'unknown',
+      runId: latestScheduledFullCrawl?.id || '',
+      startedAt: latestScheduledFullCrawl?.startedAt || null,
+      finishedAt: latestScheduledFullCrawl?.finishedAt || null,
+      reason: latestScheduledFullCrawl
+        ? scheduledLevel === 'red'
+          ? 'Latest scheduled full crawl is not healthy; keep scheduled daily reliability on watch.'
+          : 'Latest scheduled full crawl is terminal.'
+        : 'No scheduled full crawl is available.',
+    },
+    currentCrawlSystem: {
+      level: currentStateLevel,
+      lockState: lockStatus?.state || 'unknown',
+      lockFree,
+      activeRunBlocked: hasActiveBlockedRun || lockStatus?.isBlocked === true,
+      activeRunId: activeCrawlRun?.id || '',
+      latestManualFullCrawl: latestManualFullCrawl ? {
+        id: latestManualFullCrawl.id,
+        status: latestManualFullCrawl.status,
+        terminal: manualFullTerminal,
+        startedAt: latestManualFullCrawl.startedAt,
+        finishedAt: latestManualFullCrawl.finishedAt,
+        durationMs: latestManualFullCrawl.durationMs,
+        successfulSourcesCount: numberFrom(latestManualFullCrawl.summary?.successfulSourcesCount),
+        failedSourcesCount: numberFrom(latestManualFullCrawl.summary?.failedSourcesCount),
+        lastStage: latestManualFullCrawl.lastStage || '',
+        publishStatusFinished: finalizationComplete,
+        publishMatchedCount: latestManualFullCrawl.publishMatchedCount ?? null,
+        publishModifiedCount: latestManualFullCrawl.publishModifiedCount ?? null,
+      } : null,
+      finalizationLockBlocker: currentStateLevel === 'green' ? 'green' : 'needs-attention',
+      finalizationLockBlockerLabel: currentStateLevel === 'green'
+        ? 'Recovered/green'
+        : 'Needs attention',
+      awaitingNextScheduledDailyConfirmation,
+      reason: currentStateLevel === 'green'
+        ? 'Current crawl lock is free, no active blocked run exists, and latest manual full crawl reached publish-status-finished.'
+        : 'Current crawl system state still has an active lock/run or lacks a terminal manual full crawl with publish finalization.',
+    },
+    sourceFailures,
   };
 }
 
@@ -1341,6 +1491,7 @@ function buildAnalysisEssence({
   generatedAt,
   buildInfo,
   executiveStatus,
+  crawlReliability,
   latestScheduledFullCrawl,
   crawlHistory,
   lockStatus,
@@ -1394,6 +1545,7 @@ function buildAnalysisEssence({
       latestBuildTime: buildInfo?.buildTime || 'unknown',
       latestHealthTime: generatedAt || 'unknown',
     },
+    crawlReliability: crawlReliability || {},
     latestScheduledFullCrawl: {
       runId: latestScheduledFullCrawl?.id || 'not_available',
       status: latestScheduledFullCrawl?.status || 'not_available',
@@ -1454,6 +1606,11 @@ function renderAnalysisEssenceText(essence = {}) {
   const lines = [];
   const header = essence.header || {};
   const health = essence.executiveHealth || {};
+  const reliability = essence.crawlReliability || {};
+  const scheduledDaily = reliability.scheduledDaily || {};
+  const currentCrawlSystem = reliability.currentCrawlSystem || {};
+  const latestManualFull = currentCrawlSystem.latestManualFullCrawl || {};
+  const sourceFailures = reliability.sourceFailures || {};
   const latest = essence.latestScheduledFullCrawl || {};
   const history = essence.crawlHistorySummary || {};
   const offerKpi = essence.offerQualityKpi || {};
@@ -1481,6 +1638,35 @@ function renderAnalysisEssenceText(essence = {}) {
   lines.push(`  nextCrawlBlocked: ${scalarYaml(health.nextCrawlBlocked)}`);
   lines.push(`  latestBuildTime: ${scalarYaml(health.latestBuildTime)}`);
   lines.push(`  latestHealthTime: ${scalarYaml(health.latestHealthTime)}`);
+  lines.push('');
+  lines.push('crawl_reliability:');
+  lines.push('  scheduledDaily:');
+  lines.push(`    level: ${scalarYaml(scheduledDaily.level)}`);
+  lines.push(`    status: ${scalarYaml(scheduledDaily.status)}`);
+  lines.push(`    runId: ${quoteYaml(scheduledDaily.runId)}`);
+  lines.push(`    reason: ${quoteYaml(scheduledDaily.reason)}`);
+  lines.push('  currentCrawlSystem:');
+  lines.push(`    level: ${scalarYaml(currentCrawlSystem.level)}`);
+  lines.push(`    lockState: ${scalarYaml(currentCrawlSystem.lockState)}`);
+  lines.push(`    lockFree: ${scalarYaml(currentCrawlSystem.lockFree)}`);
+  lines.push(`    activeRunBlocked: ${scalarYaml(currentCrawlSystem.activeRunBlocked)}`);
+  lines.push(`    finalizationLockBlocker: ${scalarYaml(currentCrawlSystem.finalizationLockBlocker)}`);
+  lines.push(`    awaitingNextScheduledDailyConfirmation: ${scalarYaml(currentCrawlSystem.awaitingNextScheduledDailyConfirmation)}`);
+  lines.push(`    reason: ${quoteYaml(currentCrawlSystem.reason)}`);
+  lines.push('    latestManualFullCrawl:');
+  lines.push(`      runId: ${quoteYaml(latestManualFull.id || 'not_available')}`);
+  lines.push(`      status: ${scalarYaml(latestManualFull.status || 'unknown')}`);
+  lines.push(`      terminal: ${scalarYaml(latestManualFull.terminal ?? 'unknown')}`);
+  lines.push(`      lastStage: ${scalarYaml(latestManualFull.lastStage || 'unknown')}`);
+  lines.push(`      publishStatusFinished: ${scalarYaml(latestManualFull.publishStatusFinished ?? 'unknown')}`);
+  lines.push(`      sourceOk: ${scalarYaml(latestManualFull.successfulSourcesCount ?? 'unknown')}`);
+  lines.push(`      sourceFail: ${scalarYaml(latestManualFull.failedSourcesCount ?? 'unknown')}`);
+  lines.push('  sourceFailures:');
+  lines.push(`    level: ${scalarYaml(sourceFailures.level)}`);
+  lines.push(`    failedSourcesCount: ${scalarYaml(sourceFailures.failedSourcesCount)}`);
+  lines.push(`    p0ReliabilityCount: ${scalarYaml(sourceFailures.p0ReliabilityCount)}`);
+  lines.push(`    p1SourceCoverageCount: ${scalarYaml(sourceFailures.p1SourceCoverageCount)}`);
+  lines.push(`    reason: ${quoteYaml(sourceFailures.reason)}`);
   lines.push('');
   lines.push('latest_scheduled_full_crawl:');
   lines.push(`  runId: ${quoteYaml(latest.runId)}`);
@@ -1951,6 +2137,13 @@ async function buildDashboardSnapshot() {
     lockStatus,
     publishStatusSummary,
   });
+  const crawlReliability = buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl,
+    latestCrawl,
+    crawlHistory,
+    activeCrawlRun,
+    lockStatus,
+  });
   const actionableIssues = buildActionableIssues({
     latestCrawl: latestScheduledFullCrawl || latestCrawl,
     lockStatus,
@@ -1981,6 +2174,7 @@ async function buildDashboardSnapshot() {
     generatedAt,
     buildInfo,
     executiveStatus,
+    crawlReliability,
     latestScheduledFullCrawl,
     crawlHistory,
     lockStatus,
@@ -2002,6 +2196,7 @@ async function buildDashboardSnapshot() {
       build: buildInfo,
     },
     executiveStatus,
+    crawlReliability,
     latestCrawl,
     latestScheduledFullCrawl,
     activeCrawlRun,
@@ -2048,6 +2243,8 @@ module.exports = {
     buildFeedbackSummary,
     buildFeedbackSummaryFromDocuments,
     buildAnalysisEssencePayload,
+    buildCrawlReliabilityStatus,
+    buildSourceFailureDiagnosis,
     buildOfferDiagnostics,
     buildPublishStatusSummaryFromRows,
     buildQualityKpis,

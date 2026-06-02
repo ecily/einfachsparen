@@ -387,7 +387,13 @@ export function DiagnosticsPage({
   const [adminKeyMessage, setAdminKeyMessage] = useState('')
 
   const executive = snapshot?.executiveStatus || { level: 'yellow', reason: 'Dashboard-Daten werden geladen.' }
-  const latest = snapshot?.latestScheduledFullCrawl || snapshot?.latestCrawl || null
+  const latestScheduled = snapshot?.latestScheduledFullCrawl || null
+  const latest = latestScheduled || snapshot?.latestCrawl || null
+  const crawlReliability = snapshot?.crawlReliability || {}
+  const scheduledDaily = crawlReliability.scheduledDaily || {}
+  const currentCrawlSystem = crawlReliability.currentCrawlSystem || {}
+  const latestManualFull = currentCrawlSystem.latestManualFullCrawl || null
+  const sourceFailures = crawlReliability.sourceFailures || {}
   const offerSummary = snapshot?.offerSummary || {}
   const publish = snapshot?.publishStatusSummary || {}
   const lock = snapshot?.lockStatus || {}
@@ -493,8 +499,11 @@ export function DiagnosticsPage({
 
       <section className="metrics">
         <MetricCard label="Ampel" value={executive.label || STATUS_LABELS[executive.level]} note={executive.reason} status={executive.level} />
-        <MetricCard label="Letzter Daily Crawl" value={latest?.status || 'unbekannt'} note={latest?.id || 'keine Lineage'} status={latest?.status} />
-        <MetricCard label="Globaler Lock" value={lock.state === 'free' ? 'frei' : lock.state || 'unbekannt'} note={lock.reason || '-'} status={lock.state} />
+        <MetricCard label="Scheduled Daily" value={scheduledDaily.status || latestScheduled?.status || 'unbekannt'} note={scheduledDaily.reason || latestScheduled?.id || 'keine scheduled Lineage'} status={scheduledDaily.level || latestScheduled?.status} />
+        <MetricCard label="Current Crawl Lock" value={currentCrawlSystem.lockFree ? 'frei' : lock.state || 'unbekannt'} note={currentCrawlSystem.reason || lock.reason || '-'} status={currentCrawlSystem.level || lock.state} />
+        <MetricCard label="Latest Manual Full" value={latestManualFull?.status || 'unbekannt'} note={latestManualFull ? `${latestManualFull.lastStage || '-'} / ${formatInteger(latestManualFull.successfulSourcesCount)} ok / ${formatInteger(latestManualFull.failedSourcesCount)} fail` : 'kein manual full gefunden'} status={latestManualFull?.terminal ? 'green' : 'yellow'} />
+        <MetricCard label="Finalization/Lock" value={currentCrawlSystem.finalizationLockBlockerLabel || 'unbekannt'} note={currentCrawlSystem.awaitingNextScheduledDailyConfirmation ? 'Awaiting next scheduled daily confirmation' : currentCrawlSystem.finalizationLockBlocker || '-'} status={currentCrawlSystem.finalizationLockBlocker === 'green' ? 'green' : 'yellow'} />
+        <MetricCard label="Source Failures" value={`${formatInteger(sourceFailures.p1SourceCoverageCount)} P1`} note={sourceFailures.reason || 'Source/Coverage getrennt von P0 Reliability'} status={sourceFailures.level || 'unknown'} />
         <MetricCard label="PublishStatus" value={publish.status || 'unbekannt'} note={`${formatInteger(publish.finalCount)} final / ${formatInteger(publish.openCount)} offen`} status={publish.status} />
       </section>
 
@@ -505,11 +514,27 @@ export function DiagnosticsPage({
         </div>
         <div className="selection-summary-grid">
           <article className="selection-summary-card">
-            <strong>CrawlRun</strong>
+            <strong>Scheduled Daily Status</strong>
             <span>
-              ID <code>{latest?.id || '-'}</code><br />
-              {latest?.trigger || '-'} / {latest?.mode || '-'} / dryRun {latest?.dryRun ? 'ja' : 'nein'}<br />
-              Start {formatDateTime(latest?.startedAt)} - Ende {formatDateTime(latest?.finishedAt)} - Dauer {formatDuration(latest?.durationMs)}
+              ID <code>{latestScheduled?.id || '-'}</code><br />
+              <StatusPill value={scheduledDaily.level || latestScheduled?.status}>{scheduledDaily.status || latestScheduled?.status || 'unbekannt'}</StatusPill><br />
+              Start {formatDateTime(latestScheduled?.startedAt)} - Ende {formatDateTime(latestScheduled?.finishedAt)}
+            </span>
+          </article>
+          <article className="selection-summary-card">
+            <strong>Current Crawl System State</strong>
+            <span>
+              Lock {currentCrawlSystem.lockFree ? 'frei' : lock.state || 'unbekannt'}; active blocked run {currentCrawlSystem.activeRunBlocked ? 'ja' : 'nein'}<br />
+              Latest manual full <code>{latestManualFull?.id || '-'}</code><br />
+              {latestManualFull?.status || 'unbekannt'} / terminal {latestManualFull?.terminal ? 'ja' : 'nein'} / {latestManualFull?.publishStatusFinished ? 'publish-status-finished' : latestManualFull?.lastStage || '-'}
+            </span>
+          </article>
+          <article className="selection-summary-card">
+            <strong>Source Failures</strong>
+            <span>
+              P0 Reliability {formatInteger(sourceFailures.p0ReliabilityCount)}<br />
+              P1 Source/Coverage {formatInteger(sourceFailures.p1SourceCoverageCount)}<br />
+              {(sourceFailures.groups || []).slice(0, 3).map((group) => `${group.count}x ${group.sourceType} ${group.errorType}`).join(' | ') || 'Keine failed Sources im Referenzcrawl.'}
             </span>
           </article>
           <article className="selection-summary-card">
