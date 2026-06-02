@@ -72,6 +72,7 @@ function scheduleInterruptedCrawlRunRecovery({
   envConfig = env,
   crawlRunServiceImpl = crawlRunService,
   setIntervalImpl = setInterval,
+  setTimeoutImpl = setTimeout,
 } = {}) {
   if (typeof crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart !== 'function') {
     return null;
@@ -79,7 +80,7 @@ function scheduleInterruptedCrawlRunRecovery({
 
   const staleHeartbeatMinutes = Number(envConfig.CRAWL_RUN_STALE_HEARTBEAT_MINUTES || 15);
   const intervalMs = Math.max(60 * 1000, staleHeartbeatMinutes * 60 * 1000);
-  const interval = setIntervalImpl(() => {
+  const runRecovery = () => {
     crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart({
       reason: 'Scheduler periodic recovery found an active CrawlRun from a previous process with a stale lock heartbeat.',
     }).catch((error) => {
@@ -87,13 +88,18 @@ function scheduleInterruptedCrawlRunRecovery({
         message: error.message,
       });
     });
-  }, intervalMs);
+  };
+  const firstCheck = setTimeoutImpl(runRecovery, 60 * 1000);
+  const interval = setIntervalImpl(runRecovery, intervalMs);
 
+  if (firstCheck && typeof firstCheck.unref === 'function') {
+    firstCheck.unref();
+  }
   if (interval && typeof interval.unref === 'function') {
     interval.unref();
   }
 
-  return interval;
+  return { firstCheck, interval };
 }
 
 function startCrawlScheduler({

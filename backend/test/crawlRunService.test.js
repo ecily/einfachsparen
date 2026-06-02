@@ -474,6 +474,18 @@ test('restart recovery classifies only old interrupted active CrawlRuns as recov
     lock: {
       runId: oldInterruptedRun._id,
       status: 'running',
+      heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() + 60 * 1000),
+      owner: 'previous-host:1234:manual',
+    },
+    now,
+    staleAfterMs: 60 * 60 * 1000,
+  }).reason, 'process-restart-stale-heartbeat');
+
+  assert.equal(_private.isRecoverableInterruptedRunAfterRestart({
+    run: oldInterruptedRun,
+    lock: {
+      runId: oldInterruptedRun._id,
+      status: 'running',
       heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
       owner: _private.buildLockOwner('scheduled'),
     },

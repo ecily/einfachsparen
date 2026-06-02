@@ -889,7 +889,7 @@ function isRecoverableInterruptedRunAfterRestart({
     };
   }
 
-  if (!lockHeartbeatBeforeProcess) {
+  if (!lockHeartbeatBeforeProcess && !heartbeatExpired) {
     return {
       recoverable: false,
       reason: 'lock-heartbeat-in-current-process',

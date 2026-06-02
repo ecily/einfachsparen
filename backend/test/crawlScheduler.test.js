@@ -189,7 +189,9 @@ test('scheduler startup runs interrupted CrawlRun recovery without starting repl
 test('scheduler periodically retries interrupted CrawlRun recovery for fresh restart orphans', async () => {
   const recoveryCalls = [];
   const intervals = [];
-  const intervalHandle = { unrefCalled: false, unref() { this.unrefCalled = true; } };
+  const timeouts = [];
+  const intervalHandle = { type: 'interval', unrefCalled: false, unref() { this.unrefCalled = true; } };
+  const timeoutHandle = { type: 'timeout', unrefCalled: false, unref() { this.unrefCalled = true; } };
 
   const handle = _private.scheduleInterruptedCrawlRunRecovery({
     envConfig: env({ CRAWL_RUN_STALE_HEARTBEAT_MINUTES: 2 }),
@@ -203,17 +205,25 @@ test('scheduler periodically retries interrupted CrawlRun recovery for fresh res
       intervals.push({ callback, intervalMs });
       return intervalHandle;
     },
+    setTimeoutImpl(callback, delayMs) {
+      timeouts.push({ callback, delayMs });
+      return timeoutHandle;
+    },
   });
 
-  assert.equal(handle, intervalHandle);
+  assert.deepEqual(handle, { firstCheck: timeoutHandle, interval: intervalHandle });
+  assert.equal(timeoutHandle.unrefCalled, true);
   assert.equal(intervalHandle.unrefCalled, true);
+  assert.equal(timeouts.length, 1);
+  assert.equal(timeouts[0].delayMs, 60000);
   assert.equal(intervals.length, 1);
   assert.equal(intervals[0].intervalMs, 120000);
 
+  timeouts[0].callback();
   intervals[0].callback();
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(recoveryCalls.length, 1);
+  assert.equal(recoveryCalls.length, 2);
   assert.match(recoveryCalls[0].reason, /periodic recovery/i);
 });
 
