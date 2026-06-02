@@ -14,6 +14,21 @@ const {
 } = require('./crawlSourceSelection');
 const logger = require('../../lib/logger');
 
+async function reportCrawlProgress(onProgress, progress) {
+  if (typeof onProgress !== 'function') {
+    return;
+  }
+
+  try {
+    await onProgress(progress);
+  } catch (error) {
+    logger.warn('CrawlRun progress marker failed', {
+      stage: progress?.stage || '',
+      message: error.message,
+    });
+  }
+}
+
 async function crawlSource({ source, region, trigger = 'manual', crawlRunId = null }) {
   if (source.channel === 'aggregator') {
     if (String(source.sourceUrl || '').includes('marktguru.at/')) {
@@ -55,6 +70,7 @@ async function crawlAllSources({
   sourceSelectionRequested: explicitSourceSelectionRequested = false,
   trigger = 'manual',
   crawlRunId = null,
+  onProgress = null,
 } = {}) {
   const sourceCoverage = {
     totalRegisteredSources: await Source.countDocuments({ active: true }),
@@ -94,6 +110,11 @@ async function crawlAllSources({
   await ensureManualCategoryOverrideCacheLoaded();
   const prioritizedSources = selection.sources;
   const results = [];
+
+  await reportCrawlProgress(onProgress, {
+    stage: 'sources-started',
+    sourceCount: prioritizedSources.length,
+  });
 
   if (prioritizedSources.length === 0) {
     const disabledSources = sourceSelectionRequested
@@ -162,13 +183,33 @@ async function crawlAllSources({
   const effectiveRetailerKeys = selection.effectiveRetailerKeys.length > 0
     ? selection.effectiveRetailerKeys
     : retailerKeys;
+
+  await reportCrawlProgress(onProgress, {
+    stage: 'source-jobs-finished',
+    sourceCount: prioritizedSources.length,
+    finishedSourceCount: results.length,
+    retailerKeys: effectiveRetailerKeys,
+  });
+
+  await reportCrawlProgress(onProgress, {
+    stage: 'dedupe-started',
+    retailerKeys: effectiveRetailerKeys,
+  });
   const dedupeResult = await dedupeOffersAcrossSources({ retailerKeys: effectiveRetailerKeys });
+  await reportCrawlProgress(onProgress, {
+    stage: 'dedupe-finished',
+    duplicateGroups: dedupeResult.duplicateGroups,
+    removedOffers: dedupeResult.removedOffers,
+  });
   let filterMetadata = {
     ok: true,
     skipped: false,
   };
 
   try {
+    await reportCrawlProgress(onProgress, {
+      stage: 'filter-metadata-started',
+    });
     const syncResult = await rebuildFilterMetadata({
       trigger: `crawl:${trigger}`,
       loggerContext: {
@@ -184,6 +225,12 @@ async function crawlAllSources({
       ...syncResult,
     };
     clearRankingResponseCache();
+    await reportCrawlProgress(onProgress, {
+      stage: 'filter-metadata-finished',
+      processedOffers: syncResult.processedOffers,
+      retailers: syncResult.retailers,
+      categories: syncResult.categories,
+    });
   } catch (error) {
     filterMetadata = {
       ok: false,
@@ -197,6 +244,10 @@ async function crawlAllSources({
       trigger,
       region,
       retailerKeys: effectiveRetailerKeys,
+    });
+    await reportCrawlProgress(onProgress, {
+      stage: 'filter-metadata-failed',
+      message: error.message,
     });
   }
   const disabledSources = sourceSelectionRequested

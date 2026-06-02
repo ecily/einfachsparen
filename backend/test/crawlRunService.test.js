@@ -279,6 +279,13 @@ test('serializeCrawlRun returns status payload without raw offers or raw documen
     finishedAt: new Date('2026-05-10T00:01:00.000Z'),
     durationMs: 60000,
     summary: { matchedSourcesCount: 1 },
+    metadata: {
+      progress: {
+        stage: 'filter-metadata-started',
+        apiKey: 'nope',
+        updatedAt: new Date('2026-05-10T00:00:30.000Z'),
+      },
+    },
     result: {
       sources: [{
         sourceKey: 'spar',
@@ -301,6 +308,8 @@ test('serializeCrawlRun returns status payload without raw offers or raw documen
   assert.equal(serialized.result.offers, undefined);
   assert.equal(serialized.result.sources[0].rawDocuments, undefined);
   assert.equal(serialized.result.sources[0].diagnostic.apiKey, '[redacted]');
+  assert.equal(serialized.metadata.progress.stage, 'filter-metadata-started');
+  assert.equal(serialized.metadata.progress.apiKey, '[redacted]');
 });
 
 test('serializeCrawlRun tolerates malformed compact source entries', () => {
@@ -785,10 +794,14 @@ test('executeCrawlRun passes the top-level crawlRunId into source crawling and m
     offerUpdateMany: Offer.updateMany,
   };
   const offerUpdates = [];
+  const runUpdates = [];
   let receivedCrawlArgs = null;
 
   CrawlRunLock.updateOne = async () => ({ modifiedCount: 1 });
-  CrawlRun.findByIdAndUpdate = async () => ({ modifiedCount: 1 });
+  CrawlRun.findByIdAndUpdate = async (id, update) => {
+    runUpdates.push({ id, update });
+    return { modifiedCount: 1 };
+  };
   CrawlRun.findById = async () => ({ _id: runId, mode: 'scoped' });
   Offer.updateMany = async (filter, update) => {
     offerUpdates.push({ filter, update });
@@ -803,6 +816,7 @@ test('executeCrawlRun passes the top-level crawlRunId into source crawling and m
       options: { sourceKeys: ['bipa-official'] },
       crawlAllSourcesImpl: async (args) => {
         receivedCrawlArgs = args;
+        await args.onProgress({ stage: 'dedupe-started', apiKey: 'nope' });
         return {
           sources: [
             {
@@ -836,6 +850,10 @@ test('executeCrawlRun passes the top-level crawlRunId into source crawling and m
   assert.equal(receivedCrawlArgs.region, 'Steiermark');
   assert.equal(receivedCrawlArgs.trigger, 'manual');
   assert.deepEqual(receivedCrawlArgs.sourceKeys, ['bipa-official']);
+  const progressUpdate = runUpdates.find((call) => call.update?.$set?.['metadata.progress']);
+  assert.equal(progressUpdate.update.$set['metadata.progress'].stage, 'dedupe-started');
+  assert.equal(progressUpdate.update.$set['metadata.progress'].apiKey, '[redacted]');
+  assert.match(progressUpdate.update.$set['metadata.progress'].updatedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(offerUpdates.length, 1);
   assert.deepEqual(offerUpdates[0].filter, { crawlRunId: runId });
   assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-success');

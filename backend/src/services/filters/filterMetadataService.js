@@ -11,6 +11,8 @@ const { computeOfferSavings } = require('../offers/promotionMath');
 const { isOfferFreshForActiveUse } = require('../offers/offerFreshness');
 
 const FILTER_METADATA_BULK_BATCH_SIZE = 100;
+const FILTER_METADATA_QUERY_MAX_TIME_MS = 15000;
+const FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT = 5000;
 
 const FILTER_METADATA_OFFER_SELECT_FIELDS = [
   'retailerKey',
@@ -87,6 +89,12 @@ const FILTER_METADATA_OFFER_SELECT_FIELDS = [
   'updatedAt',
   'createdAt',
 ];
+
+function withFilterMetadataMaxTime(query) {
+  return query && typeof query.maxTimeMS === 'function'
+    ? query.maxTimeMS(FILTER_METADATA_QUERY_MAX_TIME_MS)
+    : query;
+}
 
 function normalizeFilterKey(value, fallback = 'unknown') {
   const normalized = normalizeTitleForMatch(value).replace(/\s+/g, '-');
@@ -957,19 +965,24 @@ async function syncFilterMetadataCollection({
 async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } = {}) {
   const now = new Date();
   const [offers, existingRetailers, sources, crawlJobs] = await Promise.all([
-    Offer.find({})
-      .select(FILTER_METADATA_OFFER_SELECT_FIELDS.join(' '))
-      .lean(),
-    Retailer.find({})
-      .select('retailerKey retailerName offerCount activeOfferCount firstSeenAt lastSeenAt lastSuccessfulCrawlAt isActive sortOrder')
-      .lean(),
-    Source.find({})
-      .select('_id retailerKey retailerName sourceRetailerName sourceRetailerFormat appliesToRetailerFormats retailerFormatLabel label channel sourceUrl active enabled disabledReason notes latestRunAt latestStatus')
-      .lean(),
-    CrawlJob.find({})
-      .select('retailerKey status startedAt finishedAt stats')
-      .sort({ startedAt: -1 })
-      .lean(),
+    withFilterMetadataMaxTime(
+      Offer.find({})
+        .select(FILTER_METADATA_OFFER_SELECT_FIELDS.join(' '))
+    ).lean(),
+    withFilterMetadataMaxTime(
+      Retailer.find({})
+        .select('retailerKey retailerName offerCount activeOfferCount firstSeenAt lastSeenAt lastSuccessfulCrawlAt isActive sortOrder')
+    ).lean(),
+    withFilterMetadataMaxTime(
+      Source.find({})
+        .select('_id retailerKey retailerName sourceRetailerName sourceRetailerFormat appliesToRetailerFormats retailerFormatLabel label channel sourceUrl active enabled disabledReason notes latestRunAt latestStatus')
+    ).lean(),
+    withFilterMetadataMaxTime(
+      CrawlJob.find({})
+        .select('retailerKey status startedAt finishedAt stats')
+        .sort({ startedAt: -1 })
+        .limit(FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT)
+    ).lean(),
   ]);
 
   const retailerDocuments = buildRetailerDocuments(existingRetailers, offers, now, sources, crawlJobs);
@@ -1153,7 +1166,9 @@ module.exports = {
   normalizeRetailerKey,
   normalizeCategoryKey,
   _private: {
+    FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT,
     FILTER_METADATA_OFFER_SELECT_FIELDS,
+    FILTER_METADATA_QUERY_MAX_TIME_MS,
     buildRetailerDocuments,
     buildKeyFilter,
     buildStableKey,

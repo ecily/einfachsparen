@@ -4,6 +4,8 @@ const { dedupeSourceEvidence } = require('./sourceEvidence');
 const { determineCategoryDecision } = require('./categoryClassifier');
 const { buildRetailerFormatScopeKey } = require('./offerAuditEnrichment');
 
+const DEDUPE_QUERY_MAX_TIME_MS = 15000;
+
 const CHANNEL_PRIORITY = {
   'official-flyer': 0,
   'official-site': 1,
@@ -370,8 +372,12 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
           'reviewReasons',
         ].join(' ')
       )
+      .maxTimeMS(DEDUPE_QUERY_MAX_TIME_MS)
       .lean(),
-    Source.find().select('_id channel retailerKey sourceUrl').lean(),
+    Source.find()
+      .select('_id channel retailerKey sourceUrl')
+      .maxTimeMS(DEDUPE_QUERY_MAX_TIME_MS)
+      .lean(),
   ]);
 
   const sourceMap = new Map(sources.map((source) => [String(source._id), source]));
@@ -509,6 +515,7 @@ async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
 module.exports = {
   dedupeOffersAcrossSources,
   _private: {
+    DEDUPE_QUERY_MAX_TIME_MS,
     buildMergedConditionFields,
     buildDedupeKey,
     isPreservableImageUrl,

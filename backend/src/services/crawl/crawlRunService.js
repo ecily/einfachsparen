@@ -201,6 +201,21 @@ function sanitizeDiagnosticValue(value, seen = new WeakSet()) {
   return sanitized;
 }
 
+function buildCrawlRunProgressMarker(progress = {}, now = new Date()) {
+  return sanitizeDiagnosticValue({
+    ...(progress && typeof progress === 'object' ? progress : {}),
+    updatedAt: now,
+  });
+}
+
+async function updateCrawlRunProgress(runId, progress) {
+  return CrawlRun.findByIdAndUpdate(runId, {
+    $set: {
+      'metadata.progress': buildCrawlRunProgressMarker(progress),
+    },
+  });
+}
+
 function normalizeSourceResult(source = {}) {
   if (!source || typeof source !== 'object') {
     source = {};
@@ -495,6 +510,9 @@ function serializeCrawlRun(run) {
     },
     errorMessages: compactStrings(plain.errorMessages || []),
     warnings: compactStrings(plain.warnings || []),
+    metadata: {
+      progress: sanitizeDiagnosticValue(plain.metadata?.progress || null),
+    },
   };
 }
 
@@ -1145,6 +1163,10 @@ async function executeCrawlRun({
       region,
       trigger,
       crawlRunId: runId,
+      onProgress: (progress) => updateCrawlRunProgress(runId, {
+        ...progress,
+        trigger,
+      }),
     }), maxRuntimeMs);
     const run = await CrawlRun.findById(runId);
     const aggregation = buildRunSummary(crawlResult);
@@ -1363,6 +1385,7 @@ module.exports = {
     markOfferPublishStatusForRun,
     normalizeSourceResult,
     parseExplicitRecoveryStaleMs,
+    buildCrawlRunProgressMarker,
     sanitizeJsonValue,
     sanitizeDiagnosticValue,
     serializeLockForAudit,
