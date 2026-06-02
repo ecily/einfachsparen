@@ -2,6 +2,16 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { _private } = require('../src/services/crawl/catalogDeduper');
 
+test('source dedupe filters can be scoped to the current CrawlRun lineage', () => {
+  assert.deepEqual(_private.buildDedupeFilters({
+    retailerKeys: ['billa', 'hofer'],
+    crawlRunId: 'run-123',
+  }), {
+    retailerKey: { $in: ['billa', 'hofer'] },
+    crawlRunId: 'run-123',
+  });
+});
+
 test('source dedupe condition merge keeps conditional offer fields', () => {
   const canonical = {
     conditionsText: '',

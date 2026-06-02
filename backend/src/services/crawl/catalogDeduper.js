@@ -309,8 +309,22 @@ function compareOffersForCanonical(left, right, sourceMap) {
   return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
 }
 
-async function dedupeOffersAcrossSources({ retailerKeys = [] } = {}) {
-  const filters = retailerKeys.length > 0 ? { retailerKey: { $in: retailerKeys } } : {};
+function buildDedupeFilters({ retailerKeys = [], crawlRunId = null } = {}) {
+  const filters = {};
+
+  if (retailerKeys.length > 0) {
+    filters.retailerKey = { $in: retailerKeys };
+  }
+
+  if (crawlRunId) {
+    filters.crawlRunId = crawlRunId;
+  }
+
+  return filters;
+}
+
+async function dedupeOffersAcrossSources({ retailerKeys = [], crawlRunId = null } = {}) {
+  const filters = buildDedupeFilters({ retailerKeys, crawlRunId });
   const [offers, sources] = await Promise.all([
     Offer.find(filters)
       .select(
@@ -516,6 +530,7 @@ module.exports = {
   dedupeOffersAcrossSources,
   _private: {
     DEDUPE_QUERY_MAX_TIME_MS,
+    buildDedupeFilters,
     buildMergedConditionFields,
     buildDedupeKey,
     isPreservableImageUrl,

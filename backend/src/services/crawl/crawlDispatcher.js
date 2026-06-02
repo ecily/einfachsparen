@@ -195,7 +195,7 @@ async function crawlAllSources({
     stage: 'dedupe-started',
     retailerKeys: effectiveRetailerKeys,
   });
-  const dedupeResult = await dedupeOffersAcrossSources({ retailerKeys: effectiveRetailerKeys });
+  const dedupeResult = await dedupeOffersAcrossSources({ retailerKeys: effectiveRetailerKeys, crawlRunId });
   await reportCrawlProgress(onProgress, {
     stage: 'dedupe-finished',
     duplicateGroups: dedupeResult.duplicateGroups,
