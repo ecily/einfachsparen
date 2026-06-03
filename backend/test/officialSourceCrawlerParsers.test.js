@@ -4,7 +4,7 @@ const axios = require('axios');
 const { Types } = require('mongoose');
 const { __private } = require('../src/services/crawl/officialSourceCrawler');
 const { enrichOffersForStorage } = require('../src/services/crawl/offerAuditEnrichment');
-const { buildValidityLabel } = require('../src/services/offers/offerRankingService');
+const { buildRankedOffer, buildValidityLabel } = require('../src/services/offers/offerRankingService');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 const { deriveSourceKey } = require('../src/services/crawl/crawlSourceSelection');
 const {
@@ -1614,9 +1614,147 @@ test('PENNY official API normalizer keeps missing validTo offers and rejects nor
   assert.equal(offers[0].normalizedUnitPrice.amount, 2.65);
   assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
   assert.equal(offers[0].imageUrl, 'https://www.penny.at/images/penny/cif-140.jpg');
+  assert.equal(offers[0].conditionsText, '');
+  assert.equal(offers[0].hasConditions, false);
+  assert.equal(offers[0].minimumPurchaseQty, 1);
   assert.equal(offers[1].validTo, null);
   assert.match(offers[1].conditionsText, /Aktuell gefunden/);
   assert.equal(offers[1].adminReview.status, 'pending');
+});
+
+test('PENNY official condition extraction reads explicit API promotion tags only', () => {
+  const cases = [
+    {
+      tags: ['ab 6 Flaschen'],
+      expectedText: 'ab 6 Flaschen',
+      expectedQty: 6,
+      expectedType: 'threshold',
+      expectedMultiBuy: false,
+    },
+    {
+      tags: ['ab 12 Packungen'],
+      expectedText: 'ab 12 Packungen',
+      expectedQty: 12,
+      expectedType: 'threshold',
+      expectedMultiBuy: false,
+    },
+    {
+      tags: ['ab 2 Stück'],
+      expectedText: 'ab 2 Stueck',
+      expectedQty: 2,
+      expectedType: 'threshold',
+      expectedMultiBuy: false,
+    },
+    {
+      tags: ['ab 4 Stk.'],
+      expectedText: 'ab 4 Stueck',
+      expectedQty: 4,
+      expectedType: 'threshold',
+      expectedMultiBuy: false,
+    },
+    {
+      tags: ['3+3 gratis'],
+      expectedText: '3+3 gratis',
+      expectedQty: 6,
+      expectedType: 'multi-buy',
+      expectedMultiBuy: true,
+    },
+  ];
+
+  for (const item of cases) {
+    const offers = __private.normalizePennyApiProductsToOffers({
+      products: [pennyApiProduct({
+        tags: item.tags,
+        validityStart: '2026-06-01',
+        validityEnd: '2026-06-30',
+      })],
+      source: pennyOfficialSource(),
+      crawlJobId: new Types.ObjectId(),
+      region: 'AT',
+      pageUrl: 'https://www.penny.at/angebote',
+      categorySlug: 'angebote-ab-1305',
+    });
+
+    assert.equal(offers.length, 1, item.expectedText);
+    assert.equal(offers[0].conditionsText, item.expectedText);
+    assert.equal(offers[0].hasConditions, true);
+    assert.equal(offers[0].minimumPurchaseQty, item.expectedQty);
+    assert.equal(offers[0].effectiveDiscountType, item.expectedType);
+    assert.equal(offers[0].isMultiBuy, item.expectedMultiBuy);
+    assert.equal(offers[0].rawFacts.conditionExtraction.reason, 'explicit-penny-promotion-field');
+    assert.deepEqual(offers[0].rawFacts.conditionExtraction.sources, ['price.regular.tags']);
+  }
+});
+
+test('PENNY official condition extraction ignores package sizes and normal price-action tags', () => {
+  const offers = __private.normalizePennyApiProductsToOffers({
+    products: [
+      pennyApiProduct({
+        name: 'Mineralwasser 6 x 1 Liter',
+        amount: '1',
+        volumeLabelShort: 'l',
+        packageLabel: 'Flasche',
+        tags: ['Aktion', '1 Liter 0,49'],
+        validityStart: '2026-06-01',
+        validityEnd: '2026-06-30',
+      }),
+      pennyApiProduct({
+        slug: 'reiswaffeln-78000002',
+        name: 'Reiswaffeln 12 Packungen',
+        amount: '12',
+        volumeLabelShort: 'Stück',
+        packageLabel: 'Packung',
+        tags: ['SO'],
+        validityStart: '2026-06-01',
+        validityEnd: '2026-06-30',
+      }),
+    ],
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-1305',
+  });
+
+  assert.equal(offers.length, 2);
+  for (const offer of offers) {
+    assert.equal(offer.conditionsText, '');
+    assert.equal(offer.hasConditions, false);
+    assert.equal(offer.minimumPurchaseQty, 1);
+    assert.equal(offer.effectiveDiscountType, 'unknown');
+    assert.equal(offer.rawFacts.conditionExtraction, undefined);
+  }
+});
+
+test('PENNY official API condition fields survive storage enrichment and public serialization', () => {
+  const [offer] = __private.normalizePennyApiProductsToOffers({
+    products: [pennyApiProduct({
+      tags: ['ab 4 Stück'],
+      validityStart: '2026-06-01',
+      validityEnd: '2026-06-30',
+    })],
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-1305',
+  });
+  const [stored] = enrichOffersForStorage([offer], {
+    source: pennyOfficialSource(),
+    sourceType: 'penny-official-html',
+    parserVersion: 'test-parser',
+    normalizationVersion: 'test-normalizer',
+  });
+  const publicOffer = buildRankedOffer(stored, null, null);
+
+  assert.equal(stored.conditionsText, 'ab 4 Stueck');
+  assert.equal(stored.hasConditions, true);
+  assert.equal(stored.minimumPurchaseQty, 4);
+  assert.equal(stored.effectiveDiscountType, 'threshold');
+  assert.equal(publicOffer.conditionsText, 'ab 4 Stueck');
+  assert.equal(publicOffer.hasConditions, true);
+  assert.equal(publicOffer.minimumPurchaseQty, 4);
+  assert.equal(publicOffer.effectiveDiscountType, 'threshold');
 });
 
 test('PENNY official API collector follows product-group pagination', async () => {

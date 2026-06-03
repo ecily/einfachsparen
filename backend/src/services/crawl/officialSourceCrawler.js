@@ -63,6 +63,7 @@ const {
   resolveIssuuOriginalPdfUrl,
 } = require('./issuuPdfResolver');
 const { normalizeImageUrl } = require('../images/imageUrl');
+const { extractPromotionRequirement } = require('../offers/promotionMath');
 const logger = require('../../lib/logger');
 
 const PARSER_VERSION = 'official-v3-coverage';
@@ -2033,6 +2034,132 @@ function hasPennyApiOfferSignal(product = {}) {
   );
 }
 
+function collectPennyPromotionFieldTexts(product = {}) {
+  const price = product?.price || {};
+  const fields = [
+    ['price.regular.tags', price.regular?.tags],
+    ['price.tags', price.tags],
+    ['price.badges', price.badges],
+    ['badges', product.badges],
+    ['promotionBadges', product.promotionBadges],
+    ['promotions', product.promotions],
+    ['promotion', product.promotion],
+    ['promotionText', product.promotionText],
+  ];
+  const texts = [];
+
+  function pushText(source, value) {
+    if (value === null || value === undefined) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => pushText(source, item));
+      return;
+    }
+
+    if (typeof value === 'object') {
+      [
+        value.label,
+        value.name,
+        value.text,
+        value.title,
+        value.value,
+        value.description,
+      ].forEach((item) => pushText(source, item));
+      return;
+    }
+
+    const text = sanitizeWhitespace(value);
+
+    if (text) {
+      texts.push({ source, text });
+    }
+  }
+
+  for (const [source, value] of fields) {
+    pushText(source, value);
+  }
+
+  return texts;
+}
+
+function normalizePennyConditionUnit(value = '') {
+  const normalized = normalizeTitleForMatch(value);
+
+  if (/fl/.test(normalized)) return 'Flaschen';
+  if (/dos/.test(normalized)) return 'Dosen';
+  if (/pack|pkg/.test(normalized)) return 'Packungen';
+  return 'Stueck';
+}
+
+function buildPennyOfficialConditionExtraction(product = {}) {
+  const evidenceTexts = collectPennyPromotionFieldTexts(product);
+  const conditions = [];
+  const seen = new Set();
+  const sources = [];
+
+  function addCondition(text, source) {
+    const condition = sanitizeWhitespace(text);
+    const key = normalizeTitleForMatch(condition);
+
+    if (!condition || !key || seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    conditions.push(condition);
+    sources.push(source);
+  }
+
+  for (const item of evidenceTexts) {
+    const rawText = String(item.text || '');
+    const normalizedText = normalizeTitleForMatch(rawText);
+
+    for (const plusMatch of rawText.matchAll(/(?=\b(\d{1,2})\s*\+\s*(\d{1,2})(?:\s*gratis)?\b)/gi)) {
+      const prefix = rawText.slice(Math.max(0, plusMatch.index - 32), plusMatch.index).toLowerCase();
+
+      if (/\b(?:lsf|spf|schutzfaktor)\s*$/i.test(prefix)) {
+        continue;
+      }
+
+      addCondition(`${Number(plusMatch[1])}+${Number(plusMatch[2])} gratis`, item.source);
+    }
+
+    for (const thresholdMatch of normalizedText.matchAll(/\bab\s+(\d{1,2})\s*(flaschen?|fl|dosen?|packungen?|pkg|stueck|stuck|stk)\b/g)) {
+      const quantity = Number(thresholdMatch[1]);
+
+      if (quantity > 1) {
+        addCondition(`ab ${quantity} ${normalizePennyConditionUnit(thresholdMatch[2])}`, item.source);
+      }
+    }
+  }
+
+  const conditionsText = conditions.join(' / ');
+  const requirement = extractPromotionRequirement({
+    conditionsText,
+    rawFacts: {},
+    benefitType: '',
+  });
+  const minimumPurchaseQty = Math.max(1, Number(requirement.requiredQuantity || 1));
+  const isMultiBuy = ['x-plus-y', 'x-for-y', 'multi-buy'].includes(requirement.mechanic);
+
+  return {
+    conditionsText,
+    hasConditions: Boolean(conditionsText),
+    minimumPurchaseQty,
+    isMultiBuy,
+    effectiveDiscountType: isMultiBuy
+      ? 'multi-buy'
+      : minimumPurchaseQty > 1
+        ? 'threshold'
+        : 'unknown',
+    evidenceTexts,
+    evidenceSources: [...new Set(sources.filter(Boolean))],
+    parser: 'penny-official-condition-tags-v1',
+  };
+}
+
 function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, region, pageUrl, categorySlug = '' }) {
   const offers = [];
   const seenOfferKeys = new Set();
@@ -2061,7 +2188,11 @@ function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, 
     });
     const issues = [];
     const offerKey = [productUrl, validFrom?.toISOString() || '', validTo?.toISOString() || '', currentPrice].join('|');
-    const conditionsText = validTo ? '' : 'Aktuell gefunden - bitte im Markt pruefen.';
+    const conditionExtraction = buildPennyOfficialConditionExtraction(product);
+    const conditionsText = [
+      conditionExtraction.conditionsText,
+      validTo ? '' : 'Aktuell gefunden - bitte im Markt pruefen.',
+    ].filter(Boolean).join(' / ');
 
     if (
       !title
@@ -2118,9 +2249,17 @@ function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, 
       status: statusInfo.status,
       isActiveNow: statusInfo.isActiveNow,
       isActiveToday: statusInfo.isActiveToday,
-      benefitType: referencePrice && referencePrice > currentPrice ? 'price-cut' : 'unknown',
+      benefitType: conditionExtraction.isMultiBuy
+        ? 'multi-buy'
+        : referencePrice && referencePrice > currentPrice
+          ? 'price-cut'
+          : 'unknown',
       conditionsText,
       customerProgramRequired: false,
+      hasConditions: conditionExtraction.hasConditions,
+      isMultiBuy: conditionExtraction.isMultiBuy,
+      minimumPurchaseQty: conditionExtraction.minimumPurchaseQty,
+      effectiveDiscountType: conditionExtraction.effectiveDiscountType,
       availabilityScope: 'unknown',
       priceCurrent: {
         amount: currentPrice,
@@ -2151,6 +2290,15 @@ function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, 
         productId: sanitizeWhitespace(product?.productId),
         sku: sanitizeWhitespace(product?.sku),
         priceTags: Array.isArray(product?.price?.regular?.tags) ? product.price.regular.tags : [],
+        tags: conditionExtraction.hasConditions
+          ? conditionExtraction.evidenceTexts.map((item) => item.text)
+          : [],
+        conditionExtraction: conditionExtraction.hasConditions ? {
+          parser: conditionExtraction.parser,
+          sources: conditionExtraction.evidenceSources,
+          confidence: 0.9,
+          reason: 'explicit-penny-promotion-field',
+        } : undefined,
         discountPercentage: product?.price?.discountPercentage ?? null,
         baseUnitShort: sanitizeWhitespace(product?.price?.baseUnitShort),
         basePriceFactor: sanitizeWhitespace(product?.price?.basePriceFactor),
@@ -6344,6 +6492,7 @@ module.exports = {
     extractPennyNuxtProductsFromHtml,
     extractPennyTabsAndLinks,
     extractPennyProductGroupSlugsFromHtml,
+    buildPennyOfficialConditionExtraction,
     normalizePennyApiProductsToOffers,
     collectPennyOfficialApiOffers,
     diagnosePennyOfficialSiteHtml,
