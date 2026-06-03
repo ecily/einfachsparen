@@ -1888,6 +1888,26 @@ test('Lidl flyer API normalizer keeps normal descriptions condition-free', () =>
   assert.equal(offer.customerProgramRequired, false);
 });
 
+test('Lidl flyer API date-only validity uses Vienna day boundaries', () => {
+  const validFrom = __private.parseLidlFlyerDate('2026-06-03');
+  const validTo = __private.parseLidlFlyerDate('2026-06-10', { endOfDay: true });
+
+  assert.equal(validFrom.toISOString(), '2026-06-02T22:00:00.000Z');
+  assert.equal(validTo.toISOString(), '2026-06-10T21:59:59.999Z');
+});
+
+test('Lidl flyer API normalizer keeps current date-only flyer windows active', () => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const futureKey = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const offer = normalizeLidlFlyerProduct(
+    { description: 'Spuelmaschinenreiniger: 60 g (1 kg = 41.50)' },
+    { offerStartDate: todayKey, offerEndDate: futureKey }
+  );
+
+  assert.equal(offer.status, 'active');
+  assert.equal(offer.isActiveNow, true);
+});
+
 test('Lidl flyer API normalizer maps explicit base price but ignores technical quantities', () => {
   const drBeckmann = normalizeLidlFlyerProduct({
     description: 'Nur gültig mit Lidl Plus Spuelmaschinenreiniger: 60 g (1 kg = 41.50)',

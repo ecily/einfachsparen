@@ -919,7 +919,34 @@ function extractLidlFlyerIdentifiers(html) {
   return [...identifiers];
 }
 
-function parseLidlFlyerDate(value) {
+function buildViennaWallClockDate(year, month, day, hour = 0, minute = 0, second = 0, millisecond = 0) {
+  const desiredUtcMs = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
+  const guess = new Date(desiredUtcMs);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(guess);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const observedUtcMs = Date.UTC(
+    Number(byType.year),
+    Number(byType.month) - 1,
+    Number(byType.day),
+    Number(byType.hour),
+    Number(byType.minute),
+    Number(byType.second),
+    millisecond
+  );
+
+  return new Date(desiredUtcMs + (desiredUtcMs - observedUtcMs));
+}
+
+function parseLidlFlyerDate(value, { endOfDay = false } = {}) {
   const match = String(value || '').match(/(\d{4})-(\d{2})-(\d{2})/);
 
   if (!match) {
@@ -927,7 +954,9 @@ function parseLidlFlyerDate(value) {
   }
 
   const [, year, month, day] = match.map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return endOfDay
+    ? buildViennaWallClockDate(year, month, day, 23, 59, 59, 999)
+    : buildViennaWallClockDate(year, month, day, 0, 0, 0, 0);
 }
 
 function parseLidlStoreTimestamp(value) {
@@ -1440,7 +1469,7 @@ function normalizeLidlProductToOffer({
     sourceCategory: product?.wonCategoryPrimary || product?.categoryPrimary || '',
   });
   const validFrom = parseLidlFlyerDate(flyer?.offerStartDate || flyer?.startDate);
-  const validTo = parseLidlFlyerDate(flyer?.offerEndDate || flyer?.endDate);
+  const validTo = parseLidlFlyerDate(flyer?.offerEndDate || flyer?.endDate, { endOfDay: true });
   const statusInfo = buildOfferStatus(validFrom, validTo);
   const customerProgramRequired = /lidl plus/i.test(description);
   const issues = [];
@@ -6510,6 +6539,7 @@ module.exports = {
     crawlBillaOfficialFlyers,
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
+    parseLidlFlyerDate,
     normalizeLidlProductToOffer,
     LIDL_OFFICIAL_CAMPAIGN_PAGES,
     extractLidlCampaignPageLinksFromHtml,
