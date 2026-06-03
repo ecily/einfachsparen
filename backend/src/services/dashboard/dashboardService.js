@@ -2198,12 +2198,12 @@ async function buildActiveOfferDashboardDiagnostics(activeOfferMatch) {
           { $project: { _id: 0 } },
         ],
         retailerMatrix: [
-          buildCounterGroupStage({ retailerKey: '$retailerKey', retailerName: '$retailerName' }),
+          buildCounterGroupStage('$retailerKey'),
           {
             $project: {
               _id: 0,
-              retailerKey: '$_id.retailerKey',
-              retailerName: '$_id.retailerName',
+              retailerKey: '$_id',
+              retailerName: 1,
               activeOffers: 1,
               officialOffers: 1,
               aggregatorOffers: 1,
