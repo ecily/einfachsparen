@@ -40,6 +40,14 @@ function source(format = 'eurospar') {
   };
 }
 
+function activeValidityForTest() {
+  const now = Date.now();
+  return {
+    validFrom: new Date(now - 24 * 60 * 60 * 1000),
+    validTo: new Date(now + 14 * 24 * 60 * 60 * 1000),
+  };
+}
+
 test('derives granular SPAR official PDF source keys', () => {
   assert.equal(sourceKeyForFormat('spar'), 'spar-official-flyer-pdf');
   assert.equal(sourceKeyForFormat('eurospar'), 'eurospar-official-flyer-pdf');
@@ -989,10 +997,7 @@ test('rejects unclear product blocks without price', () => {
 });
 
 test('normalizes SPAR PDF candidates with source metadata and distinguishable retailer formats', () => {
-  const currentValidity = {
-    validFrom: new Date('2026-05-20T12:00:00.000Z'),
-    validTo: new Date('2026-06-02T12:00:00.000Z'),
-  };
+  const currentValidity = activeValidityForTest();
   const pages = fixture.pages.filter((page) => page.sourceRetailerFormat === 'interspar');
   const candidates = extractSparPdfCandidates({
     pages,
@@ -1031,10 +1036,7 @@ test('normalizes SPAR PDF candidates with source metadata and distinguishable re
 });
 
 test('normalizes SPAR PDF beer candidates as beer with format metadata', () => {
-  const currentValidity = {
-    validFrom: new Date('2026-05-20T12:00:00.000Z'),
-    validTo: new Date('2026-06-02T12:00:00.000Z'),
-  };
+  const currentValidity = activeValidityForTest();
   const candidates = extractSparPdfCandidates({
     sourceRetailerFormat: 'eurospar',
     validity: currentValidity,

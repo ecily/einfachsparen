@@ -682,8 +682,8 @@ test('keeps BILLA and BILLA PLUS separate and disables low-yield sources', () =>
 });
 
 test('official SPAR flyer source validity uses local-day boundaries', () => {
-  const morningOfStartDay = new Date('2026-05-28T08:59:00.000Z');
-  const endOfLastDay = new Date('2026-06-02T21:30:00.000Z');
+  const morningOfStartDay = new Date('2026-06-03T08:59:00.000Z');
+  const endOfLastDay = new Date('2026-06-17T21:30:00.000Z');
   const sparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'spar' && definition.sourceType === 'pdf');
   const eurosparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'eurospar' && definition.sourceType === 'pdf');
   const intersparPdf = RETAILER_DEFINITIONS.find((definition) => definition.sourceRetailerFormat === 'interspar' && definition.sourceType === 'pdf');
