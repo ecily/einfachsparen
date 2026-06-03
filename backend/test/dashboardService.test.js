@@ -60,6 +60,67 @@ test('dashboard publish status summary classifies final and open aggregate rows'
   assert.equal(summary.statuses.find((row) => row.status === 'unknown').final, false);
 });
 
+test('dashboard aggregate diagnostics build offer KPIs without loading offer documents', () => {
+  const result = _private.buildOfferDiagnosticsFromAggregateResult({
+    summary: [{
+      activeOffers: 10,
+      officialOffers: 4,
+      aggregatorOffers: 6,
+      safeValidityOffers: 7,
+      missingValidToOffers: 3,
+      conditionOffers: 5,
+      comparisonSafeOffers: 8,
+      imageOffers: 9,
+      aggregatorRiskOffers: 2,
+    }],
+    retailerMatrix: [
+      {
+        retailerKey: 'spar',
+        retailerName: 'SPAR',
+        activeOffers: 6,
+        officialOffers: 3,
+        aggregatorOffers: 3,
+        safeValidityOffers: 4,
+        missingValidToOffers: 2,
+        conditionOffers: 4,
+        comparisonSafeOffers: 5,
+        imageOffers: 5,
+        aggregatorRiskOffers: 1,
+      },
+    ],
+    sourceTypeSummary: [{ sourceType: 'spar-official-pdf', count: 4 }],
+    publishStatusSummary: [
+      { status: 'crawl-run-partial', count: 8 },
+      { status: 'source-written', count: 2 },
+    ],
+  });
+
+  assert.equal(result.offerSummary.activeOffers, 10);
+  assert.equal(result.offerSummary.officialCoverageRate, 0.4);
+  assert.equal(result.offerSummary.validityConfidenceRate, 0.7);
+  assert.equal(result.offerSummary.conditionDetectionRate, 0.5);
+  assert.equal(result.offerSummary.comparisonSafetyRate, 0.8);
+  assert.equal(result.offerSummary.imageCoverageRate, 0.9);
+  assert.equal(result.offerSummary.aggregatorRiskRate, 0.2);
+  assert.equal(result.publishStatusSummary.status, 'open');
+  assert.equal(result.publishStatusSummary.finalCount, 8);
+  assert.equal(result.publishStatusSummary.openCount, 2);
+  assert.equal(result.retailerMatrix[0].retailerKey, 'spar');
+  assert.equal(result.sourceTypeSummary[0].sourceType, 'spar-official-pdf');
+});
+
+test('dashboard unavailable offer diagnostics preserve unknown values instead of false zeroes', () => {
+  const diagnostics = _private.buildUnavailableOfferDiagnostics('query timed out');
+  const kpis = _private.buildQualityKpis(diagnostics.offerSummary);
+
+  assert.equal(diagnostics.offerSummary.activeOffers, null);
+  assert.equal(diagnostics.offerSummary.officialCoverageRate, null);
+  assert.equal(diagnostics.publishStatusSummary.status, 'unknown');
+  assert.equal(diagnostics.publishStatusSummary.totalActiveOffers, null);
+  assert.equal(kpis[0].value, null);
+  assert.equal(kpis[0].denominator, null);
+});
+
 test('dashboard executive status turns red for stale crawl, blocked lock or open publish status', () => {
   const status = _private.buildExecutiveStatus({
     latestCrawl: null,

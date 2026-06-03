@@ -17,6 +17,7 @@ const logger = require('../../lib/logger');
 const COMPARISON_SNAPSHOT_TIMEOUT_MS = 3000;
 const DASHBOARD_QUERY_MAX_TIME_MS = 5000;
 const ACTIVE_OFFER_DIAGNOSTIC_LIMIT = 5000;
+const DASHBOARD_AGGREGATE_RESULT_LIMIT = 50;
 const HEAVY_OFFER_DIAGNOSTICS_ENABLED = false;
 const GLOBAL_CRAWL_LOCK_KEY = 'crawl-run-global';
 const TERMINAL_CRAWL_STATUSES = new Set(['success', 'partial', 'failed', 'skipped', 'stale']);
@@ -66,6 +67,13 @@ function buildCurrentAvailabilityMatch() {
         ],
       },
     ],
+  };
+}
+
+function buildDashboardActiveOfferMatch() {
+  return {
+    status: 'active',
+    isActiveNow: true,
   };
 }
 
@@ -512,6 +520,37 @@ function createOfferCounters(retailerKey = '', retailerName = '') {
   };
 }
 
+function withOfferRates(item) {
+  return {
+    ...item,
+    officialCoverageRate: rate(item.officialOffers, item.activeOffers),
+    validityConfidenceRate: rate(item.safeValidityOffers, item.activeOffers),
+    conditionDetectionRate: rate(item.conditionOffers, item.activeOffers),
+    comparisonSafetyRate: rate(item.comparisonSafeOffers, item.activeOffers),
+    imageCoverageRate: rate(item.imageOffers, item.activeOffers),
+    aggregatorRiskRate: rate(item.aggregatorRiskOffers, item.activeOffers),
+  };
+}
+
+function addRetailerWarningStatus(row) {
+  const warningStatus = row.activeOffers < 10
+    || row.officialOffers === 0
+    || row.validityConfidenceRate < 0.5
+    || row.aggregatorRiskRate >= 0.6
+    ? 'red'
+    : row.activeOffers < 30
+      || row.officialCoverageRate < 0.35
+      || row.validityConfidenceRate < 0.75
+      || row.imageCoverageRate < 0.4
+      ? 'yellow'
+      : 'green';
+
+  return {
+    ...row,
+    warningStatus,
+  };
+}
+
 function buildOfferDiagnostics(activeOffers = []) {
   const totals = createOfferCounters();
   const retailerMap = new Map();
@@ -553,35 +592,7 @@ function buildOfferDiagnostics(activeOffers = []) {
     incrementCount(publishStatusMap, offer.publishStatus || 'unknown');
   }
 
-  const withRates = (item) => ({
-    ...item,
-    officialCoverageRate: rate(item.officialOffers, item.activeOffers),
-    validityConfidenceRate: rate(item.safeValidityOffers, item.activeOffers),
-    conditionDetectionRate: rate(item.conditionOffers, item.activeOffers),
-    comparisonSafetyRate: rate(item.comparisonSafeOffers, item.activeOffers),
-    imageCoverageRate: rate(item.imageOffers, item.activeOffers),
-    aggregatorRiskRate: rate(item.aggregatorRiskOffers, item.activeOffers),
-  });
-
-  const retailerMatrix = [...retailerMap.values()].map((item) => {
-    const row = withRates(item);
-    const warningStatus = row.activeOffers < 10
-      || row.officialOffers === 0
-      || row.validityConfidenceRate < 0.5
-      || row.aggregatorRiskRate >= 0.6
-      ? 'red'
-      : row.activeOffers < 30
-        || row.officialCoverageRate < 0.35
-        || row.validityConfidenceRate < 0.75
-        || row.imageCoverageRate < 0.4
-        ? 'yellow'
-        : 'green';
-
-    return {
-      ...row,
-      warningStatus,
-    };
-  }).sort((left, right) => {
+  const retailerMatrix = [...retailerMap.values()].map((item) => addRetailerWarningStatus(withOfferRates(item))).sort((left, right) => {
     if (left.warningStatus !== right.warningStatus) {
       return ['red', 'yellow', 'green'].indexOf(left.warningStatus) - ['red', 'yellow', 'green'].indexOf(right.warningStatus);
     }
@@ -601,7 +612,7 @@ function buildOfferDiagnostics(activeOffers = []) {
     .reduce((sum, item) => sum + item.count, 0);
 
   return {
-    offerSummary: withRates({
+    offerSummary: withOfferRates({
       ...totals,
       activeOfferCount: totals.activeOffers,
     }),
@@ -620,14 +631,92 @@ function buildOfferDiagnostics(activeOffers = []) {
   };
 }
 
+function buildUnavailableOfferDiagnostics(message = 'Offer diagnostics unavailable') {
+  return {
+    offerSummary: {
+      ...createOfferCounters(),
+      activeOffers: null,
+      activeOfferCount: null,
+      officialOffers: null,
+      aggregatorOffers: null,
+      safeValidityOffers: null,
+      missingValidToOffers: null,
+      conditionOffers: null,
+      comparisonSafeOffers: null,
+      imageOffers: null,
+      aggregatorRiskOffers: null,
+      officialCoverageRate: null,
+      validityConfidenceRate: null,
+      conditionDetectionRate: null,
+      comparisonSafetyRate: null,
+      imageCoverageRate: null,
+      aggregatorRiskRate: null,
+      unavailable: true,
+      message,
+    },
+    retailerMatrix: [],
+    sourceTypeSummary: [],
+    publishStatusSummary: {
+      totalActiveOffers: null,
+      finalCount: null,
+      openCount: null,
+      finalRate: null,
+      status: 'unknown',
+      statuses: [],
+      unavailable: true,
+      message,
+    },
+  };
+}
+
+function normalizeAggregateCounterRow(row = {}) {
+  return {
+    retailerKey: row.retailerKey || '',
+    retailerName: row.retailerName || '',
+    activeOffers: numberFrom(row.activeOffers),
+    officialOffers: numberFrom(row.officialOffers),
+    aggregatorOffers: numberFrom(row.aggregatorOffers),
+    safeValidityOffers: numberFrom(row.safeValidityOffers),
+    missingValidToOffers: numberFrom(row.missingValidToOffers),
+    conditionOffers: numberFrom(row.conditionOffers),
+    comparisonSafeOffers: numberFrom(row.comparisonSafeOffers),
+    imageOffers: numberFrom(row.imageOffers),
+    aggregatorRiskOffers: numberFrom(row.aggregatorRiskOffers),
+  };
+}
+
+function buildOfferDiagnosticsFromAggregateResult(result = {}) {
+  const summaryRow = normalizeAggregateCounterRow((result.summary || [])[0] || {});
+  const retailerMatrix = (result.retailerMatrix || [])
+    .map((row) => addRetailerWarningStatus(withOfferRates(normalizeAggregateCounterRow(row))))
+    .sort((left, right) => {
+      if (left.warningStatus !== right.warningStatus) {
+        return ['red', 'yellow', 'green'].indexOf(left.warningStatus) - ['red', 'yellow', 'green'].indexOf(right.warningStatus);
+      }
+      return right.activeOffers - left.activeOffers;
+    });
+
+  return {
+    offerSummary: withOfferRates({
+      ...summaryRow,
+      activeOfferCount: summaryRow.activeOffers,
+    }),
+    retailerMatrix,
+    sourceTypeSummary: (result.sourceTypeSummary || [])
+      .map((row) => ({ sourceType: row.sourceType || 'unknown', count: numberFrom(row.count) }))
+      .sort((left, right) => right.count - left.count || left.sourceType.localeCompare(right.sourceType)),
+    publishStatusSummary: buildPublishStatusSummaryFromRows(result.publishStatusSummary || []),
+  };
+}
+
 function buildQualityKpis(offerSummary = {}) {
   return [
     {
       key: 'officialCoverageRate',
       label: 'Official Coverage Rate',
-      value: offerSummary.officialCoverageRate || 0,
-      numerator: offerSummary.officialOffers || 0,
-      denominator: offerSummary.activeOffers || 0,
+      value: offerSummary.officialCoverageRate ?? null,
+      numerator: offerSummary.officialOffers ?? null,
+      denominator: offerSummary.activeOffers ?? null,
       meaning: 'Anteil aktiver Angebote mit offizieller Quellen-Evidenz.',
       relevance: 'Offizielle Evidenz ist die belastbarste Grundlage fuer kaufklug.',
       interpretation: 'Gut ab ca. 70%, kritisch unter ca. 35%.',
@@ -635,9 +724,9 @@ function buildQualityKpis(offerSummary = {}) {
     {
       key: 'validityConfidenceRate',
       label: 'Validity Confidence Rate',
-      value: offerSummary.validityConfidenceRate || 0,
-      numerator: offerSummary.safeValidityOffers || 0,
-      denominator: offerSummary.activeOffers || 0,
+      value: offerSummary.validityConfidenceRate ?? null,
+      numerator: offerSummary.safeValidityOffers ?? null,
+      denominator: offerSummary.activeOffers ?? null,
       meaning: 'Anteil aktiver Angebote mit sicherer oder sauber propagierter Gueltigkeit.',
       relevance: 'Nur Angebote mit belastbarer Gueltigkeit sollten aktiv verglichen werden.',
       interpretation: 'Gut ab ca. 85%, kritisch unter ca. 60%.',
@@ -645,9 +734,9 @@ function buildQualityKpis(offerSummary = {}) {
     {
       key: 'conditionDetectionRate',
       label: 'Condition Detection Rate',
-      value: offerSummary.conditionDetectionRate || 0,
-      numerator: offerSummary.conditionOffers || 0,
-      denominator: offerSummary.activeOffers || 0,
+      value: offerSummary.conditionDetectionRate ?? null,
+      numerator: offerSummary.conditionOffers ?? null,
+      denominator: offerSummary.activeOffers ?? null,
       meaning: 'Anteil aktiver Angebote mit erkannten Angebotsbedingungen oder Promotionssignalen.',
       relevance: 'Bedingungen wie 1+1, Joker oder Mengenrabatte entscheiden ueber reale Ersparnis.',
       interpretation: 'Sinkende Werte koennen Parser- oder Quellenluecken anzeigen.',
@@ -655,9 +744,9 @@ function buildQualityKpis(offerSummary = {}) {
     {
       key: 'comparisonSafetyRate',
       label: 'Comparison Safety Rate',
-      value: offerSummary.comparisonSafetyRate || 0,
-      numerator: offerSummary.comparisonSafeOffers || 0,
-      denominator: offerSummary.activeOffers || 0,
+      value: offerSummary.comparisonSafetyRate ?? null,
+      numerator: offerSummary.comparisonSafeOffers ?? null,
+      denominator: offerSummary.activeOffers ?? null,
       meaning: 'Anteil aktiver Angebote, die rechnerisch sicher vergleichbar sind.',
       relevance: 'Preisvergleiche duerfen nur bei sicherer Normalisierung gezeigt werden.',
       interpretation: 'Gut ab ca. 75%, kritisch unter ca. 50%.',
@@ -665,9 +754,9 @@ function buildQualityKpis(offerSummary = {}) {
     {
       key: 'imageCoverageRate',
       label: 'Image Coverage Rate',
-      value: offerSummary.imageCoverageRate || 0,
-      numerator: offerSummary.imageOffers || 0,
-      denominator: offerSummary.activeOffers || 0,
+      value: offerSummary.imageCoverageRate ?? null,
+      numerator: offerSummary.imageOffers ?? null,
+      denominator: offerSummary.activeOffers ?? null,
       meaning: 'Anteil aktiver Angebote mit Bild.',
       relevance: 'Bilder helfen bei schneller Erkennung und Plausibilitaetspruefung.',
       interpretation: 'Gut ab ca. 80%, eingeschraenkt unter ca. 50%.',
@@ -675,9 +764,9 @@ function buildQualityKpis(offerSummary = {}) {
     {
       key: 'aggregatorRiskRate',
       label: 'Aggregator Risk Rate',
-      value: offerSummary.aggregatorRiskRate || 0,
-      numerator: offerSummary.aggregatorRiskOffers || 0,
-      denominator: offerSummary.activeOffers || 0,
+      value: offerSummary.aggregatorRiskRate ?? null,
+      numerator: offerSummary.aggregatorRiskOffers ?? null,
+      denominator: offerSummary.activeOffers ?? null,
       meaning: 'Anteil aktiver Angebote aus Aggregator- oder schwacher Evidenz ohne klare Gueltigkeit.',
       relevance: 'Hohe Werte bedeuten mehr Risiko fuer veraltete oder unsichere Angebote.',
       interpretation: 'Gut niedrig, kritisch ab ca. 30%.',
@@ -1952,6 +2041,202 @@ async function buildActivePublishStatusSummary(currentAvailabilityMatch) {
   return buildPublishStatusSummaryFromRows(rows);
 }
 
+function concatStringArrayExpression(fieldPath) {
+  return {
+    $reduce: {
+      input: { $ifNull: [fieldPath, []] },
+      initialValue: '',
+      in: {
+        $concat: [
+          '$$value',
+          ' ',
+          { $toString: { $ifNull: ['$$this', ''] } },
+        ],
+      },
+    },
+  };
+}
+
+function buildActiveOfferFeatureStages() {
+  const sourceTextExpression = {
+    $toLower: {
+      $concat: [
+        { $toString: { $ifNull: ['$sourceType', ''] } },
+        ' ',
+        concatStringArrayExpression('$sourceTypes'),
+        ' ',
+        { $toString: { $ifNull: ['$rawFacts.sourceType', ''] } },
+      ],
+    },
+  };
+  const urlTextExpression = {
+    $toLower: {
+      $concat: [
+        { $toString: { $ifNull: ['$sourceUrl', ''] } },
+        ' ',
+        concatStringArrayExpression('$sourceUrls'),
+        ' ',
+        concatStringArrayExpression('$evidenceUrls'),
+        ' ',
+        { $toString: { $ifNull: ['$rawFacts.clickoutUrl', ''] } },
+        ' ',
+        { $toString: { $ifNull: ['$rawFacts.leafletHref', ''] } },
+      ],
+    },
+  };
+
+  return [
+    {
+      $project: {
+        retailerKey: { $ifNull: ['$retailerKey', 'unknown'] },
+        retailerName: { $ifNull: ['$retailerName', '$retailerKey'] },
+        sourceType: { $ifNull: ['$sourceType', 'unknown'] },
+        publishStatus: { $ifNull: ['$publishStatus', 'unknown'] },
+        validFrom: 1,
+        validTo: 1,
+        sourceText: sourceTextExpression,
+        urlText: urlTextExpression,
+        safeValidity: {
+          $or: [
+            {
+              $and: [
+                { $ne: ['$validFrom', null] },
+                { $ne: ['$validTo', null] },
+              ],
+            },
+            { $ne: ['$rawFacts.validitySource', null] },
+            { $ne: ['$rawFacts.validTo', null] },
+          ],
+        },
+        missingValidTo: { $eq: ['$validTo', null] },
+        condition: {
+          $or: [
+            { $gt: [{ $strLenCP: { $ifNull: ['$conditionsText', ''] } }, 0] },
+            { $eq: ['$hasConditions', true] },
+            { $eq: ['$isMultiBuy', true] },
+            { $in: ['$effectiveDiscountType', [...PROMOTION_TYPES]] },
+            { $gt: [{ $ifNull: ['$minimumPurchaseQty', 1] }, 1] },
+            { $ne: ['$discountPercent', null] },
+            { $ne: ['$discountUpToPercent', null] },
+          ],
+        },
+        comparisonSafe: {
+          $or: [
+            { $eq: ['$quality.comparisonSafe', true] },
+            { $eq: ['$normalizedUnitPrice.comparable', true] },
+          ],
+        },
+        image: {
+          $or: [
+            { $gt: [{ $strLenCP: { $ifNull: ['$imageUrl', ''] } }, 0] },
+            { $gt: [{ $strLenCP: { $ifNull: ['$rawFacts.imageUrl', ''] } }, 0] },
+          ],
+        },
+      },
+    },
+    {
+      $set: {
+        official: {
+          $or: [
+            { $regexMatch: { input: '$sourceText', regex: /official|algolia/ } },
+            {
+              $and: [
+                { $regexMatch: { input: '$urlText', regex: /(billa|penny|hofer|lidl|spar|interspar|dm|bipa|pagro)\.at/ } },
+                { $not: [{ $regexMatch: { input: '$urlText', regex: /aktionsfinder\.at|marketguru\.at|wogibtswas\.at/ } }] },
+              ],
+            },
+          ],
+        },
+        aggregator: {
+          $or: [
+            { $regexMatch: { input: '$sourceText', regex: /aggregator|aktionsfinder|marketguru|wogibtswas/ } },
+            { $regexMatch: { input: '$urlText', regex: /aktionsfinder\.at|marketguru\.at|wogibtswas\.at/ } },
+          ],
+        },
+      },
+    },
+    {
+      $set: {
+        aggregatorRisk: {
+          $and: [
+            '$aggregator',
+            { $not: ['$safeValidity'] },
+          ],
+        },
+      },
+    },
+  ];
+}
+
+function buildCounterGroupStage(idExpression = null) {
+  return {
+    $group: {
+      _id: idExpression,
+      retailerKey: { $first: '$retailerKey' },
+      retailerName: { $first: '$retailerName' },
+      activeOffers: { $sum: 1 },
+      officialOffers: { $sum: { $cond: ['$official', 1, 0] } },
+      aggregatorOffers: { $sum: { $cond: ['$aggregator', 1, 0] } },
+      safeValidityOffers: { $sum: { $cond: ['$safeValidity', 1, 0] } },
+      missingValidToOffers: { $sum: { $cond: ['$missingValidTo', 1, 0] } },
+      conditionOffers: { $sum: { $cond: ['$condition', 1, 0] } },
+      comparisonSafeOffers: { $sum: { $cond: ['$comparisonSafe', 1, 0] } },
+      imageOffers: { $sum: { $cond: ['$image', 1, 0] } },
+      aggregatorRiskOffers: { $sum: { $cond: ['$aggregatorRisk', 1, 0] } },
+    },
+  };
+}
+
+async function buildActiveOfferDashboardDiagnostics(activeOfferMatch) {
+  const [result = {}] = await Offer.aggregate([
+    { $match: activeOfferMatch },
+    ...buildActiveOfferFeatureStages(),
+    {
+      $facet: {
+        summary: [
+          buildCounterGroupStage(null),
+          { $project: { _id: 0 } },
+        ],
+        retailerMatrix: [
+          buildCounterGroupStage({ retailerKey: '$retailerKey', retailerName: '$retailerName' }),
+          {
+            $project: {
+              _id: 0,
+              retailerKey: '$_id.retailerKey',
+              retailerName: '$_id.retailerName',
+              activeOffers: 1,
+              officialOffers: 1,
+              aggregatorOffers: 1,
+              safeValidityOffers: 1,
+              missingValidToOffers: 1,
+              conditionOffers: 1,
+              comparisonSafeOffers: 1,
+              imageOffers: 1,
+              aggregatorRiskOffers: 1,
+            },
+          },
+          { $sort: { activeOffers: -1, retailerKey: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        sourceTypeSummary: [
+          { $group: { _id: '$sourceType', count: { $sum: 1 } } },
+          { $project: { _id: 0, sourceType: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
+          { $sort: { count: -1, sourceType: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        publishStatusSummary: [
+          { $group: { _id: '$publishStatus', count: { $sum: 1 } } },
+          { $project: { _id: 0, status: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
+          { $sort: { count: -1, status: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+      },
+    },
+  ]).option({ maxTimeMS: DASHBOARD_QUERY_MAX_TIME_MS });
+
+  return buildOfferDiagnosticsFromAggregateResult(result);
+}
+
 async function safeDashboardQuery(name, promise, fallback, warnings = []) {
   try {
     return await promise;
@@ -1967,10 +2252,8 @@ async function safeDashboardQuery(name, promise, fallback, warnings = []) {
 }
 
 async function buildDashboardSnapshot() {
-  const currentAvailabilityMatch = buildCurrentAvailabilityMatch();
-  const dashboardWarnings = HEAVY_OFFER_DIAGNOSTICS_ENABLED
-    ? []
-    : ['heavy offer diagnostics disabled for snapshot availability'];
+  const activeOfferMatch = buildDashboardActiveOfferMatch();
+  const dashboardWarnings = [];
   const [
     sources,
     latestJobs,
@@ -1982,8 +2265,7 @@ async function buildDashboardSnapshot() {
     storedOfferCount,
     offersPendingReview,
     offersWithIssues,
-    activeOffers,
-    exactPublishStatusSummary,
+    activeOfferDiagnostics,
     offerSamples,
     recentFeedback,
     retailerSummary,
@@ -2003,54 +2285,22 @@ async function buildDashboardSnapshot() {
     safeDashboardQuery('crawlLock', withQueryMaxTime(CrawlRunLock.findById(GLOBAL_CRAWL_LOCK_KEY).lean()), null, dashboardWarnings),
     HEAVY_OFFER_DIAGNOSTICS_ENABLED
       ? safeDashboardQuery('rawCount', withQueryMaxTime(RawDocument.countDocuments()), 0, dashboardWarnings)
-      : Promise.resolve(0),
+      : Promise.resolve(null),
     HEAVY_OFFER_DIAGNOSTICS_ENABLED
       ? safeDashboardQuery('storedOfferCount', withQueryMaxTime(Offer.countDocuments()), 0, dashboardWarnings)
-      : Promise.resolve(0),
+      : Promise.resolve(null),
     HEAVY_OFFER_DIAGNOSTICS_ENABLED
       ? safeDashboardQuery('offersPendingReview', withQueryMaxTime(Offer.countDocuments({ 'adminReview.status': 'pending' })), 0, dashboardWarnings)
-      : Promise.resolve(0),
+      : Promise.resolve(null),
     HEAVY_OFFER_DIAGNOSTICS_ENABLED
       ? safeDashboardQuery('offersWithIssues', withQueryMaxTime(Offer.countDocuments({ 'quality.issues.0': { $exists: true } })), 0, dashboardWarnings)
-      : Promise.resolve(0),
-    HEAVY_OFFER_DIAGNOSTICS_ENABLED
-      ? safeDashboardQuery('activeOffers', withQueryMaxTime(Offer.find(
-      currentAvailabilityMatch,
-      {
-        retailerKey: 1,
-        retailerName: 1,
-        sourceType: 1,
-        sourceTypes: 1,
-        sourceUrl: 1,
-        sourceUrls: 1,
-        evidenceUrls: 1,
-        imageUrl: 1,
-        validFrom: 1,
-        validTo: 1,
-        conditionsText: 1,
-        hasConditions: 1,
-        isMultiBuy: 1,
-        effectiveDiscountType: 1,
-        minimumPurchaseQty: 1,
-        discountPercent: 1,
-        discountUpToPercent: 1,
-        quality: 1,
-        normalizedUnitPrice: 1,
-        publishStatus: 1,
-        rawFacts: 1,
-        lastSeenAt: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        crawlRunId: 1,
-      }
-    )
-      .sort({ updatedAt: -1, createdAt: -1 })
-      .limit(ACTIVE_OFFER_DIAGNOSTIC_LIMIT)
-      .lean()), [], dashboardWarnings)
-      : Promise.resolve([]),
-    HEAVY_OFFER_DIAGNOSTICS_ENABLED
-      ? safeDashboardQuery('publishStatusSummary', buildActivePublishStatusSummary(currentAvailabilityMatch), buildPublishStatusSummaryFromRows([]), dashboardWarnings)
-      : Promise.resolve(buildPublishStatusSummaryFromRows([])),
+      : Promise.resolve(null),
+    safeDashboardQuery(
+      'activeOfferDiagnostics',
+      buildActiveOfferDashboardDiagnostics(activeOfferMatch),
+      buildUnavailableOfferDiagnostics('Active offer diagnostics query failed.'),
+      dashboardWarnings
+    ),
     HEAVY_OFFER_DIAGNOSTICS_ENABLED
       ? safeDashboardQuery('offerSamples', withQueryMaxTime(Offer.find(
       {},
@@ -2101,12 +2351,11 @@ async function buildDashboardSnapshot() {
     offerSummary,
     retailerMatrix,
     sourceTypeSummary,
-  } = buildOfferDiagnostics(activeOffers);
-  const publishStatusSummary = exactPublishStatusSummary || buildPublishStatusSummaryFromRows([]);
+    publishStatusSummary,
+  } = activeOfferDiagnostics || buildUnavailableOfferDiagnostics('Active offer diagnostics unavailable.');
   const qualityKpis = buildQualityKpis(offerSummary);
-  const trendSeries = buildTrendSeries(crawlRuns, activeOffers);
-  const activeOfferDiagnosticsCapped = activeOffers.length >= ACTIVE_OFFER_DIAGNOSTIC_LIMIT
-    && publishStatusSummary.totalActiveOffers > ACTIVE_OFFER_DIAGNOSTIC_LIMIT;
+  const trendSeries = buildTrendSeries(crawlRuns, []);
+  const activeOfferDiagnosticsCapped = false;
 
   const qualitySummary = {
     sourceCount: activeSourceCount,
@@ -2115,7 +2364,7 @@ async function buildDashboardSnapshot() {
     crawlJobCount: latestJobs.length,
     rawDocumentCount: rawCount,
     storedOfferCount,
-    activeOfferCount: publishStatusSummary.totalActiveOffers || offerSummary.activeOffers,
+    activeOfferCount: publishStatusSummary.totalActiveOffers ?? offerSummary.activeOffers ?? null,
     offersPendingReview,
     comparisonSafeOffers: offerSummary.comparisonSafeOffers,
     offersWithIssues,
@@ -2156,7 +2405,10 @@ async function buildDashboardSnapshot() {
     trendSeries.length < 2
       ? 'Noch nicht genug historische Tagesdaten fuer belastbare KPI-Trends vorhanden.'
       : '',
-    activeOffers.length === 0
+    offerSummary.unavailable
+      ? offerSummary.message || 'Aktive Offer-Diagnose ist nicht verfuegbar.'
+      : '',
+    !offerSummary.unavailable && offerSummary.activeOffers === 0
       ? 'Keine aktiven Angebote in der aktuellen Verfuegbarkeitslogik gefunden.'
       : '',
     activeOfferDiagnosticsCapped
@@ -2214,8 +2466,10 @@ async function buildDashboardSnapshot() {
     qualitySummary,
     dashboardDiagnostics: {
       activeOfferDiagnosticsLimit: ACTIVE_OFFER_DIAGNOSTIC_LIMIT,
-      activeOfferDiagnosticsCount: activeOffers.length,
+      activeOfferDiagnosticsCount: offerSummary.activeOffers ?? null,
       activeOfferDiagnosticsCapped,
+      activeOfferDiagnosticsMatch: 'status=active,isActiveNow=true',
+      aggregateResultLimit: DASHBOARD_AGGREGATE_RESULT_LIMIT,
       queryMaxTimeMs: DASHBOARD_QUERY_MAX_TIME_MS,
       comparisonSnapshotTimeoutMs: COMPARISON_SNAPSHOT_TIMEOUT_MS,
       heavyOfferDiagnosticsEnabled: HEAVY_OFFER_DIAGNOSTICS_ENABLED,
@@ -2246,6 +2500,8 @@ module.exports = {
     buildCrawlReliabilityStatus,
     buildSourceFailureDiagnosis,
     buildOfferDiagnostics,
+    buildOfferDiagnosticsFromAggregateResult,
+    buildUnavailableOfferDiagnostics,
     buildPublishStatusSummaryFromRows,
     buildQualityKpis,
     buildTrendSeries,

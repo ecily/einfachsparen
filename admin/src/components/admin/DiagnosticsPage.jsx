@@ -21,10 +21,12 @@ const STATUS_LABELS = {
 }
 
 function formatInteger(value) {
+  if (value === null || value === undefined) return 'unbekannt'
   return new Intl.NumberFormat('de-AT').format(Number(value || 0))
 }
 
 function formatPercent(value) {
+  if (value === null || value === undefined) return 'unbekannt'
   return `${Math.round(Number(value || 0) * 100)}%`
 }
 
@@ -582,7 +584,7 @@ export function DiagnosticsPage({
           <MetricCard label="Sichere Gueltigkeit" value={formatPercent(offerSummary.validityConfidenceRate)} note={`${formatInteger(offerSummary.missingValidToOffers)} ohne validTo`} />
           <MetricCard label="comparisonSafe" value={formatPercent(offerSummary.comparisonSafetyRate)} note={formatInteger(offerSummary.comparisonSafeOffers)} />
           <MetricCard label="Bilder" value={formatPercent(offerSummary.imageCoverageRate)} note={formatInteger(offerSummary.imageOffers)} />
-          <MetricCard label="Aggregator Risk" value={formatPercent(offerSummary.aggregatorRiskRate)} note={formatInteger(offerSummary.aggregatorRiskOffers)} status={offerSummary.aggregatorRiskRate >= 0.3 ? 'yellow' : 'green'} />
+          <MetricCard label="Aggregator Risk" value={formatPercent(offerSummary.aggregatorRiskRate)} note={formatInteger(offerSummary.aggregatorRiskOffers)} status={offerSummary.aggregatorRiskRate == null ? 'unknown' : offerSummary.aggregatorRiskRate >= 0.3 ? 'yellow' : 'green'} />
         </section>
         <RetailerMatrix rows={snapshot?.retailerMatrix || []} />
       </section>
