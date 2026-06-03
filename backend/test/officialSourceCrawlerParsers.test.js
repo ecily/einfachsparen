@@ -10,6 +10,7 @@ const { deriveSourceKey } = require('../src/services/crawl/crawlSourceSelection'
 const {
   extractBillaPdfCandidates,
   normalizeBillaPdfCandidatesToOffers,
+  parseBillaFlyerValidity,
   parseCompressedPrice,
   sourceKeyForRetailer: billaPdfSourceKeyForRetailer,
   summarizeRejections: summarizeBillaPdfRejections,
@@ -2240,6 +2241,15 @@ function parseBillaPdfPage(text, overrides = {}) {
     }),
   };
 }
+
+test('BILLA flyer PDF parser parses KW23 validity when start weekday is missing in text layer', () => {
+  const validity = parseBillaFlyerValidity('VON , 3. 6. BIS MITTWOCH, 10. 6. 2026 AUF BIER');
+
+  assert.equal(validity.validFrom.toISOString(), '2026-06-03T00:00:00.000Z');
+  assert.equal(validity.validTo.toISOString(), '2026-06-10T23:59:59.999Z');
+  assert.equal(validity.validityText, 'VON 3.6. BIS 10.6.2026');
+  assert.equal(validity.confidence, 0.84);
+});
 
 test('BILLA flyer PDF parser extracts clear product and price candidates', () => {
   const pdfReference = parseBillaPdfPage(`

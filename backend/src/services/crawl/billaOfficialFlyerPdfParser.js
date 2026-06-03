@@ -54,7 +54,7 @@ function parseAustrianDate(day, month, year, { endOfDay = false } = {}) {
 
 function parseBillaFlyerValidity(text = '') {
   const normalized = normalizePdfText(text);
-  const range = normalized.match(/von\s+(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)[,\s]+(\d{1,2})\.\s*(\d{1,2})\.\s+bis\s+(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)[,\s]+(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})/i)
+  const range = normalized.match(/von[\s,]*(?:(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)[,\s]+)?(\d{1,2})\.\s*(\d{1,2})\.\s+bis\s+(?:(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)[,\s]+)?(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})/i)
     || normalized.match(/alle angebote gueltig[\s\S]{0,140}?(\d{1,2})\.\s*(\d{1,2})\.[\s\S]{0,80}?(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})/i)
     || normalized.match(/alle angebote gÃ¼ltig[\s\S]{0,140}?(\d{1,2})\.\s*(\d{1,2})\.[\s\S]{0,80}?(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})/i);
 
