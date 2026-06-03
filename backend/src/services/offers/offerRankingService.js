@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
@@ -6881,20 +6881,12 @@ async function buildRankingResponseFromStoredResultCache({
   const totalStartedAt = nowMs();
   const timings = { sliceMs: 0, hydrateMs: 0, responseBuildMs: 0, totalMs: 0 };
   const offerIds = Array.isArray(cacheEntry?.offerIds) ? cacheEntry.offerIds : [];
-  const sliceStartedAt = nowMs();
-  const pagination = paginateVisibleRankingOffers(offerIds, {
-    limit: safeLimit || offerIds.length,
-    offset: safeOffset,
-    showAllMatching,
-  });
-  timings.sliceMs = nowMs() - sliceStartedAt;
-
   const hydrateStartedAt = nowMs();
   const retailerMatch = selectedRetailers.length > 0
     ? { isActive: true, retailerKey: { $in: selectedRetailers } }
     : { isActive: true };
   const [hydratedOffers, categoryDocuments, retailerOptions] = await Promise.all([
-    Offer.find({ _id: { $in: pagination.offers } })
+    Offer.find({ _id: { $in: offerIds } })
       .select(OFFER_RANKING_FIELDS)
       .lean(),
     Category.find({ isActive: true })
@@ -6906,10 +6898,18 @@ async function buildRankingResponseFromStoredResultCache({
       .lean(),
   ]);
   const hydratedById = new Map(hydratedOffers.map((offer) => [String(offer._id), offer]));
-  const offers = pagination.offers
+  const freshVisibleOffers = filterFreshActiveOffers(offerIds
     .map((id) => hydratedById.get(String(id)))
-    .filter(Boolean);
+    .filter(Boolean));
   timings.hydrateMs = nowMs() - hydrateStartedAt;
+  const sliceStartedAt = nowMs();
+  const pagination = paginateVisibleRankingOffers(freshVisibleOffers, {
+    limit: safeLimit || freshVisibleOffers.length,
+    offset: safeOffset,
+    showAllMatching,
+  });
+  const offers = pagination.offers;
+  timings.sliceMs = nowMs() - sliceStartedAt;
 
   const responseStartedAt = nowMs();
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
@@ -6938,7 +6938,7 @@ async function buildRankingResponseFromStoredResultCache({
     })),
     units: Array.isArray(summaryBasis.units) ? summaryBasis.units : [],
     summary: {
-      resultCount: summaryBasis.resultCount || 0,
+      resultCount: freshVisibleOffers.length,
       displayedCount: rankedOffers.length,
       requestedDisplay: showAllMatching ? 'all' : safeLimit,
       totalCount: pagination.totalCount,
@@ -7328,7 +7328,7 @@ function buildRankingResponseFromBase({
   safeOffset = 0,
   showAllMatching = false,
 }) {
-  const visibleOffers = Array.isArray(base?.visibleOffers) ? base.visibleOffers : [];
+  const visibleOffers = filterFreshActiveOffers(Array.isArray(base?.visibleOffers) ? base.visibleOffers : []);
   const pagination = paginateVisibleRankingOffers(visibleOffers, {
     limit: safeLimit || visibleOffers.length,
     offset: safeOffset,

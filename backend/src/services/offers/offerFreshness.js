@@ -1,5 +1,19 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_SNAPSHOT_MAX_AGE_DAYS = 14;
+const PUBLIC_CURRENT_PUBLISH_STATUSES = new Set(['crawl-run-success', 'crawl-run-partial']);
+const PUBLIC_STALE_OR_RETAINED_PUBLISH_STATUSES = new Set([
+  '',
+  'unknown',
+  'crawl-run-stale',
+  'crawl-run-failed',
+  'crawl-run-skipped',
+  'source-written',
+  'queued',
+  'running',
+  'retained',
+  'legacy',
+]);
+const PUBLIC_CURRENT_SOURCE_RUN_STATUSES = new Set(['success', 'partial', 'current', 'verified']);
 
 function isValidDate(value) {
   if (!value) return false;
@@ -204,29 +218,67 @@ function isExpiredValidToCompensatedByFreshCrawl(offer = {}, now = new Date()) {
   return hasFreshCrawlEvidence(offer, now);
 }
 
+function normalizeStatus(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function hasCurrentPublishStatus(offer = {}) {
+  return PUBLIC_CURRENT_PUBLISH_STATUSES.has(normalizeStatus(offer.publishStatus));
+}
+
+function hasStaleOrRetainedPublishStatus(offer = {}) {
+  return PUBLIC_STALE_OR_RETAINED_PUBLISH_STATUSES.has(normalizeStatus(offer.publishStatus));
+}
+
+function hasCurrentSourceRunStatus(offer = {}) {
+  return PUBLIC_CURRENT_SOURCE_RUN_STATUSES.has(normalizeStatus(offer.sourceRunStatus || offer.rawFacts?.sourceRunStatus));
+}
+
+function hasCurrentRunFreshnessEvidence(offer = {}, now = new Date()) {
+  const { hasFreshCrawlEvidence } = require('./sourceQuality');
+
+  return hasFreshCrawlEvidence(offer, now) && (hasCurrentPublishStatus(offer) || hasCurrentSourceRunStatus(offer));
+}
+
+function isAggregatorSourceClass(sourceQuality = {}) {
+  return sourceQuality.sourceClass === 'aggregator' || sourceQuality.sourceClass === 'aggregator-ppcv';
+}
+
+function isStaleRetainedAggregatorWithoutPublicFreshness(offer = {}, sourceQuality = {}, now = new Date()) {
+  if (!isAggregatorSourceClass(sourceQuality) || toDateOrNull(offer.validTo)) {
+    return false;
+  }
+
+  if (hasStaleOrRetainedPublishStatus(offer)) {
+    return true;
+  }
+
+  return !hasCurrentRunFreshnessEvidence(offer, now);
+}
+
 function isOfferFreshForActiveUse(offer = {}, now = new Date()) {
   // Local require avoids a module cycle: sourceQuality uses the date-range parser from this file.
   const { classifyOfferSourceQuality } = require('./sourceQuality');
-  const expiredValidToCompensated = isExpiredValidToCompensatedByFreshCrawl(offer, now);
 
-  if (offer.status && offer.status !== 'active' && !expiredValidToCompensated) return false;
-  if (offer.isActiveNow === false && !expiredValidToCompensated) return false;
+  if (offer.status && offer.status !== 'active') return false;
+  if (offer.isActiveNow === false) return false;
 
   const validTo = toDateOrNull(offer.validTo);
-  if (validTo && validTo < now && !expiredValidToCompensated) return false;
-  if (hasExplicitExpiredEvidence(offer.rawFacts) || (!expiredValidToCompensated && hasExplicitExpiredEvidence(offer))) return false;
+  if (validTo && validTo < now) return false;
+  if (hasExplicitExpiredEvidence(offer.rawFacts) || hasExplicitExpiredEvidence(offer)) return false;
   if (hasExpiredUrlRange(offer, now)) return false;
   if (isSnapshotTooOld(offer, now)) return false;
   if (!hasVisibleCustomerProgramCondition(offer)) return false;
 
   const sourceQuality = classifyOfferSourceQuality(offer);
+  if (isStaleRetainedAggregatorWithoutPublicFreshness(offer, sourceQuality, now)) return false;
   if (sourceQuality.isLowConfidenceAggregator) return false;
   if (
     sourceQuality.sourceClass === 'aggregator-ppcv'
     && !sourceQuality.hasValidityEvidence
     && !sourceQuality.hasDetailEvidence
     && (
-      !sourceQuality.hasFreshCrawlEvidence
+      !hasCurrentRunFreshnessEvidence(offer, now)
       || !hasPlausiblePublicOfferShape(offer)
       || !hasVisibleCustomerProgramCondition(offer)
     )
@@ -243,9 +295,11 @@ module.exports = {
   hasExplicitExpiredEvidence,
   hasExpiredUrlRange,
   hasPlausiblePublicOfferShape,
+  hasCurrentRunFreshnessEvidence,
   hasVisibleCustomerProgramCondition,
   isExpiredValidToCompensatedByFreshCrawl,
   isOfferFreshForActiveUse,
+  isStaleRetainedAggregatorWithoutPublicFreshness,
   isSnapshotTooOld,
   parseAktionsfinderDateRange,
 };

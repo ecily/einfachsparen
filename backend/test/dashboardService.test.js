@@ -44,6 +44,29 @@ test('dashboard offer diagnostics aggregate official, validity, comparison, imag
   assert.equal(result.retailerMatrix.find((row) => row.retailerKey === 'billa').warningStatus, 'red');
 });
 
+test('dashboard diagnostics still count stale retained Aggregator offers for investigation', () => {
+  const result = _private.buildOfferDiagnostics([
+    {
+      retailerKey: 'billa',
+      retailerName: 'BILLA',
+      sourceType: 'aktionsfinder-json',
+      sourceTypes: ['aktionsfinder-json', 'aggregator'],
+      sourceUrl: 'https://www.aktionsfinder.at/ppcv/pizza/billa/',
+      status: 'active',
+      isActiveNow: true,
+      publishStatus: 'crawl-run-stale',
+      validTo: null,
+      priceCurrent: { amount: 2.99 },
+      quantityText: '1 Stk',
+    },
+  ]);
+
+  assert.equal(result.offerSummary.activeOffers, 1);
+  assert.equal(result.offerSummary.aggregatorOffers, 1);
+  assert.equal(result.offerSummary.aggregatorRiskOffers, 1);
+  assert.equal(result.publishStatusSummary.statuses[0].status, 'crawl-run-stale');
+});
+
 test('dashboard publish status summary classifies final and open aggregate rows', () => {
   const summary = _private.buildPublishStatusSummaryFromRows([
     { status: 'crawl-run-success', count: 8 },

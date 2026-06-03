@@ -193,6 +193,7 @@ test('retailer filter counts include fresh plausible Aktionsfinder offers withou
     sourceUrl: 'https://www.aktionsfinder.at/ppcv/spar/bio-kornspitz',
     status: 'active',
     isActiveNow: true,
+    publishStatus: 'crawl-run-success',
     validTo: null,
     lastSeenAt: new Date('2026-05-22T08:00:00.000Z'),
     lastSeenRunId: 'crawl-spar-fresh',
@@ -239,7 +240,14 @@ test('retailer filter counts include fresh plausible Aktionsfinder offers withou
 });
 
 test('filter metadata offer select keeps crawl freshness fields aligned with ranking visibility', () => {
-  for (const field of ['crawlJobId', 'lastSeenAt', 'lastSeenRunId', 'lastSeenSourceRunId']) {
+  for (const field of [
+    'crawlJobId',
+    'lastSeenAt',
+    'lastSeenRunId',
+    'lastSeenSourceRunId',
+    'publishStatus',
+    'sourceRunStatus',
+  ]) {
     assert.equal(FILTER_METADATA_OFFER_SELECT_FIELDS.includes(field), true);
   }
 });

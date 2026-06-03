@@ -4724,6 +4724,99 @@ test('fresh active filter removes expired and stale offers but keeps recent miss
   );
 });
 
+test('fresh active filter hides stale retained Aktionsfinder offers without validTo', () => {
+  const now = new Date('2026-06-03T12:00:00.000Z');
+  const staleAggregator = offer({
+    title: 'Holy Slice Pizza BILLA 1 Stueck',
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'aktionsfinder-json',
+    sourceTypes: ['aktionsfinder-json', 'aggregator'],
+    publishStatus: 'crawl-run-stale',
+    validTo: null,
+    lastSeenAt: new Date('2026-06-03T08:00:00.000Z'),
+    lastSeenRunId: 'old-retained-run',
+    crawlJobId: 'old-retained-job',
+    priceCurrent: { amount: 2.99 },
+    quantityText: '1 Stk',
+    comparableUnit: 'Stk',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([staleAggregator], now), []);
+});
+
+test('fresh active filter hides unknown Aktionsfinder offers without strong freshness evidence', () => {
+  const now = new Date('2026-06-03T12:00:00.000Z');
+  const unknownAggregator = offer({
+    title: 'Holy Slice Pizza BILLA 1 Stueck',
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'aktionsfinder-json',
+    publishStatus: 'unknown',
+    validTo: null,
+    lastSeenAt: new Date('2026-06-03T08:00:00.000Z'),
+    lastSeenRunId: 'fresh-run-but-not-published-current',
+    crawlJobId: 'fresh-job',
+    priceCurrent: { amount: 2.99 },
+    quantityText: '1 Stk',
+    comparableUnit: 'Stk',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([unknownAggregator], now), []);
+});
+
+test('fresh active filter keeps aggregator offers with future validTo visible', () => {
+  const now = new Date('2026-06-03T12:00:00.000Z');
+  const futureAggregator = offer({
+    title: 'Aktionsfinder Angebot mit Enddatum',
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'aktionsfinder-json',
+    publishStatus: 'crawl-run-stale',
+    validTo: new Date('2026-06-04T21:59:59.999Z'),
+    priceCurrent: { amount: 1.99 },
+    quantityText: '1 Stk',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([futureAggregator], now), [futureAggregator]);
+});
+
+test('fresh active filter keeps official offers with valid current validity visible', () => {
+  const now = new Date('2026-06-03T12:00:00.000Z');
+  const official = offer({
+    title: 'BILLA Official Kaffee 500 g',
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'billa-official-algolia',
+    publishStatus: 'crawl-run-partial',
+    validFrom: new Date('2026-06-01T00:00:00.000Z'),
+    validTo: new Date('2026-06-04T21:59:59.999Z'),
+    priceCurrent: { amount: 4.99 },
+    quantityText: '500 g',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([official], now), [official]);
+});
+
+test('fresh active filter hides expired validTo even with fresh crawl evidence', () => {
+  const now = new Date('2026-06-03T12:00:00.000Z');
+  const expired = offer({
+    title: 'Aktionsfinder abgelaufen',
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'aktionsfinder-json',
+    publishStatus: 'crawl-run-success',
+    validTo: new Date('2026-06-02T21:59:59.999Z'),
+    lastSeenAt: new Date('2026-06-03T08:00:00.000Z'),
+    lastSeenRunId: 'fresh-run',
+    crawlJobId: 'fresh-job',
+    priceCurrent: { amount: 1.99 },
+    quantityText: '1 Stk',
+  });
+
+  assert.deepEqual(filterFreshActiveOffers([expired], now), []);
+});
+
 test('ranking visibility remains compatible with legacy offers without CrawlRun lineage', () => {
   const ranked = buildRankedOffer(offer({
     _id: 'legacy-offer',
@@ -4832,6 +4925,7 @@ test('fresh active filter allows fresh plausible Aktionsfinder ppcv without vali
     lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
     lastSeenRunId: 'crawl-spar-1',
     crawlJobId: 'crawl-spar-1',
+    publishStatus: 'crawl-run-success',
     sourceType: 'aktionsfinder-json',
     sourceUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
     rawFacts: {
@@ -4899,11 +4993,11 @@ test('fresh active filter keeps expired validTo blocked unless a newer successfu
     lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
     lastSeenRunId: 'fresh-crawl',
     crawlJobId: 'fresh-crawl',
+    publishStatus: 'crawl-run-success',
   };
 
   assert.deepEqual(filterFreshActiveOffers([expiredWithoutRecrawl], now), []);
-  assert.deepEqual(filterFreshActiveOffers([recrawledAfterOldValidTo], now), [recrawledAfterOldValidTo]);
-  assert.equal(buildValidityLabel(recrawledAfterOldValidTo), 'Aktuell gefunden - bitte im Markt pruefen.');
+  assert.deepEqual(filterFreshActiveOffers([recrawledAfterOldValidTo], now), []);
 });
 
 test('fresh active filter requires visible customer-program conditions for fresh ppcv offers', () => {
@@ -4916,6 +5010,7 @@ test('fresh active filter requires visible customer-program conditions for fresh
     lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
     lastSeenRunId: 'fresh-crawl',
     crawlJobId: 'fresh-crawl',
+    publishStatus: 'crawl-run-success',
     sourceType: 'aktionsfinder-json',
     sourceUrl: 'https://www.aktionsfinder.at/ppcv/kaffee/spar/',
     rawFacts: {
@@ -4932,6 +5027,61 @@ test('fresh active filter requires visible customer-program conditions for fresh
 
   assert.deepEqual(filterFreshActiveOffers([visibleCondition], now), [visibleCondition]);
   assert.deepEqual(filterFreshActiveOffers([hiddenCondition], now), []);
+});
+
+test('cached browse response filters Holy-like stale Aggregator offers before public response mapping', () => {
+  const staleHoly = offer({
+    _id: 'holy-stale',
+    id: 'holy-stale',
+    title: 'Holy Slice Pizza BILLA 1 Stueck',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'aktionsfinder-json',
+    sourceTypes: ['aktionsfinder-json', 'aggregator'],
+    publishStatus: 'crawl-run-stale',
+    validTo: null,
+    lastSeenAt: new Date('2026-06-03T08:00:00.000Z'),
+    lastSeenRunId: 'old-retained-run',
+    crawlJobId: 'old-retained-job',
+    priceCurrent: { amount: 2.99 },
+    quantityText: '1 Stk',
+    normalizedUnitPrice: { amount: 2.99, unit: 'Stk', comparable: true },
+    quality: { comparisonSafe: true },
+  });
+  const official = offer({
+    _id: 'official-visible',
+    id: 'official-visible',
+    title: 'BILLA Kaffee 500 g',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'billa-official-algolia',
+    publishStatus: 'crawl-run-partial',
+    validTo: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    priceCurrent: { amount: 4.99 },
+    quantityText: '500 g',
+    normalizedUnitPrice: { amount: 9.98, unit: 'kg', comparable: true },
+    quality: { comparisonSafe: true },
+  });
+  const response = buildRankingResponseFromBase({
+    base: {
+      visibleOffers: [staleHoly, official],
+      categoryDocuments: [],
+      retailerOptions: [],
+      candidateCount: 2,
+      candidateLimit: 100,
+      resultCount: 2,
+    },
+    query: 'holy',
+    safeLimit: 30,
+  });
+
+  assert.equal(response.rankedOffers.some((item) => /holy/i.test(item.title)), false);
+  assert.equal(response.rankedOffers.length, 1);
+  assert.equal(response.rankedOffers[0].id, 'official-visible');
 });
 
 test('response dedupe keeps priced aggregator when official duplicate has no usable price', () => {
@@ -6014,7 +6164,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

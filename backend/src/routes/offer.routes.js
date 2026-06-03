@@ -6,6 +6,7 @@ const { offersRateLimit, basketRateLimit, imageProxyRateLimit } = require('../mi
 const { validateBasketQuery, validateRankingQuery } = require('../middleware/validators');
 const { buildOfferRanking, buildBasketSuggestions } = require('../services/offers/offerRankingService');
 const { buildImageRequestHeaders, normalizeImageUrl } = require('../services/images/imageUrl');
+const { isOfferFreshForActiveUse } = require('../services/offers/offerFreshness');
 
 const router = express.Router();
 
@@ -83,9 +84,37 @@ router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
       return res.status(400).json({ ok: false, message: 'Invalid offer id.' });
     }
 
-    const offer = await Offer.findById(req.params.offerId, { imageUrl: 1, title: 1, retailerName: 1, sourceUrl: 1 }).lean();
+    const offer = await Offer.findById(req.params.offerId, {
+      imageUrl: 1,
+      title: 1,
+      retailerName: 1,
+      sourceUrl: 1,
+      sourceUrls: 1,
+      evidenceUrls: 1,
+      sourceType: 1,
+      sourceTypes: 1,
+      status: 1,
+      isActiveNow: 1,
+      validTo: 1,
+      lastSeenAt: 1,
+      updatedAt: 1,
+      createdAt: 1,
+      lastSeenRunId: 1,
+      lastSeenSourceRunId: 1,
+      crawlJobId: 1,
+      publishStatus: 1,
+      sourceRunStatus: 1,
+      conditionsText: 1,
+      customerProgramRequired: 1,
+      priceCurrent: 1,
+      quantityText: 1,
+      unitValue: 1,
+      totalComparableAmount: 1,
+      comparableUnit: 1,
+      rawFacts: 1,
+    }).lean();
 
-    if (!offer) {
+    if (!offer || !isOfferFreshForActiveUse(offer)) {
       return res.status(404).json({ ok: false, message: 'Offer not found' });
     }
 
