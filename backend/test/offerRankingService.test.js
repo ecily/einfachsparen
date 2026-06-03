@@ -5450,6 +5450,261 @@ test('final response dedupe prefers better source for true visible duplicate', (
   assert.equal(prepared[0]._id, 'ariel-official');
 });
 
+test('final response dedupe merges official conditions into matching conditionless aggregator duplicate', () => {
+  const aggregator = offer({
+    _id: 'lindor-aggregator',
+    title: 'Lindt Lindor Kugeln div. Sorten BILLA PLUS 500 Gramm 1 Packung',
+    titleNormalized: 'lindt lindor kugeln div sorten billa plus 500 gramm 1 packung',
+    retailerKey: 'billa-plus',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 7.99 },
+    quantityText: '500 g',
+    unitValue: 500,
+    unitType: 'g',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 15.98, unit: 'kg', comparable: true },
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+    effectiveDiscountType: 'price-cut',
+  });
+  const official = offer({
+    ...aggregator,
+    _id: 'lindor-official',
+    title: 'Lindt Lindor Kugeln',
+    titleNormalized: 'lindt lindor kugeln',
+    sourceType: 'billa-official-algolia',
+    conditionsText: '1+1 gratis / ab 2 Packungen',
+    hasConditions: true,
+    isMultiBuy: true,
+    minimumPurchaseQty: 2,
+    effectiveDiscountType: 'multi-buy',
+  });
+
+  const prepared = dedupeFinalResponseOffers([aggregator, official], 'lindor');
+  const ranked = buildRankedOffer(prepared[0], null, null);
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'lindor-official');
+  assert.equal(prepared[0].conditionsText, '1+1 gratis / ab 2 Packungen');
+  assert.equal(prepared[0].hasConditions, true);
+  assert.equal(prepared[0].isMultiBuy, true);
+  assert.equal(prepared[0].minimumPurchaseQty, 2);
+  assert.equal(prepared[0].effectiveDiscountType, 'multi-buy');
+  assert.equal(ranked.conditionsText, '1+1 gratis / ab 2 Packungen');
+});
+
+test('final response dedupe does not invent conditions when official and aggregator duplicates are conditionless', () => {
+  const aggregator = offer({
+    _id: 'conditionless-aggregator',
+    title: 'Bio Vollmilch 1 l',
+    titleNormalized: 'bio vollmilch 1 l',
+    retailerKey: 'billa',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 l',
+    unitValue: 1,
+    unitType: 'l',
+    totalComparableAmount: 1,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+  });
+  const official = offer({
+    ...aggregator,
+    _id: 'conditionless-official',
+    sourceType: 'billa-official-algolia',
+  });
+
+  const prepared = dedupeFinalResponseOffers([aggregator, official], 'milch');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'conditionless-official');
+  assert.equal(prepared[0].conditionsText, '');
+  assert.equal(prepared[0].hasConditions, false);
+  assert.equal(prepared[0].minimumPurchaseQty, 1);
+});
+
+test('final response condition merge keeps different package sizes separate', () => {
+  const base = {
+    title: 'Lindt Lindor Kugeln',
+    titleNormalized: 'lindt lindor kugeln',
+    retailerKey: 'billa-plus',
+    priceCurrent: { amount: 7.99 },
+    unitType: 'g',
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 15.98, unit: 'kg', comparable: true },
+  };
+  const official = offer({
+    ...base,
+    _id: 'lindor-500g-official',
+    sourceType: 'billa-official-algolia',
+    quantityText: '500 g',
+    unitValue: 500,
+    totalComparableAmount: 0.5,
+    conditionsText: '1+1 gratis / ab 2 Packungen',
+    hasConditions: true,
+    isMultiBuy: true,
+    minimumPurchaseQty: 2,
+    effectiveDiscountType: 'multi-buy',
+  });
+  const aggregator = offer({
+    ...base,
+    _id: 'lindor-250g-aggregator',
+    sourceType: 'aktionsfinder-json',
+    quantityText: '250 g',
+    unitValue: 250,
+    totalComparableAmount: 0.25,
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+    effectiveDiscountType: 'price-cut',
+  });
+
+  assert.equal(dedupeFinalResponseOffers([aggregator, official], 'lindor').length, 2);
+});
+
+test('final response condition merge keeps same title with different price or mechanic separate', () => {
+  const base = {
+    title: 'Lindt Lindor Kugeln',
+    titleNormalized: 'lindt lindor kugeln',
+    retailerKey: 'billa-plus',
+    quantityText: '500 g',
+    unitValue: 500,
+    unitType: 'g',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 15.98, unit: 'kg', comparable: true },
+  };
+  const official = offer({
+    ...base,
+    _id: 'lindor-official-mechanic',
+    sourceType: 'billa-official-algolia',
+    priceCurrent: { amount: 7.99 },
+    conditionsText: '1+1 gratis / ab 2 Packungen',
+    hasConditions: true,
+    isMultiBuy: true,
+    minimumPurchaseQty: 2,
+    effectiveDiscountType: 'multi-buy',
+  });
+  const otherPrice = offer({
+    ...base,
+    _id: 'lindor-other-price',
+    sourceType: 'aktionsfinder-json',
+    priceCurrent: { amount: 8.99 },
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+    effectiveDiscountType: 'price-cut',
+  });
+  const otherMechanic = offer({
+    ...base,
+    _id: 'lindor-other-mechanic',
+    sourceType: 'billa-official-algolia',
+    priceCurrent: { amount: 7.99 },
+    conditionsText: 'ab 3 Packungen',
+    hasConditions: true,
+    isMultiBuy: false,
+    minimumPurchaseQty: 3,
+    effectiveDiscountType: 'threshold',
+  });
+
+  assert.equal(dedupeFinalResponseOffers([official, otherPrice], 'lindor').length, 2);
+  assert.equal(dedupeFinalResponseOffers([official, otherMechanic], 'lindor').length, 2);
+});
+
+test('final response condition merge prefers SPAR official PDF when structured duplicate data matches', () => {
+  const aggregator = sparOffer({
+    _id: 'puntigamer-aggregator',
+    brand: 'Puntigamer',
+    title: 'Puntigamer das bierige Bier SPAR 0.50 Liter 20 Stueck',
+    titleNormalized: 'puntigamer das bierige bier spar 0 50 liter 20 stueck',
+    priceCurrent: { amount: 14.9 },
+    quantityText: '0.5 l / 20 stueck',
+    unitValue: 0.5,
+    unitType: 'l',
+    packCount: 20,
+    totalComparableAmount: 10,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
+    validFrom: null,
+    validTo: null,
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+    effectiveDiscountType: 'price-cut',
+  });
+  const officialPdf = sparPdfOffer({
+    _id: 'puntigamer-official-pdf',
+    brand: 'Puntigamer',
+    title: 'Puntigamer das bierige Bier',
+    titleNormalized: 'puntigamer das bierige bier',
+    priceCurrent: { amount: 14.9 },
+    quantityText: '0.5 l / 20 stueck',
+    unitValue: 0.5,
+    unitType: 'l',
+    packCount: 20,
+    totalComparableAmount: 10,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 1.49, unit: 'l', comparable: true },
+    conditionsText: '1+1 gratis / ab 2 Kisten je 14,90',
+    hasConditions: true,
+    isMultiBuy: true,
+    minimumPurchaseQty: 2,
+    effectiveDiscountType: 'multi-buy',
+  });
+
+  const prepared = dedupeFinalResponseOffers([aggregator, officialPdf], 'bier');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]._id, 'puntigamer-official-pdf');
+  assert.equal(prepared[0].sourceType, 'spar-official-pdf');
+  assert.equal(prepared[0].conditionsText, '1+1 gratis / ab 2 Kisten je 14,90');
+  assert.equal(prepared[0].isMultiBuy, true);
+  assert.equal(prepared[0].minimumPurchaseQty, 2);
+});
+
+test('final response condition merge does not guess PENNY image-only conditions', () => {
+  const official = offer({
+    _id: 'penny-image-only-official',
+    title: 'Coca-Cola Original od. Zero',
+    titleNormalized: 'coca cola original od zero',
+    retailerKey: 'penny',
+    sourceType: 'penny-official-html',
+    priceCurrent: { amount: 1.49 },
+    quantityText: '1 flasche',
+    unitValue: 1,
+    unitType: 'flasche',
+    totalComparableAmount: 1,
+    comparableUnit: 'flasche',
+    normalizedUnitPrice: { amount: 1.49, unit: 'flasche', comparable: true },
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    minimumPurchaseQty: 1,
+  });
+  const aggregator = offer({
+    ...official,
+    _id: 'penny-image-only-aggregator',
+    sourceType: 'aktionsfinder-json',
+  });
+
+  const prepared = dedupeFinalResponseOffers([aggregator, official], 'cola');
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0].conditionsText, '');
+  assert.equal(prepared[0].hasConditions, false);
+  assert.equal(prepared[0].minimumPurchaseQty, 1);
+});
+
 test('final response dedupe keeps aggregator when no better source exists', () => {
   const aggregator = offer({
     _id: 'dr-beckmann-aggregator',

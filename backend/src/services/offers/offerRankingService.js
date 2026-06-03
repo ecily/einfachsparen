@@ -5275,6 +5275,151 @@ function haveCompatibleResponseConditions(left, right) {
   return !leftDiscount || !rightDiscount || leftDiscount === rightDiscount;
 }
 
+function hasTrustedConditionEvidence(offer) {
+  if (!hasConditionEvidence(offer)) {
+    return false;
+  }
+
+  const quality = classifyOfferSourceQuality(offer);
+  const sourceRank = getSourcePriorityRank(offer);
+
+  return Boolean(quality.hasOfficialEvidence || sourceRank <= 3 || isOfficialPdfEvidence(offer));
+}
+
+function getMinimumPurchaseNumber(offer) {
+  const value = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || offer?.minQuantity || 1);
+
+  return Number.isFinite(value) && value > 1 ? value : 1;
+}
+
+function hasContradictingConditionEvidence(left, right) {
+  const leftHasConditions = hasConditionEvidence(left);
+  const rightHasConditions = hasConditionEvidence(right);
+  const leftConditionText = normalizeSearchText(left?.conditionsText || left?.conditionLabel);
+  const rightConditionText = normalizeSearchText(right?.conditionsText || right?.conditionLabel);
+
+  if (leftConditionText && rightConditionText && leftConditionText !== rightConditionText) {
+    return !leftConditionText.includes(rightConditionText) && !rightConditionText.includes(leftConditionText);
+  }
+
+  if (leftHasConditions && rightHasConditions) {
+    if (Boolean(left?.customerProgramRequired) !== Boolean(right?.customerProgramRequired)) {
+      return true;
+    }
+
+    if (Boolean(left?.isMultiBuy) !== Boolean(right?.isMultiBuy)) {
+      return true;
+    }
+  }
+
+  const leftMinimum = getMinimumPurchaseNumber(left);
+  const rightMinimum = getMinimumPurchaseNumber(right);
+
+  if (leftMinimum > 1 && rightMinimum > 1 && leftMinimum !== rightMinimum) {
+    return true;
+  }
+
+  const leftDiscount = getResponseDiscountKey(left);
+  const rightDiscount = getResponseDiscountKey(right);
+  const nonConditionDiscountTypes = new Set(['price cut', 'price-cut', 'unknown']);
+  const leftDiscountMeaningful = leftDiscount && !nonConditionDiscountTypes.has(leftDiscount);
+  const rightDiscountMeaningful = rightDiscount && !nonConditionDiscountTypes.has(rightDiscount);
+
+  return Boolean(leftDiscountMeaningful && rightDiscountMeaningful && leftDiscount !== rightDiscount);
+}
+
+function haveCompatibleConditionDivergentQuantity(left, right) {
+  const leftStructured = getStructuredQuantitySignature(left);
+  const rightStructured = getStructuredQuantitySignature(right);
+
+  if (leftStructured && rightStructured) {
+    return leftStructured === rightStructured;
+  }
+
+  const leftQuantity = normalizeVisibleQuantityText(left?.quantityText);
+  const rightQuantity = normalizeVisibleQuantityText(right?.quantityText);
+
+  if (leftQuantity && rightQuantity) {
+    return leftQuantity === rightQuantity;
+  }
+
+  return false;
+}
+
+function hasSameConditionDivergentResponseDuplicate(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  const leftHasConditions = hasConditionEvidence(left);
+  const rightHasConditions = hasConditionEvidence(right);
+
+  if (leftHasConditions === rightHasConditions) {
+    return false;
+  }
+
+  const conditionCarrier = leftHasConditions ? left : right;
+  const conditionlessOffer = leftHasConditions ? right : left;
+  const conditionlessQuality = classifyOfferSourceQuality(conditionlessOffer);
+
+  if (!hasTrustedConditionEvidence(conditionCarrier)) {
+    return false;
+  }
+
+  if (!isAggregatorSourceQuality(conditionlessQuality)) {
+    return false;
+  }
+
+  const sameRetailer =
+    normalizeRetailerKey(left.retailerKey || left.retailerName || '') ===
+    normalizeRetailerKey(right.retailerKey || right.retailerName || '');
+
+  if (!sameRetailer) {
+    return false;
+  }
+
+  if (!sameVisiblePrice(left, right)) {
+    return false;
+  }
+
+  if (!haveCompatibleConditionDivergentQuantity(left, right)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseValidity(left, right)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseCategory(left, right)) {
+    return false;
+  }
+
+  if (!haveCompatibleResponseVariant(left, right)) {
+    return false;
+  }
+
+  if (hasContradictingConditionEvidence(left, right)) {
+    return false;
+  }
+
+  const leftTitle = getOfferTitleKey(left);
+  const rightTitle = getOfferTitleKey(right);
+  const leftTokens = getComparableTitleTokens(left);
+  const rightTokens = getComparableTitleTokens(right);
+  const rightTokenSet = new Set(rightTokens);
+  const sharedTokenCount = leftTokens.filter((token) => rightTokenSet.has(token)).length;
+  const leftTitleContainsRight = leftTitle && rightTitle && leftTitle.includes(rightTitle);
+  const rightTitleContainsLeft = leftTitle && rightTitle && rightTitle.includes(leftTitle);
+  const oneTitleContainsOther = Boolean(
+    (leftTitleContainsRight || rightTitleContainsLeft)
+    && sharedTokenCount >= 3
+  );
+
+  return Boolean(
+    leftTitle && rightTitle && leftTitle === rightTitle
+  ) || oneTitleContainsOther || hasVeryStrongVisibleCardTitleIdentity(left, right) || sameConservativeTitleIdentity(left, right);
+}
+
 function haveSameVisibleCardConditions(left, right) {
   const leftConditionText = normalizeSearchText(left?.conditionsText || left?.conditionLabel);
   const rightConditionText = normalizeSearchText(right?.conditionsText || right?.conditionLabel);
@@ -5639,6 +5784,21 @@ function mergeSparConditionEvidenceIntoOffers(offers = [], options = {}) {
   });
 }
 
+function mergeConditionDivergentResponseDuplicate(preferred, collapsed) {
+  const preferredHasConditions = hasConditionEvidence(preferred);
+  const collapsedHasConditions = hasConditionEvidence(collapsed);
+
+  if (!preferredHasConditions && collapsedHasConditions) {
+    return mergeConditionEvidence(preferred, collapsed);
+  }
+
+  if (preferredHasConditions && !collapsedHasConditions) {
+    return preferred;
+  }
+
+  return preferred;
+}
+
 function hasSameVisibleResponseFingerprint(left, right) {
   if (!left || !right) {
     return false;
@@ -5658,6 +5818,10 @@ function hasSameVisibleResponseFingerprint(left, right) {
 
   if (!haveSameVisibleQuantity(left, right)) {
     return false;
+  }
+
+  if (hasSameConditionDivergentResponseDuplicate(left, right)) {
+    return true;
   }
 
   if (!haveCompatibleResponseConditions(left, right)) {
@@ -6020,10 +6184,15 @@ function dedupeFinalResponseOffers(offers, query = '') {
       continue;
     }
 
-    const preferred = choosePreferredQueryDuplicate(unique[duplicateIndex], offer, query);
+    const current = unique[duplicateIndex];
+    const preferred = choosePreferredQueryDuplicate(current, offer, query);
+    const collapsed = preferred === current ? offer : current;
+    const merged = hasSameConditionDivergentResponseDuplicate(preferred, collapsed)
+      ? mergeConditionDivergentResponseDuplicate(preferred, collapsed)
+      : preferred;
 
-    if (preferred !== unique[duplicateIndex]) {
-      unique[duplicateIndex] = preferred;
+    if (merged !== unique[duplicateIndex]) {
+      unique[duplicateIndex] = merged;
     }
 
     const mergedKeys = new Set([
