@@ -808,6 +808,16 @@ function beerCandidate(data = {}) {
   };
 }
 
+function sweetCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+    categoryKey: 'suesswaren-knabbereien',
+    ...data,
+  };
+}
+
 function nonFoodPieceCandidate(data = {}) {
   return {
     productKind: 'generic-flyer-product',
@@ -1117,6 +1127,28 @@ function extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, vali
     ? parseAustrianDate(12, 5, 2026)
     : null;
 
+  if (
+    sourceRetailerFormat === 'spar'
+    && hasText(text, /eduscho crema elegante/)
+    && hasText(text, /ganze bohne/)
+    && hasText(text, /1\s*kg/)
+    && /15[,\s]*99/i.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      title: 'Eduscho Crema Elegante',
+      brand: 'Eduscho',
+      price: 15.99,
+      referencePrice: null,
+      quantityText: '1 kg',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      conditionsText: '',
+      rawText: 'Eduscho Crema Elegante ganze Bohne, 1 kg',
+      comparisonSafe: true,
+    });
+  }
+
   if (hasText(text, /meinl praesident/) && hasText(text, /500[-\s]?g(?:ramm)?|500[-\s]?g-packung/)) {
     const unitPriceMatch = normalized.match(/per kg\s+14[,.]\s*50/) || normalized.match(/per kg\s+10[,.]\s*88/);
     const price = unitPriceMatch
@@ -1205,6 +1237,48 @@ function extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, vali
   return candidates;
 }
 
+function extractKnownChocolateCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && hasText(text, /milka schokolade/)
+    && /ab\s+2\s+pkg\.?\s+je\s*5[,.]\s*49/i.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, sweetCandidate({
+      title: 'Milka Schokolade versch. Sorten',
+      brand: 'Milka',
+      price: 5.49,
+      referencePrice: /1\s+pkg\.?\s+6[,.]\s*49/i.test(normalized) ? 6.49 : null,
+      quantityText: '85-100 g',
+      conditionsText: 'ab 2 Packungen laut Flugblatt',
+      rawText: 'Milka Schokolade versch. Sorten, 85-100 g, ab 2 Packungen je 5,49',
+      comparisonSafe: false,
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && hasText(text, /schogetten/)
+    && /ab\s+4\s+pkg\.?\s+je\s*0[,.]\s*99/i.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, sweetCandidate({
+      title: 'Schogetten Schokolade versch. Sorten',
+      brand: 'Schogetten',
+      price: 0.99,
+      referencePrice: /1\s+pkg\.?\s+1[,.]\s*99/i.test(normalized) ? 1.99 : null,
+      quantityText: '100 g',
+      conditionsText: '2+2 gratis / ab 4 Packungen laut Flugblatt',
+      rawText: 'Schogetten Schokolade versch. Sorten, 100 g, ab 4 Packungen je 0,99',
+      comparisonSafe: true,
+    }));
+  }
+
+  return candidates;
+}
+
 function extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
   const text = normalizePdfText(page.text || '');
   const normalized = normalizeForScan(text);
@@ -1250,6 +1324,24 @@ function extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat } = {})
       quantityText: '0.5 l',
       conditionsText: `ab 24 Dosen. ${extraPercentCondition}`,
       rawText: 'Puntigamer Maerzen, 0,5 Liter, ab 24 Dosen je 0,99',
+      comparisonSafe: true,
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && hasText(text, /puntigamer das.*bierige.* bier/)
+    && hasText(text, /0[,\s.]*5\s*liter/)
+    && /ab\s+6\s+ds\.?\s+je\s*0[,\s.]*79/i.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, beerCandidate({
+      title: 'Puntigamer das bierige Bier',
+      brand: 'Puntigamer',
+      price: 0.79,
+      referencePrice: /1\s+ds\.?\s+1[,\s.]*19/i.test(normalized) ? 1.19 : null,
+      quantityText: '0.5 l',
+      conditionsText: 'ab 6 Dosen laut Flugblatt',
+      rawText: 'Puntigamer das bierige Bier, 0,5 Liter, ab 6 Dosen je 0,79',
       comparisonSafe: true,
     }));
   }
@@ -1436,6 +1528,7 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
   for (const page of pages) {
     const knownCandidates = [
       ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownChocolateCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetailerFormat, validity }),
     ];
@@ -1593,9 +1686,14 @@ function normalizeSparPdfCandidateToOffer({
     contextText: categoryContext,
     fallbackLabel: candidate.productKind || '',
   });
-  const categoryPrimary = candidate.categoryPrimary || inferredCategoryPrimary || 'Unkategorisiert';
-  const categorySecondary = candidate.categorySecondary || inferredCategorySecondary || categoryPrimary;
-  const categoryKey = candidate.categoryKey || buildKey(categorySecondary || categoryPrimary, 'unkategorisiert');
+  const forcedCoffeeCategory = /eduscho crema elegante/i.test(normalizeTitleForMatch([
+    candidate.brand,
+    candidate.title,
+    candidate.rawText,
+  ].join(' ')));
+  const categoryPrimary = candidate.categoryPrimary || (forcedCoffeeCategory ? 'Getraenke' : inferredCategoryPrimary) || 'Unkategorisiert';
+  const categorySecondary = candidate.categorySecondary || (forcedCoffeeCategory ? 'Kaffee & Tee' : inferredCategorySecondary) || categoryPrimary;
+  const categoryKey = candidate.categoryKey || (forcedCoffeeCategory ? 'kaffee-tee' : buildKey(categorySecondary || categoryPrimary, 'unkategorisiert'));
   const searchKeywords = candidate.searchKeywords || [
     candidate.brand,
     candidate.title,

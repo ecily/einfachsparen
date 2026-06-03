@@ -140,6 +140,88 @@ test('extracts current Puntigamer 1+1 crate deal from SPAR flyer text', () => {
   assert.match(puntigamer.conditionsText, /ab 2 Kisten/);
 });
 
+test('extracts SPAR KW23 Puntigamer dose deal from compact flyer layout', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: activeValidityForTest(),
+    pages: [
+      {
+        pageNumber: 8,
+        text: [
+          'Puntigamer das"bierige" Bier0,5 Liter Ottakringer Bier Spritz 0,33 Liter Egger Maerzen 0,5 Liter',
+          'mindestens Ersparnis 2,40ab 6 Ds. Mengenvorteil 1 Ds. 1,19ab 6 Ds. je0,79(per 0,5 Liter 1,20)',
+        ].join(' '),
+      },
+    ],
+  }).filter((candidate) => !candidate.exclusionReason);
+
+  const puntigamer = candidates.find((candidate) => candidate.brand === 'Puntigamer');
+
+  assert.ok(puntigamer);
+  assert.equal(puntigamer.title, 'Puntigamer das bierige Bier');
+  assert.equal(puntigamer.price, 0.79);
+  assert.equal(puntigamer.referencePrice, 1.19);
+  assert.equal(puntigamer.quantityText, '0.5 l');
+  assert.match(puntigamer.conditionsText, /ab 6 Dosen/);
+});
+
+test('classifies SPAR KW23 Eduscho Crema Elegante as coffee offer', () => {
+  const validity = activeValidityForTest();
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 14,
+        text: 'Eduscho Crema Elegante ganze Bohne 1 kg NEU BEI SPAR 15,99 per Pkg. Aktion!',
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/getPdf.ashx',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Eduscho Crema Elegante');
+  assert.equal(offers[0].categorySecondary, 'Kaffee & Tee');
+  assert.equal(offers[0].categoryKey, 'kaffee-tee');
+  assert.match(offers[0].searchText, /kaffee/);
+});
+
+test('extracts SPAR KW23 Milka Schokolade from compact flyer layout', () => {
+  const validity = activeValidityForTest();
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 15,
+        text: [
+          'Milka Schokolade versch. Sorten, 85-100 g Mengenvorteil',
+          '1 Pkg. 6,49 ab 2 Pkg. je 5,49(per kg 27,45) mindestens Ersparnis 2,-ab 2 Pkg.',
+        ].join(' '),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/getPdf.ashx',
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Milka Schokolade versch. Sorten');
+  assert.equal(offers[0].priceCurrent.amount, 5.49);
+  assert.equal(offers[0].categorySecondary, 'Suesswaren & Knabbereien');
+  assert.match(offers[0].conditionsText, /ab 2 Packungen/);
+});
+
 test('normalizes safe SPAR Puntigamer crate fallback from Kiste and half-liter bottle context', () => {
   const currentValidity = {
     validFrom: new Date('2026-05-28T12:00:00.000Z'),
