@@ -29,7 +29,7 @@ const FINAL_PUBLISH_STATUSES = new Set([
   'crawl-run-skipped',
   'crawl-run-stale',
 ]);
-const INTERMEDIATE_PUBLISH_STATUSES = new Set(['', 'unknown', 'source-written', 'queued', 'running']);
+const INTERMEDIATE_PUBLISH_STATUSES = new Set(['', 'source-written', 'queued', 'running']);
 const PROMOTION_TYPES = new Set(['multi-buy', 'threshold', 'card-required', 'conditional-price', 'sticker']);
 const FEEDBACK_OPEN_STATUSES = new Set(['new', 'reviewing']);
 const FEEDBACK_RESOLVED_STATUSES = new Set(['resolved', 'ignored']);
@@ -608,7 +608,7 @@ function buildOfferDiagnostics(activeOffers = []) {
     }))
     .sort((left, right) => right.count - left.count || left.status.localeCompare(right.status));
   const openPublishCount = publishStatuses
-    .filter((item) => item.intermediate || !item.final)
+    .filter((item) => item.intermediate)
     .reduce((sum, item) => sum + item.count, 0);
 
   return {
@@ -2017,7 +2017,7 @@ function buildPublishStatusSummaryFromRows(rows = []) {
     .sort((left, right) => right.count - left.count || left.status.localeCompare(right.status));
   const totalActiveOffers = publishStatuses.reduce((sum, item) => sum + item.count, 0);
   const openPublishCount = publishStatuses
-    .filter((item) => item.intermediate || !item.final)
+    .filter((item) => item.intermediate)
     .reduce((sum, item) => sum + item.count, 0);
 
   return {

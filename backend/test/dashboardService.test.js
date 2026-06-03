@@ -52,12 +52,13 @@ test('dashboard publish status summary classifies final and open aggregate rows'
   ]);
 
   assert.equal(summary.totalActiveOffers, 11);
-  assert.equal(summary.finalCount, 8);
-  assert.equal(summary.openCount, 3);
+  assert.equal(summary.finalCount, 9);
+  assert.equal(summary.openCount, 2);
   assert.equal(summary.status, 'open');
   assert.equal(summary.statuses.find((row) => row.status === 'crawl-run-success').final, true);
   assert.equal(summary.statuses.find((row) => row.status === 'source-written').intermediate, true);
   assert.equal(summary.statuses.find((row) => row.status === 'unknown').final, false);
+  assert.equal(summary.statuses.find((row) => row.status === 'unknown').intermediate, false);
 });
 
 test('dashboard aggregate diagnostics build offer KPIs without loading offer documents', () => {
