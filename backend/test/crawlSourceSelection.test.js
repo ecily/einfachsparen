@@ -122,6 +122,19 @@ test('source key derivation recognizes the three SPAR Aktionsfinder sources and 
   assert.equal(deriveSourceKey(SOURCES[4]), 'eurospar-official-flyer-pdf');
 });
 
+test('source key derivation keeps INTERSPAR PDFs on SPAR flugblatt domain selectable', () => {
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'interspar',
+      channel: 'official-flyer',
+      sourceType: 'pdf',
+      sourceRetailerFormat: 'interspar',
+      sourceUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx',
+    }),
+    'interspar-official-flyer-pdf'
+  );
+});
+
 test('sourceKeys select exactly the requested runnable sources without SPAR official', async () => {
   const selection = await resolveCrawlSourceSelection({
     Source: fakeSourceModel(),

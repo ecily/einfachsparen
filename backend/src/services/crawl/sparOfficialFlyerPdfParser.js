@@ -1707,7 +1707,16 @@ function normalizeSparPdfCandidateToOffer({
     comparisonSafe: candidate.comparisonSafe !== false,
     context: candidate,
   });
-  const conditionsText = sanitizeWhitespace(candidate.conditionsText || '');
+  let conditionsText = sanitizeWhitespace(candidate.conditionsText || '');
+  if (
+    source.crawlPolicy?.requireCouponCondition === true
+    && !/\bgutschein\b|\bcoupon\b/i.test(conditionsText)
+  ) {
+    conditionsText = sanitizeWhitespace([
+      conditionsText,
+      'mit Gutschein laut Gutscheinheft',
+    ].filter(Boolean).join('; '));
+  }
   const issues = [];
 
   if (!validity.validFrom || !validity.validTo) {

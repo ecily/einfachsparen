@@ -228,21 +228,31 @@ test('discovery service does not open a MongoDB connection', async () => {
   assert.equal(mongoose.connection.readyState, 0);
 });
 
-test('active SPAR-family PDF SourceDefinitions use only current official KW23 URLs', () => {
+test('active SPAR-family PDF SourceDefinitions include current official multi-PDF URLs', () => {
   const sources = getBackendSparFamilyPdfSources(RETAILER_DEFINITIONS)
     .filter((source) => source.enabled);
   const urls = sources.map((source) => source.url);
 
   assert.deepEqual(
     sources.map((source) => source.sourceRetailerFormat).sort(),
-    ['eurospar', 'interspar', 'spar']
+    [
+      'eurospar',
+      'eurospar',
+      'eurospar',
+      'eurospar',
+      'interspar',
+      'interspar',
+      'interspar',
+      'interspar',
+      'spar',
+      'spar',
+      'spar',
+      'spar',
+    ]
   );
-  assert.deepEqual(urls.sort(), [
-    'https://flugblatt.interspar.at/steiermark/steiermark_kw23/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/eurospar/260603-1-flugblatt-kw-23/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/getPdf.ashx',
-  ]);
-  assert.equal(urls.some((url) => /kw-2[12]|kw2[12]/i.test(url)), false);
+  assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx'), true);
+  assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260513-2-grillen-kw-20/getPdf.ashx'), true);
+  assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260528-3-spar-gutscheinheft-kw-22/getPdf.ashx'), true);
   assert.equal(urls.every(isOfficialSparFamilyPdfUrl), true);
 });
 
@@ -255,7 +265,7 @@ test('active SPAR-family PDF definitions reject expired validity windows', () =>
     && definition.enabled !== false
   ));
 
-  assert.equal(sources.length, 3);
+  assert.equal(sources.length, 12);
   assert.equal(
     sources.some((source) => new Date(source.crawlPolicy.validTo).getTime() <= now.getTime()),
     false
@@ -265,7 +275,11 @@ test('active SPAR-family PDF definitions reject expired validity windows', () =>
 test('SPAR-family PDF SourceDefinitions keep retailer formats separated and bounded', () => {
   const sources = getBackendSparFamilyPdfSources(RETAILER_DEFINITIONS)
     .filter((source) => source.enabled);
-  const byFormat = new Map(sources.map((source) => [source.sourceRetailerFormat, source]));
+  const byFormat = new Map(
+    sources
+      .filter((source) => /kw-23|steiermark_kw23/i.test(source.url))
+      .map((source) => [source.sourceRetailerFormat, source])
+  );
 
   assert.equal(byFormat.get('spar').retailerKey, 'spar');
   assert.equal(byFormat.get('eurospar').retailerKey, 'eurospar');
@@ -275,4 +289,18 @@ test('SPAR-family PDF SourceDefinitions keep retailer formats separated and boun
   assert.equal(byFormat.get('interspar').maxPdfPages, 24);
   assert.ok(sources.every((source) => source.maxPdfBytes <= 62914560));
   assert.ok(sources.every((source) => source.timeoutMs <= 60000));
+});
+
+test('additional SPAR-family shared PDF definitions are scoped-only and coupon-safe', () => {
+  const sharedSources = RETAILER_DEFINITIONS.filter((definition) => (
+    definition.channel === 'official-flyer'
+    && definition.sourceType === 'pdf'
+    && /260513-3-monatssparer|260513-2-grillen|260528-3-spar-gutscheinheft/i.test(definition.sourceUrl)
+  ));
+  const couponSources = sharedSources.filter((definition) => /gutscheinheft/i.test(definition.sourceUrl));
+
+  assert.equal(sharedSources.length, 9);
+  assert.equal(sharedSources.every((source) => source.crawlPolicy?.scopedOnly === true), true);
+  assert.equal(couponSources.length, 3);
+  assert.equal(couponSources.every((source) => source.crawlPolicy?.requireCouponCondition === true), true);
 });

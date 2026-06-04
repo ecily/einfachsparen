@@ -31,6 +31,7 @@ function deriveSourceKey(source = {}) {
   if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
   if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
   if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'interspar') return 'interspar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
   if (url.includes('spar.at')) return 'spar-official-flyer';

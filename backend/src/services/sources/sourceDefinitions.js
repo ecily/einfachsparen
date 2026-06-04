@@ -1,3 +1,73 @@
+const SPAR_FAMILY_PDF_FORMATS = [
+  {
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    sourceRetailerName: 'SPAR',
+    sourceRetailerFormat: 'spar',
+    retailerFormatLabel: 'nur SPAR',
+  },
+  {
+    retailerKey: 'eurospar',
+    retailerName: 'EUROSPAR',
+    sourceRetailerName: 'EUROSPAR',
+    sourceRetailerFormat: 'eurospar',
+    retailerFormatLabel: 'nur EUROSPAR',
+  },
+  {
+    retailerKey: 'interspar',
+    retailerName: 'INTERSPAR',
+    sourceRetailerName: 'INTERSPAR',
+    sourceRetailerFormat: 'interspar',
+    retailerFormatLabel: 'nur INTERSPAR',
+  },
+];
+
+function buildSparFamilySharedPdfSources({
+  label,
+  sourceUrl,
+  priority = 22,
+  validFrom,
+  validTo,
+  validityText,
+  maxPdfPages = 24,
+  requireCouponCondition = false,
+  notes,
+}) {
+  return SPAR_FAMILY_PDF_FORMATS.map((format) => ({
+    retailerKey: format.retailerKey,
+    retailerName: format.retailerName,
+    channel: 'official-flyer',
+    label: `${format.retailerName} ${label}`,
+    sourceUrl,
+    sourceType: 'pdf',
+    priority,
+    sourceRetailerName: format.sourceRetailerName,
+    sourceRetailerFormat: format.sourceRetailerFormat,
+    appliesToRetailerFormats: [format.sourceRetailerFormat],
+    retailerFormatLabel: format.retailerFormatLabel,
+    crawlPolicy: {
+      timeoutMs: 60000,
+      sourceTimeoutMs: 180000,
+      maxPdfBytes: 62914560,
+      maxPdfPages,
+      scopedOnly: true,
+      coverageGuard: {
+        minBaseline: 1,
+        minReplacementRatio: 0.1,
+        minAbsoluteDrop: 10,
+      },
+      validityText,
+      validFrom,
+      validTo,
+      extractionMethod: 'text-layer',
+      ocr: false,
+      requireCouponCondition,
+    },
+    capabilities: { discoverOffers: true, parseOfferPages: false, parseFlyers: true },
+    notes,
+  }));
+}
+
 const RETAILER_DEFINITIONS = [
   {
     retailerKey: 'adeg',
@@ -236,6 +306,37 @@ const RETAILER_DEFINITIONS = [
     capabilities: { discoverOffers: true, parseOfferPages: false, parseFlyers: true },
     notes: 'Direkt per GET validiertes offizielles INTERSPAR PDF-Flugblatt fuer Steiermark. Nur Textlayer, kein OCR, keine Request-Pfad-Verarbeitung. Statischer KW-23-Snapshot; nach Ablauf gezielt aktualisieren.',
   },
+  ...buildSparFamilySharedPdfSources({
+    label: 'Steiermark offizieller PDF-Monatssparer KW 20',
+    sourceUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx',
+    priority: 21,
+    validityText: 'Mi., 13.05.26 - Mi., 10.06.26',
+    validFrom: '2026-05-12T22:00:00.000Z',
+    validTo: '2026-06-10T21:59:59.999Z',
+    maxPdfPages: 12,
+    notes: 'Direkt per GET validierter offizieller SPAR-Family Monatssparer. Scoped-only Fallback fuer aktuelle Coverage; kein OCR, nur Textlayer.',
+  }),
+  ...buildSparFamilySharedPdfSources({
+    label: 'Steiermark offizieller PDF-Grillfolder KW 20',
+    sourceUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-2-grillen-kw-20/getPdf.ashx',
+    priority: 22,
+    validityText: 'Mi., 13.05.26 - Mi., 10.06.26',
+    validFrom: '2026-05-12T22:00:00.000Z',
+    validTo: '2026-06-10T21:59:59.999Z',
+    maxPdfPages: 8,
+    notes: 'Direkt per GET validierter offizieller SPAR-Family Grillfolder. Scoped-only Fallback fuer aktuelle Coverage; kein OCR, nur Textlayer.',
+  }),
+  ...buildSparFamilySharedPdfSources({
+    label: 'Steiermark offizielles PDF-Gutscheinheft KW 22',
+    sourceUrl: 'https://flugblatt.spar.at/steiermark/spar/260528-3-spar-gutscheinheft-kw-22/getPdf.ashx',
+    priority: 23,
+    validityText: 'Do., 28.05.26 - Mi., 17.06.26',
+    validFrom: '2026-05-27T22:00:00.000Z',
+    validTo: '2026-06-17T21:59:59.999Z',
+    maxPdfPages: 24,
+    requireCouponCondition: true,
+    notes: 'Direkt per GET validiertes offizielles SPAR-Family Gutscheinheft. Accepted Offers werden explizit als Gutschein-Angebote markiert; kein OCR, nur Textlayer.',
+  }),
   {
     retailerKey: 'spar',
     retailerName: 'SPAR',

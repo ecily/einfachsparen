@@ -1285,6 +1285,40 @@ test('generic SPAR PDF parser accepts per-liter flyer offers as 1 l quantity', (
   assert.equal(offer.exclusionReason, undefined);
 });
 
+test('coupon booklet source policy adds explicit Gutschein condition to accepted offers', () => {
+  const testSource = {
+    ...source('spar'),
+    crawlPolicy: {
+      requireCouponCondition: true,
+    },
+  };
+  const pdfReference = {
+    validity: activeValidityForTest(),
+    candidates: [
+      {
+        id: 'coupon-1',
+        page: 1,
+        title: 'SPAR extra natives Olivenoel',
+        brand: 'SPAR',
+        price: 0.5,
+        quantityText: '0.5 l',
+        rawText: 'SPAR extra natives Olivenoel 0,5 l 0,50',
+      },
+    ],
+  };
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference,
+    source: testSource,
+    crawlJobId: 'coupon-test',
+    region: 'AT',
+    pdfUrl: testSource.sourceUrl,
+  });
+
+  assert.equal(offers.length, 1);
+  assert.match(offers[0].conditionsText, /mit Gutschein laut Gutscheinheft/);
+  assert.equal(offers[0].hasConditions, true);
+});
+
 test('generic SPAR PDF parser strips safe page disclaimer prefixes from product titles', () => {
   const candidates = extractSparPdfCandidates({
     pages: [{
