@@ -9,6 +9,7 @@ const { dedupeOffersAcrossSources } = require('./catalogDeduper');
 const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
 const { clearRankingResponseCache } = require('../offers/offerRankingService');
 const { ensureManualCategoryOverrideCacheLoaded } = require('../quality/manualCategoryOverrideService');
+const { runSourceInChildProcess } = require('./sourceProcessRunner');
 const {
   deriveSourceKey,
   resolveCrawlSourceSelection,
@@ -90,6 +91,20 @@ function createSourceTimeoutError({ source = {}, timeoutMs = DEFAULT_SOURCE_TIME
 
 function isSourceTimeoutError(error) {
   return error?.code === SOURCE_TIMEOUT_ERROR_CODE;
+}
+
+function buildSourceProgress(source = {}, index = 0, total = 0, startedAt = new Date()) {
+  return {
+    sourceIndex: index,
+    sourceCount: total,
+    currentSourceKey: deriveSourceKey(source),
+    currentSourceId: sourceIdString(source),
+    currentRetailerKey: source.retailerKey || '',
+    currentSourceChannel: source.channel || '',
+    currentSourceType: source.sourceType || '',
+    currentSourceUrl: source.sourceUrl || '',
+    currentSourceStartedAt: startedAt,
+  };
 }
 
 async function withSourceTimeout(task, { source = {}, timeoutMs = sourceTimeoutMs(source) } = {}) {
@@ -225,6 +240,8 @@ async function crawlAllSources({
   rebuildFilterMetadataImpl = rebuildFilterMetadata,
   clearRankingResponseCacheImpl = clearRankingResponseCache,
   ensureManualCategoryOverrideCacheLoadedImpl = ensureManualCategoryOverrideCacheLoaded,
+  runSourceInChildProcessImpl = runSourceInChildProcess,
+  sourceIsolation = true,
 } = {}) {
   const sourceCoverage = {
     totalRegisteredSources: await SourceModel.countDocuments({ active: true }),
@@ -302,22 +319,49 @@ async function crawlAllSources({
     };
   }
 
-  for (const source of prioritizedSources) {
+  const useIsolatedSourceRunner = sourceIsolation !== false && crawlSourceImpl === crawlSource;
+
+  for (const [index, source] of prioritizedSources.entries()) {
     const sourceSummary = summarizeSource(source);
+    const currentSourceStartedAt = new Date();
 
     try {
       const timeoutMs = sourceTimeoutMs(source);
-      const result = await withSourceTimeout(
-        ({ signal }) => crawlSourceImpl({ source, region, trigger, crawlRunId, signal }),
-        { source, timeoutMs }
-      );
+      await reportCrawlProgress(onProgress, {
+        stage: 'source-started',
+        ...buildSourceProgress(source, index + 1, prioritizedSources.length, currentSourceStartedAt),
+        timeoutMs,
+      });
+
+      const result = useIsolatedSourceRunner
+        ? await runSourceInChildProcessImpl({
+          source,
+          region,
+          trigger,
+          crawlRunId,
+          timeoutMs,
+        })
+        : await withSourceTimeout(
+          ({ signal }) => crawlSourceImpl({ source, region, trigger, crawlRunId, signal }),
+          { source, timeoutMs }
+        );
       results.push({
         ...sourceSummary,
         ...result,
         status: result.status || 'success',
       });
+      await reportCrawlProgress(onProgress, {
+        stage: 'source-finished',
+        ...buildSourceProgress(source, index + 1, prioritizedSources.length, currentSourceStartedAt),
+        sourceStatus: result.status || 'success',
+        finishedSourceCount: results.length,
+      });
     } catch (error) {
-      const diagnostic = error.diagnostic || {};
+      const diagnostic = {
+        ...(error.diagnostic || {}),
+        sourceKey: error.diagnostic?.sourceKey || sourceSummary.sourceKey,
+        sourceId: error.diagnostic?.sourceId || sourceSummary.sourceId,
+      };
       if (isSourceTimeoutError(error)) {
         await markRunningSourceJobTimedOut({
           CrawlJobModel,
@@ -344,6 +388,14 @@ async function crawlAllSources({
         contentType: diagnostic.contentType || '',
         finalUrl: diagnostic.finalUrl || source.sourceUrl,
         diagnostic,
+      });
+      await reportCrawlProgress(onProgress, {
+        stage: 'source-finished',
+        ...buildSourceProgress(source, index + 1, prioritizedSources.length, currentSourceStartedAt),
+        sourceStatus: 'failed',
+        failureStage: diagnostic.failureStage || 'fetch',
+        error: error.message,
+        finishedSourceCount: results.length,
       });
     }
   }
@@ -449,6 +501,7 @@ module.exports = {
     createSourceTimeoutError,
     isSourceTimeoutError,
     markRunningSourceJobTimedOut,
+    buildSourceProgress,
     sourceTimeoutMs,
     withSourceTimeout,
   },
