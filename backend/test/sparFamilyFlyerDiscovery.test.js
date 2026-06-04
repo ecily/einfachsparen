@@ -248,11 +248,13 @@ test('active SPAR-family PDF SourceDefinitions include current official multi-PD
       'spar',
       'spar',
       'spar',
+      'spar',
     ]
   );
   assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx'), true);
   assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260513-2-grillen-kw-20/getPdf.ashx'), true);
   assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260528-3-spar-gutscheinheft-kw-22/getPdf.ashx'), true);
+  assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260601-1-obst-gemuse-kw-23/getPdf.ashx'), true);
   assert.equal(urls.every(isOfficialSparFamilyPdfUrl), true);
 });
 
@@ -265,7 +267,7 @@ test('active SPAR-family PDF definitions reject expired validity windows', () =>
     && definition.enabled !== false
   ));
 
-  assert.equal(sources.length, 12);
+  assert.equal(sources.length, 13);
   assert.equal(
     sources.some((source) => new Date(source.crawlPolicy.validTo).getTime() <= now.getTime()),
     false
@@ -277,7 +279,7 @@ test('SPAR-family PDF SourceDefinitions keep retailer formats separated and boun
     .filter((source) => source.enabled);
   const byFormat = new Map(
     sources
-      .filter((source) => /kw-23|steiermark_kw23/i.test(source.url))
+      .filter((source) => /260603-1-flugblatt-kw-23|steiermark_kw23/i.test(source.url))
       .map((source) => [source.sourceRetailerFormat, source])
   );
 

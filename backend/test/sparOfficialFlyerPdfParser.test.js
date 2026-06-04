@@ -1319,6 +1319,117 @@ test('coupon booklet source policy adds explicit Gutschein condition to accepted
   assert.equal(offers[0].hasConditions, true);
 });
 
+test('accepts current SPAR KW23 fruit and vegetable official PDF text layer', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-31T22:00:00.000Z'),
+    validTo: new Date('2026-06-06T21:59:59.999Z'),
+    validityText: 'Mo., 01.06.26 - Sa., 06.06.26',
+  };
+  const text = [
+    'So frisch isst Oesterreich.',
+    'Obst- und Gemueseangebote gueltig bis Sa., 6.6.2026',
+    'Bio-Beilagen-kartoffel aus Oesterreich, Klasse 1, 1-kg-Netz',
+    'Bio-Zitronen zur Hollerbluete Klasse 1, 500-g-Netz',
+    'SPAR Nektarinen Klasse 1, 1-kg-Tasse',
+    'Radieschen aus Oesterreich, per Bund',
+    'ZESPRI Kiwi Gold Klasse 1, 4-Stueck-Tasse',
+    'S-BUDGET Spitzpaprika Rot Klasse 1, 500-g-Packung',
+    'Nur mit SPAR-App-Gutschein: 2,49 statt 3,99',
+    'Nur mit SPAR-App-Gutschein: 1,99 statt 2,99',
+  ].join('\n');
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: currentValidity,
+    pages: [{ pageNumber: 1, text }],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260601-1-obst-gemuse-kw-23/getPdf.ashx',
+  });
+  const byTitle = new Map(offers.map((offer) => [offer.title, offer]));
+
+  for (const title of [
+    'SPAR Nektarinen',
+    'Bio-Beilagenkartoffel aus Oesterreich',
+    'Radieschen aus Oesterreich',
+    'Bio-Zitronen zur Hollerbluete',
+    'ZESPRI Kiwi Gold',
+    'S-BUDGET Spitzpaprika Rot',
+  ]) {
+    assert.ok(byTitle.get(title), title);
+    assert.equal(byTitle.get(title).categoryKey, 'obst-gemuese', title);
+  }
+
+  assert.equal(byTitle.get('SPAR Nektarinen').priceCurrent.amount, 2.49);
+  assert.equal(byTitle.get('Bio-Zitronen zur Hollerbluete').quantityText, '500 g');
+  assert.equal(byTitle.get('Radieschen aus Oesterreich').quality.comparisonSafe, false);
+  assert.match(byTitle.get('ZESPRI Kiwi Gold').conditionsText, /SPAR-App-Gutschein/);
+  assert.match(byTitle.get('S-BUDGET Spitzpaprika Rot').conditionsText, /SPAR-App-Gutschein/);
+});
+
+test('accepts selected current INTERSPAR KW23 text-layer staples without generic relax', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-06-02T22:00:00.000Z'),
+    validTo: new Date('2026-06-17T21:59:59.999Z'),
+    validityText: 'Mi., 03.06.26 - Mi., 17.06.26',
+  };
+  const pageText = [
+    'Kimbo Espresso Classico Ganze Bohne, 1-kg-Packung 2349 AKTION!',
+    'Lavazza Crema e Gusto oder Espresso Italiano Gemahlen, 250-g-Packung (= per kg 27,96) 699 1 Packung 8,99 ab 2 Packungen je',
+    'Mokaflor Miscela Blu Miscela Rossa oder Oro Ganze Bohne, 1-kg-Packung 2299 AKTION!',
+    'Noem Oesterreichische Teebutter streichzart 250-g-Packung (= per kg 7,16) 179 1 Packung 2,69 ab 3 Packungen je 2 + 1 GRATIS',
+    'S-BUDGET Spare-Ribs aus Oesterreich In Selbstbedienung per kg 1590',
+    'S-BUDGET Hendl-Unterkeulen aus Oesterreich 800-g-Packung, in Selbstbedienung (= per kg 6,74) 539',
+    'Polnische oder Kaesewurst In Selbstbedienung, 1-kg-Stange 499 1 Packung 6,29 ab 2 Packungen je',
+    'Kaesewurst, Krakauer, Wiener oder Champignon Aufschnittwurst aus Oesterreich In Bedienung per 100 g 149 statt 2,09/1,99',
+    'Salsiccia 300-g-Packung oder Salsiccia fine pikant 280-g-Packung 399 1 Packung 4,99 ab 2 Packungen je',
+    'Persil Pulver 110 WG, 2 Flaschen Persil Gel je 60 WG, 2 Packungen Persil Pulver je 54 WG oder 2 Packungen Persil Discs je 44 WG 2198 je 60 WG',
+  ].join('\n');
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages: [{ pageNumber: 7, text: pageText }],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw23/getPdf.ashx',
+  });
+  const byTitle = new Map(offers.map((offer) => [offer.title, offer]));
+
+  for (const title of [
+    'Kimbo Espresso Classico',
+    'Lavazza Crema e Gusto oder Espresso Italiano',
+    'Mokaflor Miscela Blu, Rossa oder Oro',
+    'Noem Oesterreichische Teebutter streichzart',
+    'S-BUDGET Spare-Ribs aus Oesterreich',
+    'S-BUDGET Hendl-Unterkeulen aus Oesterreich',
+    'Polnische oder Kaesewurst',
+    'Kaesewurst, Krakauer, Wiener oder Champignon Aufschnittwurst',
+    'Salsiccia oder Salsiccia fine pikant',
+    'Persil Gel, Pulver oder Discs',
+  ]) {
+    assert.ok(byTitle.get(title), title);
+  }
+
+  assert.equal(byTitle.get('Lavazza Crema e Gusto oder Espresso Italiano').priceCurrent.amount, 6.99);
+  assert.equal(byTitle.get('Noem Oesterreichische Teebutter streichzart').quantityText, '250 g');
+  assert.match(byTitle.get('Noem Oesterreichische Teebutter streichzart').conditionsText, /2\+1 gratis/);
+  assert.equal(byTitle.get('Persil Gel, Pulver oder Discs').categoryKey, 'waschmittel-reinigung');
+  assert.equal(byTitle.get('Salsiccia oder Salsiccia fine pikant').quality.comparisonSafe, false);
+});
+
 test('generic SPAR PDF parser strips safe page disclaimer prefixes from product titles', () => {
   const candidates = extractSparPdfCandidates({
     pages: [{

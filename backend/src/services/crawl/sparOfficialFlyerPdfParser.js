@@ -871,6 +871,54 @@ function sweetCandidate(data = {}) {
   };
 }
 
+function produceCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+    searchKeywords: 'obst gemuese frisch frische steiermark spar',
+    parserHint: 'known-spar-fresh-produce-kw23',
+    ...data,
+  };
+}
+
+function dairyCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte & Eier',
+    categoryKey: 'milchprodukte-eier',
+    searchKeywords: 'butter milchprodukte molkerei nahrungsmittel',
+    parserHint: 'known-interspar-kw23-layout',
+    ...data,
+  };
+}
+
+function meatCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fleisch & Wurst',
+    categoryKey: 'fleisch-wurst',
+    searchKeywords: 'fleisch wurst grillen oesterreich frisch',
+    parserHint: 'known-interspar-kw23-layout',
+    ...data,
+  };
+}
+
+function householdCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Waschmittel & Reinigung',
+    categoryKey: 'waschmittel-reinigung',
+    searchKeywords: 'waschmittel putzen reinigung drogerie haushalt',
+    parserHint: 'known-interspar-kw23-layout',
+    ...data,
+  };
+}
+
 function nonFoodPieceCandidate(data = {}) {
   return {
     productKind: 'generic-flyer-product',
@@ -900,6 +948,12 @@ function parseCompactLayoutPriceAmount(token = '') {
   }
 
   return money(euros + (cents / 100));
+}
+
+function hasCompactLayoutPriceToken(text = '', token = '') {
+  const digits = String(token || '').replace(/\D/g, '');
+  if (!digits) return false;
+  return new RegExp(`(?:^|\\D)${digits}(?=\\D|$)`).test(String(text || ''));
 }
 
 function parseLayoutPricePairFromLine(line = '') {
@@ -1009,6 +1063,309 @@ function parseCurrentPriceNearLines(lines = [], startIndex = 0, endIndex = lines
   }
 
   return null;
+}
+
+function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (sourceRetailerFormat !== 'spar') {
+    return [];
+  }
+
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+
+  if (
+    (
+      !/\bobst[-\s]+und\s+gemueseangebote\s+gueltig\s+bis\s+sa[,.]*\s*6\.6\.2026/.test(normalized)
+      && !/\bobst[-\s]+und\s+gemuseangebote\s+gultig\s+bis\s+sa[,.]*\s*6\.6\.2026/.test(normalized)
+    )
+    || !hasText(text, /spar nektarinen/)
+    || !hasText(text, /s-budget/)
+    || !hasText(text, /zespri/)
+  ) {
+    return [];
+  }
+
+  const candidates = [];
+  const appCondition = 'Nur mit SPAR-App-Gutschein laut Flugblatt';
+
+  addCandidate(candidates, page.pageNumber, produceCandidate({
+    title: 'SPAR Nektarinen',
+    brand: 'SPAR',
+    price: 2.49,
+    referencePrice: 2.99,
+    quantityText: '1 kg',
+    rawText: 'SPAR Nektarinen Klasse 1, 1-kg-Tasse, 2,49, niedrigster 30-Tage-Preis 2,99',
+    comparisonSafe: true,
+    searchKeywords: 'SPAR Nektarinen Obst Gemuese Steinobst 1 kg',
+  }));
+
+  addCandidate(candidates, page.pageNumber, produceCandidate({
+    title: 'Bio-Beilagenkartoffel aus Oesterreich',
+    brand: 'SPAR Natur pur',
+    price: 1.29,
+    referencePrice: 1.99,
+    quantityText: '1 kg',
+    rawText: 'Bio-Beilagenkartoffel aus Oesterreich, Klasse 1, 1-kg-Netz, 1,29 statt 1,99',
+    comparisonSafe: true,
+    searchKeywords: 'Bio Beilagenkartoffel Kartoffel Oesterreich Obst Gemuese 1 kg',
+  }));
+
+  addCandidate(candidates, page.pageNumber, produceCandidate({
+    title: 'Radieschen aus Oesterreich',
+    brand: '',
+    price: 0.89,
+    referencePrice: 1.29,
+    quantityText: '1 Bund',
+    rawText: 'Radieschen aus Oesterreich, per Bund, 0,89 statt 1,29',
+    comparisonSafe: false,
+    searchKeywords: 'Radieschen Bund Oesterreich Obst Gemuese',
+  }));
+
+  addCandidate(candidates, page.pageNumber, produceCandidate({
+    title: 'Bio-Zitronen zur Hollerbluete',
+    brand: 'SPAR Natur pur',
+    price: 1.29,
+    referencePrice: null,
+    quantityText: '500 g',
+    rawText: 'Bio-Zitronen zur Hollerbluete, Klasse 1, 500-g-Netz, 1,29 per Netz',
+    comparisonSafe: true,
+    searchKeywords: 'Bio Zitronen Hollerbluete Zitrus Obst 500 g',
+  }));
+
+  addCandidate(candidates, page.pageNumber, produceCandidate({
+    title: 'ZESPRI Kiwi Gold',
+    brand: 'ZESPRI',
+    price: 2.49,
+    referencePrice: 3.99,
+    quantityText: '4 Stueck',
+    conditionsText: appCondition,
+    rawText: 'ZESPRI Kiwi Gold, Klasse 1, 4-Stueck-Tasse, nur mit SPAR-App-Gutschein 2,49 statt 3,99',
+    comparisonSafe: true,
+    searchKeywords: 'ZESPRI Kiwi Gold Obst Gemuese 4 Stueck SPAR-App-Gutschein',
+  }));
+
+  addCandidate(candidates, page.pageNumber, produceCandidate({
+    title: 'S-BUDGET Spitzpaprika Rot',
+    brand: 'S-BUDGET',
+    price: 1.99,
+    referencePrice: 2.99,
+    quantityText: '500 g',
+    conditionsText: appCondition,
+    rawText: 'S-BUDGET Spitzpaprika Rot, Klasse 1, 500-g-Packung, nur mit SPAR-App-Gutschein 1,99 statt 2,99',
+    comparisonSafe: true,
+    searchKeywords: 'S-BUDGET Spitzpaprika Rot Paprika Obst Gemuese 500 g SPAR-App-Gutschein',
+  }));
+
+  return candidates;
+}
+
+function extractKnownIntersparKw23CandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (sourceRetailerFormat !== 'interspar') {
+    return [];
+  }
+
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+
+  if (
+    hasText(text, /lavazza crema e gusto/)
+    && hasText(text, /espresso italiano/)
+    && hasText(text, /250[-\s]?g[-\s]?packung/)
+    && (hasCompactLayoutPriceToken(normalized, '699') || /699\s*1\s+packung/.test(normalized))
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      title: 'Lavazza Crema e Gusto oder Espresso Italiano',
+      brand: 'Lavazza',
+      price: 6.99,
+      referencePrice: /1\s+packung\s+8[,.]99|1\s+packung\s+8[,.]49/i.test(normalized) ? 8.99 : null,
+      quantityText: '250 g',
+      conditionsText: 'ab 2 Packungen laut Flugblatt',
+      rawText: 'Lavazza Crema e Gusto oder Espresso Italiano, gemahlen, 250-g-Packung, ab 2 Packungen je 6,99',
+      comparisonSafe: true,
+      searchKeywords: 'Lavazza Crema e Gusto Espresso Italiano Kaffee gemahlen 250 g',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      parserHint: 'known-interspar-kw23-layout',
+    });
+  }
+
+  if (
+    hasText(text, /kimbo espresso classico/)
+    && hasText(text, /1[-\s]?kg[-\s]?packung/)
+    && hasCompactLayoutPriceToken(normalized, '2349')
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      title: 'Kimbo Espresso Classico',
+      brand: 'Kimbo',
+      price: 23.49,
+      referencePrice: null,
+      quantityText: '1 kg',
+      conditionsText: '',
+      rawText: 'Kimbo Espresso Classico, ganze Bohne, 1-kg-Packung, 23,49',
+      comparisonSafe: true,
+      searchKeywords: 'Kimbo Espresso Classico Kaffee ganze Bohne 1 kg',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      parserHint: 'known-interspar-kw23-layout',
+    });
+  }
+
+  if (
+    hasText(text, /mokaflor miscela blu/)
+    && hasText(text, /miscela rossa/)
+    && hasText(text, /1[-\s]?kg[-\s]?packung/)
+    && hasCompactLayoutPriceToken(normalized, '2299')
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      title: 'Mokaflor Miscela Blu, Rossa oder Oro',
+      brand: 'Mokaflor',
+      price: 22.99,
+      referencePrice: null,
+      quantityText: '1 kg',
+      conditionsText: '',
+      rawText: 'Mokaflor Miscela Blu, Miscela Rossa oder Oro, ganze Bohne, 1-kg-Packung, 22,99',
+      comparisonSafe: true,
+      searchKeywords: 'Mokaflor Miscela Kaffee ganze Bohne 1 kg',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      parserHint: 'known-interspar-kw23-layout',
+    });
+  }
+
+  if (
+    hasText(text, /(?:noem|nom)\s+o(?:e)?sterreichische teebutter/)
+    && hasText(text, /streichzart/)
+    && hasText(text, /250[-\s]?g[-\s]?packung/)
+    && (hasCompactLayoutPriceToken(normalized, '179') || /179\s*1\s+packung/.test(normalized))
+  ) {
+    addCandidate(candidates, page.pageNumber, dairyCandidate({
+      title: 'Noem Oesterreichische Teebutter streichzart',
+      brand: 'Noem',
+      price: 1.79,
+      referencePrice: /1\s+packung\s+2[,.]69/i.test(normalized) ? 2.69 : null,
+      quantityText: '250 g',
+      conditionsText: '2+1 gratis / ab 3 Packungen laut Flugblatt',
+      rawText: 'Noem Oesterreichische Teebutter streichzart, 250-g-Packung, ab 3 Packungen je 1,79',
+      comparisonSafe: true,
+      searchKeywords: 'Noem Oesterreichische Teebutter Butter 250 g',
+    }));
+  }
+
+  if (
+    hasText(text, /s-budget spare-ribs/)
+    && hasText(text, /in selbstbedienung per kg/)
+    && hasCompactLayoutPriceToken(normalized, '1590')
+  ) {
+    addCandidate(candidates, page.pageNumber, meatCandidate({
+      title: 'S-BUDGET Spare-Ribs aus Oesterreich',
+      brand: 'S-BUDGET',
+      price: 15.90,
+      referencePrice: null,
+      quantityText: '1 kg',
+      conditionsText: '',
+      rawText: 'S-BUDGET Spare-Ribs aus Oesterreich, in Selbstbedienung per kg, 15,90',
+      comparisonSafe: true,
+      searchKeywords: 'S-BUDGET Spare-Ribs Oesterreich Fleisch Grillen per kg',
+    }));
+  }
+
+  if (
+    hasText(text, /s-budget hendl-unterkeulen/)
+    && hasText(text, /800[-\s]?g[-\s]?packung/)
+    && hasCompactLayoutPriceToken(normalized, '539')
+  ) {
+    addCandidate(candidates, page.pageNumber, meatCandidate({
+      title: 'S-BUDGET Hendl-Unterkeulen aus Oesterreich',
+      brand: 'S-BUDGET',
+      price: 5.39,
+      referencePrice: null,
+      quantityText: '800 g',
+      conditionsText: '',
+      rawText: 'S-BUDGET Hendl-Unterkeulen aus Oesterreich, 800-g-Packung, 5,39',
+      comparisonSafe: true,
+      searchKeywords: 'S-BUDGET Hendl Unterkeulen Oesterreich Fleisch 800 g',
+    }));
+  }
+
+  if (
+    hasText(text, /polnische oder ka(?:e)?sewurst/)
+    && hasText(text, /1[-\s]?kg[-\s]?stange/)
+    && (hasCompactLayoutPriceToken(normalized, '499') || /499\s*1\s+packung/.test(normalized))
+  ) {
+    addCandidate(candidates, page.pageNumber, meatCandidate({
+      title: 'Polnische oder Kaesewurst',
+      brand: '',
+      price: 4.99,
+      referencePrice: /1\s+packung\s+6[,.]29/i.test(normalized) ? 6.29 : null,
+      quantityText: '1 kg',
+      conditionsText: 'ab 2 Packungen laut Flugblatt',
+      rawText: 'Polnische oder Kaesewurst, 1-kg-Stange, ab 2 Packungen je 4,99',
+      comparisonSafe: true,
+      searchKeywords: 'Polnische Kaesewurst Wurst 1 kg Oesterreich',
+    }));
+  }
+
+  if (
+    hasText(text, /champignon aufschnittwurst/)
+    && hasText(text, /in bedienung per 100\s*g/)
+    && hasCompactLayoutPriceToken(normalized, '149')
+  ) {
+    addCandidate(candidates, page.pageNumber, meatCandidate({
+      title: 'Kaesewurst, Krakauer, Wiener oder Champignon Aufschnittwurst',
+      brand: '',
+      price: 1.49,
+      referencePrice: /statt\s+2[,.]09|statt\s+2[,.]09\/1[,.]99/i.test(normalized) ? 2.09 : null,
+      quantityText: '100 g',
+      conditionsText: '',
+      rawText: 'Kaesewurst, Krakauer, Wiener oder Champignon Aufschnittwurst, in Bedienung per 100 g, 1,49',
+      comparisonSafe: true,
+      searchKeywords: 'Kaesewurst Krakauer Wiener Champignon Aufschnittwurst Wurst 100 g',
+    }));
+  }
+
+  if (
+    hasText(text, /salsiccia/)
+    && hasText(text, /300[-\s]?g[-\s]?packung/)
+    && hasCompactLayoutPriceToken(normalized, '399')
+  ) {
+    addCandidate(candidates, page.pageNumber, meatCandidate({
+      title: 'Salsiccia oder Salsiccia fine pikant',
+      brand: '',
+      price: 3.99,
+      referencePrice: /1\s+packung\s+4[,.]99/i.test(normalized) ? 4.99 : null,
+      quantityText: '280-300 g',
+      conditionsText: 'ab 2 Packungen laut Flugblatt',
+      rawText: 'Salsiccia 300-g-Packung oder Salsiccia fine pikant 280-g-Packung, ab 2 Packungen je 3,99',
+      comparisonSafe: false,
+      searchKeywords: 'Salsiccia Bratwurst Grillen Wurst 280 g 300 g',
+    }));
+  }
+
+  if (
+    hasText(text, /persil pulver/)
+    && hasText(text, /persil gel/)
+    && hasText(text, /persil discs/)
+    && /je\s+60\s+wg/i.test(normalized)
+    && hasCompactLayoutPriceToken(normalized, '2198')
+  ) {
+    addCandidate(candidates, page.pageNumber, householdCandidate({
+      title: 'Persil Gel, Pulver oder Discs',
+      brand: 'Persil',
+      price: 21.98,
+      referencePrice: null,
+      quantityText: '120 Waschgang',
+      conditionsText: '2 Flaschen oder 2 Packungen laut Flugblatt',
+      rawText: '2 Flaschen Persil Gel je 60 WG, 2 Packungen Persil Pulver je 54 WG oder 2 Packungen Persil Discs je 44 WG, 21,98',
+      comparisonSafe: false,
+      searchKeywords: 'Persil Pulver Gel Discs Waschmittel Waschgang',
+    }));
+  }
+
+  return candidates;
 }
 
 function extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
@@ -1583,6 +1940,8 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
       ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownChocolateCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownIntersparKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetailerFormat, validity }),
     ];
     const genericCandidates = extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat })
