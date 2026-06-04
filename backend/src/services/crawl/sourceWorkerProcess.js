@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const env = require('../../config/env');
+const { connectToDatabase } = require('../../config/mongodb');
 const { crawlSource } = require('./crawlDispatcher');
 
 function serializeError(error) {
@@ -12,7 +12,7 @@ function serializeError(error) {
 }
 
 async function runSourceWorker(message = {}) {
-  await mongoose.connect(env.MONGODB_URI);
+  await connectToDatabase();
 
   try {
     const result = await crawlSource({
