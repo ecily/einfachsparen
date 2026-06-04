@@ -3898,7 +3898,7 @@ function sourceCoverageFields({
   };
 }
 
-async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
+async function crawlSparOfficialPdfSource({ source, crawlJobId, crawlRunId = null, region }) {
   const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
   const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
   const maxPdfBytes = Number(source.crawlPolicy?.maxPdfBytes || 40 * 1024 * 1024);
@@ -4015,6 +4015,7 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, region }) {
 
   const refreshResult = await replaceOffersForSource({
     sourceId: source._id,
+    crawlRunId,
     offerDocuments,
     coverageGuard: {
       minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? 50),
@@ -6086,6 +6087,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       const sparPdfResult = await crawlSparOfficialPdfSource({
         source,
         crawlJobId: crawlJob._id,
+        crawlRunId,
         region,
       });
       const sourceKey = sourceKeyForFormat(source.sourceRetailerFormat || 'spar');
