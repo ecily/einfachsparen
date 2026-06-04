@@ -686,6 +686,43 @@ async function releaseCrawlRunLock(runId) {
   );
 }
 
+async function releaseRecoverableCrawlRunLock(runId, lock) {
+  if (!lock) {
+    return { matchedCount: 0, modifiedCount: 0, skipped: true };
+  }
+
+  const lockRunId = lock.runId ? String(lock.runId) : '';
+  const runIdString = String(runId || '');
+  const filter = {
+    _id: GLOBAL_CRAWL_LOCK_KEY,
+    status: { $in: ['queued', 'running'] },
+  };
+
+  if (lockRunId) {
+    if (lockRunId !== runIdString) {
+      return { matchedCount: 0, modifiedCount: 0, skipped: true, reason: 'lock-owned-by-different-run' };
+    }
+    filter.runId = runId;
+  } else {
+    filter.$or = [
+      { runId: null },
+      { runId: { $exists: false } },
+    ];
+  }
+
+  return CrawlRunLock.updateOne(
+    filter,
+    {
+      $set: {
+        status: 'released',
+        runId: null,
+        heartbeatAt: new Date(),
+        expiresAt: null,
+      },
+    }
+  );
+}
+
 async function updateCrawlRunLockHeartbeat(runId, { trigger = '', now = new Date() } = {}) {
   return CrawlRunLock.updateOne(
     {
@@ -983,14 +1020,25 @@ async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now
       errorMessages: 'CrawlRun was marked stale by admin recovery; no automatic replacement crawl was started.',
     },
   });
-  await markOfferPublishStatusForRun({
-    runId: run._id,
-    runStatus: 'stale',
-    now,
-  });
+  let publishStatusUpdate = null;
+  let publishStatusError = null;
+
+  try {
+    publishStatusUpdate = await markOfferPublishStatusForRun({
+      runId: run._id,
+      runStatus: 'stale',
+      now,
+    });
+  } catch (error) {
+    publishStatusError = compactErrorMessage(error.message);
+    logger.warn('Stale CrawlRun recovery continued after publish status update failed', {
+      runId: asStringId(run._id),
+      message: publishStatusError,
+    });
+  }
 
   if (!lock?.runId || String(lock.runId) === String(run._id)) {
-    await releaseCrawlRunLock(run._id);
+    await releaseRecoverableCrawlRunLock(run._id, lock);
   }
 
   const recoveredRun = await CrawlRun.findById(run._id);
@@ -1002,6 +1050,8 @@ async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now
     staleAfterMs,
     processStartedAt: PROCESS_STARTED_AT,
     lock: serializeLockForAudit(lock),
+    publishStatusUpdate: sanitizeJsonValue(publishStatusUpdate || {}),
+    publishStatusError,
     run: recoveredRun,
   };
 }
@@ -1085,14 +1135,21 @@ async function recoverInterruptedCrawlRunsAfterRestart({
       continue;
     }
 
-    await markOfferPublishStatusForRun({
-      runId: run._id,
-      runStatus: 'stale',
-      now,
-    });
+    try {
+      await markOfferPublishStatusForRun({
+        runId: run._id,
+        runStatus: 'stale',
+        now,
+      });
+    } catch (error) {
+      logger.warn('Interrupted CrawlRun recovery continued after publish status update failed', {
+        runId: asStringId(run._id),
+        message: compactErrorMessage(error.message),
+      });
+    }
 
     if (!lock?.runId || String(lock.runId) === String(run._id)) {
-      await releaseCrawlRunLock(run._id);
+      await releaseRecoverableCrawlRunLock(run._id, lock);
     }
 
     recovered.push({
@@ -1409,6 +1466,7 @@ module.exports = {
     markOfferPublishStatusForRun,
     normalizeSourceResult,
     parseExplicitRecoveryStaleMs,
+    releaseRecoverableCrawlRunLock,
     buildCrawlRunProgressMarker,
     sanitizeJsonValue,
     sanitizeDiagnosticValue,
