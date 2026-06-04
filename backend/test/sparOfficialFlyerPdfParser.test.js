@@ -1238,6 +1238,53 @@ test('normalizes relative image URLs and keeps offers when images are missing', 
   assert.equal(withoutImage.title, 'Persil Waschmittel Universal');
 });
 
+test('generic SPAR PDF parser accepts per-kg Bedienung offers as 1 kg quantity', () => {
+  const candidates = extractSparPdfCandidates({
+    pages: [{
+      pageNumber: 4,
+      text: [
+        'Faschiertes gemischt aus Österreich',
+        'Aus Rind- und Schweinefleisch.',
+        'In Bedienung per kg',
+        'AKTION!',
+        '7,99',
+        'statt 13,99',
+      ].join('\n'),
+    }],
+    sourceRetailerFormat: 'interspar',
+    validity: fixture.validity,
+  });
+  const offer = candidates.find((candidate) => candidate.title && /Faschiertes/i.test(candidate.title));
+
+  assert.ok(offer);
+  assert.equal(offer.quantityText, '1 kg');
+  assert.equal(offer.price, 7.99);
+  assert.equal(offer.exclusionReason, undefined);
+});
+
+test('generic SPAR PDF parser accepts per-liter flyer offers as 1 l quantity', () => {
+  const candidates = extractSparPdfCandidates({
+    pages: [{
+      pageNumber: 1,
+      text: [
+        'Premium Saft Orange',
+        'gekühlt',
+        'per Liter',
+        'nur 1,99',
+        'statt 2,49',
+      ].join('\n'),
+    }],
+    sourceRetailerFormat: 'eurospar',
+    validity: fixture.validity,
+  });
+  const offer = candidates.find((candidate) => candidate.title && /Premium Saft/i.test(candidate.title));
+
+  assert.ok(offer);
+  assert.equal(offer.quantityText, '1 l');
+  assert.equal(offer.price, 1.99);
+  assert.equal(offer.exclusionReason, undefined);
+});
+
 test('SPAR PDF dedupe keys are source-specific and do not blindly replace aggregators', () => {
   const pages = fixture.pages.filter((page) => page.sourceRetailerFormat === 'eurospar');
   const [offer] = normalizeSparPdfCandidatesToOffers({

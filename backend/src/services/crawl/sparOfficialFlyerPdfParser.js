@@ -345,6 +345,15 @@ function extractQuantityTextFromBlock(blockLines = []) {
     return sanitizeWhitespace(quantity).replace(',', '.').replace(/\bliter\b/i, 'l');
   }
 
+  const unitPriceMatch = text.match(/\bper\s+(kg|kilogramm|l|liter|100\s*g|100\s*ml)\b/i);
+  if (unitPriceMatch) {
+    const unit = normalizeForScan(unitPriceMatch[1]);
+    if (unit === 'kg' || unit === 'kilogramm') return '1 kg';
+    if (unit === 'l' || unit === 'liter') return '1 l';
+    if (unit === '100 g') return '100 g';
+    if (unit === '100 ml') return '100 ml';
+  }
+
   return '';
 }
 
