@@ -1285,6 +1285,89 @@ test('generic SPAR PDF parser accepts per-liter flyer offers as 1 l quantity', (
   assert.equal(offer.exclusionReason, undefined);
 });
 
+test('generic SPAR PDF parser strips safe page disclaimer prefixes from product titles', () => {
+  const candidates = extractSparPdfCandidates({
+    pages: [{
+      pageNumber: 2,
+      text: [
+        'Seite 2 Stattpreise sind unsere bisherigen Verkaufspreise in SPAR-Maerkten. Goesser Maerzen',
+        '0,5 Liter',
+        'Im Einzelverkauf 1,49',
+        '20er-Kiste',
+        '29,80',
+        '14,90',
+      ].join('\n'),
+    }],
+    sourceRetailerFormat: 'eurospar',
+    validity: fixture.validity,
+  });
+  const offer = candidates.find((candidate) => candidate.title && /Goesser Maerzen/i.test(candidate.title));
+
+  assert.ok(offer);
+  assert.equal(offer.title, 'Goesser Maerzen');
+  assert.equal(offer.quantityText, '0.5 l');
+  assert.equal(offer.exclusionReason, undefined);
+});
+
+test('generic SPAR PDF parser strips safe short-campaign prefixes from product titles', () => {
+  const candidates = extractSparPdfCandidates({
+    pages: [{
+      pageNumber: 4,
+      text: [
+        'NURfuer kurze ZEIT! Farmerschinken, Bauernschinken oder Jubilaeumsschinken',
+        '100 g',
+        '1,79',
+        'statt 2,19',
+      ].join('\n'),
+    }],
+    sourceRetailerFormat: 'eurospar',
+    validity: fixture.validity,
+  });
+  const offer = candidates.find((candidate) => candidate.title && /Farmerschinken/i.test(candidate.title));
+
+  assert.ok(offer);
+  assert.equal(offer.title, 'Farmerschinken, Bauernschinken oder Jubilaeumsschinken');
+  assert.equal(offer.quantityText, '100 g');
+  assert.equal(offer.exclusionReason, undefined);
+});
+
+test('generic SPAR PDF parser rejects legal and broad campaign title fragments', () => {
+  const candidates = extractSparPdfCandidates({
+    pages: [{
+      pageNumber: 2,
+      text: [
+        'Abgabe nur in Haushaltsmengen; maximal 4 Kisten oder Trays. Von Mi., 3.6. bis Sa., 6.6.2026 -50%-50%auf alle GOESSER BIERE',
+        'Bis zuBis zu per Karton',
+        '17,16',
+        '8,58(per 0,5 Liter 1,09)',
+      ].join('\n'),
+    }],
+    sourceRetailerFormat: 'eurospar',
+    validity: fixture.validity,
+  });
+
+  assert.equal(candidates.some((candidate) => !candidate.exclusionReason), false);
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title' || candidate.exclusionReason === 'generic-unclear-product'));
+});
+
+test('generic SPAR PDF parser rejects standalone service-context fragments', () => {
+  const candidates = extractSparPdfCandidates({
+    pages: [{
+      pageNumber: 3,
+      text: [
+        'In Selbstbedienung,',
+        '350-g-Packung',
+        '4,59',
+      ].join('\n'),
+    }],
+    sourceRetailerFormat: 'interspar',
+    validity: fixture.validity,
+  });
+
+  assert.equal(candidates.some((candidate) => !candidate.exclusionReason), false);
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'));
+});
+
 test('SPAR PDF dedupe keys are source-specific and do not blindly replace aggregators', () => {
   const pages = fixture.pages.filter((page) => page.sourceRetailerFormat === 'eurospar');
   const [offer] = normalizeSparPdfCandidatesToOffers({

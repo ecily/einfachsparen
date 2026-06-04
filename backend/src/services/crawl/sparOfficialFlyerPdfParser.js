@@ -508,6 +508,13 @@ function hasUnsafeGenericTitleStart(title = '') {
   const normalized = normalizeForScan(title);
   const cleanTitle = sanitizeWhitespace(title);
 
+  if (/^(?:abgabe\s+nur|seite\s+(?:xx|\d+)|angebote?\s+g(?:ue|u)ltig|gueltig|gultig|in\s+selbstbedienung|nur\s*f(?:ue|u)r\s+kurze\s+zeit)\b/i.test(normalized)) {
+    return true;
+  }
+  if (/^-?\d{1,2}\s*%\s*-?\d{0,2}\s*%?\s*auf\s+alle\b/i.test(normalized)) {
+    return true;
+  }
+
   return /^[a-zäöüß]/.test(cleanTitle)
     || /^(?:mit|natur\s+xxl|geraeuchert|gerauchert|gefüllt|gefuellt|in\s+bedienung|per\s+kg)\b/i.test(normalized)
     || /^(?:statt|aktion|ersparnis|bis\s+zu|gratis|artikel|neubei|immer\s+billig|preisgesenkt|olen|versch|oder)\b/i.test(normalized)
@@ -552,6 +559,38 @@ function stripGenericPriceReducedMarketingPrefix(title = '', { price = null, qua
   return strippedTitle;
 }
 
+function keepSafeCleanedGenericTitle(originalTitle = '', cleanedTitle = '') {
+  const original = sanitizeWhitespace(originalTitle);
+  const cleaned = sanitizeWhitespace(cleanedTitle);
+
+  return cleaned !== original
+    && hasPlausibleProductCoreAfterMarketingPrefix(cleaned)
+    && isPlausibleGenericFlyerTitle(cleaned)
+    && !hasUnsafeGenericTitleStart(cleaned);
+}
+
+function stripGenericPdfTitleFragments(title = '') {
+  const cleanTitle = sanitizeWhitespace(title);
+  const candidates = [
+    cleanTitle.replace(/^seite\s+(?:xx|\d+)\s+stattpreise\s+sind\s+unsere\s+bisherigen\s+verkaufspreise\s+in\s+spar-m(?:ä|ae)rkten\.\s*/i, ''),
+    cleanTitle
+      .replace(/^seite\s+(?:xx|\d+)\s+qualität\s*&\s*frische\s+zu\s*/i, '')
+      .replace(/^aktuell!\s*/i, ''),
+    cleanTitle.replace(/^nur\s*f(?:ür|uer|ur)\s+kurze\s+zeit!\s*/i, ''),
+    cleanTitle.replace(/^angebote?\s+gültig\s+bei\s+\d+\s+[^.]{0,80}\.\s*/i, ''),
+    cleanTitle.replace(/\s+niedrigster\s+30-tage-preis\s+\d{1,3}[,.]\d{2}\s+aktion!?\s*\d+\s*$/i, ''),
+    cleanTitle.replace(/\s+aktion!?\s*\d{2,}\s*$/i, ''),
+  ];
+
+  for (const candidate of candidates) {
+    if (keepSafeCleanedGenericTitle(cleanTitle, candidate)) {
+      return sanitizeWhitespace(candidate);
+    }
+  }
+
+  return cleanTitle;
+}
+
 function hasGenericMergeRisk(blockLines = [], quantityText = '') {
   if (!quantityText) return false;
 
@@ -589,6 +628,9 @@ function isPlausibleGenericFlyerTitle(title = '') {
   if (!cleanTitle || cleanTitle.length > 180) return false;
   if (!/\p{L}/u.test(cleanTitle)) return false;
   if (words.length < 2 && cleanTitle.length < 12) return false;
+  if (/\bangebote?\s+g(?:ue|u)ltig\b/i.test(normalized)) return false;
+  if (/^(?:frische|starke)\s+angebote\b/i.test(normalized)) return false;
+  if (/^-?\d{1,2}\s*%\s*-?\d{0,2}\s*%?\s*auf\b/i.test(normalized)) return false;
 
   return !(
     /\bangebote?\s+gueltig\b/i.test(normalized)
@@ -719,7 +761,9 @@ function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 's
       })
       : '';
     const quantityText = extractedQuantityText || fallbackQuantityText;
-    const title = stripGenericPriceReducedMarketingPrefix(rawTitle, { price, quantityText });
+    const title = stripGenericPdfTitleFragments(
+      stripGenericPriceReducedMarketingPrefix(rawTitle, { price, quantityText })
+    );
     const genericConditionsText = extractGenericConditionsText(blockLines);
 
     if (!isPlausibleGenericFlyerTitle(title)) {
