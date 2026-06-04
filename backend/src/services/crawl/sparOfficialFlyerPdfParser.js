@@ -1087,8 +1087,13 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
 
   const candidates = [];
   const appCondition = 'Nur mit SPAR-App-Gutschein laut Flugblatt';
+  const freshValidToOverride = new Date('2026-06-06T21:59:59.999Z');
+  const freshCandidate = (data) => produceCandidate({
+    validToOverride: freshValidToOverride,
+    ...data,
+  });
 
-  addCandidate(candidates, page.pageNumber, produceCandidate({
+  addCandidate(candidates, page.pageNumber, freshCandidate({
     title: 'SPAR Nektarinen',
     brand: 'SPAR',
     price: 2.49,
@@ -1099,7 +1104,7 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
     searchKeywords: 'SPAR Nektarinen Obst Gemuese Steinobst 1 kg',
   }));
 
-  addCandidate(candidates, page.pageNumber, produceCandidate({
+  addCandidate(candidates, page.pageNumber, freshCandidate({
     title: 'Bio-Beilagenkartoffel aus Oesterreich',
     brand: 'SPAR Natur pur',
     price: 1.29,
@@ -1110,7 +1115,7 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
     searchKeywords: 'Bio Beilagenkartoffel Kartoffel Oesterreich Obst Gemuese 1 kg',
   }));
 
-  addCandidate(candidates, page.pageNumber, produceCandidate({
+  addCandidate(candidates, page.pageNumber, freshCandidate({
     title: 'Radieschen aus Oesterreich',
     brand: '',
     price: 0.89,
@@ -1121,7 +1126,7 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
     searchKeywords: 'Radieschen Bund Oesterreich Obst Gemuese',
   }));
 
-  addCandidate(candidates, page.pageNumber, produceCandidate({
+  addCandidate(candidates, page.pageNumber, freshCandidate({
     title: 'Bio-Zitronen zur Hollerbluete',
     brand: 'SPAR Natur pur',
     price: 1.29,
@@ -1132,7 +1137,7 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
     searchKeywords: 'Bio Zitronen Hollerbluete Zitrus Obst 500 g',
   }));
 
-  addCandidate(candidates, page.pageNumber, produceCandidate({
+  addCandidate(candidates, page.pageNumber, freshCandidate({
     title: 'ZESPRI Kiwi Gold',
     brand: 'ZESPRI',
     price: 2.49,
@@ -1144,7 +1149,7 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
     searchKeywords: 'ZESPRI Kiwi Gold Obst Gemuese 4 Stueck SPAR-App-Gutschein',
   }));
 
-  addCandidate(candidates, page.pageNumber, produceCandidate({
+  addCandidate(candidates, page.pageNumber, freshCandidate({
     title: 'S-BUDGET Spitzpaprika Rot',
     brand: 'S-BUDGET',
     price: 1.99,

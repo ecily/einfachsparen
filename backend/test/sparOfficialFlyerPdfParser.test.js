@@ -1367,6 +1367,7 @@ test('accepts current SPAR KW23 fruit and vegetable official PDF text layer', ()
   }
 
   assert.equal(byTitle.get('SPAR Nektarinen').priceCurrent.amount, 2.49);
+  assert.equal(byTitle.get('SPAR Nektarinen').validTo.toISOString(), '2026-06-06T21:59:59.999Z');
   assert.equal(byTitle.get('Bio-Zitronen zur Hollerbluete').quantityText, '500 g');
   assert.equal(byTitle.get('Radieschen aus Oesterreich').quality.comparisonSafe, false);
   assert.match(byTitle.get('ZESPRI Kiwi Gold').conditionsText, /SPAR-App-Gutschein/);
