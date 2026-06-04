@@ -940,3 +940,87 @@ test('executeCrawlRun marks timed-out runs failed and releases the global lock',
   assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-failed');
   assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
 });
+
+test('executeCrawlRun finalizes partial publish when one source timed out but crawl continues', async () => {
+  const runId = new mongoose.Types.ObjectId();
+  const originals = {
+    crawlRunFindByIdAndUpdate: CrawlRun.findByIdAndUpdate,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const runUpdates = [];
+  const lockUpdates = [];
+  const offerUpdates = [];
+
+  CrawlRunLock.updateOne = async (filter, update) => {
+    lockUpdates.push({ filter, update });
+    return { modifiedCount: 1 };
+  };
+  CrawlRun.findByIdAndUpdate = async (id, update) => {
+    runUpdates.push({ id, update });
+    return { modifiedCount: 1 };
+  };
+  CrawlRun.findById = async () => ({ _id: runId, mode: 'full' });
+  Offer.updateMany = async (filter, update) => {
+    offerUpdates.push({ filter, update });
+    return { matchedCount: 4, modifiedCount: 4 };
+  };
+
+  try {
+    await executeCrawlRun({
+      runId,
+      trigger: 'scheduled',
+      region: 'AT',
+      crawlAllSourcesImpl: async () => ({
+        sources: [
+          {
+            sourceId: 'source-timeout',
+            sourceKey: 'billa-plus-official-site',
+            retailerKey: 'billa-plus',
+            channel: 'official-site',
+            sourceType: 'offers-page',
+            status: 'failed',
+            error: 'Crawl source timed out after 600000ms: billa-plus-official-site',
+            failureStage: 'source-timeout',
+          },
+          {
+            sourceId: 'source-ok',
+            sourceKey: 'billa-official-site',
+            retailerKey: 'billa',
+            channel: 'official-site',
+            sourceType: 'offers-page',
+            status: 'success',
+            foundRawItems: 1,
+            parsedOffers: 1,
+            offersStored: 1,
+          },
+        ],
+        matchedSources: [
+          { sourceId: 'source-timeout', sourceKey: 'billa-plus-official-site', retailerKey: 'billa-plus', channel: 'official-site', sourceType: 'offers-page' },
+          { sourceId: 'source-ok', sourceKey: 'billa-official-site', retailerKey: 'billa', channel: 'official-site', sourceType: 'offers-page' },
+        ],
+        sourceCoverage: { activeEligibleSources: 2 },
+        filterMetadata: { ok: true },
+      }),
+    });
+  } finally {
+    CrawlRun.findByIdAndUpdate = originals.crawlRunFindByIdAndUpdate;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+
+  const partialUpdate = runUpdates.find((call) => call.update?.$set?.status === 'partial');
+
+  assert.ok(partialUpdate);
+  assert.equal(partialUpdate.update.$set.summary.failedSourcesCount, 1);
+  assert.equal(partialUpdate.update.$set.result.sources[0].failureStage, 'source-timeout');
+  assert.ok(runUpdates.some((call) =>
+    call.update?.$set?.['metadata.progress']?.stage === 'publish-status-finished'
+    && call.update.$set['metadata.progress'].runStatus === 'partial'
+  ));
+  assert.equal(offerUpdates.length, 1);
+  assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-partial');
+  assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
+});

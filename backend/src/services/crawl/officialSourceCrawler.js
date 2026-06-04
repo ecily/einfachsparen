@@ -3543,12 +3543,23 @@ function parseHoferOffersFromPage({
   return offers;
 }
 
-async function fetchHtml(url) {
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return;
+  const error = new Error('Crawl source was aborted after exceeding its source timeout.');
+  error.code = 'CRAWL_SOURCE_ABORTED';
+  error.diagnostic = {
+    failureStage: 'source-timeout',
+  };
+  throw error;
+}
+
+async function fetchHtml(url, { signal = null } = {}) {
   let response;
 
   try {
     response = await axios.get(url, {
       timeout: 30000,
+      ...(signal ? { signal } : {}),
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/json',
@@ -4108,7 +4119,7 @@ function buildBillaNormalizedUnitPrice(hit, currentPrice) {
   };
 }
 
-async function fetchBillaAlgoliaPromotionHits() {
+async function fetchBillaAlgoliaPromotionHits({ signal = null } = {}) {
   const endpoint = 'https://1L8FZ3LLKJ-dsn.algolia.net/1/indexes/prod_product_search/query';
   const headers = {
     'X-Algolia-API-Key': '4872917f97ea7474bd5a4efd496e16fb',
@@ -4130,6 +4141,7 @@ async function fetchBillaAlgoliaPromotionHits() {
       {
         timeout: 30000,
         headers,
+        ...(signal ? { signal } : {}),
       }
     );
 
@@ -4737,8 +4749,10 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
   return overrideResult.offer || null;
 }
 
-async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html = '', pageUrl = '' }) {
-  const hits = await fetchBillaAlgoliaPromotionHits();
+async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html = '', pageUrl = '', signal = null }) {
+  throwIfAborted(signal);
+  const hits = await fetchBillaAlgoliaPromotionHits({ signal });
+  throwIfAborted(signal);
   const htmlPromotionResult = html
     ? extractBillaActionTeasersFromHtml({
       html,
@@ -4756,6 +4770,7 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html =
     sample: hits.slice(0, 25),
   };
 
+  throwIfAborted(signal);
   await createCompactRawDocument({
     sourceId: source._id,
     crawlJobId,
@@ -4796,6 +4811,7 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html =
     normalizationVersion: NORMALIZATION_VERSION,
   });
 
+  throwIfAborted(signal);
   const refreshResult = await replaceOffersForSource({
     sourceId: source._id,
     offerDocuments,
@@ -6049,7 +6065,7 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
   };
 }
 
-async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRunId = null }) {
+async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRunId = null, signal = null }) {
   const crawlJob = await CrawlJob.create({
     crawlRunId,
     sourceId: source._id,
@@ -6064,6 +6080,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
 
   try {
     await clearRawDocumentsForSource(source._id);
+    throwIfAborted(signal);
 
     if (isSparOfficialPdfSource(source)) {
       const sparPdfResult = await crawlSparOfficialPdfSource({
@@ -6150,7 +6167,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       };
     }
 
-    const { response, html, canonicalUrl } = await fetchHtml(source.sourceUrl);
+    const { response, html, canonicalUrl } = await fetchHtml(source.sourceUrl, { signal });
+    throwIfAborted(signal);
     const httpLog = buildHttpLogFromResponse(response, html);
     const links = extractRelevantLinks({
       html,
@@ -6236,6 +6254,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         region,
         html,
         pageUrl: canonicalUrl,
+        signal,
       });
 
       offersStored += billaOfficialResult.offerDocuments.length;

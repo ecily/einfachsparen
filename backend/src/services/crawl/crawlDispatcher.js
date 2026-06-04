@@ -1,5 +1,6 @@
 const Source = require('../../models/Source');
 const Offer = require('../../models/Offer');
+const CrawlJob = require('../../models/CrawlJob');
 const { crawlAktionsfinderSource } = require('./aktionsfinderCrawler');
 const { crawlOfficialSource } = require('./officialSourceCrawler');
 const { crawlMarktguruSource } = require('./marketguruCrawler');
@@ -9,10 +10,15 @@ const { rebuildFilterMetadata } = require('../filters/filterMetadataService');
 const { clearRankingResponseCache } = require('../offers/offerRankingService');
 const { ensureManualCategoryOverrideCacheLoaded } = require('../quality/manualCategoryOverrideService');
 const {
+  deriveSourceKey,
   resolveCrawlSourceSelection,
   summarizeSource,
 } = require('./crawlSourceSelection');
 const logger = require('../../lib/logger');
+
+const DEFAULT_SOURCE_TIMEOUT_MS = 10 * 60 * 1000;
+const MIN_SOURCE_TIMEOUT_MS = 250;
+const SOURCE_TIMEOUT_ERROR_CODE = 'CRAWL_SOURCE_TIMEOUT';
 
 async function reportCrawlProgress(onProgress, progress) {
   if (typeof onProgress !== 'function') {
@@ -29,7 +35,7 @@ async function reportCrawlProgress(onProgress, progress) {
   }
 }
 
-async function crawlSource({ source, region, trigger = 'manual', crawlRunId = null }) {
+async function crawlSource({ source, region, trigger = 'manual', crawlRunId = null, signal = null }) {
   if (source.channel === 'aggregator') {
     if (String(source.sourceUrl || '').includes('marktguru.at/')) {
       return crawlMarktguruSource({ source, region, trigger, crawlRunId });
@@ -43,18 +49,158 @@ async function crawlSource({ source, region, trigger = 'manual', crawlRunId = nu
   }
 
   if (source.channel === 'official-site' || source.channel === 'official-flyer') {
-    return crawlOfficialSource({ source, region, trigger, crawlRunId });
+    return crawlOfficialSource({ source, region, trigger, crawlRunId, signal });
   }
 
-  return crawlOfficialSource({ source, region, trigger, crawlRunId });
+  return crawlOfficialSource({ source, region, trigger, crawlRunId, signal });
 }
 
-async function fetchDisabledSourcesForRetailers({ retailerKeys = [] } = {}) {
+function sourceIdString(source = {}) {
+  return String(source?._id || source?.id || '');
+}
+
+function sourceTimeoutMs(source = {}) {
+  const configured = Number(
+    source?.crawlPolicy?.sourceTimeoutMs
+    ?? source?.crawlPolicy?.maxSourceRuntimeMs
+    ?? source?.crawlPolicy?.sourceTimeoutMillis
+    ?? DEFAULT_SOURCE_TIMEOUT_MS
+  );
+
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_SOURCE_TIMEOUT_MS;
+  }
+
+  return Math.max(MIN_SOURCE_TIMEOUT_MS, Math.round(configured));
+}
+
+function createSourceTimeoutError({ source = {}, timeoutMs = DEFAULT_SOURCE_TIMEOUT_MS } = {}) {
+  const sourceKey = deriveSourceKey(source);
+  const error = new Error(`Crawl source timed out after ${timeoutMs}ms: ${sourceKey}`);
+  error.code = SOURCE_TIMEOUT_ERROR_CODE;
+  error.diagnostic = {
+    failureStage: 'source-timeout',
+    timeoutMs,
+    sourceKey,
+    sourceId: sourceIdString(source),
+    sourceUrl: source.sourceUrl || '',
+  };
+  return error;
+}
+
+function isSourceTimeoutError(error) {
+  return error?.code === SOURCE_TIMEOUT_ERROR_CODE;
+}
+
+async function withSourceTimeout(task, { source = {}, timeoutMs = sourceTimeoutMs(source) } = {}) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  let timeoutId = null;
+
+  try {
+    return await Promise.race([
+      task({ signal: controller?.signal || null }),
+      new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          if (controller) {
+            controller.abort();
+          }
+          reject(createSourceTimeoutError({ source, timeoutMs }));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function markRunningSourceJobTimedOut({
+  CrawlJobModel = CrawlJob,
+  source = {},
+  crawlRunId = null,
+  trigger = 'manual',
+  region = '',
+  error,
+  now = new Date(),
+} = {}) {
+  if (!CrawlJobModel || typeof CrawlJobModel.updateOne !== 'function') {
+    return { matchedCount: 0, modifiedCount: 0, skipped: true };
+  }
+
+  const sourceId = source?._id || source?.id || null;
+  if (!sourceId || !crawlRunId) {
+    return { matchedCount: 0, modifiedCount: 0, skipped: true };
+  }
+
+  const timeoutMs = Number(error?.diagnostic?.timeoutMs || 0) || sourceTimeoutMs(source);
+  const update = {
+    $set: {
+      status: 'failed',
+      finishedAt: now,
+      sourceType: source.sourceType || source.channel || '',
+      sourceUrl: source.sourceUrl || '',
+      parserVersion: '',
+      normalizationVersion: '',
+      'stats.errors': 1,
+      'stats.warnings': 1,
+      'httpLog.finalUrl': source.sourceUrl || '',
+      metadata: {
+        sourceLabel: source.label || '',
+        sourceUrl: source.sourceUrl || '',
+        sourceTimeout: {
+          timedOutAt: now,
+          timeoutMs,
+          reason: 'source-timeout',
+        },
+      },
+    },
+    $push: {
+      errorMessages: error?.message || `Crawl source timed out after ${timeoutMs}ms.`,
+      warningMessages: 'Source timed out and was marked failed so the CrawlRun can continue.',
+    },
+  };
+
+  const result = await CrawlJobModel.updateOne(
+    {
+      crawlRunId,
+      sourceId,
+      status: 'running',
+    },
+    update
+  );
+
+  const matched = Number(result?.matchedCount ?? result?.n ?? 0);
+  if (matched > 0 || typeof CrawlJobModel.create !== 'function') {
+    return result;
+  }
+
+  return CrawlJobModel.create({
+    crawlRunId,
+    sourceId,
+    retailerKey: source.retailerKey || '',
+    region,
+    trigger,
+    status: 'failed',
+    finishedAt: now,
+    sourceType: source.sourceType || source.channel || '',
+    sourceUrl: source.sourceUrl || '',
+    stats: {
+      errors: 1,
+      warnings: 1,
+    },
+    errorMessages: [error?.message || `Crawl source timed out after ${timeoutMs}ms.`],
+    warningMessages: ['Source timed out before a running CrawlJob could be updated.'],
+    metadata: update.$set.metadata,
+  });
+}
+
+async function fetchDisabledSourcesForRetailers({ retailerKeys = [], SourceModel = Source } = {}) {
   const disabledFilter = retailerKeys.length > 0
     ? { active: true, enabled: false, retailerKey: { $in: retailerKeys } }
     : { active: true, enabled: false };
 
-  return Source.find(disabledFilter)
+  return SourceModel.find(disabledFilter)
       .select('retailerKey retailerName channel label sourceUrl sourceType sourceRetailerFormat enabled active disabledReason notes latestStatus latestRunAt')
       .sort({ retailerName: 1, label: 1 })
       .lean();
@@ -71,16 +217,24 @@ async function crawlAllSources({
   trigger = 'manual',
   crawlRunId = null,
   onProgress = null,
+  crawlSourceImpl = crawlSource,
+  CrawlJobModel = CrawlJob,
+  SourceModel = Source,
+  OfferModel = Offer,
+  dedupeOffersAcrossSourcesImpl = dedupeOffersAcrossSources,
+  rebuildFilterMetadataImpl = rebuildFilterMetadata,
+  clearRankingResponseCacheImpl = clearRankingResponseCache,
+  ensureManualCategoryOverrideCacheLoadedImpl = ensureManualCategoryOverrideCacheLoaded,
 } = {}) {
   const sourceCoverage = {
-    totalRegisteredSources: await Source.countDocuments({ active: true }),
-    activeEligibleSources: await Source.countDocuments({ active: true, enabled: { $ne: false } }),
-    disabledSourcesCount: await Source.countDocuments({ active: true, enabled: false }),
+    totalRegisteredSources: await SourceModel.countDocuments({ active: true }),
+    activeEligibleSources: await SourceModel.countDocuments({ active: true, enabled: { $ne: false } }),
+    disabledSourcesCount: await SourceModel.countDocuments({ active: true, enabled: false }),
   };
   const sourceSelectionRequested = explicitSourceSelectionRequested || sourceKeys.length > 0 || sourceIds.length > 0;
   const selection = await resolveCrawlSourceSelection({
-    Source,
-    Offer,
+    Source: SourceModel,
+    Offer: OfferModel,
     retailerKeys,
     sourceKeys,
     sourceIds,
@@ -107,7 +261,7 @@ async function crawlAllSources({
     };
   }
 
-  await ensureManualCategoryOverrideCacheLoaded();
+  await ensureManualCategoryOverrideCacheLoadedImpl();
   const prioritizedSources = selection.sources;
   const results = [];
 
@@ -119,7 +273,7 @@ async function crawlAllSources({
   if (prioritizedSources.length === 0) {
     const disabledSources = sourceSelectionRequested
       ? selection.disabledSources
-      : (await fetchDisabledSourcesForRetailers({ retailerKeys })).map((source) => ({
+      : (await fetchDisabledSourcesForRetailers({ retailerKeys, SourceModel })).map((source) => ({
         ...summarizeSource(source),
         skippedReason: 'disabled-source',
       }));
@@ -152,7 +306,11 @@ async function crawlAllSources({
     const sourceSummary = summarizeSource(source);
 
     try {
-      const result = await crawlSource({ source, region, trigger, crawlRunId });
+      const timeoutMs = sourceTimeoutMs(source);
+      const result = await withSourceTimeout(
+        ({ signal }) => crawlSourceImpl({ source, region, trigger, crawlRunId, signal }),
+        { source, timeoutMs }
+      );
       results.push({
         ...sourceSummary,
         ...result,
@@ -160,6 +318,16 @@ async function crawlAllSources({
       });
     } catch (error) {
       const diagnostic = error.diagnostic || {};
+      if (isSourceTimeoutError(error)) {
+        await markRunningSourceJobTimedOut({
+          CrawlJobModel,
+          source,
+          crawlRunId,
+          trigger,
+          region,
+          error,
+        });
+      }
       results.push({
         ...sourceSummary,
         retailerKey: source.retailerKey,
@@ -195,7 +363,7 @@ async function crawlAllSources({
     stage: 'dedupe-started',
     retailerKeys: effectiveRetailerKeys,
   });
-  const dedupeResult = await dedupeOffersAcrossSources({ retailerKeys: effectiveRetailerKeys, crawlRunId });
+  const dedupeResult = await dedupeOffersAcrossSourcesImpl({ retailerKeys: effectiveRetailerKeys, crawlRunId });
   await reportCrawlProgress(onProgress, {
     stage: 'dedupe-finished',
     duplicateGroups: dedupeResult.duplicateGroups,
@@ -210,7 +378,7 @@ async function crawlAllSources({
     await reportCrawlProgress(onProgress, {
       stage: 'filter-metadata-started',
     });
-    const syncResult = await rebuildFilterMetadata({
+    const syncResult = await rebuildFilterMetadataImpl({
       trigger: `crawl:${trigger}`,
       loggerContext: {
         region,
@@ -224,7 +392,7 @@ async function crawlAllSources({
       skipped: false,
       ...syncResult,
     };
-    clearRankingResponseCache();
+    clearRankingResponseCacheImpl();
     await reportCrawlProgress(onProgress, {
       stage: 'filter-metadata-finished',
       processedOffers: syncResult.processedOffers,
@@ -252,7 +420,7 @@ async function crawlAllSources({
   }
   const disabledSources = sourceSelectionRequested
     ? selection.disabledSources
-    : (await fetchDisabledSourcesForRetailers({ retailerKeys })).map((source) => ({
+    : (await fetchDisabledSourcesForRetailers({ retailerKeys, SourceModel })).map((source) => ({
       ...summarizeSource(source),
       skippedReason: 'disabled-source',
     }));
@@ -275,4 +443,13 @@ module.exports = {
   crawlAllSources,
   crawlSource,
   fetchDisabledSourcesForRetailers,
+  _private: {
+    DEFAULT_SOURCE_TIMEOUT_MS,
+    SOURCE_TIMEOUT_ERROR_CODE,
+    createSourceTimeoutError,
+    isSourceTimeoutError,
+    markRunningSourceJobTimedOut,
+    sourceTimeoutMs,
+    withSourceTimeout,
+  },
 };
