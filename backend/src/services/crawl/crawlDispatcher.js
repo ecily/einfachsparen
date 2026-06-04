@@ -20,6 +20,9 @@ const logger = require('../../lib/logger');
 const DEFAULT_SOURCE_TIMEOUT_MS = 10 * 60 * 1000;
 const MIN_SOURCE_TIMEOUT_MS = 250;
 const SOURCE_TIMEOUT_ERROR_CODE = 'CRAWL_SOURCE_TIMEOUT';
+const FULL_CRAWL_BOUNDED_SOURCE_KEYS = new Set([
+  'spar-official-flyer-pdf',
+]);
 
 async function reportCrawlProgress(onProgress, progress) {
   if (typeof onProgress !== 'function') {
@@ -93,6 +96,15 @@ function isSourceTimeoutError(error) {
   return error?.code === SOURCE_TIMEOUT_ERROR_CODE;
 }
 
+function isFullCrawlBoundedSource(source = {}) {
+  const sourceKey = deriveSourceKey(source);
+  return (
+    FULL_CRAWL_BOUNDED_SOURCE_KEYS.has(sourceKey)
+    || source?.crawlPolicy?.fullCrawlDisabled === true
+    || source?.crawlPolicy?.scopedOnly === true
+  );
+}
+
 function buildSourceProgress(source = {}, index = 0, total = 0, startedAt = new Date()) {
   return {
     sourceIndex: index,
@@ -104,6 +116,35 @@ function buildSourceProgress(source = {}, index = 0, total = 0, startedAt = new 
     currentSourceType: source.sourceType || '',
     currentSourceUrl: source.sourceUrl || '',
     currentSourceStartedAt: startedAt,
+  };
+}
+
+function buildBoundedSourceResult(sourceSummary = {}, source = {}) {
+  return {
+    ...sourceSummary,
+    retailerKey: source.retailerKey || sourceSummary.retailerKey,
+    retailerName: source.retailerName || sourceSummary.retailerName,
+    channel: source.channel || sourceSummary.channel,
+    sourceType: source.sourceType || sourceSummary.sourceType || '',
+    sourceUrl: source.sourceUrl || sourceSummary.sourceUrl,
+    offersStored: 0,
+    discoveredLinks: 0,
+    foundRawItems: 0,
+    parsedOffers: 0,
+    rejectedOffers: 0,
+    status: 'failed',
+    error: 'Source is scoped-only for crawl reliability and was not executed in full crawl.',
+    failureStage: 'source-bounded-before-execution',
+    httpStatus: null,
+    contentType: '',
+    finalUrl: source.sourceUrl || sourceSummary.sourceUrl,
+    diagnostic: {
+      failureStage: 'source-bounded-before-execution',
+      sourceKey: sourceSummary.sourceKey,
+      sourceId: sourceSummary.sourceId,
+      sourceUrl: source.sourceUrl || sourceSummary.sourceUrl,
+      boundedReason: 'full-crawl-scoped-only-source',
+    },
   };
 }
 
@@ -128,6 +169,52 @@ async function withSourceTimeout(task, { source = {}, timeoutMs = sourceTimeoutM
       clearTimeout(timeoutId);
     }
   }
+}
+
+async function createBoundedSourceJob({
+  CrawlJobModel = CrawlJob,
+  source = {},
+  sourceSummary = summarizeSource(source),
+  crawlRunId = null,
+  trigger = 'manual',
+  region = '',
+  now = new Date(),
+} = {}) {
+  if (!CrawlJobModel || typeof CrawlJobModel.create !== 'function' || !crawlRunId || !sourceSummary.sourceId) {
+    return { skipped: true };
+  }
+
+  return CrawlJobModel.create({
+    crawlRunId,
+    sourceId: source._id || source.id || sourceSummary.sourceId,
+    retailerKey: source.retailerKey || sourceSummary.retailerKey,
+    region,
+    trigger,
+    status: 'failed',
+    startedAt: now,
+    finishedAt: now,
+    sourceType: source.sourceType || source.channel || sourceSummary.sourceType || '',
+    sourceUrl: source.sourceUrl || sourceSummary.sourceUrl,
+    stats: {
+      errors: 1,
+      warnings: 1,
+      rawCandidates: 0,
+      offersStored: 0,
+      rejected: 0,
+    },
+    errorMessages: ['Source is scoped-only for crawl reliability and was not executed in full crawl.'],
+    warningMessages: ['Source was bounded before execution so the full CrawlRun can terminalize.'],
+    metadata: {
+      sourceLabel: source.label || sourceSummary.label || '',
+      sourceUrl: source.sourceUrl || sourceSummary.sourceUrl,
+      sourceKey: sourceSummary.sourceKey,
+      boundedSource: {
+        boundedAt: now,
+        reason: 'full-crawl-scoped-only-source',
+        failureStage: 'source-bounded-before-execution',
+      },
+    },
+  });
 }
 
 async function markRunningSourceJobTimedOut({
@@ -333,6 +420,29 @@ async function crawlAllSources({
         timeoutMs,
       });
 
+      if (!sourceSelectionRequested && isFullCrawlBoundedSource(source)) {
+        await createBoundedSourceJob({
+          CrawlJobModel,
+          source,
+          sourceSummary,
+          crawlRunId,
+          trigger,
+          region,
+          now: currentSourceStartedAt,
+        });
+        const boundedResult = buildBoundedSourceResult(sourceSummary, source);
+        results.push(boundedResult);
+        await reportCrawlProgress(onProgress, {
+          stage: 'source-finished',
+          ...buildSourceProgress(source, index + 1, prioritizedSources.length, currentSourceStartedAt),
+          sourceStatus: 'failed',
+          failureStage: boundedResult.failureStage,
+          error: boundedResult.error,
+          finishedSourceCount: results.length,
+        });
+        continue;
+      }
+
       const result = useIsolatedSourceRunner
         ? await runSourceInChildProcessImpl({
           source,
@@ -498,8 +608,12 @@ module.exports = {
   _private: {
     DEFAULT_SOURCE_TIMEOUT_MS,
     SOURCE_TIMEOUT_ERROR_CODE,
+    FULL_CRAWL_BOUNDED_SOURCE_KEYS,
+    buildBoundedSourceResult,
     createSourceTimeoutError,
+    createBoundedSourceJob,
     isSourceTimeoutError,
+    isFullCrawlBoundedSource,
     markRunningSourceJobTimedOut,
     buildSourceProgress,
     sourceTimeoutMs,

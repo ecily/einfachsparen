@@ -314,6 +314,99 @@ test('crawlAllSources marks isolated source process timeout failed and continues
   assert.equal(result.filterMetadata.ok, true);
 });
 
+test('crawlAllSources bounds scoped-only SPAR PDF source before full crawl execution', async () => {
+  const runId = new mongoose.Types.ObjectId();
+  const sparSourceId = new mongoose.Types.ObjectId();
+  const okSourceId = new mongoose.Types.ObjectId();
+  const sources = [
+    {
+      _id: sparSourceId,
+      active: true,
+      enabled: true,
+      retailerKey: 'spar',
+      retailerName: 'SPAR',
+      channel: 'official-flyer',
+      sourceType: 'pdf',
+      sourceRetailerFormat: 'spar',
+      sourceUrl: 'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/getPdf.ashx',
+      label: 'SPAR Flugblatt PDF',
+    },
+    {
+      _id: okSourceId,
+      active: true,
+      enabled: true,
+      retailerKey: 'billa',
+      retailerName: 'BILLA',
+      channel: 'official-site',
+      sourceType: 'offers-page',
+      sourceUrl: 'https://www.billa.at/unsere-aktionen/aktionen',
+      label: 'BILLA Aktionen',
+    },
+  ];
+  const createdJobs = [];
+  const sourceCalls = [];
+
+  const result = await crawlAllSources({
+    region: 'AT',
+    trigger: 'scheduled',
+    crawlRunId: runId,
+    SourceModel: {
+      async countDocuments(filter) {
+        if (filter?.enabled === false) return 0;
+        return sources.length;
+      },
+      find(filter = {}) {
+        return makeSourceQuery(filter?.enabled === false ? [] : sources);
+      },
+    },
+    OfferModel: {
+      async aggregate() {
+        return [];
+      },
+    },
+    CrawlJobModel: {
+      async create(document) {
+        createdJobs.push(document);
+        return document;
+      },
+    },
+    async runSourceInChildProcessImpl({ source }) {
+      sourceCalls.push(source);
+      return {
+        sourceId: String(source._id),
+        retailerKey: source.retailerKey,
+        retailerName: source.retailerName,
+        channel: source.channel,
+        sourceType: source.sourceType,
+        status: 'success',
+        foundRawItems: 1,
+        parsedOffers: 1,
+        offersStored: 1,
+      };
+    },
+    async dedupeOffersAcrossSourcesImpl() {
+      return { duplicateGroups: 0, removedOffers: 0 };
+    },
+    async rebuildFilterMetadataImpl() {
+      return { ok: true, processedOffers: 1 };
+    },
+    clearRankingResponseCacheImpl() {},
+    async ensureManualCategoryOverrideCacheLoadedImpl() {},
+  });
+
+  assert.equal(result.sources.length, 2);
+  assert.equal(result.sources[0].sourceKey, 'spar-official-flyer-pdf');
+  assert.equal(result.sources[0].status, 'failed');
+  assert.equal(result.sources[0].failureStage, 'source-bounded-before-execution');
+  assert.equal(result.sources[0].diagnostic.boundedReason, 'full-crawl-scoped-only-source');
+  assert.equal(result.sources[1].status, 'success');
+  assert.equal(sourceCalls.length, 1);
+  assert.equal(sourceCalls[0]._id, okSourceId);
+  assert.equal(createdJobs.length, 1);
+  assert.equal(createdJobs[0].status, 'failed');
+  assert.equal(createdJobs[0].metadata.boundedSource.failureStage, 'source-bounded-before-execution');
+});
+
 test('source timeout helper keeps configured source timeout bounded', () => {
   assert.equal(_private.sourceTimeoutMs({ crawlPolicy: { sourceTimeoutMs: 1 } }), 250);
   assert.equal(_private.sourceTimeoutMs({ crawlPolicy: { sourceTimeoutMs: 2000 } }), 2000);

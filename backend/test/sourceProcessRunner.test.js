@@ -11,6 +11,7 @@ class FakeChild extends EventEmitter {
     this.sent = null;
     this.killed = false;
     this.killSignal = '';
+    this.pid = Math.floor(Math.random() * 100000) + 1000;
   }
 
   send(message) {
@@ -28,7 +29,8 @@ class FakeChild extends EventEmitter {
 
 test('runSourceInChildProcess resolves source worker results', async () => {
   let child = null;
-  const source = { _id: 'source-1', sourceUrl: 'https://example.test/a' };
+  let watchdog = null;
+  const source = { _id: 'source-1', sourceUrl: 'https://example.test/a', metadata: { oversized: true } };
   const result = await runSourceInChildProcess({
     source,
     region: 'AT',
@@ -36,24 +38,43 @@ test('runSourceInChildProcess resolves source worker results', async () => {
     crawlRunId: 'run-1',
     timeoutMs: 100,
     forkImpl(workerPath, args, options) {
+      assert.equal(args.length, 0);
+      assert.equal(options.stdio[3], 'ipc');
+      if (/sourceWatchdogProcess\.js$/.test(workerPath)) {
+        watchdog = new FakeChild();
+        return watchdog;
+      }
       child = new FakeChild({
         response: {
           ok: true,
           result: { status: 'success', offersStored: 1 },
         },
       });
-      assert.equal(args.length, 0);
-      assert.equal(options.stdio[3], 'ipc');
-      assert.match(workerPath, /sourceWorkerProcess\.js$/);
       return child;
     },
   });
 
   assert.deepEqual(result, { status: 'success', offersStored: 1 });
-  assert.equal(child.sent.source, source);
+  assert.deepEqual(child.sent.source, {
+    _id: 'source-1',
+    retailerKey: '',
+    retailerName: '',
+    channel: '',
+    label: '',
+    sourceUrl: 'https://example.test/a',
+    sourceType: '',
+    sourceRetailerFormat: '',
+    parserHint: '',
+    active: true,
+    enabled: true,
+    crawlPolicy: {},
+  });
   assert.equal(child.sent.region, 'AT');
   assert.equal(child.sent.trigger, 'scheduled');
   assert.equal(child.sent.crawlRunId, 'run-1');
+  assert.equal(watchdog.sent.targetPid, child.pid);
+  assert.equal(watchdog.sent.timeoutMs, 100);
+  assert.equal(watchdog.killed, true);
   assert.equal(child.killed, false);
 });
 
@@ -67,7 +88,10 @@ test('runSourceInChildProcess kills and rejects timed-out source workers', async
       trigger: 'scheduled',
       crawlRunId: 'run-timeout',
       timeoutMs: 20,
-      forkImpl() {
+      forkImpl(workerPath) {
+        if (/sourceWatchdogProcess\.js$/.test(workerPath)) {
+          return new FakeChild();
+        }
         child = new FakeChild();
         return child;
       },
@@ -93,7 +117,10 @@ test('runSourceInChildProcess rejects worker-reported source errors', async () =
       trigger: 'manual',
       crawlRunId: 'run-error',
       timeoutMs: 100,
-      forkImpl() {
+      forkImpl(workerPath) {
+        if (/sourceWatchdogProcess\.js$/.test(workerPath)) {
+          return new FakeChild();
+        }
         return new FakeChild({
           response: {
             ok: false,

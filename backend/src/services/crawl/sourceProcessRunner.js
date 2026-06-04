@@ -1,9 +1,12 @@
 const { fork } = require('node:child_process');
+const os = require('node:os');
 const path = require('node:path');
 
 const WORKER_PATH = path.join(__dirname, 'sourceWorkerProcess.js');
+const WATCHDOG_PATH = path.join(__dirname, 'sourceWatchdogProcess.js');
 const CHILD_EXIT_GRACE_MS = 1500;
 const SOURCE_TIMEOUT_ERROR_CODE = 'CRAWL_SOURCE_TIMEOUT';
+const CHILD_NICE_PRIORITY = 10;
 
 function createSourceTimeoutError({ source = {}, timeoutMs = 0 } = {}) {
   const error = new Error(`Crawl source process timed out after ${timeoutMs}ms.`);
@@ -25,6 +28,36 @@ function createChildFailureError(payload = {}) {
   return error;
 }
 
+function serializeSourceForWorker(source = {}) {
+  return {
+    _id: String(source._id || source.id || ''),
+    retailerKey: source.retailerKey || '',
+    retailerName: source.retailerName || '',
+    channel: source.channel || '',
+    label: source.label || '',
+    sourceUrl: source.sourceUrl || '',
+    sourceType: source.sourceType || '',
+    sourceRetailerFormat: source.sourceRetailerFormat || '',
+    parserHint: source.parserHint || '',
+    active: source.active !== false,
+    enabled: source.enabled !== false,
+    crawlPolicy: source.crawlPolicy || {},
+  };
+}
+
+function lowerChildPriority(child, setPriorityImpl = os.setPriority) {
+  if (!child?.pid || typeof setPriorityImpl !== 'function') {
+    return false;
+  }
+
+  try {
+    setPriorityImpl(child.pid, CHILD_NICE_PRIORITY);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function stopChild(child, signal = 'SIGKILL') {
   if (!child || child.killed) {
     return;
@@ -44,10 +77,17 @@ function runSourceInChildProcess({
   crawlRunId = null,
   timeoutMs,
   forkImpl = fork,
+  setPriorityImpl = os.setPriority,
   workerPath = WORKER_PATH,
+  watchdogPath = WATCHDOG_PATH,
 } = {}) {
   return new Promise((resolve, reject) => {
     const child = forkImpl(workerPath, [], {
+      execArgv: [],
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    });
+    lowerChildPriority(child, setPriorityImpl);
+    const watchdog = forkImpl(watchdogPath, [], {
       execArgv: [],
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     });
@@ -61,6 +101,7 @@ function runSourceInChildProcess({
       settled = true;
       stopChild(child);
       exitTimer = setTimeout(() => stopChild(child), CHILD_EXIT_GRACE_MS);
+      stopChild(watchdog);
       reject(createSourceTimeoutError({ source, timeoutMs }));
     }, timeoutMs);
 
@@ -72,6 +113,9 @@ function runSourceInChildProcess({
       child.removeAllListeners('message');
       child.removeAllListeners('error');
       child.removeAllListeners('exit');
+      watchdog.removeAllListeners('error');
+      watchdog.removeAllListeners('exit');
+      stopChild(watchdog);
     }
 
     child.once('message', (message = {}) => {
@@ -117,11 +161,19 @@ function runSourceInChildProcess({
       reject(error);
     });
 
+    watchdog.once('error', () => {});
+    watchdog.once('exit', () => {});
+
     child.send({
-      source,
+      source: serializeSourceForWorker(source),
       region,
       trigger,
       crawlRunId,
+    });
+    watchdog.send({
+      targetPid: child.pid,
+      timeoutMs,
+      signal: 'SIGKILL',
     });
   });
 }
@@ -130,9 +182,12 @@ module.exports = {
   runSourceInChildProcess,
   _private: {
     CHILD_EXIT_GRACE_MS,
+    CHILD_NICE_PRIORITY,
     SOURCE_TIMEOUT_ERROR_CODE,
     createChildFailureError,
     createSourceTimeoutError,
+    lowerChildPriority,
+    serializeSourceForWorker,
     stopChild,
   },
 };
