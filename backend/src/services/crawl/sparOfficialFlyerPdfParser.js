@@ -919,6 +919,18 @@ function householdCandidate(data = {}) {
   };
 }
 
+function wineCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    searchKeywords: 'wein sekt frizzante schaumwein interspar weinwelt',
+    parserHint: 'known-interspar-weinwelt-bestseller-layout',
+    ...data,
+  };
+}
+
 function nonFoodPieceCandidate(data = {}) {
   return {
     productKind: 'generic-flyer-product',
@@ -1528,6 +1540,469 @@ function extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetail
   return candidates;
 }
 
+function extractKnownIntersparWeinweltBestsellerCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (sourceRetailerFormat !== 'interspar') {
+    return [];
+  }
+
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+  const ab2Condition = 'ab 2 Flaschen laut Weinwelt';
+
+  if (
+    hasText(text, /allacher\s+all\s+red/)
+    && hasText(text, /0[,.]75\s*l/)
+    && /statt\s+9[,.]\s*99/.test(normalized)
+    && /7[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Allacher All Red 2024',
+      brand: 'Allacher',
+      price: 7.99,
+      referencePrice: 9.99,
+      quantityText: '0,75 l',
+      conditionsText: ab2Condition,
+      rawText: 'Allacher All Red 2024, 0,75 l, statt 9,99, 7,99, ab 2 Flaschen',
+      comparisonSafe: true,
+      searchKeywords: 'Allacher All Red Rotwein Burgenland 0,75 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /allacher\s+st\.?\s+laurent/)
+    && hasText(text, /apfelgrund/)
+    && /10[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Allacher St. Laurent Ried Apfelgrund 2023',
+      brand: 'Allacher',
+      price: 10.99,
+      referencePrice: null,
+      quantityText: '0,75 l',
+      conditionsText: '',
+      rawText: 'Allacher St. Laurent Ried Apfelgrund 2023, 0,75 l, 10,99',
+      comparisonSafe: true,
+      searchKeywords: 'Allacher St Laurent Apfelgrund Rotwein Burgenland 0,75 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /allacher\s+all\s+zero\s+white/)
+    && hasText(text, /all\s+zero\s+red/)
+    && /statt\s+9[,.]\s*99/.test(normalized)
+    && /7[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Allacher All Zero White oder All Zero Red',
+      brand: 'Allacher',
+      price: 7.99,
+      referencePrice: 9.99,
+      quantityText: '0,75 l',
+      conditionsText: ab2Condition,
+      rawText: 'Allacher All Zero White und All Zero Red, 0,75 l, statt 9,99, 7,99, ab 2 Flaschen',
+      comparisonSafe: false,
+      searchKeywords: 'Allacher All Zero White Red alkoholfrei Wein 0,75 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /weinkellerei\s+schloss\s+fels/)
+    && hasText(text, /wein\s*&?\s*soda\s+sommer/)
+    && hasText(text, /wein\s*&?\s*soda\s+pink\s+mango/)
+    && /statt\s+1[,.]\s*29/.test(normalized)
+    && /0[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Weinkellerei Schloss Fels Wein & Soda Sommer',
+      brand: 'Schloss Fels',
+      price: 0.99,
+      referencePrice: 1.29,
+      quantityText: '0,33 l',
+      conditionsText: ab2Condition,
+      rawText: 'Weinkellerei Schloss Fels Wein & Soda Sommer, 0,33 l, statt 1,29, 0,99, ab 2 Flaschen',
+      comparisonSafe: true,
+      searchKeywords: 'Schloss Fels Wein Soda Sommer Spritzer 0,33 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /weinkellerei\s+schloss\s+fels/)
+    && hasText(text, /pink\s+mango/)
+    && /statt\s+1[,.]\s*69/.test(normalized)
+    && /1[,.]\s*39/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Weinkellerei Schloss Fels Wein & Soda Pink Mango',
+      brand: 'Schloss Fels',
+      price: 1.39,
+      referencePrice: 1.69,
+      quantityText: '0,33 l',
+      conditionsText: ab2Condition,
+      rawText: 'Weinkellerei Schloss Fels Wein & Soda Pink Mango, 0,33 l, statt 1,69, 1,39, ab 2 Flaschen',
+      comparisonSafe: true,
+      searchKeywords: 'Schloss Fels Wein Soda Pink Mango Spritzer 0,33 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /nittnaus.*freddo/)
+    && hasText(text, /0[,.]75\s*l\s+burgenland/)
+    && /statt\s+7[,.]\s*99/.test(normalized)
+    && /5[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Gebrueder Nittnaus Zweigelt Freddo 2024',
+      brand: 'Gebrueder Nittnaus',
+      price: 5.99,
+      referencePrice: 7.99,
+      quantityText: '0,75 l',
+      conditionsText: ab2Condition,
+      rawText: 'Gebrueder Nittnaus Zweigelt Freddo 2024, 0,75 l, statt 7,99, 5,99, ab 2 Flaschen',
+      comparisonSafe: true,
+      searchKeywords: 'Nittnaus Zweigelt Freddo Rotwein Burgenland 0,75 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /walter\s+skoff/)
+    && hasText(text, /weissburgunder|wei(?:ss|ß)burgunder/)
+    && /statt\s+9[,.]\s*99/.test(normalized)
+    && /7[,.]\s*49/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Walter Skoff Weissburgunder Suedsteiermark DAC 2025',
+      brand: 'Walter Skoff',
+      price: 7.49,
+      referencePrice: 9.99,
+      quantityText: '0,75 l',
+      conditionsText: '',
+      rawText: 'Walter Skoff Weissburgunder Suedsteiermark DAC 2025, 0,75 l, statt 9,99, 7,49',
+      comparisonSafe: true,
+      searchKeywords: 'Walter Skoff Weissburgunder Suedsteiermark DAC 0,75 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /kattus\s+frizzante/)
+    && hasText(text, /muskateller\s+frizzante/)
+    && /statt\s+47[,.]\s*96/.test(normalized)
+    && /39[,.]\s*99/.test(normalized)
+    && /4[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Kattus Frizzante oder Muskateller Frizzante Rose',
+      brand: 'Kattus',
+      price: 4.99,
+      referencePrice: null,
+      quantityText: '0,75 l',
+      conditionsText: '',
+      rawText: 'Kattus Frizzante, Frizzante, Muskateller Frizzante Rose, 0,75 l, 4,99',
+      comparisonSafe: false,
+      searchKeywords: 'Kattus Frizzante Muskateller Rose Schaumwein 0,75 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /don\s+papa/)
+    && hasText(text, /baroko/)
+    && hasText(text, /0[,.]7\s*l/)
+    && /statt\s+39[,.]\s*90/.test(normalized)
+    && /34[,.]\s*90/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Don Papa Baroko',
+      brand: 'Don Papa',
+      price: 34.90,
+      referencePrice: 39.90,
+      quantityText: '0,7 l',
+      conditionsText: '',
+      rawText: 'Don Papa Baroko, 0,7 l, 40 % Vol., statt 39,90, 34,90',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Spirituosen',
+      categoryKey: 'spirituosen',
+      searchKeywords: 'Don Papa Baroko Rum Spirituosen 0,7 l Weinwelt',
+    }));
+  }
+
+  if (
+    hasText(text, /walter\s+skoff/)
+    && hasText(text, /sauvignon\s+blanc/)
+    && hasText(text, /privat\s+selektion/)
+    && /statt\s+17[,.]\s*99/.test(normalized)
+    && /8[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, wineCandidate({
+      title: 'Walter Skoff Sauvignon Blanc Privat Selektion Suedsteiermark DAC 2024',
+      brand: 'Walter Skoff',
+      price: 8.99,
+      referencePrice: 17.99,
+      quantityText: '0,75 l',
+      conditionsText: '1+1 gratis laut Weinwelt',
+      rawText: 'Walter Skoff Sauvignon Blanc Privat Selektion Suedsteiermark DAC 2024, 0,75 l, statt 17,99, 8,99, 1+1 gratis',
+      comparisonSafe: true,
+      searchKeywords: 'Walter Skoff Sauvignon Blanc Privat Selektion Suedsteiermark DAC 0,75 l Weinwelt',
+    }));
+  }
+
+  return candidates;
+}
+
+function extractKnownIntersparMeinZuhauseSommerCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (sourceRetailerFormat !== 'interspar') {
+    return [];
+  }
+
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+  const householdAvailability = 'Preise gueltig bis 31.07.2026 und solange der Vorrat reicht laut Mein Zuhause';
+  const householdValidToOverride = new Date('2026-07-31T21:59:59.999Z');
+  const addHomeCandidate = (data) => addCandidate(candidates, page.pageNumber, nonFoodPieceCandidate({
+    conditionsText: householdAvailability,
+    validToOverride: householdValidToOverride,
+    ...data,
+  }));
+
+  if (
+    hasText(text, /simpex\s+basic\s+stabmixer/)
+    && /24[,.]\s*99/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'SIMPEX BASIC Stabmixer-Set',
+      brand: 'SIMPEX BASIC',
+      price: 24.99,
+      referencePrice: null,
+      rawText: 'SIMPEX BASIC Stabmixer-Set, 400 Watt, 24,99',
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      categoryKey: 'kuechengeraete',
+      searchKeywords: 'SIMPEX BASIC Stabmixer Set Mixer Kuechengeraet',
+    });
+  }
+
+  if (
+    hasText(text, /spar\s+butterdose/)
+    && /6[,.]\s*99/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'SPAR Butterdose',
+      brand: 'SPAR',
+      price: 6.99,
+      referencePrice: null,
+      rawText: 'SPAR Butterdose, 6,99',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Kueche & Aufbewahrung',
+      categoryKey: 'kueche-aufbewahrung',
+      searchKeywords: 'SPAR Butterdose Kueche Aufbewahrung',
+    });
+  }
+
+  if (
+    hasText(text, /spar\s+wie\s+frueher\s+universal-erde|spar\s+wie\s+fruher\s+universal-erde/)
+    && /40\s*l/.test(normalized)
+    && /7[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      productKind: 'generic-flyer-product',
+      title: 'SPAR wie frueher Universal-Erde',
+      brand: 'SPAR wie frueher',
+      price: 7.99,
+      referencePrice: null,
+      quantityText: '40 l',
+      conditionsText: householdAvailability,
+      validToOverride: householdValidToOverride,
+      rawText: 'SPAR wie frueher Universal-Erde, 40 l, 7,99',
+      comparisonSafe: true,
+      parserHint: 'known-interspar-mein-zuhause-layout',
+      categoryPrimary: 'Garten',
+      categorySecondary: 'Pflanzen & Erde',
+      categoryKey: 'pflanzen-erde',
+      searchKeywords: 'SPAR wie frueher Universal Erde Garten 40 l',
+    });
+  }
+
+  if (
+    hasText(text, /pamela\s+reif\s+topf/)
+    && /34[,.]\s*99/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'Pamela Reif Topf inkl. Glasdeckel 20 cm',
+      brand: 'Pamela Reif',
+      price: 34.99,
+      referencePrice: null,
+      rawText: 'Pamela Reif Topf inkl. Glasdeckel 20 cm, 34,99',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Kueche & Kochen',
+      categoryKey: 'kueche-kochen',
+      searchKeywords: 'Pamela Reif Topf Glasdeckel Kueche Kochen 20 cm',
+    });
+  }
+
+  if (
+    hasText(text, /pamela\s+reif\s+hochrandpfanne/)
+    && /34[,.]\s*90/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'Pamela Reif Hochrandpfanne 28 cm',
+      brand: 'Pamela Reif',
+      price: 34.90,
+      referencePrice: null,
+      rawText: 'Pamela Reif Hochrandpfanne 28 cm, 34,90',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Kueche & Kochen',
+      categoryKey: 'kueche-kochen',
+      searchKeywords: 'Pamela Reif Hochrandpfanne Pfanne Kueche Kochen 28 cm',
+    });
+  }
+
+  if (
+    hasText(text, /pamela\s+reif\s+universalmesser/)
+    && hasText(text, /pamela\s+reif\s+gemuesemesser|pamela\s+reif\s+gemusemesser/)
+    && /4[,.]\s*99/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'Pamela Reif Universalmesser oder Gemuesemesser',
+      brand: 'Pamela Reif',
+      price: 4.99,
+      referencePrice: null,
+      rawText: 'Pamela Reif Universalmesser 22,5 cm oder Gemuesemesser 19 cm, je 4,99',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Kueche & Kochen',
+      categoryKey: 'kueche-kochen',
+      searchKeywords: 'Pamela Reif Universalmesser Gemuesemesser Messer Kueche',
+    });
+  }
+
+  if (
+    hasText(text, /naturally\s+pam\s+by\s+pamela\s+reif\s+porridge/)
+    && /350[-\s]?g/.test(normalized)
+    && /5[,.]\s*99/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      productKind: 'generic-flyer-product',
+      title: 'Naturally Pam by Pamela Reif Porridge',
+      brand: 'Naturally Pam by Pamela Reif',
+      price: 5.99,
+      referencePrice: null,
+      quantityText: '350 g',
+      conditionsText: householdAvailability,
+      validToOverride: householdValidToOverride,
+      rawText: 'Naturally Pam by Pamela Reif Porridge Brownie Style oder Apple Pie Style, 350-g-Packung, je 5,99',
+      comparisonSafe: true,
+      parserHint: 'known-interspar-mein-zuhause-layout',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Muesli & Cerealien',
+      categoryKey: 'muesli-cerealien',
+      searchKeywords: 'Naturally Pam Pamela Reif Porridge Brownie Apple Pie 350 g',
+    });
+  }
+
+  if (
+    hasText(text, /naturally\s+pam\s+by\s+pamela\s+reif\s+oat\s+bar/)
+    && /40\s*g/.test(normalized)
+    && /2[,.]\s*29/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      productKind: 'generic-flyer-product',
+      title: 'Naturally Pam by Pamela Reif Oat Bar',
+      brand: 'Naturally Pam by Pamela Reif',
+      price: 2.29,
+      referencePrice: null,
+      quantityText: '40 g',
+      conditionsText: householdAvailability,
+      validToOverride: householdValidToOverride,
+      rawText: 'Naturally Pam by Pamela Reif Oat Bar Dark & White oder Chunky Chocolate, 40 g, je 2,29',
+      comparisonSafe: true,
+      parserHint: 'known-interspar-mein-zuhause-layout',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesses & Snacks',
+      categoryKey: 'suesses-snacks',
+      searchKeywords: 'Naturally Pam Pamela Reif Oat Bar Dark White Chunky Chocolate 40 g',
+    });
+  }
+
+  if (
+    hasText(text, /simpex\s+basic\s+heissluftfritteuse|simpex\s+basic\s+heissluftfritteuse/)
+    && /4[,.]2\s*l/.test(normalized)
+    && /59[,.]\s*90/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'SIMPEX BASIC Heissluftfritteuse 4,2 l',
+      brand: 'SIMPEX BASIC',
+      price: 59.90,
+      referencePrice: null,
+      rawText: 'SIMPEX BASIC Heissluftfritteuse, 4,2 l Fassungsvermoegen, 1.300 Watt, 59,90',
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      categoryKey: 'kuechengeraete',
+      searchKeywords: 'SIMPEX BASIC Heissluftfritteuse 4,2 l Kuechengeraet',
+    });
+  }
+
+  if (
+    hasText(text, /splendid\s+nature\s+glasreiniger|splendid\s+nature\s+glasreininger/)
+    && /750\s*ml/.test(normalized)
+    && /2[,.]\s*09/.test(normalized)
+  ) {
+    addCandidate(candidates, page.pageNumber, {
+      productKind: 'generic-flyer-product',
+      title: 'Splendid nature Glasreiniger',
+      brand: 'Splendid nature',
+      price: 2.09,
+      referencePrice: null,
+      quantityText: '750 ml',
+      conditionsText: householdAvailability,
+      validToOverride: householdValidToOverride,
+      rawText: 'Splendid nature Glasreiniger, 750 ml, 2,09',
+      comparisonSafe: true,
+      parserHint: 'known-interspar-mein-zuhause-layout',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reinigung',
+      categoryKey: 'waschmittel-reinigung',
+      searchKeywords: 'Splendid nature Glasreiniger Fensterreiniger Reinigung 750 ml',
+    });
+  }
+
+  if (
+    hasText(text, /splendid\s+fenster-wischer-set/)
+    && /7[,.]\s*99/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'Splendid Fenster-Wischer-Set 3-fach-Funktion',
+      brand: 'Splendid',
+      price: 7.99,
+      referencePrice: null,
+      rawText: 'Splendid Fenster-Wischer-Set 3-fach-Funktion, 7,99',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Waschmittel & Reinigung',
+      categoryKey: 'waschmittel-reinigung',
+      searchKeywords: 'Splendid Fenster Wischer Set Reinigung Fensterputzen',
+    });
+  }
+
+  if (
+    hasText(text, /waterdrop\s+tumbler/)
+    && /1[,.]1\s*l/.test(normalized)
+    && /34[,.]\s*90/.test(normalized)
+  ) {
+    addHomeCandidate({
+      title: 'Waterdrop Tumbler 1,1 l',
+      brand: 'Waterdrop',
+      price: 34.90,
+      referencePrice: null,
+      rawText: 'Waterdrop Tumbler, 1,1 l Fuellmenge, 34,90',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Kueche & Aufbewahrung',
+      categoryKey: 'kueche-aufbewahrung',
+      searchKeywords: 'Waterdrop Tumbler Trinkbecher 1,1 l Haushalt',
+    });
+  }
+
+  return candidates;
+}
+
 function extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }) {
   const text = normalizePdfText(page.text || '');
   const normalized = normalizeForScan(text);
@@ -1948,6 +2423,8 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
       ...extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownIntersparWeinweltBestsellerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownIntersparMeinZuhauseSommerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
     ];
     const genericCandidates = extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat })
       .filter((candidate) => !genericCandidateOverlapsKnown(candidate, knownCandidates));

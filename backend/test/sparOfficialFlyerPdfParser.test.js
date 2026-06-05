@@ -1374,6 +1374,254 @@ test('accepts current SPAR KW23 fruit and vegetable official PDF text layer', ()
   assert.match(byTitle.get('S-BUDGET Spitzpaprika Rot').conditionsText, /SPAR-App-Gutschein/);
 });
 
+test('accepts selected INTERSPAR Weinwelt Bestseller text-layer offers', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-05-17T22:00:00.000Z'),
+    validTo: new Date('2026-06-10T21:59:59.999Z'),
+    validityText: 'Mo., 18.05.26 - Mi., 10.06.26',
+  };
+  const pages = [
+    {
+      pageNumber: 3,
+      text: [
+        'Allacher All Red 2024 Preise wie ab Hof',
+        '0,75 L Burgenland',
+        'statt 9,99 EUR',
+        '7,99* EUR',
+        '*ab 2 Flaschen',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 4,
+      text: [
+        'Allacher St. Laurent Ried Apfelgrund 2023',
+        '0,75 L Burgenland',
+        '10,99 EUR',
+        'Allacher All Zero White und All Zero Red',
+        '0,75 L Oesterreich',
+        'statt 9,99 EUR',
+        '7,99* EUR',
+        '*ab 2 Flaschen',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 5,
+      text: [
+        'Weinkellerei Schloss Fels Wein & Soda Sommer',
+        'Weinkellerei Schloss Fels Wein & Soda Pink Mango',
+        '0,33 L Oesterreich',
+        'statt 1,29 EUR',
+        '0,99* EUR',
+        '*ab 2 Flaschen',
+        'statt 1,69 EUR',
+        '1,39* EUR',
+        '*ab 2 Flaschen',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 10,
+      text: [
+        'Gebrueder Nittnaus Zweigelt Freddo 2024',
+        '0,75 L Burgenland',
+        'statt 7,99 EUR',
+        '5,99* EUR',
+        '*ab 2 Flaschen',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 13,
+      text: [
+        'Walter Skoff Weissburgunder Suedsteiermark DAC 2025',
+        '0,75 L Suedsteiermark',
+        'statt 9,99 EUR',
+        '7,49 EUR',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 16,
+      text: [
+        'Kattus Frizzante, Frizzante, Muskateller Frizzante Rose',
+        '0,75 L Oesterreich',
+        'statt 47,96 EUR',
+        '39,99 EUR',
+        '4,99 EUR',
+        'Grundpreis/Liter: 6,65 EUR',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 23,
+      text: [
+        'Don Papa Baroko',
+        '0,7 L Philippinen',
+        '40 % Vol.',
+        'statt 39,90 EUR',
+        '34,90 EUR',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 24,
+      text: [
+        'Walter Skoff Sauvignon Blanc Privat Selektion Suedsteiermark DAC 2024',
+        '0,75 L Suedsteiermark',
+        '1+1 GRATIS',
+        'statt 17,99 EUR',
+        '8,99* EUR',
+        '*ab 2 Flaschen',
+      ].join('\n'),
+    },
+  ];
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages,
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000655',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/weinwelt/260511-4-weinwelt-bestseller-06-2026/getPdf.ashx',
+  });
+  const byTitle = new Map(offers.map((offer) => [offer.title, offer]));
+
+  for (const [title, price, quantityText] of [
+    ['Allacher All Red 2024', 7.99, '0,75 l'],
+    ['Allacher St. Laurent Ried Apfelgrund 2023', 10.99, '0,75 l'],
+    ['Allacher All Zero White oder All Zero Red', 7.99, '0,75 l'],
+    ['Weinkellerei Schloss Fels Wein & Soda Sommer', 0.99, '0,33 l'],
+    ['Weinkellerei Schloss Fels Wein & Soda Pink Mango', 1.39, '0,33 l'],
+    ['Gebrueder Nittnaus Zweigelt Freddo 2024', 5.99, '0,75 l'],
+    ['Walter Skoff Weissburgunder Suedsteiermark DAC 2025', 7.49, '0,75 l'],
+    ['Kattus Frizzante oder Muskateller Frizzante Rose', 4.99, '0,75 l'],
+    ['Don Papa Baroko', 34.90, '0,7 l'],
+    ['Walter Skoff Sauvignon Blanc Privat Selektion Suedsteiermark DAC 2024', 8.99, '0,75 l'],
+  ]) {
+    const offer = byTitle.get(title);
+
+    assert.ok(offer, title);
+    assert.equal(offer.priceCurrent.amount, price, title);
+    assert.equal(offer.quantityText, quantityText, title);
+  }
+
+  assert.equal(byTitle.get('Allacher All Red 2024').priceReference.amount, 9.99);
+  assert.equal(byTitle.get('Don Papa Baroko').categoryKey, 'spirituosen');
+  assert.equal(byTitle.get('Walter Skoff Sauvignon Blanc Privat Selektion Suedsteiermark DAC 2024').isMultiBuy, true);
+  assert.equal(byTitle.get('Kattus Frizzante oder Muskateller Frizzante Rose').quality.comparisonSafe, false);
+  assert.equal(offers.some((offer) => /^1\+1/.test(offer.title)), false);
+});
+
+test('accepts selected INTERSPAR Mein Zuhause Sommer text-layer offers', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-04-06T22:00:00.000Z'),
+    validTo: new Date('2026-07-31T21:59:59.999Z'),
+    validityText: 'Di., 07.04.26 - Fr., 31.07.26',
+  };
+  const pages = [
+    {
+      pageNumber: 3,
+      text: [
+        'Mein Zuhause',
+        'SIMPEX BASIC Stabmixer-Set',
+        '400 Watt Power',
+        'EUR 24,99',
+        'SPAR Butterdose',
+        'EUR 6,99',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 7,
+      text: [
+        'SPAR wie frueher Universal-Erde 40 l EUR 7,99',
+        'Preise gueltig bis 31.07.2026 und solange der Vorrat reicht.',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 20,
+      text: [
+        'Pamela Reif Topf inkl. Glasdeckel 20 cm EUR 34,99',
+        'Pamela Reif Hochrandpfanne 28 cm EUR 34,90',
+        'Pamela Reif Universalmesser 22,5 cm EUR 4,99',
+        'Pamela Reif Gemuesemesser 19 cm EUR 4,99',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 22,
+      text: [
+        'Naturally Pam by Pamela Reif Porridge Brownie Style oder Apple Pie Style, 350-g-Packung je EUR 5,99',
+        'Naturally Pam by Pamela Reif Oat Bar Dark & White oder Chunky Chocolate, 40 g je 2,29',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 25,
+      text: [
+        'SIMPEX BASIC Heissluftfritteuse 4,2 l Fassungsvermoegen, 1.300 Watt EUR 59,90',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 33,
+      text: [
+        'Splendid nature Glasreiniger 750 ml (EUR 2,79/l) EUR 2,09',
+        'Splendid Fenster-Wischer-Set 3-fach-Funktion: Microfaser, Ultra-Vlies, Abzieher EUR 7,99',
+      ].join('\n'),
+    },
+    {
+      pageNumber: 39,
+      text: [
+        'Waterdrop Tumbler',
+        '1,1 l Fuellmenge',
+        'EUR 34,90',
+      ].join('\n'),
+    },
+  ];
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: currentValidity,
+    pages,
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000656',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/sonderfolder/mein-zuhause-sommer26/getPdf.ashx',
+  });
+  const byTitle = new Map(offers.map((offer) => [offer.title, offer]));
+
+  for (const [title, price] of [
+    ['SIMPEX BASIC Stabmixer-Set', 24.99],
+    ['SPAR Butterdose', 6.99],
+    ['SPAR wie frueher Universal-Erde', 7.99],
+    ['Pamela Reif Topf inkl. Glasdeckel 20 cm', 34.99],
+    ['Pamela Reif Hochrandpfanne 28 cm', 34.90],
+    ['Pamela Reif Universalmesser oder Gemuesemesser', 4.99],
+    ['Naturally Pam by Pamela Reif Porridge', 5.99],
+    ['Naturally Pam by Pamela Reif Oat Bar', 2.29],
+    ['SIMPEX BASIC Heissluftfritteuse 4,2 l', 59.90],
+    ['Splendid nature Glasreiniger', 2.09],
+    ['Splendid Fenster-Wischer-Set 3-fach-Funktion', 7.99],
+    ['Waterdrop Tumbler 1,1 l', 34.90],
+  ]) {
+    const offer = byTitle.get(title);
+
+    assert.ok(offer, title);
+    assert.equal(offer.priceCurrent.amount, price, title);
+    assert.equal(offer.validTo.toISOString(), '2026-07-31T21:59:59.999Z', title);
+  }
+
+  assert.equal(byTitle.get('SPAR wie frueher Universal-Erde').quantityText, '40 l');
+  assert.equal(byTitle.get('SPAR wie frueher Universal-Erde').quality.comparisonSafe, true);
+  assert.equal(byTitle.get('Naturally Pam by Pamela Reif Porridge').quantityText, '350 g');
+  assert.equal(byTitle.get('Naturally Pam by Pamela Reif Porridge').categoryPrimary, 'Lebensmittel');
+  assert.equal(byTitle.get('Splendid nature Glasreiniger').quantityText, '750 ml');
+  assert.equal(byTitle.get('Waterdrop Tumbler 1,1 l').quality.comparisonSafe, false);
+});
+
 test('accepts selected current INTERSPAR KW23 text-layer staples without generic relax', () => {
   const currentValidity = {
     validFrom: new Date('2026-06-02T22:00:00.000Z'),
