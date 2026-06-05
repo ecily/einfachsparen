@@ -202,6 +202,33 @@ const KAFFEE_PRODUCT_TOKENS = [
   'tchibo',
 ];
 
+const KAFFEE_SPECIFIC_PRODUCT_TOKENS = [
+  'barista',
+  'caffissimo',
+  'cafissimo',
+  'cappuccino',
+  'crema',
+  'eduscho',
+  'espresso',
+  'hornig',
+  'jacobs',
+  'kimbo',
+  'lavazza',
+  'lungo',
+  'meinl',
+  'melange',
+  'mokaflor',
+  'nescafe',
+  'nespresso',
+  'nespressokompatible',
+  'praesident',
+  'prasident',
+  'segafredo',
+  'tassimo',
+  'tchibo',
+];
+
+
 const KAFFEE_TEA_SIDE_TOKENS = [
   'ceylon',
   'eistee',
@@ -3408,6 +3435,18 @@ function scoreOfferAgainstQuery(offer, query) {
     score += preferredContextMatches * 20;
     if (exactProductIntentMatched) {
       score += 900;
+    }
+
+    const specificKaffeeProductMatched = context.key === 'kaffee' && hasAnyTokenMatch(
+      titleTokens.concat(comparisonTokens),
+      KAFFEE_SPECIFIC_PRODUCT_TOKENS,
+      { exact: true, suffix: true }
+    );
+
+    if (specificKaffeeProductMatched && queryTokens.some((token) =>
+      ['kaffee', 'cafe', 'caffe'].includes(token)
+    )) {
+      score += 2400;
     }
 
     if (productIntentMatched && productContextMatched) {

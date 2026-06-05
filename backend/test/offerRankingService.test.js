@@ -4054,6 +4054,33 @@ test('kaffee searches keep specific coffee products findable and reject cosmetic
   assert.equal(applyQueryMatch([eyeliner, juliusMeinl], 'julius meinl')[0].title, 'Julius Meinl Praesident gemahlen');
 });
 
+test('generic kaffee search keeps exact coffee brands visible before broad direct coffee titles', () => {
+  const broadCoffee = offer({
+    title: 'Dallmayr Prodomo Entcoffeiniert Kaffee gemahlen',
+    brand: 'Dallmayr',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'dallmayr-prodomo-kaffee-gemahlen::0.5-kg',
+  });
+  const lavazza = offer({
+    title: 'Lavazza Espresso Cremoso',
+    brand: 'Lavazza',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'lavazza-espresso-cremoso::1-kg',
+  });
+  const eyeliner = offer({
+    title: 'Gel Eyeliner Cozy Chic Espresso',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Kosmetik & Make-up',
+    comparisonGroup: 'gel-eyeliner-espresso::1-stueck',
+  });
+
+  assert.equal(applyQueryMatch([broadCoffee, lavazza], 'kaffee')[0].title, 'Lavazza Espresso Cremoso');
+  assert.equal(applyQueryMatch([eyeliner, lavazza], 'kaffee')[0].title, 'Lavazza Espresso Cremoso');
+  assert.equal(applyQueryMatch([eyeliner], 'kaffee').length, 0);
+});
+
 test('coffee searches keep Teebutter from winning through coffee tea category signals', () => {
   const teebutter = offer({
     title: 'Oesterreichische Teebutter SPAR',
