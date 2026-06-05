@@ -20,7 +20,7 @@ const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCa
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidity');
 
-const PARSER_VERSION = 'spar-official-flyer-pdf-v3';
+const PARSER_VERSION = 'spar-official-flyer-pdf-v4';
 const SOURCE_TYPE = 'spar-official-pdf';
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 6;
@@ -2170,7 +2170,7 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
   }
 
   if (
-    hasText(text, /philadelphia\s+frischkaese|philadelphia\s+frischkäse/)
+    /philadelphia/.test(normalized)
     && /175\s*g/.test(normalized)
     && /1[,.]\s*99/.test(normalized)
   ) {
@@ -2188,8 +2188,8 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
   }
 
   if (
-    hasText(text, /schaerdinger\s+formil|schärdinger\s+formil/)
-    && hasText(text, /haltbare\s+vollmilch/)
+    /formil/.test(normalized)
+    && /haltbare\s+vollmilch/.test(normalized)
     && /1\s*liter/.test(normalized)
     && /0[,.]\s*99/.test(normalized)
   ) {
@@ -2244,8 +2244,7 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
   }
 
   if (
-    hasText(text, /meisterbaecker\s+oelz|meisterbäcker\s+ölz/)
-    && hasText(text, /rosinenzopf/)
+    /rosinenzopf/.test(normalized)
     && /600\s*g/.test(normalized)
     && /3[,.]\s*79/.test(normalized)
   ) {
@@ -2277,6 +2276,27 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
       rawText: 'Lorenz Pommels, 75 g, ab 2 Pkg. je 0,99',
       comparisonSafe: true,
       searchKeywords: 'Lorenz Pommels 75 g Monatssparer',
+    }));
+  }
+
+  if (
+    /spar\s+mullsack\s+mit\s+zugband|spar\s+muellsack\s+mit\s+zugband/.test(normalized)
+    && /35,\s*45\s+oder\s+70\s+liter/.test(normalized)
+    && /1[,.]\s*32/.test(normalized)
+  ) {
+    addSharedCandidate(householdCandidate({
+      title: 'SPAR Muellsack mit Zugband',
+      brand: 'SPAR',
+      price: 1.32,
+      referencePrice: 1.99,
+      quantityText: '35-70 l',
+      conditionsText: `2+1 gratis; ${sharedCondition}`,
+      rawText: 'SPAR Muellsack mit Zugband, 35, 45 oder 70 Liter, ab 3 Pkg. je 1,32',
+      comparisonSafe: false,
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Aufbewahrung & Folien',
+      categoryKey: 'aufbewahrung-folien',
+      searchKeywords: 'SPAR Muellsack mit Zugband 35 45 70 Liter Monatssparer Haushalt',
     }));
   }
 
@@ -2472,7 +2492,7 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
 
   if (
     hasText(text, /meggle/)
-    && hasText(text, /kraeuterbutter|kräuterbutter/)
+    && /krauterbutter|kraeuterbutter/.test(normalized)
     && /125\s*g/.test(normalized)
     && /1[,.]\s*49/.test(normalized)
   ) {
@@ -2490,7 +2510,7 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
   }
 
   if (
-    hasText(text, /kaesekrainer|käsekrainer/)
+    /kasekrainer|kaesekrainer/.test(normalized)
     && hasText(text, /bratwurst/)
     && /360\s*g/.test(normalized)
     && /3[,.]\s*99/.test(normalized)
@@ -2510,7 +2530,7 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
 
   if (
     hasText(text, /spar\s+bbq\s+grill-/)
-    && hasText(text, /bratkaese|bratkäse/)
+    && /bratkase|bratkaese/.test(normalized)
     && /250\s*g/.test(normalized)
     && /2[,.]\s*89/.test(normalized)
   ) {
@@ -2997,6 +3017,234 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
   return candidates;
 }
 
+function extractKnownSparFamilyKw23RecoveryCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (!isSparFamilyPdfFormat(sourceRetailerFormat)) {
+    return [];
+  }
+
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+  const appCondition = 'mit SPAR-App-Gutschein laut Flugblatt';
+  const shortPromoCondition = 'von Mi., 03.06.2026 bis Sa., 06.06.2026 laut Flugblatt';
+
+  const addRecoveryCandidate = (candidate) => addCandidate(candidates, page.pageNumber, {
+    parserHint: 'known-spar-family-kw23-recovery-layout',
+    ...candidate,
+  });
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && /metaxa\s+5/.test(normalized)
+    && /weinbrand/.test(normalized)
+    && /0[,.]\s*7\s*liter/.test(normalized)
+    && /29[,.]\s*92/.test(normalized)
+  ) {
+    addRecoveryCandidate(groceryCandidate({
+      title: 'Metaxa 5 Sterne Weinbrand',
+      brand: 'Metaxa',
+      price: 29.92,
+      referencePrice: 49.90,
+      quantityText: '0.7 l',
+      conditionsText: `${appCondition}; ${shortPromoCondition}`,
+      rawText: 'Metaxa 5 Sterne Weinbrand Griechenland, 0,7 Liter, mit SPAR-App-Gutschein 29,92',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Spirituosen',
+      categoryKey: 'spirituosen',
+      searchKeywords: 'Metaxa Weinbrand 0.7 l SPAR App Gutschein',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && /henkell\s+sekt/.test(normalized)
+    && /13[,.]\s*99/.test(normalized)
+  ) {
+    addRecoveryCandidate(wineCandidate({
+      title: 'Henkell Sekt',
+      brand: 'Henkell',
+      price: 13.99,
+      referencePrice: 17.99,
+      quantityText: '0.75 l',
+      conditionsText: appCondition,
+      rawText: 'Henkell Sekt, verschiedene Sorten, mit SPAR-App-Gutschein 13,99',
+      comparisonSafe: true,
+      searchKeywords: 'Henkell Sekt 0.75 l SPAR App Gutschein',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && /farina\s+mehl\s+t480/.test(normalized)
+    && /2[,.]\s*5\s*kg/.test(normalized)
+    && /3[,.]\s*19/.test(normalized)
+  ) {
+    addRecoveryCandidate(groceryCandidate({
+      title: 'Farina Mehl T480',
+      brand: 'Farina',
+      price: 3.19,
+      referencePrice: 3.99,
+      quantityText: '2.5 kg',
+      conditionsText: '-20% laut Flugblatt',
+      rawText: 'Farina Mehl T480, 2,5 kg, 3,19 statt 3,99',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Backen & Grundnahrungsmittel',
+      categoryKey: 'backen-grundnahrungsmittel',
+      searchKeywords: 'Farina Mehl T480 2.5 kg SPAR',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && /gefrorene\s+fruchte|gefrorene\s+fruechte/.test(normalized)
+    && /schokolade/.test(normalized)
+    && /200\s*g/.test(normalized)
+    && /3[,.]\s*99/.test(normalized)
+  ) {
+    addRecoveryCandidate(frozenCandidate({
+      title: 'Gefrorene Fruechte in Schokolade',
+      brand: '',
+      price: 3.99,
+      referencePrice: 5.79,
+      quantityText: '200 g',
+      conditionsText: '-31% laut Flugblatt',
+      rawText: 'Gefrorene Fruechte eingetaucht in zwei Schichten Schokolade, verschiedene Sorten, tiefgekuehlt, 200 g, 3,99',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      categoryKey: 'suesswaren-knabbereien',
+      searchKeywords: 'gefrorene Fruechte Schokolade tiefgekuehlt 200 g SPAR',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && /knackig,\s*susse\s+kirschen|knackig,\s*sue?e\s+kirschen|kirschen\s+klasse\s+1/.test(normalized)
+    && /per\s+kg/.test(normalized)
+    && /4[,.]\s*99/.test(normalized)
+  ) {
+    addRecoveryCandidate(produceCandidate({
+      title: 'Kirschen Klasse 1',
+      brand: '',
+      price: 4.99,
+      referencePrice: 6.99,
+      quantityText: '1 kg',
+      conditionsText: 'Kirschen-Angebot gueltig bis Sa., 06.06.2026 laut Flugblatt',
+      rawText: 'Knackig, suesse Kirschen Klasse 1, aus Spanien, per kg 4,99 statt 6,99',
+      comparisonSafe: true,
+      searchKeywords: 'Kirschen Klasse 1 Obst 1 kg SPAR',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && /always\s+ultra\s+binden\s+big\s+pack/.test(normalized)
+    && /12\s*-\s*26\s+stuck|12\s*-\s*26\s+stueck/.test(normalized)
+    && /3[,.]\s*19/.test(normalized)
+  ) {
+    addRecoveryCandidate({
+      productKind: 'generic-flyer-product',
+      title: 'Always Ultra Binden Big Pack',
+      brand: 'Always',
+      price: 3.19,
+      referencePrice: 4.08,
+      quantityText: '12-26 Stueck',
+      conditionsText: 'ab 2 Packungen je 3,19; -21% laut Flugblatt',
+      rawText: 'Always Ultra Binden Big Pack, verschiedene Sorten, 12-26 Stueck, ab 2 Pkg. je 3,19',
+      comparisonSafe: false,
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Damenhygiene',
+      categoryKey: 'damenhygiene',
+      searchKeywords: 'Always Ultra Binden Big Pack 12 26 Stueck SPAR',
+    });
+  }
+
+  if (
+    sourceRetailerFormat === 'eurospar'
+    && /pepsi\s+oder\s+pepsi\s+zero|pepsi\s+cola/.test(normalized)
+    && /1[,.]\s*5\s*liter/.test(normalized)
+    && /0[,.]\s*99/.test(normalized)
+  ) {
+    addRecoveryCandidate(groceryCandidate({
+      title: 'Pepsi oder Pepsi Zero',
+      brand: 'Pepsi',
+      price: 0.99,
+      referencePrice: 1.99,
+      quantityText: '1.5 l',
+      conditionsText: '3+3 gratis; ab 6 Flaschen je 0,99 laut Flugblatt',
+      rawText: 'Pepsi oder Pepsi Zero, 1,5 Liter, ab 6 Fl. je 0,99, 6er-Tray 5,94',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Softdrinks & Energy',
+      categoryKey: 'softdrinks-energy',
+      searchKeywords: 'Pepsi Pepsi Zero Cola 1.5 l EUROSPAR',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'eurospar'
+    && /la\s+gioiosa\s+prosecco/.test(normalized)
+    && /7[,.]\s*49/.test(normalized)
+  ) {
+    addRecoveryCandidate(wineCandidate({
+      title: 'La Gioiosa Prosecco',
+      brand: 'La Gioiosa',
+      price: 7.49,
+      referencePrice: 14.99,
+      quantityText: '0.75 l',
+      conditionsText: '1+1 gratis laut Flugblatt',
+      rawText: 'La Gioiosa Prosecco, 0,75 Liter, ab 2 Fl. je 7,49',
+      comparisonSafe: true,
+      searchKeywords: 'La Gioiosa Prosecco 0.75 l EUROSPAR',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'eurospar'
+    && /faschiertes\s+gemischt/.test(normalized)
+    && /9[,.]\s*99/.test(normalized)
+    && /per\s+kg/.test(normalized)
+  ) {
+    addRecoveryCandidate(meatCandidate({
+      title: 'Faschiertes gemischt',
+      brand: '',
+      price: 9.99,
+      referencePrice: 12.99,
+      quantityText: '1 kg',
+      conditionsText: '-23% laut Flugblatt',
+      rawText: 'Faschiertes gemischt aus Oesterreich, aus Rind- und Schweinefleisch, in Bedienung, per kg 9,99',
+      comparisonSafe: true,
+      searchKeywords: 'Faschiertes gemischt Rind Schwein 1 kg EUROSPAR',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'eurospar'
+    && /landle\s+klostertaler|laendle\s+klostertaler/.test(normalized)
+    && /100\s*g/.test(normalized)
+    && /2[,.]\s*79/.test(normalized)
+  ) {
+    addRecoveryCandidate(dairyCandidate({
+      title: 'Laendle Klostertaler',
+      brand: 'Laendle',
+      price: 2.79,
+      referencePrice: 3.29,
+      quantityText: '100 g',
+      conditionsText: '-15% laut Flugblatt',
+      rawText: 'Laendle Klostertaler, 100 g, 2,79 statt 3,29',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Kaese',
+      categoryKey: 'kaese',
+      searchKeywords: 'Laendle Klostertaler Kaese 100 g EUROSPAR',
+    }));
+  }
+
+  return candidates;
+}
+
 function extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }) {
   const text = normalizePdfText(page.text || '');
   const normalized = normalizeForScan(text);
@@ -3420,6 +3668,7 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
       ...extractKnownIntersparWeinweltBestsellerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparMeinZuhauseSommerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownSparFamilyKw23RecoveryCandidatesFromPage(page, { sourceRetailerFormat, validity }),
     ];
     const genericCandidates = extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat })
       .filter((candidate) => !genericCandidateOverlapsKnown(candidate, knownCandidates));

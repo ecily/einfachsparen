@@ -223,32 +223,47 @@ test('extracts SPAR KW23 Milka Schokolade from compact flyer layout', () => {
 });
 
 test('extracts SPAR-family Monatssparer shared folder offers', () => {
-  const validity = activeValidityForTest();
+  const validity = {
+    validFrom: new Date('2026-05-12T22:00:00.000Z'),
+    validTo: new Date('2026-06-10T21:59:59.999Z'),
+  };
   const candidates = extractSparPdfCandidates({
-    sourceRetailerFormat: 'spar',
+    sourceRetailerFormat: 'eurospar',
     validity,
     pages: [
       {
         pageNumber: 1,
         text: [
-          "Dallmayr Crema d'Oro ganze Bohne 1 kg MONATSSPARER 1 Pkg. 30,99 ab 2 Pkg. je 19,99",
-          'Jacobs Cronat Kraeftig oder Mild 200 g MONATSSPARER 1 Gl. 13,99 ab 2 Gl. je 6,99',
-          'Schaerdinger Formil haltbare Vollmilch 3,5% oder Leichtmilch 0,5% Fett 1 Liter 1 Pkg. 1,69 ab 12 Pkg. je 0,99',
+          'Philadelphia Frischkäse versch. Sorten, 175 g 1 Be. 2,49 ab 2 Be. je 1,99',
+          'Schärdinger Formil haltbare Vollmilch 3,5% oder Leichtmilch 0,5% Fett, 1 Liter 1 Pkg. 1,69 ab 12 Pkg. je 0,99',
+          'Loidl Salami Sticks Edel, Klassisch oder Salami Pralinen 80 g 1 Pkg. 2,29 ab 3 Pkg. je 1,52 2+1 GRATIS',
+          'Meisterbäcker Ölz Rosinenzopf 600 g statt 4,49 3,79',
+          'SPAR Müllsack mit Zugband 35, 45 oder 70 Liter 1 Pkg. 1,99 ab 3 Pkg. je 1,32 2+1 GRATIS',
         ].join('\n'),
       },
     ],
   });
   const offers = normalizeSparPdfCandidatesToOffers({
     pdfReference: { validity, candidates },
-    source: source('spar'),
+    source: source('eurospar'),
     crawlJobId: '000000000000000000000654',
     region: 'Grossraum Graz',
     pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx',
   });
 
-  assert.ok(offers.some((offer) => offer.title === "Dallmayr Crema d'Oro ganze Bohne" && offer.priceCurrent.amount === 19.99));
-  assert.ok(offers.some((offer) => offer.title === 'Jacobs Cronat Kraeftig oder Mild' && offer.categorySecondary === 'Kaffee & Tee'));
-  assert.ok(offers.some((offer) => offer.title.includes('Schaerdinger Formil') && offer.quantityText === '1 l'));
+  const formil = offers.find((offer) => offer.title === 'Schaerdinger Formil haltbare Vollmilch oder Leichtmilch');
+
+  assert.ok(formil);
+  assert.equal(formil.priceCurrent.amount, 0.99);
+  assert.equal(formil.quantityText, '1 l');
+  assert.equal(formil.retailerKey, 'eurospar');
+  assert.equal(formil.rawFacts.sourceRetailerFormat, 'eurospar');
+  assert.equal(formil.validTo.toISOString(), '2026-06-10T21:59:59.999Z');
+  assert.match(formil.conditionsText, /ab 12 Packungen/);
+  assert.ok(offers.some((offer) => offer.title === 'Philadelphia Frischkaese' && /ab 2 Bechern/.test(offer.conditionsText)));
+  assert.ok(offers.some((offer) => offer.title === 'Loidl Salami Sticks oder Salami Pralinen' && /2\+1 gratis/i.test(offer.conditionsText)));
+  assert.ok(offers.some((offer) => offer.title === 'Meisterbaecker Oelz Rosinenzopf' && offer.quantityText === '600 g'));
+  assert.ok(offers.some((offer) => offer.title === 'SPAR Muellsack mit Zugband' && /2\+1 gratis/i.test(offer.conditionsText)));
 });
 
 test('extracts SPAR-family Grillfolder shared offers', () => {
@@ -310,6 +325,57 @@ test('extracts SPAR-family Gutscheinheft shared coupon offers', () => {
   assert.ok(offers.some((offer) => offer.title === 'Zweigelt lieblich Oesterreich' && /Gutschein/i.test(offer.conditionsText)));
   assert.ok(offers.some((offer) => offer.title === 'Schwechater Bier' && offer.categorySecondary === 'Bier'));
   assert.ok(offers.some((offer) => offer.title === 'Lovely Toilettenpapier' && offer.categorySecondary === 'Papier & Hygiene'));
+});
+
+test('extracts selected SPAR-family KW23 recovery offers with retailer-specific mapping', () => {
+  const validity = activeValidityForTest();
+  const sparCandidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 2,
+        text: [
+          'Metaxa 5 Sterne Weinbrand Griechenland 0,7 Liter statt 49,90 39,90 29,92 Mit SPAR-App-Gutschein',
+          'Farina Mehl T480 2,5 kg 3,19 statt 3,99 -20%',
+          'Always Ultra Binden Big Pack versch. Sorten, 12-26 Stück Mengenvorteil 1 Pkg. 4,08 ab 2 Pkg. je 3,19',
+        ].join('\n'),
+      },
+    ],
+  });
+  const eurosparCandidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'eurospar',
+    validity,
+    pages: [
+      {
+        pageNumber: 2,
+        text: [
+          'Pepsi oder Pepsi zero 1,5 Liter 1 Fl. 1,99 ab 6 Fl. je 0,99 3+3 GRATIS 6er-Tray 5,94',
+          'Faschiertes gemischt aus Österreich, aus Rind- und Schweinefleisch, in Bedienung, per kg 9,99 statt 12,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const sparOffers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates: sparCandidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/getPdf.ashx',
+  });
+  const eurosparOffers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates: eurosparCandidates },
+    source: source('eurospar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/eurospar/260603-1-flugblatt-kw-23/getPdf.ashx',
+  });
+
+  assert.ok(sparOffers.some((offer) => offer.title === 'Metaxa 5 Sterne Weinbrand' && /SPAR-App-Gutschein/.test(offer.conditionsText)));
+  assert.ok(sparOffers.some((offer) => offer.title === 'Farina Mehl T480' && offer.categorySecondary === 'Backen & Grundnahrungsmittel'));
+  assert.ok(sparOffers.some((offer) => offer.title === 'Always Ultra Binden Big Pack' && offer.categorySecondary === 'Damenhygiene'));
+  assert.ok(eurosparOffers.some((offer) => offer.title === 'Pepsi oder Pepsi Zero' && offer.retailerKey === 'eurospar'));
+  assert.ok(eurosparOffers.some((offer) => offer.title === 'Faschiertes gemischt' && offer.categorySecondary === 'Fleisch & Wurst'));
 });
 
 test('normalizes safe SPAR Puntigamer crate fallback from Kiste and half-liter bottle context', () => {
