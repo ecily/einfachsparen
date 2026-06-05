@@ -22,10 +22,13 @@ function normalizeSourceKey(value = '') {
 function deriveSourceKey(source = {}) {
   const url = String(source.sourceUrl || '').toLowerCase();
   const format = normalizeSourceKey(source.sourceRetailerFormat || source.retailerKey || 'unknown');
+  const sourceType = String(source.sourceType || '').toLowerCase();
+  const parserHint = String(source.parserHint || '').toLowerCase();
 
   if (url.includes('aktionsfinder.at')) return `aktionsfinder-${format}`;
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
+  if (sourceType === 'spar-family-official-productworld' || parserHint === 'official-productworld-bff') return `${format}-official-productworld`;
   if (url.includes('spar.at/aktionen/steiermark/eurospar') || (url.includes('spar.at/aktionen/steiermark') && format === 'eurospar')) return 'eurospar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark/interspar') || url.includes('interspar.at/aktionen/steiermark') || (url.includes('spar.at/aktionen/steiermark') && format === 'interspar')) return 'interspar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';

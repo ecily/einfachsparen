@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const crypto = require('node:crypto');
 const https = require('node:https');
+const http2 = require('node:http2');
 const { Types } = require('mongoose');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
@@ -67,6 +68,21 @@ const { extractPromotionRequirement } = require('../offers/promotionMath');
 const logger = require('../../lib/logger');
 
 const PARSER_VERSION = 'official-v3-coverage';
+const SPAR_PRODUCTWORLD_SOURCE_TYPE = 'spar-family-official-productworld';
+const SPAR_PRODUCTWORLD_PARSER_VERSION = 'spar-productworld-bff-v1';
+const SPAR_PRODUCTWORLD_BFF_ORIGIN = 'https://api-scp.spar-ics.com';
+const SPAR_PRODUCTWORLD_SEARCH_PATH = '/ecom/pw/v1/search/v1/search';
+const SPAR_PRODUCTWORLD_FILTERS = ['inAngebot:true', 'isPreisGesenkt:true'];
+const SPAR_PRODUCTWORLD_DEFAULT_PAGE_SIZE = 48;
+const SPAR_PRODUCTWORLD_DEFAULT_MAX_PAGES_PER_FILTER = 80;
+const SPAR_PRODUCTWORLD_DEFAULT_DELAY_MS = 250;
+const SPAR_PRODUCTWORLD_HEADERS = {
+  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+  accept: 'application/json',
+  'accept-language': 'de-AT,de;q=0.9,en-US;q=0.8,en;q=0.7',
+  origin: 'https://www.spar.at',
+  referer: 'https://www.spar.at/produktwelt/',
+};
 const DM_CONTENT_PATH = 'https://content.services.dmtech.com/rootpage-dm-shop-de-at/ausverkauf';
 const DM_PRODUCT_SEARCH_URL = 'https://product-search.services.dmtech.com/at/search';
 const DM_SALE_PAGE_SIZE = 48;
@@ -6066,6 +6082,441 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
   };
 }
 
+function isSparProductworldSource(source = {}) {
+  return (
+    source.parserHint === 'official-productworld-bff'
+    || source.sourceType === SPAR_PRODUCTWORLD_SOURCE_TYPE
+  );
+}
+
+function buildSparProductworldPath({ filter, marketId, page = 1, pageSize = SPAR_PRODUCTWORLD_DEFAULT_PAGE_SIZE }) {
+  const params = new URLSearchParams({
+    query: '*',
+    filter,
+    hitsPerPage: String(pageSize),
+    marketId,
+    page: String(page),
+    showPermutedSearchParams: 'false',
+  });
+
+  return `${SPAR_PRODUCTWORLD_SEARCH_PATH}?${params.toString()}`;
+}
+
+function fetchSparProductworldJson({ filter, marketId, page = 1, pageSize = SPAR_PRODUCTWORLD_DEFAULT_PAGE_SIZE }) {
+  const path = buildSparProductworldPath({ filter, marketId, page, pageSize });
+
+  return new Promise((resolve, reject) => {
+    const client = http2.connect(SPAR_PRODUCTWORLD_BFF_ORIGIN, { rejectUnauthorized: false });
+    let responseHeaders = {};
+    let body = '';
+    let settled = false;
+
+    function finish(error, result) {
+      if (settled) return;
+      settled = true;
+      client.close();
+      if (error) reject(error);
+      else resolve(result);
+    }
+
+    client.on('error', (error) => finish(error));
+
+    const request = client.request({
+      ':method': 'GET',
+      ':path': path,
+      ...SPAR_PRODUCTWORLD_HEADERS,
+    });
+
+    request.setEncoding('utf8');
+    request.on('response', (headers) => {
+      responseHeaders = headers || {};
+    });
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      const status = Number(responseHeaders[':status'] || 0);
+      const contentType = String(responseHeaders['content-type'] || '');
+
+      if (status < 200 || status >= 300 || !/application\/json/i.test(contentType)) {
+        const error = new Error(`SPAR Productworld BFF returned ${status || 'unknown'} ${contentType || ''}`.trim());
+        error.diagnostic = {
+          status,
+          contentType,
+          bodyPreview: bodyPreview(body, FETCH_DIAGNOSTIC_PREVIEW_LIMIT),
+          cloudflare: {
+            server: responseHeaders.server || '',
+            cfRay: responseHeaders['cf-ray'] || '',
+            cfCacheStatus: responseHeaders['cf-cache-status'] || '',
+          },
+        };
+        finish(error);
+        return;
+      }
+
+      try {
+        finish(null, {
+          path,
+          status,
+          contentType,
+          headers: responseHeaders,
+          data: JSON.parse(body),
+          body,
+        });
+      } catch (error) {
+        error.diagnostic = {
+          status,
+          contentType,
+          bodyPreview: bodyPreview(body, FETCH_DIAGNOSTIC_PREVIEW_LIMIT),
+        };
+        finish(error);
+      }
+    });
+    request.setTimeout(30000, () => {
+      const error = new Error('SPAR Productworld BFF request timed out');
+      error.diagnostic = { path, timeoutMs: 30000 };
+      finish(error);
+    });
+    request.end();
+  });
+}
+
+function sparProductworldSourceKey(source = {}) {
+  const format = source.sourceRetailerFormat || source.retailerKey || 'spar';
+  return `${normalizeTitleForMatch(format).replace(/[^a-z0-9]+/g, '-') || 'spar'}-official-productworld`;
+}
+
+function buildSparProductworldImageUrl(assetUrl = '') {
+  const normalized = sanitizeWhitespace(assetUrl);
+
+  if (!normalized) return '';
+
+  return normalized.replace('{size}', '500').replace('{ext}', 'jpg');
+}
+
+function buildSparProductworldProductUrl(slug = '') {
+  const safeSlug = sanitizeWhitespace(slug);
+  return safeSlug ? `https://www.spar.at/produktwelt/${safeSlug}` : 'https://www.spar.at/produktwelt/';
+}
+
+function buildSparProductworldUnitPrice(geoValues = {}, currentPrice = null) {
+  const amount = Number(geoValues.comparisonPrice_price);
+  const quantity = Number(geoValues.comparisonPrice_quantity);
+  const unit = normalizeUnitFromText(geoValues.comparisonPrice_unit || '');
+
+  if (Number.isFinite(amount) && amount > 0 && Number.isFinite(quantity) && quantity > 0 && unit) {
+    if (unit === 'ml') {
+      return { amount: Number(((amount / quantity) * 1000).toFixed(2)), unit: 'l', comparable: true, confidence: 0.9 };
+    }
+
+    if (unit === 'g') {
+      return { amount: Number(((amount / quantity) * 1000).toFixed(2)), unit: 'kg', comparable: true, confidence: 0.9 };
+    }
+
+    if (unit === 'Stk') {
+      return { amount: Number((amount / quantity).toFixed(2)), unit: 'Stk', comparable: true, confidence: 0.86 };
+    }
+
+    if (['kg', 'l'].includes(unit)) {
+      return { amount, unit, comparable: true, confidence: 0.86 };
+    }
+  }
+
+  return buildOfficialNormalizedUnitPrice({
+    priceAmount: currentPrice,
+    quantityText: '',
+  });
+}
+
+function buildSparProductworldValidity(now = new Date()) {
+  const validFrom = new Date(now);
+  const validTo = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  return {
+    validFrom,
+    validTo,
+    validityText: 'Aktuell aus SPAR Produktwelt; Freshness-TTL 24h',
+  };
+}
+
+function buildSparProductworldConditions(geoValues = {}) {
+  const parts = [];
+  const badge = sanitizeWhitespace(geoValues.promotionBadgeText);
+
+  if (badge) parts.push(badge);
+  if (geoValues.hasAppVoucher) parts.push('Nur mit SPAR-App/Voucher');
+  if (geoValues.isPreisGesenkt && !geoValues.inAngebot) parts.push('Preisgesenkt');
+
+  return parts.join(' / ');
+}
+
+function buildSparProductworldOffer({ hit, source, crawlJobId, region, now, filter }) {
+  const masterValues = hit?.masterValues || {};
+  const geoInformation = Array.isArray(masterValues.geoInformation) ? masterValues.geoInformation[0] : null;
+  const geoValues = geoInformation?.geoValues || {};
+  const currentPrice = Number(geoValues.calculatedPrice);
+  const isOffer = geoValues.inAngebot === true || geoValues.hasAktionsPrice === true || geoValues.isPreisGesenkt === true;
+
+  if (!masterValues.productId || !Number.isFinite(currentPrice) || currentPrice <= 0 || !isOffer) {
+    return null;
+  }
+
+  const brand = sanitizeWhitespace(masterValues.name1);
+  const productName = sanitizeWhitespace(masterValues.name2);
+  const quantityText = sanitizeWhitespace(masterValues.name3);
+  const title = sanitizeWhitespace([brand, productName].filter(Boolean).join(' '));
+  const productUrl = buildSparProductworldProductUrl(masterValues.slug);
+  const conditionsText = buildSparProductworldConditions(geoValues);
+  const categoryPrimary = determineOfferCategory({
+    title,
+    contextText: [brand, productName, quantityText, conditionsText].filter(Boolean).join(' '),
+  });
+  const normalizedUnitPrice = buildSparProductworldUnitPrice(geoValues, currentPrice);
+  const { validFrom, validTo, validityText } = buildSparProductworldValidity(now);
+  const statusInfo = buildOfferStatus(validFrom, validTo);
+  const referenceAmount = Number(geoValues.stattPrice || geoValues.basePrice);
+  const hasReference = Number.isFinite(referenceAmount) && referenceAmount > currentPrice;
+  const minimumPurchaseQty = Number(String(conditionsText).match(/\bab\s*(\d+)\s*(?:stk|stueck|stück|flaschen|dosen|packungen)?/i)?.[1] || 1);
+  const benefitType = geoValues.hasAppVoucher
+    ? 'card-required'
+    : minimumPurchaseQty > 1 || /mengenvorteil|ab\s*\d+/i.test(conditionsText)
+      ? 'multi-buy'
+      : 'price-cut';
+  const issues = [];
+
+  if (!normalizedUnitPrice.comparable) {
+    issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+  }
+
+  if (!hasReference && !geoValues.isPreisGesenkt) {
+    issues.push('Referenzpreis aus Produktwelt nicht eindeutig ableitbar');
+  }
+
+  const overrideResult = applyManualCategoryOverridesToOfferSync({
+    crawlJobId,
+    sourceId: source._id,
+    retailerKey: source.retailerKey,
+    retailerName: source.retailerName,
+    sourceRetailerName: source.sourceRetailerName,
+    sourceRetailerFormat: source.sourceRetailerFormat,
+    retailerFormats: source.appliesToRetailerFormats,
+    appliesToRetailerFormats: source.appliesToRetailerFormats,
+    retailerFormatLabel: source.retailerFormatLabel,
+    region,
+    title,
+    brand,
+    categoryPrimary,
+    categorySecondary: determineOfferSubcategory({
+      primaryCategory: categoryPrimary,
+      fallbackLabel: categoryPrimary,
+      title,
+      contextText: [brand, productName, quantityText, conditionsText].filter(Boolean).join(' '),
+    }),
+    comparisonSignature: normalizeTitleForMatch(`${brand} ${productName}`).split(' ').slice(0, 8).join('-'),
+    comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+    comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+    description: sanitizeWhitespace([productName, quantityText, conditionsText].filter(Boolean).join(' / ')),
+    sourceUrl: productUrl,
+    imageUrl: normalizeImageUrl(buildSparProductworldImageUrl(masterValues.productImage_assetUrl), productUrl),
+    supportingSources: [
+      buildSourceEvidence({
+        source,
+        observedUrl: productUrl,
+        matchType: 'primary',
+      }),
+    ],
+    validFrom,
+    validTo,
+    status: statusInfo.status,
+    isActiveNow: statusInfo.isActiveNow,
+    isActiveToday: statusInfo.isActiveToday,
+    benefitType,
+    conditionsText,
+    customerProgramRequired: geoValues.hasAppVoucher === true,
+    isMultiBuy: benefitType === 'multi-buy',
+    minimumPurchaseQty,
+    availabilityScope: source.regionScope || region || 'Oesterreich',
+    priceCurrent: {
+      amount: currentPrice,
+      currency: 'EUR',
+      originalText: `${currentPrice.toFixed(2)} EUR`,
+    },
+    priceReference: {
+      amount: hasReference ? referenceAmount : null,
+      currency: 'EUR',
+      originalText: hasReference ? `${referenceAmount.toFixed(2)} EUR` : '',
+    },
+    priceReferenceSource: hasReference ? 'spar-productworld-statt-or-base-price' : '',
+    priceReferenceConfidence: hasReference ? 0.9 : 0,
+    quantityText,
+    normalizedUnitPrice,
+    dedupeKey: [
+      source.retailerKey,
+      SPAR_PRODUCTWORLD_SOURCE_TYPE,
+      masterValues.productId,
+      source.sourceRetailerFormat || '',
+      currentPrice,
+      validTo.toISOString().slice(0, 10),
+    ].join('::'),
+    quality: {
+      completenessScore: [currentPrice, title, categoryPrimary, quantityText, masterValues.productImage_assetUrl].filter(Boolean).length / 5,
+      parsingConfidence: normalizedUnitPrice.comparable ? 0.9 : 0.8,
+      comparisonSafe: normalizedUnitPrice.comparable,
+      issues,
+    },
+    rawFacts: {
+      sourceType: SPAR_PRODUCTWORLD_SOURCE_TYPE,
+      parserTransport: 'node-http2',
+      productId: sanitizeWhitespace(masterValues.productId),
+      marketId: source.crawlPolicy?.marketId || geoInformation?.market || '',
+      bffMarket: geoInformation?.market || '',
+      filter,
+      validityText,
+      infoText: sanitizeWhitespace([conditionsText, quantityText].filter(Boolean).join(' / ')),
+      inAngebot: geoValues.inAngebot === true,
+      hasAktionsPrice: geoValues.hasAktionsPrice === true,
+      isPreisGesenkt: geoValues.isPreisGesenkt === true,
+      preisGesenktType: sanitizeWhitespace(geoValues.preisGesenktType),
+      promotionBadgeText: sanitizeWhitespace(geoValues.promotionBadgeText),
+      available: geoValues.available === true,
+      availableStoresCount: Array.isArray(masterValues.availableStores) ? masterValues.availableStores.length : 0,
+      lastImportedPrice: sanitizeWhitespace(geoValues.last_imported_price),
+      snapshotCurrent: true,
+    },
+    adminReview: {
+      status: issues.length > 0 ? 'pending' : 'reviewed',
+      note: '',
+      feedbackDigest: '',
+    },
+    scope: buildInclusiveScopeDecision(),
+  });
+
+  return overrideResult.offer || null;
+}
+
+async function crawlSparProductworldSource({ source, crawlJobId, region }) {
+  const pageSize = Number(source.crawlPolicy?.pageSize || SPAR_PRODUCTWORLD_DEFAULT_PAGE_SIZE);
+  const maxPagesPerFilter = Number(source.crawlPolicy?.maxPagesPerFilter || SPAR_PRODUCTWORLD_DEFAULT_MAX_PAGES_PER_FILTER);
+  const delayMs = Number(source.crawlPolicy?.delayMs || SPAR_PRODUCTWORLD_DEFAULT_DELAY_MS);
+  const marketId = String(source.crawlPolicy?.marketId || 'NATIONAL');
+  const now = new Date();
+  const diagnostics = {
+    transport: 'node-http2',
+    marketId,
+    filters: {},
+    duplicateProducts: 0,
+    skippedNormalProducts: 0,
+    httpStatuses: [],
+  };
+  const byProduct = new Map();
+  let rawDocumentCount = 0;
+  let rawCandidateCount = 0;
+
+  for (const filter of SPAR_PRODUCTWORLD_FILTERS) {
+    diagnostics.filters[filter] = { pages: 0, totalHits: 0, hits: 0 };
+
+    for (let page = 1; page <= maxPagesPerFilter; page += 1) {
+      const result = await fetchSparProductworldJson({ filter, marketId, page, pageSize });
+      const data = result.data || {};
+      const hits = Array.isArray(data.hits) ? data.hits : [];
+      const totalHits = Number(data.totalHits || 0);
+      const pageCount = Number(data.paging?.pageCount || 0);
+
+      diagnostics.httpStatuses.push({
+        filter,
+        page,
+        status: result.status,
+        contentType: result.contentType,
+        cfCacheStatus: result.headers?.['cf-cache-status'] || '',
+      });
+      diagnostics.filters[filter].pages += 1;
+      diagnostics.filters[filter].totalHits = totalHits;
+      diagnostics.filters[filter].hits += hits.length;
+      rawCandidateCount += hits.length;
+
+      await createCompactRawDocument({
+        sourceId: source._id,
+        crawlJobId,
+        retailerKey: source.retailerKey,
+        region,
+        documentType: 'json',
+        sourceType: SPAR_PRODUCTWORLD_SOURCE_TYPE,
+        url: `${SPAR_PRODUCTWORLD_BFF_ORIGIN}${result.path}`,
+        canonicalUrl: `${SPAR_PRODUCTWORLD_BFF_ORIGIN}${result.path}`,
+        finalUrl: `${SPAR_PRODUCTWORLD_BFF_ORIGIN}${result.path}`,
+        title: `SPAR Productworld ${marketId} ${filter} page ${page}`,
+        contentHash: createHash(result.body),
+        contentSnippet: bodyPreview(result.body, 500),
+        extractedPreview: hits.slice(0, 5).map((hit) => sanitizeWhitespace([
+          hit?.masterValues?.name1,
+          hit?.masterValues?.name2,
+          hit?.masterValues?.name3,
+        ].filter(Boolean).join(' '))),
+        parserVersion: SPAR_PRODUCTWORLD_PARSER_VERSION,
+        payload: {
+          marketId,
+          filter,
+          page,
+          totalHits,
+          pageCount,
+          hits: hits.length,
+        },
+      });
+      rawDocumentCount += 1;
+
+      for (const hit of hits) {
+        const offer = buildSparProductworldOffer({ hit, source, crawlJobId, region, now, filter });
+
+        if (!offer) {
+          diagnostics.skippedNormalProducts += 1;
+          continue;
+        }
+
+        const productId = offer.rawFacts?.productId || offer.dedupeKey;
+        const existing = byProduct.get(productId);
+        if (existing) {
+          diagnostics.duplicateProducts += 1;
+        }
+        if (!existing || (offer.rawFacts?.inAngebot && !existing.rawFacts?.inAngebot)) {
+          byProduct.set(productId, offer);
+        }
+      }
+
+      if (page >= pageCount || hits.length === 0) {
+        break;
+      }
+
+      if (delayMs > 0) {
+        await delay(delayMs);
+      }
+    }
+  }
+
+  const offerDocuments = enrichOffersForStorage([...byProduct.values()], {
+    source,
+    sourceType: SPAR_PRODUCTWORLD_SOURCE_TYPE,
+    parserVersion: SPAR_PRODUCTWORLD_PARSER_VERSION,
+    normalizationVersion: NORMALIZATION_VERSION,
+  });
+
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
+
+  return {
+    offerDocuments,
+    rawDocumentCount,
+    rawCandidateCount,
+    diagnostics,
+    rejectionReasons: diagnostics.skippedNormalProducts > 0
+      ? [{ reason: 'productworld-normal-product-skipped', count: diagnostics.skippedNormalProducts }]
+      : [],
+    validity: buildSparProductworldValidity(now),
+    refreshResult,
+  };
+}
+
 async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRunId = null, signal = null }) {
   const crawlJob = await CrawlJob.create({
     crawlRunId,
@@ -6166,6 +6617,88 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         validTo: sparPdfResult.validity?.validTo ? sparPdfResult.validity.validTo.toISOString() : null,
         validityText: sparPdfResult.validity?.validityText || '',
         pdfReports: sparPdfResult.pdfReports,
+      };
+    }
+
+    if (isSparProductworldSource(source)) {
+      const productworldResult = await crawlSparProductworldSource({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+      });
+      const sourceKey = sparProductworldSourceKey(source);
+      const offersStored = productworldResult.offerDocuments.length;
+      const status = offersStored > 0 || productworldResult.rawCandidateCount > 0 ? 'success' : 'partial';
+
+      await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
+        status,
+        discoveredPages: productworldResult.rawDocumentCount,
+        rawDocuments: productworldResult.rawDocumentCount,
+        rawCandidateCount: productworldResult.rawCandidateCount,
+        offers: productworldResult.offerDocuments,
+        source,
+        sourceType: SPAR_PRODUCTWORLD_SOURCE_TYPE,
+        parserVersion: SPAR_PRODUCTWORLD_PARSER_VERSION,
+        normalizationVersion: NORMALIZATION_VERSION,
+        httpLog: {
+          transport: 'node-http2',
+          origin: SPAR_PRODUCTWORLD_BFF_ORIGIN,
+          statuses: productworldResult.diagnostics?.httpStatuses || [],
+        },
+        warningMessages: [],
+        errorMessages: [],
+        extraRejectionReasons: productworldResult.rejectionReasons || [],
+        validFrom: productworldResult.validity?.validFrom || null,
+        validTo: productworldResult.validity?.validTo || null,
+        metadata: {
+          sourceLabel: source.label,
+          sourceUrl: source.sourceUrl,
+          sourceKey,
+          productworld: productworldResult.diagnostics,
+          detectedValidity: {
+            validFrom: productworldResult.validity?.validFrom ? productworldResult.validity.validFrom.toISOString() : null,
+            validTo: productworldResult.validity?.validTo ? productworldResult.validity.validTo.toISOString() : null,
+            validityText: productworldResult.validity?.validityText || '',
+            validitySource: 'spar-productworld-freshness-ttl',
+            validityConfidence: 0.72,
+          },
+          refreshResult: productworldResult.refreshResult,
+        },
+      }));
+
+      await Source.findByIdAndUpdate(source._id, {
+        latestRunAt: new Date(),
+        latestStatus: status,
+      });
+
+      return {
+        retailerKey: source.retailerKey,
+        retailerName: source.retailerName,
+        channel: source.channel,
+        sourceType: SPAR_PRODUCTWORLD_SOURCE_TYPE,
+        sourceKey,
+        status,
+        offersStored,
+        foundRawItems: productworldResult.rawCandidateCount,
+        parsedOffers: offersStored,
+        rejectedOffers: Math.max(0, productworldResult.rawCandidateCount - offersStored),
+        ...sourceCoverageFields({
+          foundRawItems: productworldResult.rawCandidateCount,
+          parsedOffers: offersStored,
+          offersStored,
+          rejectedOffers: Math.max(0, productworldResult.rawCandidateCount - offersStored),
+          offers: productworldResult.offerDocuments,
+          rejectionReasons: productworldResult.rejectionReasons || [],
+          validFrom: productworldResult.validity?.validFrom || null,
+          validTo: productworldResult.validity?.validTo || null,
+        }),
+        evidenceMatched: 0,
+        discoveredLinks: productworldResult.rawDocumentCount,
+        sourceUrl: source.sourceUrl,
+        validFrom: productworldResult.validity?.validFrom ? productworldResult.validity.validFrom.toISOString() : null,
+        validTo: productworldResult.validity?.validTo ? productworldResult.validity.validTo.toISOString() : null,
+        validityText: productworldResult.validity?.validityText || '',
+        diagnostics: productworldResult.diagnostics,
       };
     }
 

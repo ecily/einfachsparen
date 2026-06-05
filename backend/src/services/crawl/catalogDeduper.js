@@ -13,6 +13,10 @@ const CHANNEL_PRIORITY = {
   other: 3,
 };
 
+const SOURCE_TYPE_PRIORITY = {
+  'spar-family-official-productworld': -1,
+};
+
 function normalizeTitle(value) {
   return String(value || '')
     .toLowerCase()
@@ -105,6 +109,12 @@ function buildDedupeKey(offer) {
 }
 
 function getPriority(source) {
+  const sourceTypePriority = SOURCE_TYPE_PRIORITY[source?.sourceType];
+
+  if (Number.isFinite(sourceTypePriority)) {
+    return sourceTypePriority;
+  }
+
   return CHANNEL_PRIORITY[source?.channel] ?? 99;
 }
 

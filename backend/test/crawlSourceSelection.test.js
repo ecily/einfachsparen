@@ -135,6 +135,42 @@ test('source key derivation keeps INTERSPAR PDFs on SPAR flugblatt domain select
   );
 });
 
+test('source key derivation recognizes SPAR Productworld BFF sources before generic spar.at fallback', () => {
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'spar',
+      channel: 'official-site',
+      sourceType: 'spar-family-official-productworld',
+      parserHint: 'official-productworld-bff',
+      sourceRetailerFormat: 'spar',
+      sourceUrl: 'https://api-scp.spar-ics.com/ecom/pw/v1/search/v1/search?marketId=NATIONAL&filters=inAngebot,isPreisGesenkt',
+    }),
+    'spar-official-productworld'
+  );
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'eurospar',
+      channel: 'official-site',
+      sourceType: 'spar-family-official-productworld',
+      parserHint: 'official-productworld-bff',
+      sourceRetailerFormat: 'eurospar',
+      sourceUrl: 'https://api-scp.spar-ics.com/ecom/pw/v1/search/v1/search?marketId=EUROSPAR&filters=inAngebot,isPreisGesenkt',
+    }),
+    'eurospar-official-productworld'
+  );
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'interspar',
+      channel: 'official-site',
+      sourceType: 'spar-family-official-productworld',
+      parserHint: 'official-productworld-bff',
+      sourceRetailerFormat: 'interspar',
+      sourceUrl: 'https://api-scp.spar-ics.com/ecom/pw/v1/search/v1/search?marketId=INTERSPAR&filters=inAngebot,isPreisGesenkt',
+    }),
+    'interspar-official-productworld'
+  );
+});
+
 test('sourceKeys select exactly the requested runnable sources without SPAR official', async () => {
   const selection = await resolveCrawlSourceSelection({
     Source: fakeSourceModel(),
