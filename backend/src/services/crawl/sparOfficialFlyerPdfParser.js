@@ -19,8 +19,9 @@ const { inferAustrianBeerCrateQuantityFields } = require('./offerQualityGuards')
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidity');
+const { extractSparFamilyPdfLayoutCandidates } = require('./sparFamilyPdfLayoutExtractor');
 
-const PARSER_VERSION = 'spar-official-flyer-pdf-v5';
+const PARSER_VERSION = 'spar-official-flyer-pdf-v6';
 const SOURCE_TYPE = 'spar-official-pdf';
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 6;
@@ -817,10 +818,53 @@ function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 's
   return candidates;
 }
 
+const OVERLAP_STOP_TOKENS = new Set([
+  'ab',
+  'aktion',
+  'bei',
+  'big',
+  'der',
+  'die',
+  'das',
+  'ein',
+  'eine',
+  'einer',
+  'fuer',
+  'je',
+  'laut',
+  'mit',
+  'oder',
+  'pack',
+  'pkg',
+  'spar',
+  'statt',
+  'und',
+  'versch',
+  'verschiedene',
+  'von',
+]);
+
+function significantOverlapTokens(value = '') {
+  return new Set(
+    normalizeTitleForMatch(value)
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 4 && !OVERLAP_STOP_TOKENS.has(token))
+  );
+}
+
+function countTokenOverlap(leftTokens, rightTokens) {
+  let count = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) count += 1;
+  }
+  return count;
+}
+
 function genericCandidateOverlapsKnown(candidate = {}, knownCandidates = []) {
   if (!candidate || candidate.exclusionReason) return false;
 
   const candidateTitle = normalizeTitleForMatch(candidate.title || '');
+  const candidateTokens = significantOverlapTokens(candidate.title || '');
   const candidateQuantity = parseQuantity(candidate.quantityText || '');
   const candidateQuantityKey = candidateQuantity.comparableUnit && candidateQuantity.totalComparableAmount
     ? `${candidateQuantity.comparableUnit}:${candidateQuantity.totalComparableAmount}`
@@ -838,6 +882,8 @@ function genericCandidateOverlapsKnown(candidate = {}, knownCandidates = []) {
 
     const knownTitle = normalizeTitleForMatch(known.title || '');
     const knownBrand = normalizeTitleForMatch(known.brand || '');
+    const knownTokens = significantOverlapTokens(`${known.title || ''} ${known.brand || ''}`);
+    const overlapCount = countTokenOverlap(candidateTokens, knownTokens);
 
     return Boolean(
       knownTitle
@@ -845,6 +891,7 @@ function genericCandidateOverlapsKnown(candidate = {}, knownCandidates = []) {
         candidateTitle.includes(knownTitle)
         || knownTitle.includes(candidateTitle)
         || (knownBrand && candidateTitle.includes(knownBrand))
+        || overlapCount >= 2
       )
     );
   });
@@ -2280,18 +2327,25 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
   }
 
   if (
-    /spar\s+mullsack\s+mit\s+zugband|spar\s+muellsack\s+mit\s+zugband/.test(normalized)
-    && /35,\s*45\s+oder\s+70\s+liter/.test(normalized)
-    && /1[,.]\s*32/.test(normalized)
+    /spar\s*(?:mullsack|muellsack)\s*mit\s*zugband/.test(normalized)
+    && /35,\s*45\s+oder\s+70\s*liter/.test(normalized)
+    && (/1[,.]\s*32/.test(normalized) || /1[,.]\s*99/.test(normalized))
   ) {
+    const currentThresholdDeal = /2[,.]\s*19/.test(normalized)
+      && /ab\s*2\s*pkg/.test(normalized)
+      && /1[,.]\s*99/.test(normalized);
     addSharedCandidate(householdCandidate({
       title: 'SPAR Muellsack mit Zugband',
       brand: 'SPAR',
-      price: 1.32,
-      referencePrice: 1.99,
+      price: currentThresholdDeal ? 1.99 : 1.32,
+      referencePrice: currentThresholdDeal ? 2.19 : 1.99,
       quantityText: '35-70 l',
-      conditionsText: `2+1 gratis; ${sharedCondition}`,
-      rawText: 'SPAR Muellsack mit Zugband, 35, 45 oder 70 Liter, ab 3 Pkg. je 1,32',
+      conditionsText: currentThresholdDeal
+        ? `ab 2 Packungen je 1,99; ${sharedCondition}`
+        : `2+1 gratis; ${sharedCondition}`,
+      rawText: currentThresholdDeal
+        ? 'SPAR Muellsack mit Zugband, 35, 45 oder 70 Liter, 1 Pkg. 2,19, ab 2 Pkg. je 1,99'
+        : 'SPAR Muellsack mit Zugband, 35, 45 oder 70 Liter, ab 3 Pkg. je 1,32',
       comparisonSafe: false,
       categoryPrimary: 'Haushalt',
       categorySecondary: 'Aufbewahrung & Folien',
@@ -3230,9 +3284,9 @@ function extractKnownSparFamilyKw23RecoveryCandidatesFromPage(page, { sourceReta
   }
 
   if (
-    sourceRetailerFormat === 'spar'
-    && /always\s+ultra\s+binden\s+big\s+pack/.test(normalized)
-    && /12\s*-\s*26\s+stuck|12\s*-\s*26\s+stueck/.test(normalized)
+    /always\s*ultra\s*binden(?:\s*big\s*pack)?/.test(normalized)
+    && /big\s*pack|12\s*-\s*26\s*(?:stuck|stueck)/.test(normalized)
+    && /12\s*-\s*26\s*(?:stuck|stueck)/.test(normalized)
     && /3[,.]\s*19/.test(normalized)
   ) {
     addRecoveryCandidate({
@@ -3744,11 +3798,18 @@ function buildRejectedCandidateSamples({
   return samples;
 }
 
-function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', validity = {} } = {}) {
+function extractSparPdfCandidates({
+  pages = [],
+  sourceRetailerFormat = 'spar',
+  validity = {},
+  layoutCandidates = [],
+} = {}) {
   const candidates = [];
   const seen = new Set();
 
   for (const page of pages) {
+    const pageLayoutCandidates = layoutCandidates
+      .filter((candidate) => Number(candidate.page) === Number(page.pageNumber));
     const knownCandidates = [
       ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownChocolateCandidatesFromPage(page, { sourceRetailerFormat, validity }),
@@ -3760,6 +3821,7 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
       ...extractKnownIntersparMeinZuhauseSommerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFamilyKw23RecoveryCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...pageLayoutCandidates,
     ];
     const genericCandidates = extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat })
       .filter((candidate) => !genericCandidateOverlapsKnown(candidate, knownCandidates));
@@ -3834,10 +3896,23 @@ async function extractSparPdfReference({
       }
       : validity;
 
+    let layoutCandidates = [];
+    let layoutError = '';
+    try {
+      layoutCandidates = await extractSparFamilyPdfLayoutCandidates({
+        pdfBuffer,
+        maxPages,
+        sourceRetailerFormat,
+      });
+    } catch (error) {
+      layoutError = error?.message || String(error);
+    }
+
     const candidates = extractSparPdfCandidates({
       pages,
       sourceRetailerFormat,
       validity: effectiveValidity,
+      layoutCandidates,
     });
 
     return {
@@ -3845,6 +3920,8 @@ async function extractSparPdfReference({
         sourceUrl,
         bytes: pdfBuffer.length,
         pages: pages.length,
+        layoutCandidateCount: layoutCandidates.length,
+        layoutError,
       },
       validity: effectiveValidity,
       pages: pages.map((page) => ({
@@ -4120,7 +4197,7 @@ function normalizeSparPdfCandidateToOffer({
       validitySource: validity.validitySource,
       validityConfidence: validity.confidence,
       parserVersion: PARSER_VERSION,
-      extractionMethod: 'text-layer',
+      extractionMethod: candidate.parserHint === 'pdfjs-layout-price-window' ? 'pdfjs-layout' : 'text-layer',
       snapshotCurrent: false,
     },
     needsReview: true,

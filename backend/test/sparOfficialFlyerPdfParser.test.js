@@ -266,6 +266,38 @@ test('extracts SPAR-family Monatssparer shared folder offers', () => {
   assert.ok(offers.some((offer) => offer.title === 'SPAR Muellsack mit Zugband' && /2\+1 gratis/i.test(offer.conditionsText)));
 });
 
+test('extracts current SPAR-family Muellsack threshold deal from Monatssparer text', () => {
+  const validity = {
+    validFrom: new Date('2026-05-12T22:00:00.000Z'),
+    validTo: new Date('2026-06-10T21:59:59.999Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: 'SPAR Muellsack mit Zugband 35, 45 oder 70 Liter 1 Pkg. 2,19 ab 2 Pkg. je 1,99',
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx',
+  });
+  const offer = offers.find((item) => item.title === 'SPAR Muellsack mit Zugband');
+
+  assert.ok(offer);
+  assert.equal(offer.priceCurrent.amount, 1.99);
+  assert.equal(offer.priceReference.amount, 2.19);
+  assert.match(offer.conditionsText, /ab 2 Packungen/);
+  assert.equal(offer.categoryKey, 'aufbewahrung-folien');
+  assert.equal(offer.quality.comparisonSafe, false);
+});
+
 test('extracts SPAR-family Grillfolder shared offers', () => {
   const validity = activeValidityForTest();
   const candidates = extractSparPdfCandidates({
@@ -386,6 +418,63 @@ test('extracts selected SPAR-family KW23 recovery offers with retailer-specific 
   assert.ok(eurosparOffers.some((offer) => offer.title === 'Goesser Maerzen' && offer.quantityText === '20 x 0.5 l'));
   assert.ok(eurosparOffers.some((offer) => offer.title === 'Pepsi oder Pepsi Zero' && offer.retailerKey === 'eurospar'));
   assert.ok(eurosparOffers.some((offer) => offer.title === 'Faschiertes gemischt' && offer.categorySecondary === 'Fleisch & Wurst'));
+});
+
+test('extracts Always Ultra Binden even when text layer separates Big Pack details', () => {
+  const validity = activeValidityForTest();
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 5,
+        text: [
+          'Always Ultra Binden',
+          'Big Pack',
+          'versch. Sorten, 12-26 Stueck',
+          '1 Pkg. 4,08',
+          'ab 2 Pkg. je 3,19',
+        ].join('\n'),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/getPdf.ashx',
+  });
+  const offer = offers.find((item) => item.title === 'Always Ultra Binden Big Pack');
+
+  assert.ok(offer);
+  assert.equal(offer.priceCurrent.amount, 3.19);
+  assert.equal(offer.categoryKey, 'damenhygiene');
+  assert.match(offer.conditionsText, /ab 2 Packungen/);
+});
+
+test('dedupes split Kantwurst generic candidate when known Reiter candidate exists', () => {
+  const validity = activeValidityForTest();
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: [
+          'Reiter Kantwurst oder unga-',
+          'rische Salami',
+          '400 g',
+          'statt 7,99',
+          '6,49',
+        ].join('\n'),
+      },
+    ],
+  }).filter((candidate) => !candidate.exclusionReason);
+  const kantwurst = candidates.filter((candidate) => /Kantwurst/i.test(candidate.title || ''));
+
+  assert.equal(kantwurst.length, 1);
+  assert.equal(kantwurst[0].title, 'Kantwurst oder ungarische Salami von Reiter');
 });
 
 test('normalizes safe SPAR Puntigamer crate fallback from Kiste and half-liter bottle context', () => {
