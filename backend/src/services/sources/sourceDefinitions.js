@@ -464,6 +464,9 @@ const RETAILER_DEFINITIONS = [
     sourceUrl: 'https://api-scp.spar-ics.com/ecom/pw/v1/search/v1/search?marketId=EUROSPAR&filters=inAngebot,isPreisGesenkt',
     sourceType: 'spar-family-official-productworld',
     priority: 1,
+    enabled: false,
+    latestStatus: 'inactive',
+    disabledReason: 'production-productworld-eurospar-inangebot-403',
     parserHint: 'official-productworld-bff',
     parserVersion: 'spar-productworld-bff-v1',
     sourceRetailerName: 'EUROSPAR',
@@ -480,7 +483,7 @@ const RETAILER_DEFINITIONS = [
       delayMs: 250,
     },
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
-    notes: 'Aktiviert nach Production-Transport-Matrix 2026-06-05: DigitalOcean Node HTTP/2 liefert offizielles JSON, HTTP/1.1/fetch/axios/curl bleiben Cloudflare-403. Importiert nur echte Angebot-/Preisvorteil-Filter; normale Produktwelt-Sortimentsprodukte bleiben ausgeschlossen.',
+    notes: 'Weiter deaktiviert nach Production-Transport-Matrix 2026-06-05: marketId=EUROSPAR liefert per Node HTTP/2 JSON fuer isPreisGesenkt, aber inAngebot bleibt Cloudflare-403. Crawler erwartet beide Filter; daher keine Teilaktivierung/Fake-Coverage.',
   },
   {
     retailerKey: 'interspar',
