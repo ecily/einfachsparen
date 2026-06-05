@@ -8,6 +8,7 @@ const {
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateMatch,
   buildSparConditionSupplementalCandidateMatch,
+  buildSparOfficialProductSupplementalCandidateMatch,
   buildRetailerScopeMatch,
   buildRankedOffer,
   buildValidityLabel,
@@ -33,6 +34,7 @@ const {
   mergeCandidateOffers,
   normalizeSearchText,
   normalizeRetailerList,
+  shouldLoadSparOfficialProductSupplementalCandidates,
   shouldLoadSparConditionSupplementalCandidates,
   paginateVisibleRankingOffers,
   parseRankingCategories,
@@ -579,6 +581,143 @@ test('non-condition control queries do not activate SPAR condition supplement', 
     assert.equal(shouldLoadSparConditionSupplementalCandidates({ query }), false);
     assert.equal(buildSparConditionSupplementalCandidateMatch({ query }), null);
   }
+});
+
+test('SPAR official product supplemental query activates only for coffee and ice product intent', () => {
+  for (const query of ['kaffee', 'lavazza', 'kimbo', 'hornig', 'eskimo', 'magnum', 'eis']) {
+    assert.equal(shouldLoadSparOfficialProductSupplementalCandidates({ query }), true);
+  }
+
+  for (const query of ['gin', 'butter', 'wurst', 'spar 1+1', 'koffer']) {
+    assert.equal(shouldLoadSparOfficialProductSupplementalCandidates({ query }), false);
+  }
+
+  assert.equal(shouldLoadSparOfficialProductSupplementalCandidates({ query: 'kaffee', selectedRetailers: ['hofer'] }), false);
+  assert.equal(shouldLoadSparOfficialProductSupplementalCandidates({ query: 'kaffee', selectedRetailers: ['spar'] }), true);
+  assert.equal(shouldLoadSparOfficialProductSupplementalCandidates({ query: 'eis', selectedRetailers: ['interspar'] }), true);
+});
+
+test('SPAR official product supplemental candidate match is official-pdf and product-gated', () => {
+  const coffeeMatch = buildSparOfficialProductSupplementalCandidateMatch({ query: 'kaffee' });
+  const iceMatch = buildSparOfficialProductSupplementalCandidateMatch({ query: 'eis' });
+  const coffeeSerialized = JSON.stringify(coffeeMatch);
+  const coffeeRegexText = coffeeMatch.$and
+    .flatMap((part) => part.$or || [])
+    .flatMap((branch) => Object.values(branch))
+    .filter((value) => value instanceof RegExp)
+    .map(String)
+    .join(' ');
+  const iceRegexText = iceMatch.$and
+    .flatMap((part) => part.$or || [])
+    .flatMap((branch) => Object.values(branch))
+    .filter((value) => value instanceof RegExp)
+    .map(String)
+    .join(' ');
+
+  assert.equal(coffeeMatch.status, 'active');
+  assert.equal(coffeeMatch.isActiveNow, true);
+  assert.ok(coffeeSerialized.includes('spar'));
+  assert.ok(coffeeSerialized.includes('eurospar'));
+  assert.ok(coffeeSerialized.includes('interspar'));
+  assert.ok(coffeeSerialized.includes('sourceType'));
+  assert.ok(coffeeSerialized.includes('sourceUrls'));
+  assert.ok(coffeeSerialized.includes('evidenceUrls'));
+  assert.match(coffeeRegexText, /lavazza/i);
+  assert.match(coffeeRegexText, /kimbo/i);
+  assert.ok(coffeeSerialized.includes('titleNormalized'));
+  assert.equal(coffeeSerialized.includes('categorySecondary'), false);
+
+  assert.match(iceRegexText, /eskimo/i);
+  assert.match(iceRegexText, /magnum/i);
+  assert.equal(buildSparOfficialProductSupplementalCandidateMatch({ query: 'gin' }), null);
+  assert.equal(buildSparOfficialProductSupplementalCandidateMatch({ query: 'kaffee', selectedRetailers: ['hofer'] }), null);
+});
+
+test('SPAR product supplemental candidates restore coffee and ice products after primary cap', () => {
+  const primary = Array.from({ length: 220 }, (_, index) => offer({
+    _id: `billa-kaffee-${index}`,
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    title: `BILLA Kaffee Aktion ${index}`,
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: `billa-kaffee-${index}::1-kg`,
+    searchText: `billa kaffee aktion ${index}`,
+    sortScoreDefault: 250 - index,
+  })).slice(0, 200);
+  const lavazza = sparPdfOffer({
+    _id: 'pdf-lavazza-kaffee',
+    retailerKey: 'interspar',
+    retailerName: 'INTERSPAR',
+    sourceRetailerFormat: 'interspar',
+    title: 'Lavazza Espresso Cremoso',
+    brand: 'Lavazza',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'lavazza-espresso-cremoso::1-kg',
+    searchText: 'interspar lavazza espresso cremoso kaffee',
+  });
+  const eskimo = sparPdfOffer({
+    _id: 'pdf-eskimo-eis',
+    title: 'Eskimo 6 Family Mix tiefgekuehlt',
+    brand: 'Eskimo',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Tiefkuehl- & Fertigprodukte',
+    comparisonGroup: 'eskimo-family-mix::6-stueck',
+    searchText: 'spar eskimo family mix tiefkuehl lebensmittel',
+  });
+
+  assert.equal(primary.some((item) => item._id === lavazza._id), false);
+  assert.equal(applyQueryMatch(primary, 'kaffee').some((item) => item._id === lavazza._id), false);
+  assert.equal(applyQueryMatch(mergeCandidateOffers(primary, [lavazza]), 'kaffee')[0]._id, 'pdf-lavazza-kaffee');
+  assert.equal(applyQueryMatch([eskimo], 'eis')[0]._id, 'pdf-eskimo-eis');
+});
+
+test('eis search prefers ice-cream brands over drogerie ice side hits', () => {
+  const eskimo = offer({
+    _id: 'eskimo-eis',
+    title: 'Eskimo 6 Family Mix tiefgekuehlt',
+    brand: 'Eskimo',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Tiefkuehl- & Fertigprodukte',
+    comparisonGroup: 'eskimo-family-mix::6-stueck',
+    searchText: 'eskimo family mix tiefkuehl lebensmittel',
+  });
+  const rollOn = offer({
+    _id: 'roll-on',
+    title: 'Teufelssalbe Eis Roll-On',
+    brand: 'Teufelssalbe',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Koerperpflege',
+    comparisonGroup: 'teufelssalbe-eis-roll-on::1-stueck',
+    searchText: 'teufelssalbe eis roll on koerperpflege',
+  });
+
+  assert.equal(applyQueryMatch([rollOn, eskimo], 'eis')[0]._id, 'eskimo-eis');
+  assert.ok(scoreOfferAgainstQuery(eskimo, 'eis') > scoreOfferAgainstQuery(rollOn, 'eis'));
+});
+
+test('gin search rejects original substring side hits and keeps exact gin products', () => {
+  const original = offer({
+    _id: 'original-tortilla',
+    title: 'Santa Maria Tortilla Original oder Whole Wheat',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Brot & Gebaeck',
+    comparisonGroup: 'santa-maria-tortilla-original::320-g',
+    searchText: 'santa maria tortilla original whole wheat',
+  });
+  const gin = offer({
+    _id: 'hendricks-gin',
+    title: "Hendrick's Gin 0,7 l",
+    brand: 'Hendrick',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Spirituosen',
+    comparisonGroup: 'hendricks-gin::0.7-l',
+    searchText: 'hendricks gin london dry spirituosen',
+  });
+
+  assert.deepEqual(applyQueryMatch([original], 'gin'), []);
+  assert.equal(applyQueryMatch([original, gin], 'gin')[0]._id, 'hendricks-gin');
 });
 
 test('SPAR-family retailer prefixes are not treated as dominant product tokens', () => {
@@ -6420,7 +6559,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

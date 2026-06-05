@@ -130,9 +130,10 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
+const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
 const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
@@ -177,16 +178,19 @@ const KAFFEE_PRODUCT_TOKENS = [
   'filterkaffee',
   'gemahlen',
   'hochlandkaffee',
+  'hornig',
   'jacobs',
   'kaffee',
   'kaffeekapsel',
   'kaffeekapseln',
   'kapsel',
   'kapseln',
+  'kimbo',
   'lavazza',
   'lungo',
   'meinl',
   'melange',
+  'mokaflor',
   'nescafe',
   'nespresso',
   'nespressokompatible',
@@ -224,6 +228,17 @@ const KAFFEE_COSMETIC_SIDE_TOKENS = [
   'mascara',
   'parfum',
   'stift',
+];
+
+const EIS_PRODUCT_TOKENS = [
+  'cornetto',
+  'cremissimo',
+  'eis',
+  'eiscreme',
+  'eisperle',
+  'eskimo',
+  'magnum',
+  'speiseeis',
 ];
 
 function getRankingCacheCapabilities() {
@@ -1154,6 +1169,17 @@ const QUERY_CONTEXTS = [
     productContext: ['kaffee', 'cafe', 'caffe', 'fruehstueck', 'fruhstuck'],
     weakContexts: ['eiskaffee', 'drink', 'pflanze', 'zierpflanze', 'duftgeranie', 'tomate', 'erdbeere', 'banane'],
     severeWeakContexts: ['eistee', 'teebeutel', 'teekanne', 'schwarztee', 'kraeutertee', 'krautertee', 'fruechtetee', 'fruchtetee', 'kamillentee', 'pfefferminztee', 'eyeliner', 'mascara', 'parfum'],
+  },
+  {
+    key: 'eis',
+    tokens: ['eis', 'eiscreme', 'speiseeis'],
+    preferred: ['eis', 'eiscreme', 'speiseeis', 'eskimo', 'magnum', 'cremissimo', 'eisperle', 'cornetto', 'tiefkuehl', 'tiefkuhl', 'lebensmittel'],
+    strongPreferred: ['eis', 'eiscreme', 'speiseeis', 'eskimo', 'magnum', 'cremissimo', 'eisperle', 'cornetto'],
+    productIntent: EIS_PRODUCT_TOKENS,
+    exactProductIntent: EIS_PRODUCT_TOKENS.filter((token) => token !== 'eis'),
+    productContext: ['eis', 'eiscreme', 'speiseeis', 'tiefkuehl', 'tiefkuhl', 'lebensmittel'],
+    weakContexts: ['eistee', 'eiskaffee'],
+    severeWeakContexts: ['salbe', 'roll', 'roll-on', 'teufelssalbe', 'koerperpflege', 'korperpflege', 'kosmetik', 'drogerie'],
   },
   {
     key: 'milch',
@@ -3206,6 +3232,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const kaffeeIntentQuery = context?.key === 'kaffee' && queryTokens.some((token) =>
     ['cafe', 'caffe', 'cappuccino', 'espresso', 'kaffee', 'kaffeekapsel', 'kaffeekapseln'].includes(token)
   );
+  const exactGinQuery = queryTokens.length === 1 && queryTokens[0] === 'gin';
   let score = 0;
 
   if (coffeeOrTeaQuery && !butterQuery && hasTeebutterProduct && !hasCoffeeOrTeaProduct) {
@@ -3215,6 +3242,16 @@ function scoreOfferAgainstQuery(offer, query) {
   if (
     kaffeeIntentQuery &&
     isUnsupportedKaffeeSideHit({ titleTokens, comparisonTokens, aggregateTokens })
+  ) {
+    return 0;
+  }
+
+  if (
+    exactGinQuery &&
+    !hasAnyTokenMatch(titleTokens.concat(comparisonTokens, aggregateTokens), ['gin'], {
+      exact: true,
+      suffix: false,
+    })
   ) {
     return 0;
   }
@@ -6820,6 +6857,123 @@ function buildSparConditionSupplementalCandidateMatch({
   return match;
 }
 
+function getSparOfficialProductSupplementalIntent(query = '') {
+  const tokens = tokenizeSearchText(getProductScoringQuery(query));
+  const coffeeIntent = tokens.some((token) => KAFFEE_PRODUCT_TOKENS.includes(token) || ['kaffee', 'cafe', 'caffe'].includes(token));
+  const iceIntent = tokens.some((token) => EIS_PRODUCT_TOKENS.includes(token));
+
+  return {
+    coffee: coffeeIntent,
+    ice: iceIntent,
+  };
+}
+
+function shouldLoadSparOfficialProductSupplementalCandidates({ query = '', selectedRetailers = [] } = {}) {
+  const intent = getSparOfficialProductSupplementalIntent(query);
+
+  if (!intent.coffee && !intent.ice) {
+    return false;
+  }
+
+  const selected = normalizeRetailerList(selectedRetailers);
+  return selected.length === 0 || selected.some((retailerKey) => SPAR_FORMAT_RETAILER_KEYS.has(retailerKey));
+}
+
+function buildSparOfficialProductSupplementalRegex(query = '') {
+  const intent = getSparOfficialProductSupplementalIntent(query);
+  const parts = [];
+
+  if (intent.coffee) {
+    parts.push(
+      'barista',
+      'bohnen?',
+      'caf(?:e|fe)',
+      'cappuccino',
+      'eduscho',
+      'espresso',
+      'hornig',
+      'jacobs',
+      'kaffee',
+      'kaffeekapseln?',
+      'kapseln?',
+      'kimbo',
+      'lavazza',
+      'meinl',
+      'mokaflor',
+      'nescafe',
+      'nespresso',
+      'segafredo',
+      'tchibo',
+    );
+  }
+
+  if (intent.ice) {
+    parts.push(
+      'cornetto',
+      'cremissimo',
+      '\\beis\\b',
+      'eiscreme',
+      'eisperle',
+      'eskimo',
+      'magnum',
+      'speiseeis',
+    );
+  }
+
+  return parts.length > 0 ? new RegExp(parts.join('|'), 'i') : null;
+}
+
+function buildSparOfficialProductSupplementalCandidateMatch({
+  selectedRetailers = [],
+  selectedCategories = [],
+  unit = 'all',
+  onlyWithoutProgram = false,
+  query = '',
+} = {}) {
+  if (!shouldLoadSparOfficialProductSupplementalCandidates({ query, selectedRetailers })) {
+    return null;
+  }
+
+  const selected = normalizeRetailerList(selectedRetailers);
+  const scopedRetailers = selected.length > 0
+    ? selected.filter((retailerKey) => SPAR_FORMAT_RETAILER_KEYS.has(retailerKey))
+    : [...SPAR_FORMAT_RETAILER_KEYS];
+
+  if (scopedRetailers.length === 0) {
+    return null;
+  }
+
+  const productRegex = buildSparOfficialProductSupplementalRegex(query);
+
+  if (!productRegex) {
+    return null;
+  }
+
+  const match = buildRankingCandidateMatch({
+    selectedRetailers: scopedRetailers,
+    selectedCategories,
+    unit,
+    onlyWithoutProgram,
+    query: '',
+  });
+
+  match.$and = [
+    ...(Array.isArray(match.$and) ? match.$and : []),
+    buildSparOfficialPdfEvidenceMatch(),
+    {
+      $or: [
+        { title: productRegex },
+        { titleNormalized: productRegex },
+        { brand: productRegex },
+        { comparisonGroup: productRegex },
+        { searchText: productRegex },
+      ],
+    },
+  ];
+
+  return match;
+}
+
 function shouldRunSeparatedRegexFallback({ query = '', offers = [], queryMetadata = {} }) {
   if (!query || queryMetadata.candidateQueryMode !== 'searchTokensOnly') {
     return '';
@@ -7198,6 +7352,9 @@ async function findRankingCandidateOffers({
     let supplementalMatch = null;
     let supplementalLoadMs = 0;
     let supplementalLoadedDocumentCount = 0;
+    let productSupplementalMatch = null;
+    let productSupplementalLoadMs = 0;
+    let productSupplementalLoadedDocumentCount = 0;
 
     if (fallbackReason) {
       fallbackMatch = buildRankingCandidateFallbackMatch({
@@ -7246,6 +7403,31 @@ async function findRankingCandidateOffers({
       queryMetadata.supplementalLimit = 0;
     }
 
+    productSupplementalMatch = buildSparOfficialProductSupplementalCandidateMatch({
+      selectedRetailers,
+      selectedCategories,
+      unit,
+      onlyWithoutProgram,
+      query,
+    });
+
+    if (productSupplementalMatch) {
+      const productSupplementalQuery = buildRankingOfferQuery(productSupplementalMatch, SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT);
+      productSupplementalQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
+      const productSupplementalStartedAt = nowMs();
+      const productSupplementalOffers = await productSupplementalQuery;
+      productSupplementalLoadMs = nowMs() - productSupplementalStartedAt;
+      productSupplementalLoadedDocumentCount = productSupplementalOffers.length;
+      offers = mergeCandidateOffers(offers, productSupplementalOffers);
+      queryMetadata.productSupplementalUsed = true;
+      queryMetadata.productSupplementalReason = 'spar-family-official-product-intent';
+      queryMetadata.productSupplementalLimit = SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT;
+    } else {
+      queryMetadata.productSupplementalUsed = false;
+      queryMetadata.productSupplementalReason = '';
+      queryMetadata.productSupplementalLimit = 0;
+    }
+
     if (!collectExecutionStats) {
       return offers;
     }
@@ -7255,9 +7437,11 @@ async function findRankingCandidateOffers({
       primaryMatch,
       fallbackMatch,
       supplementalMatch,
+      productSupplementalMatch,
       sort: RANKING_SORT,
       limit: candidateLimit,
       supplementalLimit: SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT,
+      productSupplementalLimit: SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT,
       fields: OFFER_RANKING_FIELDS.split(' '),
       queryMetadata,
       fallbackQueryMetadata,
@@ -7266,9 +7450,11 @@ async function findRankingCandidateOffers({
         primaryFindMs: primaryLoadMs,
         fallbackFindMs: fallbackQueryMetadata?.loadMs || 0,
         supplementalFindMs: supplementalLoadMs,
+        productSupplementalFindMs: productSupplementalLoadMs,
         primaryLoadedDocumentCount: primaryOffers.length,
         fallbackLoadedDocumentCount: fallbackQueryMetadata?.loadedDocumentCount || 0,
         supplementalLoadedDocumentCount,
+        productSupplementalLoadedDocumentCount,
         loadedDocumentCount: offers.length,
         loadedDocumentBytes: Buffer.byteLength(JSON.stringify(offers), 'utf8'),
       },
@@ -7276,6 +7462,7 @@ async function findRankingCandidateOffers({
       primaryExecutionStats: null,
       fallbackExecutionStats: null,
       supplementalExecutionStats: null,
+      productSupplementalExecutionStats: null,
     };
 
     return {
@@ -8133,6 +8320,22 @@ async function buildOfferRanking({
         mongoDiagnostics.supplementalError = supplementalExplainResult.error;
       }
     }
+
+    if (mongoDiagnostics.productSupplementalMatch) {
+      const productSupplementalExplainResult = await explainRankingCandidateQuery({
+        selectedRetailers,
+        selectedCategories,
+        unit,
+        onlyWithoutProgram: withoutProgram,
+        query,
+        candidateLimit: mongoDiagnostics.productSupplementalLimit || SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT,
+        matchOverride: mongoDiagnostics.productSupplementalMatch,
+      });
+      mongoDiagnostics.productSupplementalExecutionStats = productSupplementalExplainResult.executionStats;
+      if (productSupplementalExplainResult.error) {
+        mongoDiagnostics.productSupplementalError = productSupplementalExplainResult.error;
+      }
+    }
     timings.explainMs = nowMs() - explainStartedAt;
 
     return {
@@ -8255,7 +8458,9 @@ module.exports = {
   buildRankingCandidateFallbackMatch,
   buildRankingCandidateQueryMetadata,
   buildSparConditionSupplementalCandidateMatch,
+  buildSparOfficialProductSupplementalCandidateMatch,
   hasSparConditionQueryIntent,
+  shouldLoadSparOfficialProductSupplementalCandidates,
   shouldLoadSparConditionSupplementalCandidates,
   mergeCandidateOffers,
   paginateVisibleRankingOffers,
