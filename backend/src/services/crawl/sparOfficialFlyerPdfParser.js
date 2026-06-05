@@ -20,7 +20,7 @@ const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCa
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidity');
 
-const PARSER_VERSION = 'spar-official-flyer-pdf-v2';
+const PARSER_VERSION = 'spar-official-flyer-pdf-v3';
 const SOURCE_TYPE = 'spar-official-pdf';
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 6;
@@ -938,6 +938,54 @@ function nonFoodPieceCandidate(data = {}) {
     comparisonSafe: false,
     quantityFallbackReason: 'spar-family-non-food-piece',
     parserHint: 'known-interspar-non-food-layout',
+    ...data,
+  };
+}
+
+function groceryCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Vorrat & Grundnahrungsmittel',
+    categoryKey: 'vorrat-grundnahrungsmittel',
+    searchKeywords: 'lebensmittel vorrat grundnahrungsmittel spar',
+    parserHint: 'known-spar-family-shared-folder-layout',
+    ...data,
+  };
+}
+
+function frozenCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Tiefkuehlprodukte',
+    categoryKey: 'tiefkuehlprodukte',
+    searchKeywords: 'tiefkuehl tiefkuehlprodukte eis frozen spar',
+    parserHint: 'known-spar-family-shared-folder-layout',
+    ...data,
+  };
+}
+
+function bakeryCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Brot & Backwaren',
+    categoryKey: 'brot-backwaren',
+    searchKeywords: 'brot backwaren gebaeck spar',
+    parserHint: 'known-spar-family-shared-folder-layout',
+    ...data,
+  };
+}
+
+function gardenCandidate(data = {}) {
+  return {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Garten',
+    categorySecondary: 'Pflanzenpflege',
+    categoryKey: 'pflanzenpflege',
+    searchKeywords: 'garten pflanzen balkon terrasse spar',
+    parserHint: 'known-spar-family-shared-folder-layout',
     ...data,
   };
 }
@@ -2003,6 +2051,952 @@ function extractKnownIntersparMeinZuhauseSommerCandidatesFromPage(page, { source
   return candidates;
 }
 
+function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (!isSparFamilyPdfFormat(sourceRetailerFormat)) {
+    return [];
+  }
+
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+  const sharedCondition = 'laut offiziellem SPAR-Family Folder';
+  const couponCondition = 'mit Gutschein laut SPAR-Family Gutscheinheft';
+
+  const addSharedCandidate = (candidate) => addCandidate(candidates, page.pageNumber, {
+    parserHint: 'known-spar-family-shared-folder-layout',
+    ...candidate,
+  });
+
+  if (
+    hasText(text, /dallmayr/)
+    && hasText(text, /crema\s+d.?oro/)
+    && /1\s*kg/.test(normalized)
+    && /19[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: "Dallmayr Crema d'Oro ganze Bohne",
+      brand: 'Dallmayr',
+      price: 19.99,
+      referencePrice: 30.99,
+      quantityText: '1 kg',
+      conditionsText: `ab 2 Packungen je 19,99; -35%; ${sharedCondition}`,
+      rawText: "Dallmayr Crema d'Oro ganze Bohne, 1 kg, ab 2 Pkg. je 19,99",
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      searchKeywords: "Dallmayr Crema d'Oro Kaffee ganze Bohne 1 kg Monatssparer",
+    }));
+  }
+
+  if (
+    hasText(text, /jacobs\s+cronat/)
+    && /200\s*g/.test(normalized)
+    && /6[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Jacobs Cronat Kraeftig oder Mild',
+      brand: 'Jacobs',
+      price: 6.99,
+      referencePrice: 13.99,
+      quantityText: '200 g',
+      conditionsText: `1+1 gratis; ${sharedCondition}`,
+      rawText: 'Jacobs Cronat Kraeftig oder Mild, 200 g, ab 2 Glaesern je 6,99',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      searchKeywords: 'Jacobs Cronat Kaffee Kraeftig Mild 200 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /bahlsen\s+ohne\s+gleichen/)
+    && /125\s*g/.test(normalized)
+    && /1[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Bahlsen Ohne Gleichen',
+      brand: 'Bahlsen',
+      price: 1.99,
+      referencePrice: 3.99,
+      quantityText: '125 g',
+      conditionsText: `2+2 gratis; ${sharedCondition}`,
+      rawText: 'Bahlsen Ohne Gleichen, verschiedene Sorten, 125 g, ab 4 Pkg. je 1,99',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      categoryKey: 'suesswaren-knabbereien',
+      searchKeywords: 'Bahlsen Ohne Gleichen Kekse 125 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /eskimo/)
+    && hasText(text, /cornetto/)
+    && /360\s*[-–]\s*540\s*ml/.test(normalized)
+    && /4[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(frozenCandidate({
+      title: 'Eskimo Cornetto Classico, Erdbeer, Max oder Mini Mix',
+      brand: 'Eskimo',
+      price: 4.49,
+      referencePrice: 6.99,
+      quantityText: '360-540 ml',
+      conditionsText: `ab 2 Packungen je 4,49; -35%; ${sharedCondition}`,
+      rawText: 'Eskimo Cornetto Classico, Erdbeer, Max oder Mini Mix, 360-540 ml, ab 2 Pkg. je 4,49',
+      comparisonSafe: false,
+      searchKeywords: 'Eskimo Cornetto Eis Tiefkuehl 360 540 ml Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /iglo/)
+    && hasText(text, /geniesserpfanne|genießerpfanne/)
+    && /500\s*[-–]\s*700\s*g/.test(normalized)
+    && /4[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(frozenCandidate({
+      title: 'Iglo Geniesserpfanne oder Lasagne al Forno',
+      brand: 'Iglo',
+      price: 4.99,
+      referencePrice: 7.49,
+      quantityText: '500-700 g',
+      conditionsText: `2+1 gratis; ${sharedCondition}`,
+      rawText: 'Iglo Geniesserpfanne oder Lasagne al Forno, tiefgekuehlt, 500-700 g, ab 3 Pkg. je 4,99',
+      comparisonSafe: false,
+      searchKeywords: 'Iglo Geniesserpfanne Lasagne Tiefkuehl 500 700 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /philadelphia\s+frischkaese|philadelphia\s+frischkäse/)
+    && /175\s*g/.test(normalized)
+    && /1[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(dairyCandidate({
+      title: 'Philadelphia Frischkaese',
+      brand: 'Philadelphia',
+      price: 1.99,
+      referencePrice: 2.49,
+      quantityText: '175 g',
+      conditionsText: `ab 2 Bechern je 1,99; ${sharedCondition}`,
+      rawText: 'Philadelphia Frischkaese, verschiedene Sorten, 175 g, ab 2 Bechern je 1,99',
+      comparisonSafe: true,
+      searchKeywords: 'Philadelphia Frischkaese 175 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /schaerdinger\s+formil|schärdinger\s+formil/)
+    && hasText(text, /haltbare\s+vollmilch/)
+    && /1\s*liter/.test(normalized)
+    && /0[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(dairyCandidate({
+      title: 'Schaerdinger Formil haltbare Vollmilch oder Leichtmilch',
+      brand: 'Schaerdinger',
+      price: 0.99,
+      referencePrice: 1.69,
+      quantityText: '1 l',
+      conditionsText: `ab 12 Packungen je 0,99; -41%; ${sharedCondition}`,
+      rawText: 'Schaerdinger Formil haltbare Vollmilch 3,5% oder Leichtmilch 0,5% Fett, 1 Liter, ab 12 Pkg. je 0,99',
+      comparisonSafe: true,
+      searchKeywords: 'Schaerdinger Formil haltbare Vollmilch Leichtmilch 1 l Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /loidl\s+salami/)
+    && /80\s*g/.test(normalized)
+    && /1[,.]\s*52/.test(normalized)
+  ) {
+    addSharedCandidate(meatCandidate({
+      title: 'Loidl Salami Sticks oder Salami Pralinen',
+      brand: 'Loidl',
+      price: 1.52,
+      referencePrice: 2.29,
+      quantityText: '80 g',
+      conditionsText: `2+1 gratis; ${sharedCondition}`,
+      rawText: 'Loidl Salami Sticks Edel, Klassisch oder Salami Pralinen, 80 g, ab 3 Pkg. je 1,52',
+      comparisonSafe: true,
+      searchKeywords: 'Loidl Salami Sticks Pralinen 80 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /reiter/)
+    && hasText(text, /kantwurst/)
+    && /400\s*g/.test(normalized)
+    && /6[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(meatCandidate({
+      title: 'Reiter Kantwurst oder ungarische Salami',
+      brand: 'Reiter',
+      price: 6.49,
+      referencePrice: 7.99,
+      quantityText: '400 g',
+      conditionsText: `bis zu -18%; ${sharedCondition}`,
+      rawText: 'Reiter Kantwurst oder ungarische Salami, 400 g, 6,49',
+      comparisonSafe: true,
+      searchKeywords: 'Reiter Kantwurst ungarische Salami 400 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /meisterbaecker\s+oelz|meisterbäcker\s+ölz/)
+    && hasText(text, /rosinenzopf/)
+    && /600\s*g/.test(normalized)
+    && /3[,.]\s*79/.test(normalized)
+  ) {
+    addSharedCandidate(bakeryCandidate({
+      title: 'Meisterbaecker Oelz Rosinenzopf',
+      brand: 'Oelz',
+      price: 3.79,
+      referencePrice: 4.49,
+      quantityText: '600 g',
+      conditionsText: `-15%; ${sharedCondition}`,
+      rawText: 'Meisterbaecker Oelz Rosinenzopf, 600 g, 3,79',
+      comparisonSafe: true,
+      searchKeywords: 'Oelz Rosinenzopf 600 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /lorenz\s+pommels/)
+    && /75\s*g/.test(normalized)
+    && /0[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(sweetCandidate({
+      title: 'Lorenz Pommels',
+      brand: 'Lorenz',
+      price: 0.99,
+      referencePrice: 1.99,
+      quantityText: '75 g',
+      conditionsText: `1+1 gratis; ${sharedCondition}`,
+      rawText: 'Lorenz Pommels, 75 g, ab 2 Pkg. je 0,99',
+      comparisonSafe: true,
+      searchKeywords: 'Lorenz Pommels 75 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /milka\s+kekse/)
+    && /150\s*[-–]\s*260\s*g/.test(normalized)
+    && /2[,.]\s*46/.test(normalized)
+  ) {
+    addSharedCandidate(sweetCandidate({
+      title: 'Milka Kekse',
+      brand: 'Milka',
+      price: 2.46,
+      referencePrice: 3.69,
+      quantityText: '150-260 g',
+      conditionsText: `2+1 gratis; ${sharedCondition}`,
+      rawText: 'Milka Kekse, verschiedene Sorten, 150-260 g, ab 3 Pkg. je 2,46',
+      comparisonSafe: false,
+      searchKeywords: 'Milka Kekse 150 260 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /bio-aceto\s+balsamico/)
+    && /0[,.]\s*5\s*liter/.test(normalized)
+    && /3[,.]\s*79/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Bio-Aceto Balsamico di Modena IGP oder Bio-Condimento Bianco',
+      brand: 'SPAR Natur pur',
+      price: 3.79,
+      referencePrice: 4.79,
+      quantityText: '0.5 l',
+      conditionsText: `ab 2 Flaschen je 3,79; ${sharedCondition}`,
+      rawText: 'Bio-Aceto Balsamico di Modena IGP oder Bio-Condimento Bianco, 0,5 Liter, ab 2 Fl. je 3,79',
+      comparisonSafe: true,
+      searchKeywords: 'Bio Aceto Balsamico Condimento Bianco 0.5 l Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /wiener\s+gelierzucker/)
+    && /1\s*kg/.test(normalized)
+    && /1[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Wiener Gelierzucker 1:1 oder 2:1 XXL',
+      brand: 'Wiener Zucker',
+      price: 1.99,
+      referencePrice: 2.19,
+      quantityText: '1 kg',
+      conditionsText: `ab 2 Packungen je 1,99; ${sharedCondition}`,
+      rawText: 'Wiener Gelierzucker 1:1 oder 2:1 XXL, 1 kg, ab 2 Pkg. je 1,99',
+      comparisonSafe: true,
+      searchKeywords: 'Wiener Zucker Gelierzucker 1 kg Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /wiener\s+gelierzucker/)
+    && /3:1/.test(normalized)
+    && /500\s*g/.test(normalized)
+    && /1[,.]\s*32/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Wiener Gelierzucker 3:1',
+      brand: 'Wiener Zucker',
+      price: 1.32,
+      referencePrice: 1.99,
+      quantityText: '500 g',
+      conditionsText: `2+1 gratis; ${sharedCondition}`,
+      rawText: 'Wiener Gelierzucker 3:1, 500 g, ab 3 Pkg. je 1,32',
+      comparisonSafe: true,
+      searchKeywords: 'Wiener Zucker Gelierzucker 3:1 500 g Monatssparer',
+    }));
+  }
+
+  if (
+    hasText(text, /spar/)
+    && hasText(text, /knoblauchbaguette|kraeuter-\s*oder\s+knoblauchbaguette|kräuter-\s*oder\s+knoblauchbaguette/)
+    && /175\s*g/.test(normalized)
+    && /0[,.]\s*89/.test(normalized)
+  ) {
+    addSharedCandidate(bakeryCandidate({
+      title: 'SPAR Kraeuter- oder Knoblauchbaguette',
+      brand: 'SPAR',
+      price: 0.89,
+      referencePrice: 0.99,
+      quantityText: '175 g',
+      conditionsText: `ab 2 Packungen je 0,89; ${sharedCondition}`,
+      rawText: 'SPAR Kraeuter- oder Knoblauchbaguette, gekuehlt, 175 g, ab 2 Pkg. je 0,89',
+      comparisonSafe: true,
+      searchKeywords: 'SPAR Kraeuterbaguette Knoblauchbaguette 175 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /kuner\s+sauce/)
+    && /250\s*ml/.test(normalized)
+    && /1[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Kuner Sauce',
+      brand: 'Kuner',
+      price: 1.99,
+      referencePrice: 2.79,
+      quantityText: '250 ml',
+      conditionsText: `-28%; ${sharedCondition}`,
+      rawText: 'Kuner Sauce, verschiedene Sorten, 250 ml, 1,99',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen & Gewuerze',
+      categoryKey: 'saucen-gewuerze',
+      searchKeywords: 'Kuner Sauce 250 ml Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /berner\s+wuerstl|berner\s+würstl/)
+    && hasText(text, /grillzwerge/)
+    && /450\s*\/\s*500\s*g/.test(normalized)
+    && /4[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(meatCandidate({
+      title: 'Berner Wuerstl oder Grillzwerge',
+      brand: '',
+      price: 4.99,
+      referencePrice: 5.99,
+      quantityText: '450-500 g',
+      conditionsText: `ab 2 Packungen je 4,99; ${sharedCondition}`,
+      rawText: 'Berner Wuerstl oder Grillzwerge, 450/500 g, ab 2 Pkg. je 4,99',
+      comparisonSafe: false,
+      searchKeywords: 'Berner Wuerstl Grillzwerge 450 500 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /hendl\s+filetschnitzel/)
+    && /400\s*g/.test(normalized)
+    && /4[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(meatCandidate({
+      title: 'SPAR feinstes Gefluegel Hendl Filetschnitzel gewuerzt',
+      brand: 'SPAR',
+      price: 4.99,
+      referencePrice: 6.29,
+      quantityText: '400 g',
+      conditionsText: `ab 2 Packungen je 4,99; ${sharedCondition}`,
+      rawText: 'SPAR feinstes Gefluegel Hendl Filetschnitzel gewuerzt, 400 g, ab 2 Pkg. je 4,99',
+      comparisonSafe: true,
+      searchKeywords: 'SPAR Hendl Filetschnitzel 400 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /spar\s+bbq\s+hendl-\s*grillteller|spar\s+bbq\s+hendl\s+grillteller/)
+    && /600\s*g/.test(normalized)
+    && /4[,.]\s*39/.test(normalized)
+  ) {
+    addSharedCandidate(meatCandidate({
+      title: 'SPAR BBQ Hendl-Grillteller',
+      brand: 'SPAR BBQ',
+      price: 4.39,
+      referencePrice: 5.39,
+      quantityText: '600 g',
+      conditionsText: `ab 2 Packungen je 4,39; ${sharedCondition}`,
+      rawText: 'SPAR BBQ Hendl-Grillteller, 600 g, ab 2 Pkg. je 4,39',
+      comparisonSafe: true,
+      searchKeywords: 'SPAR BBQ Hendl Grillteller 600 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /spar\s+veggie/)
+    && hasText(text, /bratwuerstel|bratwürstel/)
+    && /240\s*g/.test(normalized)
+    && /3[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'SPAR Veggie vegane Bratwuerstel',
+      brand: 'SPAR Veggie',
+      price: 3.49,
+      referencePrice: 3.99,
+      quantityText: '240 g',
+      conditionsText: `ab 2 Packungen je 3,49; ${sharedCondition}`,
+      rawText: 'SPAR Veggie vegane Bratwuerstel, gekuehlt, 240 g, ab 2 Pkg. je 3,49',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Vegetarisch & Vegan',
+      categoryKey: 'vegetarisch-vegan',
+      searchKeywords: 'SPAR Veggie vegane Bratwuerstel 240 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /meggle/)
+    && hasText(text, /kraeuterbutter|kräuterbutter/)
+    && /125\s*g/.test(normalized)
+    && /1[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(dairyCandidate({
+      title: 'Meggle Kraeuterbutter',
+      brand: 'Meggle',
+      price: 1.49,
+      referencePrice: 2.49,
+      quantityText: '125 g',
+      conditionsText: `ab 2 Stueck je 1,49; -40%; ${sharedCondition}`,
+      rawText: 'Meggle Kraeuterbutter, 125 g, ab 2 Stk. je 1,49',
+      comparisonSafe: true,
+      searchKeywords: 'Meggle Kraeuterbutter 125 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /kaesekrainer|käsekrainer/)
+    && hasText(text, /bratwurst/)
+    && /360\s*g/.test(normalized)
+    && /3[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(meatCandidate({
+      title: 'Kaesekrainer, Puten-Kaesekrainer oder Bratwurst',
+      brand: '',
+      price: 3.99,
+      referencePrice: 4.99,
+      quantityText: '360 g',
+      conditionsText: `ab 2 Packungen je 3,99; ${sharedCondition}`,
+      rawText: 'Kaesekrainer, Puten-Kaesekrainer oder Bratwurst, 360 g, ab 2 Pkg. je 3,99',
+      comparisonSafe: true,
+      searchKeywords: 'Kaesekrainer Putenkaesekrainer Bratwurst 360 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /spar\s+bbq\s+grill-/)
+    && hasText(text, /bratkaese|bratkäse/)
+    && /250\s*g/.test(normalized)
+    && /2[,.]\s*89/.test(normalized)
+  ) {
+    addSharedCandidate(dairyCandidate({
+      title: 'SPAR BBQ Grill- und Bratkaese',
+      brand: 'SPAR BBQ',
+      price: 2.89,
+      referencePrice: 3.49,
+      quantityText: '250 g',
+      conditionsText: `ab 2 Packungen je 2,89; ${sharedCondition}`,
+      rawText: 'SPAR BBQ Grill- und Bratkaese in Scheiben, 250 g, ab 2 Pkg. je 2,89',
+      comparisonSafe: true,
+      searchKeywords: 'SPAR BBQ Grillkaese Bratkaese 250 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /spar\s+bbq\s+coleslaw/)
+    && /300\s*g\s*\/\s*350\s*g/.test(normalized)
+    && /1[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'SPAR BBQ Coleslaw, Kartoffel- oder Nudelsalat',
+      brand: 'SPAR BBQ',
+      price: 1.99,
+      referencePrice: 2.49,
+      quantityText: '300-350 g',
+      conditionsText: `ab 2 Bechern je 1,99; ${sharedCondition}`,
+      rawText: 'SPAR BBQ Coleslaw, Kartoffel- oder Nudelsalat, 300 g/350 g, ab 2 Be. je 1,99',
+      comparisonSafe: false,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Feinkost & Fertiggerichte',
+      categoryKey: 'feinkost-fertiggerichte',
+      searchKeywords: 'SPAR BBQ Coleslaw Kartoffelsalat Nudelsalat 300 350 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /hellmann/)
+    && hasText(text, /sauce|mayonnaise/)
+    && /250\s*ml/.test(normalized)
+    && /2[,.]\s*69/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: "Hellmann's Sauce oder Mayonnaise",
+      brand: "Hellmann's",
+      price: 2.69,
+      referencePrice: 3.49,
+      quantityText: '250 ml',
+      conditionsText: `-22%; ${sharedCondition}`,
+      rawText: "Hellmann's Sauce oder Mayonnaise, verschiedene Sorten, 250 ml, 2,69",
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen & Gewuerze',
+      categoryKey: 'saucen-gewuerze',
+      searchKeywords: "Hellmann's Sauce Mayonnaise 250 ml Grillfolder",
+    }));
+  }
+
+  if (
+    hasText(text, /goesser|gösser/)
+    && hasText(text, /soda\s+zitron\s+radler/)
+    && /0[,.]\s*5\s*liter/.test(normalized)
+    && /1[,.]\s*19/.test(normalized)
+  ) {
+    addSharedCandidate(beerCandidate({
+      title: 'Goesser Soda Zitron Radler',
+      brand: 'Goesser',
+      price: 1.19,
+      referencePrice: 1.49,
+      quantityText: '0.5 l',
+      conditionsText: `ab 6 Flaschen je 1,19; ${sharedCondition}`,
+      rawText: 'Goesser Soda Zitron Radler, 0,5 Liter, ab 6 Fl. je 1,19',
+      comparisonSafe: true,
+      searchKeywords: 'Goesser Soda Zitron Radler 0.5 l Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /domaene\s+krems|domäne\s+krems/)
+    && hasText(text, /gruener\s+veltliner|grüner\s+veltliner/)
+    && /0[,.]\s*75\s*liter/.test(normalized)
+    && /4[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(wineCandidate({
+      title: 'Domaene Krems Gruener Veltliner Niederoesterreich',
+      brand: 'Domaene Krems',
+      price: 4.49,
+      referencePrice: 8.99,
+      quantityText: '0.75 l',
+      conditionsText: `ab 6 Flaschen je 4,49; keine weiteren Rabatte moeglich; ${sharedCondition}`,
+      rawText: 'Domaene Krems Gruener Veltliner Niederoesterreich, 0,75 Liter, ab 6 Fl. je 4,49',
+      comparisonSafe: true,
+      searchKeywords: 'Domaene Krems Gruener Veltliner 0.75 l Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /woerle\s+american\s+toast/)
+    && /200[-\s]?g/.test(normalized)
+    && /2[,.]\s*19/.test(normalized)
+  ) {
+    addSharedCandidate(dairyCandidate({
+      title: 'Woerle American Toast Schmelzkaese Scheiben oder XXL Burgerscheiben',
+      brand: 'Woerle',
+      price: 2.19,
+      referencePrice: 2.89,
+      quantityText: '200 g',
+      conditionsText: `ab 2 Packungen je 2,19; ${sharedCondition}`,
+      rawText: 'Woerle American Toast Schmelzkaese Scheiben oder XXL Burgerscheiben, 200-g-Packung, ab 2 Pkg. je 2,19',
+      comparisonSafe: true,
+      searchKeywords: 'Woerle American Toast Schmelzkaese 200 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /bio-halloumi\s+klassik/)
+    && /200\s*g/.test(normalized)
+    && /3[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(dairyCandidate({
+      title: 'Bio-Halloumi Klassik',
+      brand: '',
+      price: 3.49,
+      referencePrice: 3.99,
+      quantityText: '200 g',
+      conditionsText: `ab 2 Packungen je 3,49; ${sharedCondition}`,
+      rawText: 'Bio-Halloumi Klassik, 200 g, ab 2 Pkg. je 3,49',
+      comparisonSafe: true,
+      searchKeywords: 'Bio Halloumi Klassik 200 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /bio-ketchup/)
+    && /550\s*g/.test(normalized)
+    && /2[,.]\s*59/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Bio-Ketchup',
+      brand: '',
+      price: 2.59,
+      referencePrice: 3.49,
+      quantityText: '550 g',
+      conditionsText: `-25%; ${sharedCondition}`,
+      rawText: 'Bio-Ketchup, 550 g, 2,59',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen & Gewuerze',
+      categoryKey: 'saucen-gewuerze',
+      searchKeywords: 'Bio Ketchup 550 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /bio-ajvar/)
+    && /200\s*g/.test(normalized)
+    && /3[,.]\s*69/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Bio-Ajvar',
+      brand: '',
+      price: 3.69,
+      referencePrice: 4.99,
+      quantityText: '200 g',
+      conditionsText: `-26%; ${sharedCondition}`,
+      rawText: 'Bio-Ajvar, 200 g, 3,69',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Saucen & Gewuerze',
+      categoryKey: 'saucen-gewuerze',
+      searchKeywords: 'Bio Ajvar 200 g Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /italienisches\s+natives\s+bio-olivenoel|italienisches\s+natives\s+bio-olivenöl/)
+    && /0[,.]\s*75\s*liter/.test(normalized)
+    && /10[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Italienisches natives Bio-Olivenoel extra',
+      brand: '',
+      price: 10.99,
+      referencePrice: 13.99,
+      quantityText: '0.75 l',
+      conditionsText: `ab 2 Flaschen je 10,99; ${sharedCondition}`,
+      rawText: 'Italienisches natives Bio-Olivenoel extra, 0,75 Liter, ab 2 Fl. je 10,99',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Oel & Essig',
+      categoryKey: 'oel-essig',
+      searchKeywords: 'Bio Olivenoel extra 0.75 l Grillfolder',
+    }));
+  }
+
+  if (
+    hasText(text, /ferrero\s+eis\s+cream/)
+    && /270\s*[-–]\s*280\s*ml/.test(normalized)
+    && /3[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(frozenCandidate({
+      title: 'Ferrero Eis Cream',
+      brand: 'Ferrero',
+      price: 3.99,
+      referencePrice: 5.49,
+      quantityText: '270-280 ml',
+      conditionsText: `${couponCondition}; beim Kauf von 2 Packungen`,
+      rawText: 'Ferrero Eis Cream, verschiedene Sorten, 270-280 ml, mit Gutschein je Packung 3,99',
+      comparisonSafe: false,
+      searchKeywords: 'Ferrero Eis Cream 270 280 ml Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /eskimo\s+cremissimo/)
+    && /1000\s*ml/.test(normalized)
+    && /3[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(frozenCandidate({
+      title: 'Eskimo Cremissimo',
+      brand: 'Eskimo',
+      price: 3.49,
+      referencePrice: 4.99,
+      quantityText: '1000 ml',
+      conditionsText: `${couponCondition}; beim Kauf von 2 Packungen`,
+      rawText: 'Eskimo Cremissimo, verschiedene Sorten, 1000 ml, mit Gutschein je Packung 3,49',
+      comparisonSafe: true,
+      searchKeywords: 'Eskimo Cremissimo 1000 ml Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /spar\s+extra\s+natives\s+olivenoel|spar\s+extra\s+natives\s+olivenöl/)
+    && /0[,.]\s*5\s*liter/.test(normalized)
+    && /4[,.]\s*66/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'SPAR extra natives Olivenoel',
+      brand: 'SPAR',
+      price: 4.66,
+      referencePrice: 6.99,
+      quantityText: '0.5 l',
+      conditionsText: `${couponCondition}; 2+1 gratis; beim Kauf von 3 Flaschen`,
+      rawText: 'SPAR extra natives Olivenoel, 0,5 Liter, mit Gutschein je Flasche 4,66',
+      comparisonSafe: true,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Oel & Essig',
+      categoryKey: 'oel-essig',
+      searchKeywords: 'SPAR Olivenoel 0.5 l Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /original\s+bio-kornspitz/)
+    && /0[,.]\s*50/.test(normalized)
+  ) {
+    addSharedCandidate(bakeryCandidate({
+      title: 'Original Bio-Kornspitz',
+      brand: '',
+      price: 0.50,
+      referencePrice: 0.89,
+      quantityText: '1 Stueck',
+      conditionsText: `${couponCondition}; beim Kauf von 4 Stueck`,
+      rawText: 'Original Bio-Kornspitz, mit Gutschein je Stueck 0,50, 4 Stk. 2,-',
+      comparisonSafe: true,
+      searchKeywords: 'Original Bio Kornspitz 1 Stueck Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /ritter\s+sport\s+schokolade/)
+    && /100\s*g/.test(normalized)
+    && /1[,.]\s*46/.test(normalized)
+  ) {
+    addSharedCandidate(sweetCandidate({
+      title: 'Ritter Sport Schokolade Bunte Vielfalt oder Nussklasse',
+      brand: 'Ritter Sport',
+      price: 1.46,
+      referencePrice: 2.19,
+      quantityText: '100 g',
+      conditionsText: `${couponCondition}; 2+1 gratis; beim Kauf von 3 Tafeln`,
+      rawText: 'Ritter Sport Schokolade Bunte Vielfalt oder Nussklasse, 100 g, mit Gutschein je Tafel 1,46',
+      comparisonSafe: true,
+      searchKeywords: 'Ritter Sport Schokolade 100 g Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /wiener\s+feinkristallzucker/)
+    && /1\s*kg/.test(normalized)
+    && /0[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Wiener Feinkristallzucker',
+      brand: 'Wiener Zucker',
+      price: 0.99,
+      referencePrice: 1.59,
+      quantityText: '1 kg',
+      conditionsText: `${couponCondition}; beim Kauf von 10 Packungen`,
+      rawText: 'Wiener Feinkristallzucker, 1 kg, mit Gutschein je Packung 0,99 bei 10 Packungen',
+      comparisonSafe: true,
+      searchKeywords: 'Wiener Feinkristallzucker 1 kg Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /rauch\s+eistee/)
+    && /1[,.]\s*5\s*liter/.test(normalized)
+    && /1[,.]\s*09/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Rauch Eistee',
+      brand: 'Rauch',
+      price: 1.09,
+      referencePrice: 2.19,
+      quantityText: '1.5 l',
+      conditionsText: `${couponCondition}; 3+3 gratis; beim Kauf von 6 Flaschen`,
+      rawText: 'Rauch Eistee, verschiedene Sorten, 1,5 Liter, mit Gutschein je Flasche 1,09',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Alkoholfreie Getraenke',
+      categoryKey: 'alkoholfreie-getraenke',
+      searchKeywords: 'Rauch Eistee 1.5 l Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /happy\s+day/)
+    && /1\s*liter/.test(normalized)
+    && /1[,.]\s*79/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Happy Day Apfel oder Multivitamin',
+      brand: 'Happy Day',
+      price: 1.79,
+      referencePrice: 2.79,
+      quantityText: '1 l',
+      conditionsText: `${couponCondition}; beim Kauf von 4 Packungen`,
+      rawText: 'Happy Day Apfel, Apfel trueb, Apfel mild, Multivitamin, Multivitamin mild oder Multivitamin rot, 1 Liter, mit Gutschein je Packung 1,79',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Alkoholfreie Getraenke',
+      categoryKey: 'alkoholfreie-getraenke',
+      searchKeywords: 'Happy Day Apfel Multivitamin 1 l Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /zweigelt\s+lieblich/)
+    && /0[,.]\s*75\s*liter/.test(normalized)
+    && /2[,.]\s*49/.test(normalized)
+  ) {
+    addSharedCandidate(wineCandidate({
+      title: 'Zweigelt lieblich Oesterreich',
+      brand: '',
+      price: 2.49,
+      referencePrice: 4.99,
+      quantityText: '0.75 l',
+      conditionsText: `${couponCondition}; beim Kauf von 6 Flaschen`,
+      rawText: 'Zweigelt lieblich Oesterreich, 0,75 Liter, mit Gutschein je Flasche 2,49',
+      comparisonSafe: true,
+      searchKeywords: 'Zweigelt lieblich 0.75 l Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /schwechater\s+bier/)
+    && /0[,.]\s*5\s*liter/.test(normalized)
+    && /0[,.]\s*59/.test(normalized)
+  ) {
+    addSharedCandidate(beerCandidate({
+      title: 'Schwechater Bier',
+      brand: 'Schwechater',
+      price: 0.59,
+      referencePrice: 1.38,
+      quantityText: '0.5 l',
+      conditionsText: `${couponCondition}; beim Kauf von 24 Dosen`,
+      rawText: 'Schwechater Bier, 0,5 Liter, mit Gutschein je Dose 0,59, 24er-Tray 14,16',
+      comparisonSafe: true,
+      searchKeywords: 'Schwechater Bier 0.5 l Dose Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /meinl\s+jubilaeum|meinl\s+jubiläum/)
+    && /500\s*g/.test(normalized)
+    && /8[,.]\s*24/.test(normalized)
+  ) {
+    addSharedCandidate(groceryCandidate({
+      title: 'Meinl Jubilaeum ganze Bohne oder gemahlen',
+      brand: 'Meinl',
+      price: 8.24,
+      referencePrice: 16.49,
+      quantityText: '500 g',
+      conditionsText: `${couponCondition}; 1+1 gratis; beim Kauf von 2 Packungen`,
+      rawText: 'Meinl Jubilaeum ganze Bohne oder gemahlen, 500 g, mit Gutschein je Packung 8,24',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      searchKeywords: 'Meinl Jubilaeum Kaffee 500 g Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /substral\s+balkonpflanzenduenger|substral\s+balkonpflanzendünger/)
+    && /2\s*liter/.test(normalized)
+    && /7[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(gardenCandidate({
+      title: 'Substral Balkonpflanzenduenger',
+      brand: 'Substral',
+      price: 7.99,
+      referencePrice: 9.99,
+      quantityText: '2 l',
+      conditionsText: `${couponCondition}; beim Kauf von 2 Stueck`,
+      rawText: 'Substral Balkonpflanzenduenger, fluessige Nahrung, 2 Liter, mit Gutschein je Stueck 7,99',
+      comparisonSafe: true,
+      searchKeywords: 'Substral Balkonpflanzenduenger 2 l Gutscheinheft',
+    }));
+  }
+
+  if (
+    hasText(text, /lovely\s+toilettenpapier/)
+    && /10er-packung/.test(normalized)
+    && /2[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate({
+      productKind: 'generic-flyer-product',
+      title: 'Lovely Toilettenpapier',
+      brand: 'Lovely',
+      price: 2.99,
+      referencePrice: 3.89,
+      quantityText: '10 Stueck',
+      conditionsText: `${couponCondition}; beim Kauf von 3 Packungen`,
+      rawText: 'Lovely Toilettenpapier, verschiedene Sorten, 3-lagig, 10er-Packung, mit Gutschein je Packung 2,99',
+      comparisonSafe: true,
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Papier & Hygiene',
+      categoryKey: 'papier-hygiene',
+      searchKeywords: 'Lovely Toilettenpapier 10er Packung Gutscheinheft',
+    });
+  }
+
+  if (
+    hasText(text, /persil\s+pulver\s+oder\s+gel/)
+    && /6[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(householdCandidate({
+      title: 'Persil Pulver oder Gel, Megaperls oder Discs',
+      brand: 'Persil',
+      price: 6.99,
+      referencePrice: 9.99,
+      quantityText: '20-30 Waschgaenge',
+      conditionsText: `${couponCondition}; beim Kauf von 2 Stueck`,
+      rawText: 'Persil Pulver oder Gel 28/30 WG, Megaperls 23 WG oder Discs 20/22 WG, mit Gutschein je Stueck 6,99',
+      comparisonSafe: false,
+      searchKeywords: 'Persil Pulver Gel Megaperls Discs Waschmittel Gutscheinheft',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'interspar'
+    && hasText(text, /simpex\s+basic\s+besteckset/)
+    && hasText(text, /30-teilig/)
+    && /29[,.]\s*99/.test(normalized)
+  ) {
+    addSharedCandidate(nonFoodPieceCandidate({
+      title: 'SIMPEX BASIC Besteckset 30-teilig',
+      brand: 'SIMPEX BASIC',
+      price: 29.99,
+      referencePrice: null,
+      rawText: 'SIMPEX BASIC Besteckset 30-teilig, 29,99',
+      conditionsText: 'Preise gueltig bis 31.07.2026 und solange der Vorrat reicht laut Mein Zuhause',
+      validToOverride: new Date('2026-07-31T21:59:59.999Z'),
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Kueche & Kochen',
+      categoryKey: 'kueche-kochen',
+      searchKeywords: 'SIMPEX BASIC Besteckset 30-teilig Kueche Haushalt',
+    }));
+  }
+
+  return candidates;
+}
+
 function extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }) {
   const text = normalizePdfText(page.text || '');
   const normalized = normalizeForScan(text);
@@ -2425,6 +3419,7 @@ function extractSparPdfCandidates({ pages = [], sourceRetailerFormat = 'spar', v
       ...extractKnownIntersparKw22NonFoodCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparWeinweltBestsellerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparMeinZuhauseSommerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceRetailerFormat, validity }),
     ];
     const genericCandidates = extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat })
       .filter((candidate) => !genericCandidateOverlapsKnown(candidate, knownCandidates));

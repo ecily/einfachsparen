@@ -222,6 +222,96 @@ test('extracts SPAR KW23 Milka Schokolade from compact flyer layout', () => {
   assert.match(offers[0].conditionsText, /ab 2 Packungen/);
 });
 
+test('extracts SPAR-family Monatssparer shared folder offers', () => {
+  const validity = activeValidityForTest();
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: [
+          "Dallmayr Crema d'Oro ganze Bohne 1 kg MONATSSPARER 1 Pkg. 30,99 ab 2 Pkg. je 19,99",
+          'Jacobs Cronat Kraeftig oder Mild 200 g MONATSSPARER 1 Gl. 13,99 ab 2 Gl. je 6,99',
+          'Schaerdinger Formil haltbare Vollmilch 3,5% oder Leichtmilch 0,5% Fett 1 Liter 1 Pkg. 1,69 ab 12 Pkg. je 0,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx',
+  });
+
+  assert.ok(offers.some((offer) => offer.title === "Dallmayr Crema d'Oro ganze Bohne" && offer.priceCurrent.amount === 19.99));
+  assert.ok(offers.some((offer) => offer.title === 'Jacobs Cronat Kraeftig oder Mild' && offer.categorySecondary === 'Kaffee & Tee'));
+  assert.ok(offers.some((offer) => offer.title.includes('Schaerdinger Formil') && offer.quantityText === '1 l'));
+});
+
+test('extracts SPAR-family Grillfolder shared offers', () => {
+  const validity = activeValidityForTest();
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'eurospar',
+    validity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: [
+          'SPAR Kraeuter- oder Knoblauchbaguette gekuehlt, 175 g Mengenvorteil 1 Pkg. 0,99 ab 2 Pkg. je 0,89',
+          'Kuner Sauce versch. Sorten, 250 ml statt 2,79 1,99',
+          'Domaene Krems Gruener Veltliner Niederoesterreich frisch & wuerzig 0,75 Liter 1 Fl. 8,99 ab 6 Fl. je 4,49',
+        ].join('\n'),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('eurospar'),
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-2-grillen-kw-20/getPdf.ashx',
+  });
+
+  assert.ok(offers.some((offer) => offer.title === 'SPAR Kraeuter- oder Knoblauchbaguette' && offer.priceCurrent.amount === 0.89));
+  assert.ok(offers.some((offer) => offer.title === 'Kuner Sauce' && offer.categorySecondary === 'Saucen & Gewuerze'));
+  assert.ok(offers.some((offer) => offer.title.includes('Domaene Krems') && offer.categorySecondary === 'Wein & Sekt'));
+});
+
+test('extracts SPAR-family Gutscheinheft shared coupon offers', () => {
+  const validity = activeValidityForTest();
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity,
+    pages: [
+      {
+        pageNumber: 17,
+        text: [
+          'Beim Kauf von 6 Flaschen Zweigelt lieblich Oesterreich lieblich 0,75 Liter statt 4,99 mit Gutschein je Flasche 2,49',
+          'Beim Kauf von 24 Dosen Schwechater Bier 0,5 Liter statt 1,38 mit Gutschein je Dose 0,59',
+          'Beim Kauf von 3 Packungen Lovely Toilettenpapier versch. Sorten, 3-lagig, 10er-Packung statt 3,89 mit Gutschein je Packung 2,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: {
+      ...source('interspar'),
+      crawlPolicy: { requireCouponCondition: true },
+    },
+    crawlJobId: '000000000000000000000654',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260528-3-spar-gutscheinheft-kw-22/getPdf.ashx',
+  });
+
+  assert.ok(offers.some((offer) => offer.title === 'Zweigelt lieblich Oesterreich' && /Gutschein/i.test(offer.conditionsText)));
+  assert.ok(offers.some((offer) => offer.title === 'Schwechater Bier' && offer.categorySecondary === 'Bier'));
+  assert.ok(offers.some((offer) => offer.title === 'Lovely Toilettenpapier' && offer.categorySecondary === 'Papier & Hygiene'));
+});
+
 test('normalizes safe SPAR Puntigamer crate fallback from Kiste and half-liter bottle context', () => {
   const currentValidity = {
     validFrom: new Date('2026-05-28T12:00:00.000Z'),
