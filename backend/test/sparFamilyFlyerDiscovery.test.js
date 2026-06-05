@@ -244,6 +244,8 @@ test('active SPAR-family PDF SourceDefinitions include current official multi-PD
       'interspar',
       'interspar',
       'interspar',
+      'interspar',
+      'interspar',
       'spar',
       'spar',
       'spar',
@@ -255,6 +257,8 @@ test('active SPAR-family PDF SourceDefinitions include current official multi-PD
   assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260513-2-grillen-kw-20/getPdf.ashx'), true);
   assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260528-3-spar-gutscheinheft-kw-22/getPdf.ashx'), true);
   assert.equal(urls.includes('https://flugblatt.spar.at/steiermark/spar/260601-1-obst-gemuse-kw-23/getPdf.ashx'), true);
+  assert.equal(urls.includes('https://flugblatt.interspar.at/weinwelt/260511-4-weinwelt-bestseller-06-2026/getPdf.ashx'), true);
+  assert.equal(urls.includes('https://flugblatt.interspar.at/sonderfolder/mein-zuhause-sommer26/getPdf.ashx'), true);
   assert.equal(urls.every(isOfficialSparFamilyPdfUrl), true);
 });
 
@@ -267,7 +271,7 @@ test('active SPAR-family PDF definitions reject expired validity windows', () =>
     && definition.enabled !== false
   ));
 
-  assert.equal(sources.length, 13);
+  assert.equal(sources.length, 15);
   assert.equal(
     sources.some((source) => new Date(source.crawlPolicy.validTo).getTime() <= now.getTime()),
     false

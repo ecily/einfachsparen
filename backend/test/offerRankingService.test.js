@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  applyProgramEligibility,
   applyQueryMatch,
   buildRankingCandidateLimit,
   buildRankingCandidateFallbackMatch,
@@ -6419,11 +6420,43 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
   });
+});
+
+test('ranking eligibility keeps customer-program offers visible by default with public opt-out', () => {
+  const appOffer = offer({
+    _id: 'zespri-app',
+    id: 'zespri-app',
+    title: 'ZESPRI Kiwi Gold',
+    titleNormalized: 'zespri kiwi gold',
+    brand: 'ZESPRI',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+    quantityText: '4 Stueck',
+    priceCurrent: { amount: 2.49, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 0.62, unit: 'Stk', comparable: true },
+    comparableUnit: 'Stk',
+    comparisonGroup: 'obst-gemuese:zespri-kiwi-gold:4-stueck',
+    conditionsText: 'Nur mit SPAR-App-Gutschein laut Flugblatt',
+    customerProgramRequired: true,
+    hasConditions: true,
+    status: 'active',
+    isActiveNow: true,
+    isActiveToday: true,
+    validFrom: new Date('2026-06-01T00:00:00.000Z'),
+    validTo: new Date('2099-06-07T23:59:59.999Z'),
+  });
+  assert.deepEqual(applyProgramEligibility([appOffer], {}), [appOffer]);
+  assert.deepEqual(applyProgramEligibility([appOffer], { onlyWithoutProgram: true }), []);
+  assert.deepEqual(applyProgramEligibility([appOffer], { programRetailers: ['spar'] }), [appOffer]);
+  assert.deepEqual(applyProgramEligibility([appOffer], { programRetailers: ['bipa'] }), []);
 });
 
 test('ranking response base slices cache hits without changing order or overlap', () => {

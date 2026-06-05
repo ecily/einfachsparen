@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
@@ -3779,6 +3779,7 @@ function applyQueryMatch(offers, query) {
 function applyProgramEligibility(offers, { programRetailers = [], onlyWithoutProgram = false }) {
   const allowedRetailers = new Set(normalizeProgramRetailers(programRetailers));
   const restrictToPublicOnly = normalizeBoolean(onlyWithoutProgram);
+  const restrictToSelectedProgramRetailers = allowedRetailers.size > 0;
 
   return offers.filter((offer) => {
     if (!offer.customerProgramRequired) {
@@ -3789,7 +3790,7 @@ function applyProgramEligibility(offers, { programRetailers = [], onlyWithoutPro
       return false;
     }
 
-    return allowedRetailers.has(offer.retailerKey);
+    return !restrictToSelectedProgramRetailers || allowedRetailers.has(offer.retailerKey);
   });
 }
 
@@ -8228,6 +8229,7 @@ module.exports = {
   calculateOfferTermCoverage,
   applyQueryMatch,
   filterFreshActiveOffers,
+  applyProgramEligibility,
   buildValidityLabel,
   buildGroupedRankings,
   dedupeQueryOffers,
