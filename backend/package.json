@@ -30,6 +30,7 @@
     "diagnose:spar-flyer-pdf-evidence": "node scripts/diagnoseSparFlyerPdfEvidence.js",
     "diagnose:spar-flyer-pdf-ingestion": "node scripts/diagnoseSparFlyerPdfIngestion.js",
     "diagnose:spar-pdf-rejection-recovery": "node scripts/diagnostics/diagnoseSparPdfRejectionRecovery.js",
+    "diagnose:source-transport-matrix": "node scripts/diagnostics/diagnoseSourceTransportMatrix.js",
     "diagnose:spar-official-parser-fixture": "node scripts/diagnoseSparOfficialParserFixture.js",
     "diagnose:official-source-matrix": "node scripts/diagnoseOfficialSourceMatrix.js",
     "diagnose:official-validity-coverage": "node scripts/diagnoseOfficialValidityCoverage.js",

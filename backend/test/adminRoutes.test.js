@@ -7,6 +7,8 @@ const { requireAdminApiKey } = require('../src/middleware/adminAuth');
 const {
   createAdminRouter,
   buildFilterRebuildContext,
+  parseBoundedInteger,
+  parseCsvList,
   parseBoundedLimit,
   FILTER_METADATA_COLLECTIONS,
 } = require('../src/routes/admin.routes');
@@ -436,6 +438,54 @@ test('GET /api/admin/offer-feedback/recent wird ohne Admin-Key abgelehnt', async
   assert.equal(response.statusCode, 401);
   assert.equal(response.body.ok, false);
   assert.equal(calls.find, 0);
+});
+
+test('parseCsvList and parseBoundedInteger keep source transport params bounded', () => {
+  assert.deepEqual(parseCsvList('spar-productworld-inangebot, pagro-angebote'), ['spar-productworld-inangebot', 'pagro-angebote']);
+  assert.deepEqual(parseCsvList('', ['default-target']), ['default-target']);
+  assert.equal(parseBoundedInteger('99999', { defaultValue: 10000, min: 1000, max: 30000 }), 30000);
+  assert.equal(parseBoundedInteger('100', { defaultValue: 10000, min: 1000, max: 30000 }), 1000);
+  assert.equal(parseBoundedInteger('abc', { defaultValue: 10000, min: 1000, max: 30000 }), 10000);
+});
+
+test('GET /api/admin/source-transport-matrix delegates only parsed allowlist IDs to service', async () => {
+  const calls = [];
+  const router = createAdminRouter({
+    sourceTransportMatrixServiceImpl: {
+      async runSourceTransportMatrix(options) {
+        calls.push(options);
+        return {
+          ok: true,
+          readOnly: true,
+          mutatedCollections: [],
+          generatedAt: '2026-06-05T12:00:00.000Z',
+          runtime: {},
+          summary: { resultCount: 0, usable: 0, blocked: 0, challenges: 0, unavailable: 0 },
+          targetIds: options.targetIds,
+          clientIds: options.clientIds,
+          targets: [],
+          results: [],
+          readiness: [],
+          retailers: [],
+        };
+      },
+    },
+  });
+  const app = buildTestApp(router);
+
+  const response = await requestJson(app, {
+    path: '/api/admin/source-transport-matrix?targets=spar-productworld-inangebot,pagro-angebote&clients=global-fetch,curl&timeoutMs=60000&delayMs=99999',
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.adminEndpoint.allowlistedTargetsOnly, true);
+  assert.equal(response.body.adminEndpoint.freeUrlInputAllowed, false);
+  assert.deepEqual(calls[0].targetIds, ['spar-productworld-inangebot', 'pagro-angebote']);
+  assert.deepEqual(calls[0].clientIds, ['global-fetch', 'curl']);
+  assert.equal(calls[0].timeoutMs, 30000);
+  assert.equal(calls[0].delayMs, 5000);
+  assert.equal(calls[0].maxCombinations, 20);
 });
 
 test('GET /api/admin/offer-feedback/summary liefert aggregierte Feedback-Kennzahlen', async (t) => {

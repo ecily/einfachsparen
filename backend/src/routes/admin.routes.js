@@ -3,6 +3,7 @@ const env = require('../config/env');
 const { getDatabaseState } = require('../config/mongodb');
 const OfferFeedback = require('../models/OfferFeedback');
 const { buildSafeBuildInfo } = require('../services/buildInfo');
+const sourceTransportMatrixService = require('../services/diagnostics/sourceTransportMatrix');
 const filterMetadataService = require('../services/filters/filterMetadataService');
 
 const FILTER_METADATA_COLLECTIONS = [
@@ -16,6 +17,8 @@ const RECENT_FEEDBACK_DEFAULT_LIMIT = 50;
 const RECENT_FEEDBACK_MAX_LIMIT = 200;
 const EXPORT_FEEDBACK_DEFAULT_LIMIT = 200;
 const EXPORT_FEEDBACK_MAX_LIMIT = 1000;
+const SOURCE_TRANSPORT_DEFAULT_TARGETS = ['spar-productworld-inangebot', 'spar-productworld-preisgesenkt', 'pagro-angebote', 'aktionsfinder-pagro'];
+const SOURCE_TRANSPORT_DEFAULT_CLIENTS = ['global-fetch', 'native-https', 'axios', 'http2', 'curl'];
 const OFFER_FEEDBACK_RECENT_PROJECTION = {
   _id: 1,
   createdAt: 1,
@@ -38,6 +41,25 @@ function parseBoundedLimit(rawLimit, { defaultLimit, maxLimit }) {
   }
 
   return Math.min(parsed, maxLimit);
+}
+
+function parseCsvList(rawValue, fallback = []) {
+  const values = String(rawValue || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return values.length > 0 ? values : fallback;
+}
+
+function parseBoundedInteger(rawValue, { defaultValue, min, max }) {
+  const parsed = Number.parseInt(String(rawValue || ''), 10);
+
+  if (!Number.isFinite(parsed)) {
+    return defaultValue;
+  }
+
+  return Math.max(min, Math.min(max, parsed));
 }
 
 function truncateText(value, maxLength = 800) {
@@ -474,6 +496,7 @@ function assertProductionFilterRebuildAllowed(context) {
 function createAdminRouter({
   envConfig = env,
   filterMetadataServiceImpl = filterMetadataService,
+  sourceTransportMatrixServiceImpl = sourceTransportMatrixService,
   dbStateProvider = getDatabaseState,
   buildInfoProvider = buildSafeBuildInfo,
   OfferFeedbackModel = OfferFeedback,
@@ -513,6 +536,43 @@ function createAdminRouter({
         durationMs: Date.now() - startedAt,
         context,
         summary,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/source-transport-matrix', async (req, res, next) => {
+    try {
+      const targetIds = parseCsvList(req.query.targets, SOURCE_TRANSPORT_DEFAULT_TARGETS);
+      const clientIds = parseCsvList(req.query.clients, SOURCE_TRANSPORT_DEFAULT_CLIENTS);
+      const timeoutMs = parseBoundedInteger(req.query.timeoutMs, {
+        defaultValue: 10000,
+        min: 1000,
+        max: 30000,
+      });
+      const delayMs = parseBoundedInteger(req.query.delayMs, {
+        defaultValue: 750,
+        min: 0,
+        max: 5000,
+      });
+
+      const report = await sourceTransportMatrixServiceImpl.runSourceTransportMatrix({
+        targetIds,
+        clientIds,
+        timeoutMs,
+        delayMs,
+        maxCombinations: 20,
+      });
+
+      res.json({
+        ...report,
+        adminEndpoint: {
+          path: '/api/admin/source-transport-matrix',
+          readOnly: true,
+          allowlistedTargetsOnly: true,
+          freeUrlInputAllowed: false,
+        },
       });
     } catch (error) {
       next(error);
@@ -577,6 +637,8 @@ module.exports.createAdminRouter = createAdminRouter;
 module.exports.buildFilterRebuildContext = buildFilterRebuildContext;
 module.exports.buildOfferFeedbackSummary = buildOfferFeedbackSummary;
 module.exports.findRecentOfferFeedback = findRecentOfferFeedback;
+module.exports.parseBoundedInteger = parseBoundedInteger;
+module.exports.parseCsvList = parseCsvList;
 module.exports.parseBoundedLimit = parseBoundedLimit;
 module.exports.sanitizeOfferFeedbackDocument = sanitizeOfferFeedbackDocument;
 module.exports.FILTER_METADATA_COLLECTIONS = FILTER_METADATA_COLLECTIONS;
