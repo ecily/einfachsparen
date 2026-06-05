@@ -337,6 +337,8 @@ test('extracts selected SPAR-family KW23 recovery offers with retailer-specific 
         pageNumber: 2,
         text: [
           'Metaxa 5 Sterne Weinbrand Griechenland 0,7 Liter statt 49,90 39,90 29,92 Mit SPAR-App-Gutschein',
+          '6+6 GRATIS Roemerquelle Mineralwasser versch. Sorten, 1,5 Liter 2x6er-Tray 5,64',
+          'Pampers Baby Dry Windeln, Baby Dry Pants oder Premium Protection versch. Groessen Mengenvorteil 1 Pkg. 9,99 ab 2 Pkg. je 7,99',
           'Farina Mehl T480 2,5 kg 3,19 statt 3,99 -20%',
           'Always Ultra Binden Big Pack versch. Sorten, 12-26 Stück Mengenvorteil 1 Pkg. 4,08 ab 2 Pkg. je 3,19',
         ].join('\n'),
@@ -350,6 +352,9 @@ test('extracts selected SPAR-family KW23 recovery offers with retailer-specific 
       {
         pageNumber: 2,
         text: [
+          '6+6 GRATIS Roemerquelle Mineralwasser versch. Sorten, 1,5 Liter 2x6er-Tray 5,64',
+          'Coca-Cola Limonaden versch. Sorten, 0,33 Liter 24er-Tray 16,56 1 Ds. 1,39 ab 24 Ds. je 0,69',
+          'Goesser Maerzen 0,5 Liter 20er-Kiste 29,80 14,90 -50%',
           'Pepsi oder Pepsi zero 1,5 Liter 1 Fl. 1,99 ab 6 Fl. je 0,99 3+3 GRATIS 6er-Tray 5,94',
           'Faschiertes gemischt aus Österreich, aus Rind- und Schweinefleisch, in Bedienung, per kg 9,99 statt 12,99',
         ].join('\n'),
@@ -372,8 +377,13 @@ test('extracts selected SPAR-family KW23 recovery offers with retailer-specific 
   });
 
   assert.ok(sparOffers.some((offer) => offer.title === 'Metaxa 5 Sterne Weinbrand' && /SPAR-App-Gutschein/.test(offer.conditionsText)));
+  assert.ok(sparOffers.some((offer) => offer.title === 'Roemerquelle Mineralwasser' && offer.quantityText === '12 x 1.5 l'));
+  assert.ok(sparOffers.some((offer) => offer.title === 'Pampers Baby Dry Windeln, Pants oder Premium Protection' && /ab 2 Packungen/.test(offer.conditionsText)));
   assert.ok(sparOffers.some((offer) => offer.title === 'Farina Mehl T480' && offer.categorySecondary === 'Backen & Grundnahrungsmittel'));
   assert.ok(sparOffers.some((offer) => offer.title === 'Always Ultra Binden Big Pack' && offer.categorySecondary === 'Damenhygiene'));
+  assert.ok(eurosparOffers.some((offer) => offer.title === 'Roemerquelle Mineralwasser' && offer.quantityText === '12 x 1.5 l'));
+  assert.ok(eurosparOffers.some((offer) => offer.title === 'Coca-Cola Limonaden' && offer.quantityText === '24 x 0.33 l'));
+  assert.ok(eurosparOffers.some((offer) => offer.title === 'Goesser Maerzen' && offer.quantityText === '20 x 0.5 l'));
   assert.ok(eurosparOffers.some((offer) => offer.title === 'Pepsi oder Pepsi Zero' && offer.retailerKey === 'eurospar'));
   assert.ok(eurosparOffers.some((offer) => offer.title === 'Faschiertes gemischt' && offer.categorySecondary === 'Fleisch & Wurst'));
 });
@@ -1855,7 +1865,7 @@ test('generic SPAR PDF parser strips safe page disclaimer prefixes from product 
 
   assert.ok(offer);
   assert.equal(offer.title, 'Goesser Maerzen');
-  assert.equal(offer.quantityText, '0.5 l');
+  assert.equal(offer.quantityText, '20 x 0.5 l');
   assert.equal(offer.exclusionReason, undefined);
 });
 

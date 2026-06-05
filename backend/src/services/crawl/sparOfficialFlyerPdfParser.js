@@ -20,7 +20,7 @@ const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCa
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidity');
 
-const PARSER_VERSION = 'spar-official-flyer-pdf-v4';
+const PARSER_VERSION = 'spar-official-flyer-pdf-v5';
 const SOURCE_TYPE = 'spar-official-pdf';
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 6;
@@ -2231,7 +2231,7 @@ function extractKnownSparFamilySharedFolderCandidatesFromPage(page, { sourceReta
     && /6[,.]\s*49/.test(normalized)
   ) {
     addSharedCandidate(meatCandidate({
-      title: 'Reiter Kantwurst oder ungarische Salami',
+      title: 'Kantwurst oder ungarische Salami von Reiter',
       brand: 'Reiter',
       price: 6.49,
       referencePrice: 7.99,
@@ -3072,6 +3072,97 @@ function extractKnownSparFamilyKw23RecoveryCandidatesFromPage(page, { sourceReta
       comparisonSafe: true,
       searchKeywords: 'Henkell Sekt 0.75 l SPAR App Gutschein',
     }));
+  }
+
+  if (
+    ['spar', 'eurospar'].includes(sourceRetailerFormat)
+    && /roemerquelle|mineralwasser/.test(normalized)
+    && /6\s*\+?\s*6\s+gratis/.test(normalized)
+    && /1[,.]\s*5\s*liter/.test(normalized)
+    && /5[,.]\s*64/.test(normalized)
+  ) {
+    addRecoveryCandidate(groceryCandidate({
+      title: 'Roemerquelle Mineralwasser',
+      brand: 'Roemerquelle',
+      price: 5.64,
+      referencePrice: 11.28,
+      quantityText: '12 x 1.5 l',
+      conditionsText: '6+6 gratis; 2x6er-Tray laut Flugblatt',
+      rawText: 'Roemerquelle Mineralwasser, verschiedene Sorten, 1,5 Liter, 2x6er-Tray, 5,64',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Alkoholfreie Getraenke',
+      categoryKey: 'alkoholfreie-getraenke',
+      searchKeywords: 'Roemerquelle Mineralwasser 1.5 l 6+6 gratis 2x6er Tray',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'eurospar'
+    && /coca/.test(normalized)
+    && /cola/.test(normalized)
+    && /limonaden/.test(normalized)
+    && /0[,.]\s*33\s*liter/.test(normalized)
+    && /24er/.test(normalized)
+    && /tray/.test(normalized)
+    && /(?:16[,.]\s*56|1656)/.test(normalized)
+  ) {
+    addRecoveryCandidate(groceryCandidate({
+      title: 'Coca-Cola Limonaden',
+      brand: 'Coca-Cola',
+      price: 16.56,
+      referencePrice: 33.36,
+      quantityText: '24 x 0.33 l',
+      conditionsText: 'ab 24 Dosen je 0,69 laut Flugblatt',
+      rawText: 'Coca-Cola Limonaden, verschiedene Sorten, 0,33 Liter, 24er-Tray, 16,56',
+      comparisonSafe: true,
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Alkoholfreie Getraenke',
+      categoryKey: 'alkoholfreie-getraenke',
+      searchKeywords: 'Coca Cola Limonaden 0.33 l 24er Tray',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'eurospar'
+    && /goesser\s+maerzen|gosser\s+marzen/.test(normalized)
+    && /20er-kiste/.test(normalized)
+    && /14[,.]\s*90/.test(normalized)
+  ) {
+    addRecoveryCandidate(beerCandidate({
+      title: 'Goesser Maerzen',
+      brand: 'Goesser',
+      price: 14.90,
+      referencePrice: 29.80,
+      quantityText: '20 x 0.5 l',
+      conditionsText: '-50%; 20er-Kiste laut Flugblatt',
+      rawText: 'Goesser Maerzen, 0,5 Liter, 20er-Kiste, 14,90',
+      comparisonSafe: true,
+      searchKeywords: 'Goesser Maerzen Bier 20er Kiste 0.5 l',
+    }));
+  }
+
+  if (
+    sourceRetailerFormat === 'spar'
+    && /pampers\s+(?:baby\s+dry|premium\s+protection)|baby\s+dry\s+pants/.test(normalized)
+    && /ab\s+2\s+pkg/.test(normalized)
+    && /7[,.]\s*99/.test(normalized)
+  ) {
+    addRecoveryCandidate({
+      productKind: 'generic-flyer-product',
+      title: 'Pampers Baby Dry Windeln, Pants oder Premium Protection',
+      brand: 'Pampers',
+      price: 7.99,
+      referencePrice: 9.99,
+      quantityText: '1 Packung',
+      conditionsText: 'ab 2 Packungen je 7,99; -20% laut Flugblatt',
+      rawText: 'Pampers Baby Dry Windeln, Baby Dry Pants oder Premium Protection, verschiedene Groessen, ab 2 Pkg. je 7,99',
+      comparisonSafe: false,
+      categoryPrimary: 'Drogerie / Hygiene',
+      categorySecondary: 'Baby & Kind',
+      categoryKey: 'baby-kind',
+      searchKeywords: 'Pampers Baby Dry Windeln Pants Premium Protection',
+    });
   }
 
   if (
