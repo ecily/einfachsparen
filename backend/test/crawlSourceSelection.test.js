@@ -171,6 +171,18 @@ test('source key derivation recognizes SPAR Productworld BFF sources before gene
   );
 });
 
+test('source key derivation keeps BIPA expanded page 2 source separately selectable', () => {
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'bipa',
+      channel: 'official-site',
+      sourceType: 'bipa-official-category-expanded-page2',
+      sourceUrl: 'https://www.bipa.at/c/pflege?limit=100&refine_0=c_pricebadges%3DAktion&start=100',
+    }),
+    'bipa-official-category-expanded-page2'
+  );
+});
+
 test('sourceKeys select exactly the requested runnable sources without SPAR official', async () => {
   const selection = await resolveCrawlSourceSelection({
     Source: fakeSourceModel(),

@@ -231,6 +231,17 @@ const SOURCE_TRANSPORT_TARGETS = [
     deployNotes: 'Official BIPA action category with product-near price badges. Used as first configured seed for expanded category source.',
   },
   {
+    id: 'bipa-category-expanded-page2',
+    retailerKey: 'bipa',
+    sourceFamily: 'bipa-official-category-expanded-page2',
+    label: 'BIPA expanded action category page 2',
+    method: 'GET',
+    expectedContentKind: 'html',
+    url: 'https://www.bipa.at/c/pflege?limit=100&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis&start=100',
+    headers: HTML_BROWSER_HEADERS,
+    deployNotes: 'Official BIPA page-2 action category seed. Scoped source uses only preconfigured start=100 category pages.',
+  },
+  {
     id: 'aktionsfinder-pagro',
     retailerKey: 'pagro',
     sourceFamily: 'aktionsfinder-pagro',

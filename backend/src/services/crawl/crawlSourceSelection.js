@@ -48,6 +48,7 @@ function deriveSourceKey(source = {}) {
   if (url.includes('dm.at/services/kundenprogramme-services/immerguenstig')) return 'dm-official-immerguenstig';
   if (url.includes('dm.at')) return 'dm-official-site';
   if (sourceType === 'bipa-official-category-expanded') return 'bipa-official-category-expanded';
+  if (sourceType === 'bipa-official-category-expanded-page2') return 'bipa-official-category-expanded-page2';
   if (url.includes('bipa.at/cp/onlineonly')) return 'bipa-official-onlineonly';
   if (url.includes('bipa.at/cp/joe-bonusclub')) return 'bipa-official-joe-bonusclub';
   if (url.includes('bipa.at')) return 'bipa-official-site';
