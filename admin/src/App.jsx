@@ -152,7 +152,10 @@ function SearchLandingHero() {
         }}
       >
         <div className="search-landing-hero__usp">
-          <p className="eyebrow hero-consumer__eyebrow">Flugblätter gibt es genug. Überblick nicht.</p>
+          <p className="eyebrow hero-consumer__eyebrow">
+            <span className="hero__country-badge" aria-hidden="true" />
+            <span>Flugblätter gibt es genug. Überblick nicht.</span>
+          </p>
           <h1
             style={{
               fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
