@@ -277,7 +277,7 @@ function TrustAndFaqSection() {
     },
     {
       question: 'Brauche ich ein Konto?',
-      answer: 'Nein. Du kannst Angebote suchen, merken und deine Einkaufsliste teilen, ohne dich anzumelden.',
+      answer: 'Nein. Du kannst Angebote finden, merken und deine Einkaufsliste teilen, ohne dich anzumelden.',
     },
     {
       question: 'Sind die Preise verbindlich?',
