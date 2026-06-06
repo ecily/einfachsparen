@@ -15,6 +15,7 @@ import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDispla
 import { getRetailerTheme } from '../../utils/retailerColors'
 
 const KEYWORD_SEARCH_LIMIT = 60
+const EXAMPLE_SEARCH_TERMS = ['Milch', 'Bier', 'Waschmittel', 'Zahnpasta', 'Kaffee']
 
 const SORT_OPTIONS = {
   best: 'best',
@@ -459,6 +460,19 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
     window.setTimeout(() => setSubmittedQuery(submittedQuery), 0)
   }
 
+  function handleExampleSearch(term) {
+    const nextQuery = String(term || '').trim()
+    if (!nextQuery) return
+
+    setQueryInput(nextQuery)
+    setSubmittedQuery(nextQuery)
+    setActiveSearchScrollKey((current) => current + 1)
+
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({}, '', `/suche?q=${encodeURIComponent(nextQuery)}`)
+    }
+  }
+
   async function handleLoadMoreOffers() {
     if (!submittedQuery || loading || loadingMore || !pagination.hasMore || pagination.nextOffset === null) return
 
@@ -557,6 +571,14 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             <button type="submit" className="primary-action-button">
               Angebote finden
             </button>
+          </div>
+          <div className="keyword-search-examples" aria-label="Beispiel-Suchen">
+            <span>Beispiele:</span>
+            {EXAMPLE_SEARCH_TERMS.map((term) => (
+              <button type="button" key={term} onClick={() => handleExampleSearch(term)}>
+                {term}
+              </button>
+            ))}
           </div>
         </form>
 

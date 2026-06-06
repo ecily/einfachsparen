@@ -1154,6 +1154,131 @@ a {
   line-height: 1.32;
 }
 
+.home-info-section {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+  padding: clamp(0.85rem, 2.4vw, 1.1rem);
+}
+
+.home-section-heading {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.home-section-heading h2,
+.home-step-card h3 {
+  margin: 0;
+  color: var(--kk-primary);
+  letter-spacing: 0;
+}
+
+.home-section-heading h2 {
+  font-size: clamp(1.12rem, 2.4vw, 1.42rem);
+  line-height: 1.16;
+}
+
+.home-section-heading p,
+.home-step-card p {
+  margin: 0;
+  color: var(--kk-muted);
+  line-height: 1.38;
+}
+
+.home-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.home-step-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.62rem;
+  min-width: 0;
+  padding: 0.78rem;
+  border: 1px solid rgba(94, 122, 150, 0.18);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.home-step-card__index {
+  display: inline-grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: rgba(59, 116, 83, 0.12);
+  color: var(--kk-success);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.home-step-card h3 {
+  font-size: 0.96rem;
+  line-height: 1.18;
+}
+
+.home-step-card p {
+  margin-top: 0.18rem;
+  font-size: 0.88rem;
+}
+
+.home-discovery-section,
+.home-beta-section {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.home-discovery-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+}
+
+.home-discovery-chips a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.12rem;
+  padding: 0.38rem 0.68rem;
+  border: 1px solid rgba(31, 90, 75, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--kk-primary);
+  font-size: 0.9rem;
+  font-weight: 820;
+  text-decoration: none;
+}
+
+.home-discovery-chips a:hover {
+  border-color: rgba(31, 90, 75, 0.3);
+  background: rgba(236, 246, 240, 0.92);
+}
+
+.home-beta-section {
+  align-items: center;
+  border-color: rgba(31, 90, 75, 0.16);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(239, 247, 243, 0.9));
+}
+
+.home-beta-section__cta {
+  justify-self: start;
+  min-height: 2.45rem;
+  padding: 0.55rem 0.88rem;
+  border: 1px solid rgba(31, 90, 75, 0.24);
+  border-radius: 999px;
+  background: var(--kk-primary);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 880;
+  box-shadow: 0 8px 18px rgba(36, 52, 71, 0.12);
+}
+
+.home-beta-section__cta:hover {
+  background: color-mix(in srgb, var(--kk-primary) 88%, #ffffff);
+}
+
 .search-landing-hero__mobile {
   align-self: stretch;
   align-content: center;
@@ -2922,6 +3047,37 @@ a {
   min-height: 58px;
   padding-inline: 1.18rem;
   white-space: nowrap;
+}
+
+.keyword-search-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+  align-items: center;
+  color: var(--kk-muted);
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.keyword-search-examples span {
+  font-weight: 800;
+}
+
+.keyword-search-examples button {
+  min-height: 1.86rem;
+  padding: 0.28rem 0.54rem;
+  border: 1px solid rgba(94, 122, 150, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--kk-primary);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.keyword-search-examples button:hover {
+  border-color: rgba(31, 90, 75, 0.28);
+  background: rgba(236, 246, 240, 0.9);
 }
 
 .keyword-search-filter-intro {
@@ -5204,6 +5360,27 @@ textarea:focus {
     padding: 0.82rem 0.88rem;
   }
 
+  .home-info-section {
+    gap: 0.64rem;
+    margin-top: 0.68rem;
+    padding: 0.78rem;
+  }
+
+  .home-steps-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.52rem;
+  }
+
+  .home-step-card {
+    grid-template-columns: 1fr;
+    gap: 0.42rem;
+    padding: 0.66rem;
+  }
+
+  .home-step-card p {
+    font-size: 0.82rem;
+  }
+
   .hero-market-strip__badges {
     gap: 0.3rem;
   }
@@ -5284,6 +5461,17 @@ textarea:focus {
 
   .beta-notice-trigger p {
     font-size: 0.72rem;
+  }
+
+  .keyword-search-examples {
+    gap: 0.28rem;
+    font-size: 0.76rem;
+  }
+
+  .keyword-search-examples button {
+    min-height: 1.7rem;
+    padding: 0.24rem 0.46rem;
+    font-size: 0.76rem;
   }
 
   .search-landing-hero__mobile {

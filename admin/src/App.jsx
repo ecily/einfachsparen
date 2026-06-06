@@ -154,7 +154,7 @@ function SearchLandingHero() {
         <div className="search-landing-hero__usp">
           <p className="eyebrow hero-consumer__eyebrow">
             <span className="hero__country-badge" aria-hidden="true" />
-            <span>Flugblätter gibt es genug. Überblick nicht.</span>
+            <span>Angebote aus Flugblättern. Endlich durchsuchbar.</span>
           </p>
           <h1
             style={{
@@ -164,11 +164,11 @@ function SearchLandingHero() {
               maxWidth: '100%',
             }}
           >
-            Nicht blättern. <span className="hero-headline-accent">Finden, was sich wirklich lohnt.</span>
+            Finde Supermarkt-Angebote in Österreich.
           </h1>
           <p className="subtitle" style={{ margin: 0, maxWidth: '100%' }}>
-            kaufklug macht aktuelle Angebote von Supermärkten und Drogerien in Österreich durchsuchbar – mit Preisen,
-            Gültigkeit und Bedingungen.
+            Suche nach Produkt oder Marke und sieh aktuelle Preise, Gültigkeit und Bedingungen – ohne Flugblätter zu
+            blättern.
           </p>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (
@@ -203,6 +203,70 @@ function SearchLandingHero() {
         </div>
       </section>
     </>
+  )
+}
+
+function HowItWorksSection() {
+  const steps = [
+    ['Suchen', 'Produkt oder Marke eingeben.'],
+    ['Vergleichen', 'Preis, Gültigkeit und Bedingungen prüfen.'],
+    ['Merken', 'Angebote auf die Einkaufsliste setzen.'],
+    ['Einkaufen', 'Im Markt prüfen und clever einkaufen.'],
+  ]
+
+  return (
+    <section className="panel home-info-section home-steps-section" aria-labelledby="home-steps-title">
+      <div className="home-section-heading">
+        <h2 id="home-steps-title">So funktioniert kaufklug</h2>
+      </div>
+      <div className="home-steps-grid">
+        {steps.map(([title, text], index) => (
+          <article className="home-step-card" key={title}>
+            <span className="home-step-card__index" aria-hidden="true">
+              {index + 1}
+            </span>
+            <div>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function DiscoverOffersSection() {
+  const terms = ['Milch', 'Bier', 'Waschmittel', 'Zahnpasta', 'Sonnencreme', 'Kaffee']
+
+  return (
+    <section className="panel home-info-section home-discovery-section" aria-labelledby="home-discovery-title">
+      <div className="home-section-heading">
+        <h2 id="home-discovery-title">Aktuelle Angebote entdecken</h2>
+        <p>Starte mit einer Suche und prüfe Preise, Gültigkeit und Bedingungen.</p>
+      </div>
+      <div className="home-discovery-chips" aria-label="Beliebte Angebotssuchen">
+        {terms.map((term) => (
+          <a href={`/suche?q=${encodeURIComponent(term)}`} key={term}>
+            {term}
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function HomeBetaFeedbackSection({ onNavigate }) {
+  return (
+    <section className="panel home-info-section home-beta-section" aria-labelledby="home-beta-title">
+      <div className="home-section-heading">
+        <h2 id="home-beta-title">kaufklug ist in Beta.</h2>
+        <p>Dein Feedback hilft, Angebote und Datenqualität weiter zu verbessern.</p>
+      </div>
+      <button type="button" className="home-beta-section__cta" onClick={() => onNavigate('feedback')}>
+        Feedback senden
+      </button>
+    </section>
   )
 }
 
@@ -944,6 +1008,9 @@ function App() {
             shoppingListIds={shoppingListIds}
             onAddToShoppingList={handleAddToShoppingList}
           />
+          <HowItWorksSection />
+          <DiscoverOffersSection />
+          <HomeBetaFeedbackSection onNavigate={handleNavigate} />
           <TrustAndFaqSection />
         </div>
       ) : activeSeoLandingPage ? (
