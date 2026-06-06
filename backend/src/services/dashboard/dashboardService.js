@@ -349,6 +349,7 @@ function buildCrawlReliabilityStatus({
   crawlHistory,
   activeCrawlRun,
   lockStatus,
+  publishStatusSummary,
 } = {}) {
   const latestManualFullCrawl = findLatestManualFullCrawl(crawlHistory) || (
     latestCrawl?.trigger === 'manual' && latestCrawl?.mode === 'full' && latestCrawl?.dryRun !== true
@@ -362,7 +363,9 @@ function buildCrawlReliabilityStatus({
     ? TERMINAL_CRAWL_STATUSES.has(latestManualFullCrawl.status) && Boolean(latestManualFullCrawl.finishedAt)
     : false;
   const finalizationComplete = Boolean(latestManualFullCrawl?.publishStatusFinished);
-  const currentStateLevel = lockFree && !hasActiveBlockedRun && manualFullTerminal && finalizationComplete
+  const publishFinal = publishStatusSummary?.status === 'final' && numberFrom(publishStatusSummary?.openCount) === 0;
+  const hasFinalizationProof = (manualFullTerminal && finalizationComplete) || publishFinal;
+  const currentStateLevel = lockFree && !hasActiveBlockedRun && hasFinalizationProof
     ? 'green'
     : 'red';
   const awaitingNextScheduledDailyConfirmation = Boolean(
@@ -411,8 +414,8 @@ function buildCrawlReliabilityStatus({
         : 'Needs attention',
       awaitingNextScheduledDailyConfirmation,
       reason: currentStateLevel === 'green'
-        ? 'Current crawl lock is free, no active blocked run exists, and latest manual full crawl reached publish-status-finished.'
-        : 'Current crawl system state still has an active lock/run or lacks a terminal manual full crawl with publish finalization.',
+        ? 'Current crawl lock is free, no active blocked run exists, and active offer publish status is final.'
+        : 'Current crawl system state still has an active lock/run or lacks final publish-state evidence.',
     },
     sourceFailures,
   };
@@ -2392,6 +2395,7 @@ async function buildDashboardSnapshot() {
     crawlHistory,
     activeCrawlRun,
     lockStatus,
+    publishStatusSummary,
   });
   const actionableIssues = buildActionableIssues({
     latestCrawl: latestScheduledFullCrawl || latestCrawl,

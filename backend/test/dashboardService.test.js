@@ -242,6 +242,92 @@ test('dashboard crawl reliability separates scheduled stale from current free te
   assert.equal(reliability.sourceFailures.groups[0].classification, 'P1 Source/Coverage');
 });
 
+test('dashboard crawl reliability treats final publish status as current system proof', () => {
+  const latestScopedCrawl = {
+    id: 'scoped-1',
+    status: 'success',
+    trigger: 'manual',
+    mode: 'scoped',
+    dryRun: false,
+    startedAt: '2026-06-06T13:03:24.629Z',
+    finishedAt: '2026-06-06T13:03:55.072Z',
+    lastStage: 'publish-status-finished',
+    publishStatusFinished: true,
+    summary: {
+      successfulSourcesCount: 1,
+      failedSourcesCount: 0,
+    },
+    sources: [
+      {
+        sourceKey: 'penny-official-site',
+        sourceType: 'offers-page',
+        channel: 'official-site',
+        status: 'success',
+      },
+    ],
+  };
+
+  const reliability = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: {
+      id: 'scheduled-full-1',
+      status: 'partial',
+      trigger: 'scheduled',
+      mode: 'full',
+      dryRun: false,
+      startedAt: '2026-06-05T23:00:00.112Z',
+      finishedAt: '2026-06-05T23:06:24.422Z',
+    },
+    latestCrawl: latestScopedCrawl,
+    crawlHistory: [latestScopedCrawl],
+    activeCrawlRun: null,
+    lockStatus: {
+      state: 'free',
+      isBlocked: false,
+      reason: 'Globaler Crawl-Lock ist frei.',
+    },
+    publishStatusSummary: {
+      status: 'final',
+      openCount: 0,
+    },
+  });
+
+  assert.equal(reliability.currentCrawlSystem.level, 'green');
+  assert.equal(reliability.currentCrawlSystem.lockFree, true);
+  assert.equal(reliability.currentCrawlSystem.activeRunBlocked, false);
+  assert.equal(reliability.currentCrawlSystem.latestManualFullCrawl, null);
+  assert.equal(reliability.currentCrawlSystem.finalizationLockBlocker, 'green');
+  assert.match(reliability.currentCrawlSystem.reason, /publish status is final/i);
+  assert.equal(reliability.sourceFailures.level, 'green');
+});
+
+test('dashboard crawl reliability stays red when publish status is open without final crawl proof', () => {
+  const reliability = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: null,
+    latestCrawl: {
+      id: 'scoped-open-1',
+      status: 'success',
+      trigger: 'manual',
+      mode: 'scoped',
+      dryRun: false,
+      finishedAt: '2026-06-06T13:03:55.072Z',
+    },
+    crawlHistory: [],
+    activeCrawlRun: null,
+    lockStatus: {
+      state: 'free',
+      isBlocked: false,
+    },
+    publishStatusSummary: {
+      status: 'open',
+      openCount: 12,
+    },
+  });
+
+  assert.equal(reliability.currentCrawlSystem.level, 'red');
+  assert.equal(reliability.currentCrawlSystem.finalizationLockBlocker, 'needs-attention');
+  assert.match(reliability.currentCrawlSystem.reason, /lacks final publish-state evidence/i);
+});
+
 test('dashboard lock serialization marks stale heartbeat locks as blocked', () => {
   const now = new Date('2026-06-01T13:00:00.000Z');
   const lock = _private.serializeLock({
