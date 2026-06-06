@@ -38,7 +38,19 @@ export function ImpressumPage() {
         <p>
           kaufklug.at ist derzeit ein privates, kostenlos nutzbares Projekt. Über diese Website werden derzeit keine
           Waren oder Dienstleistungen verkauft. Die Website dient der unverbindlichen Orientierung über öffentlich
-          verfügbare Angebotsinformationen.
+          verfügbare Angebotsinformationen. Ein Einkauf oder Vertrag kommt nicht mit kaufklug.at zustande, sondern
+          ausschließlich mit dem jeweiligen Händler.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Verantwortlichkeit für Inhalte">
+        <p>
+          Verantwortlich für die eigenen Inhalte dieser Website ist der oben genannte Medieninhaber und Betreiber.
+          Hinweise auf fehlerhafte, veraltete oder missverständliche Inhalte können jederzeit an{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`}>
+            {CONTACT_EMAIL}
+          </a>{' '}
+          gesendet werden.
         </p>
       </LegalSection>
 
@@ -85,8 +97,9 @@ export function PrivacyPage() {
 
       <LegalSection title="Zweck der Website">
         <p>
-          kaufklug.at hilft dabei, öffentlich verfügbare Angebotsinformationen übersichtlich darzustellen. Die Nutzung
-          ist derzeit kostenlos und ohne Nutzerkonto möglich.
+          kaufklug.at hilft dabei, öffentlich verfügbare Angebotsinformationen übersichtlich darzustellen, Angebote zu
+          finden, eine Einkaufsliste lokal zu nutzen und Feedback zur Verbesserung des Beta-Produkts zu senden. Die
+          Nutzung ist derzeit kostenlos und ohne Nutzerkonto möglich.
         </p>
       </LegalSection>
 
@@ -94,7 +107,23 @@ export function PrivacyPage() {
         <p>
           Beim Aufruf der Website können technisch notwendige Zugriffsdaten verarbeitet werden, etwa IP-Adresse,
           Zeitpunkt des Zugriffs, abgerufene Inhalte, Browserinformationen und technische Statusmeldungen. Diese Daten
-          sind für Bereitstellung, Sicherheit, Fehleranalyse und stabilen Betrieb der Website erforderlich.
+          sind für Bereitstellung, Sicherheit, Fehleranalyse und stabilen Betrieb der Website erforderlich. Die
+          Verarbeitung erfolgt über die für den Betrieb eingesetzte technische Infrastruktur; eine darüber hinausgehende
+          werbliche Auswertung ist nicht Zweck dieser Daten.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Feedback und Fehlermeldungen">
+        <p>
+          Wenn du Feedback sendest oder einen Fehler meldest, werden die eingegebenen Inhalte verarbeitet. Dazu können
+          je nach Formular Nachricht, Feedback-Typ, ausgewählte Themen, Wunschmärkte, freiwillig angegebene Kontakt- oder
+          Namensdaten und technische Zustellinformationen gehören. Name und E-Mail-Adresse sind freiwillig und werden nur
+          für Rückfragen verwendet.
+        </p>
+        <p>
+          Feedback wird genutzt, um Fehler zu prüfen, Angebotsdarstellungen zu verbessern und die Beta-Version von
+          kaufklug.at weiterzuentwickeln. Bitte sende keine sensiblen personenbezogenen Daten und keine Informationen,
+          die für die Fehlerprüfung oder Produktverbesserung nicht erforderlich sind.
         </p>
       </LegalSection>
 
@@ -129,6 +158,20 @@ export function PrivacyPage() {
         </p>
       </LegalSection>
 
+      <LegalSection title="Rechtsgrundlagen und Speicherdauer">
+        <p>
+          Die Verarbeitung technischer Betriebsdaten, pseudonymer Nutzungsereignisse, lokaler Funktionsdaten und
+          eingehender Feedbacks erfolgt grundsätzlich auf Basis berechtigter Interessen an Betrieb, Sicherheit,
+          Fehlerbehebung und Produktverbesserung. Soweit du freiwillig Kontakt- oder Feedbackdaten übermittelst, werden
+          diese zur Bearbeitung deiner Anfrage und zur Verbesserung von kaufklug.at verwendet.
+        </p>
+        <p>
+          Personenbezogene Daten werden nur so lange aufbewahrt, wie es für Betrieb, Fehleranalyse, Bearbeitung von
+          Anfragen, Nachvollziehbarkeit berechtigter Interessen oder gesetzliche Pflichten erforderlich ist. Lokale
+          Browserdaten kannst du selbst in der Anwendung oder über die Browsereinstellungen löschen.
+        </p>
+      </LegalSection>
+
       <LegalSection title="Externe QR-Code-Dienste">
         <p>
           Derzeit wird in der sichtbaren Webanwendung kein QR-Code zur Android-Testversion geladen. Falls später wieder
@@ -138,9 +181,9 @@ export function PrivacyPage() {
 
       <LegalSection title="Kontaktaufnahme">
         <p>
-          Wenn du per E-Mail Kontakt aufnimmst, werden die von dir übermittelten Daten zur Bearbeitung der Anfrage
-          verarbeitet. Eine Weitergabe erfolgt nicht ohne Anlass, außer sie ist zur Bearbeitung, Rechtsverfolgung oder
-          Erfüllung gesetzlicher Pflichten erforderlich.
+          Wenn du per E-Mail oder über das Feedbackformular Kontakt aufnimmst, werden die von dir übermittelten Daten zur
+          Bearbeitung der Anfrage verarbeitet. Eine Weitergabe erfolgt nicht ohne Anlass, außer sie ist zur Bearbeitung,
+          Rechtsverfolgung, technischen Zustellung oder Erfüllung gesetzlicher Pflichten erforderlich.
         </p>
       </LegalSection>
 
@@ -148,7 +191,11 @@ export function PrivacyPage() {
         <p>
           Betroffene Personen können nach Maßgabe der DSGVO insbesondere Auskunft, Berichtigung, Löschung,
           Einschränkung, Datenübertragbarkeit und Widerspruch geltend machen. Zudem besteht das Recht auf Beschwerde bei
-          der österreichischen Datenschutzbehörde.
+          der österreichischen Datenschutzbehörde. Datenschutzanfragen können an{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`}>
+            {CONTACT_EMAIL}
+          </a>{' '}
+          gerichtet werden.
         </p>
       </LegalSection>
     </LegalPageShell>
@@ -167,7 +214,9 @@ export function LiabilityPage() {
           kaufklug.at stellt Angebots-, Preis-, Rabatt-, Produkt-, Verfügbarkeits- und Gültigkeitsinformationen
           ausschließlich als unverbindliche Orientierungshilfe bereit. Die dargestellten Informationen können aus
           öffentlich zugänglichen Quellen, Prospekten, Online-Angeboten oder automatisierten Auswertungen abgeleitet sein
-          und können unvollständig, veraltet, fehlerhaft oder regional unterschiedlich sein.
+          und können unvollständig, veraltet, fehlerhaft oder regional unterschiedlich sein. Das gilt insbesondere für
+          Preise, Sorten, Packungsgrößen, Mengen, Aktionszeiträume, Kundenkarten- oder App-Bedingungen und regionale
+          Verfügbarkeit.
         </p>
       </LegalSection>
 
@@ -184,8 +233,8 @@ export function LiabilityPage() {
         <p>
           Eine Gewähr für Richtigkeit, Vollständigkeit, Aktualität, Vergleichbarkeit, Verfügbarkeit oder regionale
           Gültigkeit der dargestellten Angebote wird nicht übernommen. Nutzerinnen und Nutzer sind verpflichtet, Preise,
-          Bedingungen, Gültigkeit, Mengenbeschränkungen, Kundenkarten-/App-Erfordernisse und Verfügbarkeit vor dem Kauf
-          selbst beim jeweiligen Händler zu prüfen.
+          Bedingungen, Gültigkeit, Sorten, Packungsgrößen, Mengenbeschränkungen, Kundenkarten-/App-Erfordernisse und
+          Verfügbarkeit vor dem Kauf selbst beim jeweiligen Händler zu prüfen.
         </p>
       </LegalSection>
 
@@ -213,7 +262,8 @@ export function LiabilityPage() {
           <a href={`mailto:${CONTACT_EMAIL}`}>
             {CONTACT_EMAIL}
           </a>{' '}
-          ersucht. Beanstandete Inhalte werden nach nachvollziehbarer Prüfung korrigiert, ergänzt oder entfernt.
+          ersucht. Nutzerinnen und Nutzer können Fehler auch über <a href="/feedback">Feedback senden</a> melden.
+          Beanstandete Inhalte werden nach nachvollziehbarer Prüfung korrigiert, ergänzt oder entfernt.
         </p>
       </LegalSection>
     </LegalPageShell>
@@ -233,6 +283,10 @@ export function CookiesPage() {
           Werbeprofile erstellt und keine sichtbaren Tracking-Pixel wie Google Analytics, Meta Pixel oder vergleichbare
           Dienste eingesetzt.
         </p>
+        <p>
+          Sollte kaufklug.at künftig Analyse-, Marketing- oder andere nicht notwendige Cookies einsetzen, würde dies
+          gesondert erklärt und, soweit erforderlich, erst nach einer entsprechenden Einwilligung aktiviert.
+        </p>
       </LegalSection>
 
       <LegalSection title="Lokale Speicherung im Browser">
@@ -240,7 +294,8 @@ export function CookiesPage() {
           Für die Einkaufsliste, den Speicherhinweis und eine pseudonyme Sitzungskennung verwendet kaufklug.at lokale
           Speicherung im Browser beziehungsweise auf dem Gerät. Diese Speicherung dient dazu, die Einkaufsliste lokal zu
           erhalten, den Cookie-/Speicherhinweis nicht bei jedem Besuch erneut anzuzeigen und einfache Nutzungskennzahlen
-          ohne Nutzerkonto zu erfassen.
+          ohne Nutzerkonto zu erfassen. Diese lokale Speicherung ist funktional beziehungsweise technisch für eine
+          sinnvolle Nutzung der Beta-Version vorgesehen und dient nicht der Erstellung von Werbeprofilen.
         </p>
       </LegalSection>
 

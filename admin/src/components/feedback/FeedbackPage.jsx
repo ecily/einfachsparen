@@ -88,7 +88,8 @@ export function FeedbackPage() {
         <h1 id="feedback-title">Feedback senden</h1>
         <p>
           kaufklug ist gerade in der Beta. Wir freuen uns ueber Ideen, Wuensche und Hinweise,
-          damit wir besser verstehen, was dir beim Einkaufen wirklich helfen wuerde.
+          damit wir besser verstehen, was dir beim Einkaufen wirklich helfen wuerde. Dein Feedback wird zur Pruefung,
+          Fehlerbehebung und Verbesserung von kaufklug.at verarbeitet.
         </p>
       </div>
 
@@ -194,7 +195,8 @@ export function FeedbackPage() {
 
           <p className="feedback-page__privacy">
             Bitte sende keine sensiblen persoenlichen Daten. Name und E-Mail sind optional und werden nur verwendet,
-            falls wir Rueckfragen haben.
+            falls wir Rueckfragen haben. Weitere Informationen findest du in der{' '}
+            <a href="/datenschutz">Datenschutzerklaerung</a>.
           </p>
 
           {status === 'sent' ? (
