@@ -139,7 +139,7 @@ function SearchLandingHero({ onNavigate }) {
     ['pagro', 'PAGRO'],
     ['penny', 'PENNY'],
   ]
-  const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung', 'Bedingungen sichtbar']
+  const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung']
 
   return (
     <>

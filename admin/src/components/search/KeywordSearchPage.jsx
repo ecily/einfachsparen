@@ -533,7 +533,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                 id="keyword-search-input"
                 type="search"
                 value={queryInput}
-                placeholder="Produkt oder Marke suchen, z. B. Milch, Bier, Waschmittel"
+                placeholder="Produkt oder Marke suchen"
                 aria-label="Suchbegriff für Angebote"
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
