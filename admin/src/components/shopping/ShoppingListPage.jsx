@@ -256,7 +256,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
           <p>Suche nach Produkten oder stöbere nach Märkten und füge Angebote deiner Einkaufsliste hinzu.</p>
           <div className="shopping-list-empty-actions">
             <button type="button" className="primary-action-button" onClick={onGoToOffers}>
-              Angebote suchen
+              Angebote finden
             </button>
             <button type="button" className="ghost-button" onClick={() => onNavigate?.('search')}>
               Märkte stöbern
@@ -297,7 +297,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
       <div className="shopping-list-actions">
         <button type="button" className="primary-action-button" onClick={onGoToOffers}>
           <SearchIcon />
-          Weitere Angebote suchen
+          Weitere Angebote finden
         </button>
         <button type="button" className="ghost-button" onClick={handleShareList} disabled={shareState.status === 'loading'}>
           <ShareIcon />

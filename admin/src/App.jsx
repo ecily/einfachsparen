@@ -144,10 +144,10 @@ function SearchLandingHero() {
         className="panel search-landing-hero"
         style={{
           display: 'grid',
-          gap: 'clamp(0.9rem, 2.4vw, 1.25rem)',
-          marginBottom: '1rem',
+          gap: 'clamp(0.62rem, 1.8vw, 0.95rem)',
+          marginBottom: '0.55rem',
           minWidth: 0,
-          padding: 'clamp(1.05rem, 3vw, 1.7rem)',
+          padding: 'clamp(0.85rem, 2.2vw, 1.25rem)',
           width: '100%',
         }}
       >
@@ -158,12 +158,12 @@ function SearchLandingHero() {
               fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
               lineHeight: 1.05,
               margin: 0,
-              maxWidth: '46rem',
+              maxWidth: '64rem',
             }}
           >
             Nicht blättern. <span className="hero-headline-accent">Finden, was sich wirklich lohnt.</span>
           </h1>
-          <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
+          <p className="subtitle" style={{ margin: 0, maxWidth: '60rem' }}>
             kaufklug macht aktuelle Angebote von Supermärkten und Drogerien in Österreich durchsuchbar – mit Preisen,
             Gültigkeit und Bedingungen.
           </p>

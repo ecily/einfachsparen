@@ -1,17 +1,4 @@
 export function StickyBottomLine({ onNavigate }) {
-  const footerButtonStyle = {
-    display: 'inline',
-    margin: '0 0 0 0.45rem',
-    padding: 0,
-    border: 0,
-    color: 'var(--kk-primary)',
-    font: 'inherit',
-    fontWeight: 850,
-    textDecoration: 'none',
-    background: 'transparent',
-    cursor: 'pointer',
-  }
-
   return (
     <div
       aria-label="Copyright, Projektlink und Rechtliches"
@@ -52,19 +39,23 @@ export function StickyBottomLine({ onNavigate }) {
           ecily/webentwicklung
         </a>
         .
-        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('impressum')}>
+        <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('impressum')}>
           Impressum
         </button>
-        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('privacy')}>
+        <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('privacy')}>
           Datenschutz
         </button>
-        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('liability')}>
+        <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('liability')}>
           Haftung
         </button>
-        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('cookies')}>
+        <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('cookies')}>
           Cookies
         </button>
-        <button type="button" style={footerButtonStyle} onClick={() => onNavigate('feedback')}>
+        <button
+          type="button"
+          className="sticky-bottom-line__button sticky-bottom-line__button--feedback"
+          onClick={() => onNavigate('feedback')}
+        >
           Feedback senden
         </button>
       </span>

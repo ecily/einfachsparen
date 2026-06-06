@@ -217,7 +217,7 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
           <h1>Diese Einkaufsliste ist nicht mehr verfügbar.</h1>
           <p>Du kannst direkt nach aktuellen Angeboten suchen.</p>
           <button type="button" className="primary-action-button" onClick={() => onNavigate('product-search')}>
-            Angebote suchen
+            Angebote finden
           </button>
         </div>
       </SectionCard>
@@ -239,7 +239,7 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
           Liste übernehmen
         </button>
         <button type="button" className="ghost-button" onClick={() => onNavigate('product-search')}>
-          Eigene Angebote suchen
+          Eigene Angebote finden
         </button>
         <button type="button" className="ghost-button" onClick={handleShareAgain}>
           Liste teilen
