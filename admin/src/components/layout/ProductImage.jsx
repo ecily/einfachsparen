@@ -32,7 +32,7 @@ function getPlaceholderCopy(offer) {
   if (hasOfficialSourceSignal(offer)) {
     return {
       label: 'Offizielles Angebot',
-      detail: 'Bild derzeit nicht verfügbar',
+      detail: 'Bild folgt nicht immer im Flyer',
     }
   }
 
