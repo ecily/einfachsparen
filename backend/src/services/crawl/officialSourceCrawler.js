@@ -7047,7 +7047,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
           .map(([reason, count]) => ({ reason, count }))
       );
       sourceMessage = dmOfficialResult.message || dmOfficialResult.diagnostics?.message || '';
-    } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/')) {
+    } else if (
+      source.retailerKey === 'bipa'
+      && (source.sourceUrl.includes('bipa.at/cp/') || /^bipa-official-/i.test(source.sourceType || ''))
+    ) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
         source,
         crawlJobId: crawlJob._id,
