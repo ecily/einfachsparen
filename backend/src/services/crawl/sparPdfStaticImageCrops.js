@@ -192,14 +192,19 @@ const STATIC_SPAR_PDF_CROPS = [
   }),
 ];
 
-function getStaticSparPdfCropForCandidate({ candidate = {}, sourceUrl = '' } = {}) {
-  const normalizedSourceUrl = normalizeSourceUrlKey(sourceUrl);
+function getStaticSparPdfCropForCandidate({ candidate = {}, sourceUrl = '', sourceUrls = [] } = {}) {
+  const normalizedSourceUrls = [
+    sourceUrl,
+    ...sourceUrls,
+  ]
+    .map(normalizeSourceUrlKey)
+    .filter(Boolean);
   const candidateTitleKey = normalizeTitleForMatch(candidate.title || '');
   const candidatePrice = Number(candidate.price);
   const candidatePage = Number(candidate.page);
 
   const match = STATIC_SPAR_PDF_CROPS.find((entry) => (
-    normalizedSourceUrl.includes(entry.sourceNeedle)
+    normalizedSourceUrls.some((url) => url.includes(entry.sourceNeedle))
     && String(candidate.id || '') === entry.candidateId
     && Number(candidatePage) === Number(entry.page)
     && Number.isFinite(candidatePrice)
@@ -216,6 +221,7 @@ function getStaticSparPdfCropForCandidate({ candidate = {}, sourceUrl = '' } = {
     imageEvidence: {
       sourceType: 'spar-official-pdf',
       sourceUrl,
+      sourceUrls,
       page: candidate.page,
       candidateId: candidate.id,
       asset: match.asset,

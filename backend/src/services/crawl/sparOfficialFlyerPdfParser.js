@@ -4093,6 +4093,7 @@ function normalizeSparPdfCandidateToOffer({
     : getStaticSparPdfCropForCandidate({
       candidate,
       sourceUrl: pdfUrl || source.sourceUrl,
+      sourceUrls: [source.sourceUrl],
     });
   const imageUrl = normalizeImageUrl(candidate.imageUrl || staticImage?.imageUrl || '', pdfUrl || source.sourceUrl);
 

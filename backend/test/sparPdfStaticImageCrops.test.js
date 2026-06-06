@@ -66,6 +66,19 @@ test('returns a static SPAR PDF crop only for exact source, candidate, title, pa
   ]);
 });
 
+test('matches static SPAR PDF crop when downloader canonicalizes away the source slug', () => {
+  const result = getStaticSparPdfCropForCandidate({
+    sourceUrl: 'https://viewer.ipaper.io/spar/hashed-download.pdf',
+    sourceUrls: [monatssparerUrl],
+    candidate: monthCandidate(),
+  });
+
+  assert.ok(result);
+  assert.equal(result.imageEvidence.sourceUrl, 'https://viewer.ipaper.io/spar/hashed-download.pdf');
+  assert.deepEqual(result.imageEvidence.sourceUrls, [monatssparerUrl]);
+  assert.equal(result.imageUrl, 'https://www.kaufklug.at/offer-assets/spar-pdf-crops/monatssparer-p2-spar-muellsack.png');
+});
+
 test('rejects static SPAR PDF crops when any safety gate changes', () => {
   assert.equal(getStaticSparPdfCropForCandidate({
     sourceUrl: monatssparerUrl,
