@@ -1938,6 +1938,20 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       issues.push('Gueltigkeitszeitraum unvollstaendig');
     }
 
+    const conditionExtraction = {
+      conditionsText: '',
+      hasConditions: false,
+      minimumPurchaseQty: 1,
+      isMultiBuy: false,
+      effectiveDiscountType: 'unknown',
+    };
+    const conditionsText = buildPennyConditionsText({
+      conditionExtraction,
+      validTo,
+      title,
+    });
+    const hasConditions = Boolean(conditionsText);
+
     const overrideResult = applyManualCategoryOverridesToOfferSync({
       crawlJobId,
       sourceId: source._id,
@@ -1975,9 +1989,13 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
       status: statusInfo.status,
       isActiveNow: statusInfo.isActiveNow,
       isActiveToday: statusInfo.isActiveToday,
-      benefitType: priceReference.amount ? 'price-cut' : 'unknown',
-      conditionsText: '',
+      benefitType: hasConditions ? 'conditional-price' : priceReference.amount ? 'price-cut' : 'unknown',
+      conditionsText,
       customerProgramRequired: false,
+      hasConditions,
+      isMultiBuy: false,
+      minimumPurchaseQty: 1,
+      effectiveDiscountType: 'unknown',
       availabilityScope: 'unknown',
       priceCurrent: {
         amount: currentPrice,
@@ -2007,13 +2025,19 @@ function parsePennyOffersFromHtml({ html, source, crawlJobId, region, pageUrl })
         productId: sanitizeWhitespace(payloadProduct?.productId),
         sku: sanitizeWhitespace(payloadProduct?.sku),
         imageSource: sanitizeWhitespace(payloadProduct?.images?.[0]) ? 'nuxt-payload' : '',
+        conditionExtraction: hasPennyUnstructuredConditionHint({ title, conditionExtraction }) ? {
+          parser: 'penny-official-condition-tags-v1',
+          sources: ['title-footnote-marker'],
+          confidence: 0.45,
+          reason: 'unstructured-title-footnote-marker',
+        } : undefined,
         availabilityScope: scopeHint,
         pageUrl,
         snapshotCurrent: false,
       },
       adminReview: {
         status: issues.length > 0 ? 'pending' : 'reviewed',
-        note: '',
+        note: conditionsText,
         feedbackDigest: '',
       },
       scope: buildInclusiveScopeDecision(),
@@ -2208,6 +2232,28 @@ function buildPennyOfficialConditionExtraction(product = {}) {
   };
 }
 
+function hasPennyUnstructuredConditionHint({ title = '', conditionExtraction = {} } = {}) {
+  const titleText = sanitizeWhitespace(title);
+
+  if (conditionExtraction?.hasConditions) {
+    return false;
+  }
+
+  return /\*\d*/.test(titleText);
+}
+
+function buildPennyConditionsText({ conditionExtraction = {}, validTo = null, title = '' } = {}) {
+  const conditions = [
+    conditionExtraction.conditionsText,
+    hasPennyUnstructuredConditionHint({ title, conditionExtraction })
+      ? 'Bedingung im Angebotsbild pruefen'
+      : '',
+    validTo ? '' : 'Aktuell gefunden - bitte im Markt pruefen.',
+  ].filter(Boolean);
+
+  return sanitizeWhitespace([...new Set(conditions)].join(' / '));
+}
+
 function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, region, pageUrl, categorySlug = '' }) {
   const offers = [];
   const seenOfferKeys = new Set();
@@ -2237,10 +2283,12 @@ function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, 
     const issues = [];
     const offerKey = [productUrl, validFrom?.toISOString() || '', validTo?.toISOString() || '', currentPrice].join('|');
     const conditionExtraction = buildPennyOfficialConditionExtraction(product);
-    const conditionsText = [
-      conditionExtraction.conditionsText,
-      validTo ? '' : 'Aktuell gefunden - bitte im Markt pruefen.',
-    ].filter(Boolean).join(' / ');
+    const conditionsText = buildPennyConditionsText({
+      conditionExtraction,
+      validTo,
+      title,
+    });
+    const hasConditions = Boolean(conditionsText);
 
     if (
       !title
@@ -2299,12 +2347,14 @@ function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, 
       isActiveToday: statusInfo.isActiveToday,
       benefitType: conditionExtraction.isMultiBuy
         ? 'multi-buy'
+        : hasConditions
+          ? 'conditional-price'
         : referencePrice && referencePrice > currentPrice
           ? 'price-cut'
           : 'unknown',
       conditionsText,
       customerProgramRequired: false,
-      hasConditions: conditionExtraction.hasConditions,
+      hasConditions,
       isMultiBuy: conditionExtraction.isMultiBuy,
       minimumPurchaseQty: conditionExtraction.minimumPurchaseQty,
       effectiveDiscountType: conditionExtraction.effectiveDiscountType,
@@ -2346,6 +2396,11 @@ function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, 
           sources: conditionExtraction.evidenceSources,
           confidence: 0.9,
           reason: 'explicit-penny-promotion-field',
+        } : hasPennyUnstructuredConditionHint({ title, conditionExtraction }) ? {
+          parser: 'penny-official-condition-tags-v1',
+          sources: ['title-footnote-marker'],
+          confidence: 0.45,
+          reason: 'unstructured-title-footnote-marker',
         } : undefined,
         discountPercentage: product?.price?.discountPercentage ?? null,
         baseUnitShort: sanitizeWhitespace(product?.price?.baseUnitShort),

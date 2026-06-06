@@ -148,6 +148,46 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
+    patterns: [/\bkinder\s+(?:kinder\s+)?pingui\b|\bkinderpingui\b/],
+    main: 'Lebensmittel',
+    sub: 'Suesswaren & Knabbereien',
+  },
+  {
+    patterns: [/\b(makrelensalat|makrelenfilet|makrelenfilets|makrele|delamaris)\b/],
+    main: 'Lebensmittel',
+    sub: 'Fleisch, Wurst & Fisch',
+  },
+  {
+    patterns: [/\bholy\s+slice\s+pizza\b/],
+    main: 'Lebensmittel',
+    sub: 'Tiefkuehl- & Fertigprodukte',
+  },
+  {
+    patterns: [/\b(liptauer|cremoso\s+di\s+bufala|parmigiano\s+reggiano)\b/],
+    main: 'Lebensmittel',
+    sub: 'Kaese',
+  },
+  {
+    patterns: [/\b(jufka\s+teigblaetter|jufka\s+teigblatter|teigblaetter|teigblatter)\b/],
+    main: 'Lebensmittel',
+    sub: 'Backen & Grundnahrungsmittel',
+  },
+  {
+    patterns: [/\b(kardinalschnitte|schoko[-\s]?vanilletorte|vanilletorte|torte)\b/],
+    main: 'Lebensmittel',
+    sub: 'Suesswaren & Knabbereien',
+  },
+  {
+    patterns: [/\bhochriegl\s+baby\b/],
+    main: 'Getraenke',
+    sub: 'Wein & Sekt',
+  },
+  {
+    patterns: [/\b(parkside|cutter[-\s]?set|maler[-\s]?starter[-\s]?set)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Werkzeug & Akkus',
+  },
+  {
     patterns: [/\bfelix\b.*(linsen|bohnen|eintopf|konserve|ravioli|sugo|pasta|chili|gulasch)/],
     main: 'Lebensmittel',
     sub: 'Pasta, Reis & Konserven',

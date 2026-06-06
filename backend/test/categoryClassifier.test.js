@@ -181,6 +181,28 @@ test('classifies espresso cosmetic color names as cosmetics instead of coffee', 
   assert.equal(decision.secondaryCategory, 'Kosmetik & Make-up');
 });
 
+test('keeps beta feedback category false positives in their product categories', () => {
+  const cases = [
+    ['Kinder Kinder Pingui', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['Rio Mare gegrillte Makrelenfilets Natur', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Delamaris Makrelensalat', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['iglo Holy Slice Pizza div. Sorten', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
+    ['Wojnars Liptauer mild od. scharf', 'Lebensmittel', 'Kaese'],
+    ['Parmigiano Reggiano', 'Lebensmittel', 'Kaese'],
+    ['Mäidä Jufka Teigblätter', 'Lebensmittel', 'Backen & Grundnahrungsmittel'],
+    ['Kardinalschnitte', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['Hochriegl Baby div. Sorten', 'Getraenke', 'Wein & Sekt'],
+    ['PARKSIDE Maler-Starter-Set', 'Technik / Elektronik', 'Werkzeug & Akkus'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+  }
+});
+
 test('does not classify generic non-fragrance gift sets as cosmetics', () => {
   const cases = [
     'Bottled Geschenkset',

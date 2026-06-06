@@ -244,6 +244,13 @@ function sanitizeOfferFeedbackDocument(doc) {
     ]),
     structuredDetails: sanitizeStructuredDetails(plain.structuredDetails),
     freeText: truncateText(plain.freeText, 800),
+    triage: pickObject(plain.triage, [
+      'note',
+      'rootCause',
+      'resolution',
+      'updatedBy',
+      'updatedAt',
+    ]),
   });
 }
 
@@ -621,6 +628,49 @@ function createAdminRouter({
         count: items.length,
         limit,
         items,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch('/offer-feedback/:feedbackId/status', async (req, res, next) => {
+    try {
+      const status = String(req.body?.status || '').trim();
+
+      if (!['new', 'reviewing', 'resolved', 'ignored'].includes(status)) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Ungueltiger Feedback-Status.',
+        });
+      }
+
+      const update = {
+        status,
+        triage: {
+          note: truncateText(req.body?.note || '', 800) || '',
+          rootCause: truncateText(req.body?.rootCause || '', 200) || '',
+          resolution: truncateText(req.body?.resolution || '', 200) || '',
+          updatedBy: 'codex-admin',
+          updatedAt: new Date(),
+        },
+      };
+      const item = await OfferFeedbackModel.findByIdAndUpdate(
+        req.params.feedbackId,
+        { $set: update },
+        { new: true }
+      );
+
+      if (!item) {
+        return res.status(404).json({
+          ok: false,
+          message: 'OfferFeedback wurde nicht gefunden.',
+        });
+      }
+
+      return res.json({
+        ok: true,
+        item: sanitizeOfferFeedbackDocument(item),
       });
     } catch (error) {
       next(error);

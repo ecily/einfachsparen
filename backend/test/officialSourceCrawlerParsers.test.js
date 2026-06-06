@@ -1319,8 +1319,8 @@ function pennyCard({
   href = '/produkte/auslese-klassisch-78114243',
   titleLine = 'Auslese klassisch* • Jacobs',
   quantity = '500 g Packung',
-  validFrom = 'von Mi 20.05.2026',
-  validTo = 'bis Di 02.06.2026',
+  validFrom = 'von Mi 10.06.2026',
+  validTo = 'bis Di 30.06.2026',
   price = '5,99 €',
   reference = '9,99 €',
   basePrice = '1 kg 11,98 €',
@@ -1373,8 +1373,8 @@ function pennyProduct(overrides = {}) {
       { name: 'Angebote ab 13.05.' },
     ]],
     price: {
-      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-20',
-      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-06-02',
+      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-06-10',
+      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-06-30',
       crossed: overrides.crossed === undefined ? 999 : overrides.crossed,
       regular: { value: overrides.priceCents || 599 },
     },
@@ -1399,8 +1399,8 @@ function pennyApiProduct(overrides = {}) {
         tags: hasOverride('tags') ? overrides.tags : ['SO'],
         value: overrides.priceCents || 599,
       },
-      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-05-20',
-      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-06-02',
+      validityStart: hasOverride('validityStart') ? overrides.validityStart : '2026-06-10',
+      validityEnd: hasOverride('validityEnd') ? overrides.validityEnd : '2026-06-30',
     },
   };
 }
@@ -1425,14 +1425,19 @@ test('PENNY official parser extracts offer card core fields and Nuxt payload ima
   assert.equal(offers[0].title, 'Auslese klassisch*');
   assert.equal(offers[0].brand, 'Jacobs');
   assert.equal(offers[0].quantityText, '500 g Packung');
-  assert.equal(offers[0].validFrom.toISOString(), '2026-05-20T12:00:00.000Z');
-  assert.equal(offers[0].validTo.toISOString(), '2026-06-02T23:59:59.999Z');
+  assert.equal(offers[0].validFrom.toISOString(), '2026-06-10T12:00:00.000Z');
+  assert.equal(offers[0].validTo.toISOString(), '2026-06-30T23:59:59.999Z');
   assert.equal(offers[0].priceCurrent.amount, 5.99);
   assert.equal(offers[0].priceReference.amount, 9.99);
   assert.equal(offers[0].normalizedUnitPrice.amount, 11.98);
   assert.equal(offers[0].normalizedUnitPrice.unit, 'kg');
   assert.equal(offers[0].imageUrl, 'https://images.example.test/jacobs.jpg');
   assert.equal(offers[0].availabilityScope, 'unknown');
+  assert.equal(offers[0].conditionsText, 'Bedingung im Angebotsbild pruefen');
+  assert.equal(offers[0].hasConditions, true);
+  assert.equal(offers[0].minimumPurchaseQty, 1);
+  assert.equal(offers[0].effectiveDiscountType, 'unknown');
+  assert.equal(offers[0].rawFacts.conditionExtraction.reason, 'unstructured-title-footnote-marker');
 });
 
 test('PENNY official parser normalizes relative srcset image URLs', () => {
@@ -1511,8 +1516,8 @@ test('PENNY official parser classifies coffee, cleaner, sweets and alcohol conse
         href: '/produkte/bourbon-whiskey-78113169',
         titleLine: 'Bourbon Whiskey • Jim Beam',
         quantity: '0,7 liter Flasche',
-        validFrom: 'von Mi 20.05.2026',
-        validTo: 'bis Di 02.06.2026',
+        validFrom: 'von Mi 10.06.2026',
+        validTo: 'bis Di 30.06.2026',
         price: '9,99 €',
         reference: '',
         basePrice: '1 Liter 14,27 €',
@@ -1761,6 +1766,36 @@ test('PENNY official condition extraction ignores package sizes and normal price
     assert.equal(offer.effectiveDiscountType, 'unknown');
     assert.equal(offer.rawFacts.conditionExtraction, undefined);
   }
+});
+
+test('PENNY official condition extraction adds neutral hint for unstructured API title footnotes', () => {
+  const [offer] = __private.normalizePennyApiProductsToOffers({
+    products: [pennyApiProduct({
+      name: 'Coca-Cola Original* od. Zero*',
+      slug: 'coca-cola-original-od-zero-78111111',
+      brand: undefined,
+      amount: '2',
+      volumeLabelShort: 'l',
+      packageLabel: 'Flasche',
+      tags: ['SO'],
+      validityStart: '2026-06-01',
+      validityEnd: '2026-06-30',
+      crossed: null,
+      priceCents: 149,
+    })],
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-1305',
+  });
+
+  assert.equal(offer.conditionsText, 'Bedingung im Angebotsbild pruefen');
+  assert.equal(offer.hasConditions, true);
+  assert.equal(offer.isMultiBuy, false);
+  assert.equal(offer.minimumPurchaseQty, 1);
+  assert.equal(offer.effectiveDiscountType, 'unknown');
+  assert.equal(offer.rawFacts.conditionExtraction.reason, 'unstructured-title-footnote-marker');
 });
 
 test('PENNY official API condition fields survive storage enrichment and public serialization', () => {

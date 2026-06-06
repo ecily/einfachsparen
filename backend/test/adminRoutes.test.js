@@ -212,6 +212,26 @@ function createRecentOfferFeedbackModel(docs, calls = {}) {
   };
 }
 
+function createStatusOfferFeedbackModel({ updatedDoc = recentFeedbackDoc(), calls = {} } = {}) {
+  calls.findByIdAndUpdate = [];
+
+  return {
+    calls,
+    async findByIdAndUpdate(id, update, options) {
+      calls.findByIdAndUpdate.push({ id, update, options });
+      if (id === 'missing-feedback') {
+        return null;
+      }
+      return {
+        ...updatedDoc,
+        _id: id,
+        status: update.$set.status,
+        triage: update.$set.triage,
+      };
+    },
+  };
+}
+
 function recentFeedbackDoc(overrides = {}) {
   return {
     _id: 'feedback-1',
@@ -638,6 +658,62 @@ test('GET /api/admin/offer-feedback/export begrenzt limit auf 1000 und bleibt sa
   assert.equal(calls.limit, 1000);
   assert.equal(JSON.stringify(response.body).includes('203.0.113.10'), false);
   assert.equal(JSON.stringify(response.body).includes('session-hash-not-returned'), false);
+});
+
+test('PATCH /api/admin/offer-feedback/:feedbackId/status aktualisiert Status und Triage sanitisiert', async (t) => {
+  const adminKey = withAdminApiKey(t);
+  const calls = {};
+  const model = createStatusOfferFeedbackModel({ calls });
+  const router = createAdminRouter({ OfferFeedbackModel: model });
+  const app = buildTestApp(router, { adminProtected: true });
+
+  const response = await requestJson(app, {
+    method: 'PATCH',
+    path: '/api/admin/offer-feedback/feedback-123/status',
+    headers: {
+      'x-admin-api-key': adminKey,
+    },
+    body: {
+      status: 'resolved',
+      note: `${'x'.repeat(900)} secret`,
+      rootCause: 'category-classifier-feedback-cluster',
+      resolution: 'classifier-override-deployed',
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.item.status, 'resolved');
+  assert.equal(response.body.item.triage.updatedBy, 'codex-admin');
+  assert.equal(response.body.item.triage.note.length, 800);
+  assert.equal(calls.findByIdAndUpdate.length, 1);
+  assert.equal(calls.findByIdAndUpdate[0].id, 'feedback-123');
+  assert.equal(calls.findByIdAndUpdate[0].update.$set.status, 'resolved');
+  assert.equal(calls.findByIdAndUpdate[0].update.$set.triage.rootCause, 'category-classifier-feedback-cluster');
+  assert.equal(calls.findByIdAndUpdate[0].options.new, true);
+});
+
+test('PATCH /api/admin/offer-feedback/:feedbackId/status lehnt ungueltige Statuswerte ab', async (t) => {
+  const adminKey = withAdminApiKey(t);
+  const calls = {};
+  const model = createStatusOfferFeedbackModel({ calls });
+  const router = createAdminRouter({ OfferFeedbackModel: model });
+  const app = buildTestApp(router, { adminProtected: true });
+
+  const response = await requestJson(app, {
+    method: 'PATCH',
+    path: '/api/admin/offer-feedback/feedback-123/status',
+    headers: {
+      'x-admin-api-key': adminKey,
+    },
+    body: {
+      status: 'duplicate',
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.body.ok, false);
+  assert.equal(calls.findByIdAndUpdate.length, 0);
 });
 
 test('parseBoundedLimit nutzt Default und Maximalwert deterministisch', () => {

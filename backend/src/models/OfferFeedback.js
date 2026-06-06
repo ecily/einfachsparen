@@ -112,6 +112,17 @@ const moderationSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const triageSchema = new mongoose.Schema(
+  {
+    note: { type: String, default: '', trim: true },
+    rootCause: { type: String, default: '', trim: true },
+    resolution: { type: String, default: '', trim: true },
+    updatedBy: { type: String, default: 'admin', trim: true },
+    updatedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const structuredDetailsSchema = new mongoose.Schema(
   {
     category_wrong: {
@@ -212,6 +223,7 @@ const offerFeedbackSchema = new mongoose.Schema(
     freeText: { type: String, default: null, trim: true },
     clientContext: { type: clientContextSchema, default: () => ({}) },
     moderation: { type: moderationSchema, default: () => ({}) },
+    triage: { type: triageSchema, default: () => ({}) },
   },
   {
     strict: true,
