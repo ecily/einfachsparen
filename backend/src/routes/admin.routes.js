@@ -638,7 +638,7 @@ function createAdminRouter({
     try {
       const status = String(req.body?.status || '').trim();
 
-      if (!['new', 'reviewing', 'resolved', 'ignored'].includes(status)) {
+      if (!['new', 'reviewing', 'resolved', 'ignored', 'duplicate'].includes(status)) {
         return res.status(400).json({
           ok: false,
           message: 'Ungueltiger Feedback-Status.',

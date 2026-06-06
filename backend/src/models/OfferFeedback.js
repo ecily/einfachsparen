@@ -194,7 +194,7 @@ const offerFeedbackSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['new', 'reviewing', 'resolved', 'ignored'],
+      enum: ['new', 'reviewing', 'resolved', 'ignored', 'duplicate'],
       default: 'new',
       index: true,
     },

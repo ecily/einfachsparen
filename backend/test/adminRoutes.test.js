@@ -693,7 +693,7 @@ test('PATCH /api/admin/offer-feedback/:feedbackId/status aktualisiert Status und
   assert.equal(calls.findByIdAndUpdate[0].options.new, true);
 });
 
-test('PATCH /api/admin/offer-feedback/:feedbackId/status lehnt ungueltige Statuswerte ab', async (t) => {
+test('PATCH /api/admin/offer-feedback/:feedbackId/status erlaubt duplicate als Triage-Status', async (t) => {
   const adminKey = withAdminApiKey(t);
   const calls = {};
   const model = createStatusOfferFeedbackModel({ calls });
@@ -708,6 +708,32 @@ test('PATCH /api/admin/offer-feedback/:feedbackId/status lehnt ungueltige Status
     },
     body: {
       status: 'duplicate',
+      rootCause: 'same-offer-image-cluster',
+      resolution: 'duplicate-feedback',
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.item.status, 'duplicate');
+  assert.equal(calls.findByIdAndUpdate[0].update.$set.triage.resolution, 'duplicate-feedback');
+});
+
+test('PATCH /api/admin/offer-feedback/:feedbackId/status lehnt ungueltige Statuswerte ab', async (t) => {
+  const adminKey = withAdminApiKey(t);
+  const calls = {};
+  const model = createStatusOfferFeedbackModel({ calls });
+  const router = createAdminRouter({ OfferFeedbackModel: model });
+  const app = buildTestApp(router, { adminProtected: true });
+
+  const response = await requestJson(app, {
+    method: 'PATCH',
+    path: '/api/admin/offer-feedback/feedback-123/status',
+    headers: {
+      'x-admin-api-key': adminKey,
+    },
+    body: {
+      status: 'closed',
     },
   });
 
