@@ -144,10 +144,10 @@ function SearchLandingHero() {
         className="panel search-landing-hero"
         style={{
           display: 'grid',
-          gap: 'clamp(0.62rem, 1.8vw, 0.95rem)',
-          marginBottom: '0.55rem',
+          gap: 'clamp(0.42rem, 1.2vw, 0.72rem)',
+          marginBottom: '0.25rem',
           minWidth: 0,
-          padding: 'clamp(0.85rem, 2.2vw, 1.25rem)',
+          padding: 'clamp(0.68rem, 1.8vw, 1rem)',
           width: '100%',
         }}
       >
@@ -166,10 +166,6 @@ function SearchLandingHero() {
           >
             Finde Supermarkt-Angebote in Österreich.
           </h1>
-          <p className="subtitle" style={{ margin: 0, maxWidth: '100%' }}>
-            Suche nach Produkt oder Marke und sieh aktuelle Preise, Gültigkeit und Bedingungen – ohne Flugblätter zu
-            blättern.
-          </p>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (
               <span key={item}>{item}</span>
@@ -326,10 +322,14 @@ function ScopedPageTuning() {
     <style>
       {`
         .search-first-page .keyword-search-hero {
-          margin-top: 0;
+          margin-top: -0.72rem;
         }
 
         @media (max-width: 720px) {
+          .search-first-page .keyword-search-hero {
+            margin-top: -0.5rem;
+          }
+
           .search-first-page .search-landing-hero__qr {
             width: min(40vw, 132px) !important;
           }
