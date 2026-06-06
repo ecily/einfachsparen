@@ -217,7 +217,7 @@ export function OfferCardConsumer({
         '--retailer-glow-color': retailerTheme.glowColor,
       }}
     >
-      <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} />
+      <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} offer={offer} />
 
       <div className="user-card__content">
         <div className="user-card__top">
@@ -289,13 +289,6 @@ export function OfferCardConsumer({
 
         {hasActions ? (
           <div className="user-card__actions">
-            {enableOfferFeedback ? (
-              <OfferFeedbackPanel
-                offer={offer}
-                categories={feedbackCategories}
-                pageContext={feedbackPageContext}
-              />
-            ) : null}
             {showShoppingListAction && onAddToShoppingList ? (
               <button
                 type="button"
@@ -305,6 +298,13 @@ export function OfferCardConsumer({
               >
                 {isInShoppingList ? 'Auf der Einkaufsliste' : 'Auf die Einkaufsliste'}
               </button>
+            ) : null}
+            {enableOfferFeedback ? (
+              <OfferFeedbackPanel
+                offer={offer}
+                categories={feedbackCategories}
+                pageContext={feedbackPageContext}
+              />
             ) : null}
             {actionSlot}
           </div>

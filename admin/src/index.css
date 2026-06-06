@@ -1681,10 +1681,28 @@ a {
   border-radius: 0.68rem;
 }
 
-.product-image--placeholder span {
+.product-image__placeholder-copy {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.product-image__placeholder-copy strong,
+.product-image__placeholder-copy small {
+  display: block;
+}
+
+.product-image__placeholder-copy strong {
   color: #66706a;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 820;
+  line-height: 1.25;
+}
+
+.product-image__placeholder-copy small {
+  color: #7c8680;
+  font-size: 0.74rem;
+  font-weight: 720;
   line-height: 1.25;
 }
 
@@ -4225,6 +4243,47 @@ textarea:focus {
   box-shadow: 0 12px 24px rgba(36, 52, 71, 0.08);
 }
 
+.shopping-list-button {
+  border-color: color-mix(in srgb, var(--kk-primary) 70%, #ffffff);
+  background: linear-gradient(180deg, var(--kk-primary), color-mix(in srgb, var(--kk-primary) 86%, #162118));
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(36, 52, 71, 0.16);
+}
+
+.shopping-list-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--kk-primary) 82%, #ffffff);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--kk-primary) 94%, #ffffff), var(--kk-primary));
+  box-shadow: 0 14px 26px rgba(36, 52, 71, 0.2);
+}
+
+.shopping-list-button--added {
+  border-color: rgba(94, 122, 150, 0.24);
+  background: rgba(94, 122, 150, 0.1);
+  color: var(--kk-primary);
+  box-shadow: none;
+}
+
+.offer-feedback__cta {
+  border-color: rgba(94, 122, 150, 0.24);
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--kk-text-soft);
+  font-weight: 760;
+  box-shadow: none;
+}
+
+.offer-feedback__cta:hover:not(:disabled) {
+  border-color: rgba(94, 122, 150, 0.38);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--kk-primary);
+  box-shadow: 0 8px 18px rgba(36, 52, 71, 0.07);
+}
+
+.offer-feedback__cta--submitted {
+  border-color: rgba(31, 90, 75, 0.2);
+  background: rgba(31, 90, 75, 0.1);
+  color: var(--kk-primary);
+}
+
 .eyebrow,
 .hero-consumer__eyebrow,
 .keyword-search-form__label,
@@ -4443,7 +4502,8 @@ textarea:focus {
     0 8px 18px rgba(36, 52, 71, 0.07);
 }
 
-.product-image--placeholder span {
+.product-image__placeholder-copy strong,
+.product-image__placeholder-copy small {
   color: var(--kk-text-soft);
 }
 
