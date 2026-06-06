@@ -924,6 +924,7 @@ const RETAILER_DEFINITIONS = [
     priority: 19,
     crawlPolicy: {
       onlyConfiguredPageUrls: true,
+      transport: 'curl',
       sourceTimeoutMs: 120000,
       freshnessTtlHours: 96,
       categorySeedUrls: [

@@ -3,6 +3,8 @@ const cheerio = require('cheerio');
 const crypto = require('node:crypto');
 const https = require('node:https');
 const http2 = require('node:http2');
+const { execFile: execFileCallback } = require('node:child_process');
+const { promisify } = require('node:util');
 const { Types } = require('mongoose');
 const Source = require('../../models/Source');
 const CrawlJob = require('../../models/CrawlJob');
@@ -67,6 +69,7 @@ const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const logger = require('../../lib/logger');
 
+const execFile = promisify(execFileCallback);
 const PARSER_VERSION = 'official-v3-coverage';
 const SPAR_PRODUCTWORLD_SOURCE_TYPE = 'spar-family-official-productworld';
 const SPAR_PRODUCTWORLD_PARSER_VERSION = 'spar-productworld-bff-v1';
@@ -3599,6 +3602,113 @@ async function fetchHtml(url, { signal = null } = {}) {
   };
 }
 
+function parseCurlHeaderBlock(headerBlock = '') {
+  const headers = {};
+  for (const line of String(headerBlock || '').split(/\r?\n/).slice(1)) {
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) continue;
+    const key = line.slice(0, colonIndex).trim().toLowerCase();
+    const value = line.slice(colonIndex + 1).trim();
+    if (!key) continue;
+    headers[key] = headers[key] ? `${headers[key]}, ${value}` : value;
+  }
+  return headers;
+}
+
+function parseCurlHtmlOutput(stdout = '') {
+  const marker = '\n__KKT_META__';
+  const markerIndex = stdout.lastIndexOf(marker);
+  const raw = markerIndex >= 0 ? stdout.slice(0, markerIndex) : stdout;
+  const metaRaw = markerIndex >= 0 ? stdout.slice(markerIndex + marker.length).trim() : '';
+  const [statusRaw, contentTypeRaw, finalUrlRaw, httpVersionRaw] = metaRaw.split('|');
+  const sections = raw.split(/\r?\n\r?\n/);
+  const headerSections = [];
+  let bodyIndex = 0;
+
+  for (let index = 0; index < sections.length; index += 1) {
+    if (/^HTTP\//i.test(sections[index])) {
+      headerSections.push(sections[index]);
+      bodyIndex = index + 1;
+    } else {
+      break;
+    }
+  }
+
+  const headers = parseCurlHeaderBlock(headerSections[headerSections.length - 1] || '');
+  if (contentTypeRaw) headers['content-type'] = contentTypeRaw;
+
+  return {
+    status: Number(statusRaw || 0) || null,
+    headers,
+    html: sections.slice(bodyIndex).join('\n\n'),
+    canonicalUrl: finalUrlRaw || '',
+    httpVersion: httpVersionRaw ? `HTTP/${httpVersionRaw}` : '',
+  };
+}
+
+async function fetchHtmlViaCurl(url, { timeoutMs = 30000 } = {}) {
+  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const args = [
+    '--silent',
+    '--show-error',
+    '--location',
+    '--compressed',
+    '--max-time',
+    String(timeoutSeconds),
+    '--dump-header',
+    '-',
+    '--output',
+    '-',
+    '--write-out',
+    '\n__KKT_META__%{http_code}|%{content_type}|%{url_effective}|%{http_version}',
+    '--request',
+    'GET',
+    '--header',
+    'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+    '--header',
+    'Accept: text/html,application/xhtml+xml,application/json',
+    '--header',
+    'Accept-Language: de-AT,de;q=0.9,en;q=0.8',
+  ];
+
+  if (process.platform === 'win32') {
+    args.push('--ssl-no-revoke');
+  }
+
+  args.push(url);
+
+  try {
+    const result = await execFile('curl', args, {
+      timeout: timeoutMs + 2000,
+      maxBuffer: 5 * 1024 * 1024,
+    });
+    const parsed = parseCurlHtmlOutput(result.stdout || '');
+    return {
+      response: {
+        status: parsed.status,
+        headers: parsed.headers,
+        request: {
+          res: {
+            responseUrl: parsed.canonicalUrl || url,
+            httpVersion: parsed.httpVersion,
+          },
+        },
+      },
+      html: parsed.html,
+      canonicalUrl: parsed.canonicalUrl || url,
+    };
+  } catch (error) {
+    throw attachFetchDiagnostic(error, url);
+  }
+}
+
+async function fetchSourceHtml(url, source, options = {}) {
+  if (source?.crawlPolicy?.transport === 'curl') {
+    return fetchHtmlViaCurl(url, { timeoutMs: source.crawlPolicy?.sourceTimeoutMs || 30000 });
+  }
+  return fetchHtml(url, options);
+}
+
 async function fetchLidlOfficialPageHtml(url) {
   try {
     return await fetchHtml(url);
@@ -5549,7 +5659,7 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
     }
 
     try {
-      const nested = await fetchHtml(link.url);
+      const nested = await fetchSourceHtml(link.url, source);
       pageCandidates.push({
         url: nested.canonicalUrl || link.url,
         html: nested.html,
@@ -6722,7 +6832,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       };
     }
 
-    const { response, html, canonicalUrl } = await fetchHtml(source.sourceUrl, { signal });
+    const { response, html, canonicalUrl } = await fetchSourceHtml(source.sourceUrl, source, { signal });
     throwIfAborted(signal);
     const httpLog = buildHttpLogFromResponse(response, html);
     const links = extractRelevantLinks({
