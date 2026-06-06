@@ -2,10 +2,25 @@ function sanitizeImageText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function hasSrcsetDescriptor(value) {
+  return /\s+(?:\d+(?:\.\d+)?x|\d+w)$/i.test(sanitizeImageText(value));
+}
+
 function parseSrcsetCandidates(value) {
-  return sanitizeImageText(value)
-    .split(',')
-    .map((part) => sanitizeImageText(part).split(/\s+/)[0])
+  const sanitized = sanitizeImageText(value);
+
+  if (!sanitized) {
+    return [];
+  }
+
+  const parts = sanitized.split(',').map(sanitizeImageText).filter(Boolean);
+
+  if (parts.length < 2 || !parts.every(hasSrcsetDescriptor)) {
+    return [sanitized];
+  }
+
+  return parts
+    .map((part) => part.replace(/\s+(?:\d+(?:\.\d+)?x|\d+w)$/i, '').trim())
     .filter(Boolean);
 }
 

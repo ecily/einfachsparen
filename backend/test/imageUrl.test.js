@@ -11,6 +11,14 @@ const offerRouter = require('../src/routes/offer.routes');
 
 test('normalizes absolute, relative and srcset image URLs', () => {
   assert.equal(
+    normalizeImageUrl('https://products.dm-static.com/images/f_auto,q_auto,c_fit,h_320,w_320/v1764283579/assets/pas/images/6315646d-9859-45c4-83f4-b7cc5a8f3141/penaten-baby-pflegecreme-gesicht-und-koerper-intensiv'),
+    'https://products.dm-static.com/images/f_auto,q_auto,c_fit,h_320,w_320/v1764283579/assets/pas/images/6315646d-9859-45c4-83f4-b7cc5a8f3141/penaten-baby-pflegecreme-gesicht-und-koerper-intensiv'
+  );
+  assert.equal(
+    normalizeImageUrl('https://www.billa.at/dam/jcr:test/product-image.png'),
+    'https://www.billa.at/dam/jcr:test/product-image.png'
+  );
+  assert.equal(
     normalizeImageUrl('/dw/image/v2/AAFT_PRD/original/123.png?sw=140', 'https://www.bipa.at/cp/aktionen'),
     'https://www.bipa.at/dw/image/v2/AAFT_PRD/original/123.png?sw=140'
   );
@@ -25,6 +33,14 @@ test('parses image srcset candidates without density descriptors', () => {
   assert.deepEqual(
     parseSrcsetCandidates('https://example.test/a.png?sw=140 1x, /b.png?sw=280 2x'),
     ['https://example.test/a.png?sw=140', '/b.png?sw=280']
+  );
+  assert.deepEqual(
+    parseSrcsetCandidates('https://example.test/a.png 320w, https://example.test/a.png?size=large 640w'),
+    ['https://example.test/a.png', 'https://example.test/a.png?size=large']
+  );
+  assert.deepEqual(
+    parseSrcsetCandidates('https://products.dm-static.com/images/f_auto,q_auto,c_fit,h_320,w_320/v1764283579/assets/pas/images/6315646d-9859-45c4-83f4-b7cc5a8f3141/penaten-baby-pflegecreme-gesicht-und-koerper-intensiv'),
+    ['https://products.dm-static.com/images/f_auto,q_auto,c_fit,h_320,w_320/v1764283579/assets/pas/images/6315646d-9859-45c4-83f4-b7cc5a8f3141/penaten-baby-pflegecreme-gesicht-und-koerper-intensiv']
   );
 });
 
