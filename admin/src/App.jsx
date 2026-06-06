@@ -17,7 +17,6 @@ import { FeedbackPage } from './components/feedback/FeedbackPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
 import {
-  buildTrackedApkDownloadUrl,
   fetchAdminJson,
   fetchFilterCategories,
   fetchFilterRetailers,
@@ -40,15 +39,12 @@ import { getSeoLandingPageByRouteId, SEO_LANDING_PAGE_PREFIX } from './config/se
 import { getRetailerTheme } from './utils/retailerColors'
 import { shouldSeparateRetailerGroups } from './utils/retailers'
 
-const SHOW_ANDROID_TEST_DOWNLOAD = import.meta.env.VITE_SHOW_ANDROID_TEST_DOWNLOAD === 'true'
 const BETA_TEST_NOTICE =
-  'Hilf mit, kaufklug besser zu machen: Bei jedem Angebot kannst du Fehler direkt melden. Danke!'
+  'Beta: Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Fehler kannst du direkt beim Angebot melden.'
 const BETA_INFO_TITLE = 'Warum Beta-Test?'
 const BETA_INFO_TEXT =
   'kaufklug lernt gerade, Angebote noch zuverlässiger zu zeigen. Wenn dir ein falscher Preis, eine fehlende Bedingung, ein falsches Bild oder eine falsche Kategorie auffällt, melde es direkt beim Angebot. So können wir die Datenqualität gezielt verbessern.'
 const BETA_INFO_CLOSING = 'Danke für deine Hilfe.'
-const MOBILE_BROWSER_NOTICE =
-  'kaufklug.at funktioniert auch am Handy direkt im Browser. Die App-Version bleibt pausiert, bis die Datenqualität stabil genug ist.'
 
 function getFriendlyErrorMessage(error, fallback) {
   const status = Number(error?.status || 0)
@@ -118,7 +114,7 @@ function BetaNoticeDisclosure() {
         aria-controls="beta-info-hero"
         onClick={() => setIsOpen((current) => !current)}
       >
-        <strong>BETA-TEST LÄUFT!</strong>
+        <strong>Beta</strong>
         <p>{BETA_TEST_NOTICE}</p>
       </button>
       {isOpen ? <BetaInfoPanel id="beta-info-hero" className="beta-info-panel--hero" onClose={() => setIsOpen(false)} /> : null}
@@ -127,14 +123,6 @@ function BetaNoticeDisclosure() {
 }
 
 function SearchLandingHero() {
-  const appDownload = SHOW_ANDROID_TEST_DOWNLOAD
-    ? {
-        trackedDownloadUrl: buildTrackedApkDownloadUrl('search_hero_button'),
-        qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(
-          buildTrackedApkDownloadUrl('search_hero_qr')
-        )}`,
-      }
-    : null
   const heroRetailers = [
     ['billa', 'BILLA'],
     ['billa-plus', 'BILLA Plus'],
@@ -155,10 +143,8 @@ function SearchLandingHero() {
       <section
         className="panel search-landing-hero"
         style={{
-          alignItems: 'center',
           display: 'grid',
-          gap: 'clamp(1.1rem, 3vw, 1.65rem)',
-          gridTemplateColumns: 'minmax(0, 1.95fr) minmax(240px, 0.95fr)',
+          gap: 'clamp(0.9rem, 2.4vw, 1.25rem)',
           marginBottom: '1rem',
           minWidth: 0,
           padding: 'clamp(1.05rem, 3vw, 1.7rem)',
@@ -166,6 +152,26 @@ function SearchLandingHero() {
         }}
       >
         <div className="search-landing-hero__usp">
+          <p className="eyebrow hero-consumer__eyebrow">Flugblätter gibt es genug. Überblick nicht.</p>
+          <h1
+            style={{
+              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
+              lineHeight: 1.05,
+              margin: 0,
+              maxWidth: '46rem',
+            }}
+          >
+            Nicht blättern. <span className="hero-headline-accent">Finden, was sich wirklich lohnt.</span>
+          </h1>
+          <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
+            kaufklug macht aktuelle Angebote von Supermärkten und Drogerien in Österreich durchsuchbar – mit Preisen,
+            Gültigkeit und Bedingungen.
+          </p>
+          <div className="hero-trust-row" aria-label="Nutzungshinweise">
+            {trustItems.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
           <div className="hero-market-strip" aria-label="Marktbeispiele">
             {heroRetailers.map(([key, label], index) => {
               const theme = getRetailerTheme(key)
@@ -190,78 +196,7 @@ function SearchLandingHero() {
               )
             })}
           </div>
-          <div className="hero-trust-row" aria-label="Nutzungshinweise">
-            {trustItems.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-          </div>
-          <h1
-            style={{
-              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
-              lineHeight: 1.05,
-              margin: 0,
-              maxWidth: '46rem',
-            }}
-          >
-            Nicht blättern. <span className="hero-headline-accent">Finden, was sich wirklich lohnt.</span>
-          </h1>
-          <p className="subtitle" style={{ margin: 0, maxWidth: '44rem' }}>
-            Finde aktuelle Angebote von Supermärkten und Drogerien in Österreich – spare Zeit beim Suchen und Geld beim
-            Einkaufen.
-          </p>
-          <p className="hero-trust-line">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
-        </div>
-
-        <div
-          className="search-landing-hero__mobile mobile-browser-notice"
-          style={{
-            display: 'grid',
-            gap: '0.55rem',
-            justifyItems: 'center',
-            minWidth: 0,
-            textAlign: 'center',
-          }}
-        >
           <BetaNoticeDisclosure />
-          <div className="search-landing-hero__phone-copy">
-            <p className="eyebrow" style={{ margin: 0 }}>
-              Einkauf am Smartphone
-            </p>
-            <h2 style={{ fontSize: 'clamp(1.05rem, 2.4vw, 1.35rem)', lineHeight: 1.14, margin: 0 }}>
-              Am Handy direkt nutzen
-            </h2>
-            <p style={{ color: 'var(--kk-text-muted)', fontSize: '0.94rem', lineHeight: 1.42, margin: 0, maxWidth: '18rem' }}>
-              {MOBILE_BROWSER_NOTICE}
-            </p>
-          </div>
-          {appDownload ? (
-            <>
-              <div className="app-download-modal__qr search-landing-hero__qr" style={{ margin: 0 }}>
-                <img
-                  src={appDownload.qrUrl}
-                  alt="QR-Code zum Laden der kaufklug.at Android-Testversion"
-                  width="220"
-                  height="220"
-                  loading="eager"
-                />
-              </div>
-              <a
-                href={appDownload.trackedDownloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="primary-action-button"
-                style={{
-                  alignItems: 'center',
-                  display: 'inline-flex',
-                  justifyContent: 'center',
-                  maxWidth: '15.5rem',
-                  textDecoration: 'none',
-                }}
-              >
-                Android-Testversion laden
-              </a>
-            </>
-          ) : null}
         </div>
       </section>
     </>

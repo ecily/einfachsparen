@@ -519,7 +519,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                 id="keyword-search-input"
                 type="search"
                 value={queryInput}
-                placeholder="Zum Beispiel Kaffee, Milka oder Waschmittel ..."
+                placeholder="Produkt oder Marke suchen, z. B. Milch, Bier, Waschmittel"
                 aria-label="Suchbegriff für Angebote"
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
@@ -555,7 +555,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
               ) : null}
             </div>
             <button type="submit" className="primary-action-button">
-              Angebote suchen
+              Angebote finden
             </button>
           </div>
         </form>
