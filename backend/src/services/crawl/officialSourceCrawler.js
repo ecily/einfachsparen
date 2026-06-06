@@ -2159,9 +2159,9 @@ function collectPennyPromotionFieldTexts(product = {}) {
 function normalizePennyConditionUnit(value = '') {
   const normalized = normalizeTitleForMatch(value);
 
-  if (/fl/.test(normalized)) return 'Flaschen';
+  if (/fl|bottle/.test(normalized)) return 'Flaschen';
   if (/dos/.test(normalized)) return 'Dosen';
-  if (/pack|pkg/.test(normalized)) return 'Packungen';
+  if (/pack|pkg|paket|karton/.test(normalized)) return 'Packungen';
   return 'Stueck';
 }
 
@@ -2182,6 +2182,18 @@ function buildPennyOfficialConditionExtraction(product = {}) {
     seen.add(key);
     conditions.push(condition);
     sources.push(source);
+  }
+
+  const promotionQuantity = Number(product?.price?.regular?.promotionQuantity || 0);
+  const promotionType = sanitizeWhitespace(product?.price?.regular?.promotionType).toUpperCase();
+
+  if (promotionType === 'FROM' && Number.isFinite(promotionQuantity) && promotionQuantity > 1) {
+    const unit = normalizePennyConditionUnit(product?.packageLabel || product?.volumeLabelShort || '');
+    addCondition(`ab ${promotionQuantity} ${unit}`, 'price.regular.promotionQuantity');
+    evidenceTexts.push({
+      source: 'price.regular.promotionQuantity',
+      text: `promotionType=${promotionType}; promotionQuantity=${promotionQuantity}; packageLabel=${sanitizeWhitespace(product?.packageLabel || '')}`,
+    });
   }
 
   for (const item of evidenceTexts) {

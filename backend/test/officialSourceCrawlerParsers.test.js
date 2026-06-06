@@ -1396,6 +1396,8 @@ function pennyApiProduct(overrides = {}) {
       discountPercentage: hasOverride('discountPercentage') ? overrides.discountPercentage : -40,
       regular: {
         perStandardizedQuantity: hasOverride('perStandardizedQuantity') ? overrides.perStandardizedQuantity : 1198,
+        ...(hasOverride('promotionQuantity') ? { promotionQuantity: overrides.promotionQuantity } : {}),
+        ...(hasOverride('promotionType') ? { promotionType: overrides.promotionType } : {}),
         tags: hasOverride('tags') ? overrides.tags : ['SO'],
         value: overrides.priceCents || 599,
       },
@@ -1726,6 +1728,126 @@ test('PENNY official condition extraction reads explicit API promotion tags only
     assert.equal(offers[0].rawFacts.conditionExtraction.reason, 'explicit-penny-promotion-field');
     assert.deepEqual(offers[0].rawFacts.conditionExtraction.sources, ['price.regular.tags']);
   }
+});
+
+test('PENNY official condition extraction reads structured FROM promotion quantities', () => {
+  const cases = [
+    {
+      name: 'Coca-Cola Original od. Zero',
+      slug: 'cocacola-original-od-zero-78550921',
+      amount: '0.5',
+      volumeLabelShort: 'liter',
+      packageLabel: 'Flasche',
+      promotionQuantity: 6,
+      expectedText: 'ab 6 Flaschen',
+      expectedQty: 6,
+    },
+    {
+      name: 'Maerzen, Naturradler, Naturradler 0,0% od. Naturgold',
+      slug: 'maerzen-naturradler-naturradler-00-od-naturgold-78437543',
+      amount: '0.33',
+      volumeLabelShort: 'liter',
+      packageLabel: 'Flasche',
+      promotionQuantity: 24,
+      expectedText: 'ab 24 Flaschen',
+      expectedQty: 24,
+    },
+    {
+      name: 'Vollmilch',
+      slug: 'vollmilch-78417175',
+      amount: '1',
+      volumeLabelShort: 'liter',
+      packageLabel: 'Flasche',
+      promotionQuantity: 2,
+      expectedText: 'ab 2 Flaschen',
+      expectedQty: 2,
+    },
+    {
+      name: 'Cola od. Zero',
+      slug: 'cola-od-zero-78546048',
+      amount: '0.33',
+      volumeLabelShort: 'liter',
+      packageLabel: 'Dose',
+      promotionQuantity: 24,
+      expectedText: 'ab 24 Dosen',
+      expectedQty: 24,
+    },
+  ];
+
+  for (const item of cases) {
+    const [offer] = __private.normalizePennyApiProductsToOffers({
+      products: [pennyApiProduct({
+        name: item.name,
+        slug: item.slug,
+        amount: item.amount,
+        volumeLabelShort: item.volumeLabelShort,
+        packageLabel: item.packageLabel,
+        tags: ['SO'],
+        promotionQuantity: item.promotionQuantity,
+        promotionType: 'FROM',
+        validityStart: '2026-06-01',
+        validityEnd: '2026-06-30',
+      })],
+      source: pennyOfficialSource(),
+      crawlJobId: new Types.ObjectId(),
+      region: 'AT',
+      pageUrl: 'https://www.penny.at/angebote',
+      categorySlug: 'angebote-ab-0306',
+    });
+
+    assert.equal(offer.conditionsText, item.expectedText, item.name);
+    assert.equal(offer.hasConditions, true, item.name);
+    assert.equal(offer.minimumPurchaseQty, item.expectedQty, item.name);
+    assert.equal(offer.effectiveDiscountType, 'threshold', item.name);
+    assert.equal(offer.isMultiBuy, false, item.name);
+    assert.equal(offer.rawFacts.conditionExtraction.reason, 'explicit-penny-promotion-field');
+    assert.deepEqual(offer.rawFacts.conditionExtraction.sources, ['price.regular.promotionQuantity']);
+  }
+});
+
+test('PENNY official condition extraction ignores non-threshold promotion quantities', () => {
+  const offers = __private.normalizePennyApiProductsToOffers({
+    products: [
+      pennyApiProduct({
+        name: 'Premium Toastkaese*',
+        slug: 'premium-toastkaese-78598402',
+        amount: '800',
+        volumeLabelShort: 'g',
+        packageLabel: 'Packung',
+        tags: [],
+        promotionQuantity: 1,
+        promotionType: 'FROM',
+        validityStart: '2026-06-01',
+        validityEnd: '2026-06-30',
+      }),
+      pennyApiProduct({
+        name: 'Vollmilch',
+        slug: 'vollmilch-78417175',
+        amount: '1',
+        volumeLabelShort: 'liter',
+        packageLabel: 'Flasche',
+        tags: ['SO'],
+        promotionQuantity: 12,
+        promotionType: 'PACKAGE_SIZE',
+        validityStart: '2026-06-01',
+        validityEnd: '2026-06-30',
+      }),
+    ],
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-0306',
+  });
+
+  assert.equal(offers.length, 2);
+  assert.equal(offers[0].conditionsText, 'Bedingung im Angebotsbild pruefen');
+  assert.equal(offers[0].minimumPurchaseQty, 1);
+  assert.equal(offers[0].effectiveDiscountType, 'unknown');
+  assert.equal(offers[1].conditionsText, '');
+  assert.equal(offers[1].minimumPurchaseQty, 1);
+  assert.equal(offers[1].effectiveDiscountType, 'unknown');
+  assert.equal(offers[1].rawFacts.conditionExtraction, undefined);
 });
 
 test('PENNY official condition extraction ignores package sizes and normal price-action tags', () => {
