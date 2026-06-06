@@ -2596,6 +2596,11 @@ function normalizeBipaBadges(value) {
     .filter(Boolean))];
 }
 
+function bipaSourceTypeForOffer(source = {}, fallback = BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE) {
+  const sourceType = sanitizeWhitespace(source.sourceType);
+  return /^bipa-official-/i.test(sourceType) ? sourceType : fallback;
+}
+
 function buildBipaMobifyProductOffer({
   hit,
   productUrl,
@@ -2616,7 +2621,8 @@ function buildBipaMobifyProductOffer({
   const unitPriceText = sanitizeWhitespace(hit?.c_basePrice);
   const priceBadges = normalizeBipaBadges(hit?.c_effectivePriceBadges);
   const cornerBadges = normalizeBipaBadges(hit?.c_effectiveCornerBadges);
-  const conditionsText = priceBadges.join('; ');
+  const forcedConditionText = sanitizeWhitespace(source?.crawlPolicy?.forcedConditionText);
+  const conditionsText = [forcedConditionText, priceBadges.join('; ')].filter(Boolean).join('; ');
   const imageUrl = normalizeBipaMobifyImageUrl(hit, productId, pageUrl);
   const sourceUrl = productUrl || pageUrl;
 
@@ -2680,7 +2686,7 @@ function buildBipaMobifyProductOffer({
     isActiveToday: statusInfo.isActiveToday,
     benefitType: /gratis|ab\s+\d+\s*st/i.test(conditionsText) ? 'multi-buy' : 'price-cut',
     conditionsText,
-    customerProgramRequired: false,
+    customerProgramRequired: source?.crawlPolicy?.customerProgramRequired === true,
     availabilityScope: region || 'Grossraum Graz',
     priceCurrent: {
       amount: currentPrice,
@@ -2701,7 +2707,7 @@ function buildBipaMobifyProductOffer({
       issues,
     },
     rawFacts: {
-      sourceType: BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE,
+      sourceType: bipaSourceTypeForOffer(source, BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE),
       sourcePageType: 'bipa-category-pricebadge',
       bipaProductId: productId,
       bipaCategory: sanitizeWhitespace(hit?.c_category),
@@ -2891,8 +2897,8 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
       isActiveNow: statusInfo.isActiveNow,
       isActiveToday: statusInfo.isActiveToday,
       benefitType: /gratis/i.test([title, unitPriceText].join(' ')) ? 'multi-buy' : 'price-cut',
-      conditionsText: '',
-      customerProgramRequired: false,
+      conditionsText: sanitizeWhitespace(source?.crawlPolicy?.forcedConditionText),
+      customerProgramRequired: source?.crawlPolicy?.customerProgramRequired === true,
       availabilityScope: region || 'Grossraum Graz',
       priceCurrent: {
         amount: currentPrice,
@@ -2913,7 +2919,7 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
         issues,
       },
       rawFacts: {
-        sourceType: 'bipa-official-html',
+        sourceType: bipaSourceTypeForOffer(source, 'bipa-official-html'),
         validityText: validTo ? `bis ${validTo.toISOString().slice(0, 10)}` : '',
         infoText: unitPriceText,
         availabilityScope: {
@@ -5515,13 +5521,16 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
   const pageCandidates = [
     { url: canonicalUrl || source.sourceUrl, html },
   ];
-  const additionalLinks = [
-    ...collectBipaPromotionLinks(html, canonicalUrl || source.sourceUrl),
-    ...BIPA_CATEGORY_ACTION_PAGES.map((url) => ({
-      url,
-      label: 'BIPA Kategorie-Aktionsseite',
-    })),
-  ];
+  const isScopedLandingSource = source.crawlPolicy?.landingPageOnly === true;
+  const additionalLinks = isScopedLandingSource
+    ? []
+    : [
+      ...collectBipaPromotionLinks(html, canonicalUrl || source.sourceUrl),
+      ...BIPA_CATEGORY_ACTION_PAGES.map((url) => ({
+        url,
+        label: 'BIPA Kategorie-Aktionsseite',
+      })),
+    ];
 
   for (const link of additionalLinks) {
     if (pageCandidates.some((item) => item.url === link.url)) {
@@ -5555,7 +5564,7 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
   const enrichedOffers = collectedOffers
     .map((offer) => enrichOffersForStorage([offer], {
       source,
-      sourceType: 'bipa-official-html',
+      sourceType: bipaSourceTypeForOffer(source, 'bipa-official-html'),
       parserVersion: PARSER_VERSION,
       normalizationVersion: NORMALIZATION_VERSION,
     })[0])
@@ -6917,7 +6926,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
           .map(([reason, count]) => ({ reason, count }))
       );
       sourceMessage = dmOfficialResult.message || dmOfficialResult.diagnostics?.message || '';
-    } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/aktionen')) {
+    } else if (source.retailerKey === 'bipa' && source.sourceUrl.includes('bipa.at/cp/')) {
       const bipaOfficialResult = await crawlBipaOfficialOffers({
         source,
         crawlJobId: crawlJob._id,

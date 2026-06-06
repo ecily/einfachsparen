@@ -209,6 +209,17 @@ const SOURCE_TRANSPORT_TARGETS = [
     headers: HTML_BROWSER_HEADERS,
   },
   {
+    id: 'bipa-onlineonly',
+    retailerKey: 'bipa',
+    sourceFamily: 'bipa-official-onlineonly',
+    label: 'BIPA Online Only',
+    method: 'GET',
+    expectedContentKind: 'html',
+    url: 'https://www.bipa.at/cp/onlineonly',
+    headers: HTML_BROWSER_HEADERS,
+    deployNotes: 'Official BIPA online-only offer page. Offers must carry explicit Online only condition.',
+  },
+  {
     id: 'aktionsfinder-pagro',
     retailerKey: 'pagro',
     sourceFamily: 'aktionsfinder-pagro',

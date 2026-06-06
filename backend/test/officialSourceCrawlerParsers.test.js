@@ -344,6 +344,42 @@ test('BIPA category Mobify parser extracts product image, price fields and produ
   assert.equal(offers[0].rawFacts.bipaProductId, '716480');
 });
 
+test('BIPA Online-only Mobify parser marks offers with explicit online-only condition', () => {
+  const onlineSource = source({
+    label: 'BIPA Online Only',
+    sourceUrl: 'https://www.bipa.at/cp/onlineonly',
+    sourceType: 'bipa-official-onlineonly',
+    crawlPolicy: {
+      forcedConditionText: 'Online only',
+      landingPageOnly: true,
+    },
+  });
+  const offers = __private.parseBipaOffersFromHtml({
+    html: bipaMobifyHtml([
+      bipaMobifyHit('716480', {
+        c_brand: 'AIR WICK',
+        productName: 'AIR WICK Raumduft Hawaii',
+        c_kundenbezeichnung: 'Raumduft Hawaii',
+        c_category: 'haushalt-raumduft',
+        c_displayedPrice: 24.99,
+        c_insteadPrice: null,
+        c_basePrice: '',
+        c_effectivePriceBadges: [],
+      }),
+    ]),
+    source: onlineSource,
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: onlineSource.sourceUrl,
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].conditionsText, 'Online only');
+  assert.equal(offers[0].customerProgramRequired, false);
+  assert.equal(offers[0].rawFacts.sourceType, 'bipa-official-onlineonly');
+  assert.equal(offers[0].categoryPrimary, 'Haushalt');
+});
+
 test('BIPA official enrichment keeps perfume unit prices comparable and ignores LSF plus signs as quantities', () => {
   const testSource = source({ sourceUrl: 'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion' });
   const crawlJobId = new Types.ObjectId();
