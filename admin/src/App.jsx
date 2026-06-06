@@ -102,7 +102,7 @@ function BetaInfoPanel({ id, onClose, className = '' }) {
   )
 }
 
-function BetaNoticeDisclosure() {
+function BetaNoticeDisclosure({ onNavigate }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -117,12 +117,15 @@ function BetaNoticeDisclosure() {
         <strong>Beta</strong>
         <p>{BETA_TEST_NOTICE}</p>
       </button>
+      <button type="button" className="beta-notice-feedback" onClick={() => onNavigate?.('feedback')}>
+        Feedback senden
+      </button>
       {isOpen ? <BetaInfoPanel id="beta-info-hero" className="beta-info-panel--hero" onClose={() => setIsOpen(false)} /> : null}
     </div>
   )
 }
 
-function SearchLandingHero() {
+function SearchLandingHero({ onNavigate }) {
   const heroRetailers = [
     ['billa', 'BILLA'],
     ['billa-plus', 'BILLA Plus'],
@@ -195,7 +198,7 @@ function SearchLandingHero() {
               )
             })}
           </div>
-          <BetaNoticeDisclosure />
+          <BetaNoticeDisclosure onNavigate={onNavigate} />
         </div>
       </section>
     </>
@@ -907,7 +910,7 @@ function App() {
       <ScopedPageTuning />
       <nav className="page-nav" aria-label="Seiten">
         <button className="page-nav__logo" type="button" onClick={handleLogoClick} aria-label="Zur Startseite">
-          <img src="/kaufklug-logo.png" alt="" width="1024" height="1024" />
+          <img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" />
         </button>
         <button
           className="page-nav__beta"
@@ -1000,7 +1003,7 @@ function App() {
         </div>
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
-          <SearchLandingHero />
+          <SearchLandingHero onNavigate={handleNavigate} />
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
