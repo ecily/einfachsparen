@@ -47,6 +47,7 @@ function deriveSourceKey(source = {}) {
   if (url.includes('penny.at')) return `penny-${source.channel || 'official'}-${source.sourceType || 'source'}`;
   if (url.includes('dm.at/services/kundenprogramme-services/immerguenstig')) return 'dm-official-immerguenstig';
   if (url.includes('dm.at')) return 'dm-official-site';
+  if (sourceType === 'bipa-official-category-expanded') return 'bipa-official-category-expanded';
   if (url.includes('bipa.at/cp/onlineonly')) return 'bipa-official-onlineonly';
   if (url.includes('bipa.at/cp/joe-bonusclub')) return 'bipa-official-joe-bonusclub';
   if (url.includes('bipa.at')) return 'bipa-official-site';

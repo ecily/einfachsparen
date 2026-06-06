@@ -5522,7 +5522,14 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
     { url: canonicalUrl || source.sourceUrl, html },
   ];
   const isScopedLandingSource = source.crawlPolicy?.landingPageOnly === true;
-  const additionalLinks = isScopedLandingSource
+  const configuredPageUrls = Array.isArray(source.crawlPolicy?.categorySeedUrls)
+    ? source.crawlPolicy.categorySeedUrls
+      .map((url) => sanitizeWhitespace(url))
+      .filter(Boolean)
+      .map((url) => ({ url, label: 'BIPA konfigurierte Aktionskategorie' }))
+    : [];
+  const useOnlyConfiguredPages = source.crawlPolicy?.onlyConfiguredPageUrls === true;
+  const discoveredLinks = isScopedLandingSource || useOnlyConfiguredPages
     ? []
     : [
       ...collectBipaPromotionLinks(html, canonicalUrl || source.sourceUrl),
@@ -5531,6 +5538,10 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
         label: 'BIPA Kategorie-Aktionsseite',
       })),
     ];
+  const additionalLinks = [
+    ...configuredPageUrls,
+    ...discoveredLinks,
+  ];
 
   for (const link of additionalLinks) {
     if (pageCandidates.some((item) => item.url === link.url)) {

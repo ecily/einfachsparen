@@ -220,6 +220,17 @@ const SOURCE_TRANSPORT_TARGETS = [
     deployNotes: 'Official BIPA online-only offer page. Offers must carry explicit Online only condition.',
   },
   {
+    id: 'bipa-category-expanded',
+    retailerKey: 'bipa',
+    sourceFamily: 'bipa-official-category-expanded',
+    label: 'BIPA expanded action category',
+    method: 'GET',
+    expectedContentKind: 'html',
+    url: 'https://www.bipa.at/c/pflege?limit=100&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
+    headers: HTML_BROWSER_HEADERS,
+    deployNotes: 'Official BIPA action category with product-near price badges. Used as first configured seed for expanded category source.',
+  },
+  {
     id: 'aktionsfinder-pagro',
     retailerKey: 'pagro',
     sourceFamily: 'aktionsfinder-pagro',
