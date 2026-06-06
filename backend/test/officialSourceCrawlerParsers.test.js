@@ -2265,6 +2265,42 @@ test('Lidl official site parser extracts Frische-Angebote quantities, base price
   assert.equal(offers[0].normalizedUnitPrice.unit, 'Stk');
 });
 
+test('Lidl official site parser extracts Lidl Plus-only prices from homepage cards', () => {
+  const offers = parseLidlFixture({
+    pageUrl: 'https://www.lidl.at/',
+    cards: [lidlCard({
+      title: 'Gurke aus Oesterreich',
+      brand: { showBrand: false },
+      productId: 10049900,
+      canonicalUrl: '/p/gurke-aus-oesterreich/p10049900',
+      price: null,
+      extra: {
+        lidlPlus: [{
+          price: {
+            price: 0.79,
+            oldPrice: 0.99,
+            basePrice: { text: 'Je Stk.' },
+            discount: { discountText: '-20%', deletedPrice: 0.99 },
+            currencyCode: 'EUR',
+          },
+          lidlPlusText: 'mit Lidl Plus',
+          highlightText: '-20%',
+        }],
+      },
+    })],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Gurke aus Oesterreich');
+  assert.equal(offers[0].priceCurrent.amount, 0.79);
+  assert.equal(offers[0].priceReference.amount, 0.99);
+  assert.equal(offers[0].customerProgramRequired, true);
+  assert.match(offers[0].conditionsText, /-20%/);
+  assert.match(offers[0].conditionsText, /Nur gueltig mit Lidl Plus/);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'Stk');
+  assert.equal(offers[0].rawFacts.priceSource, 'lidlPlus');
+});
+
 test('Lidl official site parser rejects missing-price, expired and upcoming cards', () => {
   const now = new Date();
   const diagnostics = {};
@@ -2342,6 +2378,20 @@ test('Lidl official campaign page seeds track current resource matrix URLs', () 
   assert.ok(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10095236'));
   assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/jeden-tag-deine-guenstigsten-preise/a10094561'), false);
   assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/blumen-pflanzen/a10094558'), false);
+});
+
+test('Lidl official web offer seeds include only explicit Lidl homepage URLs', () => {
+  const pages = __private.getLidlWebOfferPagesForCrawl({
+    crawlPolicy: {
+      webOfferSeedUrls: [
+        'https://www.lidl.at/',
+        'https://www.lidl.at/c/flugblatt/s10012330',
+      ],
+    },
+  });
+
+  assert.deepEqual(pages, ['https://www.lidl.at/']);
+  assert.deepEqual(__private.LIDL_OFFICIAL_WEB_OFFER_PAGES, ['https://www.lidl.at/']);
 });
 
 test('Lidl official campaign discovery merges official links with configured seeds', () => {

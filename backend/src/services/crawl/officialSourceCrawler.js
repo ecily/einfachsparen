@@ -111,6 +111,9 @@ const LIDL_OFFICIAL_CAMPAIGN_PAGES = [
   'https://www.lidl.at/c/mit-jedem-bissen-kurzurlaub-machen/a10095235',
   'https://www.lidl.at/c/beim-grillen-richtig-kohle-sparen/a10095236',
 ];
+const LIDL_OFFICIAL_WEB_OFFER_PAGES = [
+  'https://www.lidl.at/',
+];
 const LIDL_CAMPAIGN_PAGE_LIMIT = 14;
 const FETCH_DIAGNOSTIC_PREVIEW_LIMIT = 260;
 const BIPA_OFFICIAL_CATEGORY_SOURCE_TYPE = 'bipa-official-category-html';
@@ -1172,6 +1175,63 @@ function getLidlCampaignPagesForCrawl({ html, source }) {
   return pages.slice(0, LIDL_CAMPAIGN_PAGE_LIMIT);
 }
 
+function getLidlWebOfferPagesForCrawl(source) {
+  const configuredSeeds = Array.isArray(source?.crawlPolicy?.webOfferSeedUrls) && source.crawlPolicy.webOfferSeedUrls.length > 0
+    ? source.crawlPolicy.webOfferSeedUrls
+    : LIDL_OFFICIAL_WEB_OFFER_PAGES;
+  const pages = [];
+  const seen = new Set();
+
+  for (const url of [...configuredSeeds, ...LIDL_OFFICIAL_WEB_OFFER_PAGES]) {
+    const normalizedUrl = sanitizeWhitespace(url).replace(/#.*$/, '');
+
+    if (!normalizedUrl || seen.has(normalizedUrl) || !/^https:\/\/www\.lidl\.at\/(?:[?#].*)?$/i.test(normalizedUrl)) {
+      continue;
+    }
+
+    seen.add(normalizedUrl);
+    pages.push(normalizedUrl);
+  }
+
+  return pages.slice(0, 2);
+}
+
+function selectLidlSitePrice(product = {}) {
+  const regularPrice = product?.price || null;
+  const regularAmount = parseNumericAmount(regularPrice?.price);
+
+  if (regularAmount) {
+    return {
+      price: regularPrice,
+      currentPrice: regularAmount,
+      customerProgramRequired: false,
+      highlightText: '',
+      source: 'regular',
+    };
+  }
+
+  const plusOffers = Array.isArray(product?.lidlPlus) ? product.lidlPlus : [];
+  const plusOffer = plusOffers.find((entry) => parseNumericAmount(entry?.price?.price));
+
+  if (!plusOffer) {
+    return {
+      price: null,
+      currentPrice: null,
+      customerProgramRequired: false,
+      highlightText: '',
+      source: 'missing',
+    };
+  }
+
+  return {
+    price: plusOffer.price,
+    currentPrice: parseNumericAmount(plusOffer.price?.price),
+    customerProgramRequired: true,
+    highlightText: sanitizeWhitespace(plusOffer.highlightText || ''),
+    source: 'lidlPlus',
+  };
+}
+
 function normalizeLidlSiteProductToOffer({
   product,
   source,
@@ -1179,7 +1239,9 @@ function normalizeLidlSiteProductToOffer({
   region,
   pageUrl,
 }) {
-  const currentPrice = parseNumericAmount(product?.price?.price);
+  const selectedPrice = selectLidlSitePrice(product);
+  const pricePayload = selectedPrice.price || {};
+  const currentPrice = selectedPrice.currentPrice;
   const title = sanitizeWhitespace(product?.title || product?.fullTitle);
   const brand = sanitizeWhitespace(product?.brand?.showBrand === false ? '' : product?.brand?.name);
   const productUrl = product?.canonicalUrl ? toAbsoluteUrl(product.canonicalUrl, pageUrl || source.sourceUrl) : '';
@@ -1187,14 +1249,14 @@ function normalizeLidlSiteProductToOffer({
     product?.image || product?.imageList_V1?.[0]?.image || '',
     productUrl || pageUrl || source.sourceUrl
   );
-  const basePriceText = sanitizeWhitespace(product?.price?.basePrice?.text);
-  const discountText = sanitizeWhitespace(product?.price?.discount?.discountText);
+  const basePriceText = sanitizeWhitespace(pricePayload?.basePrice?.text);
+  const discountText = sanitizeWhitespace(pricePayload?.discount?.discountText || selectedPrice.highlightText);
   const quantityText = extractLidlSiteQuantityText(basePriceText);
   const normalizedUnitPrice = buildLidlSiteNormalizedUnitPrice(basePriceText || quantityText, currentPrice);
   const validFrom = parseLidlStoreTimestamp(product?.storeStartDate);
   const validTo = parseLidlStoreTimestamp(product?.storeEndDate);
   const statusInfo = buildOfferStatus(validFrom, validTo, !validFrom && !validTo);
-  const customerProgramRequired = Boolean(product?.lidlPlus) || /lidl\s*plus/i.test(JSON.stringify(product || {}));
+  const customerProgramRequired = selectedPrice.customerProgramRequired;
   const productId = sanitizeWhitespace(product?.productId || product?.itemId || product?.erpNumber);
   const conditions = [
     discountText,
@@ -1279,18 +1341,18 @@ function normalizeLidlSiteProductToOffer({
     availabilityScope: region || 'Grossraum Graz',
     priceCurrent: {
       amount: currentPrice,
-      currency: product?.price?.currencyCode || 'EUR',
+      currency: pricePayload?.currencyCode || 'EUR',
       originalText: `${currentPrice.toFixed(2)} EUR`,
     },
     priceReference: {
-      amount: parseNumericAmount(product?.price?.oldPrice || product?.price?.discount?.deletedPrice),
-      currency: product?.price?.currencyCode || 'EUR',
-      originalText: parseNumericAmount(product?.price?.oldPrice || product?.price?.discount?.deletedPrice)
-        ? `${parseNumericAmount(product?.price?.oldPrice || product?.price?.discount?.deletedPrice).toFixed(2)} EUR`
+      amount: parseNumericAmount(pricePayload?.oldPrice || pricePayload?.discount?.deletedPrice),
+      currency: pricePayload?.currencyCode || 'EUR',
+      originalText: parseNumericAmount(pricePayload?.oldPrice || pricePayload?.discount?.deletedPrice)
+        ? `${parseNumericAmount(pricePayload?.oldPrice || pricePayload?.discount?.deletedPrice).toFixed(2)} EUR`
         : '',
     },
-    priceReferenceSource: product?.price?.oldPrice || product?.price?.discount?.deletedPrice ? 'prospect' : '',
-    priceReferenceConfidence: product?.price?.oldPrice || product?.price?.discount?.deletedPrice ? 0.95 : 0,
+    priceReferenceSource: pricePayload?.oldPrice || pricePayload?.discount?.deletedPrice ? 'prospect' : '',
+    priceReferenceConfidence: pricePayload?.oldPrice || pricePayload?.discount?.deletedPrice ? 0.95 : 0,
     quantityText,
     normalizedUnitPrice,
     dedupeKey: buildLidlDedupeKey({
@@ -1320,6 +1382,7 @@ function normalizeLidlSiteProductToOffer({
       itemId: sanitizeWhitespace(product?.itemId),
       erpNumber: sanitizeWhitespace(product?.erpNumber),
       productUrl,
+      priceSource: selectedPrice.source,
       snapshotCurrent: !validTo,
     },
     adminReview: {
@@ -1351,7 +1414,7 @@ function parseLidlOfficialSiteOffersFromHtml({
       continue;
     }
 
-    const currentPrice = parseNumericAmount(card.product?.price?.price);
+    const currentPrice = selectLidlSitePrice(card.product).currentPrice;
     const title = sanitizeWhitespace(card.product?.title || card.product?.fullTitle);
     const validFrom = parseLidlStoreTimestamp(card.product?.storeStartDate);
     const validTo = parseLidlStoreTimestamp(card.product?.storeEndDate);
@@ -5523,6 +5586,10 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
   const diagnostics = {
     flyerIdentifiers: flyerIdentifiers.length,
     flyerRawProducts: 0,
+    webOfferPagesSeeded: 0,
+    webOfferPages: [],
+    webOfferRawCards: 0,
+    webOfferParsedOffers: 0,
     campaignPagesDiscovered: 0,
     campaignPagesSeeded: 0,
     campaignPages: [],
@@ -5572,8 +5639,76 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     }
   }
 
-  const campaignPagesForCrawl = getLidlCampaignPagesForCrawl({ html, source });
-  diagnostics.campaignPagesDiscovered = extractLidlCampaignPageLinksFromHtml(html, source.sourceUrl).length;
+  const discoveryPages = [{ url: source.sourceUrl, html }];
+  const webOfferPagesForCrawl = getLidlWebOfferPagesForCrawl(source);
+  diagnostics.webOfferPagesSeeded = webOfferPagesForCrawl.length;
+
+  for (const pageUrl of webOfferPagesForCrawl) {
+    try {
+      const page = await fetchLidlOfficialPageHtml(pageUrl);
+      const pageDiagnostics = {};
+      const finalUrl = page.canonicalUrl || pageUrl;
+      const pageOffers = parseLidlOfficialSiteOffersFromHtml({
+        html: page.html,
+        source,
+        crawlJobId,
+        region,
+        pageUrl: finalUrl,
+        diagnostics: pageDiagnostics,
+      });
+
+      diagnostics.webOfferPages.push({
+        url: pageUrl,
+        finalUrl,
+        httpStatus: page.response?.status || null,
+        rawCards: pageDiagnostics.rawCards || 0,
+        parsedOffers: pageOffers.length,
+        skipReasons: pageDiagnostics.skipReasons || {},
+      });
+      diagnostics.webOfferRawCards += pageDiagnostics.rawCards || 0;
+      diagnostics.webOfferParsedOffers += pageOffers.length;
+      Object.entries(pageDiagnostics.skipReasons || {}).forEach(([reason, count]) => {
+        diagnostics.skipReasons[reason] = (diagnostics.skipReasons[reason] || 0) + count;
+      });
+      collectedOffers.push(...pageOffers);
+      discoveryPages.push({ url: finalUrl, html: page.html });
+    } catch (error) {
+      diagnostics.webOfferPages.push({
+        url: pageUrl,
+        finalUrl: pageUrl,
+        httpStatus: error.response?.status || null,
+        rawCards: 0,
+        parsedOffers: 0,
+        error: error.message,
+      });
+      diagnostics.skipReasons['web-offer-page-fetch-failed'] = (diagnostics.skipReasons['web-offer-page-fetch-failed'] || 0) + 1;
+    }
+  }
+
+  const discoveredCampaignLinks = [];
+  for (const discoveryPage of discoveryPages) {
+    discoveredCampaignLinks.push(...extractLidlCampaignPageLinksFromHtml(discoveryPage.html, discoveryPage.url || source.sourceUrl));
+  }
+  const campaignPagesForCrawl = [];
+  const campaignSeen = new Set();
+  for (const url of [
+    ...discoveredCampaignLinks,
+    ...getLidlCampaignPagesForCrawl({ html, source }),
+  ]) {
+    const normalizedUrl = sanitizeWhitespace(url).replace(/#.*$/, '');
+
+    if (!normalizedUrl || campaignSeen.has(normalizedUrl) || !isLidlCampaignPageUrl(normalizedUrl)) {
+      continue;
+    }
+
+    campaignSeen.add(normalizedUrl);
+    campaignPagesForCrawl.push(normalizedUrl);
+
+    if (campaignPagesForCrawl.length >= LIDL_CAMPAIGN_PAGE_LIMIT) {
+      break;
+    }
+  }
+  diagnostics.campaignPagesDiscovered = new Set(discoveredCampaignLinks).size;
   diagnostics.campaignPagesSeeded = campaignPagesForCrawl.length;
 
   for (const pageUrl of campaignPagesForCrawl) {
@@ -5668,15 +5803,22 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     canonicalUrl: source.sourceUrl,
     finalUrl: source.sourceUrl,
     title: 'Lidl official campaign pages snapshot',
-    contentHash: createHash(JSON.stringify(diagnostics.campaignPages)),
-    contentSnippet: `Lidl official campaign pages: ${diagnostics.campaignPages.length} Seiten, ${diagnostics.campaignRawCards} Karten, ${diagnostics.campaignParsedOffers} Offers vor Dedupe.`,
-    extractedPreview: diagnostics.campaignPages.map((item) => `${item.url} (${item.rawCards}/${item.parsedOffers})`).slice(0, 8),
-    foundRawItems: diagnostics.campaignRawCards,
-    parsedOffers: diagnostics.campaignParsedOffers,
-    rejectedOffers: Math.max(0, diagnostics.campaignRawCards - diagnostics.campaignParsedOffers),
+    contentHash: createHash(JSON.stringify({
+      webOfferPages: diagnostics.webOfferPages,
+      campaignPages: diagnostics.campaignPages,
+    })),
+    contentSnippet: `Lidl official web/campaign pages: ${diagnostics.webOfferPages.length + diagnostics.campaignPages.length} Seiten, ${diagnostics.webOfferRawCards + diagnostics.campaignRawCards} Karten, ${diagnostics.webOfferParsedOffers + diagnostics.campaignParsedOffers} Offers vor Dedupe.`,
+    extractedPreview: [
+      ...diagnostics.webOfferPages.map((item) => `${item.url} (${item.rawCards}/${item.parsedOffers})`),
+      ...diagnostics.campaignPages.map((item) => `${item.url} (${item.rawCards}/${item.parsedOffers})`),
+    ].slice(0, 10),
+    foundRawItems: diagnostics.webOfferRawCards + diagnostics.campaignRawCards,
+    parsedOffers: diagnostics.webOfferParsedOffers + diagnostics.campaignParsedOffers,
+    rejectedOffers: Math.max(0, diagnostics.webOfferRawCards + diagnostics.campaignRawCards - diagnostics.webOfferParsedOffers - diagnostics.campaignParsedOffers),
     parserVersion: PARSER_VERSION,
     rejectionReasons: Object.entries(diagnostics.skipReasons).map(([reason, count]) => ({ reason, count })),
     payload: {
+      webOfferPages: diagnostics.webOfferPages,
       campaignPages: diagnostics.campaignPages,
       skipReasons: diagnostics.skipReasons,
       dedupedOffers: diagnostics.dedupedOffers || 0,
@@ -7296,6 +7438,8 @@ module.exports = {
     parseLidlFlyerDate,
     normalizeLidlProductToOffer,
     LIDL_OFFICIAL_CAMPAIGN_PAGES,
+    LIDL_OFFICIAL_WEB_OFFER_PAGES,
+    getLidlWebOfferPagesForCrawl,
     extractLidlCampaignPageLinksFromHtml,
     getLidlCampaignPagesForCrawl,
     isLidlCampaignPageUrl,

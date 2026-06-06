@@ -150,6 +150,9 @@ const RETAILER_DEFINITIONS = [
     label: 'Lidl Flugblatt',
     sourceUrl: 'https://www.lidl.at/c/flugblatt/s10012330',
     crawlPolicy: {
+      webOfferSeedUrls: [
+        'https://www.lidl.at/',
+      ],
       campaignSeedUrls: [
         'https://www.lidl.at/c/mega-deals/s10091719',
         'https://www.lidl.at/c/aktion/a10095240',
