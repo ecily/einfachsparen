@@ -48,16 +48,19 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
   const [failedSources, setFailedSources] = useState(() => new Set(failedImageSourceCache))
   const imageSources = [primarySrc, directSrc].filter((item, index, items) => item && items.indexOf(item) === index)
   const currentSrc = imageSources.find((item) => !failedSources.has(item)) || ''
+  const isOfficialPlaceholder = hasOfficialSourceSignal(offer)
   const placeholderCopy = getPlaceholderCopy(offer)
 
   if (!currentSrc) {
     return (
       <div
-        className={`product-image product-image--placeholder ${compact ? 'product-image--compact' : ''}`}
+        className={`product-image product-image--placeholder ${
+          isOfficialPlaceholder ? 'product-image--official-placeholder' : 'product-image--generic-placeholder'
+        } ${compact ? 'product-image--compact' : ''}`}
         aria-label={`${placeholderCopy.label}: ${placeholderCopy.detail}`}
         role="img"
       >
-        <span className="product-image__placeholder-icon" aria-hidden="true" />
+        <span className="product-image__placeholder-mark" aria-hidden="true" />
         <span className="product-image__placeholder-copy">
           <strong>{placeholderCopy.label}</strong>
           <small>{placeholderCopy.detail}</small>
