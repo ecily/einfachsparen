@@ -20,6 +20,7 @@ const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCa
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidity');
 const { extractSparFamilyPdfLayoutCandidates } = require('./sparFamilyPdfLayoutExtractor');
+const { getStaticSparPdfCropForCandidate } = require('./sparPdfStaticImageCrops');
 
 const PARSER_VERSION = 'spar-official-flyer-pdf-v6';
 const SOURCE_TYPE = 'spar-official-pdf';
@@ -4087,6 +4088,13 @@ function normalizeSparPdfCandidateToOffer({
   sourceMetadata.pdfSha256 = pdfSha256;
   sourceMetadata.extractionMethod = 'text-layer';
   sourceMetadata.sourceRetailerFormat = sourceRetailerFormat;
+  const staticImage = candidate.imageUrl
+    ? null
+    : getStaticSparPdfCropForCandidate({
+      candidate,
+      sourceUrl: pdfUrl || source.sourceUrl,
+    });
+  const imageUrl = normalizeImageUrl(candidate.imageUrl || staticImage?.imageUrl || '', pdfUrl || source.sourceUrl);
 
   const overrideResult = applyManualCategoryOverridesToOfferSync({
     crawlJobId,
@@ -4127,7 +4135,7 @@ function normalizeSparPdfCandidateToOffer({
     description: candidate.quantityText,
     sourceUrl: pdfUrl || source.sourceUrl,
     sourceType: SOURCE_TYPE,
-    imageUrl: normalizeImageUrl(candidate.imageUrl || '', pdfUrl || source.sourceUrl),
+    imageUrl,
     supportingSources: [
       buildSourceEvidence({
         source,
@@ -4199,6 +4207,11 @@ function normalizeSparPdfCandidateToOffer({
       parserVersion: PARSER_VERSION,
       extractionMethod: candidate.parserHint === 'pdfjs-layout-price-window' ? 'pdfjs-layout' : 'text-layer',
       snapshotCurrent: false,
+      ...(staticImage ? {
+        imageSourceType: staticImage.imageSourceType,
+        imageConfidence: staticImage.imageConfidence,
+        imageEvidence: staticImage.imageEvidence,
+      } : {}),
     },
     needsReview: true,
     reviewReasons: issues,
