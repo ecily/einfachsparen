@@ -193,6 +193,14 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Kaese',
   },
   {
+    patterns: [
+      /\bgriller\b.*\b\d+(?:[.,]\d+)?\s*(?:g|gramm|kg|kilogramm)\b/,
+      /\b\d+(?:[.,]\d+)?\s*(?:g|gramm|kg|kilogramm)\b.*\bgriller\b/,
+    ],
+    main: 'Lebensmittel',
+    sub: 'Fleisch, Wurst & Fisch',
+  },
+  {
     patterns: [/\bfelix\b.*(linsen|bohnen|eintopf|konserve|ravioli|sugo|pasta|chili|gulasch)/],
     main: 'Lebensmittel',
     sub: 'Pasta, Reis & Konserven',

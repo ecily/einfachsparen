@@ -205,6 +205,22 @@ test('keeps beta feedback category false positives in their product categories',
   }
 });
 
+test('classifies weighted Lidl Griller offers as food without reclassifying grill devices', () => {
+  const weightedFood = determineCategoryDecision({
+    title: 'Griller',
+    contextText: 'Je 250 g (1 kg = 9.68)',
+  });
+  const grillDevice = determineCategoryDecision({
+    title: 'Kontaktgrill',
+    contextText: 'Je Stueck',
+  });
+
+  assert.equal(weightedFood.primaryCategory, 'Lebensmittel');
+  assert.equal(weightedFood.secondaryCategory, 'Fleisch, Wurst & Fisch');
+  assert.equal(grillDevice.primaryCategory, 'Technik / Elektronik');
+  assert.equal(grillDevice.secondaryCategory, 'Kuechengeraete');
+});
+
 test('does not classify generic non-fragrance gift sets as cosmetics', () => {
   const cases = [
     'Bottled Geschenkset',
