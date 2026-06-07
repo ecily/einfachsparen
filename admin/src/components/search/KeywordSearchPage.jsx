@@ -584,7 +584,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
 
         <div className="keyword-search-controls">
           <div className="keyword-search-filter-intro">
-            <p className="eyebrow">Optional eingrenzen</p>
+            <p className="eyebrow">Filter und Sortierung</p>
             <label className="keyword-search-toggle">
               <input
                 type="checkbox"
