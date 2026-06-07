@@ -2330,6 +2330,17 @@ a {
   font-weight: 720;
 }
 
+.user-card__brand {
+  margin: 0.08rem 0 0;
+  color: var(--kk-muted-2);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
 .user-card h3 {
   max-width: 100%;
   margin: 0.3rem 0 0;
@@ -5869,6 +5880,12 @@ textarea:focus {
     font-size: 0.68rem;
   }
 
+  .user-card__brand {
+    margin-top: 0.06rem;
+    font-size: 0.68rem;
+    line-height: 1.12;
+  }
+
   .user-card h3 {
     display: -webkit-box;
     margin-top: 0.22rem;
@@ -6589,6 +6606,11 @@ textarea:focus {
   .user-card__retailer-badge {
     min-height: 1.42rem;
     padding: 0.18rem 0.44rem;
+  }
+
+  .user-card__brand {
+    font-size: 0.66rem;
+    line-height: 1.1;
   }
 
   .user-card h3 {

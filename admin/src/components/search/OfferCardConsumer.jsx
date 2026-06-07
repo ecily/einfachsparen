@@ -133,6 +133,49 @@ function getPromotionScopeLabel(offer) {
 
 const SHORT_CONDITION_MAX_LENGTH = 68
 
+function normalizeBrandMatchText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' und ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function getOfferBrandLabel(offer) {
+  return String(
+    offer?.brand ||
+      offer?.brandName ||
+      offer?.normalizedBrand ||
+      offer?.productBrand ||
+      offer?.manufacturer ||
+      ''
+  ).replace(/\s+/g, ' ').trim()
+}
+
+function removeLeadingBrandToken(title, brandLabel) {
+  const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim()
+  const cleanBrand = String(brandLabel || '').replace(/\s+/g, ' ').trim()
+  if (!cleanTitle || !cleanBrand) return cleanTitle
+
+  const titleParts = cleanTitle.split(' ')
+  const brandPartCount = cleanBrand.split(' ').length
+  const normalizedBrand = normalizeBrandMatchText(cleanBrand)
+  let removeCount = 0
+
+  while (titleParts.length - removeCount >= brandPartCount) {
+    const candidate = titleParts.slice(removeCount, removeCount + brandPartCount).join(' ')
+    if (normalizeBrandMatchText(candidate) !== normalizedBrand) break
+    removeCount += brandPartCount
+  }
+
+  if (removeCount === 0) return cleanTitle
+
+  const remaining = titleParts.slice(removeCount).join(' ').trim()
+  return remaining || cleanTitle
+}
+
 function getConditionDisplayText(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
   return text
@@ -199,6 +242,8 @@ export function OfferCardConsumer({
   const promotionScopeLabel = getPromotionScopeLabel(offer)
   const unitPriceText = showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : ''
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
+  const brandLabel = getOfferBrandLabel(offer)
+  const displayTitle = removeLeadingBrandToken(offer?.title, brandLabel)
   const cardClassName = [
     'user-card',
     hasSavings ? 'user-card--known-savings' : 'user-card--action-price',
@@ -226,8 +271,9 @@ export function OfferCardConsumer({
               <span className="user-card__retailer-badge">{normalizeRetailerName(offer.retailerName)}</span>
             </div>
 
+            {brandLabel ? <p className="user-card__brand">{brandLabel}</p> : null}
             <h3>
-              <span>{offer.title}</span>
+              <span>{displayTitle}</span>
               {quantityText ? <span className="user-card__title-quantity"> · {quantityText}</span> : null}
             </h3>
             {quantityText ? <p className="user-card__title-quantity">{quantityText}</p> : null}
