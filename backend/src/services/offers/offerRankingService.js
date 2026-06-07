@@ -130,7 +130,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
@@ -768,6 +768,110 @@ const FRESH_SIDEHIT_TOKENS = [
   'konserviert',
   'glas',
   'eingelegt',
+];
+
+const HUMAN_FOOD_PET_COLLISION_QUERY_TOKENS = new Set([
+  ...FISCH_PRODUCT_TOKENS,
+  ...WURST_PRODUCT_TOKENS,
+  'faschiertes',
+  'filet',
+  'fleisch',
+  'gefluegel',
+  'geflugel',
+  'hendl',
+  'huhn',
+  'huehnchen',
+  'huhnchen',
+  'karree',
+  'pute',
+  'puten',
+  'rind',
+  'rindfleisch',
+  'schnitzel',
+  'schwein',
+  'steak',
+]);
+
+const EXPLICIT_PET_FOOD_QUERY_TOKENS = new Set([
+  'biscrok',
+  'cat',
+  'felix',
+  'futter',
+  'haustierfutter',
+  'hund',
+  'hunde',
+  'hundefutter',
+  'hundenahrung',
+  'hundesnack',
+  'katze',
+  'katzen',
+  'katzenfutter',
+  'katzennahrung',
+  'katzensnack',
+  'nassfutter',
+  'pedigree',
+  'schmackos',
+  'sheba',
+  'tierbedarf',
+  'tierfutter',
+  'tiernahrung',
+  'trockenfutter',
+  'vitakraft',
+  'whiskas',
+]);
+
+const PET_FOOD_CATEGORY_TOKENS = [
+  'haustierfutter',
+  'hundefutter',
+  'katzenfutter',
+  'tierbedarf',
+  'tierfutter',
+  'tiernahrung',
+];
+
+const PET_FOOD_BRAND_TOKENS = [
+  'biscrok',
+  'cesar',
+  'felix',
+  'gourmet',
+  'pedigree',
+  'schmackos',
+  'sheba',
+  'vitakraft',
+  'whiskas',
+];
+
+const PET_FOOD_PRODUCT_TOKENS = [
+  'beef',
+  'cat',
+  'delice',
+  'delisauce',
+  'fishy',
+  'haustierfutter',
+  'hundesnack',
+  'jelly',
+  'katzenfutter',
+  'katzennassfutter',
+  'katzensnack',
+  'liquid',
+  'nassfutter',
+  'poesie',
+  'sensations',
+  'snack',
+  'tiernahrung',
+  'trockenfutter',
+];
+
+const HUMAN_FOOD_CATEGORY_TOKENS = [
+  'fleisch',
+  'fisch',
+  'gefluegel',
+  'geflugel',
+  'lebensmittel',
+  'meeresfruechte',
+  'tiefkuehl',
+  'tiefkuhl',
+  'wurst',
 ];
 
 const STRONG_FRESH_CONTEXT_TOKENS = [
@@ -2476,6 +2580,99 @@ function scorePetFoodSearchIntent({ titleTokens, categoryTokens, comparisonToken
   return adjustment;
 }
 
+function hasExplicitPetFoodQueryIntent(queryTokens = []) {
+  return queryTokens.some((token) => EXPLICIT_PET_FOOD_QUERY_TOKENS.has(token));
+}
+
+function hasHumanFoodPetCollisionQueryIntent(queryTokens = []) {
+  return queryTokens.some((token) => HUMAN_FOOD_PET_COLLISION_QUERY_TOKENS.has(token)) &&
+    !hasExplicitPetFoodQueryIntent(queryTokens);
+}
+
+function isLikelyPetFoodOffer({
+  brandTokens = [],
+  titleTokens = [],
+  categoryTokens = [],
+  comparisonTokens = [],
+  aggregateTokens = [],
+} = {}) {
+  const productTokens = titleTokens.concat(brandTokens, comparisonTokens);
+  const allTokens = productTokens.concat(categoryTokens, aggregateTokens);
+
+  if (hasAnyTokenFamily(categoryTokens.concat(comparisonTokens), PET_FOOD_CATEGORY_TOKENS)) {
+    return true;
+  }
+
+  if (hasAnyTokenMatch(brandTokens.concat(titleTokens), PET_FOOD_BRAND_TOKENS, {
+    exact: true,
+    suffix: false,
+  })) {
+    return true;
+  }
+
+  return hasAnyTokenFamily(allTokens, PET_FOOD_PRODUCT_TOKENS) &&
+    hasAnyTokenFamily(allTokens, PET_FOOD_CATEGORY_TOKENS.concat(PET_FOOD_BRAND_TOKENS, [
+      'hund',
+      'hunde',
+      'katze',
+      'katzen',
+    ]));
+}
+
+function isLikelyHumanFoodOffer({
+  brandTokens = [],
+  titleTokens = [],
+  categoryTokens = [],
+  comparisonTokens = [],
+  aggregateTokens = [],
+} = {}) {
+  if (isLikelyPetFoodOffer({ brandTokens, titleTokens, categoryTokens, comparisonTokens, aggregateTokens })) {
+    return false;
+  }
+
+  return hasAnyTokenFamily(categoryTokens.concat(comparisonTokens, aggregateTokens), HUMAN_FOOD_CATEGORY_TOKENS);
+}
+
+function scoreHumanFoodPetCollisionIntent({
+  queryTokens = [],
+  brandTokens = [],
+  titleTokens = [],
+  categoryTokens = [],
+  comparisonTokens = [],
+  aggregateTokens = [],
+} = {}) {
+  if (!hasHumanFoodPetCollisionQueryIntent(queryTokens)) {
+    return 0;
+  }
+
+  const petFood = isLikelyPetFoodOffer({
+    brandTokens,
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
+
+  if (petFood) {
+    return -9200;
+  }
+
+  if (isLikelyHumanFoodOffer({
+    brandTokens,
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  }) && hasAnyTokenMatch(titleTokens.concat(brandTokens, comparisonTokens), queryTokens, {
+    exact: false,
+    suffix: true,
+  })) {
+    return 1800;
+  }
+
+  return 0;
+}
+
 function getGenericCatFoodOfferIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
   const productTokens = titleTokens.concat(comparisonTokens);
   const allTokens = titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens);
@@ -3243,6 +3440,7 @@ function scoreOfferAgainstQuery(offer, query) {
   ].join(' ');
   const structuredTokens = tokenizeSearchText(structuredText);
   const titleTokens = tokenizeSearchText(offer.title);
+  const brandTokens = tokenizeSearchText(offer.brand);
   const categoryTokens = tokenizeSearchText([
     offer.categoryPrimary,
     offer.categorySecondary,
@@ -3644,6 +3842,15 @@ function scoreOfferAgainstQuery(offer, query) {
       aggregateTokens,
     });
   }
+
+  score += scoreHumanFoodPetCollisionIntent({
+    queryTokens,
+    brandTokens,
+    titleTokens,
+    categoryTokens,
+    comparisonTokens,
+    aggregateTokens,
+  });
 
   if (score <= 0 && genericButterQuery) {
     const { hardSide, realButter, plausibleSpread } = getGenericButterOfferIntent({

@@ -3025,6 +3025,154 @@ test('ranks chicken meat ahead of pet food for generic huhn search', () => {
   assert.ok(sortedTitles.indexOf('Whiskas Katzenfutter Huhn') > 0);
 });
 
+test('human food intent downranks pet food for fish and meat terms without hiding it', () => {
+  const offers = [
+    offer({
+      title: 'Sheba Fresh&Fine in Sauce Lachs und Thunfisch',
+      brand: 'Sheba',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'sheba-katzenfutter-lachs-thunfisch::0.3-kg',
+    }),
+    offer({
+      title: 'BILLA Bio Raeucherlachs',
+      brand: 'BILLA Bio',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'billa-bio-raeucherlachs::0.1-kg',
+    }),
+    offer({
+      title: 'Vitakraft Liquid Snack mit Lachs',
+      brand: 'Vitakraft',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'vitakraft-liquid-snack-lachs::6-Stk',
+    }),
+  ];
+
+  const sortedTitles = applyQueryMatch(offers, 'lachs').map((item) => item.title);
+
+  assert.equal(sortedTitles[0], 'BILLA Bio Raeucherlachs');
+  assert.ok(sortedTitles.includes('Sheba Fresh&Fine in Sauce Lachs und Thunfisch'));
+  assert.ok(sortedTitles.includes('Vitakraft Liquid Snack mit Lachs'));
+  assert.ok(sortedTitles.indexOf('Sheba Fresh&Fine in Sauce Lachs und Thunfisch') > 0);
+  assert.ok(sortedTitles.indexOf('Vitakraft Liquid Snack mit Lachs') > 0);
+});
+
+test('human thunfisch outranks Sheba cat food for thunfisch intent', () => {
+  const offers = [
+    offer({
+      title: 'Sheba Fresh&Fine in Sauce Lachs und Thunfisch',
+      brand: 'Sheba',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'sheba-katzenfutter-lachs-thunfisch::0.3-kg',
+    }),
+    offer({
+      title: 'Orlando MSC Thunfisch in Salzlake',
+      brand: 'Orlando',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'orlando-thunfisch-salzlake::0.185-kg',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'thunfisch').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles, [
+    'Orlando MSC Thunfisch in Salzlake',
+    'Sheba Fresh&Fine in Sauce Lachs und Thunfisch',
+  ]);
+});
+
+test('explicit pet food intent keeps pet food above human food controls', () => {
+  const offers = [
+    offer({
+      title: 'BILLA Bio Raeucherlachs',
+      brand: 'BILLA Bio',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'billa-bio-raeucherlachs::0.1-kg',
+    }),
+    offer({
+      title: 'Sheba Fresh&Fine in Sauce Lachs und Thunfisch',
+      brand: 'Sheba',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'sheba-katzenfutter-lachs-thunfisch::0.3-kg',
+    }),
+  ];
+
+  assert.equal(applyQueryMatch(offers, 'katzenfutter lachs')[0].title, 'Sheba Fresh&Fine in Sauce Lachs und Thunfisch');
+  assert.equal(applyQueryMatch(offers, 'sheba lachs')[0].title, 'Sheba Fresh&Fine in Sauce Lachs und Thunfisch');
+});
+
+test('Vitakraft pet food is detected despite misleading human food category', () => {
+  const offers = [
+    offer({
+      title: 'Puten-Kaesekrainer',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'puten-kaesekrainer::0.3-kg',
+    }),
+    offer({
+      title: 'Beef Stick mit Pute',
+      brand: 'Vitakraft',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'vitakraft-beef-stick-pute::1-Stk',
+    }),
+  ];
+  const sortedTitles = applyQueryMatch(offers, 'pute').map((item) => item.title);
+
+  assert.deepEqual(sortedTitles, [
+    'Puten-Kaesekrainer',
+    'Beef Stick mit Pute',
+  ]);
+});
+
+test('human food pet downrank leaves garnelen wurst and schinken controls stable', () => {
+  const offers = [
+    offer({
+      title: 'Iglo Backteig Garnelen',
+      brand: 'Iglo',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'iglo-backteig-garnelen::0.275-kg',
+    }),
+    offer({
+      title: 'Felix Crispies Garnelen',
+      brand: 'Felix',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      comparisonGroup: 'felix-crispies-garnelen::0.06-kg',
+    }),
+    offer({
+      title: 'Heurigenschinken',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      comparisonGroup: 'heurigenschinken::0.1-kg',
+    }),
+    offer({
+      title: 'Liquid Snack mit Leberwurst',
+      brand: 'Vitakraft',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Suesswaren & Knabbereien',
+      comparisonGroup: 'vitakraft-liquid-snack-leberwurst::1-Stk',
+    }),
+    offer({
+      title: 'Kantwurst oder ungarische Salami',
+      brand: 'Reiter',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch & Wurst',
+      comparisonGroup: 'kantwurst-salami::0.2-kg',
+    }),
+  ];
+
+  assert.equal(applyQueryMatch(offers, 'garnelen')[0].title, 'Iglo Backteig Garnelen');
+  assert.equal(applyQueryMatch(offers, 'wurst')[0].title, 'Kantwurst oder ungarische Salami');
+  assert.equal(applyQueryMatch(offers, 'schinken')[0].title, 'Heurigenschinken');
+});
+
 test('ranks real milk ahead of cheese or cream brand context hits', () => {
   const offers = [
     offer({
@@ -6596,7 +6744,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
