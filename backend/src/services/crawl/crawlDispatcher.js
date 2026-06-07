@@ -132,8 +132,11 @@ function buildBoundedSourceResult(sourceSummary = {}, source = {}) {
     foundRawItems: 0,
     parsedOffers: 0,
     rejectedOffers: 0,
-    status: 'failed',
-    error: 'Source is scoped-only for crawl reliability and was not executed in full crawl.',
+    status: 'skipped',
+    skipped: true,
+    skippedReason: 'full-crawl-scoped-only-source',
+    message: 'Source is scoped-only for crawl reliability and was not executed in full crawl.',
+    error: '',
     failureStage: 'source-bounded-before-execution',
     httpStatus: null,
     contentType: '',
@@ -144,6 +147,8 @@ function buildBoundedSourceResult(sourceSummary = {}, source = {}) {
       sourceId: sourceSummary.sourceId,
       sourceUrl: source.sourceUrl || sourceSummary.sourceUrl,
       boundedReason: 'full-crawl-scoped-only-source',
+      notExecutedByPolicy: true,
+      policyBounded: true,
     },
   };
 }
@@ -190,19 +195,19 @@ async function createBoundedSourceJob({
     retailerKey: source.retailerKey || sourceSummary.retailerKey,
     region,
     trigger,
-    status: 'failed',
+    status: 'skipped',
     startedAt: now,
     finishedAt: now,
     sourceType: source.sourceType || source.channel || sourceSummary.sourceType || '',
     sourceUrl: source.sourceUrl || sourceSummary.sourceUrl,
     stats: {
-      errors: 1,
+      errors: 0,
       warnings: 1,
       rawCandidates: 0,
       offersStored: 0,
       rejected: 0,
     },
-    errorMessages: ['Source is scoped-only for crawl reliability and was not executed in full crawl.'],
+    errorMessages: [],
     warningMessages: ['Source was bounded before execution so the full CrawlRun can terminalize.'],
     metadata: {
       sourceLabel: source.label || sourceSummary.label || '',
@@ -212,6 +217,8 @@ async function createBoundedSourceJob({
         boundedAt: now,
         reason: 'full-crawl-scoped-only-source',
         failureStage: 'source-bounded-before-execution',
+        notExecutedByPolicy: true,
+        policyBounded: true,
       },
     },
   });
@@ -435,9 +442,9 @@ async function crawlAllSources({
         await reportCrawlProgress(onProgress, {
           stage: 'source-finished',
           ...buildSourceProgress(source, index + 1, prioritizedSources.length, currentSourceStartedAt),
-          sourceStatus: 'failed',
+          sourceStatus: 'skipped',
           failureStage: boundedResult.failureStage,
-          error: boundedResult.error,
+          warning: boundedResult.message,
           finishedSourceCount: results.length,
         });
         continue;

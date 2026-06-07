@@ -202,6 +202,18 @@ test('dashboard crawl reliability separates scheduled stale from current free te
         failureStage: 'fetch',
         error: 'Request failed with status code 404',
       },
+      {
+        sourceKey: 'spar-official-flyer-pdf',
+        sourceType: 'pdf',
+        channel: 'official-flyer',
+        status: 'skipped',
+        skippedReason: 'full-crawl-scoped-only-source',
+        failureStage: 'source-bounded-before-execution',
+        diagnostic: {
+          boundedReason: 'full-crawl-scoped-only-source',
+          notExecutedByPolicy: true,
+        },
+      },
     ],
   };
 
@@ -238,8 +250,12 @@ test('dashboard crawl reliability separates scheduled stale from current free te
   assert.equal(reliability.sourceFailures.level, 'yellow');
   assert.equal(reliability.sourceFailures.p0ReliabilityCount, 0);
   assert.equal(reliability.sourceFailures.p1SourceCoverageCount, 1);
+  assert.equal(reliability.sourceFailures.failedSourcesCount, 1);
+  assert.equal(reliability.sourceFailures.policyBoundedSourcesCount, 1);
+  assert.equal(reliability.sourceFailures.notExecutedByPolicySourcesCount, 1);
   assert.equal(reliability.sourceFailures.groups[0].errorType, 'http-404');
   assert.equal(reliability.sourceFailures.groups[0].classification, 'P1 Source/Coverage');
+  assert.equal(reliability.sourceFailures.policyBoundedGroups[0].classification, 'notExecutedByPolicy');
 });
 
 test('dashboard crawl reliability treats final publish status as current system proof', () => {

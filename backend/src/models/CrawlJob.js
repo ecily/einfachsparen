@@ -8,7 +8,7 @@ const crawlJobSchema = new mongoose.Schema(
     region: { type: String, required: true },
     status: {
       type: String,
-      enum: ['running', 'success', 'partial', 'failed'],
+      enum: ['running', 'success', 'partial', 'failed', 'skipped'],
       default: 'running',
       index: true,
     },

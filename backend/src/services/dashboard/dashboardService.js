@@ -302,8 +302,20 @@ function detectSourceErrorType(source = {}) {
   return source.failureStage || 'source-error';
 }
 
+function isPolicyBoundedDashboardSource(source = {}) {
+  const diagnostic = source.diagnostic || {};
+  return source.status === 'skipped' && (
+    source.skippedReason === 'full-crawl-scoped-only-source'
+    || source.failureStage === 'source-bounded-before-execution'
+    || diagnostic.boundedReason === 'full-crawl-scoped-only-source'
+    || diagnostic.notExecutedByPolicy === true
+    || diagnostic.policyBounded === true
+  );
+}
+
 function buildSourceFailureDiagnosis(run) {
   const failedSources = (run?.sources || []).filter((source) => source.status === 'failed');
+  const policyBoundedSources = (run?.sources || []).filter(isPolicyBoundedDashboardSource);
   const groups = new Map();
 
   for (const source of failedSources) {
@@ -336,10 +348,22 @@ function buildSourceFailureDiagnosis(run) {
     failedSourcesCount: failedSources.length,
     p0ReliabilityCount: 0,
     p1SourceCoverageCount,
+    policyBoundedSourcesCount: policyBoundedSources.length,
+    notExecutedByPolicySourcesCount: policyBoundedSources.length,
     reason: failedSources.length > 0
-      ? `${failedSources.length} failed source(s) are classified separately from crawl finalization/lock reliability.`
+      ? `${failedSources.length} failed source(s) are classified separately from crawl finalization/lock reliability; ${policyBoundedSources.length} source(s) were not executed by policy.`
       : 'No failed sources in the reference crawl.',
     groups: [...groups.values()],
+    policyBoundedGroups: policyBoundedSources.length > 0
+      ? [
+        {
+          reason: 'full-crawl-scoped-only-source',
+          count: policyBoundedSources.length,
+          classification: 'notExecutedByPolicy',
+          sourceKeys: policyBoundedSources.map((source) => source.sourceKey || 'unknown'),
+        },
+      ]
+      : [],
   };
 }
 
@@ -1215,12 +1239,16 @@ function summarizeCrawlSources(run = {}) {
   const sources = Array.isArray(run?.sources) ? run.sources : [];
   const sourceOk = numberFrom(run?.summary?.successfulSourcesCount, null);
   const sourceFail = numberFrom(run?.summary?.failedSourcesCount, null);
-  const countedOk = sources.filter((source) => ['success', 'skipped'].includes(source.status)).length;
+  const countedOk = sources.filter((source) => source.status === 'success').length;
   const countedFail = sources.filter((source) => !['success', 'skipped', 'unknown'].includes(source.status)).length;
+  const sourceSkipped = numberFrom(run?.summary?.skippedSourcesCount, null);
+  const sourcePolicyBounded = numberFrom(run?.summary?.policyBoundedSourcesCount, null);
 
   return {
     sourceOk: sourceOk === null ? countedOk : sourceOk,
     sourceFail: sourceFail === null ? countedFail : sourceFail,
+    sourceSkipped: sourceSkipped === null ? sources.filter((source) => source.status === 'skipped').length : sourceSkipped,
+    sourcePolicyBounded: sourcePolicyBounded === null ? sources.filter(isPolicyBoundedDashboardSource).length : sourcePolicyBounded,
     warningSummary: compactStrings([...(run?.errorMessages || []), ...(run?.warnings || [])].map((item) => sanitizeAnalysisText(item, 180)), 5),
     staleOrRecoveryReason: sanitizeAnalysisText(
       run?.summary?.staleReason

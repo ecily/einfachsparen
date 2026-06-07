@@ -95,6 +95,113 @@ test('buildRunSummary aggregates source, retailer, type, dedupe and filter metad
   assert.equal(summary.sources[1].diagnostic.requestHeaders.Accept, 'text/html');
 });
 
+test('buildRunSummary separates policy-bounded skipped sources from real source failures', () => {
+  const result = {
+    sourceCoverage: {
+      totalRegisteredSources: 3,
+      activeEligibleSources: 3,
+    },
+    matchedSources: [
+      { sourceId: 's1', sourceKey: 'spar-official-flyer-pdf', retailerKey: 'spar', channel: 'official-flyer', sourceType: 'pdf' },
+      { sourceId: 's2', sourceKey: 'aktionsfinder-spar', retailerKey: 'spar', channel: 'aggregator', sourceType: 'aggregator' },
+      { sourceId: 's3', sourceKey: 'billa-official-site', retailerKey: 'billa', channel: 'official-site', sourceType: 'offers-page' },
+    ],
+    sources: [
+      {
+        sourceId: 's1',
+        sourceKey: 'spar-official-flyer-pdf',
+        retailerKey: 'spar',
+        channel: 'official-flyer',
+        sourceType: 'pdf',
+        status: 'skipped',
+        skipped: true,
+        skippedReason: 'full-crawl-scoped-only-source',
+        failureStage: 'source-bounded-before-execution',
+        diagnostic: {
+          boundedReason: 'full-crawl-scoped-only-source',
+          notExecutedByPolicy: true,
+        },
+      },
+      {
+        sourceId: 's2',
+        sourceKey: 'aktionsfinder-spar',
+        retailerKey: 'spar',
+        channel: 'aggregator',
+        sourceType: 'aggregator',
+        status: 'failed',
+        error: 'Request failed with status code 404',
+      },
+      {
+        sourceId: 's3',
+        sourceKey: 'billa-official-site',
+        retailerKey: 'billa',
+        channel: 'official-site',
+        sourceType: 'offers-page',
+        status: 'success',
+        offersStored: 3,
+      },
+    ],
+  };
+
+  const summary = _private.buildRunSummary(result);
+
+  assert.equal(summary.summary.failedSourcesCount, 1);
+  assert.equal(summary.summary.successfulSourcesCount, 1);
+  assert.equal(summary.summary.skippedSourcesCount, 1);
+  assert.equal(summary.summary.policyBoundedSourcesCount, 1);
+  assert.equal(summary.summary.notExecutedByPolicySourcesCount, 1);
+  assert.equal(summary.perRetailer.find((item) => item.retailerKey === 'spar').failedSources, 1);
+  assert.equal(summary.perRetailer.find((item) => item.retailerKey === 'spar').skippedSources, 1);
+  assert.equal(summary.perRetailer.find((item) => item.retailerKey === 'spar').policyBoundedSources, 1);
+  assert.equal(summary.sourceTypes.find((item) => item.channel === 'official-flyer').skippedSources, 1);
+  assert.equal(
+    _private.determineFinalStatus({ crawlResult: result, summary: summary.summary, mode: 'full' }),
+    'partial'
+  );
+});
+
+test('determineFinalStatus does not turn a full crawl partial only because policy-bounded sources were skipped', () => {
+  const result = {
+    sourceCoverage: {
+      totalRegisteredSources: 2,
+      activeEligibleSources: 2,
+    },
+    matchedSources: [
+      { sourceId: 's1', sourceKey: 'spar-official-flyer-pdf', retailerKey: 'spar', channel: 'official-flyer', sourceType: 'pdf' },
+      { sourceId: 's2', sourceKey: 'billa-official-site', retailerKey: 'billa', channel: 'official-site', sourceType: 'offers-page' },
+    ],
+    sources: [
+      {
+        sourceId: 's1',
+        sourceKey: 'spar-official-flyer-pdf',
+        retailerKey: 'spar',
+        channel: 'official-flyer',
+        sourceType: 'pdf',
+        status: 'skipped',
+        skippedReason: 'full-crawl-scoped-only-source',
+        diagnostic: { notExecutedByPolicy: true },
+      },
+      {
+        sourceId: 's2',
+        sourceKey: 'billa-official-site',
+        retailerKey: 'billa',
+        channel: 'official-site',
+        sourceType: 'offers-page',
+        status: 'success',
+      },
+    ],
+  };
+
+  const summary = _private.buildRunSummary(result);
+
+  assert.equal(summary.summary.failedSourcesCount, 0);
+  assert.equal(summary.summary.policyBoundedSourcesCount, 1);
+  assert.equal(
+    _private.determineFinalStatus({ crawlResult: result, summary: summary.summary, mode: 'full' }),
+    'success'
+  );
+});
+
 test('buildRunSummary exposes parser coverage rejection taxonomy and alert flags', () => {
   const summary = _private.buildRunSummary({
     matchedSources: [

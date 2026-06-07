@@ -282,6 +282,7 @@ function normalizeSourceResult(source = {}) {
     freshnessStatus: String(source.freshnessStatus || coverage.freshnessStatus || 'unknown'),
     flags,
     skipped: Boolean(source.skipped),
+    skippedReason: String(source.skippedReason || diagnostic.boundedReason || ''),
     message: compactErrorMessage(source.message),
     error: compactErrorMessage(source.error),
     failureStage: String(source.failureStage || diagnostic.failureStage || ''),
@@ -290,6 +291,17 @@ function normalizeSourceResult(source = {}) {
     finalUrl: String(source.finalUrl || diagnostic.finalUrl || ''),
     diagnostic,
   };
+}
+
+function isPolicyBoundedSource(source = {}) {
+  const diagnostic = source.diagnostic || {};
+  return source.status === 'skipped' && (
+    source.skippedReason === 'full-crawl-scoped-only-source'
+    || source.failureStage === 'source-bounded-before-execution'
+    || diagnostic.boundedReason === 'full-crawl-scoped-only-source'
+    || diagnostic.notExecutedByPolicy === true
+    || diagnostic.policyBounded === true
+  );
 }
 
 function incrementRetailerSummary(map, retailerKey) {
@@ -301,6 +313,8 @@ function incrementRetailerSummary(map, retailerKey) {
       matchedSources: 0,
       successfulSources: 0,
       failedSources: 0,
+      skippedSources: 0,
+      policyBoundedSources: 0,
       foundRawItems: 0,
       parsedOffers: 0,
       offersStored: 0,
@@ -331,6 +345,8 @@ function incrementSourceTypeSummary(map, source) {
       matchedSources: 0,
       successfulSources: 0,
       failedSources: 0,
+      skippedSources: 0,
+      policyBoundedSources: 0,
       offersStored: 0,
       rejectedOffers: 0,
       rejectedByReason: {},
@@ -369,12 +385,18 @@ function buildRunSummary(crawlResult = {}) {
     const sourceType = incrementSourceTypeSummary(sourceTypeMap, source);
     const failed = source.status === 'failed';
     const partial = source.status === 'partial';
+    const skipped = source.status === 'skipped';
+    const policyBounded = isPolicyBoundedSource(source);
 
     if (source.sourceId) matchedSourceIds.add(source.sourceId);
     if (source.status === 'success') retailer.successfulSources += 1;
     if (source.status === 'success') sourceType.successfulSources += 1;
     if (failed) retailer.failedSources += 1;
     if (failed) sourceType.failedSources += 1;
+    if (skipped) retailer.skippedSources += 1;
+    if (skipped) sourceType.skippedSources += 1;
+    if (policyBounded) retailer.policyBoundedSources += 1;
+    if (policyBounded) sourceType.policyBoundedSources += 1;
     if (partial) {
       retailer.failedSources += 0;
     }
@@ -404,6 +426,8 @@ function buildRunSummary(crawlResult = {}) {
   const failedSourcesCount = sources.filter((source) => source.status === 'failed').length;
   const partialSourcesCount = sources.filter((source) => source.status === 'partial').length;
   const successfulSourcesCount = sources.filter((source) => source.status === 'success').length;
+  const skippedResultSourcesCount = sources.filter((source) => source.status === 'skipped').length;
+  const policyBoundedSourcesCount = sources.filter(isPolicyBoundedSource).length;
   const filterMetadata = crawlResult.filterMetadata || {};
   const rejectedByReasonTotal = sources.reduce((acc, source) => addReasonCounts(acc, source.rejectedByReason), {});
   const sourceFlags = sources.reduce((acc, source) => {
@@ -422,7 +446,9 @@ function buildRunSummary(crawlResult = {}) {
       totalRegisteredSources: numberFrom(sourceCoverage.totalRegisteredSources),
       activeEligibleSources: numberFrom(sourceCoverage.activeEligibleSources),
       matchedSourcesCount: matchedSources.length || sources.length,
-      skippedSourcesCount: skippedSources.length,
+      skippedSourcesCount: skippedSources.length + skippedResultSourcesCount,
+      policyBoundedSourcesCount,
+      notExecutedByPolicySourcesCount: policyBoundedSourcesCount,
       disabledSourcesCount: disabledSources.length || numberFrom(sourceCoverage.disabledSourcesCount),
       unknownSourceKeys: crawlResult.unknownSourceKeys || [],
       unknownSourceIds: crawlResult.unknownSourceIds || [],

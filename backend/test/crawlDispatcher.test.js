@@ -396,15 +396,22 @@ test('crawlAllSources bounds scoped-only SPAR PDF source before full crawl execu
 
   assert.equal(result.sources.length, 2);
   assert.equal(result.sources[0].sourceKey, 'spar-official-flyer-pdf');
-  assert.equal(result.sources[0].status, 'failed');
+  assert.equal(result.sources[0].status, 'skipped');
+  assert.equal(result.sources[0].skipped, true);
+  assert.equal(result.sources[0].skippedReason, 'full-crawl-scoped-only-source');
+  assert.equal(result.sources[0].error, '');
   assert.equal(result.sources[0].failureStage, 'source-bounded-before-execution');
   assert.equal(result.sources[0].diagnostic.boundedReason, 'full-crawl-scoped-only-source');
+  assert.equal(result.sources[0].diagnostic.notExecutedByPolicy, true);
   assert.equal(result.sources[1].status, 'success');
   assert.equal(sourceCalls.length, 1);
   assert.equal(sourceCalls[0]._id, okSourceId);
   assert.equal(createdJobs.length, 1);
-  assert.equal(createdJobs[0].status, 'failed');
+  assert.equal(createdJobs[0].status, 'skipped');
+  assert.equal(createdJobs[0].stats.errors, 0);
+  assert.deepEqual(createdJobs[0].errorMessages, []);
   assert.equal(createdJobs[0].metadata.boundedSource.failureStage, 'source-bounded-before-execution');
+  assert.equal(createdJobs[0].metadata.boundedSource.notExecutedByPolicy, true);
 });
 
 test('source timeout helper keeps configured source timeout bounded', () => {
