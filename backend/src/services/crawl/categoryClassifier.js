@@ -7,7 +7,7 @@ const CATEGORY_TAXONOMY = [
     subcategories: [
       { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|radieschen|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz|mango|mangos|nektarine|nektarinen|kresse)/] },
       { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast|baguette|kornspitz|weizenweckerl|striezel|brioche|tortilla|wrap)/] },
-      { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|leberkaese|leberkase|bratwurst|cabanossi|kabanossi|extrawurst|frankfurter|kantwurst|wiener|wuerstel|wuerstl|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
+      { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|kotelett|kotelette|kotelettes|karree|leberkaese|leberkase|bratwurst|cabanossi|kabanossi|extrawurst|frankfurter|kantwurst|wiener|wuerstel|wuerstl|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
       { label: 'Milchprodukte', patterns: [/\b(milch|heumilch|vollmilch|buttermilch|butter|teebutter|joghurt|jogurt|topfen|sahne|rahm|quark|skyr|kefir|sauerrahm|schlagobers|obers|pudding|dessertcreme|milchreis)\b/] },
       { label: 'Kaese', patterns: [/\b(kase|kaese|grosslochkaese|grosslochkase|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|bergkase|frischkaese|frischkase|schnittkaese|schnittkase|weinkaese|weinkase|oesterkron|osterkron|feta|ricotta|mascarpone|grana|cheddar|brie)\b/] },
       { label: 'Tiefkuehl- & Fertigprodukte', patterns: [/\b(tiefkuhl|tiefkuehl|pizza|fertig|mikrowelle|tk|frost|lasagne|pommes|eis|eiscreme|fischstaebchen|fischstabchen|fertiggericht|convenience|tiefgekuhlt|tiefgekuehlt)\b/] },
@@ -186,6 +186,11 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(parkside|cutter[-\s]?set|maler[-\s]?starter[-\s]?set)\b/],
     main: 'Technik / Elektronik',
     sub: 'Werkzeug & Akkus',
+  },
+  {
+    patterns: [/\bgrilltaler\b/],
+    main: 'Lebensmittel',
+    sub: 'Kaese',
   },
   {
     patterns: [/\bfelix\b.*(linsen|bohnen|eintopf|konserve|ravioli|sugo|pasta|chili|gulasch)/],

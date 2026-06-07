@@ -193,6 +193,8 @@ test('keeps beta feedback category false positives in their product categories',
     ['Kardinalschnitte', 'Lebensmittel', 'Suesswaren & Knabbereien'],
     ['Hochriegl Baby div. Sorten', 'Getraenke', 'Wein & Sekt'],
     ['PARKSIDE Maler-Starter-Set', 'Technik / Elektronik', 'Werkzeug & Akkus'],
+    ['Grilltaler', 'Lebensmittel', 'Kaese'],
+    ['WIESENTALER Frische Karree-Koteletts mariniert Lidl 350 Gramm', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
   ];
 
   for (const [title, primaryCategory, secondaryCategory] of cases) {

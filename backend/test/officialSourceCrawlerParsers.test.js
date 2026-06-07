@@ -2109,6 +2109,12 @@ test('Lidl flyer API normalizer maps explicit base price but ignores technical q
   const perKg = normalizeLidlFlyerProduct({
     description: 'Spuelmaschinenreiniger: 60 g 41.50 \u20ac/kg',
   });
+  const plainBasePrice = normalizeLidlFlyerProduct({
+    title: 'Butterkaese in Scheiben',
+    brand: 'MILBONA',
+    price: '1.99',
+    description: 'Packung, 500 g, 1 kg = 3.98',
+  });
   const parkside = normalizeLidlFlyerProduct({
     title: 'PARKSIDE Akku-Bohrschrauber, 20 V',
     brand: 'PARKSIDE',
@@ -2134,6 +2140,10 @@ test('Lidl flyer API normalizer maps explicit base price but ignores technical q
   assert.equal(perKg.normalizedUnitPrice.amount, 41.5);
   assert.equal(perKg.normalizedUnitPrice.unit, 'kg');
   assert.equal(perKg.normalizedUnitPrice.comparable, true);
+  assert.equal(plainBasePrice.quantityText, '500 g');
+  assert.equal(plainBasePrice.normalizedUnitPrice.amount, 3.98);
+  assert.equal(plainBasePrice.normalizedUnitPrice.unit, 'kg');
+  assert.equal(plainBasePrice.normalizedUnitPrice.comparable, true);
   assert.equal(parkside.normalizedUnitPrice.comparable, false);
   assert.equal(parkside.normalizedUnitPrice.amount, null);
   assert.equal(shelf.normalizedUnitPrice.comparable, false);

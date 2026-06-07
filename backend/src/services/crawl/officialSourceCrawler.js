@@ -520,6 +520,7 @@ function buildOfficialNormalizedUnitPrice({ priceAmount, quantityText }) {
 function buildUnitPriceFromLabel(label, currentPrice) {
   const text = sanitizeWhitespace(label);
   const slashUnitMatch = text.match(/([\d,.]+)\s*(?:\u20ac|eur|euro)?\s*\/\s*(?:(\d+(?:[.,]\d+)?)\s*)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stuck|stueck|stk|waschgang)\b/i);
+  const explicitBaseUnitMatch = text.match(/(?:^|[\s(])(\d+(?:[.,]\d+)?)\s*(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stuck|stueck|stk|waschgang)\s*(?:=|:)\s*(?:€|eur)?\s*([\d,.]+)/i);
   const match = text.match(/(\d+(?:[.,]\d+)?)\s*(?:per\s+)?(kg|kilogramm|g|gramm|l|liter|ml|milliliter|stuck|stueck|stk|waschgang)\s*(?:=|:)?\s*(?:€|eur)?\s*([\d,.]+)/i);
 
   if (slashUnitMatch) {
@@ -541,6 +542,28 @@ function buildUnitPriceFromLabel(label, currentPrice) {
       unit: comparableUnit || unit,
       comparable: Boolean(amount && ['kg', 'l', 'Stk'].includes(comparableUnit || unit)),
       confidence: amount ? 0.88 : 0,
+    };
+  }
+
+  if (explicitBaseUnitMatch) {
+    const basisQuantity = parseNumericAmount(explicitBaseUnitMatch[1]);
+    let amount = parseNumericAmount(explicitBaseUnitMatch[3]);
+    const unit = normalizeUnitFromText(explicitBaseUnitMatch[2]);
+    const comparableUnit = unit === 'g' ? 'kg' : unit === 'ml' ? 'l' : unit;
+
+    if (amount && basisQuantity && unit === 'g') {
+      amount = Number((amount * (1000 / basisQuantity)).toFixed(2));
+    }
+
+    if (amount && basisQuantity && unit === 'ml') {
+      amount = Number((amount * (1000 / basisQuantity)).toFixed(2));
+    }
+
+    return {
+      amount,
+      unit: comparableUnit || unit,
+      comparable: Boolean(amount && ['kg', 'l', 'Stk'].includes(comparableUnit || unit)),
+      confidence: amount ? 0.9 : 0,
     };
   }
 
