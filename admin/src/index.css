@@ -5636,7 +5636,7 @@ textarea:focus {
     border-radius: 0.85rem;
     box-sizing: border-box;
     max-width: 100%;
-    width: calc(100vw - 2rem);
+    width: calc(100vw - 3rem);
     overflow: visible;
   }
 
@@ -5708,7 +5708,7 @@ textarea:focus {
   }
 
   .empty-state p {
-    font-size: 0.9rem;
+    font-size: 0.86rem;
     line-height: 1.4;
   }
 
