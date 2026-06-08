@@ -16,6 +16,29 @@ import { getRetailerTheme } from '../../utils/retailerColors'
 
 const KEYWORD_SEARCH_LIMIT = 60
 const EXAMPLE_SEARCH_TERMS = ['Milch', 'Bier', 'Waschmittel', 'Zahnpasta', 'Kaffee']
+const EMPTY_SEARCH_FALLBACK_TERMS = ['Milch', 'Bier', 'Kaffee', 'Waschmittel', 'Zahnpasta']
+const EMPTY_SEARCH_SUGGESTION_MAP = [
+  {
+    pattern: /reininghaus|bier|märzen|maerzen|radler|gösser|goesser|puntigamer|stiegl|ottakringer/i,
+    terms: ['bier', 'märzen', 'radler', 'gösser', 'puntigamer'],
+  },
+  {
+    pattern: /milch|joghurt|butter|käse|kaese|schärdinger|schaerdinger/i,
+    terms: ['Milch', 'Butter', 'Käse', 'Joghurt', 'Schärdinger'],
+  },
+  {
+    pattern: /kaffee|espresso|cappuccino|eduscho|jacobs|lavazza/i,
+    terms: ['Kaffee', 'Espresso', 'Eduscho', 'Jacobs', 'Lavazza'],
+  },
+  {
+    pattern: /wasch|reiniger|spül|spuel|putz|finish|persil|ariel/i,
+    terms: ['Waschmittel', 'Reiniger', 'Geschirrspültabs', 'Persil', 'Ariel'],
+  },
+  {
+    pattern: /zahn|zahnpasta|oral|elmex|meridol/i,
+    terms: ['Zahnpasta', 'Elmex', 'Meridol', 'Mundspülung', 'Zahnbürste'],
+  },
+]
 
 const SORT_OPTIONS = {
   best: 'best',
@@ -132,6 +155,20 @@ function normalizeSavingsUnitKey(value) {
     .trim()
     .replace(/\s+/g, ' ')
     .toLocaleLowerCase('de-AT')
+}
+
+function getEmptySearchSuggestions(query) {
+  const normalizedQuery = String(query || '').trim()
+  const matchedGroup = EMPTY_SEARCH_SUGGESTION_MAP.find((group) => group.pattern.test(normalizedQuery))
+  const terms = matchedGroup?.terms || EMPTY_SEARCH_FALLBACK_TERMS
+  const seen = new Set()
+
+  return terms.filter((term) => {
+    const key = term.toLocaleLowerCase('de-AT')
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function getOfferSavingsUnit(offer) {
@@ -305,6 +342,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
   const needsMarketSelection = marketFilterEnabled && selectedRetailerKeys.length === 0
   const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
+  const emptySearchSuggestions = useMemo(() => getEmptySearchSuggestions(submittedQuery), [submittedQuery])
 
   useEffect(() => {
     if (!searchRequest?.nonce) return
@@ -780,8 +818,18 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
               </>
             ) : needsMarketSelection ? null : (
               <div className="empty-state">
-                <h3>Aktuell kein passendes Angebot gefunden.</h3>
-                <p>Wir zeigen lieber keine Treffer als unsichere Angebote. Suche allgemeiner oder prüfe es später erneut.</p>
+                <h3>Dazu finden wir gerade kein sicheres Angebot.</h3>
+                <p>
+                  Versuche es mit einem allgemeineren Begriff, einer Marke oder einer Produktgruppe. Wir zeigen lieber weniger
+                  Treffer als unsichere Angebote.
+                </p>
+                <div className="empty-state__suggestions" aria-label="Alternative Suchvorschläge">
+                  {emptySearchSuggestions.map((term) => (
+                    <button type="button" key={term} onClick={() => handleExampleSearch(term)}>
+                      {term}
+                    </button>
+                  ))}
+                </div>
                 <button type="button" className="primary-action-button" onClick={() => setQueryInput(submittedQuery)}>
                   Suche ändern
                 </button>

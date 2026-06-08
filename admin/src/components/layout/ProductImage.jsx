@@ -31,14 +31,16 @@ function hasOfficialSourceSignal(offer) {
 function getPlaceholderCopy(offer) {
   if (hasOfficialSourceSignal(offer)) {
     return {
-      label: 'Offizielles Angebot',
-      detail: 'Bild folgt nicht immer im Flyer',
+      badge: 'Offizielle Quelle',
+      label: 'Angebot ohne Bild',
+      detail: 'Preis und Details stammen aus der Quelle.',
     }
   }
 
   return {
-    label: 'Bild derzeit nicht verfügbar',
-    detail: 'Preis und Bedingungen prüfen',
+    badge: 'kaufklug',
+    label: 'Angebot ohne Bild',
+    detail: 'Preis und Bedingungen bitte prüfen.',
   }
 }
 
@@ -62,6 +64,7 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
       >
         <span className="product-image__placeholder-mark" aria-hidden="true" />
         <span className="product-image__placeholder-copy">
+          <small className="product-image__placeholder-badge">{placeholderCopy.badge}</small>
           <strong>{placeholderCopy.label}</strong>
           <small>{placeholderCopy.detail}</small>
         </span>

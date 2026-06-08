@@ -148,7 +148,7 @@ function SearchLandingHero() {
       ['pagro', 'PAGRO'],
     ],
   ]
-  const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung']
+  const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung', 'Pfeilschnell']
 
   return (
     <>
@@ -205,7 +205,9 @@ function SearchLandingHero() {
           </h1>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (
-              <span key={item}>{item}</span>
+              <span className={item === 'Pfeilschnell' ? 'hero-trust-row__item--speed' : ''} key={item}>
+                {item}
+              </span>
             ))}
           </div>
         </div>
