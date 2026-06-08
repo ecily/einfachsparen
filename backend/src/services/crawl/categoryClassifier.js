@@ -5,11 +5,11 @@ const CATEGORY_TAXONOMY = [
     main: 'Lebensmittel',
     patterns: [/(lebensmittel|essen|nahrung|bio|genuss|feinkost|frisch|vegetarisch|vegan|backshop|kuehlregal|kuhlregal)/],
     subcategories: [
-      { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|radieschen|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz|mango|mangos|nektarine|nektarinen|kresse)/] },
+      { label: 'Obst & Gemuese', patterns: [/(obst|gemuse|gemuese|salat|kartoffel|erdapfel|erdapfel|zwiebel|tomate|paradeiser|gurke|paprika|karotte|mohre|moehre|radieschen|apfel|birne|banane|orange|mandarine|zitrone|beere|erdbeere|heidelbeere|traube|avocado|zucchini|kuerbis|kurbis|champignon|pilz|mango|mangos|nektarine|nektarinen|marille|marillen|kresse)/] },
       { label: 'Brot & Gebaeck', patterns: [/(brot|gebaeck|geback|backwaren|semmel|weckerl|croissant|toast|baguette|kornspitz|weizenweckerl|striezel|brioche|tortilla|wrap)/] },
       { label: 'Fleisch, Wurst & Fisch', patterns: [/(fleisch|wurst|schinken|salami|speck|fisch|lachs|thunfisch|geflugel|gefluegel|huhn|hendl|pute|truthahn|rind|schwein|faschiert|hackfleisch|kotelett|kotelette|kotelettes|karree|leberkaese|leberkase|bratwurst|cabanossi|kabanossi|extrawurst|frankfurter|kantwurst|wiener|wuerstel|wuerstl|kaesekrainer|kasekrainer|surimi|garnelen|shrimp)/] },
       { label: 'Milchprodukte', patterns: [/\b(milch|heumilch|vollmilch|buttermilch|butter|teebutter|joghurt|jogurt|topfen|sahne|rahm|quark|skyr|kefir|sauerrahm|schlagobers|obers|pudding|dessertcreme|milchreis)\b/] },
-      { label: 'Kaese', patterns: [/\b(kase|kaese|grosslochkaese|grosslochkase|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|bergkase|frischkaese|frischkase|schnittkaese|schnittkase|weinkaese|weinkase|oesterkron|osterkron|feta|ricotta|mascarpone|grana|cheddar|brie)\b/] },
+      { label: 'Kaese', patterns: [/\b(kase|kaese|butterkase|butterkaese|grosslochkaese|grosslochkase|mozzarella|emmentaler|gouda|camembert|parmesan|bergkaese|bergkase|frischkaese|frischkase|schnittkaese|schnittkase|weinkaese|weinkase|oesterkron|osterkron|feta|ricotta|mascarpone|grana|cheddar|brie)\b/] },
       { label: 'Tiefkuehl- & Fertigprodukte', patterns: [/\b(tiefkuhl|tiefkuehl|pizza|fertig|mikrowelle|tk|frost|lasagne|pommes|eis|eiscreme|fischstaebchen|fischstabchen|fertiggericht|convenience|tiefgekuhlt|tiefgekuehlt)\b/] },
       { label: 'Suesswaren & Knabbereien', patterns: [/\b(schokolade|susswaren|suesswaren|fruchtgummi|gummibaer|gummibaeren|knabberei|chips|flips|brotchips|kekse|butterkeks|bonbon|zuckerl|praline|pralinen|nougat|snack|nusse|nuesse|erdnuss|erdnusse|erdnuesse|mandel|cashew|waffel|popcorn|soletti|cracker|riegel|muesliriegel|muesli riegel|proteinriegel)\b/] },
       { label: 'Pasta, Reis & Konserven', patterns: [/\b(nudel|nudeln|pasta|spaghetti|fusilli|penne|reis|risotto|konserve|bohnen|linsen|kichererbse|passata|polpa|sugo|dosentomaten|mais|erbsen|thunfischdose|ravioli|gnocchi|couscous|bulgur)\b/] },
@@ -163,7 +163,22 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Tiefkuehl- & Fertigprodukte',
   },
   {
-    patterns: [/\b(liptauer|cremoso\s+di\s+bufala|parmigiano\s+reggiano)\b/],
+    patterns: [/\b(pizz\s*ah|picco\s+belli|flammkuchen|ristorante)\b/],
+    main: 'Lebensmittel',
+    sub: 'Tiefkuehl- & Fertigprodukte',
+  },
+  {
+    patterns: [/\bpotato\s+wedges\b/],
+    main: 'Lebensmittel',
+    sub: 'Tiefkuehl- & Fertigprodukte',
+  },
+  {
+    patterns: [/\bbackbox\b.*\b(laugenwuchtel|chili\s+cheese\s+hot\s+dog|hot\s+dog)\b/],
+    main: 'Lebensmittel',
+    sub: 'Brot & Gebaeck',
+  },
+  {
+    patterns: [/\b(liptauer|cremoso\s+di\s+bufala|parmigiano\s+reggiano|butterkase|butterkaese)\b/],
     main: 'Lebensmittel',
     sub: 'Kaese',
   },

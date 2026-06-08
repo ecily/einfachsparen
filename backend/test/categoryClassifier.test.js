@@ -221,6 +221,44 @@ test('classifies weighted Lidl Griller offers as food without reclassifying gril
   assert.equal(grillDevice.secondaryCategory, 'Kuechengeraete');
 });
 
+test('keeps HOFER and Lidl feedback food anchors out of household and electronics categories', () => {
+  const cases = [
+    ["PIZZ'AH Picco Belli, Flammkuchen", 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
+    ['Potato Wedges, Mediterran', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
+    ['Potato Wedges, Classic', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
+    ['BACKBOX Laugenwuchtel', 'Lebensmittel', 'Brot & Gebaeck'],
+    ['BACKBOX Chili Cheese Hot Dog', 'Lebensmittel', 'Brot & Gebaeck'],
+    ['DR. OETKER Ristorante 2er, 710 g/640 g', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
+    ['Marillen', 'Lebensmittel', 'Obst & Gemuese'],
+    ['Butterkaese in Scheiben', 'Lebensmittel', 'Kaese'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+    assert.notEqual(decision.primaryCategory, 'Haushalt', title);
+    assert.notEqual(decision.primaryCategory, 'Technik / Elektronik', title);
+  }
+});
+
+test('does not overcorrect real household and kitchen devices to food', () => {
+  const cases = [
+    ['Kuechenmesser Set', 'Haushalt', 'Kuechenhelfer'],
+    ['Frischhaltefolie 3 Rollen', 'Haushalt', 'Aufbewahrung & Folien'],
+    ['Aufbewahrungsbox Kueche', 'Haushalt', 'Kuechenhelfer'],
+    ['Kontaktgrill', 'Technik / Elektronik', 'Kuechengeraete'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+  }
+});
+
 test('does not classify generic non-fragrance gift sets as cosmetics', () => {
   const cases = [
     'Bottled Geschenkset',
