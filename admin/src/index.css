@@ -5582,7 +5582,7 @@ textarea:focus {
     border-radius: 0.85rem;
     box-sizing: border-box;
     max-width: 100%;
-    width: calc(100vw - 1rem);
+    width: calc(100vw - 2rem);
     overflow: visible;
   }
 
