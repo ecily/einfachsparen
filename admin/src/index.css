@@ -2365,7 +2365,7 @@ a {
 
 .user-card__decision {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.38rem;
   justify-items: start;
   min-width: 0;
   max-width: 100%;
@@ -2374,9 +2374,28 @@ a {
 .user-card__conditions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.32rem;
   max-width: 100%;
   min-width: 0;
+  padding: 0.34rem 0.4rem;
+  border: 1px solid rgba(74, 117, 91, 0.18);
+  border-radius: 0.82rem;
+  background: rgba(245, 251, 247, 0.76);
+}
+
+.user-card__conditions-label {
+  flex: 0 0 auto;
+  min-height: 1.42rem;
+  padding: 0.22rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(74, 117, 91, 0.14);
+  color: var(--kk-condition-text-strong);
+  font-size: 0.72rem;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 1.25;
 }
 
 .user-card__condition-chip {
@@ -2394,6 +2413,13 @@ a {
   overflow-wrap: anywhere;
 }
 
+.user-card__condition-chip--quantity {
+  background: var(--kk-condition-bg);
+  border-color: var(--kk-condition-border);
+  color: var(--kk-condition-text-strong);
+  box-shadow: inset 3px 0 0 rgba(74, 117, 91, 0.34);
+}
+
 .user-card__condition-text {
   flex: 1 1 100%;
   max-width: 46rem;
@@ -2407,6 +2433,11 @@ a {
   font-weight: 790;
   line-height: 1.38;
   overflow-wrap: anywhere;
+}
+
+.user-card__condition-text--quantity {
+  background: var(--kk-condition-bg);
+  box-shadow: inset 3px 0 0 rgba(74, 117, 91, 0.34);
 }
 
 .user-card__condition-chip--more {
@@ -5927,6 +5958,13 @@ textarea:focus {
 
   .user-card__conditions {
     gap: 0.3rem;
+    padding: 0.28rem 0.32rem;
+  }
+
+  .user-card__conditions-label {
+    min-height: 1.34rem;
+    padding: 0.18rem 0.34rem;
+    font-size: 0.68rem;
   }
 
   .user-card__condition-chip {
@@ -6649,6 +6687,13 @@ textarea:focus {
 
   .user-card__conditions {
     gap: 0.22rem;
+    padding: 0.24rem 0.28rem;
+  }
+
+  .user-card__conditions-label {
+    min-height: 1.24rem;
+    padding: 0.16rem 0.3rem;
+    font-size: 0.64rem;
   }
 
   .user-card__condition-chip {

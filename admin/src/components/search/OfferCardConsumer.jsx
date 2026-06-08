@@ -181,6 +181,12 @@ function getConditionDisplayText(value) {
   return text
 }
 
+function isQuantityCondition(value) {
+  return /^(ab|bei kauf von|im|in der|in den)\s+\d+|\d+\s*(st[üu]ck|packungen|flaschen|dosen|gl[aä]ser|kg|g|l|ml)/i.test(
+    String(value || '')
+  )
+}
+
 function getVisibleConditionInfo(rawConditions) {
   const shortConditions = []
   const detailedConditions = []
@@ -314,13 +320,23 @@ export function OfferCardConsumer({
 
           {shortConditions.length > 0 || detailedConditions.length > 0 ? (
             <div className="user-card__conditions" aria-label={`Wichtige Angebotsbedingungen: ${fullConditionText}`}>
+              <span className="user-card__conditions-label" aria-hidden="true">Bedingung</span>
               {shortConditions.map((condition) => (
-                <span className="user-card__condition-chip" key={condition} title={condition} aria-label={`Bedingung: ${condition}`}>
+                <span
+                  className={`user-card__condition-chip ${isQuantityCondition(condition) ? 'user-card__condition-chip--quantity' : ''}`}
+                  key={condition}
+                  title={condition}
+                  aria-label={`Bedingung: ${condition}`}
+                >
                   {condition}
                 </span>
               ))}
               {detailedConditions.map((condition) => (
-                <p className="user-card__condition-text" key={condition} title={condition}>
+                <p
+                  className={`user-card__condition-text ${isQuantityCondition(condition) ? 'user-card__condition-text--quantity' : ''}`}
+                  key={condition}
+                  title={condition}
+                >
                   {condition}
                 </p>
               ))}
