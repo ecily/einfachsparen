@@ -105,7 +105,7 @@ function BetaNoticeDisclosure({ onNavigate }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className={`search-landing-hero__beta-notice${isOpen ? ' search-landing-hero__beta-notice--open' : ''}`}>
+    <section className={`home-beta-notice${isOpen ? ' home-beta-notice--open' : ''}`} aria-label="Beta-Hinweis">
       <button
         type="button"
         className="beta-notice-trigger beta-notice-trigger--hero"
@@ -120,11 +120,11 @@ function BetaNoticeDisclosure({ onNavigate }) {
         Feedback senden
       </button>
       {isOpen ? <BetaInfoPanel id="beta-info-hero" className="beta-info-panel--hero" onClose={() => setIsOpen(false)} /> : null}
-    </div>
+    </section>
   )
 }
 
-function SearchLandingHero({ onNavigate }) {
+function SearchLandingHero() {
   const heroRetailerGroups = [
     [
       ['billa', 'BILLA'],
@@ -208,7 +208,6 @@ function SearchLandingHero({ onNavigate }) {
               <span key={item}>{item}</span>
             ))}
           </div>
-          <BetaNoticeDisclosure onNavigate={onNavigate} />
         </div>
       </section>
     </>
@@ -261,20 +260,6 @@ function DiscoverOffersSection() {
           </a>
         ))}
       </div>
-    </section>
-  )
-}
-
-function HomeBetaFeedbackSection({ onNavigate }) {
-  return (
-    <section className="panel home-info-section home-beta-section" aria-labelledby="home-beta-title">
-      <div className="home-section-heading">
-        <h2 id="home-beta-title">kaufklug ist in Beta.</h2>
-        <p>Dein Feedback hilft, Angebote und Datenqualität weiter zu verbessern.</p>
-      </div>
-      <button type="button" className="home-beta-section__cta" onClick={() => onNavigate('feedback')}>
-        Feedback senden
-      </button>
     </section>
   )
 }
@@ -1013,7 +998,8 @@ function App() {
         </div>
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
-          <SearchLandingHero onNavigate={handleNavigate} />
+          <BetaNoticeDisclosure onNavigate={handleNavigate} />
+          <SearchLandingHero />
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
@@ -1023,7 +1009,6 @@ function App() {
           />
           <HowItWorksSection />
           <DiscoverOffersSection />
-          <HomeBetaFeedbackSection onNavigate={handleNavigate} />
           <TrustAndFaqSection />
         </div>
       ) : activeSeoLandingPage ? (
