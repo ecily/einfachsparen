@@ -5579,7 +5579,8 @@ textarea:focus {
     display: grid;
     gap: 0.24rem;
     border-radius: 0.85rem;
-    max-width: 100%;
+    box-sizing: border-box;
+    max-width: calc(100vw - 1rem);
     width: 100%;
     overflow: visible;
   }
@@ -5588,12 +5589,15 @@ textarea:focus {
     display: grid;
     gap: 0.18rem 0.36rem;
     padding: 0.34rem 0.48rem;
+    box-sizing: border-box;
+    width: 100%;
   }
 
   .beta-notice-trigger p {
     display: block;
     max-width: 100%;
     min-width: 0;
+    font-size: 0.68rem;
     white-space: normal;
   }
 
@@ -5608,10 +5612,17 @@ textarea:focus {
   }
 
   .keyword-search-examples {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    justify-content: start;
     width: 100%;
     gap: 0.26rem;
     font-size: 0.75rem;
     overflow: visible;
+  }
+
+  .keyword-search-examples span {
+    grid-column: 1 / -1;
   }
 
   .keyword-search-examples button {
