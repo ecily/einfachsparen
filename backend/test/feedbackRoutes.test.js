@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const express = require('express');
 const { createFeedbackRouter } = require('../src/routes/feedback.routes');
-const { sendBetaFeedbackEmail } = require('../src/services/feedbackEmailService');
+const {
+  DEFAULT_FEEDBACK_EMAIL_TO,
+  sendBetaFeedbackEmail,
+} = require('../src/services/feedbackEmailService');
 
 function requestJson(app, { body = {}, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -130,6 +133,7 @@ test('POST /api/feedback stores valid beta feedback', async () => {
   assert.equal(response.statusCode, 201);
   assert.equal(response.body.ok, true);
   assert.equal(response.body.emailDeliveryStatus, 'sent');
+  assert.equal(response.body.emailDeliveryConfigured, true);
   assert.equal(created.length, 1);
   assert.equal(created[0].message, validFeedback().message);
   assert.equal(created[0].sourcePage, '/feedback');
@@ -151,6 +155,7 @@ test('POST /api/feedback succeeds when email is not configured', async () => {
   assert.equal(response.statusCode, 201);
   assert.equal(response.body.ok, true);
   assert.equal(response.body.emailDeliveryStatus, 'not_configured');
+  assert.equal(response.body.emailDeliveryConfigured, false);
   assert.equal(created.length, 1);
   assert.equal(updates[0].update.emailDeliveryStatus, 'not_configured');
 });
@@ -170,6 +175,28 @@ test('POST /api/feedback succeeds and records failed email delivery', async () =
   assert.equal(response.body.emailDeliveryStatus, 'failed');
   assert.equal(updates[0].update.emailDeliveryStatus, 'failed');
   assert.equal(updates[0].update.emailDeliveryError, 'smtp unavailable');
+});
+
+test('POST /api/feedback stores feedback even when email sender throws', async () => {
+  const created = [];
+  const updates = [];
+  const app = createTestApp({
+    created,
+    updates,
+    emailSender: async () => {
+      throw new Error('smtp crashed');
+    },
+  });
+  const response = await requestJson(app, {
+    body: validFeedback(),
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.emailDeliveryStatus, 'failed');
+  assert.equal(created.length, 1);
+  assert.equal(updates[0].update.emailDeliveryStatus, 'failed');
+  assert.equal(updates[0].update.emailDeliveryError, 'smtp crashed');
 });
 
 test('POST /api/feedback neutralizes honeypot submissions without storing', async () => {
@@ -219,4 +246,45 @@ test('sendBetaFeedbackEmail reports not_configured without SMTP env', async () =
   });
 
   assert.equal(result.status, 'not_configured');
+  assert.equal(result.to, DEFAULT_FEEDBACK_EMAIL_TO);
+  assert.equal(result.configured, false);
+  assert.match(result.error, /SMTP_HOST/);
+});
+
+test('sendBetaFeedbackEmail uses andreas feedback recipient fallback when SMTP is configured', async () => {
+  let sentMail = null;
+  const result = await sendBetaFeedbackEmail(validFeedback(), {
+    envConfig: {
+      FEEDBACK_EMAIL_TO: '',
+      SMTP_HOST: 'smtp.example.test',
+      SMTP_PORT: 587,
+      SMTP_FROM: 'noreply@kaufklug.at',
+    },
+    smtpSender: async (mail) => {
+      sentMail = mail;
+    },
+  });
+
+  assert.equal(result.status, 'sent');
+  assert.equal(result.to, DEFAULT_FEEDBACK_EMAIL_TO);
+  assert.equal(sentMail.to, DEFAULT_FEEDBACK_EMAIL_TO);
+});
+
+test('sendBetaFeedbackEmail honors FEEDBACK_EMAIL_TO override when SMTP is configured', async () => {
+  let sentMail = null;
+  const result = await sendBetaFeedbackEmail(validFeedback(), {
+    envConfig: {
+      FEEDBACK_EMAIL_TO: 'feedback@example.test',
+      SMTP_HOST: 'smtp.example.test',
+      SMTP_PORT: 587,
+      SMTP_FROM: 'noreply@kaufklug.at',
+    },
+    smtpSender: async (mail) => {
+      sentMail = mail;
+    },
+  });
+
+  assert.equal(result.status, 'sent');
+  assert.equal(result.to, 'feedback@example.test');
+  assert.equal(sentMail.to, 'feedback@example.test');
 });

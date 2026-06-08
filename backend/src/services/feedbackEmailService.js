@@ -4,8 +4,25 @@ const env = require('../config/env');
 
 const DEFAULT_FEEDBACK_EMAIL_TO = 'andreas.franz@ecily.com';
 
+function getFeedbackEmailRecipient(envConfig = env) {
+  return String(envConfig.FEEDBACK_EMAIL_TO || DEFAULT_FEEDBACK_EMAIL_TO).trim() || DEFAULT_FEEDBACK_EMAIL_TO;
+}
+
+function getSmtpConfigStatus(envConfig = env) {
+  const missing = [];
+
+  if (!envConfig.SMTP_HOST) missing.push('SMTP_HOST');
+  if (!envConfig.SMTP_PORT) missing.push('SMTP_PORT');
+  if (!envConfig.SMTP_FROM) missing.push('SMTP_FROM');
+
+  return {
+    configured: missing.length === 0,
+    missing,
+  };
+}
+
 function hasSmtpConfig(envConfig = env) {
-  return Boolean(envConfig.SMTP_HOST && envConfig.SMTP_PORT && envConfig.SMTP_FROM);
+  return getSmtpConfigStatus(envConfig).configured;
 }
 
 function sanitizeHeader(value) {
@@ -148,13 +165,13 @@ function buildMimeMessage({ from, to, subject, text }) {
   ].join('\r\n');
 }
 
-async function sendSmtpMail({ envConfig = env, subject, text }) {
+async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) {
   const host = envConfig.SMTP_HOST;
   const port = Number(envConfig.SMTP_PORT);
   const secure = envConfig.SMTP_SECURE === true || port === 465;
   const requireStartTls = envConfig.SMTP_REQUIRE_TLS === true || (!secure && port === 587);
   const from = envConfig.SMTP_FROM;
-  const to = envConfig.FEEDBACK_EMAIL_TO || DEFAULT_FEEDBACK_EMAIL_TO;
+  const to = explicitTo || getFeedbackEmailRecipient(envConfig);
   let socket = await connectSocket({ host, port, secure });
 
   try {
@@ -184,16 +201,22 @@ async function sendSmtpMail({ envConfig = env, subject, text }) {
 }
 
 async function sendBetaFeedbackEmail(feedback, { envConfig = env, smtpSender = sendSmtpMail } = {}) {
-  if (!hasSmtpConfig(envConfig)) {
+  const to = getFeedbackEmailRecipient(envConfig);
+  const configStatus = getSmtpConfigStatus(envConfig);
+
+  if (!configStatus.configured) {
     return {
       status: 'not_configured',
-      error: null,
+      error: `missing ${configStatus.missing.join(', ')}`,
+      to,
+      configured: false,
     };
   }
 
   try {
     await smtpSender({
       envConfig,
+      to,
       subject: 'Neues kaufklug Beta-Feedback',
       text: buildBetaFeedbackEmailText(feedback),
     });
@@ -201,11 +224,15 @@ async function sendBetaFeedbackEmail(feedback, { envConfig = env, smtpSender = s
     return {
       status: 'sent',
       error: null,
+      to,
+      configured: true,
     };
   } catch (error) {
     return {
       status: 'failed',
       error: shortError(error),
+      to,
+      configured: true,
     };
   }
 }
@@ -213,6 +240,8 @@ async function sendBetaFeedbackEmail(feedback, { envConfig = env, smtpSender = s
 module.exports = {
   DEFAULT_FEEDBACK_EMAIL_TO,
   buildBetaFeedbackEmailText,
+  getFeedbackEmailRecipient,
+  getSmtpConfigStatus,
   hasSmtpConfig,
   sendBetaFeedbackEmail,
   sendSmtpMail,

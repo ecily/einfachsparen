@@ -196,6 +196,21 @@ async function updateEmailDeliveryStatus(BetaFeedbackModel, feedback, delivery) 
   Object.assign(feedback, update);
 }
 
+async function sendFeedbackEmailSafely(emailSender, feedback) {
+  try {
+    const delivery = await emailSender(feedback);
+
+    return delivery && typeof delivery === 'object'
+      ? delivery
+      : { status: 'failed', error: 'email sender returned invalid result' };
+  } catch (error) {
+    return {
+      status: 'failed',
+      error: String(error?.message || error || 'email delivery failed').replace(/\s+/g, ' ').slice(0, 240),
+    };
+  }
+}
+
 function createFeedbackRouter({
   AdminFeedbackModel = AdminFeedback,
   BetaFeedbackModel = BetaFeedback,
@@ -233,7 +248,7 @@ function createFeedbackRouter({
         emailDeliveryStatus: 'pending',
         emailDeliveryError: null,
       });
-      const delivery = await emailSender(feedback);
+      const delivery = await sendFeedbackEmailSafely(emailSender, feedback);
 
       try {
         await updateEmailDeliveryStatus(BetaFeedbackModel, feedback, delivery);
@@ -244,8 +259,28 @@ function createFeedbackRouter({
         });
       }
 
+      const emailLogPayload = {
+        feedbackId: String(feedback?._id || feedback?.id || ''),
+        emailDeliveryStatus: delivery.status,
+        recipient: delivery.to || '',
+      };
+
+      if (delivery.status === 'sent') {
+        logger.info('Beta feedback email sent', emailLogPayload);
+      } else if (delivery.status === 'not_configured') {
+        logger.warn('Beta feedback email not configured', {
+          ...emailLogPayload,
+          error: delivery.error || 'SMTP config missing',
+        });
+      } else {
+        logger.error('Beta feedback email failed', {
+          ...emailLogPayload,
+          error: delivery.error || 'email delivery failed',
+        });
+      }
+
       if (delivery.status !== 'sent') {
-        logger.info('Beta feedback email not sent', {
+        logger.info('Beta feedback stored without email delivery', {
           feedbackId: String(feedback?._id || feedback?.id || ''),
           emailDeliveryStatus: delivery.status,
         });
@@ -255,6 +290,7 @@ function createFeedbackRouter({
         ok: true,
         feedbackId: String(feedback._id || feedback.id || ''),
         emailDeliveryStatus: delivery.status,
+        emailDeliveryConfigured: delivery.status !== 'not_configured',
         message: 'Danke. Dein Feedback wurde gesendet und hilft uns, kaufklug gezielt zu verbessern.',
       });
     } catch (error) {
