@@ -134,6 +134,7 @@ test('POST /api/feedback stores valid beta feedback', async () => {
   assert.equal(response.body.ok, true);
   assert.equal(response.body.emailDeliveryStatus, 'sent');
   assert.equal(response.body.emailDeliveryConfigured, true);
+  assert.equal(response.body.emailDeliveryDiagnostic, null);
   assert.equal(created.length, 1);
   assert.equal(created[0].message, validFeedback().message);
   assert.equal(created[0].sourcePage, '/feedback');
@@ -156,6 +157,7 @@ test('POST /api/feedback succeeds when email is not configured', async () => {
   assert.equal(response.body.ok, true);
   assert.equal(response.body.emailDeliveryStatus, 'not_configured');
   assert.equal(response.body.emailDeliveryConfigured, false);
+  assert.match(response.body.emailDeliveryDiagnostic, /not_configured/);
   assert.equal(created.length, 1);
   assert.equal(updates[0].update.emailDeliveryStatus, 'not_configured');
 });
@@ -173,6 +175,7 @@ test('POST /api/feedback succeeds and records failed email delivery', async () =
   assert.equal(response.statusCode, 201);
   assert.equal(response.body.ok, true);
   assert.equal(response.body.emailDeliveryStatus, 'failed');
+  assert.equal(response.body.emailDeliveryDiagnostic, 'smtp unavailable');
   assert.equal(updates[0].update.emailDeliveryStatus, 'failed');
   assert.equal(updates[0].update.emailDeliveryError, 'smtp unavailable');
 });

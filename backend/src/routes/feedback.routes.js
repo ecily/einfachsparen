@@ -291,6 +291,7 @@ function createFeedbackRouter({
         feedbackId: String(feedback._id || feedback.id || ''),
         emailDeliveryStatus: delivery.status,
         emailDeliveryConfigured: delivery.status !== 'not_configured',
+        emailDeliveryDiagnostic: delivery.status === 'sent' ? null : (delivery.error || delivery.status),
         message: 'Danke. Dein Feedback wurde gesendet und hilft uns, kaufklug gezielt zu verbessern.',
       });
     } catch (error) {
