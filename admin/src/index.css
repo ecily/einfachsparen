@@ -1020,8 +1020,7 @@ a {
   width: min(100%, 64rem);
   max-width: none;
   margin-top: 0.08rem;
-  padding-top: 0.28rem;
-  border-top: 1px solid rgba(94, 122, 150, 0.12);
+  padding-top: 0.04rem;
 }
 
 .hero-market-badge {
@@ -5498,14 +5497,22 @@ textarea:focus {
     flex-wrap: wrap;
     gap: 0.2rem 0.22rem;
     overflow: visible;
-    margin-top: 0.02rem;
-    padding-top: 0.22rem;
+    margin-top: 0;
+    padding-top: 0.04rem;
     padding-bottom: 0;
     width: 100%;
   }
 
   .hero-market-separator {
-    display: none;
+    display: inline-flex;
+    width: 0.42rem;
+    min-height: 1.4rem;
+    margin: 0 0.02rem;
+  }
+
+  .hero-market-separator::before {
+    width: 1px;
+    height: 1.16rem;
   }
 
   .search-landing-hero {

@@ -37,7 +37,6 @@ import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } 
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 import { getSeoLandingPageByRouteId, SEO_LANDING_PAGE_PREFIX } from './config/seoLandingPages'
 import { getRetailerTheme } from './utils/retailerColors'
-import { shouldSeparateRetailerGroups } from './utils/retailers'
 
 const BETA_TEST_NOTICE =
   'Beta: Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Fehler kannst du direkt beim Angebot melden.'
@@ -126,18 +125,28 @@ function BetaNoticeDisclosure({ onNavigate }) {
 }
 
 function SearchLandingHero({ onNavigate }) {
-  const heroRetailers = [
-    ['billa', 'BILLA'],
-    ['billa-plus', 'BILLA Plus'],
-    ['spar', 'SPAR'],
-    ['eurospar', 'EUROSPAR'],
-    ['interspar', 'INTERSPAR'],
-    ['hofer', 'HOFER'],
-    ['lidl', 'Lidl'],
-    ['dm', 'dm'],
-    ['bipa', 'BIPA'],
-    ['pagro', 'PAGRO'],
-    ['penny', 'PENNY'],
+  const heroRetailerGroups = [
+    [
+      ['billa', 'BILLA'],
+      ['billa-plus', 'BILLA Plus'],
+    ],
+    [
+      ['spar', 'SPAR'],
+      ['eurospar', 'EUROSPAR'],
+      ['interspar', 'INTERSPAR'],
+    ],
+    [
+      ['hofer', 'HOFER'],
+      ['lidl', 'Lidl'],
+      ['penny', 'PENNY'],
+    ],
+    [
+      ['dm', 'dm'],
+      ['bipa', 'BIPA'],
+    ],
+    [
+      ['pagro', 'PAGRO'],
+    ],
   ]
   const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung']
 
@@ -157,8 +166,33 @@ function SearchLandingHero({ onNavigate }) {
         <div className="search-landing-hero__usp">
           <p className="eyebrow hero-consumer__eyebrow">
             <span className="hero__country-badge" aria-hidden="true" />
-            <span>Angebote aus Flugblättern. Endlich durchsuchbar.</span>
+            <span>Angebote aus Flugblättern. Endlich einfach durchsuchbar.</span>
           </p>
+          <div className="hero-market-strip" aria-label="Marktbeispiele">
+            {heroRetailerGroups.map((group, groupIndex) => (
+              <Fragment key={group.map(([key]) => key).join('-')}>
+                {groupIndex > 0 ? <span className="hero-market-separator" aria-hidden="true" /> : null}
+                {group.map(([key, label]) => {
+                  const theme = getRetailerTheme(key)
+
+                  return (
+                    <span
+                      key={key}
+                      className="hero-market-badge"
+                      style={{
+                        '--retailer-color': theme.color,
+                        '--retailer-text-color': theme.textColor,
+                        '--retailer-border-color': theme.borderColor,
+                        '--retailer-soft-color': theme.softColor,
+                      }}
+                    >
+                      {label}
+                    </span>
+                  )
+                })}
+              </Fragment>
+            ))}
+          </div>
           <h1
             style={{
               fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
@@ -173,30 +207,6 @@ function SearchLandingHero({ onNavigate }) {
             {trustItems.map((item) => (
               <span key={item}>{item}</span>
             ))}
-          </div>
-          <div className="hero-market-strip" aria-label="Marktbeispiele">
-            {heroRetailers.map(([key, label], index) => {
-              const theme = getRetailerTheme(key)
-              const nextRetailer = heroRetailers[index + 1]?.[0]
-              const showGroupSeparator = shouldSeparateRetailerGroups(key, nextRetailer)
-
-              return (
-                <Fragment key={key}>
-                  <span
-                    className="hero-market-badge"
-                    style={{
-                      '--retailer-color': theme.color,
-                      '--retailer-text-color': theme.textColor,
-                      '--retailer-border-color': theme.borderColor,
-                      '--retailer-soft-color': theme.softColor,
-                    }}
-                  >
-                    {label}
-                  </span>
-                  {showGroupSeparator ? <span className="hero-market-separator" aria-hidden="true" /> : null}
-                </Fragment>
-              )
-            })}
           </div>
           <BetaNoticeDisclosure onNavigate={onNavigate} />
         </div>
