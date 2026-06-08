@@ -5578,10 +5578,11 @@ textarea:focus {
   .home-beta-notice {
     display: grid;
     gap: 0.24rem;
+    justify-self: stretch;
     border-radius: 0.85rem;
     box-sizing: border-box;
-    max-width: calc(100vw - 1rem);
-    width: 100%;
+    max-width: 100%;
+    width: calc(100vw - 1rem);
     overflow: visible;
   }
 
@@ -5590,6 +5591,8 @@ textarea:focus {
     gap: 0.18rem 0.36rem;
     padding: 0.34rem 0.48rem;
     box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
     width: 100%;
   }
 
