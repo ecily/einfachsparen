@@ -5,10 +5,6 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/einkaufsliste</loc>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://www.kaufklug.at/angebote</loc>
     <priority>0.8</priority>
   </url>

@@ -169,19 +169,23 @@ export function updateSeoMetadata(activePage) {
   if (typeof document === 'undefined') return
 
   const meta = getPageMeta(activePage)
-  const canonicalUrl = `${SITE_URL}${meta.path}`
+  const currentPathname = String(window.location.pathname || '').toLowerCase().replace(/\/+$/, '') || '/'
+  const isHomePath = currentPathname === '/'
+  const isUnknownSeoOfferPath = /^\/angebote\/[^/]+$/.test(currentPathname)
+    && !getSeoLandingPageByPath(currentPathname)
+  const canonicalPath = isHomePath ? '/' : meta.path
+  const canonicalUrl = `${SITE_URL}${canonicalPath}`
   const isInternalPage = activePage === 'diagnostics'
   const isSharedListPage = activePage === 'shared-shopping-list'
+  const robots = isUnknownSeoOfferPath
+    ? 'noindex,follow'
+    : meta.robots || (isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
 
   document.title = meta.title || TAB_TITLE
 
   setOrCreateMeta('name', 'title', meta.title)
   setOrCreateMeta('name', 'description', meta.description)
-  setOrCreateMeta(
-    'name',
-    'robots',
-    meta.robots || (isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
-  )
+  setOrCreateMeta('name', 'robots', robots)
   setOrCreateMeta('name', 'theme-color', '#f7f9fb')
 
   setOrCreateMeta('property', 'og:type', 'website')
