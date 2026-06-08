@@ -2178,6 +2178,8 @@ a {
 .empty-state {
   display: grid;
   gap: 0.42rem;
+  min-width: 0;
+  max-width: 100%;
   padding: 1.15rem;
   border-radius: var(--kk-radius-lg);
   background: rgba(255, 254, 250, 0.82);
@@ -2189,6 +2191,7 @@ a {
   color: var(--kk-ink-soft);
   font-size: 1.05rem;
   line-height: 1.24;
+  overflow-wrap: anywhere;
 }
 
 .empty-state h3,
@@ -2198,6 +2201,7 @@ a {
 
 .empty-state p {
   color: var(--kk-muted);
+  overflow-wrap: anywhere;
 }
 
 .empty-state__suggestions {
@@ -2208,6 +2212,7 @@ a {
 }
 
 .empty-state__suggestions button {
+  max-width: 100%;
   min-height: 2rem;
   padding: 0.34rem 0.64rem;
   border: 1px solid rgba(94, 122, 150, 0.2);
@@ -2218,6 +2223,7 @@ a {
   font: inherit;
   font-size: 0.84rem;
   font-weight: 820;
+  overflow-wrap: anywhere;
 }
 
 .empty-state__suggestions button:hover {
@@ -5681,6 +5687,22 @@ textarea:focus {
     min-height: 1.7rem;
     padding: 0.22rem 0.4rem;
     font-size: 0.74rem;
+  }
+
+  .empty-state {
+    overflow: hidden;
+  }
+
+  .empty-state__suggestions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.28rem;
+  }
+
+  .empty-state__suggestions button {
+    justify-content: center;
+    padding-inline: 0.42rem;
+    font-size: 0.78rem;
   }
 
   .search-landing-hero__mobile {
