@@ -246,7 +246,7 @@ test('sendBetaFeedbackEmail reports not_configured without SMTP env', async () =
   });
 
   assert.equal(result.status, 'not_configured');
-  assert.equal(result.to, DEFAULT_FEEDBACK_EMAIL_TO);
+  assert.deepEqual(result.to, [DEFAULT_FEEDBACK_EMAIL_TO]);
   assert.equal(result.configured, false);
   assert.match(result.error, /SMTP_HOST/);
 });
@@ -266,11 +266,11 @@ test('sendBetaFeedbackEmail uses andreas feedback recipient fallback when SMTP i
   });
 
   assert.equal(result.status, 'sent');
-  assert.equal(result.to, DEFAULT_FEEDBACK_EMAIL_TO);
-  assert.equal(sentMail.to, DEFAULT_FEEDBACK_EMAIL_TO);
+  assert.deepEqual(result.to, [DEFAULT_FEEDBACK_EMAIL_TO]);
+  assert.deepEqual(sentMail.to, [DEFAULT_FEEDBACK_EMAIL_TO]);
 });
 
-test('sendBetaFeedbackEmail honors FEEDBACK_EMAIL_TO override when SMTP is configured', async () => {
+test('sendBetaFeedbackEmail keeps andreas recipient when FEEDBACK_EMAIL_TO override is configured', async () => {
   let sentMail = null;
   const result = await sendBetaFeedbackEmail(validFeedback(), {
     envConfig: {
@@ -285,6 +285,6 @@ test('sendBetaFeedbackEmail honors FEEDBACK_EMAIL_TO override when SMTP is confi
   });
 
   assert.equal(result.status, 'sent');
-  assert.equal(result.to, 'feedback@example.test');
-  assert.equal(sentMail.to, 'feedback@example.test');
+  assert.deepEqual(result.to, [DEFAULT_FEEDBACK_EMAIL_TO, 'feedback@example.test']);
+  assert.deepEqual(sentMail.to, [DEFAULT_FEEDBACK_EMAIL_TO, 'feedback@example.test']);
 });

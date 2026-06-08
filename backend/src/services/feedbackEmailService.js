@@ -8,6 +8,14 @@ function getFeedbackEmailRecipient(envConfig = env) {
   return String(envConfig.FEEDBACK_EMAIL_TO || DEFAULT_FEEDBACK_EMAIL_TO).trim() || DEFAULT_FEEDBACK_EMAIL_TO;
 }
 
+function getFeedbackEmailRecipients(envConfig = env) {
+  const configuredRecipient = getFeedbackEmailRecipient(envConfig);
+  return [...new Set([
+    DEFAULT_FEEDBACK_EMAIL_TO,
+    configuredRecipient,
+  ].filter(Boolean))];
+}
+
 function getSmtpConfigStatus(envConfig = env) {
   const missing = [];
 
@@ -150,7 +158,7 @@ function upgradeToTls(socket, host) {
 
 function buildMimeMessage({ from, to, subject, text }) {
   const safeFrom = sanitizeHeader(from);
-  const safeTo = sanitizeHeader(to);
+  const safeTo = (Array.isArray(to) ? to : [to]).map(sanitizeHeader).filter(Boolean).join(', ');
   const safeSubject = sanitizeHeader(subject);
 
   return [
@@ -171,7 +179,9 @@ async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) 
   const secure = envConfig.SMTP_SECURE === true || port === 465;
   const requireStartTls = envConfig.SMTP_REQUIRE_TLS === true || (!secure && port === 587);
   const from = envConfig.SMTP_FROM;
-  const to = explicitTo || getFeedbackEmailRecipient(envConfig);
+  const recipients = (Array.isArray(explicitTo) ? explicitTo : (explicitTo ? [explicitTo] : getFeedbackEmailRecipients(envConfig)))
+    .map((recipient) => String(recipient || '').trim())
+    .filter(Boolean);
   let socket = await connectSocket({ host, port, secure });
 
   try {
@@ -190,9 +200,12 @@ async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) 
     }
 
     await writeSmtp(socket, `MAIL FROM:<${sanitizeHeader(from)}>`, 250);
-    await writeSmtp(socket, `RCPT TO:<${sanitizeHeader(to)}>`, [250, 251]);
+    for (const recipient of recipients) {
+      await writeSmtp(socket, `RCPT TO:<${sanitizeHeader(recipient)}>`, [250, 251]);
+    }
+
     await writeSmtp(socket, 'DATA', 354);
-    socket.write(`${buildMimeMessage({ from, to, subject, text })}\r\n.\r\n`);
+    socket.write(`${buildMimeMessage({ from, to: recipients, subject, text })}\r\n.\r\n`);
     await expectSmtp(socket, 250, 'DATA body');
     socket.write('QUIT\r\n');
   } finally {
@@ -201,7 +214,7 @@ async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) 
 }
 
 async function sendBetaFeedbackEmail(feedback, { envConfig = env, smtpSender = sendSmtpMail } = {}) {
-  const to = getFeedbackEmailRecipient(envConfig);
+  const to = getFeedbackEmailRecipients(envConfig);
   const configStatus = getSmtpConfigStatus(envConfig);
 
   if (!configStatus.configured) {
@@ -241,6 +254,7 @@ module.exports = {
   DEFAULT_FEEDBACK_EMAIL_TO,
   buildBetaFeedbackEmailText,
   getFeedbackEmailRecipient,
+  getFeedbackEmailRecipients,
   getSmtpConfigStatus,
   hasSmtpConfig,
   sendBetaFeedbackEmail,
