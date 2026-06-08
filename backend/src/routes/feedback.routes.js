@@ -196,9 +196,24 @@ async function updateEmailDeliveryStatus(BetaFeedbackModel, feedback, delivery) 
   Object.assign(feedback, update);
 }
 
-async function sendFeedbackEmailSafely(emailSender, feedback) {
+function buildEmailTimeoutDelivery(timeoutMs) {
+  return {
+    status: 'timeout',
+    error: `email delivery timed out after ${timeoutMs}ms`,
+  };
+}
+
+async function sendFeedbackEmailSafely(emailSender, feedback, timeoutMs = env.FEEDBACK_EMAIL_TIMEOUT_MS) {
+  let timeout = null;
+
   try {
-    const delivery = await emailSender(feedback);
+    const delivery = await Promise.race([
+      emailSender(feedback),
+      new Promise((resolve) => {
+        timeout = setTimeout(() => resolve(buildEmailTimeoutDelivery(timeoutMs)), timeoutMs);
+        timeout.unref?.();
+      }),
+    ]);
 
     return delivery && typeof delivery === 'object'
       ? delivery
@@ -208,6 +223,8 @@ async function sendFeedbackEmailSafely(emailSender, feedback) {
       status: 'failed',
       error: String(error?.message || error || 'email delivery failed').replace(/\s+/g, ' ').slice(0, 240),
     };
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -216,6 +233,7 @@ function createFeedbackRouter({
   BetaFeedbackModel = BetaFeedback,
   rateLimitMiddleware = feedbackRateLimit,
   emailSender = sendBetaFeedbackEmail,
+  emailTimeoutMs = env.FEEDBACK_EMAIL_TIMEOUT_MS,
 } = {}) {
   const router = express.Router();
 
@@ -248,7 +266,7 @@ function createFeedbackRouter({
         emailDeliveryStatus: 'pending',
         emailDeliveryError: null,
       });
-      const delivery = await sendFeedbackEmailSafely(emailSender, feedback);
+      const delivery = await sendFeedbackEmailSafely(emailSender, feedback, emailTimeoutMs);
 
       try {
         await updateEmailDeliveryStatus(BetaFeedbackModel, feedback, delivery);
@@ -267,10 +285,15 @@ function createFeedbackRouter({
 
       if (delivery.status === 'sent') {
         logger.info('Beta feedback email sent', emailLogPayload);
-      } else if (delivery.status === 'not_configured') {
+      } else if (delivery.status === 'skipped' || delivery.status === 'not_configured') {
         logger.warn('Beta feedback email not configured', {
           ...emailLogPayload,
           error: delivery.error || 'SMTP config missing',
+        });
+      } else if (delivery.status === 'timeout') {
+        logger.error('Beta feedback email timed out', {
+          ...emailLogPayload,
+          error: delivery.error || 'email delivery timed out',
         });
       } else {
         logger.error('Beta feedback email failed', {
@@ -290,7 +313,7 @@ function createFeedbackRouter({
         ok: true,
         feedbackId: String(feedback._id || feedback.id || ''),
         emailDeliveryStatus: delivery.status,
-        emailDeliveryConfigured: delivery.status !== 'not_configured',
+        emailDeliveryConfigured: delivery.status !== 'skipped' && delivery.status !== 'not_configured',
         emailDeliveryDiagnostic: delivery.status === 'sent' ? null : (delivery.error || delivery.status),
         message: 'Danke. Dein Feedback wurde gesendet und hilft uns, kaufklug gezielt zu verbessern.',
       });
@@ -313,3 +336,4 @@ module.exports = createFeedbackRouter();
 module.exports.createFeedbackRouter = createFeedbackRouter;
 module.exports.normalizeBetaFeedbackPayload = normalizeBetaFeedbackPayload;
 module.exports.hasHoneypotContent = hasHoneypotContent;
+module.exports.sendFeedbackEmailSafely = sendFeedbackEmailSafely;

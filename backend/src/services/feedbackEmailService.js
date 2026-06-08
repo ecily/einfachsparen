@@ -3,6 +3,12 @@ const tls = require('node:tls');
 const env = require('../config/env');
 
 const DEFAULT_FEEDBACK_EMAIL_TO = 'andreas.franz@ecily.com';
+const DEFAULT_FEEDBACK_EMAIL_TIMEOUT_MS = 7000;
+
+function getFeedbackEmailTimeoutMs(envConfig = env) {
+  const timeoutMs = Number(envConfig.FEEDBACK_EMAIL_TIMEOUT_MS);
+  return Number.isFinite(timeoutMs) && timeoutMs >= 1000 ? timeoutMs : DEFAULT_FEEDBACK_EMAIL_TIMEOUT_MS;
+}
 
 function getFeedbackEmailRecipient(envConfig = env) {
   return String(envConfig.FEEDBACK_EMAIL_TO || DEFAULT_FEEDBACK_EMAIL_TO).trim() || DEFAULT_FEEDBACK_EMAIL_TO;
@@ -104,7 +110,7 @@ function readLine(socket, timeoutMs = 15000) {
 
     timer = setTimeout(() => {
       cleanup();
-      reject(new Error('SMTP response timeout'));
+      reject(new Error(`SMTP response timeout after ${timeoutMs}ms`));
     }, timeoutMs);
 
     socket.on('data', handleData);
@@ -114,7 +120,7 @@ function readLine(socket, timeoutMs = 15000) {
 }
 
 async function expectSmtp(socket, expectedCodes, command) {
-  const response = await readLine(socket);
+  const response = await readLine(socket, socket.feedbackTimeoutMs || DEFAULT_FEEDBACK_EMAIL_TIMEOUT_MS);
   const code = Number(response.slice(0, 3));
   const allowedCodes = Array.isArray(expectedCodes) ? expectedCodes : [expectedCodes];
 
@@ -130,11 +136,16 @@ async function writeSmtp(socket, command, expectedCodes) {
   return expectSmtp(socket, expectedCodes, command.split(' ')[0]);
 }
 
-function connectSocket({ host, port, secure }) {
+function connectSocket({ host, port, secure, timeoutMs = DEFAULT_FEEDBACK_EMAIL_TIMEOUT_MS }) {
   return new Promise((resolve, reject) => {
     const socket = secure
       ? tls.connect({ host, port, servername: host })
       : net.connect({ host, port });
+    socket.feedbackTimeoutMs = timeoutMs;
+
+    socket.setTimeout(timeoutMs, () => {
+      socket.destroy(new Error(`SMTP socket timeout after ${timeoutMs}ms`));
+    });
 
     socket.once('connect', () => {
       if (!secure) resolve(socket);
@@ -146,9 +157,14 @@ function connectSocket({ host, port, secure }) {
 
 function upgradeToTls(socket, host) {
   return new Promise((resolve, reject) => {
+    const timeoutMs = socket.feedbackTimeoutMs || DEFAULT_FEEDBACK_EMAIL_TIMEOUT_MS;
     const secureSocket = tls.connect({
       socket,
       servername: host,
+    });
+    secureSocket.feedbackTimeoutMs = timeoutMs;
+    secureSocket.setTimeout(timeoutMs, () => {
+      secureSocket.destroy(new Error(`SMTP TLS timeout after ${timeoutMs}ms`));
     });
 
     secureSocket.once('secureConnect', () => resolve(secureSocket));
@@ -179,10 +195,14 @@ async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) 
   const secure = envConfig.SMTP_SECURE === true || port === 465;
   const requireStartTls = envConfig.SMTP_REQUIRE_TLS === true || (!secure && port === 587);
   const from = envConfig.SMTP_FROM;
+  const timeoutMs = getFeedbackEmailTimeoutMs(envConfig);
   const recipients = (Array.isArray(explicitTo) ? explicitTo : (explicitTo ? [explicitTo] : getFeedbackEmailRecipients(envConfig)))
     .map((recipient) => String(recipient || '').trim())
     .filter(Boolean);
-  let socket = await connectSocket({ host, port, secure });
+  let socket = await connectSocket({ host, port, secure, timeoutMs });
+  socket.setTimeout(timeoutMs, () => {
+    socket.destroy(new Error(`SMTP socket timeout after ${timeoutMs}ms`));
+  });
 
   try {
     await expectSmtp(socket, 220, 'connect');
@@ -191,6 +211,7 @@ async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) 
     if (requireStartTls) {
       await writeSmtp(socket, 'STARTTLS', 220);
       socket = await upgradeToTls(socket, host);
+      socket.feedbackTimeoutMs = timeoutMs;
       await writeSmtp(socket, `EHLO ${sanitizeHeader(envConfig.SMTP_HELO_NAME || 'kaufklug.at')}`, 250);
     }
 
@@ -219,7 +240,7 @@ async function sendBetaFeedbackEmail(feedback, { envConfig = env, smtpSender = s
 
   if (!configStatus.configured) {
     return {
-      status: 'not_configured',
+      status: 'skipped',
       error: `missing ${configStatus.missing.join(', ')}`,
       to,
       configured: false,
@@ -252,9 +273,11 @@ async function sendBetaFeedbackEmail(feedback, { envConfig = env, smtpSender = s
 
 module.exports = {
   DEFAULT_FEEDBACK_EMAIL_TO,
+  DEFAULT_FEEDBACK_EMAIL_TIMEOUT_MS,
   buildBetaFeedbackEmailText,
   getFeedbackEmailRecipient,
   getFeedbackEmailRecipients,
+  getFeedbackEmailTimeoutMs,
   getSmtpConfigStatus,
   hasSmtpConfig,
   sendBetaFeedbackEmail,

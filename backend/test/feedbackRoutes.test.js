@@ -44,7 +44,12 @@ function requestJson(app, { body = {}, headers = {} } = {}) {
   });
 }
 
-function createTestApp({ created = [], updates = [], emailSender = async () => ({ status: 'not_configured', error: null }) } = {}) {
+function createTestApp({
+  created = [],
+  updates = [],
+  emailSender = async () => ({ status: 'skipped', error: null }),
+  emailTimeoutMs = 7000,
+} = {}) {
   const BetaFeedbackModel = {
     async create(payload) {
       const doc = {
@@ -85,6 +90,7 @@ function createTestApp({ created = [], updates = [], emailSender = async () => (
     BetaFeedbackModel,
     rateLimitMiddleware: (req, res, next) => next(),
     emailSender,
+    emailTimeoutMs,
   }));
   app.use((error, req, res, next) => {
     res.status(error.statusCode || 500).json({
@@ -147,7 +153,7 @@ test('POST /api/feedback succeeds when email is not configured', async () => {
   const app = createTestApp({
     created,
     updates,
-    emailSender: async () => ({ status: 'not_configured', error: null }),
+    emailSender: async () => ({ status: 'skipped', error: 'missing SMTP_HOST, SMTP_FROM', configured: false }),
   });
   const response = await requestJson(app, {
     body: validFeedback(),
@@ -155,11 +161,11 @@ test('POST /api/feedback succeeds when email is not configured', async () => {
 
   assert.equal(response.statusCode, 201);
   assert.equal(response.body.ok, true);
-  assert.equal(response.body.emailDeliveryStatus, 'not_configured');
+  assert.equal(response.body.emailDeliveryStatus, 'skipped');
   assert.equal(response.body.emailDeliveryConfigured, false);
-  assert.match(response.body.emailDeliveryDiagnostic, /not_configured/);
+  assert.match(response.body.emailDeliveryDiagnostic, /SMTP_HOST/);
   assert.equal(created.length, 1);
-  assert.equal(updates[0].update.emailDeliveryStatus, 'not_configured');
+  assert.equal(updates[0].update.emailDeliveryStatus, 'skipped');
 });
 
 test('POST /api/feedback succeeds and records failed email delivery', async () => {
@@ -202,6 +208,33 @@ test('POST /api/feedback stores feedback even when email sender throws', async (
   assert.equal(updates[0].update.emailDeliveryError, 'smtp crashed');
 });
 
+test('POST /api/feedback times out hanging email sender and still stores feedback', async () => {
+  const created = [];
+  const updates = [];
+  const app = createTestApp({
+    created,
+    updates,
+    emailTimeoutMs: 30,
+    emailSender: async () => new Promise(() => {}),
+  });
+  const startedAt = Date.now();
+  const response = await requestJson(app, {
+    body: validFeedback(),
+  });
+  const elapsedMs = Date.now() - startedAt;
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.emailDeliveryStatus, 'timeout');
+  assert.equal(response.body.emailDeliveryConfigured, true);
+  assert.match(response.body.emailDeliveryDiagnostic, /timed out/i);
+  assert.equal(created.length, 1);
+  assert.equal(updates[0].update.emailDeliveryStatus, 'timeout');
+  assert.match(updates[0].update.emailDeliveryError, /timed out/i);
+  assert.ok(elapsedMs < 1000, `expected timeout response under 1000ms, got ${elapsedMs}ms`);
+});
+
+
 test('POST /api/feedback neutralizes honeypot submissions without storing', async () => {
   const created = [];
   const app = createTestApp({ created });
@@ -238,7 +271,7 @@ test('POST /api/feedback stores no IP, user-agent or session fields', async () =
   assert.equal(stored.includes('192.0.2.'), false);
 });
 
-test('sendBetaFeedbackEmail reports not_configured without SMTP env', async () => {
+test('sendBetaFeedbackEmail reports skipped without SMTP env', async () => {
   const result = await sendBetaFeedbackEmail(validFeedback(), {
     envConfig: {
       FEEDBACK_EMAIL_TO: 'andreas.franz@ecily.com',
@@ -248,7 +281,7 @@ test('sendBetaFeedbackEmail reports not_configured without SMTP env', async () =
     },
   });
 
-  assert.equal(result.status, 'not_configured');
+  assert.equal(result.status, 'skipped');
   assert.deepEqual(result.to, [DEFAULT_FEEDBACK_EMAIL_TO]);
   assert.equal(result.configured, false);
   assert.match(result.error, /SMTP_HOST/);

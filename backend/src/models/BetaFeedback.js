@@ -48,7 +48,7 @@ const betaFeedbackSchema = new mongoose.Schema(
     },
     emailDeliveryStatus: {
       type: String,
-      enum: ['pending', 'sent', 'failed', 'not_configured'],
+      enum: ['pending', 'sent', 'failed', 'timeout', 'skipped', 'not_configured'],
       default: 'pending',
       index: true,
     },
