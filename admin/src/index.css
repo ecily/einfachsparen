@@ -6603,6 +6603,9 @@ textarea:focus {
   .page-nav {
     background: rgba(255, 255, 255, 0.9);
     box-shadow: 0 12px 28px rgba(36, 52, 71, 0.1);
+    grid-template-columns: 2.42rem 3rem repeat(3, minmax(3.55rem, 1fr));
+    gap: 0.26rem;
+    padding: 0.3rem;
   }
 
   .page-nav__button--active {
@@ -6638,9 +6641,62 @@ textarea:focus {
     width: min(100% - 0.65rem, 1240px);
   }
 
+  .page-nav {
+    grid-template-columns: 2.2rem 4.6rem minmax(0, 1fr);
+    gap: 0.24rem;
+    padding: 0.28rem;
+  }
+
+  .page-nav__logo {
+    grid-column: 1;
+    grid-row: 1;
+    width: 2.2rem;
+    height: 2.2rem;
+    min-width: 2.2rem;
+    justify-self: start;
+  }
+
   .page-nav__button,
   .page-nav__beta {
+    min-height: 2.32rem;
     line-height: 1.1;
+  }
+
+  .page-nav__button {
+    padding-inline: 0.08rem;
+    font-size: 0.7rem;
+  }
+
+  .page-nav__beta {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: stretch;
+    padding-inline: 0.08rem;
+    font-size: 0.68rem;
+  }
+
+  .page-nav__main {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.24rem;
+    width: 100%;
+  }
+
+  .page-nav__button:nth-child(1) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .page-nav__button:nth-child(2) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .page-nav__button:nth-child(3) {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .keyword-search-form input {
