@@ -5690,7 +5690,26 @@ textarea:focus {
   }
 
   .empty-state {
+    box-sizing: border-box;
     overflow: hidden;
+    width: calc(100vw - 2rem);
+    max-width: 100%;
+    padding: 0.9rem;
+  }
+
+  .empty-state > * {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .empty-state h3 {
+    font-size: 0.96rem;
+    line-height: 1.26;
+  }
+
+  .empty-state p {
+    font-size: 0.9rem;
+    line-height: 1.4;
   }
 
   .empty-state__suggestions {
