@@ -131,9 +131,9 @@ async function expectSmtp(socket, expectedCodes, command) {
   return response;
 }
 
-async function writeSmtp(socket, command, expectedCodes) {
+async function writeSmtp(socket, command, expectedCodes, commandLabel = command.split(' ')[0]) {
   socket.write(`${command}\r\n`);
-  return expectSmtp(socket, expectedCodes, command.split(' ')[0]);
+  return expectSmtp(socket, expectedCodes, commandLabel);
 }
 
 function connectSocket({ host, port, secure, timeoutMs = DEFAULT_FEEDBACK_EMAIL_TIMEOUT_MS }) {
@@ -189,6 +189,58 @@ function buildMimeMessage({ from, to, subject, text }) {
   ].join('\r\n');
 }
 
+function getSmtpAuthMechanisms(ehloResponse = '') {
+  return String(ehloResponse)
+    .split(/\r?\n/)
+    .map((line) => {
+      const match = line.match(/^250[- ]AUTH(?:\s+(.+))?$/i);
+      return match ? match[1] || '' : '';
+    })
+    .filter(Boolean)
+    .flatMap((value) => value.split(/\s+/))
+    .map((value) => value.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function selectSmtpAuthMechanism(envConfig = env, ehloResponse = '') {
+  const mechanisms = getSmtpAuthMechanisms(ehloResponse);
+  const host = String(envConfig.SMTP_HOST || '').trim().toLowerCase();
+
+  if (host === 'smtp.office365.com' && mechanisms.includes('LOGIN')) {
+    return 'LOGIN';
+  }
+
+  if (mechanisms.includes('PLAIN')) {
+    return 'PLAIN';
+  }
+
+  if (mechanisms.includes('LOGIN')) {
+    return 'LOGIN';
+  }
+
+  return 'PLAIN';
+}
+
+async function authenticateSmtp(socket, envConfig = env, ehloResponse = '') {
+  if (!envConfig.SMTP_USER && !envConfig.SMTP_PASS) {
+    return;
+  }
+
+  const username = envConfig.SMTP_USER || '';
+  const password = envConfig.SMTP_PASS || '';
+  const mechanism = selectSmtpAuthMechanism(envConfig, ehloResponse);
+
+  if (mechanism === 'LOGIN') {
+    await writeSmtp(socket, 'AUTH LOGIN', 334, 'AUTH LOGIN');
+    await writeSmtp(socket, Buffer.from(username, 'utf8').toString('base64'), 334, 'AUTH LOGIN username');
+    await writeSmtp(socket, Buffer.from(password, 'utf8').toString('base64'), 235, 'AUTH LOGIN password');
+    return;
+  }
+
+  const auth = Buffer.from(`\u0000${username}\u0000${password}`, 'utf8').toString('base64');
+  await writeSmtp(socket, `AUTH PLAIN ${auth}`, 235, 'AUTH PLAIN');
+}
+
 async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) {
   const host = envConfig.SMTP_HOST;
   const port = Number(envConfig.SMTP_PORT);
@@ -206,19 +258,16 @@ async function sendSmtpMail({ envConfig = env, subject, text, to: explicitTo }) 
 
   try {
     await expectSmtp(socket, 220, 'connect');
-    await writeSmtp(socket, `EHLO ${sanitizeHeader(envConfig.SMTP_HELO_NAME || 'kaufklug.at')}`, 250);
+    let ehloResponse = await writeSmtp(socket, `EHLO ${sanitizeHeader(envConfig.SMTP_HELO_NAME || 'kaufklug.at')}`, 250);
 
     if (requireStartTls) {
       await writeSmtp(socket, 'STARTTLS', 220);
       socket = await upgradeToTls(socket, host);
       socket.feedbackTimeoutMs = timeoutMs;
-      await writeSmtp(socket, `EHLO ${sanitizeHeader(envConfig.SMTP_HELO_NAME || 'kaufklug.at')}`, 250);
+      ehloResponse = await writeSmtp(socket, `EHLO ${sanitizeHeader(envConfig.SMTP_HELO_NAME || 'kaufklug.at')}`, 250);
     }
 
-    if (envConfig.SMTP_USER || envConfig.SMTP_PASS) {
-      const auth = Buffer.from(`\u0000${envConfig.SMTP_USER || ''}\u0000${envConfig.SMTP_PASS || ''}`, 'utf8').toString('base64');
-      await writeSmtp(socket, `AUTH PLAIN ${auth}`, 235);
-    }
+    await authenticateSmtp(socket, envConfig, ehloResponse);
 
     await writeSmtp(socket, `MAIL FROM:<${sanitizeHeader(from)}>`, 250);
     for (const recipient of recipients) {
@@ -279,7 +328,9 @@ module.exports = {
   getFeedbackEmailRecipients,
   getFeedbackEmailTimeoutMs,
   getSmtpConfigStatus,
+  getSmtpAuthMechanisms,
   hasSmtpConfig,
+  selectSmtpAuthMechanism,
   sendBetaFeedbackEmail,
   sendSmtpMail,
 };

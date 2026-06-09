@@ -1,10 +1,14 @@
 const assert = require('node:assert/strict');
+const net = require('node:net');
 const test = require('node:test');
 const express = require('express');
 const { createFeedbackRouter } = require('../src/routes/feedback.routes');
 const {
   DEFAULT_FEEDBACK_EMAIL_TO,
+  getSmtpAuthMechanisms,
+  selectSmtpAuthMechanism,
   sendBetaFeedbackEmail,
+  sendSmtpMail,
 } = require('../src/services/feedbackEmailService');
 
 function requestJson(app, { body = {}, headers = {} } = {}) {
@@ -285,6 +289,116 @@ test('sendBetaFeedbackEmail reports skipped without SMTP env', async () => {
   assert.deepEqual(result.to, [DEFAULT_FEEDBACK_EMAIL_TO]);
   assert.equal(result.configured, false);
   assert.match(result.error, /SMTP_HOST/);
+});
+
+test('getSmtpAuthMechanisms parses advertised EHLO auth capabilities', () => {
+  const mechanisms = getSmtpAuthMechanisms([
+    '250-example.test Hello',
+    '250-STARTTLS',
+    '250-AUTH LOGIN XOAUTH2',
+    '250 SIZE 157286400',
+  ].join('\r\n'));
+
+  assert.deepEqual(mechanisms, ['LOGIN', 'XOAUTH2']);
+});
+
+test('selectSmtpAuthMechanism uses AUTH LOGIN for Microsoft 365', () => {
+  const mechanism = selectSmtpAuthMechanism({
+    SMTP_HOST: 'smtp.office365.com',
+  }, [
+    '250-smtp.office365.com Hello',
+    '250-AUTH LOGIN XOAUTH2',
+    '250 SIZE 157286400',
+  ].join('\r\n'));
+
+  assert.equal(mechanism, 'LOGIN');
+});
+
+test('selectSmtpAuthMechanism keeps AUTH PLAIN preference for other SMTP servers', () => {
+  const mechanism = selectSmtpAuthMechanism({
+    SMTP_HOST: 'smtp.example.test',
+  }, [
+    '250-smtp.example.test Hello',
+    '250-AUTH PLAIN LOGIN',
+    '250 SIZE 157286400',
+  ].join('\r\n'));
+
+  assert.equal(mechanism, 'PLAIN');
+});
+
+test('sendSmtpMail uses AUTH LOGIN when the SMTP server advertises LOGIN only', async () => {
+  const commands = [];
+  let dataMode = false;
+  const server = net.createServer((socket) => {
+    socket.setEncoding('utf8');
+    socket.write('220 smtp.office365.com Microsoft ESMTP MAIL Service ready\r\n');
+    socket.on('data', (chunk) => {
+      const lines = chunk.split(/\r?\n/).filter(Boolean);
+      for (const line of lines) {
+        if (dataMode) {
+          if (line === '.') {
+            dataMode = false;
+            socket.write('250 2.0.0 OK queued\r\n');
+          }
+          continue;
+        }
+
+        commands.push(line);
+
+        if (line.startsWith('EHLO ')) {
+          socket.write('250-smtp.office365.com Hello\r\n250-AUTH LOGIN XOAUTH2\r\n250 SIZE 157286400\r\n');
+        } else if (line === 'AUTH LOGIN') {
+          socket.write('334 VXNlcm5hbWU6\r\n');
+        } else if (line === Buffer.from('andreas.franz@ecily.com', 'utf8').toString('base64')) {
+          socket.write('334 UGFzc3dvcmQ6\r\n');
+        } else if (line === Buffer.from('secret-password', 'utf8').toString('base64')) {
+          socket.write('235 2.7.0 Authentication successful\r\n');
+        } else if (line.startsWith('MAIL FROM:')) {
+          socket.write('250 2.1.0 Sender OK\r\n');
+        } else if (line.startsWith('RCPT TO:')) {
+          socket.write('250 2.1.5 Recipient OK\r\n');
+        } else if (line === 'DATA') {
+          dataMode = true;
+          socket.write('354 Start mail input; end with <CRLF>.<CRLF>\r\n');
+        } else if (line === 'QUIT') {
+          socket.write('221 2.0.0 Bye\r\n');
+          socket.end();
+        } else {
+          socket.write('500 unexpected command\r\n');
+        }
+      }
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+
+  try {
+    const address = server.address();
+    await sendSmtpMail({
+      envConfig: {
+        SMTP_HOST: '127.0.0.1',
+        SMTP_PORT: address.port,
+        SMTP_SECURE: false,
+        SMTP_REQUIRE_TLS: false,
+        SMTP_FROM: 'andreas.franz@ecily.com',
+        SMTP_USER: 'andreas.franz@ecily.com',
+        SMTP_PASS: 'secret-password',
+        FEEDBACK_EMAIL_TO: 'andreas.franz@ecily.com',
+        FEEDBACK_EMAIL_TIMEOUT_MS: 1000,
+      },
+      to: ['andreas.franz@ecily.com'],
+      subject: 'SMTP test',
+      text: 'Test',
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+
+  assert.equal(commands.includes('AUTH LOGIN'), true);
+  assert.equal(commands.includes(`AUTH PLAIN ${Buffer.from('\u0000andreas.franz@ecily.com\u0000secret-password', 'utf8').toString('base64')}`), false);
 });
 
 test('sendBetaFeedbackEmail uses andreas feedback recipient fallback when SMTP is configured', async () => {
