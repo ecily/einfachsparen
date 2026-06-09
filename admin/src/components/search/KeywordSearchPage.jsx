@@ -265,6 +265,7 @@ function buildAvailableRetailers(retailers) {
 
 export function KeywordSearchPage({ searchRequest, retailers = [], categories = [], shoppingListIds, onAddToShoppingList }) {
   const resultsHeadingRef = useRef(null)
+  const searchInputRef = useRef(null)
   const requestIdRef = useRef(0)
   const [queryInput, setQueryInput] = useState(() => getInitialKeywordQuery())
   const [submittedQuery, setSubmittedQuery] = useState(() => {
@@ -492,6 +493,18 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
     setQueryInput('')
   }
 
+  function handleEditSearch() {
+    setQueryInput(submittedQuery)
+
+    window.requestAnimationFrame(() => {
+      const input = searchInputRef.current
+      if (!input) return
+
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      input.focus({ preventScroll: true })
+    })
+  }
+
   function handleRetrySearch() {
     if (!submittedQuery) return
     setSubmittedQuery('')
@@ -569,6 +582,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             >
               <input
                 id="keyword-search-input"
+                ref={searchInputRef}
                 type="search"
                 value={queryInput}
                 placeholder="Produkt oder Marke suchen"
@@ -830,7 +844,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                     </button>
                   ))}
                 </div>
-                <button type="button" className="primary-action-button" onClick={() => setQueryInput(submittedQuery)}>
+                <button type="button" className="primary-action-button" onClick={handleEditSearch}>
                   Suche ändern
                 </button>
                 {marketFilterEnabled && selectedRetailerKeys.length > 0 ? (
