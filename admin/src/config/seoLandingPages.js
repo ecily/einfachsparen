@@ -3,17 +3,13 @@ export const SEO_LANDING_PAGE_PREFIX = 'seo-offers:'
 export const SEO_TRUST_COPY = 'Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.'
 
 const baseRelatedLinks = [
-  ['supermarkt', 'Supermarkt Angebote'],
   ['drogerie', 'Drogerie Angebote'],
   ['kaffee', 'Kaffee Angebote'],
   ['bier', 'Bier Angebote'],
   ['waschmittel', 'Waschmittel Angebote'],
-  ['butter', 'Butter Angebote'],
-  ['wurst', 'Wurst Angebote'],
 ]
 
 const retailerRelatedLinks = [
-  ['spar', 'SPAR Angebote'],
   ['billa', 'BILLA Angebote'],
   ['hofer', 'HOFER Angebote'],
   ['lidl', 'Lidl Angebote'],
