@@ -321,7 +321,7 @@ function ScopedPageTuning() {
     <style>
       {`
         .search-first-page .keyword-search-hero {
-          margin-top: -0.5rem;
+          margin-top: 0.35rem;
         }
 
         @media (max-width: 720px) {

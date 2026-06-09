@@ -4625,8 +4625,8 @@ textarea:focus {
 }
 
 .search-first-page .keyword-search-hero {
-  justify-self: center;
-  width: min(100%, 61rem);
+  justify-self: stretch;
+  width: 100%;
 }
 
 .keyword-search-page .keyword-search-hero::before {
