@@ -164,9 +164,8 @@ function SearchLandingHero() {
         }}
       >
         <div className="search-landing-hero__usp">
-          <p className="eyebrow hero-consumer__eyebrow">
-            <span className="hero__country-badge" aria-hidden="true" />
-            <span>Angebote aus Flugblättern. Endlich einfach durchsuchbar.</span>
+          <p className="subtitle">
+            Suche aktuelle Supermarkt- und Drogerie-Angebote in Österreich – schnell, kostenlos und ohne Anmeldung.
           </p>
           <div className="hero-market-strip" aria-label="Marktbeispiele">
             {heroRetailerGroups.map((group, groupIndex) => (
@@ -201,7 +200,7 @@ function SearchLandingHero() {
               maxWidth: '100%',
             }}
           >
-            Finde Supermarkt-Angebote in Österreich.
+            Nicht blättern. Finden, was sich lohnt.
           </h1>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (
