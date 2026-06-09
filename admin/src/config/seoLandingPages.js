@@ -21,25 +21,6 @@ const retailerRelatedLinks = [
   ['penny', 'PENNY Angebote'],
 ]
 
-const supermarketOfferCategories = JSON.stringify([
-  'Kaese',
-  'Milchprodukte',
-  'Brot & Gebaeck',
-  'Obst & Gemuese',
-  'Fleisch, Wurst & Fisch',
-  'Tiefkuehl- & Fertigprodukte',
-  'Pasta, Reis & Konserven',
-  'Saucen, Oele & Gewuerze',
-  'Kaffee & Tee',
-  'Bier',
-  'Softdrinks & Energy',
-  'Saefte & Sirupe',
-  'Wasser',
-  'Suesswaren & Knabbereien',
-  'Backen & Grundnahrungsmittel',
-  'Fruehstueck & Aufstriche',
-])
-
 function links(keys) {
   const lookup = new Map([...baseRelatedLinks, ...retailerRelatedLinks])
 
@@ -79,23 +60,40 @@ export const seoLandingPages = [
     robots: 'index,follow',
     queries: [
       {
-        categories: supermarketOfferCategories,
-        retailers: 'billa,billa-plus,hofer,lidl,penny',
-        limit: 60,
+        retailers: 'billa,billa-plus',
+        programRetailers: 'billa,billa-plus',
+        limit: 12,
         offset: 0,
       },
       {
-        categories: supermarketOfferCategories,
+        retailers: 'hofer',
+        programRetailers: 'hofer',
+        limit: 8,
+        offset: 0,
+      },
+      {
+        retailers: 'lidl',
+        programRetailers: 'lidl',
+        limit: 8,
+        offset: 0,
+      },
+      {
+        retailers: 'penny',
+        programRetailers: 'penny',
+        limit: 8,
+        offset: 0,
+      },
+      {
         retailers: 'spar,eurospar,interspar',
         programRetailers: 'spar,eurospar,interspar',
-        limit: 24,
+        limit: 12,
         offset: 0,
       },
     ],
     query: {
-      categories: supermarketOfferCategories,
-      retailers: 'billa,billa-plus,hofer,lidl,penny',
-      limit: 60,
+      retailers: 'billa,billa-plus',
+      programRetailers: 'billa,billa-plus',
+      limit: 12,
       offset: 0,
     },
     relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaese']),
