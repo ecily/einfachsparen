@@ -3,13 +3,16 @@ export const SEO_LANDING_PAGE_PREFIX = 'seo-offers:'
 export const SEO_TRUST_COPY = 'Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.'
 
 const baseRelatedLinks = [
+  ['supermarkt', 'Supermarkt Angebote'],
   ['drogerie', 'Drogerie Angebote'],
   ['kaffee', 'Kaffee Angebote'],
   ['bier', 'Bier Angebote'],
   ['waschmittel', 'Waschmittel Angebote'],
+  ['kaese', 'K\u00e4se Angebote'],
 ]
 
 const retailerRelatedLinks = [
+  ['spar', 'SPAR Angebote'],
   ['billa', 'BILLA Angebote'],
   ['hofer', 'HOFER Angebote'],
   ['lidl', 'Lidl Angebote'],
@@ -17,6 +20,25 @@ const retailerRelatedLinks = [
   ['bipa', 'BIPA Angebote'],
   ['penny', 'PENNY Angebote'],
 ]
+
+const supermarketOfferCategories = JSON.stringify([
+  'Kaese',
+  'Milchprodukte',
+  'Brot & Gebaeck',
+  'Obst & Gemuese',
+  'Fleisch, Wurst & Fisch',
+  'Tiefkuehl- & Fertigprodukte',
+  'Pasta, Reis & Konserven',
+  'Saucen, Oele & Gewuerze',
+  'Kaffee & Tee',
+  'Bier',
+  'Softdrinks & Energy',
+  'Saefte & Sirupe',
+  'Wasser',
+  'Suesswaren & Knabbereien',
+  'Backen & Grundnahrungsmittel',
+  'Fruehstueck & Aufstriche',
+])
 
 function links(keys) {
   const lookup = new Map([...baseRelatedLinks, ...retailerRelatedLinks])
@@ -55,11 +77,28 @@ export const seoLandingPages = [
     h1: 'Supermarkt Angebote in \u00d6sterreich finden',
     intro: 'Suche aktuelle Angebote von Superm\u00e4rkten in \u00d6sterreich und finde schneller, was sich gerade lohnt.',
     robots: 'index,follow',
+    queries: [
+      {
+        categories: supermarketOfferCategories,
+        retailers: 'billa,billa-plus,hofer,lidl,penny',
+        limit: 60,
+        offset: 0,
+      },
+      {
+        categories: supermarketOfferCategories,
+        retailers: 'spar,eurospar,interspar',
+        programRetailers: 'spar,eurospar,interspar',
+        limit: 24,
+        offset: 0,
+      },
+    ],
     query: {
-      retailers: 'billa,billa-plus,hofer,lidl,spar,eurospar,interspar,penny,adeg',
-      limit: 24,
+      categories: supermarketOfferCategories,
+      retailers: 'billa,billa-plus,hofer,lidl,penny',
+      limit: 60,
+      offset: 0,
     },
-    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'butter', 'wurst']),
+    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaese']),
   },
   {
     key: 'drogerie',
@@ -92,8 +131,9 @@ export const seoLandingPages = [
       retailers: 'spar,eurospar,interspar',
       programRetailers: 'spar,eurospar,interspar',
       limit: 24,
+      offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'butter']),
+    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'kaese']),
   },
   {
     key: 'billa',
@@ -109,8 +149,9 @@ export const seoLandingPages = [
       retailers: 'billa,billa-plus',
       programRetailers: 'billa,billa-plus',
       limit: 24,
+      offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'butter', 'wurst']),
+    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaese']),
   },
   {
     key: 'hofer',
@@ -126,8 +167,9 @@ export const seoLandingPages = [
       retailers: 'hofer',
       programRetailers: 'hofer',
       limit: 24,
+      offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'lidl', 'penny', 'kaffee', 'butter']),
+    relatedLinks: links(['supermarkt', 'billa', 'lidl', 'penny', 'kaffee', 'kaese']),
   },
   {
     key: 'lidl',
@@ -143,6 +185,7 @@ export const seoLandingPages = [
       retailers: 'lidl',
       programRetailers: 'lidl',
       limit: 24,
+      offset: 0,
     },
     relatedLinks: links(['supermarkt', 'hofer', 'billa', 'penny', 'waschmittel', 'kaffee']),
   },
@@ -160,6 +203,7 @@ export const seoLandingPages = [
       retailers: 'dm',
       programRetailers: 'dm',
       limit: 24,
+      offset: 0,
     },
     relatedLinks: links(['drogerie', 'bipa', 'waschmittel', 'supermarkt']),
   },
@@ -177,6 +221,7 @@ export const seoLandingPages = [
       retailers: 'bipa',
       programRetailers: 'bipa',
       limit: 24,
+      offset: 0,
     },
     relatedLinks: links(['drogerie', 'dm', 'waschmittel', 'supermarkt']),
   },
@@ -194,8 +239,9 @@ export const seoLandingPages = [
       retailers: 'penny',
       programRetailers: 'penny',
       limit: 24,
+      offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'butter']),
+    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaese']),
   },
   {
     key: 'kaffee',
@@ -210,8 +256,9 @@ export const seoLandingPages = [
     query: {
       q: 'kaffee',
       limit: 24,
+      offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'spar', 'butter']),
+    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'spar', 'kaese']),
   },
   {
     key: 'bier',
@@ -226,6 +273,7 @@ export const seoLandingPages = [
     query: {
       q: 'bier',
       limit: 24,
+      offset: 0,
     },
     relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'spar']),
   },
@@ -242,8 +290,26 @@ export const seoLandingPages = [
     query: {
       q: 'waschmittel',
       limit: 24,
+      offset: 0,
     },
     relatedLinks: links(['drogerie', 'dm', 'bipa', 'supermarkt']),
+  },
+  {
+    key: 'kaese',
+    path: '/angebote/kaese',
+    title: 'K\u00e4se Angebote aktuell finden | kaufklug',
+    description:
+      'Finde aktuelle K\u00e4se-Angebote in \u00d6sterreich. kaufklug zeigt Preise, Packungsgr\u00f6\u00dfen, Aktionen und G\u00fcltigkeit als Orientierungshilfe.',
+    h1: 'K\u00e4se Angebote aktuell finden',
+    intro:
+      'Finde aktuelle K\u00e4se-Angebote in \u00d6sterreich. kaufklug zeigt Preise, Packungsgr\u00f6\u00dfen, Aktionen und G\u00fcltigkeit, soweit diese erkannt wurden.',
+    robots: 'noindex,follow',
+    query: {
+      q: 'kaese',
+      limit: 24,
+      offset: 0,
+    },
+    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'penny']),
   },
   {
     key: 'butter',

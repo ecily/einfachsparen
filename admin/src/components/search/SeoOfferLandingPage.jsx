@@ -6,6 +6,35 @@ import { OfferCardConsumer } from './OfferCardConsumer'
 
 const MIN_USEFUL_OFFER_COUNT = 1
 
+function combineInitialRankingResults(results = []) {
+  return results.filter(Boolean).reduce((mergedRanking, ranking) => {
+    if (!mergedRanking) return ranking
+
+    return {
+      ...mergePaginatedRankingResults(mergedRanking, ranking),
+      summary: {
+        ...(mergedRanking.summary || {}),
+        ...(ranking.summary || {}),
+        resultCount: Number(mergedRanking.summary?.resultCount || 0) + Number(ranking.summary?.resultCount || 0),
+        displayedCount: flattenRankingOffers(mergedRanking).length + flattenRankingOffers(ranking).length,
+        hasMore: false,
+        nextOffset: null,
+      },
+    }
+  }, null)
+}
+
+async function fetchSeoLandingRanking(page) {
+  const queries = Array.isArray(page?.queries) ? page.queries.filter(Boolean) : []
+
+  if (!queries.length) {
+    return fetchOfferRankingDirect(page.query || {})
+  }
+
+  const results = await Promise.all(queries.map((query) => fetchOfferRankingDirect(query)))
+  return combineInitialRankingResults(results)
+}
+
 function getFallbackText(page) {
   if (page.robots === 'index,follow') {
     return 'Aktuell wurden nicht gen\u00fcgend passende Angebote erkannt. Bitte Suche und Marktbedingungen pr\u00fcfen.'
@@ -36,7 +65,7 @@ export function SeoOfferLandingPage({ page, categories = [], shoppingListIds, on
         setLoading(true)
         setLoadingMore(false)
         setError('')
-        const rankingResult = await fetchOfferRankingDirect(page.query || {})
+        const rankingResult = await fetchSeoLandingRanking(page)
 
         if (!active || requestId !== requestIdRef.current) return
 
