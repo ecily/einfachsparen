@@ -2716,6 +2716,8 @@ a {
   justify-content: flex-end;
   align-items: center;
   gap: 0.65rem;
+  width: 100%;
+  min-width: 0;
   margin-top: 0.1rem;
 }
 
@@ -2876,9 +2878,13 @@ a {
 
 .offer-feedback__panel {
   flex: 1 0 100%;
+  grid-column: 1 / -1;
+  justify-self: stretch;
   display: grid;
   gap: 0.78rem;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   min-width: 0;
   margin-top: 0.12rem;
   padding: 0.86rem;
@@ -2893,6 +2899,10 @@ a {
   align-items: start;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.offer-feedback__header > div {
+  min-width: 0;
 }
 
 .offer-feedback__header h4,
