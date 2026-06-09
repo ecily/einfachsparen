@@ -321,12 +321,12 @@ function ScopedPageTuning() {
     <style>
       {`
         .search-first-page .keyword-search-hero {
-          margin-top: -0.72rem;
+          margin-top: -0.5rem;
         }
 
         @media (max-width: 720px) {
           .search-first-page .keyword-search-hero {
-            margin-top: -0.72rem;
+            margin-top: -0.5rem;
           }
 
           .search-first-page .search-landing-hero__qr {

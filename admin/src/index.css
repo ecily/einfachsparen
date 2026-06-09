@@ -1180,7 +1180,7 @@ a {
 
 .search-landing-hero__usp {
   display: grid;
-  gap: 0.38rem;
+  gap: 0.42rem;
   min-width: 0;
   max-width: 100%;
 }
@@ -4624,6 +4624,11 @@ textarea:focus {
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
+.search-first-page .keyword-search-hero {
+  justify-self: center;
+  width: min(100%, 61rem);
+}
+
 .keyword-search-page .keyword-search-hero::before {
   content: "";
   position: absolute;
@@ -5627,12 +5632,12 @@ textarea:focus {
 
   .search-landing-hero {
     grid-template-columns: 1fr !important;
-    gap: 0.38rem !important;
-    padding: 0.62rem !important;
+    gap: 0.32rem !important;
+    padding: 0.66rem !important;
   }
 
   .search-landing-hero__usp {
-    gap: 0.34rem;
+    gap: 0.3rem;
   }
 
   .search-landing-hero__usp h1 {
@@ -5652,7 +5657,7 @@ textarea:focus {
   }
 
   .hero-trust-row {
-    gap: 0.26rem;
+    gap: 0.22rem;
     max-width: 100%;
     width: 100%;
   }
@@ -5668,9 +5673,9 @@ textarea:focus {
   }
 
   .hero-trust-row span {
-    min-height: 1.58rem;
-    padding: 0.28rem 0.44rem;
-    font-size: 0.72rem;
+    min-height: 1.48rem;
+    padding: 0.24rem 0.4rem;
+    font-size: 0.7rem;
   }
 
   .hero-trust-row .hero-trust-row__item--speed {
@@ -5904,7 +5909,7 @@ textarea:focus {
   .keyword-search-form__row {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0.48rem;
+    gap: 0.42rem;
   }
 
   .quick-action-row .ghost-button,
@@ -6775,29 +6780,31 @@ textarea:focus {
   }
 
   .keyword-search-form input {
-    min-height: 60px;
-    border-radius: 0.95rem;
+    min-height: 58px;
+    border-radius: 1rem;
     font-size: 1rem;
-    padding: 0.92rem 1rem;
+    padding: 0.9rem 1rem;
   }
 
   .keyword-search-form .primary-action-button {
     min-height: 58px;
+    border-radius: 1rem;
     font-size: 0.98rem;
   }
 
   .keyword-search-page .keyword-search-hero {
-    gap: 0.52rem;
-    margin-top: -0.72rem;
-    padding: 0.88rem !important;
-    border-radius: 1.08rem;
+    gap: 0.5rem;
+    margin-top: -0.5rem;
+    padding: 0.92rem !important;
+    border-color: rgba(31, 90, 75, 0.22);
+    border-radius: 1.12rem;
     box-shadow:
-      0 14px 32px rgba(36, 52, 71, 0.12),
+      0 16px 34px rgba(36, 52, 71, 0.13),
       inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 
   .keyword-search-hero__copy h1 {
-    font-size: 1.08rem;
+    font-size: 1.1rem;
     line-height: 1.18;
   }
 
