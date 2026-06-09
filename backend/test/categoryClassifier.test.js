@@ -318,6 +318,52 @@ test('classifies cat food brands as pet food instead of sauce or groceries', () 
   }
 });
 
+test('keeps Sheba and Vitakraft pet-food anchors ahead of human-food terms', () => {
+  const catFoodCases = [
+    { title: 'Sheba Fresh&Fine in Sauce Lachs & Thunfisch' },
+    { title: 'Sheba Selection in Sauce Herzhafte Komposition 4-Pack' },
+    { title: 'Sheba Selection in Sauce Gefluegel Variation 4-Pack' },
+    { title: 'Vitakraft Poesie mit Huhn und Gartengemuese in Sauce' },
+    { title: 'Vitakraft Poesie Sauce mit Seelachs und Tomate' },
+    { title: 'Poesie mit Huhn und Gartengemuese in Sauce', contextText: 'Vitakraft' },
+  ];
+
+  for (const input of catFoodCases) {
+    const decision = determineCategoryDecision(input);
+
+    assert.equal(decision.primaryCategory, 'Tierbedarf', input.title);
+    assert.equal(decision.secondaryCategory, 'Katzenfutter', input.title);
+  }
+
+  for (const title of [
+    'Vitakraft Liquid Snack mit Lachs',
+    'Vitakraft Beef Stick mit Rind',
+  ]) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, 'Tierbedarf', title);
+    assert.equal(decision.secondaryCategory, 'Tiernahrung', title);
+  }
+});
+
+test('keeps human food products with sauce fish meat and chicken terms in food categories', () => {
+  const cases = [
+    ['Knorr Sauce', 'Lebensmittel', 'Saucen, Oele & Gewuerze'],
+    ['BILLA Bio Raeucherlachs', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Hendlfilet', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Huehnerfilet', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Iglo Fischstaebchen', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Felix Gulaschsuppe', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+  }
+});
+
 test('keeps Felix food products out of pet food despite misleading source category context', () => {
   for (const input of [
     { title: 'Felix Felix Linsen mit Speck' },
