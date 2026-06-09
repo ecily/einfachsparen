@@ -39,7 +39,7 @@ import { getSeoLandingPageByRouteId, SEO_LANDING_PAGE_PREFIX } from './config/se
 import { getRetailerTheme } from './utils/retailerColors'
 
 const BETA_TEST_NOTICE =
-  'Beta: Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Fehler kannst du direkt beim Angebot melden.'
+  'Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.'
 const BETA_INFO_TITLE = 'Warum Beta-Test?'
 const BETA_INFO_TEXT =
   'kaufklug lernt gerade, Angebote noch zuverlässiger zu zeigen. Wenn dir ein falscher Preis, eine fehlende Bedingung, ein falsches Bild oder eine falsche Kategorie auffällt, melde es direkt beim Angebot. So können wir die Datenqualität gezielt verbessern.'
@@ -164,6 +164,16 @@ function SearchLandingHero() {
         }}
       >
         <div className="search-landing-hero__usp">
+          <h1
+            style={{
+              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
+              lineHeight: 1.05,
+              margin: 0,
+              maxWidth: '100%',
+            }}
+          >
+            Nicht blättern. Finden, was sich lohnt.
+          </h1>
           <p className="subtitle">
             Suche aktuelle Supermarkt- und Drogerie-Angebote in Österreich – schnell, kostenlos und ohne Anmeldung.
           </p>
@@ -192,16 +202,6 @@ function SearchLandingHero() {
               </Fragment>
             ))}
           </div>
-          <h1
-            style={{
-              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
-              lineHeight: 1.05,
-              margin: 0,
-              maxWidth: '100%',
-            }}
-          >
-            Nicht blättern. Finden, was sich lohnt.
-          </h1>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (
               <span className={item === 'Pfeilschnell' ? 'hero-trust-row__item--speed' : ''} key={item}>
@@ -326,7 +326,7 @@ function ScopedPageTuning() {
 
         @media (max-width: 720px) {
           .search-first-page .keyword-search-hero {
-            margin-top: -0.5rem;
+            margin-top: -0.72rem;
           }
 
           .search-first-page .search-landing-hero__qr {
