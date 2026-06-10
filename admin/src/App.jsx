@@ -164,27 +164,6 @@ function SearchLandingHero() {
         }}
       >
         <div className="search-landing-hero__usp">
-          <h1
-            style={{
-              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
-              lineHeight: 1.05,
-              margin: 0,
-              maxWidth: '100%',
-            }}
-          >
-            Nicht blättern. Finden, was sich lohnt.
-          </h1>
-          <p className="subtitle">
-            Suche aktuelle Supermarkt- und Drogerie-Angebote{' '}
-            <span className="hero-austria-phrase">
-              in{' '}
-              <span className="hero-austria-accent">
-                <span className="hero-austria-accent__flag" aria-hidden="true" />
-                Österreich
-              </span>
-            </span>{' '}
-            – schnell, kostenlos und ohne Anmeldung.
-          </p>
           <div className="hero-market-strip" aria-label="Marktbeispiele">
             {heroRetailerGroups.map((group, groupIndex) => (
               <Fragment key={group.map(([key]) => key).join('-')}>
@@ -210,6 +189,27 @@ function SearchLandingHero() {
               </Fragment>
             ))}
           </div>
+          <h1
+            style={{
+              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
+              lineHeight: 1.05,
+              margin: 0,
+              maxWidth: '100%',
+            }}
+          >
+            Nicht blättern. Finden, was sich lohnt.
+          </h1>
+          <p className="subtitle">
+            Suche aktuelle Supermarkt- und Drogerie-Angebote{' '}
+            <span className="hero-austria-phrase">
+              in{' '}
+              <span className="hero-austria-accent">
+                <span className="hero-austria-accent__flag" aria-hidden="true" />
+                Österreich
+              </span>
+            </span>{' '}
+            – schnell, kostenlos und ohne Anmeldung.
+          </p>
           <div className="hero-trust-row" aria-label="Nutzungshinweise">
             {trustItems.map((item) => (
               <span className={item === 'Pfeilschnell' ? 'hero-trust-row__item--speed' : ''} key={item}>
@@ -1007,8 +1007,8 @@ function App() {
         </div>
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
-          <BetaNoticeDisclosure onNavigate={handleNavigate} />
           <SearchLandingHero />
+          <BetaNoticeDisclosure onNavigate={handleNavigate} />
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
