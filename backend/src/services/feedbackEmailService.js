@@ -206,7 +206,7 @@ function selectSmtpAuthMechanism(envConfig = env, ehloResponse = '') {
   const mechanisms = getSmtpAuthMechanisms(ehloResponse);
   const host = String(envConfig.SMTP_HOST || '').trim().toLowerCase();
 
-  if (host === 'smtp.office365.com' && mechanisms.includes('LOGIN')) {
+  if ((host === 'smtp.office365.com' || host.endsWith('.brevo.com')) && mechanisms.includes('LOGIN')) {
     return 'LOGIN';
   }
 

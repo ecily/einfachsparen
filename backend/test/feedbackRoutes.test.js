@@ -314,6 +314,18 @@ test('selectSmtpAuthMechanism uses AUTH LOGIN for Microsoft 365', () => {
   assert.equal(mechanism, 'LOGIN');
 });
 
+test('selectSmtpAuthMechanism uses AUTH LOGIN for Brevo SMTP relay', () => {
+  const mechanism = selectSmtpAuthMechanism({
+    SMTP_HOST: 'smtp-relay.brevo.com',
+  }, [
+    '250-smtp-relay.brevo.com Hello',
+    '250-AUTH PLAIN LOGIN CRAM-MD5',
+    '250 SIZE 20971520',
+  ].join('\r\n'));
+
+  assert.equal(mechanism, 'LOGIN');
+});
+
 test('selectSmtpAuthMechanism keeps AUTH PLAIN preference for other SMTP servers', () => {
   const mechanism = selectSmtpAuthMechanism({
     SMTP_HOST: 'smtp.example.test',
