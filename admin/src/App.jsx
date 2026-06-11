@@ -1012,7 +1012,6 @@ function App() {
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
           <SearchLandingHero />
-          <BetaNoticeDisclosure onNavigate={handleNavigate} />
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
@@ -1020,6 +1019,7 @@ function App() {
             shoppingListIds={shoppingListIds}
             onAddToShoppingList={handleAddToShoppingList}
           />
+          <BetaNoticeDisclosure onNavigate={handleNavigate} />
           <HowItWorksSection />
           <DiscoverOffersSection />
           <TrustAndFaqSection />
