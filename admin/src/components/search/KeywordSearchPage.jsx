@@ -581,7 +581,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                 ref={searchInputRef}
                 type="search"
                 value={queryInput}
-                placeholder="Produkt oder Marke suchen"
+                placeholder="Produkt oder Marke finden."
                 aria-label="Suchbegriff für Angebote"
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
