@@ -2,7 +2,11 @@ const express = require('express');
 const { requireAdminApiKey } = require('../middleware/adminAuth');
 const { analyticsEventRateLimit } = require('../middleware/rateLimits');
 const { validateAnalyticsPayload } = require('../middleware/validators');
-const { buildAnalyticsSummary, trackAnalyticsEvent } = require('../services/analytics/analyticsService');
+const {
+  buildAnalyticsSummary,
+  buildInternalTesterActivation,
+  trackAnalyticsEvent,
+} = require('../services/analytics/analyticsService');
 
 const router = express.Router();
 
@@ -24,6 +28,19 @@ router.post('/event', analyticsEventRateLimit, validateAnalyticsPayload, async (
       });
     }
 
+    next(error);
+  }
+});
+
+router.post('/internal-tester', analyticsEventRateLimit, async (req, res, next) => {
+  try {
+    const result = buildInternalTesterActivation({
+      action: req.body?.action,
+      secret: req.body?.secret,
+    });
+
+    res.json(result);
+  } catch (error) {
     next(error);
   }
 });

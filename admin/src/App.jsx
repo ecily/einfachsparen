@@ -22,7 +22,7 @@ import {
   fetchFilterRetailers,
   fetchOfferRankingDirect,
 } from './utils/apiBase'
-import { trackAnalyticsEvent } from './utils/analytics'
+import { configureInternalTesterModeFromUrl, trackAnalyticsEvent } from './utils/analytics'
 import {
   buildAllCategorySelectionTokens,
   buildMainSelectionToken,
@@ -395,6 +395,10 @@ function App() {
   useEffect(() => {
     updateSeoMetadata(activePage)
   }, [activePage])
+
+  useEffect(() => {
+    configureInternalTesterModeFromUrl()
+  }, [])
 
   useEffect(() => {
     if (activePage === 'diagnostics') return

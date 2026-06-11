@@ -2374,6 +2374,8 @@ async function buildDashboardSnapshot() {
     safeDashboardQuery('analyticsSummary', buildAnalyticsSummary(), {
       ok: false,
       trafficLast24h: 0,
+      internalTrafficLast24h: 0,
+      totalTrafficLast24h: 0,
       trafficDailyHistory: [],
       traffic: {
         last24h: { total: 0, byEventName: {}, since: null, until: null },
@@ -2508,7 +2510,9 @@ async function buildDashboardSnapshot() {
     trendSeries,
     analyticsSummary,
     trafficSummary: analyticsSummary?.traffic || null,
-    trafficLast24h: analyticsSummary?.trafficLast24h ?? analyticsSummary?.traffic?.last24h?.total ?? 0,
+    trafficLast24h: analyticsSummary?.trafficLast24h ?? analyticsSummary?.traffic?.last24h?.external?.total ?? 0,
+    internalTrafficLast24h: analyticsSummary?.internalTrafficLast24h ?? analyticsSummary?.traffic?.last24h?.internal?.total ?? 0,
+    totalTrafficLast24h: analyticsSummary?.totalTrafficLast24h ?? analyticsSummary?.traffic?.last24h?.total ?? 0,
     trafficDailyHistory: analyticsSummary?.trafficDailyHistory || analyticsSummary?.traffic?.dailyHistory || [],
     feedbackSummary,
     actionableIssues,

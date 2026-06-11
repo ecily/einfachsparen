@@ -31,6 +31,7 @@ const analyticsEventSchema = new mongoose.Schema(
       enum: ['chrome', 'safari', 'firefox', 'edge', 'other', 'unknown'],
       default: 'unknown',
     },
+    internal: { type: Boolean, default: false, index: true },
     sessionIdHash: { type: String, default: '', index: true },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
@@ -41,5 +42,6 @@ analyticsEventSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 analyticsEventSchema.index({ eventName: 1, createdAt: -1 });
 analyticsEventSchema.index({ createdAt: -1, referrerHost: 1 });
 analyticsEventSchema.index({ createdAt: -1, deviceType: 1 });
+analyticsEventSchema.index({ createdAt: -1, internal: 1, eventName: 1 });
 
 module.exports = mongoose.model('AnalyticsEvent', analyticsEventSchema);

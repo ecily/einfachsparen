@@ -388,6 +388,14 @@ function validateAnalyticsPayload(req, res, next) {
       field: 'path',
       maxLength: 220,
     }) || '/';
+    req.body.internalTesterToken = normalizeString(req.body?.internalTesterToken || '', {
+      field: 'internalTesterToken',
+      maxLength: 220,
+    });
+    req.body.internalTesterSecret = normalizeString(req.body?.internalTesterSecret || '', {
+      field: 'internalTesterSecret',
+      maxLength: 220,
+    });
 
     if (req.body.metadata !== undefined && (typeof req.body.metadata !== 'object' || Array.isArray(req.body.metadata))) {
       rejectBadRequest('metadata ist ungueltig.');

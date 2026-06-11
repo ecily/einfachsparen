@@ -40,6 +40,7 @@ const envSchema = z.object({
   SMTP_HELO_NAME: z.string().trim().default('kaufklug.at'),
   FEEDBACK_EMAIL_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(7000),
   ANALYTICS_SESSION_SECRET: z.string().min(16).default('change-this-analytics-session-secret'),
+  INTERNAL_TESTER_SECRET: z.string().trim().default(''),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   CRAWL_REGION: z.string().default('Grossraum Graz'),
   CRAWL_RUN_ON_START: booleanFromEnv.default(false),

@@ -408,6 +408,9 @@ export function DiagnosticsPage({
   const feedback = snapshot?.feedbackSummary || {}
   const traffic = snapshot?.trafficSummary || snapshot?.analyticsSummary?.traffic || {}
   const trafficLast24h = traffic?.last24h || {}
+  const externalTrafficLast24h = trafficLast24h.external?.total ?? snapshot?.trafficLast24h ?? 0
+  const internalTrafficLast24h = trafficLast24h.internal?.total ?? snapshot?.internalTrafficLast24h ?? 0
+  const totalTrafficLast24h = trafficLast24h.total ?? snapshot?.totalTrafficLast24h ?? externalTrafficLast24h + internalTrafficLast24h
   const trafficHistory = traffic?.dailyHistory || snapshot?.trafficDailyHistory || []
   const issues = snapshot?.actionableIssues || []
   const dataWarnings = snapshot?.dataCompletenessWarnings || []
@@ -508,7 +511,8 @@ export function DiagnosticsPage({
 
       <section className="metrics">
         <MetricCard label="Ampel" value={executive.label || STATUS_LABELS[executive.level]} note={executive.reason} status={executive.level} />
-        <MetricCard label="Zugriffe letzte 24h" value={formatInteger(trafficLast24h.total ?? snapshot?.trafficLast24h ?? 0)} note="Aggregierte Events, keine personenbezogene Auswertung" />
+        <MetricCard label="Zugriffe letzte 24h" value={formatInteger(externalTrafficLast24h)} note="Externe aggregierte Events, keine personenbezogene Auswertung" />
+        <MetricCard label="Interne Tests letzte 24h" value={formatInteger(internalTrafficLast24h)} note={`Gesamt inkl. intern: ${formatInteger(totalTrafficLast24h)}`} />
         <MetricCard label="Scheduled Daily" value={scheduledDaily.status || latestScheduled?.status || 'unbekannt'} note={scheduledDaily.reason || latestScheduled?.id || 'keine scheduled Lineage'} status={scheduledDaily.level || latestScheduled?.status} />
         <MetricCard label="Current Crawl Lock" value={currentCrawlSystem.lockFree ? 'frei' : lock.state || 'unbekannt'} note={currentCrawlSystem.reason || lock.reason || '-'} status={currentCrawlSystem.level || lock.state} />
         <MetricCard label="Latest Manual Full" value={latestManualFull?.status || 'unbekannt'} note={latestManualFull ? `${latestManualFull.lastStage || '-'} / ${formatInteger(latestManualFull.successfulSourcesCount)} ok / ${formatInteger(latestManualFull.failedSourcesCount)} fail` : 'kein manual full gefunden'} status={latestManualFull?.terminal ? 'green' : 'yellow'} />
@@ -520,7 +524,7 @@ export function DiagnosticsPage({
       <section className="panel">
         <div className="panel__header">
           <h2>Nutzung</h2>
-          <p>Zugriffe sind aggregierte Frontend-Nutzungsereignisse. Such-Result-Events werden nicht zusaetzlich gezaehlt.</p>
+          <p>Zugriffe sind externe aggregierte Frontend-Nutzungsereignisse. Interne Tests werden getrennt ausgewiesen; Such-Result-Events werden nicht zusaetzlich gezaehlt.</p>
         </div>
         {trafficHistory.length ? (
           <div className="op-table-wrap">
@@ -529,6 +533,7 @@ export function DiagnosticsPage({
                 <tr>
                   <th>Tag</th>
                   <th>Events</th>
+                  <th>Intern</th>
                   <th>Suchen</th>
                   <th>Seitenaufrufe</th>
                 </tr>
@@ -538,6 +543,7 @@ export function DiagnosticsPage({
                   <tr key={row.date}>
                     <td>{formatDay(row.date)}</td>
                     <td>{formatInteger(row.total)}</td>
+                    <td>{formatInteger(row.internalTotal)}</td>
                     <td>{formatInteger(row.byEventName?.offer_search_started)}</td>
                     <td>{formatInteger(row.byEventName?.landing_page_view)}</td>
                   </tr>

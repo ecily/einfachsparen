@@ -31,6 +31,7 @@ const EVENT_RETENTION_DAYS = 180;
 const MAX_PATH_LENGTH = 180;
 const MAX_METADATA_STRING_LENGTH = 80;
 const MAX_SESSION_ID_LENGTH = 160;
+const INTERNAL_TESTER_MARKER_PAYLOAD = 'kaufklug-internal-tester-v1';
 
 const metadataAllowlist = {
   landing_page_view: {
@@ -295,6 +296,8 @@ async function trackAnalyticsEvent({ req, eventName, path, metadata = {}, referr
 
   const now = new Date();
   const sanitizedMetadata = sanitizeMetadata(eventName, metadata);
+  const internal = isValidInternalTesterToken(req.body?.internalTesterToken)
+    || validateInternalTesterSecret(req.body?.internalTesterSecret);
   const event = {
     eventName,
     createdAt: now,
@@ -303,6 +306,7 @@ async function trackAnalyticsEvent({ req, eventName, path, metadata = {}, referr
     referrerHost: referrerHost || extractReferrerHost(req, req.body),
     deviceType: detectDeviceType(req.get('user-agent')),
     browserFamily: detectBrowserFamily(req.get('user-agent')),
+    internal,
     sessionIdHash: buildSessionIdHash(req, req.body),
     metadata: sanitizedMetadata,
   };
@@ -311,6 +315,67 @@ async function trackAnalyticsEvent({ req, eventName, path, metadata = {}, referr
   await incrementDailyAggregate(eventName, now, sanitizedMetadata);
 
   return event;
+}
+
+function isInternalTesterModeConfigured(envConfig = env) {
+  return typeof envConfig.INTERNAL_TESTER_SECRET === 'string' && envConfig.INTERNAL_TESTER_SECRET.trim().length >= 16;
+}
+
+function createInternalTesterToken(envConfig = env) {
+  if (!isInternalTesterModeConfigured(envConfig)) {
+    return '';
+  }
+
+  const signature = crypto
+    .createHmac('sha256', envConfig.INTERNAL_TESTER_SECRET)
+    .update(INTERNAL_TESTER_MARKER_PAYLOAD)
+    .digest('hex');
+
+  return `v1.${signature}`;
+}
+
+function isValidInternalTesterToken(token, envConfig = env) {
+  if (!isInternalTesterModeConfigured(envConfig) || typeof token !== 'string') {
+    return false;
+  }
+
+  const expected = createInternalTesterToken(envConfig);
+  const provided = token.trim();
+
+  if (!provided || provided.length !== expected.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+}
+
+function validateInternalTesterSecret(secret, envConfig = env) {
+  if (!isInternalTesterModeConfigured(envConfig) || typeof secret !== 'string') {
+    return false;
+  }
+
+  const provided = secret.trim();
+  const expected = envConfig.INTERNAL_TESTER_SECRET;
+
+  if (!provided || provided.length !== expected.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+}
+
+function buildInternalTesterActivation({ action, secret, envConfig = env } = {}) {
+  const normalizedAction = action === 'clear' ? 'clear' : 'set';
+  const configured = isInternalTesterModeConfigured(envConfig);
+  const accepted = configured && validateInternalTesterSecret(secret, envConfig);
+
+  return {
+    ok: true,
+    configured,
+    accepted,
+    action: normalizedAction,
+    internalTesterToken: accepted && normalizedAction === 'set' ? createInternalTesterToken(envConfig) : '',
+  };
 }
 
 async function incrementDailyAggregate(eventName, date, metadata) {
@@ -347,7 +412,9 @@ async function buildAnalyticsSummary() {
   return {
     ok: true,
     generatedAt: now.toISOString(),
-    trafficLast24h: traffic.last24h.total,
+    trafficLast24h: traffic.last24h.external.total,
+    internalTrafficLast24h: traffic.last24h.internal.total,
+    totalTrafficLast24h: traffic.last24h.total,
     trafficDailyHistory: traffic.dailyHistory,
     traffic,
     totals: {
@@ -379,11 +446,14 @@ async function buildTrafficSummary({
 } = {}) {
   const [last24h, dailyHistory] = await Promise.all([
     buildRollingTrafficLast24h({ now, AnalyticsEventModel }),
-    buildDailyTrafficHistory({ now, days, AnalyticsDailyAggregateModel }),
+    buildDailyTrafficHistory({ now, days, AnalyticsEventModel, AnalyticsDailyAggregateModel }),
   ]);
 
   return {
     last24h,
+    externalLast24h: last24h.external,
+    internalLast24h: last24h.internal,
+    totalLast24h: last24h.total,
     dailyHistory,
     countedEvents: TRAFFIC_EVENT_NAMES,
     excludedEvents: TRAFFIC_EXCLUDED_EVENT_NAMES,
@@ -401,18 +471,33 @@ async function buildRollingTrafficLast24h({ now = new Date(), AnalyticsEventMode
         eventName: { $in: TRAFFIC_EVENT_NAMES },
       },
     },
-    { $group: { _id: '$eventName', count: { $sum: 1 } } },
-    { $project: { _id: 0, eventName: '$_id', count: 1 } },
+    { $group: { _id: { eventName: '$eventName', internal: { $eq: ['$internal', true] } }, count: { $sum: 1 } } },
+    { $project: { _id: 0, eventName: '$_id.eventName', internal: '$_id.internal', count: 1 } },
   ]);
-  const byEventName = buildEmptyTrafficEventCounts();
+  const externalByEventName = buildEmptyTrafficEventCounts();
+  const internalByEventName = buildEmptyTrafficEventCounts();
 
   for (const row of rows) {
-    byEventName[row.eventName] = Number(row.count || 0);
+    if (row.internal === true) {
+      internalByEventName[row.eventName] = Number(row.count || 0);
+    } else {
+      externalByEventName[row.eventName] = Number(row.count || 0);
+    }
   }
+  const externalTotal = sumCounts(externalByEventName);
+  const internalTotal = sumCounts(internalByEventName);
 
   return {
-    total: sumCounts(byEventName),
-    byEventName,
+    total: externalTotal + internalTotal,
+    external: {
+      total: externalTotal,
+      byEventName: externalByEventName,
+    },
+    internal: {
+      total: internalTotal,
+      byEventName: internalByEventName,
+    },
+    byEventName: externalByEventName,
     since: since.toISOString(),
     until: until.toISOString(),
   };
@@ -421,15 +506,13 @@ async function buildRollingTrafficLast24h({ now = new Date(), AnalyticsEventMode
 async function buildDailyTrafficHistory({
   now = new Date(),
   days = 7,
+  AnalyticsEventModel = AnalyticsEvent,
   AnalyticsDailyAggregateModel = AnalyticsDailyAggregate,
 } = {}) {
   const safeDays = Math.max(1, Math.min(14, Number(days) || 7));
   const startDate = new Date(now.getTime() - (safeDays - 1) * DAY_MS);
   const start = getDayString(startDate);
-  const rows = await AnalyticsDailyAggregateModel.find({
-    day: { $gte: start },
-    eventName: { $in: TRAFFIC_EVENT_NAMES },
-  }).lean();
+  const rows = await buildDailyTrafficRows({ start, AnalyticsEventModel, AnalyticsDailyAggregateModel });
   const daily = new Map();
 
   for (let index = 0; index < safeDays; index += 1) {
@@ -438,6 +521,9 @@ async function buildDailyTrafficHistory({
       date: day,
       total: 0,
       byEventName: buildEmptyTrafficEventCounts(),
+      internalTotal: 0,
+      internalByEventName: buildEmptyTrafficEventCounts(),
+      combinedTotal: 0,
     });
   }
 
@@ -447,13 +533,59 @@ async function buildDailyTrafficHistory({
       continue;
     }
 
-    day.byEventName[row.eventName] = Number(row.count || 0);
+    if (row.internal === true) {
+      day.internalByEventName[row.eventName] = Number(row.count || 0);
+    } else {
+      day.byEventName[row.eventName] = Number(row.count || 0);
+    }
   }
 
   return [...daily.values()].map((day) => ({
     ...day,
     total: sumCounts(day.byEventName),
+    internalTotal: sumCounts(day.internalByEventName),
+    combinedTotal: sumCounts(day.byEventName) + sumCounts(day.internalByEventName),
   }));
+}
+
+async function buildDailyTrafficRows({ start, AnalyticsEventModel, AnalyticsDailyAggregateModel }) {
+  if (typeof AnalyticsEventModel?.aggregate === 'function') {
+    const since = new Date(`${start}T00:00:00.000Z`);
+    return AnalyticsEventModel.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: since },
+          eventName: { $in: TRAFFIC_EVENT_NAMES },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            eventName: '$eventName',
+            internal: { $eq: ['$internal', true] },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          day: '$_id.day',
+          eventName: '$_id.eventName',
+          internal: '$_id.internal',
+          count: 1,
+        },
+      },
+    ]);
+  }
+
+  const rows = await AnalyticsDailyAggregateModel.find({
+    day: { $gte: start },
+    eventName: { $in: TRAFFIC_EVENT_NAMES },
+  }).lean();
+
+  return rows.map((row) => ({ ...row, internal: false }));
 }
 
 function buildEmptyTrafficEventCounts() {
@@ -509,10 +641,13 @@ module.exports = {
   EVENT_NAMES,
   TRAFFIC_EVENT_NAMES,
   TRAFFIC_EXCLUDED_EVENT_NAMES,
+  buildInternalTesterActivation,
   buildDailyTrafficHistory,
   buildAnalyticsSummary,
   buildRollingTrafficLast24h,
   buildTrafficSummary,
+  createInternalTesterToken,
+  isValidInternalTesterToken,
   sanitizeMetadata,
   trackAnalyticsEvent,
 };
