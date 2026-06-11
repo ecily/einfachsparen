@@ -6647,6 +6647,13 @@ test('validity label includes concrete date when validTo is present', () => {
     }),
     'gueltig bis 2026-05-12'
   );
+  assert.equal(
+    buildValidityLabel({
+      validFrom: new Date('2026-06-10T22:00:00Z'),
+      validTo: new Date('2026-06-17T21:59:59.999Z'),
+    }),
+    'gueltig 2026-06-11 bis 2026-06-17'
+  );
 });
 
 test('paginates visible ranking offers by limit and offset without overlap', () => {

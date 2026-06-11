@@ -4672,7 +4672,7 @@ function formatDateLabel(value) {
   }
 
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+  return getViennaDateKey(date);
 }
 
 function buildValidityLabel(offer) {
