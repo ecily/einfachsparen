@@ -1666,6 +1666,181 @@ test('PENNY official API normalizer keeps missing validTo offers and rejects nor
   assert.equal(offers[1].adminReview.status, 'pending');
 });
 
+test('PENNY official API normalizer handles current 11.06 reference products', () => {
+  const products = [
+    pennyApiProduct({
+      slug: 'helles-78101754',
+      name: 'Helles',
+      brand: { name: 'Ottakringer', slug: 'ottakringer' },
+      amount: '0.33',
+      volumeLabelShort: 'liter',
+      packageLabel: 'Flasche',
+      priceCents: 69,
+      crossed: null,
+      promotionType: 'FROM',
+      promotionQuantity: 24,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'kinder-pingui-78102064',
+      name: 'Kinder Pingui',
+      brand: null,
+      amount: '120',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 159,
+      crossed: null,
+      tags: [],
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'joghurt-mit-der-ecke-78102841',
+      name: 'Joghurt mit der Ecke',
+      brand: { name: 'M\u00fcller', slug: 'mueller' },
+      amount: '150',
+      volumeLabelShort: 'g',
+      packageLabel: 'Becher',
+      priceCents: 52,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'gelierzucker-21-78105219',
+      name: 'Gelierzucker 2:1*',
+      brand: { name: 'Wiener Zucker', slug: 'wiener-zucker' },
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Paket',
+      priceCents: 99,
+      crossed: null,
+      promotionType: 'FROM',
+      promotionQuantity: 2,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'kartoffelpueree-78103890',
+      name: 'Kartoffelp\u00fcree',
+      brand: { name: 'Pfanni', slug: 'pfanni' },
+      amount: '240',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 186,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'kirschen-78108999',
+      name: 'Kirschen',
+      brand: null,
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Tasse',
+      priceCents: 299,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-13',
+    }),
+    pennyApiProduct({
+      slug: 'gouda-78110986',
+      name: 'Gouda*',
+      brand: { name: 'Sch\u00e4rdinger', slug: 'schaerdinger' },
+      amount: '1',
+      volumeLabelShort: 'kg',
+      packageLabel: 'Packung',
+      priceCents: 699,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-13',
+    }),
+    pennyApiProduct({
+      slug: 'polardorsch-78111437',
+      name: 'Polardorsch*',
+      brand: { name: 'Iglo', slug: 'iglo' },
+      amount: '400',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 449,
+      crossed: null,
+      validityStart: '2026-06-12',
+      validityEnd: '2026-06-13',
+    }),
+    pennyApiProduct({
+      slug: 'rosinenbroetchen-78112501',
+      name: 'Rosinenbr\u00f6tchen*',
+      brand: { name: '\u00d6lz', slug: 'oelz' },
+      amount: '375',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 399,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'amicelli-78112199',
+      name: 'Amicelli od. Amicelli Kokos*',
+      brand: null,
+      amount: '200',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 349,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+  ];
+
+  const offers = __private.normalizePennyApiProductsToOffers({
+    products,
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-1106',
+  });
+  const bySlug = new Map(offers.map((offer) => [offer.rawFacts.productSlug, offer]));
+
+  assert.equal(offers.length, products.length);
+  assert.equal(bySlug.get('helles-78101754').brand, 'Ottakringer');
+  assert.equal(bySlug.get('helles-78101754').priceCurrent.amount, 0.69);
+  assert.equal(bySlug.get('helles-78101754').conditionsText, 'ab 24 Flaschen');
+  assert.equal(bySlug.get('kinder-pingui-78102064').title, 'Kinder Pingui');
+  assert.equal(bySlug.get('joghurt-mit-der-ecke-78102841').brand, 'M\u00fcller');
+  assert.equal(bySlug.get('polardorsch-78111437').brand, 'Iglo');
+  assert.equal(bySlug.get('gouda-78110986').brand, 'Sch\u00e4rdinger');
+  assert.equal(bySlug.get('rosinenbroetchen-78112501').brand, '\u00d6lz');
+  assert.equal(bySlug.get('amicelli-78112199').priceCurrent.amount, 3.49);
+  assert.ok(offers.every((offer) => offer.rawFacts.sourceType === 'penny-official-html'));
+});
+
+test('official source zero-store gate marks raw official coverage as partial warning', () => {
+  const gate = __private.buildOfficialSourceZeroStoredGate({
+    source: pennyOfficialSource(),
+    rawCandidateCount: 258,
+    offersStored: 0,
+  });
+
+  assert.equal(gate.forcePartial, true);
+  assert.match(gate.warningMessages[0], /stored 0 offers/);
+  assert.deepEqual(gate.rejectionReasons, [{
+    reason: 'official-source-zero-stored',
+    count: 258,
+  }]);
+
+  const healthy = __private.buildOfficialSourceZeroStoredGate({
+    source: pennyOfficialSource(),
+    rawCandidateCount: 258,
+    offersStored: 42,
+  });
+
+  assert.equal(healthy.forcePartial, false);
+});
+
 test('PENNY official condition extraction reads explicit API promotion tags only', () => {
   const cases = [
     {

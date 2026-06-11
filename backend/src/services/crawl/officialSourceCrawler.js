@@ -4183,6 +4183,39 @@ function sourceCoverageFields({
   };
 }
 
+function shouldWarnOfficialSourceZeroStored({ source = {}, rawCandidateCount = 0, offersStored = 0 } = {}) {
+  const channel = String(source.channel || '');
+  const sourceType = String(source.sourceType || '');
+
+  return Number(rawCandidateCount || 0) > 0
+    && Number(offersStored || 0) === 0
+    && (/^official-/i.test(channel) || /official/i.test(sourceType));
+}
+
+function buildOfficialSourceZeroStoredWarning({ source = {}, rawCandidateCount = 0 } = {}) {
+  const label = source.label || source.sourceUrl || source.retailerName || 'official source';
+  return `${label} found ${Number(rawCandidateCount || 0)} raw/API candidates but stored 0 offers. Treating source as partial for coverage trust.`;
+}
+
+function buildOfficialSourceZeroStoredGate({ source = {}, rawCandidateCount = 0, offersStored = 0 } = {}) {
+  if (!shouldWarnOfficialSourceZeroStored({ source, rawCandidateCount, offersStored })) {
+    return {
+      forcePartial: false,
+      warningMessages: [],
+      rejectionReasons: [],
+    };
+  }
+
+  return {
+    forcePartial: true,
+    warningMessages: [buildOfficialSourceZeroStoredWarning({ source, rawCandidateCount })],
+    rejectionReasons: [{
+      reason: 'official-source-zero-stored',
+      count: Math.max(1, Number(rawCandidateCount || 0)),
+    }],
+  };
+}
+
 async function crawlSparOfficialPdfSource({ source, crawlJobId, crawlRunId = null, region }) {
   const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
   const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
@@ -7307,7 +7340,19 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       extraRawDocuments += nestedDocuments.filter((item) => item && !item.error).length;
     }
 
-    const status = forcePartialStatus ? 'partial' : (offersStored > 0 || evidenceMatched > 0 || links.length > 0 ? 'success' : 'partial');
+    const zeroStoredGate = buildOfficialSourceZeroStoredGate({
+      source,
+      rawCandidateCount,
+      offersStored,
+    });
+    if (zeroStoredGate.forcePartial) {
+      warningMessages = warningMessages.concat(zeroStoredGate.warningMessages);
+      extraRejectionReasons = extraRejectionReasons.concat(zeroStoredGate.rejectionReasons);
+    }
+
+    const status = (forcePartialStatus || zeroStoredGate.forcePartial)
+      ? 'partial'
+      : (offersStored > 0 || evidenceMatched > 0 || links.length > 0 ? 'success' : 'partial');
     if (status === 'partial' && sourceMessage) {
       warningMessages = warningMessages.concat(sourceMessage);
     }
@@ -7443,6 +7488,7 @@ module.exports = {
     buildPennyOfficialConditionExtraction,
     normalizePennyApiProductsToOffers,
     collectPennyOfficialApiOffers,
+    buildOfficialSourceZeroStoredGate,
     diagnosePennyOfficialSiteHtml,
     parseDmSaleOffersFromHtml,
     parseDmSaleOffersFromProductSearchJson,
