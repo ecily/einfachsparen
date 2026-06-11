@@ -160,6 +160,33 @@ test('normalizes austrian potato and erdapfel query aliases bidirectionally', ()
   assert.equal(pureeTokens.includes('erdaepfel'), true);
 });
 
+test('normalizes austrian food aliases bidirectionally', () => {
+  const families = [
+    ['tomate', ['tomate', 'tomaten', 'paradeiser']],
+    ['tomaten', ['tomate', 'tomaten', 'paradeiser']],
+    ['paradeiser', ['tomate', 'tomaten', 'paradeiser']],
+    ['marille', ['aprikose', 'aprikosen', 'marille', 'marillen']],
+    ['aprikose', ['aprikose', 'aprikosen', 'marille', 'marillen']],
+    ['karfiol', ['blumenkohl', 'karfiol']],
+    ['blumenkohl', ['blumenkohl', 'karfiol']],
+    ['topfen', ['quark', 'topfen']],
+    ['quark', ['quark', 'topfen']],
+  ];
+
+  for (const [query, expectedTokens] of families) {
+    const queryTokens = buildQuerySearchTokens(query);
+
+    for (const expectedToken of expectedTokens) {
+      assert.equal(queryTokens.includes(expectedToken), true, `${query} should include ${expectedToken}`);
+    }
+  }
+
+  assert.equal(buildOfferSearchTokens({ title: 'Paradeiser aus Oesterreich' }).includes('tomaten'), true);
+  assert.equal(buildOfferSearchTokens({ title: 'Marillen 500 g' }).includes('aprikose'), true);
+  assert.equal(buildOfferSearchTokens({ title: 'Karfiol' }).includes('blumenkohl'), true);
+  assert.equal(buildOfferSearchTokens({ title: 'Topfen 250 g' }).includes('quark'), true);
+});
+
 test('expands fisch query to direct fish and seafood product tokens only', () => {
   const fischTokens = buildQuerySearchTokens('fisch');
 

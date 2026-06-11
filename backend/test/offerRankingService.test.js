@@ -205,6 +205,7 @@ test('ranking candidate query expands salad compounds and austrian potato aliase
   const salatMetadata = buildRankingCandidateQueryMetadata({ query: 'salat' });
   const kartoffelMetadata = buildRankingCandidateQueryMetadata({ query: 'kartoffel' });
   const erdaepfelMetadata = buildRankingCandidateQueryMetadata({ query: 'erd\u00e4pfel' });
+  const paradeiserMetadata = buildRankingCandidateQueryMetadata({ query: 'paradeiser' });
 
   for (const token of ['salat', 'salatherzen', 'kopfsalat', 'eisbergsalat', 'salatgurke']) {
     assert.equal(salatMetadata.queryTokens.includes(token), true);
@@ -219,6 +220,8 @@ test('ranking candidate query expands salad compounds and austrian potato aliase
   assert.equal(salatMetadata.candidateQueryMode, 'searchTokensOnly');
   assert.equal(kartoffelMetadata.candidateQueryMode, 'searchTokensOnly');
   assert.equal(erdaepfelMetadata.candidateQueryMode, 'searchTokensOnly');
+  assert.equal(paradeiserMetadata.queryTokens.includes('tomaten'), true);
+  assert.equal(paradeiserMetadata.candidateQueryMode, 'searchTokensOnly');
 });
 
 test('query scoring matches salad compounds and potato erdapfel aliases', () => {
@@ -245,6 +248,39 @@ test('query scoring matches salad compounds and potato erdapfel aliases', () => 
     'Ofen-/Grillerd\u00e4pfel',
     'Kartoffelp\u00fcree',
   ]);
+});
+
+test('query scoring matches austrian food aliases bidirectionally', () => {
+  const offers = [
+    offer({ title: 'Paradeiser', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Tomaten', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Marillen', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Aprikosen', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Karfiol', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Blumenkohl', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Topfen', categoryPrimary: 'Lebensmittel', categorySecondary: 'Milchprodukte' }),
+    offer({ title: 'Quark', categoryPrimary: 'Lebensmittel', categorySecondary: 'Milchprodukte' }),
+  ];
+
+  assert.equal(applyQueryMatch(offers, 'tomate').some((item) => item.title === 'Paradeiser'), true);
+  assert.equal(applyQueryMatch(offers, 'tomaten').some((item) => item.title === 'Paradeiser'), true);
+  assert.equal(applyQueryMatch(offers, 'paradeiser').some((item) => item.title === 'Tomaten'), true);
+  assert.equal(applyQueryMatch(offers, 'marille').some((item) => item.title === 'Aprikosen'), true);
+  assert.equal(applyQueryMatch(offers, 'aprikose').some((item) => item.title === 'Marillen'), true);
+  assert.equal(applyQueryMatch(offers, 'karfiol').some((item) => item.title === 'Blumenkohl'), true);
+  assert.equal(applyQueryMatch(offers, 'blumenkohl').some((item) => item.title === 'Karfiol'), true);
+  assert.equal(applyQueryMatch(offers, 'topfen').some((item) => item.title === 'Quark'), true);
+  assert.equal(applyQueryMatch(offers, 'quark').some((item) => item.title === 'Topfen'), true);
+});
+
+test('query scoring keeps original austrian food terms ahead of alias-only hits', () => {
+  const offers = [
+    offer({ title: 'Paradeiser', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Tomaten', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+  ];
+
+  assert.equal(applyQueryMatch(offers, 'tomate')[0].title, 'Tomaten');
+  assert.equal(applyQueryMatch(offers, 'paradeiser')[0].title, 'Paradeiser');
 });
 
 test('ranking retailer filter keeps normal retailerKey query for non-SPAR retailers', () => {

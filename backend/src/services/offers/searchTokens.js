@@ -145,6 +145,34 @@ const POTATO_PRODUCT_TOKENS = [
   'speisekartoffeln',
 ];
 
+const AUSTRIAN_FOOD_ALIAS_TOKEN_FAMILIES = [
+  [
+    'tomate',
+    'tomaten',
+    'paradeis',
+    'paradeiser',
+    'paradeiserl',
+    'cherrytomate',
+    'cherrytomaten',
+    'cocktailtomate',
+    'cocktailtomaten',
+  ],
+  [
+    'aprikose',
+    'aprikosen',
+    'marille',
+    'marillen',
+  ],
+  [
+    'blumenkohl',
+    'karfiol',
+  ],
+  [
+    'quark',
+    'topfen',
+  ],
+];
+
 const STOPWORDS = new Set([
   'ab',
   'aktion',
@@ -179,6 +207,12 @@ const STOPWORDS = new Set([
 
 const SHORT_TOKEN_ALLOWLIST = new Set(['wc']);
 
+function buildBidirectionalAliasEntries(families = []) {
+  return families.flatMap((family) =>
+    family.map((token) => [token, family.filter((alias) => alias !== token)])
+  );
+}
+
 const SYNONYMS = new Map([
   ['cafe', ['kaffee', 'caffe']],
   ['caffe', ['kaffee', 'cafe']],
@@ -201,6 +235,7 @@ const SYNONYMS = new Map([
   ['ol', ['oel']],
   ['suesswaren', ['susswaren']],
   ['susswaren', ['suesswaren']],
+  ...buildBidirectionalAliasEntries(AUSTRIAN_FOOD_ALIAS_TOKEN_FAMILIES),
 ]);
 
 const QUERY_SYNONYMS = new Map([
@@ -417,6 +452,7 @@ function withOfferSearchTokens(offer = {}) {
 
 module.exports = {
   SEARCH_TOKEN_VERSION,
+  AUSTRIAN_FOOD_ALIAS_TOKEN_FAMILIES,
   FOOD_OIL_PRODUCT_TOKENS,
   DUFT_PRODUCT_TOKENS,
   FISCH_PRODUCT_TOKENS,

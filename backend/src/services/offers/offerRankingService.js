@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { computeOfferSavings } = require('./promotionMath');
 const {
   SEARCH_TOKEN_VERSION,
+  AUSTRIAN_FOOD_ALIAS_TOKEN_FAMILIES,
   STOPWORDS: SEARCH_TOKEN_STOPWORDS,
   DUFT_PRODUCT_TOKENS,
   FISCH_PRODUCT_TOKENS,
@@ -958,6 +959,14 @@ function expandScoringQueryTokens(tokens = []) {
   if (tokens.some((token) => POTATO_PRODUCT_TOKENS.includes(token))) {
     for (const token of POTATO_PRODUCT_TOKENS) {
       expanded.add(token);
+    }
+  }
+
+  for (const family of AUSTRIAN_FOOD_ALIAS_TOKEN_FAMILIES) {
+    if (tokens.some((token) => family.includes(token))) {
+      for (const token of family) {
+        expanded.add(token);
+      }
     }
   }
 
@@ -3437,7 +3446,9 @@ function scoreKaffeeSearchIntent({ titleTokens, categoryTokens, comparisonTokens
 
 function scoreOfferAgainstQuery(offer, query) {
   const productScoringQuery = getProductScoringQuery(query);
-  const queryTokens = expandScoringQueryTokens(tokenizeSearchText(productScoringQuery));
+  const originalQueryTokens = tokenizeSearchText(productScoringQuery);
+  const queryTokens = expandScoringQueryTokens(originalQueryTokens);
+  const hasExpandedQueryTokens = queryTokens.length > originalQueryTokens.length;
 
   if (queryTokens.length === 0) {
     return scoreConditionQuerySignal(offer, query) || 1;
@@ -3551,6 +3562,33 @@ function scoreOfferAgainstQuery(offer, query) {
     prefix: 1,
     substring: 0,
   });
+
+  if (hasExpandedQueryTokens) {
+    score += scoreFieldAgainstQuery(offer.title, originalQueryTokens, {
+      phrase: 80,
+      exact: 30,
+      prefix: 18,
+      substring: 4,
+      allTokens: 35,
+      firstToken: 14,
+    });
+    score += scoreFieldAgainstQuery(offer.brand, originalQueryTokens, {
+      phrase: 60,
+      exact: 22,
+      prefix: 12,
+      substring: 3,
+      allTokens: 25,
+      firstToken: 8,
+    });
+    score += scoreFieldAgainstQuery(offer.categorySecondary || offer.subcategoryKey, originalQueryTokens, {
+      phrase: 40,
+      exact: 14,
+      prefix: 8,
+      substring: 2,
+      allTokens: 18,
+    });
+  }
+
   score += scoreConditionQuerySignal(offer, query);
 
   const matchedStructuredTokens = countTokenMatches(structuredTokens, queryTokens, { allowPrefix: true });
