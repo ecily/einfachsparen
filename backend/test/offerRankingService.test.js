@@ -201,6 +201,52 @@ test('pushes ranking query into Mongo searchTokens candidate filtering before JS
   });
 });
 
+test('ranking candidate query expands salad compounds and austrian potato aliases', () => {
+  const salatMetadata = buildRankingCandidateQueryMetadata({ query: 'salat' });
+  const kartoffelMetadata = buildRankingCandidateQueryMetadata({ query: 'kartoffel' });
+  const erdaepfelMetadata = buildRankingCandidateQueryMetadata({ query: 'erd\u00e4pfel' });
+
+  for (const token of ['salat', 'salatherzen', 'kopfsalat', 'eisbergsalat', 'salatgurke']) {
+    assert.equal(salatMetadata.queryTokens.includes(token), true);
+  }
+
+  for (const metadata of [kartoffelMetadata, erdaepfelMetadata]) {
+    for (const token of ['kartoffel', 'kartoffeln', 'erdapfel', 'erdaepfel', 'grillerdaepfel']) {
+      assert.equal(metadata.queryTokens.includes(token), true);
+    }
+  }
+
+  assert.equal(salatMetadata.candidateQueryMode, 'searchTokensOnly');
+  assert.equal(kartoffelMetadata.candidateQueryMode, 'searchTokensOnly');
+  assert.equal(erdaepfelMetadata.candidateQueryMode, 'searchTokensOnly');
+});
+
+test('query scoring matches salad compounds and potato erdapfel aliases', () => {
+  const saladOffers = [
+    offer({ title: 'Salatherzen', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Kopfsalat', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Salatgurke', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+  ];
+  const potatoOffers = [
+    offer({ title: 'Ofen-/Grillerd\u00e4pfel', categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese' }),
+    offer({ title: 'Kartoffelp\u00fcree', categoryPrimary: 'Lebensmittel', categorySecondary: 'Trockensortiment' }),
+  ];
+
+  assert.deepEqual(new Set(applyQueryMatch(saladOffers, 'salat').map((item) => item.title)), new Set([
+    'Salatherzen',
+    'Kopfsalat',
+    'Salatgurke',
+  ]));
+  assert.deepEqual(applyQueryMatch(potatoOffers, 'kartoffel').map((item) => item.title), [
+    'Ofen-/Grillerd\u00e4pfel',
+    'Kartoffelp\u00fcree',
+  ]);
+  assert.deepEqual(applyQueryMatch(potatoOffers, 'erd\u00e4pfel').map((item) => item.title), [
+    'Ofen-/Grillerd\u00e4pfel',
+    'Kartoffelp\u00fcree',
+  ]);
+});
+
 test('ranking retailer filter keeps normal retailerKey query for non-SPAR retailers', () => {
   assert.deepEqual(buildRetailerScopeMatch(['hofer']), {
     retailerKey: { $in: ['hofer'] },

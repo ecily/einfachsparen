@@ -124,6 +124,42 @@ test('expands wurst query to direct sausage and cold-cut product tokens only', (
   }
 });
 
+test('expands salat query to common salad compound product tokens', () => {
+  const salatTokens = buildQuerySearchTokens('salat');
+
+  for (const token of ['salat', 'salatherzen', 'kopfsalat', 'eisbergsalat', 'salatgurke']) {
+    assert.equal(salatTokens.includes(token), true);
+  }
+
+  const saladHeartTokens = buildOfferSearchTokens({ title: 'Salatherzen 2 Stueck' });
+  const cucumberTokens = buildOfferSearchTokens({ title: 'Salatgurke' });
+  const headLettuceTokens = buildOfferSearchTokens({ title: 'Kopfsalat' });
+
+  assert.equal(saladHeartTokens.includes('salat'), true);
+  assert.equal(cucumberTokens.includes('salat'), true);
+  assert.equal(headLettuceTokens.includes('salat'), true);
+});
+
+test('normalizes austrian potato and erdapfel query aliases bidirectionally', () => {
+  const potatoTokens = buildQuerySearchTokens('kartoffel');
+  const potatoPluralTokens = buildQuerySearchTokens('kartoffeln');
+  const erdaepfelTokens = buildQuerySearchTokens('erd\u00e4pfel');
+
+  for (const tokens of [potatoTokens, potatoPluralTokens, erdaepfelTokens]) {
+    for (const token of ['kartoffel', 'kartoffeln', 'erdapfel', 'erdaepfel', 'grillerdaepfel']) {
+      assert.equal(tokens.includes(token), true);
+    }
+  }
+
+  const grillErdaepfelTokens = buildOfferSearchTokens({ title: 'Ofen-/Grillerd\u00e4pfel' });
+  const pureeTokens = buildOfferSearchTokens({ title: 'Kartoffelp\u00fcree' });
+
+  assert.equal(grillErdaepfelTokens.includes('kartoffel'), true);
+  assert.equal(grillErdaepfelTokens.includes('erdaepfel'), true);
+  assert.equal(pureeTokens.includes('kartoffel'), true);
+  assert.equal(pureeTokens.includes('erdaepfel'), true);
+});
+
 test('expands fisch query to direct fish and seafood product tokens only', () => {
   const fischTokens = buildQuerySearchTokens('fisch');
 

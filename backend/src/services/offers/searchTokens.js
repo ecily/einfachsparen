@@ -116,6 +116,35 @@ const DUFT_PRODUCT_TOKENS = [
   'toilette',
 ];
 
+const SALAT_PRODUCT_TOKENS = [
+  'eisbergsalat',
+  'kopfsalat',
+  'salat',
+  'salatgurke',
+  'salatherz',
+  'salatherzen',
+];
+
+const POTATO_PRODUCT_TOKENS = [
+  'erdapfel',
+  'erdaepfel',
+  'erdaepfeln',
+  'fruehkartoffel',
+  'fruehkartoffeln',
+  'grillerdaepfel',
+  'grillkartoffel',
+  'grillkartoffeln',
+  'kartoffel',
+  'kartoffeln',
+  'kartoffelpueree',
+  'kartoffelpuree',
+  'ofenerdaepfel',
+  'ofenkartoffel',
+  'ofenkartoffeln',
+  'speisekartoffel',
+  'speisekartoffeln',
+];
+
 const STOPWORDS = new Set([
   'ab',
   'aktion',
@@ -160,6 +189,10 @@ const SYNONYMS = new Map([
   ['haarol', ['haaroel']],
   ['katzenstreu', ['klumpstreu']],
   ['klumpstreu', ['katzenstreu']],
+  ['erdapfel', POTATO_PRODUCT_TOKENS.filter((token) => token !== 'erdapfel')],
+  ['erdaepfel', POTATO_PRODUCT_TOKENS.filter((token) => token !== 'erdaepfel')],
+  ['kartoffel', POTATO_PRODUCT_TOKENS.filter((token) => token !== 'kartoffel')],
+  ['kartoffeln', POTATO_PRODUCT_TOKENS.filter((token) => token !== 'kartoffeln')],
   ['kase', ['kaese']],
   ['kaese', ['kase']],
   ['nudeln', ['nudel', 'pasta', 'spaghetti', 'penne', 'fusilli', 'makkaroni', 'maccheroni', 'teigwaren']],
@@ -189,18 +222,22 @@ const QUERY_SYNONYMS = new Map([
     'whiskas',
   ]],
   ['fisch', FISCH_PRODUCT_TOKENS.filter((token) => token !== 'fisch')],
+  ['salat', SALAT_PRODUCT_TOKENS.filter((token) => token !== 'salat')],
   ['tee', TEE_PRODUCT_TOKENS.filter((token) => token !== 'tee')],
   ['wurst', WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst')],
   ['duft', DUFT_PRODUCT_TOKENS.filter((token) => token !== 'duft')],
 ]);
 
 const COMPOUND_PRODUCT_TOKENS = new Set([
+  'kartoffel',
   'milch',
   'reis',
+  'salat',
 ]);
 
 const CONSERVATIVE_COMPOUND_TOKEN_ALIASES = new Map([
   ['oel', FOOD_OIL_PRODUCT_TOKENS],
+  ['erdaepfel', POTATO_PRODUCT_TOKENS.filter((token) => token !== 'erdaepfel')],
   ['butter', [
     'alpenbutter',
     'bauernbutter',
@@ -211,6 +248,7 @@ const CONSERVATIVE_COMPOUND_TOKEN_ALIASES = new Map([
     'sussrahmbutter',
     'teebutter',
   ]],
+  ['salat', SALAT_PRODUCT_TOKENS.filter((token) => token !== 'salat')],
   ['wurst', WURST_PRODUCT_TOKENS.filter((token) => token !== 'wurst')],
 ]);
 
@@ -382,6 +420,8 @@ module.exports = {
   FOOD_OIL_PRODUCT_TOKENS,
   DUFT_PRODUCT_TOKENS,
   FISCH_PRODUCT_TOKENS,
+  POTATO_PRODUCT_TOKENS,
+  SALAT_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
   TEE_PRODUCT_TOKENS,
   STOPWORDS,

@@ -10,6 +10,8 @@ const {
   STOPWORDS: SEARCH_TOKEN_STOPWORDS,
   DUFT_PRODUCT_TOKENS,
   FISCH_PRODUCT_TOKENS,
+  POTATO_PRODUCT_TOKENS,
+  SALAT_PRODUCT_TOKENS,
   TEE_PRODUCT_TOKENS,
   WURST_PRODUCT_TOKENS,
   buildQuerySearchTokens,
@@ -945,6 +947,18 @@ function expandScoringQueryTokens(tokens = []) {
 
   if (expanded.has('sbudget')) {
     expanded.add('budget');
+  }
+
+  if (expanded.has('salat')) {
+    for (const token of SALAT_PRODUCT_TOKENS) {
+      expanded.add(token);
+    }
+  }
+
+  if (tokens.some((token) => POTATO_PRODUCT_TOKENS.includes(token))) {
+    for (const token of POTATO_PRODUCT_TOKENS) {
+      expanded.add(token);
+    }
   }
 
   return [...expanded];
