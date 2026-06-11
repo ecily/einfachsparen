@@ -570,10 +570,6 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
   return (
     <div className="keyword-search-page">
       <section className="panel keyword-search-hero">
-        <div className="keyword-search-hero__copy">
-          <h1>Wonach suchst du heute?</h1>
-        </div>
-
         <form className="keyword-search-form" onSubmit={handleSubmit}>
           <div className="keyword-search-form__row">
             <div
@@ -621,7 +617,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
               ) : null}
             </div>
             <button type="submit" className="primary-action-button">
-              Angebote finden
+              Los
             </button>
           </div>
           <div className="keyword-search-examples" aria-label="Beispiel-Suchen">

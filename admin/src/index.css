@@ -3204,20 +3204,20 @@ a {
 
 .keyword-search-form__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(11rem, auto);
-  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
   align-items: stretch;
 }
 
 .keyword-search-form input {
   width: 100%;
   min-width: 0;
-  min-height: 64px;
+  min-height: 58px;
   border: 1px solid rgba(31, 90, 75, 0.3);
-  border-radius: 1.08rem;
+  border-radius: 1rem;
   background: rgba(255, 254, 250, 0.99);
   color: var(--kk-ink);
-  padding: 1.02rem 1.16rem;
+  padding: 0.9rem 1rem;
   font-size: clamp(1rem, 2vw, 1.14rem);
   font-weight: 760;
   outline: none;
@@ -3250,8 +3250,9 @@ a {
 }
 
 .keyword-search-form .primary-action-button {
-  min-height: 64px;
-  padding-inline: 1.34rem;
+  min-height: 58px;
+  padding-inline: 1.18rem;
+  border-radius: 1rem;
   border-color: rgba(31, 90, 75, 0.36);
   font-size: 1rem;
   font-weight: 920;
@@ -5957,8 +5958,7 @@ textarea:focus {
 
   .quick-action-row,
   .action-button-row,
-  .shopping-list-actions,
-  .keyword-search-form__row {
+  .shopping-list-actions {
     display: grid;
     grid-template-columns: 1fr;
     gap: 0.42rem;
@@ -5967,9 +5967,13 @@ textarea:focus {
   .quick-action-row .ghost-button,
   .action-button-row .ghost-button,
   .action-button-row .primary-action-button,
-  .shopping-list-actions .ghost-button,
-  .keyword-search-form__row .primary-action-button {
+  .shopping-list-actions .ghost-button {
     width: 100%;
+  }
+
+  .keyword-search-form__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.42rem;
   }
 
   .keyword-search-controls,
@@ -6821,16 +6825,15 @@ textarea:focus {
   }
 
   .keyword-search-form input {
-    min-height: 58px;
-    border-radius: 1rem;
+    min-height: 54px;
     font-size: 1rem;
-    padding: 0.9rem 1rem;
+    padding: 0.82rem 0.8rem;
   }
 
   .keyword-search-form .primary-action-button {
-    min-height: 58px;
-    border-radius: 1rem;
-    font-size: 0.98rem;
+    min-height: 54px;
+    padding-inline: 0.82rem;
+    font-size: 0.96rem;
   }
 
   .keyword-search-page .keyword-search-hero {
