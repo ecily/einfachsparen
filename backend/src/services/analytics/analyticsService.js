@@ -15,6 +15,16 @@ const ALLOWED_EVENTS = new Set([
 ]);
 
 const EVENT_NAMES = Array.from(ALLOWED_EVENTS);
+const TRAFFIC_EVENT_NAMES = [
+  'landing_page_view',
+  'shopping_list_opened',
+  'offer_search_started',
+  'offer_added_to_list',
+  'apk_download_click',
+  'legal_page_opened',
+  'app_open',
+];
+const TRAFFIC_EXCLUDED_EVENT_NAMES = ['offer_search_result'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_WINDOW_DAYS = 7;
 const EVENT_RETENTION_DAYS = 180;
@@ -325,17 +335,21 @@ async function incrementDailyAggregate(eventName, date, metadata) {
 
 async function buildAnalyticsSummary() {
   const now = new Date();
-  const [totals1d, totals7d, totals30d, topReferrerHosts, deviceTypes] = await Promise.all([
+  const [totals1d, totals7d, totals30d, topReferrerHosts, deviceTypes, traffic] = await Promise.all([
     buildTotals(1, now),
     buildTotals(7, now),
     buildTotals(30, now),
     buildTopReferrerHosts(now),
     buildDeviceTypes(now),
+    buildTrafficSummary({ now }),
   ]);
 
   return {
     ok: true,
     generatedAt: now.toISOString(),
+    trafficLast24h: traffic.last24h.total,
+    trafficDailyHistory: traffic.dailyHistory,
+    traffic,
     totals: {
       last1Day: totals1d,
       last7Days: totals7d,
@@ -355,6 +369,99 @@ async function buildAnalyticsSummary() {
     topReferrerHosts,
     deviceTypes,
   };
+}
+
+async function buildTrafficSummary({
+  now = new Date(),
+  days = 7,
+  AnalyticsEventModel = AnalyticsEvent,
+  AnalyticsDailyAggregateModel = AnalyticsDailyAggregate,
+} = {}) {
+  const [last24h, dailyHistory] = await Promise.all([
+    buildRollingTrafficLast24h({ now, AnalyticsEventModel }),
+    buildDailyTrafficHistory({ now, days, AnalyticsDailyAggregateModel }),
+  ]);
+
+  return {
+    last24h,
+    dailyHistory,
+    countedEvents: TRAFFIC_EVENT_NAMES,
+    excludedEvents: TRAFFIC_EXCLUDED_EVENT_NAMES,
+    note: 'Aggregierte Nutzungsereignisse, keine personenbezogene Auswertung.',
+  };
+}
+
+async function buildRollingTrafficLast24h({ now = new Date(), AnalyticsEventModel = AnalyticsEvent } = {}) {
+  const until = new Date(now);
+  const since = new Date(until.getTime() - DAY_MS);
+  const rows = await AnalyticsEventModel.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: since, $lte: until },
+        eventName: { $in: TRAFFIC_EVENT_NAMES },
+      },
+    },
+    { $group: { _id: '$eventName', count: { $sum: 1 } } },
+    { $project: { _id: 0, eventName: '$_id', count: 1 } },
+  ]);
+  const byEventName = buildEmptyTrafficEventCounts();
+
+  for (const row of rows) {
+    byEventName[row.eventName] = Number(row.count || 0);
+  }
+
+  return {
+    total: sumCounts(byEventName),
+    byEventName,
+    since: since.toISOString(),
+    until: until.toISOString(),
+  };
+}
+
+async function buildDailyTrafficHistory({
+  now = new Date(),
+  days = 7,
+  AnalyticsDailyAggregateModel = AnalyticsDailyAggregate,
+} = {}) {
+  const safeDays = Math.max(1, Math.min(14, Number(days) || 7));
+  const startDate = new Date(now.getTime() - (safeDays - 1) * DAY_MS);
+  const start = getDayString(startDate);
+  const rows = await AnalyticsDailyAggregateModel.find({
+    day: { $gte: start },
+    eventName: { $in: TRAFFIC_EVENT_NAMES },
+  }).lean();
+  const daily = new Map();
+
+  for (let index = 0; index < safeDays; index += 1) {
+    const day = getDayString(new Date(startDate.getTime() + index * DAY_MS));
+    daily.set(day, {
+      date: day,
+      total: 0,
+      byEventName: buildEmptyTrafficEventCounts(),
+    });
+  }
+
+  for (const row of rows) {
+    const day = daily.get(row.day);
+    if (!day || !TRAFFIC_EVENT_NAMES.includes(row.eventName)) {
+      continue;
+    }
+
+    day.byEventName[row.eventName] = Number(row.count || 0);
+  }
+
+  return [...daily.values()].map((day) => ({
+    ...day,
+    total: sumCounts(day.byEventName),
+  }));
+}
+
+function buildEmptyTrafficEventCounts() {
+  return Object.fromEntries(TRAFFIC_EVENT_NAMES.map((eventName) => [eventName, 0]));
+}
+
+function sumCounts(counts) {
+  return Object.values(counts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
 }
 
 async function buildTotals(days, now) {
@@ -400,7 +507,12 @@ async function buildDeviceTypes(now) {
 module.exports = {
   ALLOWED_EVENTS,
   EVENT_NAMES,
+  TRAFFIC_EVENT_NAMES,
+  TRAFFIC_EXCLUDED_EVENT_NAMES,
+  buildDailyTrafficHistory,
   buildAnalyticsSummary,
+  buildRollingTrafficLast24h,
+  buildTrafficSummary,
   sanitizeMetadata,
   trackAnalyticsEvent,
 };

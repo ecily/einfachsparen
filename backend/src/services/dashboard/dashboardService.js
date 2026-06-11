@@ -11,6 +11,7 @@ const mongoose = require('mongoose');
 const env = require('../../config/env');
 const { buildSafeBuildInfo } = require('../buildInfo');
 const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
+const { buildAnalyticsSummary } = require('../analytics/analyticsService');
 const { classifyOfferSourceQuality } = require('../offers/sourceQuality');
 const logger = require('../../lib/logger');
 
@@ -2303,6 +2304,7 @@ async function buildDashboardSnapshot() {
     retailerCoverage,
     feedbackSummary,
     comparisonSnapshot,
+    analyticsSummary,
   ] = await Promise.all([
     safeDashboardQuery('sources', withQueryMaxTime(Source.find().sort({ active: -1, retailerName: 1 }).lean()), [], dashboardWarnings),
     safeDashboardQuery('latestJobs', withQueryMaxTime(CrawlJob.find().sort({ startedAt: -1 }).limit(20).lean()), [], dashboardWarnings),
@@ -2369,6 +2371,18 @@ async function buildDashboardSnapshot() {
       totalFeedback: 0,
     }), dashboardWarnings),
     buildComparisonSnapshotSafely(),
+    safeDashboardQuery('analyticsSummary', buildAnalyticsSummary(), {
+      ok: false,
+      trafficLast24h: 0,
+      trafficDailyHistory: [],
+      traffic: {
+        last24h: { total: 0, byEventName: {}, since: null, until: null },
+        dailyHistory: [],
+        countedEvents: [],
+        excludedEvents: [],
+        note: 'Analytics summary unavailable.',
+      },
+    }, dashboardWarnings),
   ]);
 
   const activeSourceCount = sources.filter((source) => source.active).length;
@@ -2492,6 +2506,10 @@ async function buildDashboardSnapshot() {
     sourceTypeSummary,
     qualityKpis,
     trendSeries,
+    analyticsSummary,
+    trafficSummary: analyticsSummary?.traffic || null,
+    trafficLast24h: analyticsSummary?.trafficLast24h ?? analyticsSummary?.traffic?.last24h?.total ?? 0,
+    trafficDailyHistory: analyticsSummary?.trafficDailyHistory || analyticsSummary?.traffic?.dailyHistory || [],
     feedbackSummary,
     actionableIssues,
     dataCompletenessWarnings,

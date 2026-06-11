@@ -34,6 +34,10 @@ function formatDateTime(value) {
   return value ? dayjs(value).format('DD.MM.YYYY HH:mm:ss') : '-'
 }
 
+function formatDay(value) {
+  return value ? dayjs(value).format('DD.MM.') : '-'
+}
+
 function formatDuration(ms) {
   const value = Number(ms)
   if (!Number.isFinite(value) || value <= 0) return '-'
@@ -402,6 +406,9 @@ export function DiagnosticsPage({
   const kpis = snapshot?.qualityKpis || []
   const trendRows = snapshot?.trendSeries || []
   const feedback = snapshot?.feedbackSummary || {}
+  const traffic = snapshot?.trafficSummary || snapshot?.analyticsSummary?.traffic || {}
+  const trafficLast24h = traffic?.last24h || {}
+  const trafficHistory = traffic?.dailyHistory || snapshot?.trafficDailyHistory || []
   const issues = snapshot?.actionableIssues || []
   const dataWarnings = snapshot?.dataCompletenessWarnings || []
   const hasAdminApiKey = adminApiKeyInput.trim().length > 0
@@ -501,12 +508,46 @@ export function DiagnosticsPage({
 
       <section className="metrics">
         <MetricCard label="Ampel" value={executive.label || STATUS_LABELS[executive.level]} note={executive.reason} status={executive.level} />
+        <MetricCard label="Zugriffe letzte 24h" value={formatInteger(trafficLast24h.total ?? snapshot?.trafficLast24h ?? 0)} note="Aggregierte Events, keine personenbezogene Auswertung" />
         <MetricCard label="Scheduled Daily" value={scheduledDaily.status || latestScheduled?.status || 'unbekannt'} note={scheduledDaily.reason || latestScheduled?.id || 'keine scheduled Lineage'} status={scheduledDaily.level || latestScheduled?.status} />
         <MetricCard label="Current Crawl Lock" value={currentCrawlSystem.lockFree ? 'frei' : lock.state || 'unbekannt'} note={currentCrawlSystem.reason || lock.reason || '-'} status={currentCrawlSystem.level || lock.state} />
         <MetricCard label="Latest Manual Full" value={latestManualFull?.status || 'unbekannt'} note={latestManualFull ? `${latestManualFull.lastStage || '-'} / ${formatInteger(latestManualFull.successfulSourcesCount)} ok / ${formatInteger(latestManualFull.failedSourcesCount)} fail` : 'kein manual full gefunden'} status={latestManualFull?.terminal ? 'green' : 'yellow'} />
         <MetricCard label="Finalization/Lock" value={currentCrawlSystem.finalizationLockBlockerLabel || 'unbekannt'} note={currentCrawlSystem.awaitingNextScheduledDailyConfirmation ? 'Awaiting next scheduled daily confirmation' : currentCrawlSystem.finalizationLockBlocker || '-'} status={currentCrawlSystem.finalizationLockBlocker === 'green' ? 'green' : 'yellow'} />
         <MetricCard label="Source Failures" value={`${formatInteger(sourceFailures.p1SourceCoverageCount)} P1`} note={sourceFailures.reason || 'Source/Coverage getrennt von P0 Reliability'} status={sourceFailures.level || 'unknown'} />
         <MetricCard label="PublishStatus" value={publish.status || 'unbekannt'} note={`${formatInteger(publish.finalCount)} final / ${formatInteger(publish.openCount)} offen`} status={publish.status} />
+      </section>
+
+      <section className="panel">
+        <div className="panel__header">
+          <h2>Nutzung</h2>
+          <p>Zugriffe sind aggregierte Frontend-Nutzungsereignisse. Such-Result-Events werden nicht zusaetzlich gezaehlt.</p>
+        </div>
+        {trafficHistory.length ? (
+          <div className="op-table-wrap">
+            <table className="op-table op-table--compact">
+              <thead>
+                <tr>
+                  <th>Tag</th>
+                  <th>Events</th>
+                  <th>Suchen</th>
+                  <th>Seitenaufrufe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trafficHistory.slice(-7).map((row) => (
+                  <tr key={row.date}>
+                    <td>{formatDay(row.date)}</td>
+                    <td>{formatInteger(row.total)}</td>
+                    <td>{formatInteger(row.byEventName?.offer_search_started)}</td>
+                    <td>{formatInteger(row.byEventName?.landing_page_view)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="status">Noch keine Analytics-Tageshistorie vorhanden.</p>
+        )}
       </section>
 
       <section className="panel">
