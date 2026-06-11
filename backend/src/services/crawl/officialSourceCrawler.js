@@ -1796,7 +1796,9 @@ function parsePennyDateFromIso(value, endOfDay = false) {
   }
 
   const [, year, month, day] = match.map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day, endOfDay ? 23 : 12, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0));
+  const date = endOfDay
+    ? buildViennaWallClockDate(year, month, day, 23, 59, 59, 999)
+    : buildViennaWallClockDate(year, month, day, 0, 0, 0, 0);
 
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -1809,7 +1811,9 @@ function parsePennyDateFromText(value, endOfDay = false) {
   }
 
   const [, day, month, year] = match.map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day, endOfDay ? 23 : 12, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0));
+  const date = endOfDay
+    ? buildViennaWallClockDate(year, month, day, 23, 59, 59, 999)
+    : buildViennaWallClockDate(year, month, day, 0, 0, 0, 0);
 
   return Number.isNaN(date.getTime()) ? null : date;
 }

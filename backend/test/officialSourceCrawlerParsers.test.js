@@ -1427,8 +1427,8 @@ test('PENNY official parser extracts offer card core fields and Nuxt payload ima
   assert.equal(offers[0].title, 'Auslese klassisch*');
   assert.equal(offers[0].brand, 'Jacobs');
   assert.equal(offers[0].quantityText, '500 g Packung');
-  assert.equal(offers[0].validFrom.toISOString(), '2026-06-10T12:00:00.000Z');
-  assert.equal(offers[0].validTo.toISOString(), '2026-06-30T23:59:59.999Z');
+  assert.equal(offers[0].validFrom.toISOString(), '2026-06-09T22:00:00.000Z');
+  assert.equal(offers[0].validTo.toISOString(), '2026-06-30T21:59:59.999Z');
   assert.equal(offers[0].priceCurrent.amount, 5.99);
   assert.equal(offers[0].priceReference.amount, 9.99);
   assert.equal(offers[0].normalizedUnitPrice.amount, 11.98);
@@ -1809,6 +1809,9 @@ test('PENNY official API normalizer handles current 11.06 reference products', (
   assert.equal(bySlug.get('helles-78101754').brand, 'Ottakringer');
   assert.equal(bySlug.get('helles-78101754').priceCurrent.amount, 0.69);
   assert.equal(bySlug.get('helles-78101754').conditionsText, 'ab 24 Flaschen');
+  assert.equal(bySlug.get('helles-78101754').validFrom.toISOString(), '2026-06-10T22:00:00.000Z');
+  assert.equal(bySlug.get('helles-78101754').validTo.toISOString(), '2026-06-17T21:59:59.999Z');
+  assert.equal(bySlug.get('helles-78101754').status, 'active');
   assert.equal(bySlug.get('kinder-pingui-78102064').title, 'Kinder Pingui');
   assert.equal(bySlug.get('joghurt-mit-der-ecke-78102841').brand, 'M\u00fcller');
   assert.equal(bySlug.get('polardorsch-78111437').brand, 'Iglo');
