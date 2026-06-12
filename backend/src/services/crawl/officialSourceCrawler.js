@@ -4819,6 +4819,82 @@ function getViennaWeekdayKey(now = new Date()) {
   }[weekday] || '';
 }
 
+function getViennaDateParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const valueByType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(valueByType.year),
+    month: Number(valueByType.month),
+    day: Number(valueByType.day),
+  };
+}
+
+function getBillaPromotionCycleOffset(weekdayKey = '') {
+  return {
+    do: 0,
+    fr: 1,
+    sa: 2,
+    so: 3,
+    mo: 4,
+    di: 5,
+    mi: 6,
+  }[weekdayKey];
+}
+
+function buildBillaPriceWindowValidity(weekdays = [], now = new Date()) {
+  const offsets = weekdays
+    .map(getBillaPromotionCycleOffset)
+    .filter((offset) => Number.isInteger(offset));
+
+  if (offsets.length === 0) {
+    return {};
+  }
+
+  const currentOffset = getBillaPromotionCycleOffset(getViennaWeekdayKey(now));
+
+  if (!Number.isInteger(currentOffset)) {
+    return {};
+  }
+
+  const { year, month, day } = getViennaDateParts(now);
+  const todayStart = buildViennaWallClockDate(year, month, day, 0, 0, 0, 0);
+  const cycleStartCalendarDate = new Date(Date.UTC(year, month - 1, day - currentOffset, 12, 0, 0, 0));
+  const startOffset = Math.min(...offsets);
+  const endOffset = Math.max(...offsets);
+  const validFrom = buildViennaWallClockDate(
+    cycleStartCalendarDate.getUTCFullYear(),
+    cycleStartCalendarDate.getUTCMonth() + 1,
+    cycleStartCalendarDate.getUTCDate() + startOffset,
+    0,
+    0,
+    0,
+    0
+  );
+  const validTo = buildViennaWallClockDate(
+    cycleStartCalendarDate.getUTCFullYear(),
+    cycleStartCalendarDate.getUTCMonth() + 1,
+    cycleStartCalendarDate.getUTCDate() + endOffset,
+    23,
+    59,
+    59,
+    999
+  );
+
+  return {
+    validFrom,
+    validTo,
+    validityText: `Preisfenster ${weekdays.join('/')}`,
+    validitySource: 'billa-action-price-window',
+    snapshotCurrent: validFrom <= todayStart && validTo >= todayStart,
+  };
+}
+
 function normalizeBillaWeekdayToken(value = '') {
   const normalized = normalizeTitleForMatch(value);
 
@@ -4910,6 +4986,7 @@ function parseBillaActionPriceWindowTeaser(fullText = '', { now = new Date() } =
     referencePrice: reference?.price || null,
     conditionsText: `Preisfenster ${selected.label}`,
     rawText: text,
+    ...buildBillaPriceWindowValidity(selected.weekdays, now),
     priceWindow: {
       selectedLabel: selected.label,
       selectedWeekdays: selected.weekdays,
@@ -5128,8 +5205,8 @@ function extractBillaActionTeasersFromHtml({ html, source, crawlJobId, region, p
       || '';
     const offer = normalizeBillaActionTeaserToOffer({
       candidate: {
-        ...parsed,
         ...context,
+        ...parsed,
         imageUrl,
       },
       source,

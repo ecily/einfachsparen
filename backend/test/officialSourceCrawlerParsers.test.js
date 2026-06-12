@@ -3388,6 +3388,8 @@ test('BILLA action HTML parser selects FR-SA price window for Dallmayr on Friday
   assert.equal(parsed.referencePrice, 11.99);
   assert.match(parsed.conditionsText, /Preisfenster/);
   assert.equal(parsed.priceWindow.selectedWeekdays.includes('fr'), true);
+  assert.equal(parsed.validFrom.toISOString(), '2026-06-11T22:00:00.000Z');
+  assert.equal(parsed.validTo.toISOString(), '2026-06-13T21:59:59.999Z');
 });
 
 test('BILLA action HTML parser selects DO/MO-MI price window outside Friday-Saturday', () => {
@@ -3399,6 +3401,8 @@ test('BILLA action HTML parser selects DO/MO-MI price window outside Friday-Satu
 
   assert.equal(parsed.currentPrice, 11.99);
   assert.equal(parsed.priceWindow.selectedWeekdays.includes('mo'), true);
+  assert.equal(parsed.validFrom.toISOString(), '2026-06-14T22:00:00.000Z');
+  assert.equal(parsed.validTo.toISOString(), '2026-06-17T21:59:59.999Z');
 });
 
 test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 condition', () => {
