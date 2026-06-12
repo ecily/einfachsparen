@@ -203,10 +203,11 @@ function SearchLandingHero() {
             Suche aktuelle Supermarkt- und Drogerie-Angebote{' '}
             <span className="hero-austria-phrase">
               in{' '}
+              <span className="hero-austria-accent__flag" aria-hidden="true" />
               <span className="hero-austria-accent">
-                <span className="hero-austria-accent__flag" aria-hidden="true" />
-                Österreich
+                Österreich, OLÉ
               </span>
+              <span className="hero-austria-icons" aria-hidden="true"> ⚽🏆</span>
             </span>{' '}
             – schnell, kostenlos und ohne Anmeldung.
           </p>

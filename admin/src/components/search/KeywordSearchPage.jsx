@@ -346,6 +346,15 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
   const emptySearchSuggestions = useMemo(() => getEmptySearchSuggestions(submittedQuery), [submittedQuery])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) return
+
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus({ preventScroll: true })
+    })
+  }, [])
+
+  useEffect(() => {
     if (!searchRequest?.nonce) return
 
     const nextQuery = String(searchRequest.query || '').trim()
