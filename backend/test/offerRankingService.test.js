@@ -5094,6 +5094,65 @@ test('response dedupe applies official source priority conservatively for BILLA 
   assert.deepEqual(prepared.map((item) => item._id).sort(), ['billa-official', 'lidl-official']);
 });
 
+test('BILLA action HTML price-window evidence remains visible ahead of Algolia snapshot', () => {
+  const algolia = offer({
+    _id: 'dallmayr-algolia',
+    title: 'Dallmayr Prodomo 500 g',
+    retailerKey: 'billa',
+    sourceType: 'offers-page',
+    rawFacts: { sourceType: 'billa-official-algolia' },
+    priceCurrent: { amount: 11.99 },
+    quantityText: '500 g',
+    normalizedUnitPrice: { amount: 23.98, unit: 'kg', comparable: true },
+    conditionsText: '',
+    validTo: null,
+    searchText: 'dallmayr prodomo 500 g billa',
+  });
+  const actionHtml = offer({
+    ...algolia,
+    _id: 'dallmayr-action-html',
+    rawFacts: { sourceType: 'billa-official-action-html' },
+    priceCurrent: { amount: 8.99 },
+    normalizedUnitPrice: { amount: 17.98, unit: 'kg', comparable: true },
+    conditionsText: 'Preisfenster Freitag und Samstag',
+    searchText: 'dallmayr prodomo 500 g billa preisfenster freitag samstag',
+  });
+
+  const ranked = [algolia, actionHtml].sort((a, b) => compareOffersByRanking(a, b, {
+    query: 'Dallmayr Prodomo',
+  }));
+  const rankedOffer = buildRankedOffer(actionHtml, 17.98, 23.98);
+
+  assert.equal(ranked[0]._id, 'dallmayr-action-html');
+  assert.equal(rankedOffer.sourceType, 'billa-official-action-html');
+  assert.deepEqual(rankedOffer.sourceTypes.sort(), ['billa-official-action-html', 'offers-page']);
+});
+
+test('BILLA response dedupe prefers exact action HTML evidence over same-price Algolia duplicate', () => {
+  const algolia = offer({
+    _id: 'dallmayr-algolia',
+    title: 'Dallmayr Prodomo 500 g',
+    retailerKey: 'billa',
+    sourceType: 'offers-page',
+    rawFacts: { sourceType: 'billa-official-algolia' },
+    priceCurrent: { amount: 8.99 },
+    quantityText: '500 g',
+    normalizedUnitPrice: { amount: 17.98, unit: 'kg', comparable: true },
+    conditionsText: 'Preisfenster Freitag und Samstag',
+    validTo: null,
+  });
+  const actionHtml = offer({
+    ...algolia,
+    _id: 'dallmayr-action-html',
+    rawFacts: { sourceType: 'billa-official-action-html' },
+    conditionsText: 'Preisfenster Freitag und Samstag',
+  });
+
+  const prepared = dedupeResponseOffers([algolia, actionHtml], 'dallmayr prodomo');
+
+  assert.deepEqual(prepared.map((item) => item._id), ['dallmayr-action-html']);
+});
+
 test('fresh active filter removes expired and stale offers but keeps recent missing-validTo snapshots', () => {
   const now = new Date('2026-05-21T12:00:00.000Z');
   const current = offer({

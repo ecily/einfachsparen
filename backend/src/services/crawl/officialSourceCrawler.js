@@ -5342,17 +5342,19 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html =
 function selectBillaFlyerPdfLinks({ links = [], source = {} } = {}) {
   const retailerKey = String(source.retailerKey || '').toLowerCase();
   const pdfLinks = links.filter((link) => link.type === 'pdf');
+  const sharedFlyerPattern = /(?:billa|flugblatt|fb|flyer|beileger|grill)/i;
   const wantedPattern = retailerKey === 'billa-plus'
-    ? /billa[_-]?plus|billaplus|plus[_-]?fb/i
-    : /billa[_-]?fb|billa[_-]?flugblatt|billa_fb/i;
+    ? /billa[_-]?plus|billaplus|plus[_-]?fb|plus.*flugblatt|flugblatt.*plus|beileger|grill/i
+    : /billa[_-]?fb|billa[_-]?flugblatt|billa_fb|beileger|grill/i;
   const excludedPattern = retailerKey === 'billa-plus'
     ? null
     : /billa[_-]?plus|billaplus|plus[_-]?fb/i;
 
   return pdfLinks
+    .filter((link) => sharedFlyerPattern.test(`${link.url} ${link.label || ''}`))
     .filter((link) => wantedPattern.test(`${link.url} ${link.label || ''}`))
     .filter((link) => !excludedPattern || !excludedPattern.test(`${link.url} ${link.label || ''}`))
-    .slice(0, 2);
+    .slice(0, 6);
 }
 
 async function crawlBillaOfficialFlyers({ source, crawlJobId, region, links }) {
@@ -5380,7 +5382,7 @@ async function crawlBillaOfficialFlyers({ source, crawlJobId, region, links }) {
         pdfBuffer: buffer,
         sourceUrl: canonicalUrl || link.url,
         sourceRetailerFormat: source.retailerKey,
-        maxPages: Number(source.crawlPolicy?.maxPdfPages || 8),
+        maxPages: Number(source.crawlPolicy?.maxPdfPages || 24),
       });
       const normalizedOffers = normalizeBillaPdfCandidatesToOffers({
         pdfReference,

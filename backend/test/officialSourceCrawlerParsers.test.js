@@ -3319,6 +3319,7 @@ test('BILLA flyer PDF parser extracts KW24 grill supplement dense references', (
   const pdfReference = parseBillaPdfPage(`
     Bertolli Grill Olivenöl 0,5 Liter Flasche (1 l 13.98)
     Puntigamer Bier 0,5 Liter 069 1 DOSE € 1.54 -55 % AB 24 DOSEN JE
+    clever Ofen-/Grill-Lachs 250 g Packung 699 AB 2 PACKUNGEN JE 1 PKG. € 8.99
     Radatz Grillhitparade Chili Käsekrainer, Chili Bratwürstel, Berner Würstel, Käsekrainer, Bratwürstel, 680 g Packung (100 g 0.88) 599
     clever Baguette div. Sorten 175 g Packung (1 kg 4.51) 079
   `);
@@ -3330,6 +3331,8 @@ test('BILLA flyer PDF parser extracts KW24 grill supplement dense references', (
     pdfUrl: 'https://assets.example.test/BILLA_GRILLEN_KW24_2026.pdf',
   });
   const puntigamer = offers.find((offer) => /Puntigamer/i.test(offer.title));
+  const lachs = offers.find((offer) => /Grill-Lachs/i.test(offer.title)
+    && offer.priceCurrent?.amount === 6.99);
   const radatz = offers.find((offer) => /Radatz Grillhitparade/i.test(offer.title));
   const baguette = offers.find((offer) => /Baguette/i.test(offer.title));
 
@@ -3337,6 +3340,10 @@ test('BILLA flyer PDF parser extracts KW24 grill supplement dense references', (
   assert.equal(puntigamer.priceCurrent.amount, 0.69);
   assert.equal(puntigamer.quantityText, '0.5 l');
   assert.match(puntigamer.conditionsText, /24 Dosen/i);
+  assert.ok(lachs);
+  assert.equal(lachs.priceCurrent.amount, 6.99);
+  assert.equal(lachs.quantityText, '250 g');
+  assert.match(lachs.conditionsText, /ab 2 Packungen/i);
   assert.ok(radatz);
   assert.equal(radatz.priceCurrent.amount, 5.99);
   assert.ok(baguette);
@@ -3347,6 +3354,7 @@ test('BILLA flyer source selects retailer-specific official PDF links', () => {
   const links = [
     { type: 'pdf', url: 'https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf', label: 'BILLA Flugblatt' },
     { type: 'pdf', url: 'https://assets.example.test/BILLA_PLUS_FB_KW22_2026_Wien.pdf', label: 'BILLA PLUS Flugblatt' },
+    { type: 'pdf', url: 'https://assets.example.test/BILLA_Grillen_Beileger_KW24_2026.pdf', label: 'BILLA Grillen Beileger' },
     { type: 'html', url: 'https://www.billa.at/unsere-aktionen/flugblatt', label: 'Flugblatt' },
   ];
 
@@ -3356,8 +3364,14 @@ test('BILLA flyer source selects retailer-specific official PDF links', () => {
     source: billaFlyerSource({ retailerKey: 'billa-plus', retailerName: 'Billa Plus' }),
   });
 
-  assert.deepEqual(billaLinks.map((link) => link.url), ['https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf']);
-  assert.deepEqual(billaPlusLinks.map((link) => link.url), ['https://assets.example.test/BILLA_PLUS_FB_KW22_2026_Wien.pdf']);
+  assert.deepEqual(billaLinks.map((link) => link.url), [
+    'https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf',
+    'https://assets.example.test/BILLA_Grillen_Beileger_KW24_2026.pdf',
+  ]);
+  assert.deepEqual(billaPlusLinks.map((link) => link.url), [
+    'https://assets.example.test/BILLA_PLUS_FB_KW22_2026_Wien.pdf',
+    'https://assets.example.test/BILLA_Grillen_Beileger_KW24_2026.pdf',
+  ]);
 });
 
 test('BILLA action HTML parser selects FR-SA price window for Dallmayr on Friday', () => {

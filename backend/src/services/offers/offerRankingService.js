@@ -4693,11 +4693,15 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
     referencePrice: structuredReferencePrice,
     savings: structuredSavings,
     imageUrl: offer.imageUrl || '',
-    sourceType: offer.sourceType || '',
+    sourceType: getOfferSourceType(offer),
     sourceKey: offer.rawFacts?.sourceKey || '',
     sourceUrl: offer.sourceUrl || '',
     sourceUrls: offer.sourceUrls || [],
-    sourceTypes: offer.sourceTypes || [],
+    sourceTypes: [...new Set([
+      ...(Array.isArray(offer.sourceTypes) ? offer.sourceTypes : []),
+      offer.sourceType,
+      offer.rawFacts?.sourceType,
+    ].filter(Boolean))],
     evidenceUrls: offer.evidenceUrls || [],
     crawlRunId: offer.crawlRunId || null,
     crawlJobId: offer.crawlJobId || null,
@@ -4807,14 +4811,22 @@ function buildConsumerScore(offer) {
 }
 
 function getOfferSourceType(offer) {
-  return String(offer?.sourceType || offer?.rawFacts?.sourceType || '').trim();
+  const rawFactsSourceType = String(offer?.rawFacts?.sourceType || '').trim();
+
+  if (/^billa-official-(?:action-html|flyer-pdf)$/i.test(rawFactsSourceType)) {
+    return rawFactsSourceType;
+  }
+
+  return String(offer?.sourceType || rawFactsSourceType || '').trim();
 }
 
 const RESPONSE_SOURCE_PRIORITY_MATRIX = {
   billa: [
-    ['billa-official-algolia', 1, 'official-structured-json'],
-    ['billa-official-html', 2, 'official-html'],
-    ['flyer', 3, 'official-flyer'],
+    ['billa-official-action-html', 0, 'official-action-html'],
+    ['billa-official-flyer-pdf', 1, 'official-flyer-pdf'],
+    ['billa-official-algolia', 2, 'official-structured-json'],
+    ['billa-official-html', 3, 'official-html'],
+    ['flyer', 4, 'official-flyer'],
     ['offers-page', 3, 'official-page'],
     ['aktionsfinder-json', 5, 'aggregator-json'],
     ['marketguru-json-api', 6, 'aggregator-json'],
@@ -4823,9 +4835,11 @@ const RESPONSE_SOURCE_PRIORITY_MATRIX = {
     ['aggregator', 7, 'aggregator'],
   ],
   'billa-plus': [
-    ['billa-official-algolia', 1, 'official-structured-json'],
-    ['billa-official-html', 2, 'official-html'],
-    ['flyer', 3, 'official-flyer'],
+    ['billa-official-action-html', 0, 'official-action-html'],
+    ['billa-official-flyer-pdf', 1, 'official-flyer-pdf'],
+    ['billa-official-algolia', 2, 'official-structured-json'],
+    ['billa-official-html', 3, 'official-html'],
+    ['flyer', 4, 'official-flyer'],
     ['offers-page', 3, 'official-page'],
     ['aktionsfinder-json', 5, 'aggregator-json'],
     ['marketguru-json-api', 6, 'aggregator-json'],
@@ -5001,6 +5015,7 @@ function buildSourceQualityScore(offer) {
   if (quality.isLowConfidenceAggregator) return -500;
   if (isAggregatorSourceQuality(quality) && !quality.hasValidityEvidence && !hasConditionEvidence(offer)) return -120;
 
+  if (rank <= 0) return 260;
   if (rank === 1) return 220;
   if (rank === 2) return 180;
   if (rank === 3) return 140;
