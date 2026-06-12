@@ -2989,7 +2989,7 @@ function parseBillaPdfPage(text, overrides = {}) {
   return {
     validity,
     candidates: extractBillaPdfCandidates({
-      pages: [{ pageNumber: 1, text }],
+      pages: [{ pageNumber: 1, text, positionedItems: overrides.positionedItems || [] }],
       validity,
       sourceRetailerFormat: overrides.sourceRetailerFormat || 'billa',
       now: overrides.now || new Date(),
@@ -2997,12 +2997,19 @@ function parseBillaPdfPage(text, overrides = {}) {
   };
 }
 
-function normalizeBillaPdfFixture({ text, pageNumber = 1, source: sourceDef = billaFlyerSource(), region = 'Steiermark', sourceRetailerFormat = sourceDef.retailerKey || 'billa' }) {
+function normalizeBillaPdfFixture({
+  text,
+  pageNumber = 1,
+  positionedItems = [],
+  source: sourceDef = billaFlyerSource(),
+  region = 'Steiermark',
+  sourceRetailerFormat = sourceDef.retailerKey || 'billa',
+}) {
   const validity = currentBillaFlyerValidity();
   const pdfReference = {
     validity,
     candidates: extractBillaPdfCandidates({
-      pages: [{ pageNumber, text }],
+      pages: [{ pageNumber, text, positionedItems }],
       validity,
       sourceRetailerFormat,
       now: new Date('2026-06-12T10:00:00+02:00'),
@@ -3025,8 +3032,8 @@ function findOffer(offers, pattern) {
 test('BILLA flyer PDF parser parses KW23 validity when start weekday is missing in text layer', () => {
   const validity = parseBillaFlyerValidity('VON , 3. 6. BIS MITTWOCH, 10. 6. 2026 AUF BIER');
 
-  assert.equal(validity.validFrom.toISOString(), '2026-06-03T00:00:00.000Z');
-  assert.equal(validity.validTo.toISOString(), '2026-06-10T23:59:59.999Z');
+  assert.equal(validity.validFrom.toISOString(), '2026-06-02T22:00:00.000Z');
+  assert.equal(validity.validTo.toISOString(), '2026-06-10T21:59:59.999Z');
   assert.equal(validity.validityText, 'VON 3.6. BIS 10.6.2026');
   assert.equal(validity.confidence, 0.84);
 });
@@ -3602,6 +3609,108 @@ test('BILLA Steiermark PDF parser does not map page 3 price block blindly to Eis
   });
 
   assert.equal(offers.some((offer) => /Eissalat/i.test(offer.title)), false);
+});
+
+test('BILLA Steiermark PDF parser maps page 3 produce only with positioned text evidence', () => {
+  const p = (str, x, y) => ({ str, x, y, width: 20, height: 10 });
+  const positionedItems = [
+    p('099', 10, 10),
+    p('Da komm ich her!', 28, 18),
+    p('Trauben', 28, 28),
+    p('weiss kernlos', 28, 42),
+    p('Kl. I, 500 g Packung', 28, 56),
+    p('(1 kg 3.98)', 28, 70),
+    p('1', 198, 28),
+    p('99', 221, 47),
+    p('2.99', 241, 28),
+    p('Da komm ich her!', 271, 18),
+    p('Erdbeeren', 271, 28),
+    p('Kl. I, 500 g Tasse (1 kg 5.98)', 271, 46),
+    p('2', 433, 28),
+    p('99', 463, 47),
+    p('3.99', 483, 28),
+    p('Da komm ich her!', 28, 210),
+    p('Eissalat', 28, 223),
+    p('Kl. I, per Stueck', 28, 240),
+    p('0', 185, 223),
+    p('99', 221, 242),
+    p('1.99', 242, 223),
+    p('Paprika', 271, 223),
+    p('rot od. gelb', 271, 240),
+    p('Kl. I, per Stueck', 271, 256),
+    p('0', 427, 223),
+    p('99', 463, 242),
+    p('1.69', 484, 223),
+    p('Da komm ich her!', 28, 405),
+    p('Kohlrabi', 28, 417),
+    p('Kl. I, per Stueck', 28, 435),
+    p('0', 104, 417),
+    p('99', 140, 436),
+    p('1.39', 161, 417),
+    p('LGV', 454, 470),
+    p('Mini-San-', 454, 483),
+    p('Marzano-', 454, 500),
+    p('Paradeiser', 454, 514),
+    p('Kl. I, 300 g Tasse', 454, 532),
+    p('(1 kg 9.96)', 454, 548),
+    p('2', 427, 424),
+    p('99', 463, 443),
+    p('3.99', 483, 424),
+    p('Chry-', 124, 657),
+    p('santhemen', 124, 675),
+    p('div. Farben,', 124, 690),
+    p('3 Stiele,', 124, 706),
+    p('ca. 50 cm lang,', 124, 722),
+    p('per Bund', 124, 738),
+    p('3', 111, 611),
+    p('49', 140, 630),
+  ];
+  const offers = normalizeBillaPdfFixture({
+    pageNumber: 3,
+    positionedItems,
+    text: `
+      Da komm ich her!
+      Trauben
+      weiss kernlos
+      Kl. I, 500 g Packung
+      Da komm ich her!
+      Erdbeeren
+      Kl. I, 500 g Tasse (1 kg 5.98)
+      Da komm ich her!
+      Eissalat
+      Kl. I, per Stueck
+      Paprika
+      rot od. gelb
+      Kl. I, per Stueck
+      Da komm ich her!
+      Kohlrabi
+      Kl. I, per Stueck
+      LGV
+      Mini-San-
+      Marzano-
+      Paradeiser
+      Kl. I, 300 g Tasse
+      (1 kg 9.96)
+      Chry-
+      santhemen
+      div. Farben,
+      3 Stiele,
+      ca. 50 cm lang,
+      per Bund
+    `,
+  });
+
+  assert.equal(findOffer(offers, /^Trauben weiss kernlos$/)?.priceCurrent.amount, 1.99);
+  assert.equal(findOffer(offers, /^Trauben weiss kernlos$/)?.quantityText, '500 g');
+  assert.equal(findOffer(offers, /^Erdbeeren$/)?.priceCurrent.amount, 2.99);
+  assert.equal(findOffer(offers, /^Eissalat$/)?.priceCurrent.amount, 0.99);
+  assert.equal(findOffer(offers, /^Paprika rot od\. gelb$/)?.priceCurrent.amount, 0.99);
+  assert.equal(findOffer(offers, /^Kohlrabi$/)?.priceCurrent.amount, 0.99);
+  assert.equal(findOffer(offers, /^LGV Mini-San-Marzano-Paradeiser$/)?.priceCurrent.amount, 2.99);
+  assert.equal(findOffer(offers, /^LGV Mini-San-Marzano-Paradeiser$/)?.quantityText, '300 g');
+  assert.equal(findOffer(offers, /^Chrysanthmen div\. Farben$/)?.priceCurrent.amount, 3.49);
+  assert.equal(findOffer(offers, /^Chrysanthmen div\. Farben$/)?.quantityText, '1 Bund');
+  assert.ok(offers.every((offer) => offer.rawFacts.parserHint === 'billa-pdf-positioned-frontloaded-produce'));
 });
 
 test('BILLA flyer source selects retailer-specific official PDF links', () => {

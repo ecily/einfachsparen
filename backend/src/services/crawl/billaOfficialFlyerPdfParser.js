@@ -39,9 +39,36 @@ function dateKey(value) {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }
 
+function buildViennaWallClockDate(year, zeroBasedMonth, day, hour = 0, minute = 0, second = 0, millisecond = 0) {
+  const desiredUtcMs = Date.UTC(year, zeroBasedMonth, day, hour, minute, second, millisecond);
+  const guess = new Date(desiredUtcMs);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(guess).map((part) => [part.type, part.value]));
+  const observedUtcMs = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+    millisecond
+  );
+
+  return new Date(desiredUtcMs + (desiredUtcMs - observedUtcMs));
+}
+
 function parseAustrianDate(day, month, year, { endOfDay = false } = {}) {
   const numericYear = Number(year) < 100 ? 2000 + Number(year) : Number(year);
-  return new Date(Date.UTC(
+  return buildViennaWallClockDate(
     numericYear,
     Number(month) - 1,
     Number(day),
@@ -49,7 +76,7 @@ function parseAustrianDate(day, month, year, { endOfDay = false } = {}) {
     endOfDay ? 59 : 0,
     endOfDay ? 59 : 0,
     endOfDay ? 999 : 0
-  ));
+  );
 }
 
 function parseBillaFlyerValidity(text = '') {
@@ -121,6 +148,8 @@ function parseReferencePrice(lines = []) {
 
 function lineHasQuantity(line = '') {
   const normalized = normalizePdfText(line);
+  if (/\bper\s+bund\b/i.test(normalized)) return true;
+  if (/\bper\s+st(?:ue|ü|u)ck\b/i.test(normalized)) return true;
   return /\b\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter|stk|stueck|stÃ¼ck|stuck)\b/i.test(normalized)
     || /\bper\s+(?:kilo|kg|stueck|stÃ¼ck|stuck)\b/i.test(normalized)
     || /\b\d+\s*(?:waschgaenge|waschg\S*nge|waschgange|wg)\b/i.test(normalized)
@@ -146,6 +175,8 @@ function extractQuantityText(lines = []) {
   if (sheets) return normalizePdfText(sheets[0]).replace(/\s+/g, ' ');
 
   if (/\bper\s+kilo\b/i.test(text)) return '1 kg';
+  if (/\bper\s+bund\b/i.test(text)) return '1 Bund';
+  if (/\bper\s+st(?:ue|ü|u)ck\b/i.test(text)) return '1 Stk';
   if (/\bper\s+(?:stueck|stÃ¼ck|stuck)\b/i.test(text)) return '1 Stk';
 
   return '';
@@ -317,6 +348,20 @@ function hasPlausibleBillaTitle(title = '') {
   return true;
 }
 
+function hasPlausiblePositionedProduceTitle(title = '') {
+  const normalized = normalizeForScan(title);
+
+  return Boolean(
+    title
+    && title.length >= 6
+    && title.length <= 80
+    && /[a-z]/.test(normalized)
+    && !/^\s*[-\d]/.test(title)
+    && !/â‚¬/.test(title)
+    && !/^(?:billa|aktion|gratis|statt|packung|per kilo|per stueck|div sorten)$/.test(normalized)
+  );
+}
+
 function groupPriceLines(lines = []) {
   const groups = [];
   let current = null;
@@ -477,7 +522,7 @@ function addCandidate(candidates, pageNumber, data) {
     candidate.exclusionReason = 'quantity-missing';
   } else if (hasSuspiciousLowUnitPriceMismatch(candidate)) {
     candidate.exclusionReason = 'price-quantity-implausible';
-  } else if (!hasAnchoredBillaPriceContext(priceContextText) && !/^billa-pdf-inline-/.test(candidate.parserHint || '')) {
+  } else if (!hasAnchoredBillaPriceContext(priceContextText) && !/^billa-pdf-(?:inline|positioned)-/.test(candidate.parserHint || '')) {
     candidate.exclusionReason = 'product-price-ambiguous';
   } else if (!candidate.validFrom || !candidate.validTo) {
     candidate.exclusionReason = 'validity-missing';
@@ -584,12 +629,12 @@ function extractMinimumPurchaseQtyFromConditions(conditionsText = '') {
   return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
 }
 
-function buildCandidateFromPair({ productBlock, priceGroup, pageNumber, validity, sourceRetailerFormat }) {
+function buildCandidateFromPair({ productBlock, priceGroup, pageNumber, validity, sourceRetailerFormat, allowShortProduceTitle = false }) {
   const title = cleanInlineBillaTitle(buildTitleFromBlock(productBlock));
   const quantityText = extractQuantityText(productBlock);
   const rawText = sanitizeWhitespace([...productBlock, ...priceGroup.lines].join(' '));
 
-  if (!hasPlausibleBillaTitle(title)) {
+  if (!hasPlausibleBillaTitle(title) && !(allowShortProduceTitle && hasPlausiblePositionedProduceTitle(title))) {
     return {
       id: '',
       page: pageNumber,
@@ -753,13 +798,17 @@ function isForwardProductContinuationLine(line = '') {
 
 function cleanInlineBillaTitle(value = '') {
   return sanitizeWhitespace(normalizePdfText(value))
+    .replace(/\bchry\s*-\s*santhemen\b/gi, 'Chrysanthmen')
+    .replace(/-\s+/g, '-')
     .replace(/^.*?\bNicht mit anderen Rabatten und Bons kombinierbar\.\s*/i, '')
     .replace(/^.*?\bAusgenommen:\s*BILLA Online Shop\.\s*/i, '')
     .replace(/^.*?\b\d+\s*\+\s*\d+\s+/i, '')
     .replace(/^\d+\s*\+\s*\d+\s+/i, '')
     .replace(/^.*\b(?:aktion|extrem preis)\b\s*/i, '')
+    .replace(/\bper\s+st(?:ue|ü|u)ck\b.*$/i, ' ')
     .replace(/^.*\bper\s+(?:kilo|kg|stueck|stück|stuck)\s+/i, '')
     .replace(/\b(?:aktion|extrem preis|nur kurze zeit|-?\d+\s*%)\b/gi, ' ')
+    .replace(/\b\d+\s+stiele\b.*$/i, ' ')
     .replace(/\b(?:kl\.?\s*i|im ganzen|kernarm|in selbstbedienung|div\.?\s*sorten)\b/gi, ' ')
     .replace(/\s*,\s*/g, ' ')
     .replace(/\s+/g, ' ')
@@ -1163,6 +1212,178 @@ function extractForwardProductPriceBillaPdfCandidatesFromPage(page, { validity =
   return candidates;
 }
 
+function isPositionedProduceNoise(value = '') {
+  const raw = sanitizeWhitespace(normalizePdfText(value));
+  const normalized = normalizeForScan(value);
+
+  return !normalized
+    || isBillaRecoveryBoundaryLine(value)
+    || isPriceContextLine(value)
+    || /\b(?:solange der vorrat|nicht jeder artikel|statt-preise)\b/i.test(raw)
+    || /^\d{1,3}(?:[,.]\d{2})?$/.test(raw)
+    || /^\d{1,3}(?:[,.]\d{2})?$/.test(normalized)
+    || /^-?\d+\s*%$/.test(normalized)
+    || /^(?:da komm|ich her|stefan bauer|suess|suss|fruchtig|leicht|saeuerlich|sauerlich|vollreif|taeglich|taglich|geerntet|harmonisch)/.test(normalized);
+}
+
+function buildPositionedRows(items = []) {
+  return items
+    .map((item) => ({
+      text: sanitizeWhitespace(normalizePdfText(item.str || item.text || '')),
+      x: Number(item.x),
+      y: Number(item.y),
+      width: Number(item.width || 0),
+      height: Number(item.height || 0),
+    }))
+    .filter((item) => item.text && Number.isFinite(item.x) && Number.isFinite(item.y));
+}
+
+function extractPositionedBillaPriceClusters(rows = []) {
+  const clusters = [];
+  const used = new Set();
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const euro = rows[index];
+    if (!/^\d{1,2}$/.test(euro.text) || used.has(index)) continue;
+
+    let centsIndex = -1;
+    let centsDistance = Infinity;
+    for (let next = 0; next < rows.length; next += 1) {
+      const cents = rows[next];
+      const xDistance = cents.x - euro.x;
+      const yDistance = Math.abs(cents.y - euro.y);
+      if (!/^\d{2}$/.test(cents.text) || used.has(next) || xDistance < 10 || xDistance > 75 || yDistance > 35) continue;
+      const distance = xDistance + yDistance;
+      if (distance < centsDistance) {
+        centsDistance = distance;
+        centsIndex = next;
+      }
+    }
+
+    if (centsIndex < 0) continue;
+    const cents = rows[centsIndex];
+    let referencePrice = null;
+
+    for (const reference of rows) {
+      const xDistance = reference.x - cents.x;
+      const yDistance = Math.abs(reference.y - euro.y);
+      if (!/^\d{1,3}[,.]\d{2}$/.test(reference.text) || xDistance < 5 || xDistance > 95 || yDistance > 18) continue;
+      referencePrice = money(Number(reference.text.replace(',', '.')));
+      break;
+    }
+
+    used.add(index);
+    used.add(centsIndex);
+    clusters.push({
+      price: money(`${euro.text}.${cents.text}`),
+      referencePrice,
+      x: euro.x,
+      y: euro.y,
+      lines: referencePrice ? [`${euro.text}${cents.text}`, `statt ${referencePrice.toFixed(2)}`] : [`${euro.text}${cents.text}`],
+    });
+  }
+
+  return clusters.filter((cluster) => cluster.price > 0);
+}
+
+function extractPositionedBillaProduceBlocks(rows = []) {
+  const blocks = [];
+  const anchors = rows
+    .filter((row) => lineHasQuantity(row.text))
+    .filter((row) => !/^\(\s*(?:1\s+(?:kg|l|liter)|100\s*(?:g|ml))\b/i.test(normalizePdfText(row.text)))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+
+  for (const anchor of anchors) {
+    const sameColumnRows = rows
+      .filter((row) => {
+        if (Math.abs(row.y - anchor.y) > 110) return false;
+        if (Math.abs(row.x - anchor.x) > 95) return false;
+        if (isPositionedProduceNoise(row.text)) return false;
+        return true;
+      });
+
+    const titleRows = sameColumnRows.filter((row) => !lineHasQuantity(row.text));
+    const quantityRows = sameColumnRows.filter((row) => lineHasQuantity(row.text));
+    const titleDirection = titleRows.some((row) => row.y > anchor.y) ? -1 : 1;
+    const block = [
+      ...titleRows.sort((a, b) => titleDirection * (a.y - b.y) || a.x - b.x),
+      ...quantityRows.sort((a, b) => Math.abs(a.y - anchor.y) - Math.abs(b.y - anchor.y)),
+    ].map((row) => row.text);
+    const title = cleanInlineBillaTitle(buildTitleFromBlock(block));
+    if (!block.some((line) => lineHasQuantity(line)) || !hasPlausiblePositionedProduceTitle(title)) continue;
+
+    const key = `${Math.round(anchor.x)}:${Math.round(anchor.y)}:${normalizeForScan(title)}`;
+    if (blocks.some((blockItem) => blockItem.key === key)) continue;
+    blocks.push({
+      key,
+      lines: block,
+      x: anchor.x,
+      y: anchor.y,
+    });
+  }
+
+  return blocks;
+}
+
+function choosePositionedPriceForBlock(block, priceClusters = [], usedPrices = new Set()) {
+  let selected = null;
+  let selectedScore = Infinity;
+
+  for (let index = 0; index < priceClusters.length; index += 1) {
+    if (usedPrices.has(index)) continue;
+    const price = priceClusters[index];
+    const yDistance = Math.abs(block.y - price.y);
+    const xDistance = price.x - block.x;
+    const sameBandRight = xDistance > 10 && xDistance < 230 && yDistance <= 55;
+    const nearColumnAbove = Math.abs(xDistance) <= 120 && block.y - price.y >= 0 && block.y - price.y <= 140;
+    if (!sameBandRight && !nearColumnAbove) continue;
+
+    const score = (sameBandRight ? 0 : 200) + Math.abs(xDistance) + yDistance;
+    if (score < selectedScore) {
+      selectedScore = score;
+      selected = { index, price };
+    }
+  }
+
+  return selected;
+}
+
+function extractPositionedFrontloadedProduceBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa' } = {}) {
+  const rows = buildPositionedRows(page.positionedItems || []);
+  const candidates = [];
+
+  if (rows.length < 20) {
+    return candidates;
+  }
+
+  const priceClusters = extractPositionedBillaPriceClusters(rows);
+  const productBlocks = extractPositionedBillaProduceBlocks(rows);
+  const usedPrices = new Set();
+
+  if (priceClusters.length < 3 || productBlocks.length < 3) {
+    return candidates;
+  }
+
+  for (const productBlock of productBlocks) {
+    const match = choosePositionedPriceForBlock(productBlock, priceClusters, usedPrices);
+    if (!match) continue;
+    usedPrices.add(match.index);
+
+    const candidate = buildCandidateFromPair({
+      productBlock: productBlock.lines,
+      priceGroup: match.price,
+      pageNumber: page.pageNumber,
+      validity,
+      sourceRetailerFormat,
+      allowShortProduceTitle: true,
+    });
+    candidate.parserHint = 'billa-pdf-positioned-frontloaded-produce';
+    addCandidate(candidates, page.pageNumber, candidate);
+  }
+
+  return candidates;
+}
+
 function extractBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa', now = new Date() } = {}) {
   const lines = String(page.text || '')
     .split(/\r?\n/)
@@ -1232,6 +1453,7 @@ function extractBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailer
   const inlineCandidates = [
     ...extractInlineBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
     ...extractRecoveryBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
+    ...extractPositionedFrontloadedProduceBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
     ...extractSeparatedClusterBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat, now }),
     ...extractForwardProductPriceBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
   ];
@@ -1282,6 +1504,46 @@ function extractBillaPdfCandidates({ pages = [], validity = {}, sourceRetailerFo
   return candidates;
 }
 
+function shouldExtractBillaPositionedPages(text = '') {
+  const raw = normalizePdfText(text);
+  const normalized = normalizeForScan(text);
+  return (/\bkl\.?\s*i\b/.test(normalized) || /\bkl\.\s*i\b/i.test(raw)) && /\bda komm\b/.test(normalized);
+}
+
+async function extractBillaPositionedPages({ pdfBuffer, maxPages = DEFAULT_MAX_PAGES } = {}) {
+  const positionedPages = new Map();
+
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(pdfBuffer),
+      disableWorker: true,
+    });
+    const document = await loadingTask.promise;
+    const pageCount = Math.min(maxPages, document.numPages || maxPages);
+
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      positionedPages.set(pageNumber, textContent.items
+        .map((item) => ({
+          str: item.str || '',
+          x: Number(item.transform?.[4] || 0),
+          y: Number(item.transform?.[5] || 0),
+          width: Number(item.width || 0),
+          height: Number(item.height || 0),
+        }))
+        .filter((item) => item.str));
+    }
+
+    await document.destroy?.();
+  } catch (error) {
+    return positionedPages;
+  }
+
+  return positionedPages;
+}
+
 async function extractBillaPdfReference({ pdfBuffer, sourceUrl = '', sourceRetailerFormat = 'billa', maxPages = DEFAULT_MAX_PAGES } = {}) {
   if (!Buffer.isBuffer(pdfBuffer)) {
     throw new Error('BILLA PDF parser requires a PDF buffer.');
@@ -1314,6 +1576,12 @@ async function extractBillaPdfReference({ pdfBuffer, sourceUrl = '', sourceRetai
     }
 
     const fullText = pages.map((page) => page.text).join('\n');
+    if (shouldExtractBillaPositionedPages(fullText)) {
+      const positionedPages = await extractBillaPositionedPages({ pdfBuffer, maxPages });
+      for (const page of pages) {
+        page.positionedItems = positionedPages.get(page.pageNumber) || [];
+      }
+    }
     const validity = parseBillaFlyerValidity(fullText);
     const candidates = extractBillaPdfCandidates({
       pages,
