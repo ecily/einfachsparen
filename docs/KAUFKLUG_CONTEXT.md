@@ -17,6 +17,7 @@
 - BILLA/BILLA Plus Folgefix am 2026-06-12: Commits `d1afda96`, `569582ff` und `20542283` wurden nach `origin/main` gepusht und live deployed; `/api/health` BuildTime `2026-06-12T11:56:54.287Z`. Finaler scoped Crawl `6a2bf41d8d79e0447867a162` fuer die vier BILLA/BILLA-Plus Sources endete `success` mit 2139 raw, 1994 parsed/stored, 145 rejected, failed/partial 0.
 - BILLA Root Causes: official flyer discovery erfasste nur Hauptflugblatt-PDFs; Grill-Beileger ist auf der aktuellen BILLA-Flugblattseite nicht als PDF-Link sichtbar. Action-HTML-Preisfenster wurden geparst, aber die berechnete Fr/Sa-Validity wurde durch leere Section-Validity ueberschrieben, wodurch `Dallmayr Prodomo` 8,99 vor dem Fix nicht active war. Catalog-/Response-Dedupe priorisiert nun BILLA Action-HTML/PDF vor Algolia, ohne Preise zu ueberschreiben.
 - BILLA/BILLA Plus Abschluss am 2026-06-12: Commits `40b64e9b`, `d861f6be` und `8fa1239b` wurden nach `origin/main` gepusht und live deployed; `/api/health` BuildTime `2026-06-12T12:24:48.805Z`, Ranking-Cache-Schema `billa-primary-evidence-v2`. Scoped Crawl `6a2bfaca77462dead66e1612` fuer die vier BILLA/BILLA-Plus Sources endete `success` mit 2139 raw, 1994 parsed/stored, 145 rejected, failed/partial 0. `Dallmayr Prodomo` 8,99/500 g steht live fuer BILLA und BILLA Plus vor Algolia 11,99; `SanLucar Wassermelone` 1,29/kg und `clever Hendl-Filet` 5,99/700 g bleiben sichtbar aus `billa-official-flyer-pdf`. `Puntigamer Bier` 0,69, `clever Ofen-/Grill-Lachs` 6,99 und `Bio-Hendl-Grillteller` fehlen weiter, weil der Grill-Beileger auf den offiziellen BILLA-Seiten nur als Tab/Bild-Evidence, aber nicht als produktiver PDF-Link entdeckt wurde.
+- BILLA Steiermark KW24 Check am 2026-06-12: Lokales PDF `C:\Users\Nutzer\Downloads\BILLA_FB_KW24_2026_aktuell.pdf` hat 16 Seiten, Gueltigkeit 11.06.-17.06.2026 und enthaelt regionale Abweichungen gegenueber dem produktiv gecrawlten Wien-PDF, u. a. `Dreamies Katzensnacks`, `BI Home Toilettenpapier`, `Sansin Weichspueler`, `Sansin Waschmittel` sowie `Wieselburger Gold`. Offizielle BILLA-Region-Slugs wie `/aktionen/flugblatt/steiermark` und `/flugblatt-steiermark` lieferten serverseitig weiterhin die Wien-PDF-Links; kein stabiler offizieller Steiermark-PDF-/Endpoint-Pfad wurde belegt. Lokale PDF-Datei bleibt Diagnose-Evidence und darf nicht produktiv hardcodiert werden.
 
 ## Offene Risiken
 
@@ -24,9 +25,10 @@
 - P1: Such-/Matchqualitaet bei sehr aehnlichen Fisch-/Fleischprodukten pruefen, besonders Forelle vs. Goldbrasse.
 - P2: Kategoriequalitaet bei PENNY-Lebensmitteln bleibt ein Feedback-Thema, z. B. Kinder Cards und Milch-/Topfenfaelle.
 - P1: BILLA Grill-Beileger-Angebote fehlen live, solange kein offizieller produktiver URL/Discoverypfad fuer den Beileger eingebunden ist. Keine lokale PDF-Quelle als Live-Datenquelle verwenden.
+- P1/P0: BILLA regionale Flyer-Wahrheit ist aktuell nicht region-aware abgedeckt. Steiermark-Coverage braucht official regional flyer discovery und spaeter region-aware offer truth; keine regionale UI oder Vollarchitektur ad hoc bauen.
 
 ## Naechste klare Aufgaben
 
 - Read-only Matrix fuer PENNY Seite 19 Tages-/Fensterpreise gegen PENNY-Web/kaufklug vervollstaendigen.
 - Naechste Restaufgabe: Ursache fuer wiederholt stale scoped PENNY-Crawls im Schritt `penny-official-site`/`source-started` eingrenzen, bevor erneut ein scoped PENNY-Crawl freigegeben wird.
-- Naechste BILLA-Restaufgabe: Official beileger discovery automatisieren/evidence-preserving anbinden, sobald ein stabiler offizieller PDF-/Endpoint-Pfad belegt ist.
+- Naechste BILLA-Restaufgabe: Official regional flyer discovery automatisieren/evidence-preserving anbinden, sobald ein stabiler offizieller Steiermark-PDF-/Endpoint-Pfad belegt ist.
