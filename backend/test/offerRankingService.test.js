@@ -5189,6 +5189,54 @@ test('BILLA Algolia-only query result remains visible', () => {
   assert.deepEqual(prepared.map((item) => item._id), ['dallmayr-algolia']);
 });
 
+test('BILLA adjacent duplicate rotation keeps current primary evidence ahead of Algolia variants', () => {
+  const base = {
+    title: 'Dallmayr Prodomo',
+    retailerKey: 'billa',
+    sourceType: 'offers-page',
+    priceCurrent: { amount: 8.99 },
+    quantityText: '500 g',
+    normalizedUnitPrice: { amount: 17.98, unit: 'kg', comparable: true },
+    conditionsText: 'Preisfenster Freitag und Samstag',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: new Date('2026-06-11T22:00:00.000Z'),
+    validTo: new Date('2026-06-13T21:59:59.999Z'),
+    searchText: 'dallmayr prodomo 500 g billa preisfenster freitag samstag',
+  };
+  const billaAction = offer({
+    ...base,
+    _id: 'dallmayr-action-billa',
+    rawFacts: { sourceType: 'billa-official-action-html' },
+  });
+  const billaPlusAction = offer({
+    ...base,
+    _id: 'dallmayr-action-billa-plus',
+    retailerKey: 'billa-plus',
+    rawFacts: { sourceType: 'billa-official-action-html' },
+  });
+  const algolia = offer({
+    ...base,
+    _id: 'dallmayr-algolia',
+    title: 'Dallmayr Dallmayr Prodomo Ganze Bohne',
+    rawFacts: { sourceType: 'billa-official-algolia' },
+    priceCurrent: { amount: 11.99 },
+    normalizedUnitPrice: { amount: 23.98, unit: 'kg', comparable: true },
+    conditionsText: '',
+    validFrom: null,
+    validTo: null,
+    searchText: 'dallmayr prodomo ganze bohne 500 g billa',
+  });
+
+  const prepared = prepareQueryOffersForResponse([billaAction, billaPlusAction, algolia], 'dallmayr prodomo');
+
+  assert.deepEqual(prepared.map((item) => item._id), [
+    'dallmayr-action-billa',
+    'dallmayr-action-billa-plus',
+    'dallmayr-algolia',
+  ]);
+});
+
 test('BILLA response dedupe prefers exact action HTML evidence over same-price Algolia duplicate', () => {
   const algolia = offer({
     _id: 'dallmayr-algolia',
