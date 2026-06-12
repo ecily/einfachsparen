@@ -8,6 +8,11 @@ const { buildRankedOffer, buildValidityLabel } = require('../src/services/offers
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 const { deriveSourceKey } = require('../src/services/crawl/crawlSourceSelection');
 const {
+  PDF_WEB_PRICE_QUANTITY_CONFLICT_REASON,
+  PUBLIC_PDF_WEB_PRICE_QUANTITY_HINT,
+  buildPennyPdfEvidenceByProduct,
+} = require('../src/services/crawl/evidenceConflictGuard');
+const {
   extractBillaPdfCandidates,
   normalizeBillaPdfCandidatesToOffers,
   parseBillaFlyerValidity,
@@ -1819,6 +1824,290 @@ test('PENNY official API normalizer handles current 11.06 reference products', (
   assert.equal(bySlug.get('rosinenbroetchen-78112501').brand, '\u00d6lz');
   assert.equal(bySlug.get('amicelli-78112199').priceCurrent.amount, 3.49);
   assert.ok(offers.every((offer) => offer.rawFacts.sourceType === 'penny-official-html'));
+});
+
+test('PENNY PDF evidence bridge maps only tight pro-kg conflicts into official API normalizer', () => {
+  const validFrom = new Date('2026-06-10T22:00:00.000Z');
+  const validTo = new Date('2026-06-17T21:59:59.999Z');
+  const pdfReferences = [{
+    pdfReference: {
+      validity: { validFrom, validTo },
+      candidates: [
+        {
+          title: 'Schopf od. Karree',
+          price: 6.99,
+          quantityText: 'pro kg',
+          rawText: 'Schopf od. Karree ohne Knochen geschnitten od. im Stueck natur od. gewuerzt pro kg 6.99',
+          page: 6,
+        },
+        {
+          title: 'Schweinefleisch fuer Reisfleisch/Gulasch',
+          price: 7.99,
+          quantityText: 'pro kg',
+          rawText: 'Schweinefleisch fuer Reisfleisch/Gulasch geschnitten pro kg 7.99',
+          page: 6,
+        },
+        {
+          title: 'Rindsschnitzelfleisch',
+          price: 15.99,
+          quantityText: 'geschnitten od. im Stueck, pro kg',
+          rawText: 'Rindsschnitzelfleisch geschnitten od. im Stueck pro kg 15.99',
+          page: 7,
+        },
+        {
+          title: 'Cevapcici',
+          price: 2.59,
+          quantityText: '480 g, 1 kg=5.39',
+          rawText: 'Delikatessa Cevapcici 480 g 1 kg=5.39 2.59',
+          page: 6,
+        },
+        {
+          title: 'Hendl-Minutenschnitzel',
+          price: 5.99,
+          quantityText: '500 g, 1 kg=11.98',
+          rawText: 'Hendl-Minutenschnitzel 500 g 1 kg=11.98 5.99',
+          page: 7,
+        },
+        {
+          title: 'XXL Karree od. XXL Schopf',
+          price: 5.99,
+          quantityText: 'im Stueck, pro kg',
+          rawText: 'Delikatessa XXL Karree od. XXL Schopf im Stueck pro kg 5.99',
+          page: 6,
+        },
+        {
+          title: 'Suppenfleisch',
+          price: 12.99,
+          quantityText: 'im Stueck, pro kg',
+          rawText: 'Suppenfleisch im Stueck pro kg 12.99',
+          page: 7,
+        },
+      ],
+    },
+  }];
+  const products = [
+    pennyApiProduct({
+      slug: 'schopf-od-karree-78111111',
+      name: 'Schopf od. Karree',
+      brand: null,
+      category: 'Fleisch, Wurst & Fisch',
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 349,
+      crossed: null,
+      perStandardizedQuantity: 698,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'schweinefleisch-fuer-reisfleisch-gulasch-78111112',
+      name: 'Schweinefleisch fuer Reisfleisch/Gulasch',
+      brand: null,
+      category: 'Fleisch, Wurst & Fisch',
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 399,
+      crossed: null,
+      perStandardizedQuantity: 798,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'rindsschnitzelfleisch-78111113',
+      name: 'Rindsschnitzelfleisch',
+      brand: null,
+      category: 'Fleisch, Wurst & Fisch',
+      amount: '450',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 719,
+      crossed: null,
+      perStandardizedQuantity: 1598,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'cevapcici-78111114',
+      name: 'Cevapcici',
+      brand: null,
+      category: 'Fleisch, Wurst & Fisch',
+      amount: '480',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 259,
+      crossed: null,
+      perStandardizedQuantity: 539,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'hendl-minutenschnitzel-78111115',
+      name: 'Hendl-Minutenschnitzel',
+      brand: null,
+      category: 'Fleisch, Wurst & Fisch',
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 599,
+      crossed: null,
+      perStandardizedQuantity: 1198,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'xxl-karree-od-xxl-schopf-78111116',
+      name: 'XXL Karree od. XXL Schopf',
+      brand: null,
+      category: 'Fleisch, Wurst & Fisch',
+      amount: '1',
+      volumeLabelShort: 'kg',
+      packageLabel: '',
+      priceCents: 599,
+      crossed: null,
+      perStandardizedQuantity: 599,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'kirschen-78111117',
+      name: 'Kirschen',
+      brand: null,
+      category: 'Obst & Gemuese',
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Tasse',
+      priceCents: 299,
+      crossed: null,
+      perStandardizedQuantity: 598,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-13',
+    }),
+  ];
+  const pdfEvidenceByProduct = buildPennyPdfEvidenceByProduct({ pdfReferences, products });
+
+  assert.equal(pdfEvidenceByProduct.has('schopf-od-karree-78111111'), true);
+  assert.equal(pdfEvidenceByProduct.has('schweinefleisch-fuer-reisfleisch-gulasch-78111112'), true);
+  assert.equal(pdfEvidenceByProduct.has('rindsschnitzelfleisch-78111113'), true);
+  assert.equal(pdfEvidenceByProduct.has('cevapcici-78111114'), false);
+  assert.equal(pdfEvidenceByProduct.has('hendl-minutenschnitzel-78111115'), false);
+  assert.equal(pdfEvidenceByProduct.has('xxl-karree-od-xxl-schopf-78111116'), false);
+  assert.equal(pdfEvidenceByProduct.has('kirschen-78111117'), false);
+
+  const offers = __private.normalizePennyApiProductsToOffers({
+    products,
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-1106',
+    pdfEvidenceByProduct,
+  });
+  const bySlug = new Map(offers.map((offer) => [offer.rawFacts.productSlug, offer]));
+
+  for (const slug of [
+    'schopf-od-karree-78111111',
+    'schweinefleisch-fuer-reisfleisch-gulasch-78111112',
+    'rindsschnitzelfleisch-78111113',
+  ]) {
+    const offer = bySlug.get(slug);
+    assert.equal(offer.needsReview, true, slug);
+    assert.ok(offer.reviewReasons.includes(PDF_WEB_PRICE_QUANTITY_CONFLICT_REASON), slug);
+    assert.match(offer.conditionsText, new RegExp(PUBLIC_PDF_WEB_PRICE_QUANTITY_HINT), slug);
+    assert.equal(offer.rawFacts.evidenceConflict.type, PDF_WEB_PRICE_QUANTITY_CONFLICT_REASON);
+  }
+
+  assert.equal(bySlug.get('schopf-od-karree-78111111').priceCurrent.amount, 3.49);
+  assert.equal(bySlug.get('schweinefleisch-fuer-reisfleisch-gulasch-78111112').priceCurrent.amount, 3.99);
+  assert.equal(bySlug.get('rindsschnitzelfleisch-78111113').priceCurrent.amount, 7.19);
+
+  for (const slug of [
+    'cevapcici-78111114',
+    'hendl-minutenschnitzel-78111115',
+    'xxl-karree-od-xxl-schopf-78111116',
+    'kirschen-78111117',
+  ]) {
+    const offer = bySlug.get(slug);
+    assert.equal(Boolean(offer.needsReview), false, slug);
+    assert.equal((offer.reviewReasons || []).includes(PDF_WEB_PRICE_QUANTITY_CONFLICT_REASON), false, slug);
+    assert.doesNotMatch(offer.conditionsText, new RegExp(PUBLIC_PDF_WEB_PRICE_QUANTITY_HINT), slug);
+  }
+});
+
+test('PENNY PDF evidence bridge skips missing pro-kg, weak titles and non-overlapping validity', () => {
+  const products = [
+    pennyApiProduct({
+      slug: 'schopf-od-karree-78111111',
+      name: 'Schopf od. Karree',
+      brand: null,
+      category: 'Fleisch, Wurst & Fisch',
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 349,
+      crossed: null,
+      perStandardizedQuantity: 698,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+  ];
+
+  const missingProKgMap = buildPennyPdfEvidenceByProduct({
+    products,
+    pdfReferences: [{
+      pdfReference: {
+        validity: {
+          validFrom: new Date('2026-06-10T22:00:00.000Z'),
+          validTo: new Date('2026-06-17T21:59:59.999Z'),
+        },
+        candidates: [{
+          title: 'Schopf od. Karree',
+          price: 3.49,
+          quantityText: '500 g Packung',
+          rawText: 'Schopf od. Karree 500 g Packung 3.49',
+        }],
+      },
+    }],
+  });
+  const weakTitleMap = buildPennyPdfEvidenceByProduct({
+    products,
+    pdfReferences: [{
+      pdfReference: {
+        validity: {
+          validFrom: new Date('2026-06-10T22:00:00.000Z'),
+          validTo: new Date('2026-06-17T21:59:59.999Z'),
+        },
+        candidates: [{
+          title: 'Suppenfleisch',
+          price: 6.99,
+          quantityText: 'pro kg',
+          rawText: 'Suppenfleisch im Stueck pro kg 6.99',
+        }],
+      },
+    }],
+  });
+  const nonOverlappingMap = buildPennyPdfEvidenceByProduct({
+    products,
+    pdfReferences: [{
+      pdfReference: {
+        validity: {
+          validFrom: new Date('2026-05-01T00:00:00.000Z'),
+          validTo: new Date('2026-05-07T23:59:59.999Z'),
+        },
+        candidates: [{
+          title: 'Schopf od. Karree',
+          price: 6.99,
+          quantityText: 'pro kg',
+          rawText: 'Schopf od. Karree pro kg 6.99',
+        }],
+      },
+    }],
+  });
+
+  assert.equal(missingProKgMap.size, 0);
+  assert.equal(weakTitleMap.size, 0);
+  assert.equal(nonOverlappingMap.size, 0);
 });
 
 test('official source zero-store gate marks raw official coverage as partial warning', () => {

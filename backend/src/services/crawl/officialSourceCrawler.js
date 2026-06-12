@@ -14,7 +14,10 @@ const {
   normalizeTitleForMatch,
   buildSourceEvidence,
 } = require('./sourceEvidence');
-const { applyPdfWebPriceQuantityConflictGuard } = require('./evidenceConflictGuard');
+const {
+  applyPdfWebPriceQuantityConflictGuard,
+  buildPennyPdfEvidenceByProduct,
+} = require('./evidenceConflictGuard');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 const {
   determineOfferCategory,
@@ -5384,6 +5387,102 @@ async function crawlBillaOfficialFlyers({ source, crawlJobId, region, links }) {
   };
 }
 
+async function collectPennyOfficialPdfEvidenceReferences({ source, pageUrl = 'https://www.penny.at/angebote/flugblaetter' } = {}) {
+  const diagnostics = {
+    attempted: true,
+    pageUrl,
+    pdfReferences: 0,
+    rawCandidates: 0,
+    errors: [],
+  };
+  const pdfReferences = [];
+
+  try {
+    const { html, canonicalUrl } = await fetchHtml(pageUrl);
+    const pageLinks = extractRelevantLinks({
+      html,
+      baseUrl: canonicalUrl || pageUrl,
+      retailerKey: source?.retailerKey || 'penny',
+    });
+    const pdfTargets = pageLinks
+      .filter((link) => link.type === 'pdf')
+      .map((link) => ({
+        kind: 'direct-pdf',
+        label: link.label,
+        pdfUrl: link.url,
+        observedUrl: link.url,
+      }));
+    const issuuDocuments = extractIssuuDocumentsFromHtml(html);
+
+    for (const document of issuuDocuments.slice(0, 1)) {
+      try {
+        const resolved = await resolveIssuuOriginalPdfUrl(document);
+        pdfTargets.push({
+          kind: 'issuu-original-pdf',
+          label: resolved.title,
+          pdfUrl: resolved.pdfUrl,
+          observedUrl: document.documentUrl,
+          publicationId: resolved.publicationId,
+          revisionId: resolved.revisionId,
+          pageCount: resolved.pageCount,
+        });
+      } catch (error) {
+        diagnostics.errors.push({
+          stage: 'resolve-issuu',
+          observedUrl: document.documentUrl,
+          message: error.message,
+        });
+      }
+    }
+
+    const seenPdfUrls = new Set();
+
+    for (const target of pdfTargets.slice(0, 1)) {
+      if (!target.pdfUrl || seenPdfUrls.has(target.pdfUrl)) {
+        continue;
+      }
+
+      seenPdfUrls.add(target.pdfUrl);
+
+      try {
+        const { buffer, canonicalUrl: pdfCanonicalUrl } = await fetchBinary(target.pdfUrl, 'application/pdf,*/*', {
+          timeoutMs: source?.crawlPolicy?.sourceTimeoutMs || 90000,
+          maxContentLength: source?.crawlPolicy?.maxPdfBytes || 90 * 1024 * 1024,
+        });
+        const pdfReference = await extractPennyPdfReference({
+          pdfBuffer: buffer,
+          sourceUrl: target.observedUrl || pdfCanonicalUrl || target.pdfUrl,
+        });
+
+        pdfReferences.push({
+          pdfReference,
+          pdfUrl: target.observedUrl || pdfCanonicalUrl || target.pdfUrl,
+          kind: target.kind,
+        });
+        diagnostics.pdfReferences += 1;
+        diagnostics.rawCandidates += Array.isArray(pdfReference?.candidates) ? pdfReference.candidates.length : 0;
+      } catch (error) {
+        diagnostics.errors.push({
+          stage: 'parse-pdf-evidence',
+          observedUrl: target.observedUrl || target.pdfUrl,
+          message: error.message,
+        });
+      }
+    }
+  } catch (error) {
+    diagnostics.errors.push({
+      stage: 'fetch-flyer-page',
+      pageUrl,
+      message: error.message,
+    });
+  }
+
+  return {
+    pdfReferences,
+    diagnostics,
+  };
+}
+
 async function collectPennyOfficialApiOffers({
   html,
   source,
@@ -5391,6 +5490,7 @@ async function collectPennyOfficialApiOffers({
   region,
   pageUrl,
   fetchProductsPage = fetchPennyProductGroupProducts,
+  pdfReferences = [],
 }) {
   const categorySlugs = extractPennyProductGroupSlugsFromHtml(html).slice(0, 1);
   const offers = [];
@@ -5439,6 +5539,10 @@ async function collectPennyOfficialApiOffers({
         region,
         pageUrl,
         categorySlug,
+        pdfEvidenceByProduct: buildPennyPdfEvidenceByProduct({
+          pdfReferences,
+          products,
+        }),
       }));
 
       page += 1;
@@ -5465,12 +5569,17 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
     region,
     pageUrl: canonicalUrl || source.sourceUrl,
   });
+  const pdfEvidenceResult = await collectPennyOfficialPdfEvidenceReferences({
+    source,
+    pageUrl: 'https://www.penny.at/angebote/flugblaetter',
+  });
   const apiResult = await collectPennyOfficialApiOffers({
     html,
     source,
     crawlJobId,
     region,
     pageUrl: canonicalUrl || source.sourceUrl,
+    pdfReferences: pdfEvidenceResult.pdfReferences,
   });
   const seen = new Set();
   const normalizedOffers = [];
@@ -5507,7 +5616,10 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
     offerDocuments,
     rawDocuments: 0,
     rawCandidateCount: htmlOffers.length + apiResult.diagnostics.productsFetched,
-    diagnostics: apiResult.diagnostics,
+    diagnostics: {
+      ...apiResult.diagnostics,
+      pdfEvidenceBridge: pdfEvidenceResult.diagnostics,
+    },
     refreshResult,
   };
 }

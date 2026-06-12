@@ -262,9 +262,120 @@ function applyPdfWebPriceQuantityConflictGuard(offer = {}, pdfEvidence = {}, { p
   };
 }
 
+function parseDateValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function centsToAmount(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric / 100 : null;
+}
+
+function buildPennyProductQuantityText(product = {}) {
+  const amount = sanitizeWhitespace(product.amount);
+  const unit = sanitizeWhitespace(product.volumeLabelShort || product.price?.baseUnitShort);
+  const pack = sanitizeWhitespace(product.packageLabel);
+
+  return [amount, unit, pack].filter(Boolean).join(' ');
+}
+
+function buildPennyProductEvidenceKeys(product = {}) {
+  const title = sanitizeWhitespace(product.name);
+  const brand = sanitizeWhitespace(product.brand?.name);
+  const keys = [
+    sanitizeWhitespace(product.slug),
+    sanitizeWhitespace(product.productId),
+    sanitizeWhitespace(product.sku),
+    normalizeTitleForMatch([brand, title].filter(Boolean).join(' ')),
+    normalizeTitleForMatch(title),
+  ];
+
+  return [...new Set(keys.filter(Boolean))];
+}
+
+function buildPennyWebOfferShell(product = {}) {
+  const currentPrice = centsToAmount(product.price?.regular?.value);
+  const unitPrice = centsToAmount(product.price?.regular?.perStandardizedQuantity);
+
+  return {
+    retailerKey: 'penny',
+    retailerName: 'PENNY',
+    title: sanitizeWhitespace(product.name),
+    brand: sanitizeWhitespace(product.brand?.name),
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: sanitizeWhitespace(product.category),
+    quantityText: buildPennyProductQuantityText(product),
+    validFrom: parseDateValue(product.price?.validityStart),
+    validTo: parseDateValue(product.price?.validityEnd),
+    priceCurrent: {
+      amount: currentPrice,
+      currency: 'EUR',
+    },
+    normalizedUnitPrice: {
+      amount: unitPrice,
+      unit: sanitizeWhitespace(product.price?.baseUnitShort || '').toLowerCase(),
+      comparable: Boolean(unitPrice),
+    },
+  };
+}
+
+function flattenPennyPdfEvidenceCandidates(pdfReferences = []) {
+  return pdfReferences.flatMap((entry) => {
+    const pdfReference = entry?.pdfReference || entry;
+    const candidates = Array.isArray(pdfReference?.candidates) ? pdfReference.candidates : [];
+
+    return candidates.map((candidate) => ({
+      title: candidate.title,
+      description: sanitizeWhitespace([candidate.quantityText, candidate.conditionsText].filter(Boolean).join(' ')),
+      quantityText: sanitizeWhitespace([candidate.quantityText, candidate.rawText].filter(Boolean).join(' ')),
+      price: candidate.price,
+      validFrom: pdfReference?.validity?.validFrom || null,
+      validTo: pdfReference?.validity?.validTo || null,
+      sourceType: 'penny-official-pdf',
+      sourceKey: 'penny-official-flyer-pdf',
+      page: candidate.page ?? null,
+      rawText: candidate.rawText || '',
+    }));
+  });
+}
+
+function buildPennyPdfEvidenceByProduct({ pdfReferences = [], products = [] } = {}) {
+  const map = new Map();
+  const pdfCandidates = flattenPennyPdfEvidenceCandidates(pdfReferences)
+    .filter((candidate) => candidate.title && candidate.price);
+
+  if (!pdfCandidates.length || !Array.isArray(products) || !products.length) {
+    return map;
+  }
+
+  for (const product of products) {
+    const offerShell = buildPennyWebOfferShell(product);
+    const match = pdfCandidates.find((candidate) => detectPdfWebPriceQuantityConflict({
+      offer: offerShell,
+      pdfEvidence: candidate,
+    }).conflict);
+
+    if (!match) {
+      continue;
+    }
+
+    for (const key of buildPennyProductEvidenceKeys(product)) {
+      map.set(key, match);
+    }
+  }
+
+  return map;
+}
+
 module.exports = {
   PDF_WEB_PRICE_QUANTITY_CONFLICT_REASON,
   PUBLIC_PDF_WEB_PRICE_QUANTITY_HINT,
   detectPdfWebPriceQuantityConflict,
   applyPdfWebPriceQuantityConflictGuard,
+  buildPennyPdfEvidenceByProduct,
 };
