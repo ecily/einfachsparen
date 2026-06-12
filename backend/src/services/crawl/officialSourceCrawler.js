@@ -14,6 +14,7 @@ const {
   normalizeTitleForMatch,
   buildSourceEvidence,
 } = require('./sourceEvidence');
+const { applyPdfWebPriceQuantityConflictGuard } = require('./evidenceConflictGuard');
 const { clearRawDocumentsForSource, createCompactRawDocument } = require('./rawDocumentStorage');
 const {
   determineOfferCategory,
@@ -2356,7 +2357,59 @@ function buildPennyConditionsText({ conditionExtraction = {}, validTo = null, ti
   return sanitizeWhitespace([...new Set(conditions)].join(' / '));
 }
 
-function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, region, pageUrl, categorySlug = '' }) {
+function readEvidenceByKey(evidenceByProduct, key) {
+  if (!evidenceByProduct || !key) {
+    return null;
+  }
+
+  if (typeof evidenceByProduct.get === 'function') {
+    return evidenceByProduct.get(key) || null;
+  }
+
+  if (typeof evidenceByProduct === 'object' && !Array.isArray(evidenceByProduct)) {
+    return evidenceByProduct[key] || null;
+  }
+
+  return null;
+}
+
+function findPennyPdfEvidenceForProduct({ evidenceByProduct, product, title, brand, productSlug }) {
+  if (!evidenceByProduct) {
+    return null;
+  }
+
+  if (Array.isArray(evidenceByProduct)) {
+    const titleKey = normalizeTitleForMatch([brand, title].filter(Boolean).join(' '));
+    return evidenceByProduct.find((item) => normalizeTitleForMatch([item?.brand, item?.title].filter(Boolean).join(' ')) === titleKey) || null;
+  }
+
+  const keys = [
+    sanitizeWhitespace(productSlug),
+    sanitizeWhitespace(product?.productId),
+    sanitizeWhitespace(product?.sku),
+    normalizeTitleForMatch([brand, title].filter(Boolean).join(' ')),
+    normalizeTitleForMatch(title),
+  ].filter(Boolean);
+
+  for (const key of keys) {
+    const evidence = readEvidenceByKey(evidenceByProduct, key);
+    if (evidence) {
+      return evidence;
+    }
+  }
+
+  return null;
+}
+
+function normalizePennyApiProductsToOffers({
+  products = [],
+  source,
+  crawlJobId,
+  region,
+  pageUrl,
+  categorySlug = '',
+  pdfEvidenceByProduct = null,
+}) {
   const offers = [];
   const seenOfferKeys = new Set();
   const scopeHint = {
@@ -2520,7 +2573,16 @@ function normalizePennyApiProductsToOffers({ products = [], source, crawlJobId, 
     });
 
     if (overrideResult.offer) {
-      offers.push(overrideResult.offer);
+      offers.push(applyPdfWebPriceQuantityConflictGuard(
+        overrideResult.offer,
+        findPennyPdfEvidenceForProduct({
+          evidenceByProduct: pdfEvidenceByProduct,
+          product,
+          title,
+          brand,
+          productSlug,
+        }),
+      ));
     }
   }
 
