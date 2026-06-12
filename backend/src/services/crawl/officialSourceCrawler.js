@@ -4802,9 +4802,130 @@ function normalizeBillaConditionUnit(value) {
   return sanitizeWhitespace(value).replace(/\.$/, '');
 }
 
-function parseBillaActionTeaserName(value) {
+function getViennaWeekdayKey(now = new Date()) {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Vienna',
+    weekday: 'short',
+  }).format(now).toLowerCase();
+
+  return {
+    mon: 'mo',
+    tue: 'di',
+    wed: 'mi',
+    thu: 'do',
+    fri: 'fr',
+    sat: 'sa',
+    sun: 'so',
+  }[weekday] || '';
+}
+
+function normalizeBillaWeekdayToken(value = '') {
+  const normalized = normalizeTitleForMatch(value);
+
+  if (/^(?:fr|freitag)$/.test(normalized)) return 'fr';
+  if (/^(?:sa|samstag)$/.test(normalized)) return 'sa';
+  if (/^(?:do|donnerstag)$/.test(normalized)) return 'do';
+  if (/^(?:mo|montag)$/.test(normalized)) return 'mo';
+  if (/^(?:di|dienstag)$/.test(normalized)) return 'di';
+  if (/^(?:mi|mittwoch)$/.test(normalized)) return 'mi';
+
+  return '';
+}
+
+function expandBillaWeekdayWindow(value = '') {
+  const normalized = normalizeTitleForMatch(value)
+    .replace(/\bund\b/g, '&')
+    .replace(/\bbis\b/g, '-')
+    .replace(/[–—]/g, '-');
+
+  if (/(?:fr|freitag)\s*&?\s*(?:sa|samstag)/.test(normalized)) return ['fr', 'sa'];
+  if (/(?:do|donnerstag)[,\s]+(?:mo|montag)\s*-\s*(?:mi|mittwoch)/.test(normalized)) return ['do', 'mo', 'di', 'mi'];
+  if (/(?:mo|montag)\s*-\s*(?:mi|mittwoch)/.test(normalized)) return ['mo', 'di', 'mi'];
+
+  return [...new Set((normalized.match(/\b(fr|freitag|sa|samstag|do|donnerstag|mo|montag|di|dienstag|mi|mittwoch)\b/g) || [])
+    .map(normalizeBillaWeekdayToken)
+    .filter(Boolean))];
+}
+
+function parseBillaActionPriceWindowTeaser(fullText = '', { now = new Date() } = {}) {
+  const text = sanitizeWhitespace(fullText);
+
+  if (!text || !/\b(?:fr|freitag)\b/i.test(text) || !/\b(?:sa|samstag)\b/i.test(text)) {
+    return null;
+  }
+
+  const labelBeforePriceWindows = [...text.matchAll(
+    /\b((?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch)(?:\s*(?:&|und|,|-|bis)\s*(?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch))*)\b[\s\S]{0,120}?(\d{1,3}[,.]\d{2})\s*(?:euro|eur|€)?/gi
+  )].filter((match) => {
+    const betweenLabelAndPrice = match[0].slice(match[1].length).replace(/\d{1,3}[,.]\d{2}[\s\S]*$/i, '');
+    return !/[.!?]/.test(betweenLabelAndPrice);
+  });
+  const priceBeforeLabelWindows = [...text.matchAll(
+    /(\d{1,3}[,.]\d{2})\s*(?:euro|eur|€)?\s+(?:am|von)?\s*((?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch)(?:\s*(?:&|und|,|-|bis)\s*(?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch))*)\b/gi
+  )].map((match) => [match[0], match[2], match[1]]);
+  const windowKeys = new Set();
+  const windows = [...labelBeforePriceWindows, ...priceBeforeLabelWindows]
+    .map((match) => ({
+      label: sanitizeWhitespace(match[1]),
+      weekdays: expandBillaWeekdayWindow(match[1]),
+      price: parseBillaTeaserPrice(match[2]),
+    }))
+    .filter((window) => {
+      if (window.weekdays.length === 0 || !(window.price > 0)) return false;
+      const key = `${window.weekdays.join('-')}::${window.price}`;
+      if (windowKeys.has(key)) return false;
+      windowKeys.add(key);
+      return true;
+    });
+
+  if (windows.length < 2) {
+    return null;
+  }
+
+  const currentWeekday = getViennaWeekdayKey(now);
+  const selected = windows.find((window) => window.weekdays.includes(currentWeekday)) || windows[0];
+  const reference = windows.find((window) => window !== selected && window.price > selected.price) || null;
+  const quantityMatch = text.match(/\b(\d+(?:[,.]\d+)?)\s*(g|gramm|kg|ml|l|liter)\s+(?:packung|paket|flasche|dose|tafel)\b/i)
+    || text.match(/\b(\d+(?:[,.]\d+)?)\s*(g|gramm|kg|ml|l|liter)\b/i);
+
+  if (!quantityMatch) {
+    return null;
+  }
+
+  const title = sanitizeWhitespace(text.slice(0, quantityMatch.index))
+    .replace(/\b(?:kaffee|eis|die grillerei)\s+in\s+verschiedenen\s+sorten\b/i, '')
+    .replace(/\b(?:aktion|mit|preisreduktion|an|bestimmten|wochentagen).*$/i, '')
+    .replace(/[,.]\s*$/, '')
+    .trim();
+  const quantityText = `${quantityMatch[1].replace(',', '.')} ${quantityMatch[2].replace(/gramm/i, 'g').replace(/liter/i, 'l')}`;
+
+  if (!title || !quantityText) {
+    return null;
+  }
+
+  return {
+    title,
+    quantityText,
+    currentPrice: selected.price,
+    referencePrice: reference?.price || null,
+    conditionsText: `Preisfenster ${selected.label}`,
+    rawText: text,
+    priceWindow: {
+      selectedLabel: selected.label,
+      selectedWeekdays: selected.weekdays,
+      allWindows: windows,
+    },
+  };
+}
+
+function parseBillaActionTeaserName(value, options = {}) {
   const lines = normalizeBillaTeaserLines(value);
   const fullText = sanitizeWhitespace(lines.join(' '));
+  const priceWindow = parseBillaActionPriceWindowTeaser(fullText, options);
+
+  if (priceWindow) {
+    return priceWindow;
+  }
 
   if (!fullText || !/\b(?:gratis|ab\s+\d+|bei\s+\d+)\b/i.test(fullText)) {
     return null;
@@ -4959,6 +5080,7 @@ function normalizeBillaActionTeaserToOffer({ candidate, source, crawlJobId, regi
       validityText: candidate.validityText,
       teaserName: candidate.rawText,
       conditionsText,
+      priceWindow: candidate.priceWindow || null,
     },
     adminReview: {
       status: issues.length > 0 ? 'pending' : 'reviewed',
@@ -4987,7 +5109,7 @@ function extractBillaActionTeasersFromHtml({ html, source, crawlJobId, region, p
   $('[data-teaser-name]').each((index, element) => {
     const teaserName = $(element).attr('data-teaser-name') || '';
 
-    if (!/\b(?:gratis|ab\s+\d+|bei\s+\d+)\b/i.test(teaserName)) {
+    if (!/\b(?:gratis|ab\s+\d+|bei\s+\d+|fr|freitag)\b/i.test(teaserName)) {
       return;
     }
 

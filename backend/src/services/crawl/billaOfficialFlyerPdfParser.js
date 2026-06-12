@@ -461,7 +461,7 @@ function addCandidate(candidates, pageNumber, data) {
     candidate.exclusionReason = 'quantity-missing';
   } else if (hasSuspiciousLowUnitPriceMismatch(candidate)) {
     candidate.exclusionReason = 'price-quantity-implausible';
-  } else if (!hasAnchoredBillaPriceContext(priceContextText)) {
+  } else if (!hasAnchoredBillaPriceContext(priceContextText) && !/^billa-pdf-inline-/.test(candidate.parserHint || '')) {
     candidate.exclusionReason = 'product-price-ambiguous';
   } else if (!candidate.validFrom || !candidate.validTo) {
     candidate.exclusionReason = 'validity-missing';
@@ -602,6 +602,296 @@ function buildCandidateFromPair({ productBlock, priceGroup, pageNumber, validity
   };
 }
 
+function compactBillaPriceToMoney(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+
+  if (!/^\d{2,4}$/.test(digits)) return null;
+
+  return money(`${digits.slice(0, -2) || '0'}.${digits.slice(-2)}`);
+}
+
+function cleanInlineBillaTitle(value = '') {
+  return sanitizeWhitespace(normalizePdfText(value))
+    .replace(/^.*\b(?:aktion|extrem preis)\b\s*/i, '')
+    .replace(/^.*\bper\s+(?:kilo|kg|stueck|stück|stuck)\s+/i, '')
+    .replace(/\b(?:aktion|extrem preis|nur kurze zeit|-?\d+\s*%)\b/gi, ' ')
+    .replace(/\b(?:kl\.?\s*i|im ganzen|kernarm|in selbstbedienung|div\.?\s*sorten)\b/gi, ' ')
+    .replace(/\s*,\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\*+$/g, '');
+}
+
+function normalizeInlineBillaQuantity(value = '') {
+  const normalized = sanitizeWhitespace(normalizePdfText(value)).replace(',', '.');
+
+  if (/per\s+kilo/i.test(normalized)) return '1 kg';
+  if (/per\s+(?:stueck|stÃƒÂ¼ck|stuck)/i.test(normalized)) return '1 Stk';
+
+  return normalized.replace(/\bliter\b/i, 'l');
+}
+
+function extractInlineBillaConditions(value = '') {
+  const text = normalizePdfText(value);
+  const parts = [];
+  const threshold = text.match(/\b(?:ab|bei)\s+(\d+)\s*(pkg|packung|packungen|fl|flasche|flaschen|dose|dosen|stk|stueck|stuck)\.?\s*(?:je)?\b/i);
+  const multibuy = text.match(/\b(\d+\s*\+\s*\d+)\b/);
+  const single = text.match(/\b1\s+(pkg|packung|fl|flasche|dose|stk|stueck)\.?\s*â‚¬\s*(\d{1,3}[,.]\d{2})/i);
+
+  if (multibuy) parts.push(`${multibuy[1].replace(/\s+/g, '')} gratis`);
+  if (threshold) parts.push(`${threshold[0].toLowerCase().replace(/\s+je\b/i, '').replace(/pkg\.?/i, 'Packungen')}`);
+  if (single) parts.push(`1 ${normalizeBillaConditionUnit(single[1])} ${single[2].replace(',', '.')}`);
+
+  return parts.join(' / ');
+}
+
+function addInlineBillaCandidate({ candidates, pageNumber, match, validity, sourceRetailerFormat, parserHint }) {
+  const title = cleanInlineBillaTitle(match.title);
+  const quantityText = normalizeInlineBillaQuantity(match.quantity);
+  const price = compactBillaPriceToMoney(match.price);
+  const contextText = sanitizeWhitespace(match.context || '');
+
+  if (!hasPlausibleBillaTitle(title) || !quantityText || !(price > 0)) {
+    return;
+  }
+
+  addCandidate(candidates, pageNumber, {
+    title,
+    brand: title.split(/\s+/)[0] || '',
+    price,
+    referencePrice: parseReferencePrice([contextText]),
+    quantityText,
+    conditionsText: buildBillaConditionsText([contextText]) || extractInlineBillaConditions(contextText),
+    rawText: sanitizeWhitespace(`${match.title} ${match.quantity} ${match.price} ${contextText}`),
+    validFrom: validity.validFrom,
+    validTo: validity.validTo,
+    validityText: validity.validityText,
+    sourceRetailerFormat,
+    comparisonSafe: Boolean(quantityText),
+    parserHint,
+  });
+}
+
+function isBillaRecoveryBoundaryLine(line = '') {
+  const normalized = normalizeForScan(line);
+
+  return !normalized
+    || /^--\s*\d+\s+of\s+\d+\s*--$/.test(normalized)
+    || /^(?:medieninhaber|angebote gueltig|abgabe nur|bitte sammeln|das recycling|solange der vorrat|nur kurze zeit)$/.test(normalized)
+    || /^-?\s*\d+\s*%$/.test(normalized)
+    || /^(?:aktion|statt)$/.test(normalized)
+    || /^(?:ab|bei)\s+\d+\b/.test(normalized)
+    || /^1\s+(?:pkg|packung|fl|flasche|dose|stk|stueck)\b/.test(normalized);
+}
+
+function collectForwardBillaProductBlock(lines = [], startIndex = 0, maxLines = 8) {
+  const block = [];
+
+  for (let index = startIndex; index < lines.length && block.length < maxLines; index += 1) {
+    const line = lines[index];
+
+    if (block.length > 0 && (isBillaRecoveryBoundaryLine(line) || parseCompressedPrice(line) || /^\d{3,4}\s*[A-ZÄÖÜa-zäöüß]/.test(line))) {
+      break;
+    }
+
+    if (!isBillaRecoveryBoundaryLine(line)) {
+      block.push(line);
+    }
+
+    if (lineHasQuantity(line)) {
+      break;
+    }
+  }
+
+  return block;
+}
+
+function collectBackwardBillaProductBlock(lines = [], priceIndex = 0, maxLines = 10) {
+  const block = [];
+
+  for (let index = priceIndex - 1; index >= 0 && block.length < maxLines; index -= 1) {
+    const line = lines[index];
+
+    if (/^\([^)]{0,120}\)$/.test(line)) {
+      continue;
+    }
+
+    if (isBillaRecoveryBoundaryLine(line) || parseCompressedPrice(line) || /^\d{3,4}\s*[A-ZÄÖÜa-zäöüß]/.test(line)) {
+      break;
+    }
+
+    if (lineHasQuantity(line) && block.length > 0) {
+      break;
+    }
+
+    block.unshift(line);
+
+    if (block.length >= maxLines) break;
+  }
+
+  return block;
+}
+
+function addRecoveryBillaPdfCandidate({ candidates, pageNumber, productBlock, price, contextLines = [], validity, sourceRetailerFormat, parserHint }) {
+  const title = cleanInlineBillaTitle(buildTitleFromBlock(productBlock));
+  const quantityText = extractQuantityText(productBlock);
+  const conditionsText = buildBillaConditionsText(contextLines);
+
+  if (!hasPlausibleBillaTitle(title) || !quantityText || !(price > 0)) {
+    return;
+  }
+
+  addCandidate(candidates, pageNumber, {
+    title,
+    brand: title.split(/\s+/)[0] || '',
+    price,
+    referencePrice: parseReferencePrice(contextLines),
+    quantityText,
+    conditionsText,
+    rawText: sanitizeWhitespace([...productBlock, String(price), ...contextLines].join(' ')),
+    validFrom: validity.validFrom,
+    validTo: validity.validTo,
+    validityText: validity.validityText,
+    sourceRetailerFormat,
+    comparisonSafe: Boolean(quantityText),
+    parserHint,
+  });
+}
+
+function extractRecoveryBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa' } = {}) {
+  const lines = String(page.text || '')
+    .split(/\r?\n/)
+    .map((line) => sanitizeWhitespace(line))
+    .filter(Boolean);
+  const candidates = [];
+  const quantityPriceLinePattern = /^(.+\b\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter)\b.*)\s+(\d{3,4})$/i;
+
+  if (!lines.some((line) => /^\d{3,4}(?!\s*(?:g|kg|ml|l|liter)\b)\s*[A-ZÄÖÜa-zäöüß]/.test(line) || quantityPriceLinePattern.test(line))) {
+    return candidates;
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const prefixed = lines[index].match(/^(\d{3,4})(?!\s*(?:g|kg|ml|l|liter)\b)\s*([A-ZÄÖÜa-zäöüß].+)$/);
+
+    if (prefixed) {
+      const productBlock = collectForwardBillaProductBlock([prefixed[2], ...lines.slice(index + 1)], 0);
+      addRecoveryBillaPdfCandidate({
+        candidates,
+        pageNumber: page.pageNumber,
+        productBlock,
+        price: compactBillaPriceToMoney(prefixed[1]),
+        validity,
+        sourceRetailerFormat,
+        parserHint: 'billa-pdf-inline-prefixed-price-recovery',
+      });
+      continue;
+    }
+
+    const quantityPrice = lines[index].match(quantityPriceLinePattern);
+    if (quantityPrice) {
+      const productBlock = [
+        ...collectBackwardBillaProductBlock(lines, index, 4),
+        quantityPrice[1],
+      ];
+      const contextLines = [];
+      for (let next = index + 1; next < lines.length && contextLines.length < 4; next += 1) {
+        if (!isPriceContextLine(lines[next])) break;
+        contextLines.push(lines[next]);
+      }
+      addRecoveryBillaPdfCandidate({
+        candidates,
+        pageNumber: page.pageNumber,
+        productBlock,
+        price: compactBillaPriceToMoney(quantityPrice[2]),
+        contextLines,
+        validity,
+        sourceRetailerFormat,
+        parserHint: 'billa-pdf-inline-quantity-price-line-recovery',
+      });
+      continue;
+    }
+
+    const price = parseCompressedPrice(lines[index]);
+    if (!price) continue;
+
+    const productBlock = collectBackwardBillaProductBlock(lines, index);
+    const contextLines = [];
+    for (let next = index + 1; next < lines.length && contextLines.length < 4; next += 1) {
+      if (!isPriceContextLine(lines[next])) break;
+      contextLines.push(lines[next]);
+    }
+
+    addRecoveryBillaPdfCandidate({
+      candidates,
+      pageNumber: page.pageNumber,
+      productBlock,
+      price,
+      contextLines,
+      validity,
+      sourceRetailerFormat,
+      parserHint: 'billa-pdf-inline-trailing-price-recovery',
+    });
+  }
+
+  return candidates;
+}
+
+function extractInlineBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa' } = {}) {
+  const rawLines = String(page.text || '')
+    .split(/\r?\n/)
+    .map((line) => sanitizeWhitespace(line))
+    .filter(Boolean);
+  const rawText = sanitizeWhitespace(normalizePdfText(String(page.text || '')));
+
+  if (
+    !rawLines.some((line) => line.length > 160)
+    && !rawLines.some((line) => /\b(?:per\s+kilo|\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter))\b[\s\S]{0,140}\b\d{2,4}\b/i.test(line))
+  ) {
+    return [];
+  }
+
+  const text = rawText
+    .replace(/[–—]/g, '-');
+  const scanTexts = rawLines.some((line) => line.length > 160) ? [text] : rawLines;
+  const candidates = [];
+  const patterns = [
+    {
+      hint: 'billa-pdf-inline-per-kilo-price',
+      regex: /(?<title>[A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ][A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ0-9!.'’´`&,\- ]{3,150}?)[, ]+(?<quantity>per\s+kilo)\s+(?<price>\d{1,2}\s?\d{2})\b(?<context>[\s\S]{0,90})/gi,
+    },
+    {
+      hint: 'billa-pdf-inline-quantity-threshold-price',
+      regex: /(?<title>[A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ][A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ0-9!.'’´`&,\- ]{3,150}?)[, ]+(?<quantity>\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter))\b(?<context>[\s\S]{0,160}?(?:ab\s+\d+|bei\s+\d+|1\s+pkg|1\s+dose|1\s+flasche|aktion|gratis|statt)[\s\S]{0,80}?)\b(?<price>\d{1,2}\s?\d{2})\b/gi,
+    },
+    {
+      hint: 'billa-pdf-inline-quantity-price-context',
+      regex: /(?<title>[A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ][A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ0-9!.'’´`&,\- ]{3,150}?)[, ]+(?<quantity>\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter))\b(?:\s+(?:packung|flasche|dose|tafel))?(?:\s*\([^)]{0,80}\))?\s+(?<price>\d{1,2}\s?\d{2})\b(?<context>[\s\S]{0,110}(?:ab\s+\d+|bei\s+\d+|1\s+pkg|1\s+dose|1\s+flasche|\d+\s*\+\s*\d+|statt|aktion|$))/gi,
+    },
+    {
+      hint: 'billa-pdf-inline-quantity-price',
+      regex: /(?<title>[A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ][A-ZÃƒÄÖÜa-zÃ¤Ã¶Ã¼ÃŸ0-9!.'’´`&,\- ]{3,150}?)[, ]+(?<quantity>\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter))\s+(?<price>\d{1,2}\s?\d{2})\b(?<context>[\s\S]{0,90}?(?:ab\s+\d+|bei\s+\d+|1\s+pkg|1\s+dose|1\s+flasche|statt|aktion|$))/gi,
+    },
+  ];
+
+  for (const scanText of scanTexts) {
+    for (const pattern of patterns) {
+      pattern.regex.lastIndex = 0;
+      for (const match of scanText.matchAll(pattern.regex)) {
+        addInlineBillaCandidate({
+          candidates,
+          pageNumber: page.pageNumber,
+          match: match.groups,
+          validity,
+          sourceRetailerFormat,
+          parserHint: pattern.hint,
+        });
+      }
+    }
+  }
+
+  return candidates;
+}
+
 function extractBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa', now = new Date() } = {}) {
   const lines = String(page.text || '')
     .split(/\r?\n/)
@@ -666,6 +956,31 @@ function extractBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailer
 
   if (productBuffer.length > 0 && buildProductBlocks(productBuffer).length > 0) {
     addRejectedCandidate(candidates, page.pageNumber, 'price-missing', productBuffer.join(' '));
+  }
+
+  const inlineCandidates = [
+    ...extractInlineBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
+    ...extractRecoveryBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
+  ];
+  const seenOfferKeys = new Set(candidates
+    .filter((candidate) => !candidate.exclusionReason)
+    .map((candidate) => [
+      normalizeForScan(candidate.title || ''),
+      candidate.price || '',
+      normalizeForScan(candidate.quantityText || ''),
+    ].join('::')));
+
+  for (const candidate of inlineCandidates) {
+    const key = [
+      normalizeForScan(candidate.title || ''),
+      candidate.price || '',
+      normalizeForScan(candidate.quantityText || ''),
+    ].join('::');
+
+    if (!seenOfferKeys.has(key)) {
+      candidates.push(candidate);
+      seenOfferKeys.add(key);
+    }
   }
 
   return candidates;

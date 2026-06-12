@@ -3282,6 +3282,67 @@ test('BILLA flyer PDF parser removes layout date fragments from visible conditio
   assert.doesNotMatch(offers[0].searchText, /alternative flyerpreise/i);
 });
 
+test('BILLA flyer PDF parser extracts KW24 dense page references', () => {
+  const pdfReference = parseBillaPdfPage(`
+    Österreichisches HENDL-FILET ZUM EXTREM PREIS
+    SanLucar Wassermelone Kl. I, im Ganzen, kernarm per Kilo 129
+    clever Hendl-Filet in Selbstbedienung, 700 g (1 kg 12.99/8.56) 599 AB 2 PKG. JE 1 PKG. € 9.09
+    Lindt Goldtafel div. Sorten 300 g (100 g 3.33/1.66) 499 1+1 BEI 2 TAFELN JE 1 TAFEL € 9.99
+  `);
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource({
+      retailerKey: 'billa-plus',
+      retailerName: 'Billa Plus',
+      label: 'BILLA PLUS Flugblatt',
+    }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_PLUS_FB_KW24_2026.pdf',
+  });
+  const watermelon = offers.find((offer) => /Wassermelone/i.test(offer.title));
+  const hendl = offers.find((offer) => /Hendl-Filet/i.test(offer.title));
+  const lindt = offers.find((offer) => /Goldtafel/i.test(offer.title));
+
+  assert.ok(watermelon);
+  assert.equal(watermelon.priceCurrent.amount, 1.29);
+  assert.equal(watermelon.quantityText, '1 kg');
+  assert.ok(hendl);
+  assert.equal(hendl.priceCurrent.amount, 5.99);
+  assert.equal(hendl.quantityText, '700 g');
+  assert.match(hendl.conditionsText, /ab 2 Packungen/i);
+  assert.ok(lindt);
+  assert.equal(lindt.priceCurrent.amount, 4.99);
+});
+
+test('BILLA flyer PDF parser extracts KW24 grill supplement dense references', () => {
+  const pdfReference = parseBillaPdfPage(`
+    Bertolli Grill Olivenöl 0,5 Liter Flasche (1 l 13.98)
+    Puntigamer Bier 0,5 Liter 069 1 DOSE € 1.54 -55 % AB 24 DOSEN JE
+    Radatz Grillhitparade Chili Käsekrainer, Chili Bratwürstel, Berner Würstel, Käsekrainer, Bratwürstel, 680 g Packung (100 g 0.88) 599
+    clever Baguette div. Sorten 175 g Packung (1 kg 4.51) 079
+  `);
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: billaFlyerSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pdfUrl: 'https://assets.example.test/BILLA_GRILLEN_KW24_2026.pdf',
+  });
+  const puntigamer = offers.find((offer) => /Puntigamer/i.test(offer.title));
+  const radatz = offers.find((offer) => /Radatz Grillhitparade/i.test(offer.title));
+  const baguette = offers.find((offer) => /Baguette/i.test(offer.title));
+
+  assert.ok(puntigamer);
+  assert.equal(puntigamer.priceCurrent.amount, 0.69);
+  assert.equal(puntigamer.quantityText, '0.5 l');
+  assert.match(puntigamer.conditionsText, /24 Dosen/i);
+  assert.ok(radatz);
+  assert.equal(radatz.priceCurrent.amount, 5.99);
+  assert.ok(baguette);
+  assert.equal(baguette.priceCurrent.amount, 0.79);
+});
+
 test('BILLA flyer source selects retailer-specific official PDF links', () => {
   const links = [
     { type: 'pdf', url: 'https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf', label: 'BILLA Flugblatt' },
@@ -3299,12 +3360,39 @@ test('BILLA flyer source selects retailer-specific official PDF links', () => {
   assert.deepEqual(billaPlusLinks.map((link) => link.url), ['https://assets.example.test/BILLA_PLUS_FB_KW22_2026_Wien.pdf']);
 });
 
+test('BILLA action HTML parser selects FR-SA price window for Dallmayr on Friday', () => {
+  const parsed = __private.parseBillaActionTeaserName(`
+    Dallmayr Prodomo Kaffee in verschiedenen Sorten, 500 Gramm Packung.
+    Aktion mit Preisreduktion an bestimmten Wochentagen, von Montag bis Mittwoch sowie Freitag und Samstag.
+    Der Preis pro Packung beträgt 11,99 Euro von Montag bis Mittwoch.
+    Der Preis pro Packung beträgt 8,99 Euro am Freitag und Samstag.
+  `, { now: new Date('2026-06-12T10:00:00+02:00') });
+
+  assert.equal(parsed.title, 'Dallmayr Prodomo');
+  assert.equal(parsed.quantityText, '500 g');
+  assert.equal(parsed.currentPrice, 8.99);
+  assert.equal(parsed.referencePrice, 11.99);
+  assert.match(parsed.conditionsText, /Preisfenster/);
+  assert.equal(parsed.priceWindow.selectedWeekdays.includes('fr'), true);
+});
+
+test('BILLA action HTML parser selects DO/MO-MI price window outside Friday-Saturday', () => {
+  const parsed = __private.parseBillaActionTeaserName(`
+    Dallmayr Prodomo Kaffee in verschiedenen Sorten, 500 Gramm Packung.
+    Der Preis pro Packung beträgt 11,99 Euro von Montag bis Mittwoch.
+    Der Preis pro Packung beträgt 8,99 Euro am Freitag und Samstag.
+  `, { now: new Date('2026-06-15T10:00:00+02:00') });
+
+  assert.equal(parsed.currentPrice, 11.99);
+  assert.equal(parsed.priceWindow.selectedWeekdays.includes('mo'), true);
+});
+
 test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 condition', () => {
   const result = parseBillaActionHtml(`
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
     <div class="row">
       <h3>Extrem Aktion*</h3>
-      <div>Gültig von Mittwoch, 27.5. bis Dienstag, 2.6.2026</div>
+      <div>Gültig von Donnerstag, 11.6. bis Mittwoch, 17.6.2026</div>
     </div>
     <div class="ws-slider-group">
       <article>
@@ -3334,9 +3422,33 @@ BEI 24 DOSEN JE
   assert.match(stored[0].conditionsText, /bei 24 Dosen/);
   assert.equal(stored[0].minimumPurchaseQty, 24);
   assert.equal(stored[0].isMultiBuy, true);
-  assert.equal(stored[0].validFrom.toISOString(), '2026-05-27T12:00:00.000Z');
-  assert.equal(stored[0].validTo.toISOString(), '2026-06-02T23:59:59.999Z');
+  assert.equal(stored[0].validFrom.toISOString(), '2026-06-11T12:00:00.000Z');
+  assert.equal(stored[0].validTo.toISOString(), '2026-06-17T23:59:59.999Z');
   assert.equal(stored[0].rawFacts.sourceType, 'billa-official-action-html');
+});
+
+test('BILLA action HTML parser extracts Dallmayr price-window teaser from markup', () => {
+  const result = parseBillaActionHtml(`
+    <h2>GÃ¼ltig bei BILLA & BILLA PLUS</h2>
+    <div class="row">
+      <h3>Kaffee</h3>
+      <div>GÃ¼ltig von Donnerstag, 11.6. bis Mittwoch, 17.6.2026</div>
+    </div>
+    <div class="ws-slider-group">
+      <article>
+        <div data-teaser-name="Dallmayr Prodomo Kaffee in verschiedenen Sorten, 500 Gramm Packung.
+Aktion mit Preisreduktion an bestimmten Wochentagen, von Montag bis Mittwoch sowie Freitag und Samstag.
+Der Preis pro Packung beträgt 11,99 Euro von Montag bis Mittwoch.
+Der Preis pro Packung beträgt 8,99 Euro am Freitag und Samstag."></div>
+      </article>
+    </div>
+  `);
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0].title, 'Dallmayr Prodomo');
+  assert.equal(result.offers[0].priceCurrent.amount, 8.99);
+  assert.equal(result.offers[0].priceReference.amount, 11.99);
+  assert.equal(result.offers[0].rawFacts.priceWindow.selectedWeekdays.includes('fr'), true);
 });
 
 test('BILLA action HTML parser keeps global legal text out of product conditions', () => {
