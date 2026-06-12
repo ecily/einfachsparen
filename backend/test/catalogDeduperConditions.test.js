@@ -53,6 +53,26 @@ test('source dedupe condition preference picks richer condition evidence', () =>
   assert.equal(best.conditionsText, 'nur mit App');
 });
 
+test('source dedupe prefers BILLA action price-window evidence over Algolia unit price', () => {
+  const algolia = {
+    title: 'Dallmayr Prodomo',
+    sourceType: 'offers-page',
+    rawFacts: { sourceType: 'billa-official-algolia' },
+    normalizedUnitPrice: { amount: 23.98, unit: 'kg' },
+  };
+  const actionHtml = {
+    title: 'Dallmayr Prodomo',
+    sourceType: 'offers-page',
+    rawFacts: { sourceType: 'billa-official-action-html' },
+    normalizedUnitPrice: { amount: 17.98, unit: 'kg' },
+    conditionsText: 'Preisfenster Freitag und Samstag',
+  };
+
+  const best = _private.pickBestComparableUnitPriceOffer([algolia, actionHtml]);
+
+  assert.equal(best, actionHtml);
+});
+
 test('source dedupe image merge copies valid image from safe duplicate when canonical is empty', () => {
   const imageUrl = _private.pickMergedImageUrl(
     { imageUrl: '' },

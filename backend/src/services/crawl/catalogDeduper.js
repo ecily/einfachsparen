@@ -15,6 +15,9 @@ const CHANNEL_PRIORITY = {
 
 const SOURCE_TYPE_PRIORITY = {
   'spar-family-official-productworld': -1,
+  'billa-official-action-html': -2,
+  'billa-official-flyer-pdf': -1,
+  'billa-official-algolia': 1,
 };
 
 function normalizeTitle(value) {
@@ -116,6 +119,16 @@ function getPriority(source) {
   }
 
   return CHANNEL_PRIORITY[source?.channel] ?? 99;
+}
+
+function getOfferSourceType(offer) {
+  return String(offer?.rawFacts?.sourceType || offer?.sourceType || '').trim();
+}
+
+function getOfferSourceTypePriority(offer) {
+  const sourceTypePriority = SOURCE_TYPE_PRIORITY[getOfferSourceType(offer)];
+
+  return Number.isFinite(sourceTypePriority) ? sourceTypePriority : 99;
 }
 
 function getOfferCompletenessScore(offer) {
@@ -309,6 +322,13 @@ function compareOffersForCanonical(left, right, sourceMap) {
     return rightStructured - leftStructured;
   }
 
+  const leftSourceTypePriority = getOfferSourceTypePriority(left);
+  const rightSourceTypePriority = getOfferSourceTypePriority(right);
+
+  if (leftSourceTypePriority !== rightSourceTypePriority) {
+    return leftSourceTypePriority - rightSourceTypePriority;
+  }
+
   const leftPriority = getPriority(sourceMap.get(String(left.sourceId)));
   const rightPriority = getPriority(sourceMap.get(String(right.sourceId)));
 
@@ -331,6 +351,24 @@ function buildDedupeFilters({ retailerKeys = [], crawlRunId = null } = {}) {
   }
 
   return filters;
+}
+
+function pickBestComparableUnitPriceOffer(offers = []) {
+  const comparableOffers = offers.filter(hasComparableUnitPrice);
+
+  if (comparableOffers.length === 0) {
+    return null;
+  }
+
+  return comparableOffers.sort((left, right) => {
+    const sourceTypeDelta = getOfferSourceTypePriority(left) - getOfferSourceTypePriority(right);
+
+    if (sourceTypeDelta !== 0) {
+      return sourceTypeDelta;
+    }
+
+    return Number(left.normalizedUnitPrice?.amount || Infinity) - Number(right.normalizedUnitPrice?.amount || Infinity);
+  })[0];
 }
 
 async function dedupeOffersAcrossSources({ retailerKeys = [], crawlRunId = null } = {}) {
@@ -437,7 +475,7 @@ async function dedupeOffersAcrossSources({ retailerKeys = [], crawlRunId = null 
     const bestConditionOffer = pickBestConditionOffer(sorted);
     const mergedConditionFields = buildMergedConditionFields(canonical, bestConditionOffer);
     const mergedImageUrl = pickMergedImageUrl(canonical, sorted);
-    const bestUnitPriceOffer = sorted.find(hasComparableUnitPrice) || canonical;
+    const bestUnitPriceOffer = pickBestComparableUnitPriceOffer(sorted) || canonical;
     const mergedReviewState = buildMergedReviewState({ canonical, bestCategoryOffer });
     const mergedSupportingSources = dedupeSourceEvidence(
       sorted.flatMap((offer) => offer.supportingSources || [])
@@ -546,5 +584,6 @@ module.exports = {
     isPreservableImageUrl,
     pickMergedImageUrl,
     pickBestConditionOffer,
+    pickBestComparableUnitPriceOffer,
   },
 };
