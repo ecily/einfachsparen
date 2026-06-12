@@ -38,6 +38,8 @@ function deriveSourceKey(source = {}) {
   if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
   if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
   if (url.includes('spar.at')) return 'spar-official-flyer';
+  if (url.includes('view.publitas.com/billa-at/billa-fb-kw24-2026-steiermark') || url.includes('view.publitas.com/billa-at/billa_fb_kw24_2026_steiermark')) return 'billa-official-flyer-steiermark';
+  if (url.includes('view.publitas.com/billa-plus/billa-plus-fb-kw24-2026-steiermark') || url.includes('view.publitas.com/billa-plus/billa_plus_fb_kw24_2026_steiermark')) return 'billa-plus-official-flyer-steiermark';
   if (url.includes('billa.at')) return `${format || 'billa'}-${source.channel || 'official'}-${source.sourceType || 'source'}`;
   if (url.includes('hofer.at')) return 'hofer-official-flyer';
   if (url.includes('lidl.at')) return 'lidl-official-flyer';

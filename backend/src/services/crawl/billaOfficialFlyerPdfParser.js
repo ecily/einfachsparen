@@ -103,6 +103,9 @@ function parseCompressedPrice(line = '') {
 
 function parseReferencePrice(lines = []) {
   const text = normalizePdfText(lines.join(' '));
+  const compactStatt = text.match(/\b\d{2,4}\s*statt\s+(\d{1,3}[,.]\d{2})\b/i);
+  if (compactStatt) return money(Number(compactStatt[1].replace(',', '.')));
+
   const decimal = text.match(/\bstatt\s+(\d{1,3}[,.]\d{2})\b/i);
   if (decimal) return money(Number(decimal[1].replace(',', '.')));
 
@@ -120,6 +123,8 @@ function lineHasQuantity(line = '') {
   const normalized = normalizePdfText(line);
   return /\b\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter|stk|stueck|stÃ¼ck|stuck)\b/i.test(normalized)
     || /\bper\s+(?:kilo|kg|stueck|stÃ¼ck|stuck)\b/i.test(normalized)
+    || /\b\d+\s*(?:waschgaenge|waschg\S*nge|waschgange|wg)\b/i.test(normalized)
+    || /\b\d+\s*x\s*\d+\s*blatt\b/i.test(normalized)
     || /\bpackung\b/i.test(normalized);
 }
 
@@ -130,6 +135,15 @@ function extractQuantityText(lines = []) {
 
   const quantity = text.match(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter|stk|stueck|stÃ¼ck|stuck)\b/i);
   if (quantity) return normalizePdfText(quantity[0]).replace(',', '.').replace(/\bliter\b/i, 'l').replace(/stueck|stÃ¼ck|stuck/i, 'Stk');
+
+  const washes = text.match(/\b\d+\s*(?:waschgaenge|waschg\S*nge|waschgange|wg)\b/i);
+  if (washes) {
+    const count = washes[0].match(/\d+/)?.[0] || '';
+    if (count) return `${count} WG`;
+  }
+
+  const sheets = text.match(/\b\d+\s*x\s*\d+\s*blatt\b/i) || text.match(/\b\d+\s*blatt\b/i);
+  if (sheets) return normalizePdfText(sheets[0]).replace(/\s+/g, ' ');
 
   if (/\bper\s+kilo\b/i.test(text)) return '1 kg';
   if (/\bper\s+(?:stueck|stÃ¼ck|stuck)\b/i.test(text)) return '1 Stk';
@@ -271,6 +285,8 @@ function buildTitleFromBlock(block = []) {
     if (lineHasQuantity(line)) {
       const beforeQuantity = line
         .replace(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|ml|l|liter|stk|stueck|stÃ¼ck|stuck)\b.*$/i, '')
+        .replace(/\b\d+\s*(?:waschgaenge|waschg\S*nge|waschgange|wg)\b.*$/i, '')
+        .replace(/\b\d+\s*x\s*\d+\s*blatt\b.*$/i, '')
         .replace(/\bper\s+(?:kilo|kg|stueck|stÃ¼ck|stuck)\b.*$/i, '')
         .trim();
       if (beforeQuantity) titleLines.push(beforeQuantity);
@@ -335,7 +351,7 @@ function groupPriceLines(lines = []) {
 }
 
 function isStattDecimalContinuation(lines = [], line = '') {
-  return /\bstatt\b/i.test(normalizePdfText(lines.join(' ')))
+  return /statt\b/i.test(normalizePdfText(lines.join(' ')))
     && /^\d{1,3}[,.]\d{2}$/.test(normalizePdfText(line));
 }
 
@@ -569,7 +585,7 @@ function extractMinimumPurchaseQtyFromConditions(conditionsText = '') {
 }
 
 function buildCandidateFromPair({ productBlock, priceGroup, pageNumber, validity, sourceRetailerFormat }) {
-  const title = buildTitleFromBlock(productBlock);
+  const title = cleanInlineBillaTitle(buildTitleFromBlock(productBlock));
   const quantityText = extractQuantityText(productBlock);
   const rawText = sanitizeWhitespace([...productBlock, ...priceGroup.lines].join(' '));
 
@@ -610,8 +626,137 @@ function compactBillaPriceToMoney(value = '') {
   return money(`${digits.slice(0, -2) || '0'}.${digits.slice(-2)}`);
 }
 
+function extractCompactBillaPriceFromMixedLine(line = '') {
+  const text = sanitizeWhitespace(normalizePdfText(line));
+  const normalized = normalizeForScan(text);
+
+  if (!text || /--\s*\d+\s+of\s+\d+\s*--/i.test(text)) return null;
+  if (/^\d+\s*\+\s*\d+$/.test(normalized)) return null;
+  if (/^\d{1,3}[,.]\d{2}$/.test(text)) return null;
+  if (/^1\s+(?:pkg|packung|fl|flasche|dose|stk|stueck|stuck|glas)\b/i.test(normalized)) return null;
+  if (/^\(?\s*(?:1\s+(?:kg|l|liter|wg|stk|stueck|stuck|glas)|100\s*(?:g|ml))\s+\d{1,3}[,.]\d{2}(?:\s*[-/]\s*\d{1,3}[,.]\d{2})?\s*\)?$/i.test(normalized)) return null;
+
+  const direct = parseCompressedPrice(text);
+  if (direct) return direct;
+
+  if (/^-?\d{2,4}$/.test(normalized)) return null;
+
+  const suffix = text.match(/(?:^|[^\d,])(\d{2,4})(?:\s*statt\b)?$/i);
+  if (!suffix || /^(?:19|20)\d{2}$/.test(suffix[1])) return null;
+
+  return compactBillaPriceToMoney(suffix[1]);
+}
+
+function mergeBillaQuantityContinuationLines(lines = []) {
+  const merged = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    let line = lines[index];
+
+    while (lineHasQuantity(line) && index + 1 < lines.length) {
+      const next = lines[index + 1] || '';
+      const normalizedNext = normalizePdfText(next);
+      const openParens = (line.match(/\(/g) || []).length > (line.match(/\)/g) || []).length;
+
+      if (!/^(?:per\b|\()/i.test(normalizedNext) && !openParens) break;
+
+      line = `${line} ${next}`;
+      index += 1;
+    }
+
+    merged.push(line);
+  }
+
+  return merged;
+}
+
+function isSeparatedClusterNoiseLine(line = '') {
+  const normalized = normalizeForScan(line);
+  const raw = normalizePdfText(line);
+
+  return isNoiseProductLine(line)
+    || /\b(?:ausgenommen:\s*billa online shop|nicht mit anderen rabatten|solange der vorrat reicht|unsere statt-preise)\b/i.test(raw)
+    || /^auf\b/.test(normalized)
+    || /^\d+\s*\+\s*\d+$/.test(normalized)
+    || /^1\s+(?:pkg|packung|fl|flasche|dose|stk|stueck|stuck|glas)\b.*\d/.test(normalized)
+    || /^-?\s*\d{1,3}$/.test(normalized)
+    || /^\d{1,3}[,.]\d{2}$/.test(raw)
+    || /^\d{2,4}\s*statt\b/i.test(normalized)
+    || Boolean(extractCompactBillaPriceFromMixedLine(line));
+}
+
+function buildSeparatedClusterProductBlocks(lines = []) {
+  const blocks = [];
+  let current = [];
+
+  function flush() {
+    const clean = current.filter((line) => !isSeparatedClusterNoiseLine(line));
+    current = [];
+    if (clean.length === 0) return;
+
+    const title = cleanInlineBillaTitle(buildTitleFromBlock(clean));
+    if (clean.some((line) => lineHasQuantity(line)) && hasPlausibleBillaTitle(title)) {
+      blocks.push(clean);
+    }
+  }
+
+  for (const line of lines) {
+    if (isSeparatedClusterNoiseLine(line)) {
+      continue;
+    }
+
+    current.push(line);
+
+    if (lineHasQuantity(line) || current.length >= 8) {
+      flush();
+    }
+  }
+
+  flush();
+  return blocks;
+}
+
+function groupMixedBillaPriceLines(lines = []) {
+  const groups = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const price = extractCompactBillaPriceFromMixedLine(lines[index]);
+    if (!price) continue;
+
+    const group = {
+      price,
+      lines: [lines[index]],
+    };
+
+    for (let next = index + 1; next < lines.length && group.lines.length < 5; next += 1) {
+      if (!isPriceContextLine(lines[next]) && !isStattDecimalContinuation(group.lines, lines[next])) break;
+      group.lines.push(lines[next]);
+    }
+
+    groups.push(group);
+  }
+
+  return groups;
+}
+
+function isForwardProductContinuationLine(line = '') {
+  const raw = sanitizeWhitespace(normalizePdfText(line));
+  const normalized = normalizeForScan(raw);
+
+  if (!raw || isBillaRecoveryBoundaryLine(raw) || extractCompactBillaPriceFromMixedLine(raw)) return false;
+  return /^\(/.test(raw)
+    || /^[a-zÃ¤Ã¶Ã¼ÃŸ]/.test(raw)
+    || /,\s*$/.test(raw)
+    || lineHasQuantity(raw)
+    || /^per\b/.test(normalized);
+}
+
 function cleanInlineBillaTitle(value = '') {
   return sanitizeWhitespace(normalizePdfText(value))
+    .replace(/^.*?\bNicht mit anderen Rabatten und Bons kombinierbar\.\s*/i, '')
+    .replace(/^.*?\bAusgenommen:\s*BILLA Online Shop\.\s*/i, '')
+    .replace(/^.*?\b\d+\s*\+\s*\d+\s+/i, '')
+    .replace(/^\d+\s*\+\s*\d+\s+/i, '')
     .replace(/^.*\b(?:aktion|extrem preis)\b\s*/i, '')
     .replace(/^.*\bper\s+(?:kilo|kg|stueck|stück|stuck)\s+/i, '')
     .replace(/\b(?:aktion|extrem preis|nur kurze zeit|-?\d+\s*%)\b/gi, ' ')
@@ -892,6 +1037,132 @@ function extractInlineBillaPdfCandidatesFromPage(page, { validity = {}, sourceRe
   return candidates;
 }
 
+function extractSeparatedClusterBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa', now = new Date() } = {}) {
+  const lines = mergeBillaQuantityContinuationLines(String(page.text || '')
+    .split(/\r?\n/)
+    .map((line) => sanitizeWhitespace(line))
+    .filter(Boolean));
+  const candidates = [];
+
+  const hasDenseUnitMarker = lines.some((line) => /\b(?:waschgaenge|waschg\S*nge|waschgange|wg|blatt)\b/i.test(normalizePdfText(line)));
+  const firstPriceIndex = lines.findIndex((line) => Boolean(extractCompactBillaPriceFromMixedLine(line)));
+  const lastQuantityIndex = lines.reduce((last, line, index) => (lineHasQuantity(line) ? index : last), -1);
+
+  if (!hasDenseUnitMarker && (firstPriceIndex < 0 || firstPriceIndex <= lastQuantityIndex)) {
+    return candidates;
+  }
+
+  const productBlocks = buildSeparatedClusterProductBlocks(lines);
+  const priceGroups = normalizePriceGroupsForProductCount(groupMixedBillaPriceLines(lines), productBlocks.length, now);
+
+  if (productBlocks.length < 4 || priceGroups.length < productBlocks.length) {
+    return candidates;
+  }
+
+  for (let index = 0; index < productBlocks.length; index += 1) {
+    const candidate = buildCandidateFromPair({
+      productBlock: productBlocks[index],
+      priceGroup: priceGroups[index],
+      pageNumber: page.pageNumber,
+      validity,
+      sourceRetailerFormat,
+    });
+    candidate.parserHint = 'billa-pdf-separated-product-price-cluster';
+    addCandidate(candidates, page.pageNumber, candidate);
+  }
+
+  return candidates;
+}
+
+function extractForwardProductPriceBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa' } = {}) {
+  const lines = mergeBillaQuantityContinuationLines(String(page.text || '')
+    .split(/\r?\n/)
+    .map((line) => sanitizeWhitespace(line))
+    .filter(Boolean));
+  const candidates = [];
+
+  if (lines.some((line) => /\b(?:waschgaenge|waschg\S*nge|waschgange|wg|blatt)\b/i.test(normalizePdfText(line)))) {
+    return candidates;
+  }
+
+  const firstPriceIndex = lines.findIndex((line) => Boolean(extractCompactBillaPriceFromMixedLine(line)));
+  const lastQuantityIndex = lines.reduce((last, line, index) => (lineHasQuantity(line) ? index : last), -1);
+  if (firstPriceIndex > lastQuantityIndex && lastQuantityIndex >= 0 && buildSeparatedClusterProductBlocks(lines).length >= 3) {
+    return candidates;
+  }
+
+  for (let start = 0; start < lines.length; start += 1) {
+    if (isBillaRecoveryBoundaryLine(lines[start]) || extractCompactBillaPriceFromMixedLine(lines[start])) {
+      continue;
+    }
+
+    const productBlock = [];
+    let index = start;
+    let foundQuantity = false;
+    let priceGroup = null;
+    let hasContinuationAfterQuantity = false;
+
+    for (; index < lines.length && productBlock.length < 8; index += 1) {
+      const line = lines[index];
+
+      if (productBlock.length > 0 && (isBillaRecoveryBoundaryLine(line) || extractCompactBillaPriceFromMixedLine(line))) {
+        break;
+      }
+
+      productBlock.push(line);
+      if (lineHasQuantity(line)) {
+        foundQuantity = true;
+        break;
+      }
+    }
+
+    if (!foundQuantity) continue;
+
+    for (let priceIndex = index; priceIndex < Math.min(lines.length, index + 5); priceIndex += 1) {
+      const price = extractCompactBillaPriceFromMixedLine(lines[priceIndex]);
+      if (!price) {
+        if (priceIndex > index && !isForwardProductContinuationLine(lines[priceIndex])) break;
+        if (priceIndex > index) {
+          productBlock.push(lines[priceIndex]);
+          hasContinuationAfterQuantity = true;
+        }
+        continue;
+      }
+
+      const hasInlineBaseEvidence = productBlock.some((line) => /\(\s*(?:1\s+(?:kg|l|liter)|100\s*(?:g|ml))\b/i.test(normalizePdfText(line)));
+      if (priceIndex > index && !hasContinuationAfterQuantity && !hasInlineBaseEvidence) break;
+
+      priceGroup = {
+        price,
+        lines: [lines[priceIndex]],
+      };
+
+      for (let next = priceIndex + 1; next < lines.length && priceGroup.lines.length < 5; next += 1) {
+        if (!isPriceContextLine(lines[next]) && !isStattDecimalContinuation(priceGroup.lines, lines[next])) break;
+        priceGroup.lines.push(lines[next]);
+      }
+      break;
+    }
+
+    if (!priceGroup) continue;
+
+    const title = cleanInlineBillaTitle(buildTitleFromBlock(productBlock));
+    if (!hasPlausibleBillaTitle(title)) continue;
+
+    const candidate = buildCandidateFromPair({
+      productBlock,
+      priceGroup,
+      pageNumber: page.pageNumber,
+      validity,
+      sourceRetailerFormat,
+    });
+    candidate.parserHint = 'billa-pdf-inline-forward-product-price';
+    addCandidate(candidates, page.pageNumber, candidate);
+  }
+
+  return candidates;
+}
+
 function extractBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailerFormat = 'billa', now = new Date() } = {}) {
   const lines = String(page.text || '')
     .split(/\r?\n/)
@@ -961,6 +1232,8 @@ function extractBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailer
   const inlineCandidates = [
     ...extractInlineBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
     ...extractRecoveryBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
+    ...extractSeparatedClusterBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat, now }),
+    ...extractForwardProductPriceBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
   ];
   const seenOfferKeys = new Set(candidates
     .filter((candidate) => !candidate.exclusionReason)
@@ -1074,7 +1347,11 @@ function buildKey(value, fallback = '') {
     .replace(/^-+|-+$/g, '') || fallback;
 }
 
-function sourceKeyForRetailer(retailerKey = 'billa') {
+function sourceKeyForRetailer(retailerKey = 'billa', sourceUrl = '') {
+  const url = String(sourceUrl || '').toLowerCase();
+  if (url.includes('view.publitas.com/billa-at/billa_fb_kw24_2026_steiermark')) return 'billa-official-flyer-steiermark';
+  if (url.includes('view.publitas.com/billa-plus/billa_plus_fb_kw24_2026_steiermark')) return 'billa-plus-official-flyer-steiermark';
+
   return retailerKey === 'billa-plus'
     ? 'billa-plus-official-flyer-flyer'
     : 'billa-official-flyer-flyer';
@@ -1117,7 +1394,7 @@ function normalizeBillaPdfCandidateToOffer({ candidate, pdfReference, source, cr
     contextText: categoryContext,
     fallbackLabel: candidate.productKind || '',
   });
-  const sourceKey = sourceKeyForRetailer(source.retailerKey);
+  const sourceKey = sourceKeyForRetailer(source.retailerKey, source.sourceUrl);
   const categoryKey = buildKey(categorySecondary || categoryPrimary, 'unkategorisiert');
   const comparisonSignature = normalizeTitleForMatch([candidate.brand, candidate.title].join(' '))
     .split(/\s+/)
@@ -1255,6 +1532,8 @@ function normalizeBillaPdfCandidateToOffer({ candidate, pdfReference, source, cr
       sourceId: source._id ? String(source._id) : '',
       retailerKey: source.retailerKey,
       retailerName: source.retailerName,
+      region,
+      regionLevel: source.crawlPolicy?.regionLevel || '',
       sourceText: candidate.rawText,
       parserHint: candidate.parserHint || '',
       evidenceText: sourceMetadata.evidence,

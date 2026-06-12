@@ -2997,6 +2997,31 @@ function parseBillaPdfPage(text, overrides = {}) {
   };
 }
 
+function normalizeBillaPdfFixture({ text, pageNumber = 1, source: sourceDef = billaFlyerSource(), region = 'Steiermark', sourceRetailerFormat = sourceDef.retailerKey || 'billa' }) {
+  const validity = currentBillaFlyerValidity();
+  const pdfReference = {
+    validity,
+    candidates: extractBillaPdfCandidates({
+      pages: [{ pageNumber, text }],
+      validity,
+      sourceRetailerFormat,
+      now: new Date('2026-06-12T10:00:00+02:00'),
+    }),
+  };
+
+  return normalizeBillaPdfCandidatesToOffers({
+    pdfReference,
+    source: sourceDef,
+    crawlJobId: new Types.ObjectId(),
+    region,
+    pdfUrl: sourceDef.sourceUrl,
+  });
+}
+
+function findOffer(offers, pattern) {
+  return offers.find((offer) => pattern.test(offer.title));
+}
+
 test('BILLA flyer PDF parser parses KW23 validity when start weekday is missing in text layer', () => {
   const validity = parseBillaFlyerValidity('VON , 3. 6. BIS MITTWOCH, 10. 6. 2026 AUF BIER');
 
@@ -3350,6 +3375,235 @@ test('BILLA flyer PDF parser extracts KW24 grill supplement dense references', (
   assert.equal(baguette.priceCurrent.amount, 0.79);
 });
 
+test('BILLA Steiermark PDF parser extracts separated page 15 product-price cluster', () => {
+  const offers = normalizeBillaPdfFixture({
+    pageNumber: 15,
+    text: `
+      MI., 17. 6. 2026
+      Gültig in allen BILLA und BILLA PLUS Märkten.199
+      BEI 3 FL. JE
+      1 FL. € 2.99
+      2+1
+      Axe
+      Dusche
+      div. Sorten
+      250 ml (100 ml
+      1.20/0.80)
+      Sansin
+      Waschmittel
+      div. Sorten
+      44 Waschgänge,
+      per Flasche
+      (1 WG 0.16)
+      Sansin
+      Weichspüler
+      div. Sorten
+      80 Waschgänge,
+      per Flasche
+      (1 WG 0.04)
+      Sheba
+      Frischebeutel
+      od. Fresh & Fine
+      div. Sorten
+      160 g – 340 g
+      (1 kg 11.15 – 23.69/
+      8.79 – 18.69)
+      Sheba
+      Katzenschalen
+      div. Sorten
+      85 g (1 kg 10.47/8.12)
+      Cif
+      Bad & Dusche
+      Sprühflasche
+      750 ml Flasche
+      (1 l 3.98)
+      679statt
+      9.99
+      AKTION
+      -32%
+      299statt
+      4.99
+      AKTION
+      -40%
+      299statt
+      3.49
+      AKTION
+      -050
+      299
+      AB 2 PKG. JE
+      1 PKG. € 4.99
+      -40%
+      BI Home
+      Toilettenpapier
+      4-lagig 10x180 Blatt
+      Dreamies
+      Katzensnacks
+      div. Sorten
+      30 g – 60 g
+      (1 kg 44.83 – 89.67/
+      29.83 – 59.67)
+      179
+      BEI 3 PKG. JE
+      1 PKG. € 2.69
+      2+1
+      299
+      AKTION
+      -080
+      AB 2 PKG. JE
+      1 PKG. € 3.79
+      069
+      AKTION
+      -020
+      AB 4 PKG. JE
+      1 PKG. € 0.89
+    `,
+  });
+
+  assert.equal(findOffer(offers, /^Axe Dusche$/)?.priceCurrent.amount, 1.99);
+  assert.equal(findOffer(offers, /^Sansin Waschmittel$/)?.quantityText, '44 WG');
+  assert.equal(findOffer(offers, /^Sansin Waschmittel$/)?.priceCurrent.amount, 6.79);
+  assert.equal(findOffer(offers, /^Sansin Weichspüler$/)?.priceCurrent.amount, 2.99);
+  assert.equal(findOffer(offers, /^Sheba Frischebeutel/)?.priceCurrent.amount, 2.99);
+  assert.equal(findOffer(offers, /^Sheba Katzenschalen$/)?.conditionsText, 'ab 2 Packungen');
+  assert.equal(findOffer(offers, /^Cif Bad & Dusche/)?.priceCurrent.amount, 1.79);
+  assert.equal(findOffer(offers, /^BI Home Toilettenpapier/)?.quantityText, '10x180 Blatt');
+  assert.equal(findOffer(offers, /^BI Home Toilettenpapier/)?.priceCurrent.amount, 2.99);
+  assert.equal(findOffer(offers, /^Dreamies Katzensnacks$/)?.priceCurrent.amount, 0.69);
+  assert.ok(offers.every((offer) => offer.rawFacts.parserHint === 'billa-pdf-separated-product-price-cluster'));
+});
+
+test('BILLA Steiermark PDF parser extracts interleaved page 4 and page 8 products without cross-pairing', () => {
+  const page4Offers = normalizeBillaPdfFixture({
+    pageNumber: 4,
+    text: `
+      clever
+      Chicken-Wings
+      BBQ-mariniert
+      in Selbstbedienung,
+      500 g (1 kg 7.98/5.98)
+      clever
+      Spareribs
+      classic mariniert
+      in Selbstbedienung,
+      per Kilo299
+      AKTION
+      -25%
+      AB 2 PKG. JE
+      1 PKG. € 3.99
+      Die Grillerei
+      Burger Buns
+      Brioche 4 Stk.
+      geschnitten,
+      300 g Packung
+      (1 kg 5.63) 169
+    `,
+  });
+  const burger = findOffer(page4Offers, /Burger Buns Brioche/);
+
+  assert.ok(burger);
+  assert.equal(burger.priceCurrent.amount, 1.69);
+  assert.equal(burger.quantityText, '4 Stk');
+  assert.equal(page4Offers.some((offer) => /Burger Buns/i.test(offer.title) && offer.priceCurrent.amount === 4.99), false);
+
+  const page8Offers = normalizeBillaPdfFixture({
+    pageNumber: 8,
+    text: `
+      Rama
+      Cremefine
+      div. Sorten
+      200 ml – 250 ml
+      (1 l 5.96 – 7.45/
+      2.96 – 3.70)
+      074
+      BEI 4 FL. JE
+      1 FL. € 1.49
+      2+2
+    `,
+  });
+  const rama = findOffer(page8Offers, /^Rama Cremefine$/);
+
+  assert.ok(rama);
+  assert.equal(rama.priceCurrent.amount, 0.74);
+  assert.equal(rama.quantityText, '200 ml');
+  assert.equal(rama.conditionsText, 'bei 4 Flaschen');
+});
+
+test('BILLA Steiermark PDF parser extracts separated page 16 beverage cluster', () => {
+  const offers = normalizeBillaPdfFixture({
+    pageNumber: 16,
+    text: `
+      Ja! Natürlich
+      Bio-Rinderfaschiertes
+      in Selbstbedienung,
+      360 g (1 kg 24.97/13.86)
+      Vöslauer
+      Mineral-
+      wasser
+      div. Sorten
+      1,5 Liter
+      (1 l 0.66/0.33)
+      Schwechater
+      Bier
+      0,5 Liter
+      Schärdinger
+      Bergbauern
+      Joghurt
+      div. Sorten
+      500 g
+      (1 kg 3.98/1.98)
+      499
+      AB 2 PKG. JE
+      1 PKG. € 8.99
+      -44 %
+      099
+      BEI 2 GL. JE
+      1 GLAS € 1.99
+      1+1
+      069
+      BEI 24 DOSEN JE
+      1 DOSE € 1.39
+      12+12
+      049
+      BEI 6 FL. JE
+      1 FL. € 0.99
+      3+3
+    `,
+  });
+
+  assert.equal(findOffer(offers, /Bio-Rinderfaschiertes/)?.priceCurrent.amount, 4.99);
+  assert.equal(findOffer(offers, /Schwechater Bier/)?.priceCurrent.amount, 0.69);
+  assert.equal(findOffer(offers, /Schwechater Bier/)?.conditionsText, 'bei 24 Dosen');
+});
+
+test('BILLA Steiermark PDF parser does not map page 3 price block blindly to Eissalat', () => {
+  const offers = normalizeBillaPdfFixture({
+    pageNumber: 3,
+    text: `
+      099
+      -28 %
+      statt
+      1.39
+      299
+      -25 %
+      statt
+      3.99
+      199
+      -33 %
+      statt
+      2.99
+      Da komm’ ich her!
+      Eissalat
+      Kl. I, per Stück
+      Trauben
+      weiß kernlos
+      Kl. I, 500 g Packung
+      (1 kg 3.98)
+    `,
+  });
+
+  assert.equal(offers.some((offer) => /Eissalat/i.test(offer.title)), false);
+});
+
 test('BILLA flyer source selects retailer-specific official PDF links', () => {
   const links = [
     { type: 'pdf', url: 'https://assets.example.test/BILLA_FB_KW22_2026_Wien.pdf', label: 'BILLA Flugblatt' },
@@ -3372,6 +3626,38 @@ test('BILLA flyer source selects retailer-specific official PDF links', () => {
     'https://assets.example.test/BILLA_PLUS_FB_KW22_2026_Wien.pdf',
     'https://assets.example.test/BILLA_Grillen_Beileger_KW24_2026.pdf',
   ]);
+});
+
+test('BILLA flyer source selects official Publitas Steiermark PDF links and source keys', () => {
+  const billaPdf = 'https://view.publitas.com/88085/3139236/pdfs/example.pdf?downloadPdf=BILLA%20-%20BILLA%20Steiermark.pdf';
+  const billaPlusPdf = 'https://view.publitas.com/91215/3139237/pdfs/example.pdf?downloadPdf=BILLA%20PLUS%20Steiermark.pdf';
+  const billaSourceDef = billaFlyerSource({
+    label: 'BILLA Flugblatt Steiermark',
+    sourceUrl: 'https://view.publitas.com/billa-at/billa_fb_kw24_2026_steiermark/',
+    regionScope: 'Steiermark',
+    crawlPolicy: { regionLevel: 'Bundesland' },
+  });
+  const billaPlusSourceDef = billaFlyerSource({
+    retailerKey: 'billa-plus',
+    retailerName: 'Billa Plus',
+    label: 'BILLA PLUS Flugblatt Steiermark',
+    sourceUrl: 'https://view.publitas.com/billa-plus/billa_plus_fb_kw24_2026_steiermark/',
+    regionScope: 'Steiermark',
+    crawlPolicy: { regionLevel: 'Bundesland' },
+  });
+
+  assert.deepEqual(__private.selectBillaFlyerPdfLinks({
+    links: [{ type: 'pdf', url: billaPdf, label: billaPdf }],
+    source: billaSourceDef,
+  }).map((link) => link.url), [billaPdf]);
+  assert.deepEqual(__private.selectBillaFlyerPdfLinks({
+    links: [{ type: 'pdf', url: billaPlusPdf, label: billaPlusPdf }],
+    source: billaPlusSourceDef,
+  }).map((link) => link.url), [billaPlusPdf]);
+  assert.equal(deriveSourceKey(billaSourceDef), 'billa-official-flyer-steiermark');
+  assert.equal(deriveSourceKey(billaPlusSourceDef), 'billa-plus-official-flyer-steiermark');
+  assert.equal(billaPdfSourceKeyForRetailer('billa', billaSourceDef.sourceUrl), 'billa-official-flyer-steiermark');
+  assert.equal(billaPdfSourceKeyForRetailer('billa-plus', billaPlusSourceDef.sourceUrl), 'billa-plus-official-flyer-steiermark');
 });
 
 test('BILLA action HTML parser selects FR-SA price window for Dallmayr on Friday', () => {

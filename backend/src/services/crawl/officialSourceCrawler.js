@@ -5418,6 +5418,7 @@ async function crawlBillaOfficialPromotions({ source, crawlJobId, region, html =
 
 function selectBillaFlyerPdfLinks({ links = [], source = {} } = {}) {
   const retailerKey = String(source.retailerKey || '').toLowerCase();
+  const sourceUrl = String(source.sourceUrl || '').toLowerCase();
   const pdfLinks = links.filter((link) => link.type === 'pdf');
   const sharedFlyerPattern = /(?:billa|flugblatt|fb|flyer|beileger|grill)/i;
   const wantedPattern = retailerKey === 'billa-plus'
@@ -5426,10 +5427,15 @@ function selectBillaFlyerPdfLinks({ links = [], source = {} } = {}) {
   const excludedPattern = retailerKey === 'billa-plus'
     ? null
     : /billa[_-]?plus|billaplus|plus[_-]?fb/i;
+  const publitasAccountPattern = retailerKey === 'billa-plus'
+    ? /view\.publitas\.com\/91215\//i
+    : /view\.publitas\.com\/88085\//i;
+  const isRegionalPublitasSource = /view\.publitas\.com\/(?:billa-at|billa-plus)\//i.test(sourceUrl);
+  const isRegionalPublitasPdf = (link) => isRegionalPublitasSource && publitasAccountPattern.test(link.url);
 
   return pdfLinks
-    .filter((link) => sharedFlyerPattern.test(`${link.url} ${link.label || ''}`))
-    .filter((link) => wantedPattern.test(`${link.url} ${link.label || ''}`))
+    .filter((link) => isRegionalPublitasPdf(link) || sharedFlyerPattern.test(`${link.url} ${link.label || ''}`))
+    .filter((link) => isRegionalPublitasPdf(link) || wantedPattern.test(`${link.url} ${link.label || ''}`))
     .filter((link) => !excludedPattern || !excludedPattern.test(`${link.url} ${link.label || ''}`))
     .slice(0, 6);
 }
