@@ -5026,6 +5026,74 @@ function buildSourceQualityScore(offer) {
   return 0;
 }
 
+function isBillaFamilyRetailer(offer) {
+  return ['billa', 'billa-plus'].includes(normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || ''));
+}
+
+function isActiveBillaPrimaryEvidence(offer) {
+  const sourceType = getOfferSourceType(offer);
+
+  return isBillaFamilyRetailer(offer)
+    && /^billa-official-(?:action-html|flyer-pdf)$/i.test(sourceType)
+    && offer?.status === 'active'
+    && offer?.isActiveNow !== false
+    && hasSafeValidityWindow(offer)
+    && hasUsableOfferPrice(offer);
+}
+
+function isBillaAlgoliaSnapshot(offer) {
+  return isBillaFamilyRetailer(offer)
+    && /^billa-official-algolia$/i.test(getOfferSourceType(offer))
+    && hasUsableOfferPrice(offer);
+}
+
+function offerCoversQueryTerms(offer, query) {
+  const queryTerms = buildMeaningfulQueryTerms(query);
+
+  if (queryTerms.length === 0) {
+    return false;
+  }
+
+  const offerTokens = buildTermCoverageTokens([
+    offer?.title,
+    offer?.brand,
+    offer?.comparisonGroup,
+    offer?.searchText,
+    ...(Array.isArray(offer?.searchTokens) ? offer.searchTokens : []),
+  ]);
+
+  return queryTerms.every((queryTerm) => hasTermCoverageMatch(offerTokens, queryTerm));
+}
+
+function compareBillaPrimaryEvidencePreference(left, right, query) {
+  if (!query || !isBillaFamilyRetailer(left) || !isBillaFamilyRetailer(right)) {
+    return 0;
+  }
+
+  if (!haveSameVisibleQuantity(left, right)) {
+    return 0;
+  }
+
+  if (!offerCoversQueryTerms(left, query) || !offerCoversQueryTerms(right, query)) {
+    return 0;
+  }
+
+  const leftPrimary = isActiveBillaPrimaryEvidence(left);
+  const rightPrimary = isActiveBillaPrimaryEvidence(right);
+  const leftAlgolia = isBillaAlgoliaSnapshot(left);
+  const rightAlgolia = isBillaAlgoliaSnapshot(right);
+
+  if (leftPrimary && rightAlgolia) {
+    return -1;
+  }
+
+  if (rightPrimary && leftAlgolia) {
+    return 1;
+  }
+
+  return 0;
+}
+
 function buildRetailerDistribution(offers) {
   const grouped = new Map();
 
@@ -6735,6 +6803,12 @@ function compareOffersByRanking(left, right, { query = '' } = {}) {
   const queryTokens = tokenizeSearchText(query);
 
   if (queryTokens.length > 0) {
+    const billaEvidencePreference = compareBillaPrimaryEvidencePreference(left, right, query);
+
+    if (billaEvidencePreference !== 0) {
+      return billaEvidencePreference;
+    }
+
     const leftQueryScore = scoreOfferAgainstQuery(left, query);
     const rightQueryScore = scoreOfferAgainstQuery(right, query);
 
