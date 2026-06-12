@@ -171,6 +171,13 @@ test('normalizes austrian food aliases bidirectionally', () => {
     ['blumenkohl', ['blumenkohl', 'karfiol']],
     ['topfen', ['quark', 'topfen']],
     ['quark', ['quark', 'topfen']],
+    ['kren', ['kren', 'meerrettich']],
+    ['meerrettich', ['kren', 'meerrettich']],
+    ['germ', ['germ', 'hefe']],
+    ['hefe', ['germ', 'hefe']],
+    ['schlagobers', ['obers', 'sahne', 'schlagobers']],
+    ['obers', ['obers', 'sahne', 'schlagobers']],
+    ['sahne', ['obers', 'sahne', 'schlagobers']],
   ];
 
   for (const [query, expectedTokens] of families) {
@@ -185,6 +192,9 @@ test('normalizes austrian food aliases bidirectionally', () => {
   assert.equal(buildOfferSearchTokens({ title: 'Marillen 500 g' }).includes('aprikose'), true);
   assert.equal(buildOfferSearchTokens({ title: 'Karfiol' }).includes('blumenkohl'), true);
   assert.equal(buildOfferSearchTokens({ title: 'Topfen 250 g' }).includes('quark'), true);
+  assert.equal(buildOfferSearchTokens({ title: 'Kren gerieben' }).includes('meerrettich'), true);
+  assert.equal(buildOfferSearchTokens({ title: 'Germ frisch' }).includes('hefe'), true);
+  assert.equal(buildOfferSearchTokens({ title: 'Schlagobers 250 ml' }).includes('sahne'), true);
 });
 
 test('expands fisch query to direct fish and seafood product tokens only', () => {

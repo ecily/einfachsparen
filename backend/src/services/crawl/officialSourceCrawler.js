@@ -6943,12 +6943,17 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       const sourceKey = sourceKeyForFormat(source.sourceRetailerFormat || 'spar');
       const offersStored = sparPdfResult.offerDocuments.length;
       const replacementQuality = sparPdfResult.replacementQuality || 'complete';
+      const zeroStoredGate = buildOfficialSourceZeroStoredGate({
+        source,
+        rawCandidateCount: sparPdfResult.rawCandidateCount,
+        offersStored,
+      });
       const status = replacementQuality === 'quality-risk'
         ? 'partial'
-        : (offersStored > 0 || sparPdfResult.rawCandidateCount > 0 ? 'success' : 'partial');
+        : (zeroStoredGate.forcePartial ? 'partial' : (offersStored > 0 ? 'success' : 'partial'));
       const warningMessages = replacementQuality === 'quality-risk'
         ? [`SPAR PDF source protected previous offers because replacement coverage dropped sharply (${sparPdfResult.refreshResult?.coverageRisk?.previousActiveCount || 0} -> ${sparPdfResult.refreshResult?.coverageRisk?.nextCount || offersStored}).`]
-        : [];
+        : zeroStoredGate.warningMessages;
 
       await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
         status,
@@ -6963,7 +6968,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         httpLog: sparPdfResult.httpLog || {},
         warningMessages,
         errorMessages: [],
-        extraRejectionReasons: sparPdfResult.rejectionReasons || [],
+        extraRejectionReasons: [
+          ...(sparPdfResult.rejectionReasons || []),
+          ...zeroStoredGate.rejectionReasons,
+        ],
         validFrom: sparPdfResult.validity?.validFrom || null,
         validTo: sparPdfResult.validity?.validTo || null,
         metadata: {
@@ -7005,7 +7013,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
           offersStored,
           rejectedOffers: Math.max(0, sparPdfResult.rawCandidateCount - offersStored),
           offers: sparPdfResult.offerDocuments,
-          rejectionReasons: sparPdfResult.rejectionReasons || [],
+          rejectionReasons: [
+            ...(sparPdfResult.rejectionReasons || []),
+            ...zeroStoredGate.rejectionReasons,
+          ],
           validFrom: sparPdfResult.validity?.validFrom || null,
           validTo: sparPdfResult.validity?.validTo || null,
         }),

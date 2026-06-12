@@ -171,6 +171,19 @@ const AUSTRIAN_FOOD_ALIAS_TOKEN_FAMILIES = [
     'quark',
     'topfen',
   ],
+  [
+    'kren',
+    'meerrettich',
+  ],
+  [
+    'germ',
+    'hefe',
+  ],
+  [
+    'obers',
+    'sahne',
+    'schlagobers',
+  ],
 ];
 
 const STOPWORDS = new Set([

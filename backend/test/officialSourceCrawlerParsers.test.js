@@ -1844,6 +1844,41 @@ test('official source zero-store gate marks raw official coverage as partial war
   assert.equal(healthy.forcePartial, false);
 });
 
+test('official source zero-store gate covers official pdf flyer paths without penalizing empty raw sources', () => {
+  const pdfGate = __private.buildOfficialSourceZeroStoredGate({
+    source: {
+      label: 'EUROSPAR Flugblatt PDF',
+      channel: 'official-flyer',
+      sourceType: 'pdf',
+      retailerKey: 'eurospar',
+    },
+    rawCandidateCount: 64,
+    offersStored: 0,
+  });
+
+  assert.equal(pdfGate.forcePartial, true);
+  assert.match(pdfGate.warningMessages[0], /stored 0 offers/);
+  assert.deepEqual(pdfGate.rejectionReasons, [{
+    reason: 'official-source-zero-stored',
+    count: 64,
+  }]);
+
+  const emptyRaw = __private.buildOfficialSourceZeroStoredGate({
+    source: {
+      label: 'EUROSPAR Flugblatt PDF',
+      channel: 'official-flyer',
+      sourceType: 'pdf',
+      retailerKey: 'eurospar',
+    },
+    rawCandidateCount: 0,
+    offersStored: 0,
+  });
+
+  assert.equal(emptyRaw.forcePartial, false);
+  assert.deepEqual(emptyRaw.warningMessages, []);
+  assert.deepEqual(emptyRaw.rejectionReasons, []);
+});
+
 test('PENNY official condition extraction reads explicit API promotion tags only', () => {
   const cases = [
     {
