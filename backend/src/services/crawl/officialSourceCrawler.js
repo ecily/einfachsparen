@@ -5429,7 +5429,7 @@ function selectBillaFlyerPdfLinks({ links = [], source = {} } = {}) {
     : /billa[_-]?plus|billaplus|plus[_-]?fb/i;
   const publitasAccountPattern = retailerKey === 'billa-plus'
     ? /view\.publitas\.com\/91215\//i
-    : /view\.publitas\.com\/88085\//i;
+    : /view\.publitas\.com\/90963\//i;
   const isRegionalPublitasSource = /view\.publitas\.com\/(?:billa-at|billa-plus)\//i.test(sourceUrl);
   const isRegionalPublitasPdf = (link) => isRegionalPublitasSource && publitasAccountPattern.test(link.url);
 

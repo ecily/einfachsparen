@@ -3629,7 +3629,7 @@ test('BILLA flyer source selects retailer-specific official PDF links', () => {
 });
 
 test('BILLA flyer source selects official Publitas Steiermark PDF links and source keys', () => {
-  const billaPdf = 'https://view.publitas.com/88085/3139236/pdfs/example.pdf?downloadPdf=BILLA%20-%20BILLA%20Steiermark.pdf';
+  const billaPdf = 'https://view.publitas.com/90963/3139229/pdfs/example.pdf?downloadPdf=BILLA%20-%20BILLA%20Steiermark.pdf';
   const billaPlusPdf = 'https://view.publitas.com/91215/3139237/pdfs/example.pdf?downloadPdf=BILLA%20PLUS%20Steiermark.pdf';
   const billaSourceDef = billaFlyerSource({
     label: 'BILLA Flugblatt Steiermark',
