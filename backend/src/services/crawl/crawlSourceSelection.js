@@ -19,6 +19,19 @@ function normalizeSourceKey(value = '') {
     .replace(/^-+|-+$/g, '');
 }
 
+function isSparFamilyCurrentDiscoverySource(source = {}) {
+  const sourceType = String(source.sourceType || '').toLowerCase();
+  const parserHint = String(source.parserHint || '').toLowerCase();
+  return source.crawlPolicy?.currentDiscovery === true
+    || sourceType === 'spar-family-current-flyer-discovery'
+    || parserHint === 'spar-family-flyer-discovery';
+}
+
+function isScopedHistoricalSource(source = {}) {
+  return source.crawlPolicy?.currentSnapshot === false
+    || (source.crawlPolicy?.scopedOnly === true && !isSparFamilyCurrentDiscoverySource(source));
+}
+
 function deriveSourceKey(source = {}) {
   const url = String(source.sourceUrl || '').toLowerCase();
   const format = normalizeSourceKey(source.sourceRetailerFormat || source.retailerKey || 'unknown');
@@ -29,14 +42,15 @@ function deriveSourceKey(source = {}) {
   if (url.includes('marktguru.at')) return `marktguru-${format}`;
   if (url.includes('wogibtswas.at')) return `wogibtswas-${format}`;
   if (sourceType === 'spar-family-official-productworld' || parserHint === 'official-productworld-bff') return `${format}-official-productworld`;
+  if (isSparFamilyCurrentDiscoverySource(source) && ['spar', 'eurospar', 'interspar'].includes(format)) return `${format}-official-flyer-current`;
   if (url.includes('spar.at/aktionen/steiermark/eurospar') || (url.includes('spar.at/aktionen/steiermark') && format === 'eurospar')) return 'eurospar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark/interspar') || url.includes('interspar.at/aktionen/steiermark') || (url.includes('spar.at/aktionen/steiermark') && format === 'interspar')) return 'interspar-official-actions-steiermark';
   if (url.includes('spar.at/aktionen/steiermark')) return 'spar-official-actions-steiermark';
   if (url.includes('interspar.at/aktionen')) return 'interspar-official-actions';
-  if (url.includes('flugblatt.interspar.at')) return 'interspar-official-flyer-pdf';
-  if (url.includes('flugblatt.spar.at') && format === 'interspar') return 'interspar-official-flyer-pdf';
-  if (url.includes('flugblatt.spar.at') && format === 'eurospar') return 'eurospar-official-flyer-pdf';
-  if (url.includes('flugblatt.spar.at') && format === 'spar') return 'spar-official-flyer-pdf';
+  if (url.includes('flugblatt.interspar.at')) return isScopedHistoricalSource(source) ? 'interspar-official-flyer-pdf-scoped' : 'interspar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'interspar') return isScopedHistoricalSource(source) ? 'interspar-official-flyer-pdf-scoped' : 'interspar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'eurospar') return isScopedHistoricalSource(source) ? 'eurospar-official-flyer-pdf-scoped' : 'eurospar-official-flyer-pdf';
+  if (url.includes('flugblatt.spar.at') && format === 'spar') return isScopedHistoricalSource(source) ? 'spar-official-flyer-pdf-scoped' : 'spar-official-flyer-pdf';
   if (url.includes('spar.at')) return 'spar-official-flyer';
   if (url.includes('view.publitas.com/billa-at/billa-fb-kw24-2026-steiermark') || url.includes('view.publitas.com/billa-at/billa_fb_kw24_2026_steiermark')) return 'billa-official-flyer-steiermark';
   if (url.includes('view.publitas.com/billa-plus/billa-plus-fb-kw24-2026-steiermark') || url.includes('view.publitas.com/billa-plus/billa_plus_fb_kw24_2026_steiermark')) return 'billa-plus-official-flyer-steiermark';

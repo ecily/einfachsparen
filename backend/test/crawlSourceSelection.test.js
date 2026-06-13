@@ -67,6 +67,27 @@ const SOURCES = [
     sourceRetailerFormat: 'eurospar',
     enabled: true,
     active: true,
+    crawlPolicy: {
+      scopedOnly: true,
+      currentSnapshot: false,
+    },
+  },
+  {
+    _id: '777777777777777777777777',
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    channel: 'official-flyer',
+    label: 'SPAR Steiermark Current Flyer Discovery',
+    sourceUrl: 'https://www.spar.at/aktionen/steiermark',
+    sourceType: 'spar-family-current-flyer-discovery',
+    parserHint: 'spar-family-flyer-discovery',
+    sourceRetailerFormat: 'spar',
+    enabled: true,
+    active: true,
+    crawlPolicy: {
+      currentDiscovery: true,
+      currentSnapshot: true,
+    },
   },
   {
     _id: '555555555555555555555555',
@@ -119,7 +140,8 @@ test('source key derivation recognizes the three SPAR Aktionsfinder sources and 
   assert.equal(deriveSourceKey(SOURCES[1]), 'aktionsfinder-interspar');
   assert.equal(deriveSourceKey(SOURCES[2]), 'aktionsfinder-eurospar');
   assert.equal(deriveSourceKey(SOURCES[3]), 'spar-official-flyer');
-  assert.equal(deriveSourceKey(SOURCES[4]), 'eurospar-official-flyer-pdf');
+  assert.equal(deriveSourceKey(SOURCES[4]), 'eurospar-official-flyer-pdf-scoped');
+  assert.equal(deriveSourceKey(SOURCES[5]), 'spar-official-flyer-current');
 });
 
 test('source key derivation keeps INTERSPAR PDFs on SPAR flugblatt domain selectable', () => {
@@ -171,6 +193,41 @@ test('source key derivation recognizes SPAR Productworld BFF sources before gene
   );
 });
 
+test('source key derivation separates scoped SPAR-family PDF snapshots from current flyer keys', () => {
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'interspar',
+      channel: 'official-flyer',
+      sourceType: 'pdf',
+      sourceRetailerFormat: 'interspar',
+      sourceUrl: 'https://flugblatt.spar.at/steiermark/spar/260513-3-monatssparer-kw-20/getPdf.ashx',
+      crawlPolicy: {
+        scopedOnly: true,
+        currentSnapshot: false,
+      },
+    }),
+    'interspar-official-flyer-pdf-scoped'
+  );
+});
+
+test('source key derivation recognizes SPAR-family current flyer discovery sources', () => {
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'eurospar',
+      channel: 'official-flyer',
+      sourceType: 'spar-family-current-flyer-discovery',
+      parserHint: 'spar-family-flyer-discovery',
+      sourceRetailerFormat: 'eurospar',
+      sourceUrl: 'https://www.spar.at/aktionen/steiermark/eurospar',
+      crawlPolicy: {
+        currentDiscovery: true,
+        currentSnapshot: true,
+      },
+    }),
+    'eurospar-official-flyer-current'
+  );
+});
+
 test('source key derivation keeps BIPA expanded page 2 source separately selectable', () => {
   assert.equal(
     deriveSourceKey({
@@ -201,18 +258,33 @@ test('sourceKeys select exactly the requested runnable sources without SPAR offi
   assert.deepEqual(selection.effectiveRetailerKeys, ['spar', 'eurospar', 'interspar']);
 });
 
-test('sourceKeys can select SPAR official PDF source exactly', async () => {
+test('sourceKeys can select scoped SPAR official PDF snapshots exactly without using current keys', async () => {
   const selection = await resolveCrawlSourceSelection({
     Source: fakeSourceModel(),
     Offer: fakeOfferModel([{ _id: 'spar', activeOfferCount: 10 }]),
-    sourceKeys: ['eurospar-official-flyer-pdf'],
+    sourceKeys: ['eurospar-official-flyer-pdf-scoped'],
     sourceSelectionRequested: true,
   });
 
   assert.equal(selection.wouldRunCount, 1);
-  assert.equal(selection.matchedSources[0].sourceKey, 'eurospar-official-flyer-pdf');
+  assert.equal(selection.matchedSources[0].sourceKey, 'eurospar-official-flyer-pdf-scoped');
   assert.equal(selection.matchedSources[0].sourceRetailerFormat, 'eurospar');
   assert.deepEqual(selection.effectiveRetailerKeys, ['eurospar']);
+});
+
+test('sourceKeys select current SPAR-family flyer discovery without historical PDF snapshots', async () => {
+  const selection = await resolveCrawlSourceSelection({
+    Source: fakeSourceModel(),
+    Offer: fakeOfferModel([{ _id: 'spar', activeOfferCount: 10 }]),
+    sourceKeys: ['spar-official-flyer-current'],
+    sourceSelectionRequested: true,
+  });
+
+  assert.equal(selection.wouldRunCount, 1);
+  assert.equal(selection.matchedSources[0].sourceKey, 'spar-official-flyer-current');
+  assert.equal(selection.matchedSources[0].label, 'SPAR Steiermark Current Flyer Discovery');
+  assert.equal(selection.matchedSources.some((source) => source.sourceKey.includes('pdf-scoped')), false);
+  assert.deepEqual(selection.effectiveRetailerKeys, ['spar']);
 });
 
 test('retailerKeys and sourceKeys act as an intersection', async () => {
@@ -268,7 +340,7 @@ test('retailerKeys-only path remains compatible and excludes disabled sources', 
     retailerKeys: ['spar'],
   });
 
-  assert.equal(selection.wouldRunCount, 1);
+  assert.equal(selection.wouldRunCount, 2);
   assert.deepEqual(seenFilters[0].retailerKey, { $in: ['spar'] });
   assert.deepEqual(seenFilters[0].enabled, { $ne: false });
 });

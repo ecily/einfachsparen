@@ -292,6 +292,8 @@ test('SPAR-family PDF SourceDefinitions keep old static regular flyers scoped-on
   assert.equal(oldRegularKw23.length, 3);
   assert.equal(oldRegularKw23.every((source) => source.scopedOnly === true), true);
   assert.equal(oldRegularKw23.every((source) => source.currentSnapshot === false), true);
+  assert.equal(sources.every((source) => source.scopedOnly === true), true);
+  assert.equal(sources.every((source) => source.currentSnapshot === false), true);
   assert.equal(
     sources.some((source) => /260603-1-flugblatt-kw-23|steiermark_kw23/i.test(source.url)
       && source.scopedOnly !== true

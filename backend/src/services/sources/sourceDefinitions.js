@@ -59,6 +59,7 @@ function buildSparFamilySharedPdfSources({
       validityText,
       validFrom,
       validTo,
+      currentSnapshot: false,
       extractionMethod: 'text-layer',
       ocr: false,
       requireCouponCondition,
@@ -283,6 +284,7 @@ const RETAILER_DEFINITIONS = [
       maxPdfBytes: 10485760,
       maxPdfPages: 2,
       scopedOnly: true,
+      currentSnapshot: false,
       coverageGuard: {
         minBaseline: 6,
         minReplacementRatio: 0.35,
@@ -378,6 +380,7 @@ const RETAILER_DEFINITIONS = [
       maxPdfBytes: 41943040,
       maxPdfPages: 28,
       scopedOnly: true,
+      currentSnapshot: false,
       coverageGuard: {
         minBaseline: 6,
         minReplacementRatio: 0.35,
@@ -409,6 +412,7 @@ const RETAILER_DEFINITIONS = [
       maxPdfBytes: 41943040,
       maxPdfPages: 48,
       scopedOnly: true,
+      currentSnapshot: false,
       coverageGuard: {
         minBaseline: 8,
         minReplacementRatio: 0.35,
