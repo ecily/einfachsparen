@@ -69,6 +69,9 @@ const {
   extractIssuuDocumentsFromHtml,
   resolveIssuuOriginalPdfUrl,
 } = require('./issuuPdfResolver');
+const {
+  discoverSparFamilyFlyers,
+} = require('./sparFamilyFlyerDiscovery');
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const logger = require('../../lib/logger');
@@ -77,6 +80,7 @@ const execFile = promisify(execFileCallback);
 const PARSER_VERSION = 'official-v3-coverage';
 const SPAR_PRODUCTWORLD_SOURCE_TYPE = 'spar-family-official-productworld';
 const SPAR_PRODUCTWORLD_PARSER_VERSION = 'spar-productworld-bff-v1';
+const SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION = 'spar-family-flyer-discovery-v1';
 const SPAR_PRODUCTWORLD_BFF_ORIGIN = 'https://api-scp.spar-ics.com';
 const SPAR_PRODUCTWORLD_SEARCH_PATH = '/ecom/pw/v1/search/v1/search';
 const SPAR_PRODUCTWORLD_FILTERS = ['inAngebot:true', 'isPreisGesenkt:true'];
@@ -4252,6 +4256,11 @@ function sourceCoverageFields({
   };
 }
 
+function isSparFamilyFlyerDiscoverySource(source = {}) {
+  return source.parserHint === 'spar-family-flyer-discovery'
+    || source.crawlPolicy?.currentDiscovery === true;
+}
+
 function shouldWarnOfficialSourceZeroStored({ source = {}, rawCandidateCount = 0, offersStored = 0 } = {}) {
   const channel = String(source.channel || '');
   const sourceType = String(source.sourceType || '');
@@ -4451,6 +4460,78 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, crawlRunId = nul
       contentHash: pdfSha256,
     },
     refreshResult,
+  };
+}
+
+async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, region }) {
+  const entryPoints = Array.isArray(source.crawlPolicy?.entryPoints) && source.crawlPolicy.entryPoints.length > 0
+    ? source.crawlPolicy.entryPoints
+    : [source.sourceUrl];
+  const limits = {
+    maxEntryPoints: Number(source.crawlPolicy?.maxEntryPoints || entryPoints.length || 1),
+    maxLinks: Number(source.crawlPolicy?.maxLinks || 20),
+    maxPdfMetadataLookups: Number(source.crawlPolicy?.maxPdfMetadataLookups || 0),
+    timeoutMs: Number(source.crawlPolicy?.timeoutMs || 15000),
+  };
+  const discovery = await discoverSparFamilyFlyers({
+    entryPoints,
+    limits,
+  });
+  const sourceKey = `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
+  const discoveredLinks = discovery.pdfs || [];
+  const checkedPages = discovery.checkedPages || [];
+  const blockedPages = checkedPages.filter((page) => page.blockedLikely);
+  const warningMessages = [];
+
+  if (discoveredLinks.length === 0) {
+    warningMessages.push(`${source.label || source.sourceUrl} did not discover a current SPAR-family flyer link.`);
+  }
+
+  if (blockedPages.length > 0) {
+    warningMessages.push(`${source.label || source.sourceUrl} had blocked/challenge-like discovery entrypoints.`);
+  }
+
+  const status = discoveredLinks.length > 0 && blockedPages.length === 0 ? 'success' : 'partial';
+  const rawDocument = await createCompactRawDocument({
+    sourceId: source._id,
+    crawlJobId,
+    retailerKey: source.retailerKey,
+    region,
+    documentType: 'html',
+    sourceType: 'spar-family-flyer-discovery',
+    url: source.sourceUrl,
+    canonicalUrl: source.sourceUrl,
+    finalUrl: checkedPages[0]?.finalUrl || source.sourceUrl,
+    title: source.label || 'SPAR-family current flyer discovery',
+    httpStatus: checkedPages[0]?.httpStatus || null,
+    contentType: checkedPages[0]?.contentType || '',
+    downloadBytes: 0,
+    contentHash: createHash(JSON.stringify(discovery)),
+    contentSnippet: checkedPages.map((page) => `${page.fetchStatus}:${page.url}`).join(' | ').slice(0, 500),
+    extractedPreview: discoveredLinks.slice(0, 12).map((item) => item.url),
+    foundRawItems: discoveredLinks.length,
+    parsedOffers: 0,
+    rejectedOffers: 0,
+    parserVersion: SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION,
+    extractionConfidence: discoveredLinks.length > 0 ? 0.75 : 0.2,
+    payload: {
+      sourceKey,
+      sourceKind: 'spar-family-current-flyer-discovery',
+      sourceRetailerFormat: source.sourceRetailerFormat || '',
+      parserVersion: SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION,
+      discovery,
+    },
+  });
+
+  return {
+    sourceKey,
+    status,
+    rawDocuments: 1,
+    rawDocumentId: rawDocument._id,
+    rawCandidateCount: discoveredLinks.length,
+    discoveredLinks: discoveredLinks.length,
+    warningMessages,
+    discovery,
   };
 }
 
@@ -7313,6 +7394,76 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
   try {
     await clearRawDocumentsForSource(source._id);
     throwIfAborted(signal);
+
+    if (isSparFamilyFlyerDiscoverySource(source)) {
+      const discoveryResult = await crawlSparFamilyFlyerDiscoverySource({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+      });
+
+      await CrawlJob.findByIdAndUpdate(crawlJob._id, buildCrawlJobUpdate({
+        status: discoveryResult.status,
+        discoveredPages: discoveryResult.discovery?.checkedPages?.length || 1,
+        rawDocuments: discoveryResult.rawDocuments,
+        rawCandidateCount: discoveryResult.rawCandidateCount,
+        offers: [],
+        source,
+        sourceType: 'spar-family-flyer-discovery',
+        parserVersion: SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION,
+        normalizationVersion: NORMALIZATION_VERSION,
+        httpLog: {
+          entryPoints: discoveryResult.discovery?.entryPoints || [],
+          checkedPages: discoveryResult.discovery?.checkedPages || [],
+        },
+        warningMessages: discoveryResult.warningMessages,
+        errorMessages: [],
+        extraRejectionReasons: discoveryResult.rawCandidateCount > 0 ? [] : [{
+          reason: 'spar-family-current-flyer-discovery-zero-links',
+          count: 1,
+        }],
+        metadata: {
+          sourceLabel: source.label,
+          sourceUrl: source.sourceUrl,
+          sourceKey: discoveryResult.sourceKey,
+          discovery: discoveryResult.discovery,
+        },
+      }));
+
+      await Source.findByIdAndUpdate(source._id, {
+        latestRunAt: new Date(),
+        latestStatus: discoveryResult.status,
+      });
+
+      return {
+        retailerKey: source.retailerKey,
+        retailerName: source.retailerName,
+        channel: source.channel,
+        sourceType: source.sourceType || 'flyer',
+        sourceKey: discoveryResult.sourceKey,
+        status: discoveryResult.status,
+        offersStored: 0,
+        foundRawItems: discoveryResult.rawCandidateCount,
+        parsedOffers: 0,
+        rejectedOffers: 0,
+        ...sourceCoverageFields({
+          foundRawItems: discoveryResult.rawCandidateCount,
+          parsedOffers: 0,
+          offersStored: 0,
+          rejectedOffers: 0,
+          offers: [],
+          rejectionReasons: discoveryResult.rawCandidateCount > 0 ? [] : [{
+            reason: 'spar-family-current-flyer-discovery-zero-links',
+            count: 1,
+          }],
+        }),
+        evidenceMatched: 0,
+        discoveredLinks: discoveryResult.discoveredLinks,
+        sourceUrl: source.sourceUrl,
+        warnings: discoveryResult.warningMessages,
+        discovery: discoveryResult.discovery,
+      };
+    }
 
     if (isSparOfficialPdfSource(source)) {
       const sparPdfResult = await crawlSparOfficialPdfSource({

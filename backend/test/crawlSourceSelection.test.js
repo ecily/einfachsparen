@@ -5,6 +5,7 @@ const {
   deriveSourceKey,
   resolveCrawlSourceSelection,
 } = require('../src/services/crawl/crawlSourceSelection');
+const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 
 const SOURCES = [
   {
@@ -285,6 +286,43 @@ test('sourceKeys select current SPAR-family flyer discovery without historical P
   assert.equal(selection.matchedSources[0].label, 'SPAR Steiermark Current Flyer Discovery');
   assert.equal(selection.matchedSources.some((source) => source.sourceKey.includes('pdf-scoped')), false);
   assert.deepEqual(selection.effectiveRetailerKeys, ['spar']);
+});
+
+test('sourceKeys select registered SPAR-family current flyer discovery definitions', async () => {
+  const registeredSources = RETAILER_DEFINITIONS
+    .filter((source) => source.parserHint === 'spar-family-flyer-discovery')
+    .map((source, index) => ({
+      _id: `${index + 1}`.repeat(24).slice(0, 24),
+      ...source,
+      enabled: source.enabled !== false,
+      active: true,
+    }));
+
+  const selection = await resolveCrawlSourceSelection({
+    Source: fakeSourceModel(registeredSources),
+    Offer: fakeOfferModel([
+      { _id: 'spar', activeOfferCount: 10 },
+      { _id: 'eurospar', activeOfferCount: 10 },
+      { _id: 'interspar', activeOfferCount: 10 },
+    ]),
+    sourceKeys: [
+      'spar-official-flyer-current',
+      'eurospar-official-flyer-current',
+      'interspar-official-flyer-current',
+    ],
+    sourceSelectionRequested: true,
+    dryRun: true,
+  });
+
+  assert.equal(selection.wouldRunCount, 3);
+  assert.deepEqual(selection.matchedSources.map((source) => source.sourceKey).sort(), [
+    'eurospar-official-flyer-current',
+    'interspar-official-flyer-current',
+    'spar-official-flyer-current',
+  ]);
+  assert.deepEqual(selection.matchedSources.map((source) => source.sourceType).sort(), ['flyer', 'flyer', 'flyer']);
+  assert.equal(selection.matchedSources.some((source) => source.sourceKey.includes('pdf-scoped')), false);
+  assert.deepEqual(selection.effectiveRetailerKeys, ['spar', 'eurospar', 'interspar']);
 });
 
 test('retailerKeys and sourceKeys act as an intersection', async () => {

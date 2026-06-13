@@ -3,6 +3,9 @@ const test = require('node:test');
 const mongoose = require('mongoose');
 
 const {
+  deriveSourceKey,
+} = require('../src/services/crawl/crawlSourceSelection');
+const {
   buildSparFamilyFlyerInventoryReport,
   classifySparFamilyFlyerUrl,
   classifySparFamilyPdfUrl,
@@ -352,4 +355,24 @@ test('additional SPAR-family shared PDF definitions are scoped-only and coupon-s
   assert.equal(sharedSources.every((source) => source.crawlPolicy?.scopedOnly === true), true);
   assert.equal(couponSources.length, 3);
   assert.equal(couponSources.every((source) => source.crawlPolicy?.requireCouponCondition === true), true);
+});
+
+test('SPAR-family current flyer discovery definitions are registered without local or aggregator sources', () => {
+  const currentSources = RETAILER_DEFINITIONS.filter((definition) => definition.parserHint === 'spar-family-flyer-discovery');
+
+  assert.equal(currentSources.length, 3);
+  assert.deepEqual(currentSources.map((source) => deriveSourceKey(source)).sort(), [
+    'eurospar-official-flyer-current',
+    'interspar-official-flyer-current',
+    'spar-official-flyer-current',
+  ]);
+  assert.deepEqual(currentSources.map((source) => source.retailerKey).sort(), ['eurospar', 'interspar', 'spar']);
+  assert.equal(currentSources.every((source) => source.channel === 'official-flyer'), true);
+  assert.equal(currentSources.every((source) => source.sourceType === 'flyer'), true);
+  assert.equal(currentSources.every((source) => source.enabled !== false), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.scopedOnly === true), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.currentDiscovery === true), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.currentSnapshot === true), true);
+  assert.equal(currentSources.every((source) => source.parserHint !== 'official-category-actions'), true);
+  assert.equal(currentSources.every((source) => !/^(?:[A-Z]:\\|file:|https?:\/\/(?:www\.)?aktionsfinder\.at|https?:\/\/(?:www\.)?marktguru\.at)/i.test(source.sourceUrl)), true);
 });
