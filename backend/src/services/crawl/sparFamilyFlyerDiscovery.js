@@ -27,6 +27,13 @@ const OFFICIAL_PDF_HOSTS = new Set([
   'flugblatt.interspar.at',
 ]);
 
+const OFFICIAL_VIEWER_HOSTS = new Set([
+  'flugblatt.spar.at',
+  'flugblatt.interspar.at',
+  'www.spar.at',
+  'www.interspar.at',
+]);
+
 const NON_FOOD_TERMS = [
   'haushalt',
   'non food',
@@ -138,7 +145,46 @@ function isOfficialSparFamilyPdfUrl(value) {
   }
 }
 
+function isOfficialSparFamilyViewerUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase().replace(/\/+$/, '');
+
+    if (parsed.protocol !== 'https:' || !OFFICIAL_VIEWER_HOSTS.has(host)) {
+      return false;
+    }
+
+    if (OFFICIAL_PDF_HOSTS.has(host)) {
+      return (
+        /\/steiermark\/(?:spar|eurospar)\/[^/]+$/i.test(path)
+        || /\/steiermark\/steiermark_kw\d+$/i.test(path)
+        || /\/sonderfolder\/[^/]+$/i.test(path)
+        || /\/weinwelt\/[^/]+$/i.test(path)
+      );
+    }
+
+    return /\/aktionen\/(?:steiermark|sonderfolder|weinwelt)\/[^/]+$/i.test(path);
+  } catch (error) {
+    return false;
+  }
+}
+
 function isRelevantSparFamilyPdfUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const path = parsed.pathname.toLowerCase();
+    return path.includes('/steiermark/')
+      || path.includes('/sonderfolder/')
+      || path.includes('/weinwelt/');
+  } catch (error) {
+    return false;
+  }
+}
+
+function isRelevantSparFamilyViewerUrl(value) {
+  if (!isOfficialSparFamilyViewerUrl(value)) return false;
+
   try {
     const parsed = new URL(value);
     const path = parsed.pathname.toLowerCase();
@@ -237,6 +283,51 @@ function extractSparFamilyPdfLinksFromHtml(html, {
   return links;
 }
 
+function extractSparFamilyViewerLinksFromHtml(html, {
+  baseUrl = '',
+  discoveredFrom = baseUrl,
+  maxLinks = DEFAULT_LIMITS.maxLinks,
+  relevantOnly = true,
+} = {}) {
+  const $ = cheerio.load(html || '');
+  const candidates = [];
+
+  $('a[href], link[href]').each((_, element) => {
+    const value = $(element).attr('href');
+    if (value) {
+      candidates.push(toAbsoluteUrl(value, baseUrl));
+    }
+  });
+
+  candidates.push(...extractUrlCandidatesFromText(html, baseUrl));
+
+  const seen = new Set();
+  const links = [];
+
+  for (const candidate of candidates.map(canonicalDiscoveryUrl).filter(Boolean)) {
+    if (
+      !isOfficialSparFamilyViewerUrl(candidate)
+      || (relevantOnly && !isRelevantSparFamilyViewerUrl(candidate))
+      || seen.has(candidate)
+    ) {
+      continue;
+    }
+
+    seen.add(candidate);
+    links.push({
+      url: candidate,
+      discoveredFrom,
+      kind: 'viewer',
+    });
+
+    if (links.length >= maxLinks) {
+      break;
+    }
+  }
+
+  return links;
+}
+
 function classifySparFamilyPdfUrl(value) {
   const url = canonicalDiscoveryUrl(value);
   if (!url || !isOfficialSparFamilyPdfUrl(url)) {
@@ -276,6 +367,55 @@ function classifySparFamilyPdfUrl(value) {
   };
 }
 
+function classifySparFamilyFlyerUrl(value) {
+  const url = canonicalDiscoveryUrl(value);
+  const pdfClassification = classifySparFamilyPdfUrl(url);
+  if (pdfClassification.allowed) {
+    return {
+      ...pdfClassification,
+      kind: 'pdf',
+    };
+  }
+
+  if (!isOfficialSparFamilyViewerUrl(url)) {
+    return {
+      allowed: false,
+      reason: url ? 'not-official-spar-family-flyer' : 'invalid-url',
+      sourceGuess: 'unknown',
+      host: '',
+      path: '',
+      kind: 'unknown',
+    };
+  }
+
+  const parsed = new URL(url);
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  const segments = path.split('/').filter(Boolean);
+  let sourceGuess = 'unknown';
+
+  if (segments.includes('weinwelt')) {
+    sourceGuess = 'weinwelt';
+  } else if (segments.includes('sonderfolder')) {
+    sourceGuess = 'sonderfolder';
+  } else if (host === 'flugblatt.interspar.at' || host === 'www.interspar.at' || segments.includes('interspar')) {
+    sourceGuess = 'interspar';
+  } else if (segments.includes('eurospar')) {
+    sourceGuess = 'eurospar';
+  } else if (segments.includes('spar')) {
+    sourceGuess = 'spar';
+  }
+
+  return {
+    allowed: true,
+    reason: '',
+    sourceGuess,
+    host,
+    path: parsed.pathname,
+    kind: 'viewer',
+  };
+}
+
 function findMatchedTerms(value, terms) {
   const normalized = ` ${normalizeForScan(value)} `;
   return terms.filter((term) => {
@@ -288,7 +428,7 @@ function inferFolderType(url, text = '') {
   const normalizedUrl = normalizeForScan(url);
   const normalizedText = normalizeForScan(text);
   const normalized = `${normalizedUrl} ${normalizedText}`.trim();
-  const classification = classifySparFamilyPdfUrl(url);
+  const classification = classifySparFamilyFlyerUrl(url);
   const normalizedPath = normalizeForScan(classification.path || '');
 
   if (classification.sourceGuess === 'weinwelt' || /\bweinwelt\b|\bwein\b/.test(normalizedPath)) {
@@ -331,7 +471,7 @@ function mergeDiscoveredLinks(links, { maxLinks = DEFAULT_LIMITS.maxLinks } = {}
 
   for (const link of links || []) {
     const url = canonicalDiscoveryUrl(link.url);
-    if (!url || !isOfficialSparFamilyPdfUrl(url)) continue;
+    if (!url || (!isOfficialSparFamilyPdfUrl(url) && !isOfficialSparFamilyViewerUrl(url))) continue;
 
     const existing = byUrl.get(url);
     if (existing) {
@@ -345,6 +485,7 @@ function mergeDiscoveredLinks(links, { maxLinks = DEFAULT_LIMITS.maxLinks } = {}
     byUrl.set(url, {
       url,
       discoveredFrom: link.discoveredFrom ? [link.discoveredFrom] : [],
+      kind: link.kind || (isOfficialSparFamilyPdfUrl(url) ? 'pdf' : 'viewer'),
     });
 
     if (byUrl.size >= maxLinks) {
@@ -366,13 +507,15 @@ function buildSafetyMetadata({
   limits = DEFAULT_LIMITS,
 } = {}) {
   const sourceClassification = classifySparFamilyPdfUrl(url);
+  const flyerClassification = classifySparFamilyFlyerUrl(url);
   const matchedNonFoodTerms = findMatchedTerms(`${url} ${scannedText}`, NON_FOOD_TERMS);
   const matchedValidityTerms = findMatchedTerms(scannedText, VALIDITY_TERMS);
 
   return {
     url,
     discoveredFrom,
-    sourceGuess: sourceClassification.sourceGuess,
+    kind: flyerClassification.kind,
+    sourceGuess: flyerClassification.sourceGuess || sourceClassification.sourceGuess,
     folderType: inferFolderType(url, scannedText),
     pageCount,
     wouldExceedDefaultMaxPages: Boolean(pageCount && pageCount > limits.defaultMaxPages),
@@ -472,11 +615,18 @@ async function fetchEntrypoint(url, {
       fetchStatus: blocked ? 'blocked' : (response.status >= 200 && response.status < 300 ? 'ok' : 'fetchFailed'),
       blockedLikely: blocked,
       error: blocked ? 'blocked-or-challenge-likely' : (response.status >= 200 && response.status < 300 ? '' : `HTTP ${response.status}`),
-      links: blocked ? [] : extractSparFamilyPdfLinksFromHtml(html, {
-        baseUrl: response.request?.res?.responseUrl || url,
-        discoveredFrom: url,
-        maxLinks,
-      }),
+      links: blocked ? [] : [
+        ...extractSparFamilyPdfLinksFromHtml(html, {
+          baseUrl: response.request?.res?.responseUrl || url,
+          discoveredFrom: url,
+          maxLinks,
+        }),
+        ...extractSparFamilyViewerLinksFromHtml(html, {
+          baseUrl: response.request?.res?.responseUrl || url,
+          discoveredFrom: url,
+          maxLinks,
+        }),
+      ],
     };
   } catch (error) {
     return {
@@ -573,6 +723,7 @@ async function discoverSparFamilyFlyers({
       blockedLikely: result.blockedLikely,
       error: result.error,
       discoveredPdfCount: result.links.length,
+      discoveredViewerCount: result.links.filter((link) => link.kind === 'viewer').length,
     })),
     pdfs: enrichedLinks,
   };
@@ -593,6 +744,8 @@ function getBackendSparFamilyPdfSources(definitions = []) {
       maxPdfPages: definition.crawlPolicy?.maxPdfPages ?? null,
       maxPdfBytes: definition.crawlPolicy?.maxPdfBytes ?? null,
       timeoutMs: definition.crawlPolicy?.timeoutMs ?? null,
+      scopedOnly: definition.crawlPolicy?.scopedOnly === true,
+      currentSnapshot: definition.crawlPolicy?.currentSnapshot !== false,
     }));
 }
 
@@ -636,15 +789,18 @@ module.exports = {
   buildSparFamilyFlyerInventoryReport,
   canonicalDiscoveryUrl,
   classifySparFamilyPdfUrl,
+  classifySparFamilyFlyerUrl,
   decodeUrlText,
   discoverSparFamilyFlyers,
   extractSparFamilyPdfLinksFromHtml,
+  extractSparFamilyViewerLinksFromHtml,
   fetchEntrypoint,
   findMatchedTerms,
   getBackendSparFamilyPdfSources,
   inferFolderType,
   isBlockedLikely,
   isOfficialSparFamilyPdfUrl,
+  isOfficialSparFamilyViewerUrl,
   isRelevantSparFamilyPdfUrl,
   mergeDiscoveredLinks,
   normalizeForScan,

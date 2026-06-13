@@ -4,11 +4,14 @@ const mongoose = require('mongoose');
 
 const {
   buildSparFamilyFlyerInventoryReport,
+  classifySparFamilyFlyerUrl,
   classifySparFamilyPdfUrl,
   discoverSparFamilyFlyers,
   extractSparFamilyPdfLinksFromHtml,
+  extractSparFamilyViewerLinksFromHtml,
   getBackendSparFamilyPdfSources,
   inferFolderType,
+  isOfficialSparFamilyViewerUrl,
   isOfficialSparFamilyPdfUrl,
 } = require('../src/services/crawl/sparFamilyFlyerDiscovery');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
@@ -66,6 +69,31 @@ test('dedupes duplicate PDF links', () => {
 
   assert.equal(links.length, 1);
   assert.equal(links[0].url, 'https://flugblatt.spar.at/steiermark/spar/kw22/getPdf.ashx');
+});
+
+test('extracts and classifies official SPAR-family flyer viewer links', () => {
+  const html = `
+    <a href="https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/">SPAR KW24</a>
+    <a href="/aktionen/steiermark/steiermark_kw24">INTERSPAR KW24</a>
+    <a href="https://www.interspar.at/aktionen/steiermark/steiermark_kw24">INTERSPAR web</a>
+    <a href="https://www.spar.at/produkte">ignored</a>
+  `;
+
+  const links = extractSparFamilyViewerLinksFromHtml(html, {
+    baseUrl: 'https://www.interspar.at',
+    discoveredFrom: 'fixture',
+  });
+  const urls = links.map((link) => link.url);
+
+  assert.deepEqual(urls, [
+    'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/',
+    'https://www.interspar.at/aktionen/steiermark/steiermark_kw24',
+  ]);
+  assert.equal(links.every((link) => link.kind === 'viewer'), true);
+  assert.equal(isOfficialSparFamilyViewerUrl(urls[0]), true);
+  assert.equal(classifySparFamilyFlyerUrl(urls[0]).sourceGuess, 'spar');
+  assert.equal(classifySparFamilyFlyerUrl(urls[1]).sourceGuess, 'interspar');
+  assert.equal(classifySparFamilyFlyerUrl(urls[1]).kind, 'viewer');
 });
 
 test('classifies SPAR-family source guesses conservatively', () => {
@@ -228,10 +256,11 @@ test('discovery service does not open a MongoDB connection', async () => {
   assert.equal(mongoose.connection.readyState, 0);
 });
 
-test('active SPAR-family PDF SourceDefinitions include current official multi-PDF URLs', () => {
+test('SPAR-family PDF SourceDefinitions keep old static regular flyers scoped-only', () => {
   const sources = getBackendSparFamilyPdfSources(RETAILER_DEFINITIONS)
     .filter((source) => source.enabled);
   const urls = sources.map((source) => source.url);
+  const oldRegularKw23 = sources.filter((source) => /260603-1-flugblatt-kw-23|steiermark_kw23/i.test(source.url));
 
   assert.deepEqual(
     sources.map((source) => source.sourceRetailerFormat).sort(),
@@ -260,6 +289,15 @@ test('active SPAR-family PDF SourceDefinitions include current official multi-PD
   assert.equal(urls.includes('https://flugblatt.interspar.at/weinwelt/260511-4-weinwelt-bestseller-06-2026/getPdf.ashx'), true);
   assert.equal(urls.includes('https://flugblatt.interspar.at/sonderfolder/mein-zuhause-sommer26/getPdf.ashx'), true);
   assert.equal(urls.every(isOfficialSparFamilyPdfUrl), true);
+  assert.equal(oldRegularKw23.length, 3);
+  assert.equal(oldRegularKw23.every((source) => source.scopedOnly === true), true);
+  assert.equal(oldRegularKw23.every((source) => source.currentSnapshot === false), true);
+  assert.equal(
+    sources.some((source) => /260603-1-flugblatt-kw-23|steiermark_kw23/i.test(source.url)
+      && source.scopedOnly !== true
+      && source.currentSnapshot !== false),
+    false
+  );
 });
 
 test('active SPAR-family PDF definitions reject expired validity windows', () => {
@@ -293,6 +331,9 @@ test('SPAR-family PDF SourceDefinitions keep retailer formats separated and boun
   assert.equal(byFormat.get('spar').maxPdfPages, 28);
   assert.equal(byFormat.get('eurospar').maxPdfPages, 24);
   assert.equal(byFormat.get('interspar').maxPdfPages, 24);
+  assert.equal(byFormat.get('spar').scopedOnly, true);
+  assert.equal(byFormat.get('eurospar').scopedOnly, true);
+  assert.equal(byFormat.get('interspar').scopedOnly, true);
   assert.ok(sources.every((source) => source.maxPdfBytes <= 62914560));
   assert.ok(sources.every((source) => source.timeoutMs <= 60000));
 });
