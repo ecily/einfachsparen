@@ -759,6 +759,91 @@ test('recoverStaleCrawlRun releases matching lock even when publish status marki
   assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
 });
 
+test('shutdown interruption finalizes current-process CrawlRuns and releases the lock', async () => {
+  const { interruptCurrentProcessCrawlRuns } = require('../src/services/crawl/crawlRunService');
+  const runId = new mongoose.Types.ObjectId();
+  const now = new Date('2026-06-13T01:03:00.000Z');
+  const startedAt = new Date('2026-06-13T01:00:00.000Z');
+  const run = {
+    _id: runId,
+    status: 'running',
+    trigger: 'scheduled',
+    startedAt,
+  };
+  const lock = {
+    runId,
+    status: 'running',
+    heartbeatAt: new Date('2026-06-13T01:02:30.000Z'),
+  };
+  const originals = {
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunFindOneAndUpdate: CrawlRun.findOneAndUpdate,
+    crawlRunLockFindById: CrawlRunLock.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const runUpdates = [];
+  const lockUpdates = [];
+  const offerUpdates = [];
+
+  _private.activeExecutionRunIds.set(String(runId), {
+    runId,
+    trigger: 'scheduled',
+    startedAt,
+  });
+  CrawlRun.findById = async () => run;
+  CrawlRun.findOneAndUpdate = async (filter, update, options) => {
+    runUpdates.push({ filter, update, options });
+    return { ...run, status: 'failed' };
+  };
+  CrawlRunLock.findById = () => ({
+    lean: async () => lock,
+  });
+  CrawlRunLock.updateOne = async (filter, update) => {
+    lockUpdates.push({ filter, update });
+    return { matchedCount: 1, modifiedCount: 1 };
+  };
+  Offer.updateMany = async (filter, update) => {
+    offerUpdates.push({ filter, update });
+    return { matchedCount: 0, modifiedCount: 0 };
+  };
+
+  try {
+    const result = await interruptCurrentProcessCrawlRuns({
+      reason: 'test shutdown',
+      signal: 'SIGTERM',
+      now,
+    });
+
+    assert.equal(result.interrupted.length, 1);
+    assert.equal(result.interrupted[0].runId, String(runId));
+  } finally {
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
+    CrawlRunLock.findById = originals.crawlRunLockFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+    _private.activeExecutionRunIds.clear();
+  }
+
+  assert.equal(runUpdates.length, 1);
+  assert.deepEqual(runUpdates[0].filter, {
+    _id: runId,
+    status: { $in: ['queued', 'running'] },
+  });
+  assert.equal(runUpdates[0].update.$set.status, 'failed');
+  assert.equal(runUpdates[0].update.$set.finishedAt, now);
+  assert.equal(runUpdates[0].update.$set.durationMs, 180000);
+  assert.equal(runUpdates[0].update.$set['metadata.shutdown'].signal, 'SIGTERM');
+  assert.equal(runUpdates[0].update.$set['metadata.progress'].stage, 'process-shutdown');
+  assert.equal(runUpdates[0].update.$set['metadata.progress'].runStatus, 'failed');
+  assert.match(runUpdates[0].update.$push.warnings, /process shutdown/i);
+  assert.equal(offerUpdates.length, 1);
+  assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-failed');
+  assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
+  assert.equal(_private.activeExecutionRunIds.size, 0);
+});
+
 test('releaseRecoverableCrawlRunLock can release orphaned active global lock without runId', async () => {
   const runId = new mongoose.Types.ObjectId();
   const originals = {

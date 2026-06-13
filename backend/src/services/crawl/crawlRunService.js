@@ -18,6 +18,7 @@ const DEFAULT_STALE_HEARTBEAT_MS = env.CRAWL_RUN_STALE_HEARTBEAT_MINUTES * 60 * 
 const PROCESS_STARTED_AT = new Date();
 const CURRENT_PROCESS_OWNER_PREFIX = `${os.hostname()}:${process.pid}:`;
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
+const activeExecutionRunIds = new Map();
 const OFFER_PUBLISH_STATUS_BY_RUN_STATUS = {
   success: 'crawl-run-success',
   partial: 'crawl-run-partial',
@@ -99,6 +100,10 @@ function hasAnyFlag(flags = {}) {
 
 function compactRecoveryReason(value) {
   return compactErrorMessage(value || 'Admin-triggered stale CrawlRun recovery.');
+}
+
+function compactShutdownReason(value) {
+  return compactErrorMessage(value || 'Process shutdown interrupted this CrawlRun.');
 }
 
 function buildLockOwner(trigger = '') {
@@ -1202,6 +1207,124 @@ async function recoverInterruptedCrawlRunsAfterRestart({
   };
 }
 
+function trackActiveExecution(runId, { trigger = '', startedAt = new Date() } = {}) {
+  const id = String(runId || '');
+
+  if (!id) return;
+
+  activeExecutionRunIds.set(id, {
+    runId,
+    trigger,
+    startedAt,
+  });
+}
+
+function untrackActiveExecution(runId) {
+  activeExecutionRunIds.delete(String(runId || ''));
+}
+
+async function interruptCurrentProcessCrawlRuns({
+  reason = 'Process shutdown interrupted this CrawlRun.',
+  signal = '',
+  now = new Date(),
+} = {}) {
+  const activeExecutions = [...activeExecutionRunIds.values()];
+  const interrupted = [];
+  const skipped = [];
+
+  for (const execution of activeExecutions) {
+    const run = await CrawlRun.findById(execution.runId);
+
+    if (!run || !ACTIVE_RUN_STATUSES.includes(run.status)) {
+      skipped.push({
+        runId: asStringId(execution.runId),
+        reason: 'not-active',
+        status: run?.status || 'not-found',
+      });
+      untrackActiveExecution(execution.runId);
+      continue;
+    }
+
+    const startedAt = run.startedAt || execution.startedAt || now;
+    const durationMs = Math.max(0, now.getTime() - new Date(startedAt).getTime());
+    const auditReason = compactShutdownReason(reason);
+    const auditMessage = `CrawlRun interrupted by process shutdown: ${auditReason}`;
+    const updatedRun = await CrawlRun.findOneAndUpdate(
+      {
+        _id: run._id,
+        status: { $in: ACTIVE_RUN_STATUSES },
+      },
+      {
+        $set: {
+          status: 'failed',
+          finishedAt: now,
+          durationMs,
+          'metadata.shutdown': {
+            reason: auditReason,
+            signal: String(signal || ''),
+            interruptedAt: now,
+            previousStatus: run.status,
+            processStartedAt: PROCESS_STARTED_AT,
+            ownerPrefix: CURRENT_PROCESS_OWNER_PREFIX,
+          },
+          'metadata.progress': buildCrawlRunProgressMarker({
+            stage: 'process-shutdown',
+            trigger: execution.trigger,
+            runStatus: 'failed',
+            signal: String(signal || ''),
+          }, now),
+        },
+        $push: {
+          warnings: auditMessage,
+          errorMessages: 'CrawlRun was interrupted by process shutdown; no automatic replacement crawl was started.',
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedRun) {
+      skipped.push({
+        runId: asStringId(run._id),
+        reason: 'status-changed-before-shutdown-finalization',
+      });
+      untrackActiveExecution(execution.runId);
+      continue;
+    }
+
+    try {
+      await markOfferPublishStatusForRun({
+        runId: run._id,
+        runStatus: 'failed',
+        now,
+      });
+    } catch (error) {
+      logger.warn('Shutdown CrawlRun interruption continued after publish status update failed', {
+        runId: asStringId(run._id),
+        message: compactErrorMessage(error.message),
+      });
+    }
+
+    const lock = await CrawlRunLock.findById(GLOBAL_CRAWL_LOCK_KEY).lean();
+    if (!lock?.runId || String(lock.runId) === String(run._id)) {
+      await releaseRecoverableCrawlRunLock(run._id, lock);
+    }
+
+    interrupted.push({
+      runId: asStringId(run._id),
+      trigger: execution.trigger,
+      previousStatus: run.status,
+      durationMs,
+    });
+    untrackActiveExecution(execution.runId);
+  }
+
+  return {
+    interrupted,
+    skipped,
+    processStartedAt: PROCESS_STARTED_AT,
+  };
+}
+
 async function markLockRunning(runId, { trigger = '' } = {}) {
   await CrawlRunLock.updateOne(
     {
@@ -1231,6 +1354,7 @@ async function executeCrawlRun({
   const startedAt = new Date();
   let heartbeat = null;
 
+  trackActiveExecution(runId, { trigger, startedAt });
   await markLockRunning(runId, { trigger });
   await CrawlRun.findByIdAndUpdate(runId, {
     $set: {
@@ -1369,6 +1493,7 @@ async function executeCrawlRun({
     if (heartbeat) {
       heartbeat.stop();
     }
+    untrackActiveExecution(runId);
     await releaseCrawlRunLock(runId);
   }
 }
@@ -1468,6 +1593,7 @@ module.exports = {
   executeCrawlRun,
   getLatestCrawlRun,
   getCrawlRunById,
+  interruptCurrentProcessCrawlRuns,
   recoverInterruptedCrawlRunsAfterRestart,
   recoverStaleCrawlRun,
   serializeCrawlRun,
@@ -1485,7 +1611,9 @@ module.exports = {
     determineFinalStatus,
     determineMode,
     failStaleRun,
+    activeExecutionRunIds,
     isCurrentProcessLockOwner,
+    interruptCurrentProcessCrawlRuns,
     isRecoverableInterruptedRunAfterRestart,
     isRecoverableStaleRun,
     isRunStale,
