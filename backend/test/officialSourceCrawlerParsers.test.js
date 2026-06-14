@@ -1671,7 +1671,9 @@ test('PENNY official API normalizer keeps missing validTo offers and rejects nor
   assert.equal(offers[1].adminReview.status, 'pending');
 });
 
-test('PENNY official API normalizer handles current 11.06 reference products', () => {
+test('PENNY official API normalizer handles current 11.06 reference products', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-12T10:00:00+02:00') });
+
   const products = [
     pennyApiProduct({
       slug: 'helles-78101754',
@@ -1826,7 +1828,54 @@ test('PENNY official API normalizer handles current 11.06 reference products', (
   assert.ok(offers.every((offer) => offer.rawFacts.sourceType === 'penny-official-html'));
 });
 
-test('PENNY PDF evidence bridge maps only tight pro-kg conflicts into official API normalizer', () => {
+test('PENNY official API normalizer filters expired offer-level short windows', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-14T10:00:00+02:00') });
+
+  const products = [
+    pennyApiProduct({
+      slug: 'kinder-pingui-78102064',
+      name: 'Kinder Pingui',
+      brand: null,
+      amount: '120',
+      volumeLabelShort: 'g',
+      packageLabel: 'Packung',
+      priceCents: 159,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-17',
+    }),
+    pennyApiProduct({
+      slug: 'kirschen-78108999',
+      name: 'Kirschen',
+      brand: null,
+      amount: '500',
+      volumeLabelShort: 'g',
+      packageLabel: 'Tasse',
+      priceCents: 299,
+      crossed: null,
+      validityStart: '2026-06-11',
+      validityEnd: '2026-06-13',
+    }),
+  ];
+
+  const offers = __private.normalizePennyApiProductsToOffers({
+    products,
+    source: pennyOfficialSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: 'https://www.penny.at/angebote',
+    categorySlug: 'angebote-ab-1106',
+  });
+  const bySlug = new Map(offers.map((offer) => [offer.rawFacts.productSlug, offer]));
+
+  assert.equal(offers.length, 1);
+  assert.equal(bySlug.has('kinder-pingui-78102064'), true);
+  assert.equal(bySlug.has('kirschen-78108999'), false);
+});
+
+test('PENNY PDF evidence bridge maps only tight pro-kg conflicts into official API normalizer', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-12T10:00:00+02:00') });
+
   const validFrom = new Date('2026-06-10T22:00:00.000Z');
   const validTo = new Date('2026-06-17T21:59:59.999Z');
   const pdfReferences = [{
@@ -3942,7 +3991,9 @@ BEI 24 DOSEN JE
   assert.equal(stored[0].rawFacts.sourceType, 'billa-official-action-html');
 });
 
-test('BILLA action HTML parser extracts Dallmayr price-window teaser from markup', () => {
+test('BILLA action HTML parser extracts Dallmayr price-window teaser from markup', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-12T10:00:00+02:00') });
+
   const result = parseBillaActionHtml(`
     <h2>GÃ¼ltig bei BILLA & BILLA PLUS</h2>
     <div class="row">
