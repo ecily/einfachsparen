@@ -3571,6 +3571,14 @@ test('BILLA Steiermark PDF parser rejects title price artifacts while keeping cl
     0,5 l
     1580
     AKTION
+    Gösser Märzen Naturradler Naturradler 0 0% od. Naturgold 12 G
+    0,5 l
+    099
+    AKTION
+    Dallmayr Prodomo MI
+    500 g
+    899
+    AKTION
   `);
 
   assert.ok(parsed.candidates.some((candidate) => (
@@ -3605,6 +3613,10 @@ test('BILLA Steiermark PDF parser rejects title price artifacts while keeping cl
     candidate.title === 'Hohes C All-In-One'
     && !candidate.exclusionReason
   )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    candidate.title === 'Dallmayr Prodomo'
+    && !candidate.exclusionReason
+  )));
 
   const offers = normalizeBillaPdfCandidatesToOffers({
     pdfReference: parsed,
@@ -3620,7 +3632,9 @@ test('BILLA Steiermark PDF parser rejects title price artifacts while keeping cl
   assert.equal(offers.some((offer) => /^INHALT\b/i.test(offer.title)), false);
   assert.equal(offers.some((offer) => /\bper Flasche \($/i.test(offer.title)), false);
   assert.equal(offers.some((offer) => /^Egger Puntigamer/i.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /\b12 G$/i.test(offer.title)), false);
   assert.ok(offers.some((offer) => offer.title === 'Hohes C All-In-One'));
+  assert.ok(offers.some((offer) => offer.title === 'Dallmayr Prodomo'));
 });
 
 test('BILLA Steiermark PDF parser extracts separated page 16 beverage cluster', () => {

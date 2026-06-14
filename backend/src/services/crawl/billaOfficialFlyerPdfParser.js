@@ -361,6 +361,7 @@ function hasBillaTitlePriceArtifact(title = '') {
     || /\bper\s+(?:flasche|packung|pkg|dose|glas)\s*\(/.test(normalized)
     || /\b\d+\s*kiste\s*=\s*\d+\s*flaschen\b/.test(normalized)
     || /\b\d+\s*\+\s*\d+\b/.test(normalized)
+    || /\b\d{1,3}\s*(?:g|kg|ml|l|liter)\s*$/.test(normalized)
     || /\(\s*$/.test(text)
     || /\begger\s+puntigamer\b/.test(normalized)
   );
@@ -833,6 +834,7 @@ function cleanInlineBillaTitle(value = '') {
     .replace(/\s*,\s*/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+    .replace(/\s+\b(?:mo|di|mi|do|fr|sa|so)\b\.?$/i, '')
     .replace(/\*+$/g, '');
 }
 
