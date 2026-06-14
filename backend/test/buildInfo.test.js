@@ -23,6 +23,8 @@ test('buildSafeBuildInfo uses safe env commit metadata and redacts by omission',
   assert.equal(info.commitSource, 'GIT_SHA');
   assert.equal(info.buildTime, '2026-05-11T06:00:00.000Z');
   assert.equal(info.buildTimeSource, 'BUILD_TIME');
+  assert.match(info.processStartedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(typeof info.processUptimeSeconds, 'number');
   assert.equal(info.nodeEnv, 'production');
   assert.equal(info.deploymentId, 'deploy-123');
 

@@ -51,7 +51,7 @@ const envSchema = z.object({
   CRAWL_RUN_MAX_RUNTIME_MINUTES: z.coerce.number().int().min(5).max(1440).default(240),
   CRAWL_RUN_LOCK_HEARTBEAT_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(300).default(45),
   CRAWL_RUN_STALE_HEARTBEAT_MINUTES: z.coerce.number().int().min(2).max(180).default(15),
-  CRAWL_RUN_STARTUP_GRACE_SECONDS: z.coerce.number().int().min(0).max(3600).default(180),
+  CRAWL_RUN_STARTUP_GRACE_SECONDS: z.coerce.number().int().min(0).max(3600).default(900),
 }).superRefine((value, context) => {
   if (value.NODE_ENV === 'production' && !value.ADMIN_API_KEY) {
     context.addIssue({

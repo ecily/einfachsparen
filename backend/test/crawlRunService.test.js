@@ -79,6 +79,23 @@ test('startup crawl guard allows safe cases outside production startup risk', ()
   }).blocked, false);
 });
 
+test('startup crawl guard can block production crawls for fifteen minutes', () => {
+  const processStartedAt = new Date('2026-06-14T18:04:18.368Z');
+  const guard = _private.getStartupCrawlStartGuard({
+    trigger: 'manual',
+    options: { sourceKeys: ['penny-official-site'], dryRun: false },
+    envConfig: {
+      NODE_ENV: 'production',
+      CRAWL_RUN_STARTUP_GRACE_SECONDS: 900,
+    },
+    processStartedAt,
+    now: new Date('2026-06-14T18:10:00.000Z'),
+  });
+
+  assert.equal(guard.blocked, true);
+  assert.equal(guard.graceMs, 900000);
+});
+
 test('buildRunSummary aggregates source, retailer, type, dedupe and filter metadata inputs compactly', () => {
   const result = {
     sourceCoverage: {

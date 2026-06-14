@@ -95,6 +95,8 @@ function buildSafeBuildInfo({ env = process.env, cwd = process.cwd(), gitReader 
     commitSource: commitEnv.key || (gitCommitSha ? 'git' : 'unknown'),
     buildTime,
     buildTimeSource: envBuildTime ? buildTimeEnv.key : 'process-start-fallback',
+    processStartedAt: PROCESS_STARTED_AT.toISOString(),
+    processUptimeSeconds: Math.round(process.uptime()),
     nodeEnv: cleanBuildValue(env.NODE_ENV) || 'development',
     ...(deploymentId ? { deploymentId } : {}),
   };
