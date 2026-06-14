@@ -601,7 +601,7 @@ test('restart recovery classifies only old interrupted active CrawlRuns as recov
   }).reason, 'process-restart-stale-heartbeat');
 });
 
-test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs stale and releases matching lock idempotently', async () => {
+test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs failed and releases matching lock idempotently', async () => {
   const { recoverInterruptedCrawlRunsAfterRestart } = require('../src/services/crawl/crawlRunService');
   const runId = new mongoose.Types.ObjectId();
   const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 2 * 60 * 60 * 1000);
@@ -640,7 +640,7 @@ test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs stale a
       return null;
     }
     activeRuns = [];
-    return { ...run, status: 'stale' };
+    return { ...run, status: 'failed' };
   };
   CrawlRunLock.findById = () => ({
     lean: async () => lock,
@@ -678,17 +678,22 @@ test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs stale a
   }
 
   assert.equal(runUpdates.length, 1);
-  assert.equal(runUpdates[0].update.$set.status, 'stale');
+  assert.equal(runUpdates[0].update.$set.status, 'failed');
   assert.equal(runUpdates[0].update.$set.finishedAt, now);
   assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].recoveredBy, 'startup-recovery');
   assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].heartbeatAt, lock.heartbeatAt);
   assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].heartbeatAgeMs, now.getTime() - lock.heartbeatAt.getTime());
   assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].thresholdMs, 60 * 60 * 1000);
   assert.equal(runUpdates[0].update.$set['metadata.staleRecovery'].lockOwner, '');
+  assert.equal(runUpdates[0].update.$set['metadata.shutdown'].signal, 'process-restart-recovery');
+  assert.equal(runUpdates[0].update.$set['metadata.shutdown'].interruptedBy, 'startup-recovery');
+  assert.equal(runUpdates[0].update.$set['metadata.progress'].stage, 'process-restart-recovery');
+  assert.equal(runUpdates[0].update.$set['metadata.progress'].runStatus, 'failed');
   assert.match(runUpdates[0].update.$push.warnings, /after restart/i);
+  assert.match(runUpdates[0].update.$push.errorMessages, /marked failed after process restart/i);
   assert.equal(offerUpdates.length, 1);
   assert.deepEqual(offerUpdates[0].filter, { crawlRunId: runId });
-  assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-stale');
+  assert.equal(offerUpdates[0].update.$set.publishStatus, 'crawl-run-failed');
   assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
 });
 

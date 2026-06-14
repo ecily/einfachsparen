@@ -1119,7 +1119,7 @@ async function recoverInterruptedCrawlRunsAfterRestart({
     const reference = getRunReferenceDate(run) || now;
     const durationMs = Math.max(0, now.getTime() - new Date(reference).getTime());
     const auditReason = compactRecoveryReason(reason);
-    const auditMessage = `Stale CrawlRun recovery after restart: ${auditReason}`;
+    const auditMessage = `Interrupted CrawlRun recovery after restart: ${auditReason}`;
     const updatedRun = await CrawlRun.findOneAndUpdate(
       {
         _id: run._id,
@@ -1127,7 +1127,7 @@ async function recoverInterruptedCrawlRunsAfterRestart({
       },
       {
         $set: {
-          status: 'stale',
+          status: 'failed',
           finishedAt: now,
           durationMs,
           'metadata.staleRecovery': {
@@ -1147,10 +1147,25 @@ async function recoverInterruptedCrawlRunsAfterRestart({
             lockOwner: lock?.owner || '',
             lock: serializeLockForAudit(lock),
           },
+          'metadata.shutdown': {
+            reason: auditReason,
+            signal: 'process-restart-recovery',
+            interruptedAt: now,
+            interruptedBy: 'startup-recovery',
+            previousStatus: run.status,
+            processStartedAt: PROCESS_STARTED_AT,
+            detectionReason: recoverable.reason,
+            lockOwner: lock?.owner || '',
+          },
+          'metadata.progress': buildCrawlRunProgressMarker({
+            stage: 'process-restart-recovery',
+            trigger: run.trigger || '',
+            runStatus: 'failed',
+          }, now),
         },
         $push: {
           warnings: auditMessage,
-          errorMessages: 'CrawlRun was marked stale after process restart; no automatic replacement crawl was started.',
+          errorMessages: 'CrawlRun was marked failed after process restart; no automatic replacement crawl was started.',
         },
       },
       { new: true }
@@ -1169,7 +1184,7 @@ async function recoverInterruptedCrawlRunsAfterRestart({
     try {
       await markOfferPublishStatusForRun({
         runId: run._id,
-        runStatus: 'stale',
+        runStatus: 'failed',
         now,
       });
     } catch (error) {
