@@ -105,7 +105,7 @@ async function ensureSourceRegistry() {
           parserHint: definition.parserHint || inferSourceType(definition),
           parserVersion: definition.parserVersion || '',
           normalizationVersion: definition.normalizationVersion || 'v3-audit',
-          regionScope: definition.regionScope || 'Grossraum Graz',
+          regionScope: definition.regionScope || 'Steiermark',
           active: true,
         },
       },

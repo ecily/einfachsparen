@@ -772,7 +772,7 @@ function normalizePromotionToOffer({ promotion, retailerKey, retailerName, sourc
     hasConditions,
     isMultiBuy,
     minimumPurchaseQty: requirement?.requiredQuantity || 1,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: priceCurrentAmount,
       currency: promotion.currency?.iso || 'EUR',

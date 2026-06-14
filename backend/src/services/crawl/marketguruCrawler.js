@@ -482,7 +482,7 @@ function parseOffersFromEmbeddedPayload({ payload, source, crawlJobId, region })
       benefitType: oldPrice && oldPrice > currentPrice ? 'price-cut' : 'unknown',
       conditionsText: parsedInfo.conditionsText,
       customerProgramRequired,
-      availabilityScope: region || 'Grossraum Graz',
+      availabilityScope: region || 'Steiermark',
       priceCurrent: {
         amount: currentPrice,
         currency: 'EUR',
@@ -613,7 +613,7 @@ function parseOffersFromHtml({ html, source, crawlJobId, region }) {
       benefitType: oldPrice && oldPrice > currentPrice ? 'price-cut' : 'unknown',
       conditionsText: parsedInfo.conditionsText,
       customerProgramRequired,
-      availabilityScope: region || 'Grossraum Graz',
+      availabilityScope: region || 'Steiermark',
       priceCurrent: {
         amount: currentPrice,
         currency: 'EUR',

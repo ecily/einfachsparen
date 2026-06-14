@@ -3535,6 +3535,50 @@ test('BILLA Steiermark PDF parser extracts interleaved page 4 and page 8 product
   assert.equal(rama.conditionsText, 'bei 4 Flaschen');
 });
 
+test('BILLA Steiermark PDF parser rejects title price artifacts while keeping clean candidates', () => {
+  const parsed = parseBillaPdfPage(`
+    Hohes C od. Hohes C All-In-One
+    4.65/ 2.66) 2.99/3.49
+    0,85 l
+    199
+    AKTION
+    Hohes C All-In-One
+    0,85 l
+    199
+    AB 2 FL. JE
+    1 FL. EUR 2.99
+    Pistazien gesalzen od. ungesalzen 2.26/Arizona NUR Eistee KURZE ZEIT
+    250 g
+    299
+    AKTION
+  `);
+
+  assert.ok(parsed.candidates.some((candidate) => (
+    /Hohes C od\./i.test(candidate.title)
+    && candidate.exclusionReason === 'title-price-artifact'
+  )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    /Pistazien/i.test(candidate.title)
+    && candidate.exclusionReason === 'title-price-artifact'
+  )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    candidate.title === 'Hohes C All-In-One'
+    && !candidate.exclusionReason
+  )));
+
+  const offers = normalizeBillaPdfCandidatesToOffers({
+    pdfReference: parsed,
+    source: billaFlyerSource(),
+    crawlJobId: new Types.ObjectId(),
+    region: 'Steiermark',
+    pdfUrl: billaFlyerSource().sourceUrl,
+  });
+
+  assert.equal(offers.some((offer) => /4\.65\/\s*2\.66/i.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /kurze zeit/i.test(offer.title)), false);
+  assert.ok(offers.some((offer) => offer.title === 'Hohes C All-In-One'));
+});
+
 test('BILLA Steiermark PDF parser extracts separated page 16 beverage cluster', () => {
   const offers = normalizeBillaPdfFixture({
     pageNumber: 16,

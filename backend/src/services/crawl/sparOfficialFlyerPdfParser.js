@@ -5170,7 +5170,7 @@ function normalizeSparPdfCandidateToOffer({
     hasConditions: Boolean(conditionsText),
     isMultiBuy: /ab\s+\d|1\+1|2\+2/i.test(conditionsText),
     minimumPurchaseQty: /ab\s+2/i.test(conditionsText) ? 2 : 1,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: candidate.price,
       currency: 'EUR',

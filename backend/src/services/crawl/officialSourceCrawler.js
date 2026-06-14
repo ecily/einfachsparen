@@ -1370,7 +1370,7 @@ function normalizeLidlSiteProductToOffer({
     benefitType: customerProgramRequired ? 'conditional-price' : isMultiBuy ? 'multi-buy' : 'price-cut',
     conditionsText,
     customerProgramRequired,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: currentPrice,
       currency: pricePayload?.currencyCode || 'EUR',
@@ -1641,7 +1641,7 @@ function normalizeLidlProductToOffer({
     benefitType: customerProgramRequired ? 'conditional-price' : 'price-cut',
     conditionsText: customerProgramRequired ? 'Nur gueltig mit Lidl Plus' : '',
     customerProgramRequired,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: currentPrice,
       currency: 'EUR',
@@ -2917,7 +2917,7 @@ function buildBipaMobifyProductOffer({
     benefitType: /gratis|ab\s+\d+\s*st/i.test(conditionsText) ? 'multi-buy' : 'price-cut',
     conditionsText,
     customerProgramRequired: source?.crawlPolicy?.customerProgramRequired === true,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: currentPrice,
       currency: 'EUR',
@@ -3129,7 +3129,7 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
       benefitType: /gratis/i.test([title, unitPriceText].join(' ')) ? 'multi-buy' : 'price-cut',
       conditionsText: sanitizeWhitespace(source?.crawlPolicy?.forcedConditionText),
       customerProgramRequired: source?.crawlPolicy?.customerProgramRequired === true,
-      availabilityScope: region || 'Grossraum Graz',
+      availabilityScope: region || 'Steiermark',
       priceCurrent: {
         amount: currentPrice,
         currency: 'EUR',
@@ -3736,7 +3736,7 @@ function parseHoferOffersFromPage({
       benefitType: oldPrice && oldPrice > currentPrice ? 'price-cut' : 'unknown',
       conditionsText,
       customerProgramRequired: false,
-      availabilityScope: region || 'Grossraum Graz',
+      availabilityScope: region || 'Steiermark',
       priceCurrent: {
         amount: currentPrice,
         currency: 'EUR',
@@ -5423,7 +5423,7 @@ function normalizeBillaActionTeaserToOffer({ candidate, source, crawlJobId, regi
     benefitType: 'multi-buy',
     conditionsText,
     customerProgramRequired: false,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: candidate.currentPrice,
       currency: 'EUR',
@@ -5590,7 +5590,7 @@ function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, obser
     benefitType: determineBillaBenefitType(hit),
     conditionsText,
     customerProgramRequired,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: currentPrice,
       currency: 'EUR',

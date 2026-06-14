@@ -806,7 +806,7 @@ function normalizePennyPdfCandidateToOffer({
     hasConditions,
     isMultiBuy: ['x-plus-y', 'x-for-y', 'multi-buy'].includes(requirement?.mechanic),
     minimumPurchaseQty: requirement?.requiredQuantity || 1,
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: candidate.price,
       currency: 'EUR',

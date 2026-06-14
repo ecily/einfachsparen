@@ -348,6 +348,17 @@ function hasPlausibleBillaTitle(title = '') {
   return true;
 }
 
+function hasBillaTitlePriceArtifact(title = '') {
+  const text = sanitizeWhitespace(normalizePdfText(title));
+  const normalized = normalizeForScan(text);
+
+  return Boolean(
+    /\b\d{1,2}[,.]\d{2}\s*\/\s*\d{1,2}[,.]\d{2}\b/.test(text)
+    || /\b\d{1,2}[,.]\d{2}\s*\/\s*[A-Z]/i.test(text)
+    || /\b(?:nur\s+)?kurze\s+zeit\b/.test(normalized)
+  );
+}
+
 function hasPlausiblePositionedProduceTitle(title = '') {
   const normalized = normalizeForScan(title);
 
@@ -516,6 +527,8 @@ function addCandidate(candidates, pageNumber, data) {
 
   if (!candidate.title) {
     candidate.exclusionReason = 'product-unclear';
+  } else if (hasBillaTitlePriceArtifact(candidate.title)) {
+    candidate.exclusionReason = 'title-price-artifact';
   } else if (!(candidate.price > 0)) {
     candidate.exclusionReason = 'price-missing';
   } else if (!candidate.quantityText) {
@@ -1766,7 +1779,7 @@ function normalizeBillaPdfCandidateToOffer({ candidate, pdfReference, source, cr
     hasConditions: Boolean(conditionsText),
     isMultiBuy: /ab\s+\d|bei\s+\d|gratis/i.test(conditionsText),
     minimumPurchaseQty: extractMinimumPurchaseQtyFromConditions(conditionsText),
-    availabilityScope: region || 'Grossraum Graz',
+    availabilityScope: region || 'Steiermark',
     priceCurrent: {
       amount: candidate.price,
       currency: 'EUR',

@@ -42,7 +42,7 @@ const envSchema = z.object({
   ANALYTICS_SESSION_SECRET: z.string().min(16).default('change-this-analytics-session-secret'),
   INTERNAL_TESTER_SECRET: z.string().trim().default(''),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
-  CRAWL_REGION: z.string().default('Grossraum Graz'),
+  CRAWL_REGION: z.string().default('Steiermark'),
   CRAWL_RUN_ON_START: booleanFromEnv.default(false),
   CRAWL_SCHEDULE_ENABLED: booleanFromEnv.default(false),
   CRAWL_SCHEDULE_CRON: z.string().trim().default('0 2 * * *'),
