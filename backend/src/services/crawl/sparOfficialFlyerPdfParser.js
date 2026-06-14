@@ -225,11 +225,13 @@ function buildNormalizedUnitPrice({ price, quantityText, comparisonSafe, context
 }
 
 function inferValidity(candidate, fallbackValidity = {}) {
-  if (candidate.validToOverride) {
+  if (candidate.validFromOverride || candidate.validToOverride) {
+    const validFrom = candidate.validFromOverride || fallbackValidity.validFrom || null;
+    const validTo = candidate.validToOverride || fallbackValidity.validTo || null;
     return {
-      validFrom: fallbackValidity.validFrom || null,
-      validTo: candidate.validToOverride,
-      validityText: `${dateKey(fallbackValidity.validFrom)} - ${dateKey(candidate.validToOverride)}`,
+      validFrom,
+      validTo,
+      validityText: [dateKey(validFrom), dateKey(validTo)].filter(Boolean).join(' - '),
       validitySource: 'offer-level-pdf-condition',
       confidence: 0.86,
     };
@@ -3772,6 +3774,10 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
   const isInterspar = sourceRetailerFormat === 'interspar';
   const isEurospar = sourceRetailerFormat === 'eurospar';
   const frSaKw24 = 'Zusatzpreis nur am Fr., 12.6. und Sa., 13.6.2026 laut Flugblatt';
+  const frSaKw24Window = {
+    validFromOverride: new Date('2026-06-11T22:00:00.000Z'),
+    validToOverride: new Date('2026-06-13T21:59:59.999Z'),
+  };
 
   addKnownCandidateIf(candidates, page, hasText(text, /stiegl\s*goldbraeu|stiegl\s*goldbr.u/) && /(20er-kiste|20\s*x\s*0[,\s]*5).*14[,\s]*80/i.test(normalized), beerCandidate({
     title: 'Stiegl Goldbraeu',
@@ -3816,11 +3822,22 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
   addKnownCandidateIf(candidates, page, hasText(text, /bio-salzstangerl/) && /(?:0[,\s]*66|\b066\b)/i.test(normalized), bakeryCandidate({
     title: 'Bio-Salzstangerl',
     brand: 'SPAR',
-    price: /bei\s+3\s+st(?:ueck|uck)\s+je\s*0[,\s]*49/i.test(normalized) ? 0.49 : 0.66,
+    price: 0.66,
     referencePrice: /1\s+st(?:ueck|uck)\s+0[,\s]*99/i.test(normalized) ? 0.99 : null,
     quantityText: '1 Stueck',
-    conditionsText: `2+1 gratis / bei 3 Stueck laut Flugblatt${/0[,\s]*49/i.test(normalized) ? ` / ${frSaKw24}` : ''}`,
+    conditionsText: '2+1 gratis / bei 3 Stueck laut Flugblatt',
     rawText: 'Bio-Salzstangerl, bei 3 Stueck je 0,66, Fr/Sa ggf. 0,49',
+  }));
+
+  addKnownCandidateIf(candidates, page, hasText(text, /bio-salzstangerl/) && /bei\s+3\s+st(?:ueck|uck)\s+je\s*0[,\s]*49/i.test(normalized), bakeryCandidate({
+    title: 'Bio-Salzstangerl',
+    brand: 'SPAR',
+    price: 0.49,
+    referencePrice: /1\s+st(?:ueck|uck)\s+0[,\s]*99/i.test(normalized) ? 0.99 : null,
+    quantityText: '1 Stueck',
+    conditionsText: `2+1 gratis / bei 3 Stueck laut Flugblatt / ${frSaKw24}`,
+    rawText: 'Bio-Salzstangerl, bei 3 Stueck je 0,49, Fr/Sa Zusatzpreis',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, isInterspar && hasText(text, /s-budget\s*lachsfilet/) && /per\s+kg/i.test(normalized), fishCandidate({
@@ -3830,42 +3847,83 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
     quantityText: '1 kg',
     conditionsText: 'nur gueltig am Fr., 12.6. und Sa., 13.6.2026 laut Flugblatt',
     rawText: 'S-BUDGET Lachsfilet frisch mit Haut, ca. 1,3-kg-Filet, per kg 19,90',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, isInterspar && hasText(text, /bio-butter/) && /ab\s+2\s+packungen\s+je\s*2[,\s]*29/i.test(normalized), dairyCandidate({
     title: 'Bio-Butter',
     brand: 'SPAR Natur Pur',
-    price: /1[,\s]*72/i.test(normalized) ? 1.72 : 2.29,
+    price: 2.29,
     quantityText: '250 g',
-    conditionsText: `ab 2 Packungen je 2,29 laut Flugblatt / ${frSaKw24}`,
+    conditionsText: 'ab 2 Packungen je 2,29 laut Flugblatt',
     rawText: 'Bio-Butter, 250 g, ab 2 Packungen je 2,29, Fr/Sa Zusatzpreis 1,72',
+  }));
+
+  addKnownCandidateIf(candidates, page, isInterspar && hasText(text, /bio-butter/) && /1[,\s]*72/i.test(normalized), dairyCandidate({
+    title: 'Bio-Butter',
+    brand: 'SPAR Natur Pur',
+    price: 1.72,
+    quantityText: '250 g',
+    conditionsText: `ab 2 Packungen laut Flugblatt / ${frSaKw24}`,
+    rawText: 'Bio-Butter, 250 g, Fr/Sa Zusatzpreis 1,72',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, hasText(text, /bio-hendl-oberkeule/) && /500-g-packung/i.test(normalized), meatCandidate({
     title: 'Bio-Hendl-Oberkeule',
     brand: 'SPAR Natur Pur',
-    price: /5[,\s]*39/i.test(normalized) ? 5.39 : 7.19,
+    price: 7.19,
+    quantityText: '500 g',
+    conditionsText: 'ab 2 Packungen laut Flugblatt',
+    rawText: 'Bio-Hendl-Oberkeule, 500-g-Packung, Fr/Sa Zusatzpreis 5,39',
+  }));
+
+  addKnownCandidateIf(candidates, page, hasText(text, /bio-hendl-oberkeule/) && /500-g-packung/i.test(normalized) && /5[,\s]*39/i.test(normalized), meatCandidate({
+    title: 'Bio-Hendl-Oberkeule',
+    brand: 'SPAR Natur Pur',
+    price: 5.39,
     quantityText: '500 g',
     conditionsText: `ab 2 Packungen laut Flugblatt / ${frSaKw24}`,
     rawText: 'Bio-Hendl-Oberkeule, 500-g-Packung, Fr/Sa Zusatzpreis 5,39',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, hasText(text, /bio-rindsschnitzel/) && /per\s+kg/i.test(normalized), meatCandidate({
     title: 'Bio-Rindsschnitzel',
     brand: 'SPAR Natur Pur',
-    price: /18[,\s]*74/i.test(normalized) ? 18.74 : 24.99,
+    price: 24.99,
+    quantityText: '1 kg',
+    conditionsText: '',
+    rawText: 'Bio-Rindsschnitzel aus Oesterreich, per kg, Fr/Sa Zusatzpreis 18,74',
+  }));
+
+  addKnownCandidateIf(candidates, page, hasText(text, /bio-rindsschnitzel/) && /per\s+kg/i.test(normalized) && /18[,\s]*74/i.test(normalized), meatCandidate({
+    title: 'Bio-Rindsschnitzel',
+    brand: 'SPAR Natur Pur',
+    price: 18.74,
     quantityText: '1 kg',
     conditionsText: frSaKw24,
     rawText: 'Bio-Rindsschnitzel aus Oesterreich, per kg, Fr/Sa Zusatzpreis 18,74',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, hasText(text, /bio-goldbrasse/) && /per\s+100\s*g/i.test(normalized), fishCandidate({
     title: 'Bio-Goldbrasse',
     brand: 'SPAR Natur Pur',
-    price: /2[,\s]*24/i.test(normalized) ? 2.24 : 2.99,
+    price: 2.99,
+    quantityText: '100 g',
+    conditionsText: '',
+    rawText: 'Bio-Goldbrasse, per 100 g, Fr/Sa Zusatzpreis 2,24',
+  }));
+
+  addKnownCandidateIf(candidates, page, hasText(text, /bio-goldbrasse/) && /per\s+100\s*g/i.test(normalized) && /2[,\s]*24/i.test(normalized), fishCandidate({
+    title: 'Bio-Goldbrasse',
+    brand: 'SPAR Natur Pur',
+    price: 2.24,
     quantityText: '100 g',
     conditionsText: frSaKw24,
     rawText: 'Bio-Goldbrasse, per 100 g, Fr/Sa Zusatzpreis 2,24',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, hasText(text, /s-budget\s+leberkaese|s-budget\s+leberk.se/) && /500-g-packung/i.test(normalized), meatCandidate({
@@ -3894,54 +3952,108 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
     quantityText: '1 kg',
     conditionsText: 'Wassermelonen-Angebot gueltig bis Sa., 13.6.2026 laut Flugblatt',
     rawText: 'SPAR Wassermelone kernarm, Klasse 1, per kg, Aktion 1,00',
+    validToOverride: frSaKw24Window.validToOverride,
   }));
 
   addKnownCandidateIf(candidates, page, isSpar && hasText(text, /recheis\s+gold-?\s*marke/) && /1[,\s]*99/i.test(normalized) && /1[,\s]*49/i.test(normalized), groceryCandidate({
     title: 'Recheis Goldmarke, Recheis Vollkorn oder Naturgenuss Dinkel Teigwaren',
     brand: 'Recheis',
-    price: /noch\s+zusaetzlich|fr\./i.test(normalized) ? 1.49 : 1.99,
+    price: 1.99,
+    referencePrice: /1\s+pkg\.?\s+2[,\s]*49/i.test(normalized) ? 2.49 : null,
+    quantityText: '400-500 g',
+    conditionsText: 'ab 2 Packungen laut Flugblatt',
+    rawText: 'Recheis Goldmarke/Vollkorn oder Naturgenuss Dinkel Teigwaren, ab 2 Pkg. je 1,99, Fr/Sa 1,49',
+    comparisonSafe: false,
+  }));
+
+  addKnownCandidateIf(candidates, page, isSpar && hasText(text, /recheis\s+gold-?\s*marke/) && /1[,\s]*99/i.test(normalized) && /1[,\s]*49/i.test(normalized), groceryCandidate({
+    title: 'Recheis Goldmarke, Recheis Vollkorn oder Naturgenuss Dinkel Teigwaren',
+    brand: 'Recheis',
+    price: 1.49,
     referencePrice: /1\s+pkg\.?\s+2[,\s]*49/i.test(normalized) ? 2.49 : null,
     quantityText: '400-500 g',
     conditionsText: `ab 2 Packungen laut Flugblatt / ${frSaKw24}`,
-    rawText: 'Recheis Goldmarke/Vollkorn oder Naturgenuss Dinkel Teigwaren, ab 2 Pkg. je 1,99, Fr/Sa 1,49',
+    rawText: 'Recheis Goldmarke/Vollkorn oder Naturgenuss Dinkel Teigwaren, Fr/Sa Zusatzpreis 1,49',
     comparisonSafe: false,
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, isSpar && hasText(text, /despar\s+olio/) && /7[,\s]*99/i.test(normalized) && /5[,\s]*99/i.test(normalized), groceryCandidate({
     title: 'DESPAR Olio extra vergine di Oliva',
     brand: 'DESPAR',
-    price: /5[,\s]*99/i.test(normalized) ? 5.99 : 7.99,
+    price: 7.99,
+    referencePrice: /1\s+fl\.?\s+10[,\s]*99/i.test(normalized) ? 10.99 : null,
+    quantityText: '1 l',
+    conditionsText: 'ab 2 Flaschen laut Flugblatt',
+    rawText: 'DESPAR Olio extra vergine di Oliva, 1 Liter, ab 2 Flaschen je 7,99, Fr/Sa 5,99',
+  }));
+
+  addKnownCandidateIf(candidates, page, isSpar && hasText(text, /despar\s+olio/) && /7[,\s]*99/i.test(normalized) && /5[,\s]*99/i.test(normalized), groceryCandidate({
+    title: 'DESPAR Olio extra vergine di Oliva',
+    brand: 'DESPAR',
+    price: 5.99,
     referencePrice: /1\s+fl\.?\s+10[,\s]*99/i.test(normalized) ? 10.99 : null,
     quantityText: '1 l',
     conditionsText: `ab 2 Flaschen laut Flugblatt / ${frSaKw24}`,
-    rawText: 'DESPAR Olio extra vergine di Oliva, 1 Liter, ab 2 Flaschen je 7,99, Fr/Sa 5,99',
+    rawText: 'DESPAR Olio extra vergine di Oliva, 1 Liter, Fr/Sa Zusatzpreis 5,99',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, isSpar && hasText(text, /ben.?s\s+original/) && /4[,\s]*19/i.test(normalized) && /3[,\s]*14/i.test(normalized), groceryCandidate({
     title: "Ben's Original Langkorn-Reis",
     brand: "Ben's Original",
-    price: /3[,\s]*14/i.test(normalized) ? 3.14 : 4.19,
+    price: 4.19,
+    quantityText: '1 kg',
+    conditionsText: 'ab 2 Packungen laut Flugblatt',
+    rawText: "Ben's Original Langkorn-Reis, 1 kg, ab 2 Pkg. je 4,19, Fr/Sa 3,14",
+  }));
+
+  addKnownCandidateIf(candidates, page, isSpar && hasText(text, /ben.?s\s+original/) && /4[,\s]*19/i.test(normalized) && /3[,\s]*14/i.test(normalized), groceryCandidate({
+    title: "Ben's Original Langkorn-Reis",
+    brand: "Ben's Original",
+    price: 3.14,
     quantityText: '1 kg',
     conditionsText: `ab 2 Packungen laut Flugblatt / ${frSaKw24}`,
-    rawText: "Ben's Original Langkorn-Reis, 1 kg, ab 2 Pkg. je 4,19, Fr/Sa 3,14",
+    rawText: "Ben's Original Langkorn-Reis, 1 kg, Fr/Sa Zusatzpreis 3,14",
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, isSpar && hasText(text, /despar\s+pasta/) && /0[,\s]*99/i.test(normalized) && /0[,\s]*74/i.test(normalized), groceryCandidate({
     title: 'DESPAR Pasta',
     brand: 'DESPAR',
-    price: /0[,\s]*74/i.test(normalized) ? 0.74 : 0.99,
+    price: 0.99,
+    quantityText: '500 g',
+    conditionsText: 'ab 2 Packungen laut Flugblatt',
+    rawText: 'DESPAR Pasta, 500 g, ab 2 Pkg. je 0,99, Fr/Sa 0,74',
+  }));
+
+  addKnownCandidateIf(candidates, page, isSpar && hasText(text, /despar\s+pasta/) && /0[,\s]*99/i.test(normalized) && /0[,\s]*74/i.test(normalized), groceryCandidate({
+    title: 'DESPAR Pasta',
+    brand: 'DESPAR',
+    price: 0.74,
     quantityText: '500 g',
     conditionsText: `ab 2 Packungen laut Flugblatt / ${frSaKw24}`,
-    rawText: 'DESPAR Pasta, 500 g, ab 2 Pkg. je 0,99, Fr/Sa 0,74',
+    rawText: 'DESPAR Pasta, 500 g, Fr/Sa Zusatzpreis 0,74',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, isSpar && /spar\s*natives\s*oliven(?:oel|ol|.l)/i.test(normalized) && /4[,\s]*66/i.test(normalized) && /3[,\s]*49/i.test(normalized), groceryCandidate({
     title: 'SPAR natives Olivenoel extra',
     brand: 'SPAR',
-    price: /3[,\s]*49/i.test(normalized) ? 3.49 : 4.66,
+    price: 4.66,
+    quantityText: '0.5 l',
+    conditionsText: '2+1 gratis laut Flugblatt',
+    rawText: 'SPAR natives Olivenoel extra, 0,5-Liter-Flasche, 2+1, Fr/Sa 3,49',
+  }));
+
+  addKnownCandidateIf(candidates, page, isSpar && /spar\s*natives\s*oliven(?:oel|ol|.l)/i.test(normalized) && /4[,\s]*66/i.test(normalized) && /3[,\s]*49/i.test(normalized), groceryCandidate({
+    title: 'SPAR natives Olivenoel extra',
+    brand: 'SPAR',
+    price: 3.49,
     quantityText: '0.5 l',
     conditionsText: `2+1 gratis laut Flugblatt / ${frSaKw24}`,
-    rawText: 'SPAR natives Olivenoel extra, 0,5-Liter-Flasche, 2+1, Fr/Sa 3,49',
+    rawText: 'SPAR natives Olivenoel extra, 0,5-Liter-Flasche, Fr/Sa Zusatzpreis 3,49',
+    ...frSaKw24Window,
   }));
 
   addKnownCandidateIf(candidates, page, isSpar && hasText(text, /spar\s+steinofen\s+weizen-roggenbrot/) && /400\s*g/i.test(normalized) && /1[,\s]*99/i.test(normalized), bakeryCandidate({
@@ -4196,7 +4308,7 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
   addKnownCandidateIf(candidates, page, hasText(text, /ariel\s+pulver/) && /23[,\s]*99/i.test(normalized), drugstoreCandidate({
     title: 'Ariel Pulver, Fluessig oder Pods',
     brand: 'Ariel',
-    price: /19[,\s]*99/i.test(normalized) ? 19.99 : 23.99,
+    price: 23.99,
     quantityText: '82-111 WG',
     conditionsText: /spar-app-gutschein/i.test(normalized) ? 'mit SPAR-App-Gutschein 19,99 laut Flugblatt' : '',
     rawText: 'Ariel Pulver 100 WG, Fluessig 111 WG oder Pods 82 WG, 23,99, App 19,99',

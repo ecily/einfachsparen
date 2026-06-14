@@ -2074,6 +2074,10 @@ test('extracts current KW24 offers from official SPAR viewer pageTexts', async (
     pdfSha256: 'viewer-fixture',
   });
   const titles = offers.map((offer) => offer.title);
+  const recheisWeekly = offers.find((offer) => /Recheis/i.test(offer.title) && offer.priceCurrent.amount === 1.99);
+  const recheisFrSa = offers.find((offer) => /Recheis/i.test(offer.title) && offer.priceCurrent.amount === 1.49);
+  const wassermelone = offers.find((offer) => /Wassermelone/i.test(offer.title));
+  const ariel = offers.find((offer) => /Ariel/i.test(offer.title));
 
   assert.ok(titles.some((title) => /Recheis/i.test(title)));
   assert.ok(titles.some((title) => /Stiegl Goldbraeu/i.test(title)));
@@ -2092,6 +2096,14 @@ test('extracts current KW24 offers from official SPAR viewer pageTexts', async (
   assert.ok(titles.some((title) => /Bistro Baguette/i.test(title)));
   assert.ok(titles.some((title) => /Frosta/i.test(title)));
   assert.ok(titles.some((title) => /Plenty/i.test(title)));
+  assert.equal(dateKey(recheisWeekly.validTo), '2026-06-17');
+  assert.equal(recheisFrSa.validFrom.toISOString(), '2026-06-11T22:00:00.000Z');
+  assert.equal(recheisFrSa.validTo.toISOString(), '2026-06-13T21:59:59.999Z');
+  assert.match(recheisWeekly.conditionsText, /ab 2 Packungen/);
+  assert.match(recheisFrSa.conditionsText, /Zusatzpreis/);
+  assert.equal(dateKey(wassermelone.validTo), '2026-06-13');
+  assert.equal(ariel.priceCurrent.amount, 23.99);
+  assert.match(ariel.conditionsText, /SPAR-App-Gutschein 19,99/);
 });
 
 test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', async () => {
@@ -2122,6 +2134,9 @@ test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', as
     pdfSha256: 'viewer-fixture',
   });
   const titles = offers.map((offer) => offer.title);
+  const bioHendlWeekly = offers.find((offer) => /Bio-Hendl-Oberkeule/i.test(offer.title) && offer.priceCurrent.amount === 7.19);
+  const bioHendlFrSa = offers.find((offer) => /Bio-Hendl-Oberkeule/i.test(offer.title) && offer.priceCurrent.amount === 5.39);
+  const lachsfilet = offers.find((offer) => /S-BUDGET Lachsfilet/i.test(offer.title));
 
   assert.equal(dateKey(reference.validity.validTo), '2026-06-17');
   assert.ok(titles.some((title) => /Puntigamer/i.test(title)));
@@ -2139,4 +2154,10 @@ test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', as
   assert.ok(titles.some((title) => /Kaminwurzerl/i.test(title)));
   assert.ok(titles.some((title) => /Santa Maria Tortilla/i.test(title)));
   assert.ok(titles.some((title) => /Mini Wraps/i.test(title)));
+  assert.equal(dateKey(bioHendlWeekly.validTo), '2026-06-17');
+  assert.equal(bioHendlFrSa.validFrom.toISOString(), '2026-06-11T22:00:00.000Z');
+  assert.equal(bioHendlFrSa.validTo.toISOString(), '2026-06-13T21:59:59.999Z');
+  assert.match(bioHendlFrSa.conditionsText, /Zusatzpreis/);
+  assert.equal(lachsfilet.validFrom.toISOString(), '2026-06-11T22:00:00.000Z');
+  assert.equal(lachsfilet.validTo.toISOString(), '2026-06-13T21:59:59.999Z');
 });
