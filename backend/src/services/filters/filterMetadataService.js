@@ -13,6 +13,7 @@ const { isOfferFreshForActiveUse } = require('../offers/offerFreshness');
 const FILTER_METADATA_BULK_BATCH_SIZE = 100;
 const FILTER_METADATA_QUERY_MAX_TIME_MS = 15000;
 const FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT = 5000;
+const PUBLIC_DISABLED_RETAILER_KEYS = new Set(['eurospar']);
 
 const FILTER_METADATA_OFFER_SELECT_FIELDS = [
   'retailerKey',
@@ -112,6 +113,10 @@ function normalizeFilterKey(value, fallback = 'unknown') {
 
 function normalizeRetailerKey({ retailerKey, retailerName }) {
   return normalizeFilterKey(retailerKey || retailerName, 'unknown-retailer');
+}
+
+function isPublicRetailerEnabled(retailerKey) {
+  return !PUBLIC_DISABLED_RETAILER_KEYS.has(String(retailerKey || '').trim().toLowerCase());
 }
 
 function normalizeCategoryKey(value, fallback = 'unkategorisiert') {
@@ -1078,15 +1083,25 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
 }
 
 async function getRetailerFilters() {
-  return Retailer.find({ isActive: true, activeOfferCount: { $gt: 0 } })
+  return Retailer.find({
+    isActive: true,
+    activeOfferCount: { $gt: 0 },
+    retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] },
+  })
     .sort({ coveragePriorityScore: -1, sortOrder: 1, retailerName: 1 })
     .lean();
 }
 
 async function getCategoryFilters({ retailerKeys = [] } = {}) {
   if (Array.isArray(retailerKeys) && retailerKeys.length > 0) {
+    const publicRetailerKeys = retailerKeys.filter(isPublicRetailerEnabled);
+
+    if (publicRetailerKeys.length === 0) {
+      return [];
+    }
+
     const stats = await RetailerCategoryStat.find({
-      retailerKey: { $in: retailerKeys },
+      retailerKey: { $in: publicRetailerKeys },
       activeOfferCount: { $gt: 0 },
     })
       .sort({ mainCategoryLabel: 1, subcategoryLabel: 1 })
@@ -1180,6 +1195,7 @@ module.exports = {
     FILTER_METADATA_QUERY_MAX_TIME_MS,
     buildFilterMetadataOfferMatch,
     buildRetailerDocuments,
+    isPublicRetailerEnabled,
     buildKeyFilter,
     buildStableKey,
     isSameFilterDocument,

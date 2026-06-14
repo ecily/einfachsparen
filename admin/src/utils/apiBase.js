@@ -193,6 +193,7 @@ export async function fetchFilterRetailers() {
 
   return retailers
     .filter((item) => item && typeof item === 'object')
+    .filter((item) => normalizeRetailerKey(item.retailerKey || item.retailerName) !== 'eurospar')
     .map((item, index) => ({
       retailerKey: item.retailerKey || normalizeRetailerKey(item.retailerName || `retailer-${index}`),
       retailerName: formatRetailerName(

@@ -4,12 +4,16 @@ const path = require('node:path');
 const test = require('node:test');
 
 const Category = require('../src/models/Category');
+const Retailer = require('../src/models/Retailer');
+const RetailerCategoryStat = require('../src/models/RetailerCategoryStat');
 const {
   getCategoryFilters,
+  getRetailerFilters,
   _private: {
     FILTER_METADATA_OFFER_SELECT_FIELDS,
     buildFilterMetadataOfferMatch,
     buildRetailerDocuments,
+    isPublicRetailerEnabled,
     syncFilterMetadataCollection,
   },
 } = require('../src/services/filters/filterMetadataService');
@@ -180,6 +184,89 @@ test('category filter response shape stays compatible', async () => {
     ]);
   } finally {
     Category.find = originalFind;
+  }
+});
+
+test('public retailer facets hide temporarily disabled retailers', async () => {
+  const originalFind = Retailer.find;
+  const documents = [
+    { retailerKey: 'spar', retailerName: 'SPAR', activeOfferCount: 12, isActive: true },
+    { retailerKey: 'eurospar', retailerName: 'EUROSPAR', activeOfferCount: 8, isActive: true },
+    { retailerKey: 'interspar', retailerName: 'INTERSPAR', activeOfferCount: 6, isActive: true },
+  ];
+
+  Retailer.find = (filter) => {
+    assert.deepEqual(filter.retailerKey?.$nin, ['eurospar']);
+
+    return {
+      sort() {
+        return {
+          async lean() {
+            return documents.filter((document) => !filter.retailerKey.$nin.includes(document.retailerKey));
+          },
+        };
+      },
+    };
+  };
+
+  try {
+    const retailers = await getRetailerFilters();
+    assert.deepEqual(retailers.map((retailer) => retailer.retailerKey), ['spar', 'interspar']);
+    assert.equal(isPublicRetailerEnabled('eurospar'), false);
+    assert.equal(isPublicRetailerEnabled('spar'), true);
+  } finally {
+    Retailer.find = originalFind;
+  }
+});
+
+test('category facets ignore public-disabled retailer scopes', async () => {
+  const originalFind = RetailerCategoryStat.find;
+  const stats = [
+    {
+      retailerKey: 'spar',
+      mainCategoryKey: 'getraenke',
+      mainCategoryLabel: 'Getraenke',
+      subcategoryKey: 'bier',
+      subcategoryLabel: 'Bier',
+      activeOfferCount: 3,
+      lastSeenAt: new Date('2026-06-14T10:00:00.000Z'),
+    },
+    {
+      retailerKey: 'eurospar',
+      mainCategoryKey: 'drogerie',
+      mainCategoryLabel: 'Drogerie',
+      subcategoryKey: 'waschmittel',
+      subcategoryLabel: 'Waschmittel',
+      activeOfferCount: 4,
+      lastSeenAt: new Date('2026-06-14T10:00:00.000Z'),
+    },
+  ];
+
+  let findCalls = 0;
+  RetailerCategoryStat.find = (filter) => {
+    findCalls += 1;
+    assert.deepEqual(filter.retailerKey?.$in, ['spar']);
+
+    return {
+      sort() {
+        return {
+          async lean() {
+            return stats.filter((stat) => filter.retailerKey.$in.includes(stat.retailerKey));
+          },
+        };
+      },
+    };
+  };
+
+  try {
+    const categories = await getCategoryFilters({ retailerKeys: ['spar', 'eurospar'] });
+    assert.deepEqual(categories.map((category) => category.mainCategoryKey), ['getraenke']);
+
+    const hiddenOnly = await getCategoryFilters({ retailerKeys: ['eurospar'] });
+    assert.deepEqual(hiddenOnly, []);
+    assert.equal(findCalls, 1);
+  } finally {
+    RetailerCategoryStat.find = originalFind;
   }
 });
 

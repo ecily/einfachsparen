@@ -84,8 +84,8 @@ export const seoLandingPages = [
         offset: 0,
       },
       {
-        retailers: 'spar,eurospar,interspar',
-        programRetailers: 'spar,eurospar,interspar',
+        retailers: 'spar,interspar',
+        programRetailers: 'spar,interspar',
         limit: 12,
         offset: 0,
       },
@@ -119,15 +119,15 @@ export const seoLandingPages = [
     path: '/angebote/spar',
     title: 'SPAR Angebote aktuell finden | kaufklug',
     description:
-      'Finde aktuelle Angebote der SPAR-Familie in \u00d6sterreich. kaufklug hilft, Aktionen, Preise und Bedingungen schneller zu \u00fcberblicken.',
+      'Finde aktuelle Angebote von SPAR und INTERSPAR in \u00d6sterreich. kaufklug hilft, Aktionen, Preise und Bedingungen schneller zu \u00fcberblicken.',
     h1: 'SPAR Angebote aktuell finden',
     intro:
-      'Finde aktuelle Angebote der SPAR-Familie in \u00d6sterreich. kaufklug hilft dir, Aktionen, Preise und Bedingungen schneller zu \u00fcberblicken.',
-    note: 'Mit SPAR sind hier SPAR, EUROSPAR und INTERSPAR gemeint, sofern nicht anders angegeben.',
+      'Finde aktuelle Angebote von SPAR und INTERSPAR in \u00d6sterreich. kaufklug hilft dir, Aktionen, Preise und Bedingungen schneller zu \u00fcberblicken.',
+    note: 'Diese Seite umfasst aktuell SPAR und INTERSPAR.',
     robots: 'noindex,follow',
     query: {
-      retailers: 'spar,eurospar,interspar',
-      programRetailers: 'spar,eurospar,interspar',
+      retailers: 'spar,interspar',
+      programRetailers: 'spar,interspar',
       limit: 24,
       offset: 0,
     },

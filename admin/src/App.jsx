@@ -132,7 +132,6 @@ function SearchLandingHero() {
     ],
     [
       ['spar', 'SPAR'],
-      ['eurospar', 'EUROSPAR'],
       ['interspar', 'INTERSPAR'],
     ],
     [
