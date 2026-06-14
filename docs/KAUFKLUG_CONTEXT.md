@@ -29,6 +29,7 @@
 - SPAR-Family Steiermark KW24 am 2026-06-13: Offizielle aktuelle Viewer-Pfade sind belegbar (`flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/`, `flugblatt.interspar.at/steiermark/steiermark_kw24/`), waehrend alte `getPdf.ashx`-Rates fuer KW24 404 liefern und CDN-Downloads ohne Token 403 liefern. Keine Token-/Session-Umgehung und keine lokale PDF als produktive Quelle. Die alten statischen KW23-Regular-PDF-Sources sind scoped-only/currentSnapshot=false; lokale KW24-PDF-Smokes decken repraesentative SPAR/EUROSPAR/INTERSPAR-Angebote und verwerfen enge abgelaufene Sonderfolder-Fenster wie `Goesser Maerzen` 03.06-06.06.
 - SPAR-Family SourceSelection-Fix am 2026-06-13: Historische/scoped SPAR-Family-PDF-Snapshots werden nicht mehr unter den Current-PDF-Keys `spar/eurospar/interspar-official-flyer-pdf` selektiert, sondern als `*-official-flyer-pdf-scoped` getrennt. Ausdrueckliche Current-Discovery-Sources laufen unter `*-official-flyer-current`; ein produktiver Crawl braucht nach Deploy weiterhin eine freigegebene Current-Source/Discovery-Bindung, keine lokalen PDFs und keine Token-/Session-Umgehung.
 - SPAR-Family Current-Registry-Fix am 2026-06-13: Die offiziellen SPAR/EUROSPAR/INTERSPAR Steiermark-Listingseiten sind als scoped-only Current-Flyer-Discovery-Sources mit Keys `spar/eurospar/interspar-official-flyer-current` angebunden. Sie nutzen `spar-family-flyer-discovery`, nicht den deaktivierten Kategorieaktions-Parser, nicht Productworld und keine Aggregatoren. Discovery speichert keine Offers; ein Angebotscrawl bleibt separat freizugeben.
+- SPAR-Family Current-Discovery-Fix am 2026-06-14: Productiver scoped Crawl `6a2e5fd6c124f6aa38ade5f0` fand auf den offiziellen Listingseiten wegen blocked/challenge-like HTML keine Links (`spar-family-current-flyer-discovery-zero-links`). Die Discovery nutzt nun nur fuer belegte aktuelle offizielle KW24-Viewer konfigurierte Fallbacks fuer SPAR (`flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/`) und INTERSPAR (`flugblatt.interspar.at/steiermark/steiermark_kw24/`); EUROSPAR bleibt ohne Fallback, bis ein stabiler offizieller aktueller Viewer belegt ist. Keine lokalen PDFs, keine Aggregatoren, keine Token-/Session-Umgehung.
 
 ## Offene Risiken
 
@@ -42,6 +43,7 @@
 - P2: BILLA Mehrkauf-/Gratislogik kann bei einzelnen Basispreisen sichtbar auffallen, z. B. `Schwechater Bier` trotz korrektem Preis und korrekter `3+3 gratis`-Bedingung.
 - P1: Scheduled Daily Crawl bleibt erst nach dem naechsten regulaeren Lauf wieder bestaetigt gruen; Shutdown-/Restart-Recovery verhindert unklare stale Orphans, ersetzt aber keinen abgebrochenen Crawl automatisch.
 - P1: SPAR-Family Current-Source Discovery ist als Registry-Quelle vorbereitet, aber noch nicht produktiv als Angebotscrawl validiert. Viewer-Discovery darf keine direkten PDF-Token erfinden; ein naechster freigegebener Crawl muss zeigen, ob offizielle Viewer/Parserpfad genuegend aktuelle Offers liefern.
+- P1: EUROSPAR Current-Viewer fuer Steiermark KW24 ist weiter nicht belastbar belegt; keine Gleichsetzung mit SPAR und kein spekulativer Fallback.
 
 ## Naechste klare Aufgaben
 

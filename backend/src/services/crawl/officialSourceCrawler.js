@@ -4467,6 +4467,9 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, region 
   const entryPoints = Array.isArray(source.crawlPolicy?.entryPoints) && source.crawlPolicy.entryPoints.length > 0
     ? source.crawlPolicy.entryPoints
     : [source.sourceUrl];
+  const fallbackViewerUrls = Array.isArray(source.crawlPolicy?.fallbackViewerUrls)
+    ? source.crawlPolicy.fallbackViewerUrls
+    : [];
   const limits = {
     maxEntryPoints: Number(source.crawlPolicy?.maxEntryPoints || entryPoints.length || 1),
     maxLinks: Number(source.crawlPolicy?.maxLinks || 20),
@@ -4475,6 +4478,7 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, region 
   };
   const discovery = await discoverSparFamilyFlyers({
     entryPoints,
+    fallbackViewerUrls,
     limits,
   });
   const sourceKey = `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;

@@ -72,6 +72,11 @@ const VALIDITY_TERMS = [
   'pickerl',
 ];
 
+const CURRENT_FALLBACK_VIEWER_PATTERNS = [
+  /kw[-_ ]?24\b/i,
+  /steiermark_kw24/i,
+];
+
 function normalizeForScan(value) {
   return String(value || '')
     .toLowerCase()
@@ -194,6 +199,42 @@ function isRelevantSparFamilyViewerUrl(value) {
   } catch (error) {
     return false;
   }
+}
+
+function isCurrentFallbackViewerUrl(value) {
+  const url = canonicalDiscoveryUrl(value);
+  if (!url || !isRelevantSparFamilyViewerUrl(url)) {
+    return false;
+  }
+
+  return CURRENT_FALLBACK_VIEWER_PATTERNS.some((pattern) => pattern.test(url));
+}
+
+function buildFallbackViewerLinks(fallbackViewerUrls = [], {
+  maxLinks = DEFAULT_LIMITS.maxLinks,
+} = {}) {
+  const links = [];
+  const seen = new Set();
+
+  for (const fallbackUrl of fallbackViewerUrls || []) {
+    const url = canonicalDiscoveryUrl(fallbackUrl);
+    if (!url || !isCurrentFallbackViewerUrl(url) || seen.has(url)) {
+      continue;
+    }
+
+    seen.add(url);
+    links.push({
+      url,
+      discoveredFrom: 'configured-current-viewer-fallback',
+      kind: 'viewer',
+    });
+
+    if (links.length >= maxLinks) {
+      break;
+    }
+  }
+
+  return links;
 }
 
 function derivePdfCandidateUrls(value) {
@@ -591,6 +632,113 @@ async function loadPdfMetadata(url, {
   }
 }
 
+function extractAssignedJsonObject(html, assignmentName) {
+  const source = String(html || '');
+  const assignmentIndex = source.indexOf(assignmentName);
+  if (assignmentIndex < 0) return null;
+
+  const startIndex = source.indexOf('{', assignmentIndex);
+  if (startIndex < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let stringQuote = '';
+  let escaped = false;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === stringQuote) {
+        inString = false;
+        stringQuote = '';
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      inString = true;
+      stringQuote = char;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseAssignedJsonObject(html, assignmentName) {
+  const json = extractAssignedJsonObject(html, assignmentName);
+  if (!json) return {};
+
+  try {
+    return JSON.parse(json);
+  } catch (error) {
+    return {};
+  }
+}
+
+async function loadViewerMetadata(url, {
+  httpClient = axios,
+  timeoutMs = DEFAULT_LIMITS.timeoutMs,
+  maxPdfTextPages = DEFAULT_LIMITS.maxPdfTextPages,
+} = {}) {
+  const response = await httpClient.get(url, {
+    timeout: timeoutMs,
+    responseType: 'text',
+    maxRedirects: 5,
+    headers: REQUEST_HEADERS,
+    validateStatus: () => true,
+  });
+  const html = String(response.data || '');
+  const blocked = isBlockedLikely({ status: response.status, body: html });
+
+  if (!(response.status >= 200 && response.status < 300) || blocked) {
+    return {
+      fetchStatus: blocked ? 'blocked' : 'fetchFailed',
+      httpStatus: response.status,
+      contentType: response.headers?.['content-type'] || '',
+      pageCount: null,
+      text: '',
+      error: response.status ? `HTTP ${response.status}` : 'Viewer fetch failed',
+    };
+  }
+
+  const staticSettings = parseAssignedJsonObject(html, 'window.staticSettings');
+  const pageTexts = Array.isArray(staticSettings.pageTexts)
+    ? staticSettings.pageTexts.slice(0, maxPdfTextPages).map((part) => String(part || ''))
+    : [];
+  const pageCount = Array.isArray(staticSettings.pages)
+    ? staticSettings.pages.length
+    : (pageTexts.length || null);
+  const titleParts = [
+    staticSettings.paperCompleteUrl,
+    staticSettings.name,
+    staticSettings.pageTitle,
+  ].filter(Boolean).map((part) => String(part));
+
+  return {
+    fetchStatus: 'ok',
+    httpStatus: response.status,
+    contentType: response.headers?.['content-type'] || '',
+    pageCount,
+    text: [...titleParts, ...pageTexts].join('\n'),
+    error: '',
+  };
+}
+
 async function fetchEntrypoint(url, {
   httpClient = axios,
   timeoutMs = DEFAULT_LIMITS.timeoutMs,
@@ -644,8 +792,10 @@ async function fetchEntrypoint(url, {
 
 async function discoverSparFamilyFlyers({
   entryPoints = DEFAULT_ENTRY_POINTS,
+  fallbackViewerUrls = [],
   httpClient = axios,
   pdfMetadataLoader = loadPdfMetadata,
+  viewerMetadataLoader = loadViewerMetadata,
   limits = {},
 } = {}) {
   const effectiveLimits = { ...DEFAULT_LIMITS, ...limits };
@@ -661,6 +811,12 @@ async function discoverSparFamilyFlyers({
     });
     entrypointResults.push(result);
     discovered.push(...result.links);
+  }
+
+  if (discovered.length === 0 && Array.isArray(fallbackViewerUrls) && fallbackViewerUrls.length > 0) {
+    discovered.push(...buildFallbackViewerLinks(fallbackViewerUrls, {
+      maxLinks: effectiveLimits.maxLinks,
+    }));
   }
 
   const uniqueLinks = mergeDiscoveredLinks(discovered, { maxLinks: effectiveLimits.maxLinks });
@@ -679,7 +835,8 @@ async function discoverSparFamilyFlyers({
 
     if (shouldLoadMetadata) {
       try {
-        metadata = await pdfMetadataLoader(link.url, {
+        const metadataLoader = link.kind === 'viewer' ? viewerMetadataLoader : pdfMetadataLoader;
+        metadata = await metadataLoader(link.url, {
           httpClient,
           timeoutMs: effectiveLimits.timeoutMs,
           maxPdfBytes: effectiveLimits.maxPdfBytes,
@@ -714,6 +871,9 @@ async function discoverSparFamilyFlyers({
     mutatedCollections: [],
     limits: effectiveLimits,
     entryPoints: selectedEntryPoints,
+    fallbackViewerUrls: buildFallbackViewerLinks(fallbackViewerUrls, {
+      maxLinks: effectiveLimits.maxLinks,
+    }).map((link) => link.url),
     checkedPages: entrypointResults.map((result) => ({
       url: result.url,
       finalUrl: result.finalUrl,
@@ -786,6 +946,7 @@ module.exports = {
   NON_FOOD_TERMS,
   VALIDITY_TERMS,
   buildSafetyMetadata,
+  buildFallbackViewerLinks,
   buildSparFamilyFlyerInventoryReport,
   canonicalDiscoveryUrl,
   classifySparFamilyPdfUrl,
@@ -799,9 +960,11 @@ module.exports = {
   getBackendSparFamilyPdfSources,
   inferFolderType,
   isBlockedLikely,
+  isCurrentFallbackViewerUrl,
   isOfficialSparFamilyPdfUrl,
   isOfficialSparFamilyViewerUrl,
   isRelevantSparFamilyPdfUrl,
+  loadViewerMetadata,
   mergeDiscoveredLinks,
   normalizeForScan,
   toAbsoluteUrl,

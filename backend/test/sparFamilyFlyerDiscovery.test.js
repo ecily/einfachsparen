@@ -140,6 +140,75 @@ test('models 403 or Cloudflare pages as blocked without extracting links', async
   assert.equal(result.pdfs.length, 0);
 });
 
+test('uses configured current viewer fallback when official entrypoint is blocked', async () => {
+  const entrypointUrl = 'https://www.spar.at/aktionen/steiermark';
+  const viewerUrl = 'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/';
+  const viewerHtml = `
+    <script>
+      window.staticSettings = {
+        "paperCompleteUrl":"https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/",
+        "name":"260611-1-Flugblatt KW 24",
+        "pageTitle":"Do., 11.06.26 - Mi., 17.06.26",
+        "pages":[{"number":1},{"number":2}],
+        "pageTexts":["gueltig bis 17.06.2026","Stiegl Goldbraeu Aktion"]
+      };
+    </script>
+  `;
+  const httpClient = createHttpClient({
+    htmlByUrl: {
+      [entrypointUrl]: '<html><title>Just a moment...</title><body>Cloudflare</body></html>',
+      [viewerUrl]: viewerHtml,
+    },
+    statusByUrl: {
+      [entrypointUrl]: 403,
+    },
+  });
+
+  const result = await discoverSparFamilyFlyers({
+    entryPoints: [entrypointUrl],
+    fallbackViewerUrls: [viewerUrl],
+    httpClient,
+    limits: { maxPdfMetadataLookups: 1 },
+  });
+
+  assert.deepEqual(httpClient.calls, [entrypointUrl, viewerUrl]);
+  assert.equal(result.checkedPages[0].fetchStatus, 'blocked');
+  assert.deepEqual(result.fallbackViewerUrls, [viewerUrl]);
+  assert.equal(result.pdfs.length, 1);
+  assert.equal(result.pdfs[0].url, viewerUrl);
+  assert.equal(result.pdfs[0].kind, 'viewer');
+  assert.equal(result.pdfs[0].sourceGuess, 'spar');
+  assert.equal(result.pdfs[0].folderType, 'regular flyer');
+  assert.equal(result.pdfs[0].fetchStatus, 'ok');
+  assert.equal(result.pdfs[0].pageCount, 2);
+  assert.equal(result.pdfs[0].containsValidityTerms, true);
+});
+
+test('ignores configured fallback viewers that are not the current KW24 official path', async () => {
+  const entrypointUrl = 'https://www.spar.at/aktionen/steiermark';
+  const historicalViewerUrl = 'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/';
+  const httpClient = createHttpClient({
+    htmlByUrl: {
+      [entrypointUrl]: '<html><title>Just a moment...</title><body>Cloudflare</body></html>',
+      [historicalViewerUrl]: '<html></html>',
+    },
+    statusByUrl: {
+      [entrypointUrl]: 403,
+    },
+  });
+
+  const result = await discoverSparFamilyFlyers({
+    entryPoints: [entrypointUrl],
+    fallbackViewerUrls: [historicalViewerUrl],
+    httpClient,
+    limits: { maxPdfMetadataLookups: 1 },
+  });
+
+  assert.deepEqual(httpClient.calls, [entrypointUrl]);
+  assert.deepEqual(result.fallbackViewerUrls, []);
+  assert.equal(result.pdfs.length, 0);
+});
+
 test('enforces maxEntryPoints maxLinks and maxPdfMetadataLookups', async () => {
   const html = `
     <a href="https://flugblatt.spar.at/steiermark/spar/one/getPdf.ashx">one</a>
@@ -375,4 +444,12 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   assert.equal(currentSources.every((source) => source.crawlPolicy?.currentSnapshot === true), true);
   assert.equal(currentSources.every((source) => source.parserHint !== 'official-category-actions'), true);
   assert.equal(currentSources.every((source) => !/^(?:[A-Z]:\\|file:|https?:\/\/(?:www\.)?aktionsfinder\.at|https?:\/\/(?:www\.)?marktguru\.at)/i.test(source.sourceUrl)), true);
+  const byKey = new Map(currentSources.map((source) => [deriveSourceKey(source), source]));
+  assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
+    'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/',
+  ]);
+  assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw24/',
+  ]);
+  assert.equal(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
 });
