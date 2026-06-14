@@ -2053,8 +2053,8 @@ test('extracts current KW24 offers from official SPAR viewer pageTexts', async (
         "pageTitle":"Do., 11.06.26 - Mi., 17.06.26",
         "pages":[{"number":1},{"number":2}],
         "pageTexts":[
-          "Recheis Goldmarke Recheis Vollkorn oder Naturgenuss Dinkel Teigwaren 1 Pkg. 2,49 ab 2 Packungen je 1,99 Fr. noch zusaetzlich 1,49 SPAR Wassermelone kernarm Klasse 1 per kg statt 1,99 Aktion 1,00 Hendl Filetschnitzerl 400-g-Packung ab 2 Packungen je 4,99 Ariel Pulver 100 WG 23,99 SPAR-App-Gutschein 19,99 Axe Duschgel 250 ml 2+1 gratis ab 3 Stueck je 1,92 Zewa Toilettenpapier 20 Rollen 6,79",
-          "Stiegl Goldbraeu 0,5 Liter 20er-Kiste 29,60 Aktionspreis 14,80"
+          "Recheis Goldmarke Recheis Vollkorn oder Naturgenuss Dinkel Teigwaren 1 Pkg. 2,49 ab 2 Packungen je 1,99 Fr. noch zusaetzlich 1,49 SPAR Wassermelone kernarm Klasse 1 per kg statt 1,99 Aktion 1,00 SPAR Steinofen Weizen-Roggenbrot 400 g statt 2,49 1,99 Fussball Donut 6er-Packung 3,99 SPAR Linzerstangerl 200-g-Packung 2,19 Hendl Filetschnitzerl 400-g-Packung ab 2 Packungen je 4,99 Beef Burger 220-g-Packung 3,99 Leberkaese classic Kaese oder Chili Cheese 500-g-Packung 4,49 Kaesewurst Krakauer oder Wiener per 100 g 1,49 Frankfurter 1-kg-Packung 7,99 Schaerdinger Moosbacher 100 g statt 1,79 1,29 Kaerntnermilch Mascarpone 500-g-Packung 3,49 Dr. Oetker Creme Vega 150-g-Becher 1 Becher 1,49 ab 2 Becher je 0,74 Kelly's Erdnuss Linsen Snips oder Donuts Peanuts Caramel ab 2 Packungen je 1,49 Bahlsen Choco Leibniz 125-g-Packung ab 4 Packungen je 1,89",
+          "Stiegl Goldbraeu 0,5 Liter 20er-Kiste 29,60 Aktionspreis 14,80 Dr. Oetker High Protein Pudding 400-g-Packung ab 2 Packungen je 1,34 Iglo Hühner Sticks oder Hühner Nuggets 220 g ab 2 Packungen je 2,89 Dr. Oetker Bistro Baguette 250-g-Packung 1,99 Frosta Wokpfanne Paella oder Couscous 500-g-Packung ab 3 Packungen je 3,86 Aperol 0,7 Liter 8,99 Ariel Pulver 100 WG 23,99 SPAR-App-Gutschein 19,99 Axe Duschgel 250 ml 2+1 gratis ab 3 Stueck je 1,92 Zewa Toilettenpapier 20 Rollen 6,79 Plenty Kuechenrolle 6er-Packung 5,49 Syoss Shampoo Haarspray oder Haarschaum ab 3 Stueck je 3,32 Axe Deospray oder Deo Stick ab 2 Stueck je 2,99"
         ]
       };
     </script>
@@ -2082,6 +2082,16 @@ test('extracts current KW24 offers from official SPAR viewer pageTexts', async (
   assert.ok(titles.some((title) => /Ariel/i.test(title)));
   assert.ok(titles.some((title) => /Axe/i.test(title)));
   assert.ok(titles.some((title) => /Zewa/i.test(title)));
+  assert.ok(titles.some((title) => /Steinofen Weizen-Roggenbrot/i.test(title)));
+  assert.ok(titles.some((title) => /Beef Burger/i.test(title)));
+  assert.ok(titles.some((title) => /Leberkaese classic/i.test(title)));
+  assert.ok(titles.some((title) => /Moosbacher/i.test(title)));
+  assert.ok(titles.some((title) => /Creme Vega/i.test(title)));
+  assert.ok(titles.some((title) => /Choco Leibniz/i.test(title)));
+  assert.ok(titles.some((title) => /High Protein/i.test(title)));
+  assert.ok(titles.some((title) => /Bistro Baguette/i.test(title)));
+  assert.ok(titles.some((title) => /Frosta/i.test(title)));
+  assert.ok(titles.some((title) => /Plenty/i.test(title)));
 });
 
 test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', async () => {
@@ -2092,7 +2102,7 @@ test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', as
         "pageTitle":"Do., 11.06.26 - Mi., 17.06.26",
         "pages":[{"number":1}],
         "pageTexts":[
-          "Puntigamer Maerzen 24er-Tray ab 24 Dosen je 0,69 Milka Schokolade 190 g 2,66 Lotus Biscoff Doppelkeks 150 g ab 3 Rollen je 1,32 S-BUDGET Lachsfilet frisch mit Haut per kg 19,90 Bio-Hendl-Oberkeule 500-g-Packung Fr/Sa Zusatzpreis 5,39 S-BUDGET Leberkaese aus Oesterreich 500-g-Packung 3,99"
+          "Puntigamer Maerzen 24er-Tray ab 24 Dosen je 0,69 Milka Schokolade 190 g 2,66 Lotus Biscoff Doppelkeks 150 g ab 3 Rollen je 1,32 S-BUDGET Lachsfilet frisch mit Haut per kg 19,90 Bio-Hendl-Oberkeule 500-g-Packung Fr/Sa Zusatzpreis 5,39 S-BUDGET Leberkaese aus Oesterreich 500-g-Packung 3,99 De Cecco Pasta 500-g-Packung 1 Pkg. 2,99 ab 2 Packungen je 1,99 Barilla Collezione Pasta 1 Pkg. 2,99 ab 2 Packungen je 1,99 S-BUDGET Energy Drink 0,25 Liter 24er-Tray 6,96 S-BUDGET Cashews 150-g-Packung 1,99 S-BUDGET Chocolate Chip Cookies 225-g-Packung 1,79 S-BUDGET Grillsaucen 300-ml-Flasche 1,49 S-BUDGET Kaminwurzerl 300-g-Packung 4,98 Santa Maria Tortilla 320-371 g 2,49 Santa Maria Gewuerzmischungen 28-g-Packung 0,99 La Fiesta Mini Wraps 250-g-Packung 1,19 La Fiesta XXL Wraps 468-g-Packung 1,79"
         ]
       };
     </script>
@@ -2120,4 +2130,13 @@ test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', as
   assert.ok(titles.some((title) => /S-BUDGET Lachsfilet/i.test(title)));
   assert.ok(titles.some((title) => /Bio-Hendl-Oberkeule/i.test(title)));
   assert.ok(titles.some((title) => /S-BUDGET Leberkaese/i.test(title)));
+  assert.ok(titles.some((title) => /De Cecco Pasta/i.test(title)));
+  assert.ok(titles.some((title) => /Barilla Collezione/i.test(title)));
+  assert.ok(titles.some((title) => /Energy Drink/i.test(title)));
+  assert.ok(titles.some((title) => /Cashews/i.test(title)));
+  assert.ok(titles.some((title) => /Chocolate Chip Cookies/i.test(title)));
+  assert.ok(titles.some((title) => /Grillsaucen/i.test(title)));
+  assert.ok(titles.some((title) => /Kaminwurzerl/i.test(title)));
+  assert.ok(titles.some((title) => /Santa Maria Tortilla/i.test(title)));
+  assert.ok(titles.some((title) => /Mini Wraps/i.test(title)));
 });
