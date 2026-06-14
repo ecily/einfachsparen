@@ -3551,6 +3551,26 @@ test('BILLA Steiermark PDF parser rejects title price artifacts while keeping cl
     250 g
     299
     AKTION
+    All-In-One
+    0,85 l
+    199
+    AKTION
+    INHALT Bi Home Toilettenpapier 4-lagig
+    10 x 180 Blatt
+    049
+    AKTION
+    Sansin Waschmittel per Flasche (
+    1 WG
+    679
+    AKTION
+    Egger Puntigamer Märzen Einweg 12+12
+    0,33 l
+    065
+    AKTION
+    Puntigamer Märzen 1 Kiste = 20 Flaschen (
+    0,5 l
+    1580
+    AKTION
   `);
 
   assert.ok(parsed.candidates.some((candidate) => (
@@ -3559,6 +3579,26 @@ test('BILLA Steiermark PDF parser rejects title price artifacts while keeping cl
   )));
   assert.ok(parsed.candidates.some((candidate) => (
     /Pistazien/i.test(candidate.title)
+    && candidate.exclusionReason === 'title-price-artifact'
+  )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    candidate.title === 'All-In-One'
+    && candidate.exclusionReason === 'title-price-artifact'
+  )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    /^INHALT Bi Home/i.test(candidate.title)
+    && candidate.exclusionReason === 'title-price-artifact'
+  )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    /^Sansin Waschmittel per Flasche/i.test(candidate.title)
+    && candidate.exclusionReason === 'title-price-artifact'
+  )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    /^Egger Puntigamer/i.test(candidate.title)
+    && candidate.exclusionReason === 'title-price-artifact'
+  )));
+  assert.ok(parsed.candidates.some((candidate) => (
+    /^Puntigamer Märzen 1 Kiste/i.test(candidate.title)
     && candidate.exclusionReason === 'title-price-artifact'
   )));
   assert.ok(parsed.candidates.some((candidate) => (
@@ -3576,6 +3616,10 @@ test('BILLA Steiermark PDF parser rejects title price artifacts while keeping cl
 
   assert.equal(offers.some((offer) => /4\.65\/\s*2\.66/i.test(offer.title)), false);
   assert.equal(offers.some((offer) => /kurze zeit/i.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /^All-In-One$/i.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /^INHALT\b/i.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /\bper Flasche \($/i.test(offer.title)), false);
+  assert.equal(offers.some((offer) => /^Egger Puntigamer/i.test(offer.title)), false);
   assert.ok(offers.some((offer) => offer.title === 'Hohes C All-In-One'));
 });
 

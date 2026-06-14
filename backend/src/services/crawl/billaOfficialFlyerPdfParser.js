@@ -356,6 +356,13 @@ function hasBillaTitlePriceArtifact(title = '') {
     /\b\d{1,2}[,.]\d{2}\s*\/\s*\d{1,2}[,.]\d{2}\b/.test(text)
     || /\b\d{1,2}[,.]\d{2}\s*\/\s*[A-Z]/i.test(text)
     || /\b(?:nur\s+)?kurze\s+zeit\b/.test(normalized)
+    || /^all in one$/.test(normalized)
+    || /^inhalt\b/.test(normalized)
+    || /\bper\s+(?:flasche|packung|pkg|dose|glas)\s*\(/.test(normalized)
+    || /\b\d+\s*kiste\s*=\s*\d+\s*flaschen\b/.test(normalized)
+    || /\b\d+\s*\+\s*\d+\b/.test(normalized)
+    || /\(\s*$/.test(text)
+    || /\begger\s+puntigamer\b/.test(normalized)
   );
 }
 
