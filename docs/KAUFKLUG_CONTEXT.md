@@ -9,6 +9,7 @@
 - PENNY Seite 19 enthaelt Tages-/Fensterpreise innerhalb eines Prospektzeitraums. Diese sind Trust-relevant und sollten bei weiteren PENNY-Checks separat gegen Web/kaufklug geprueft werden.
 - Globale Validity-Regel: Offer validity beats flyer validity. Short-window-Angebote sind eine haendleruebergreifende Klasse, kein PENNY-Sonderfall. Artikel-spezifische Zeitfenster, Tages-/Wochenend-/Fr-Sa-Fenster, Preisfenster sowie Coupon-/App-/Gutscheinfenster schlagen die allgemeine Prospektgueltigkeit; Prospektgueltigkeit ist nur Fallback, wenn kein artikelspezifisches Zeitfenster sicher erkannt wird.
 - PENNY KW24 PDF-Parser-Fix am 2026-06-14: Enge Textlayer-Recovery fuer sichere Fixtures `Kirschen` (500 g, 2,99, Gutscheinpreis 2,69, gueltig 11.06.-13.06.), `Schaerdinger Gouda` 1 kg/6,99 sowie Fleisch-`pro kg`-Konflikt-Evidence (`Schopf od. Karree`, `Schweinefleisch fuer Reisfleisch/Gulasch`, `Rindsschnitzelfleisch`). Bekannte falsche Nachbar-Merges `GOLD IGLO POLARDORSCH` und `SELEKTION ... Gouda` werden rejected; keine generische PDF-Parser-Lockerung und keine Preisueberschreibung.
+- PENNY KW24 PDF-Parser-Fix Release am 2026-06-14: Commit `3619b69f` wurde nach `origin/main` gepusht und live deployed; `/api/health` BuildTime wechselte auf `2026-06-14T17:28:46.814Z` bzw. nach Prozessneustart `2026-06-14T17:31:32.707Z`. Der freigegebene scoped Crawl `6a2ee5314ff9b7db05dc9079` fuer `penny-official-flyer` und `penny-official-site` wurde nach Prozess-Restart-Recovery als `failed` finalisiert, schrieb keine Source-Ergebnisse und keinen Publish. Live-Validierung des Parser-Fixes ist deshalb nicht abgeschlossen; bestehende PENNY Live-Smokes zeigen weiter den vorherigen Crawl-Bestand.
 - Ein enger PDF-vs-Web-Conflict-Guard ist vorbereitet: Er markiert nur bei expliziter PDF-`pro kg`-Evidence plus passendem Web-Fixgewicht, aendert keine Preise und setzt Review-/Evidence-Flags.
 - Die PENNY Evidence-Bruecke ist im Code vorbereitet: Der PENNY-Web/API-Pfad laedt offizielle Flyer-Evidence fail-open, verdichtet nur enge Guard-relevante PDF-Kandidaten zu `pdfEvidenceByProduct` und uebergibt sie an den Web-Normalizer. Live-Wirkung braucht nach Deploy einen freigegebenen regulaeren oder scoped PENNY-Crawl.
 - Abschlussversuch am 2026-06-12: scoped PENNY-Crawl `6a2bc46b76e25482815c147d` fuer `penny-official-site` wurde `stale` nach Prozess-Restart und schrieb keine Summary/Offers. Konfliktfaelle waren danach live weiter unmarkiert; Punkt bleibt offen.
@@ -40,6 +41,7 @@
 ## Offene Risiken
 
 - P1: PDF-vs-official-site Konflikte bei variabler Gewichtsware duerfen nicht ungeprueft als normale 500-g-Fixpreise wirken.
+- P1: PENNY scoped Crawls koennen weiter durch Prozess-Restart-Recovery ohne Source-Ergebnisse abbrechen; vor einem weiteren PENNY Release-Crawl muss die Runtime-/Restart-Ursache geklaert werden.
 - P1: Such-/Matchqualitaet bei sehr aehnlichen Fisch-/Fleischprodukten pruefen, besonders Forelle vs. Goldbrasse.
 - P2: Kategoriequalitaet bei PENNY-Lebensmitteln bleibt ein Feedback-Thema, z. B. Kinder Cards und Milch-/Topfenfaelle.
 - P1: BILLA Grill-Beileger-Angebote fehlen live, solange kein offizieller produktiver URL/Discoverypfad fuer den Beileger eingebunden ist. Keine lokale PDF-Quelle als Live-Datenquelle verwenden.
@@ -58,6 +60,6 @@
 ## Naechste klare Aufgaben
 
 - Read-only Matrix fuer PENNY Seite 19 Tages-/Fensterpreise gegen PENNY-Web/kaufklug vervollstaendigen.
-- Naechste Restaufgabe: Ursache fuer wiederholt stale scoped PENNY-Crawls im Schritt `penny-official-site`/`source-started` eingrenzen, bevor erneut ein scoped PENNY-Crawl freigegeben wird.
+- Naechste Restaufgabe: Ursache fuer wiederholt abgebrochene scoped PENNY-Crawls im Schritt `source-started`/Prozess-Restart-Recovery eingrenzen, bevor erneut ein scoped PENNY-Crawl freigegeben wird.
 - Naechste BILLA-Restaufgabe: Nur bei sichtbarer Nutzerrelevanz enges Polish fuer Titelartefakte/Duplikate, fehlende Bilder oder Mehrkauf-Grundpreise planen; keine lokale PDF-Quelle und keine unsichere Bild-/Preisuebernahme.
 - Naechste SPAR-Family-Aufgabe: Nach Freigabe deployen und erst danach einen regulären oder eng scoped SPAR-Family-Lauf beobachten; kein Crawl aus lokalen PDFs und keine Bild-/Token-Uebernahme.
