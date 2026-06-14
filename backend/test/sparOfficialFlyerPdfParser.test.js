@@ -10,6 +10,7 @@ const {
   SOURCE_TYPE,
   buildRejectedCandidateSamples,
   extractSparPdfCandidates,
+  extractSparViewerReference,
   normalizeSparPdfCandidatesToOffers,
   priceFromUnitPrice,
   sourceKeyForFormat,
@@ -2039,4 +2040,80 @@ test('SPAR PDF dedupe keys are source-specific and do not blindly replace aggreg
 
   assert.match(offer.dedupeKey, /eurospar-official-flyer-pdf/);
   assert.doesNotMatch(offer.dedupeKey, /aktionsfinder/);
+});
+
+test('extracts current KW24 offers from official SPAR viewer pageTexts', async () => {
+  const viewerHtml = `
+    <script>
+      window.staticSettings = {
+        "name":"260611-1-Flugblatt KW 24",
+        "pageTitle":"Do., 11.06.26 - Mi., 17.06.26",
+        "pages":[{"number":1},{"number":2}],
+        "pageTexts":[
+          "Recheis Goldmarke Recheis Vollkorn oder Naturgenuss Dinkel Teigwaren 1 Pkg. 2,49 ab 2 Packungen je 1,99 Fr. noch zusaetzlich 1,49 SPAR Wassermelone kernarm Klasse 1 per kg statt 1,99 Aktion 1,00 Hendl Filetschnitzerl 400-g-Packung ab 2 Packungen je 4,99 Ariel Pulver 100 WG 23,99 SPAR-App-Gutschein 19,99 Axe Duschgel 250 ml 2+1 gratis ab 3 Stueck je 1,92 Zewa Toilettenpapier 20 Rollen 6,79",
+          "Stiegl Goldbraeu 0,5 Liter 20er-Kiste 29,60 Aktionspreis 14,80"
+        ]
+      };
+    </script>
+  `;
+  const reference = await extractSparViewerReference({
+    viewerHtml,
+    sourceUrl: 'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/',
+    sourceRetailerFormat: 'spar',
+    maxPages: 24,
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: reference,
+    source: source('spar'),
+    crawlJobId: '000000000000000000000777',
+    region: 'AT',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/',
+    pdfSha256: 'viewer-fixture',
+  });
+  const titles = offers.map((offer) => offer.title);
+
+  assert.ok(titles.some((title) => /Recheis/i.test(title)));
+  assert.ok(titles.some((title) => /Stiegl Goldbraeu/i.test(title)));
+  assert.ok(titles.some((title) => /Wassermelone/i.test(title)));
+  assert.ok(titles.some((title) => /Hendl Filetschnitzerl/i.test(title)));
+  assert.ok(titles.some((title) => /Ariel/i.test(title)));
+  assert.ok(titles.some((title) => /Axe/i.test(title)));
+  assert.ok(titles.some((title) => /Zewa/i.test(title)));
+});
+
+test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', async () => {
+  const viewerHtml = `
+    <script>
+      window.staticSettings = {
+        "name":"260601-1-Online-Flugblatt Steiermark KW 24",
+        "pageTitle":"Do., 11.06.26 - Mi., 17.06.26",
+        "pages":[{"number":1}],
+        "pageTexts":[
+          "Puntigamer Maerzen 24er-Tray ab 24 Dosen je 0,69 Milka Schokolade 190 g 2,66 Lotus Biscoff Doppelkeks 150 g ab 3 Rollen je 1,32 S-BUDGET Lachsfilet frisch mit Haut per kg 19,90 Bio-Hendl-Oberkeule 500-g-Packung Fr/Sa Zusatzpreis 5,39 S-BUDGET Leberkaese aus Oesterreich 500-g-Packung 3,99"
+        ]
+      };
+    </script>
+  `;
+  const reference = await extractSparViewerReference({
+    viewerHtml,
+    sourceUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw24/',
+    sourceRetailerFormat: 'interspar',
+    maxPages: 24,
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: reference,
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000778',
+    region: 'AT',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw24/',
+    pdfSha256: 'viewer-fixture',
+  });
+  const titles = offers.map((offer) => offer.title);
+
+  assert.ok(titles.some((title) => /Puntigamer/i.test(title)));
+  assert.ok(titles.some((title) => /Milka/i.test(title)));
+  assert.ok(titles.some((title) => /Lotus Biscoff/i.test(title)));
+  assert.ok(titles.some((title) => /S-BUDGET Lachsfilet/i.test(title)));
+  assert.ok(titles.some((title) => /Bio-Hendl-Oberkeule/i.test(title)));
+  assert.ok(titles.some((title) => /S-BUDGET Leberkaese/i.test(title)));
 });

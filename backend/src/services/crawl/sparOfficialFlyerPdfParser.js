@@ -4418,6 +4418,136 @@ async function extractSparPdfReference({
   }
 }
 
+function extractAssignedJsonObject(html, assignmentName) {
+  const source = String(html || '');
+  const assignmentIndex = source.indexOf(assignmentName);
+  if (assignmentIndex < 0) return null;
+
+  const startIndex = source.indexOf('{', assignmentIndex);
+  if (startIndex < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let stringQuote = '';
+  let escaped = false;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === stringQuote) {
+        inString = false;
+        stringQuote = '';
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      inString = true;
+      stringQuote = char;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseAssignedJsonObject(html, assignmentName) {
+  const json = extractAssignedJsonObject(html, assignmentName);
+  if (!json) return {};
+
+  try {
+    return JSON.parse(json);
+  } catch (error) {
+    return {};
+  }
+}
+
+function buildSparViewerPages({ viewerHtml = '', maxPages = DEFAULT_MAX_PAGES } = {}) {
+  const staticSettings = parseAssignedJsonObject(viewerHtml, 'window.staticSettings');
+  const pageTexts = Array.isArray(staticSettings.pageTexts) ? staticSettings.pageTexts : [];
+  const titleText = [
+    staticSettings.name,
+    staticSettings.pageTitle,
+  ].filter(Boolean).join('\n');
+
+  return pageTexts
+    .slice(0, maxPages)
+    .map((text, index) => {
+      const pageText = index === 0 && titleText
+        ? `${titleText}\n${String(text || '')}`
+        : String(text || '');
+      return {
+        pageNumber: index + 1,
+        text: pageText,
+        charCount: pageText.length,
+      };
+    })
+    .filter((page) => page.text.trim());
+}
+
+async function extractSparViewerReference({
+  viewerHtml,
+  sourceUrl = '',
+  sourceRetailerFormat = 'spar',
+  validity = {},
+  maxPages = DEFAULT_MAX_PAGES,
+} = {}) {
+  const pages = buildSparViewerPages({ viewerHtml, maxPages });
+
+  if (pages.length === 0) {
+    throw new Error('SPAR viewer parser found no public pageTexts in window.staticSettings.');
+  }
+
+  const pdfValidity = extractOfficialFlyerValidityFromPages(pages, {
+    contextYear: validity.validTo?.getUTCFullYear?.() || validity.validFrom?.getUTCFullYear?.(),
+  });
+  const effectiveValidity = pdfValidity.validTo
+    ? {
+      ...pdfValidity,
+      confidence: pdfValidity.validityConfidence,
+    }
+    : validity;
+  const candidates = extractSparPdfCandidates({
+    pages,
+    sourceRetailerFormat,
+    validity: effectiveValidity,
+    layoutCandidates: [],
+  });
+
+  return {
+    file: {
+      sourceUrl,
+      bytes: Buffer.byteLength(String(viewerHtml || ''), 'utf8'),
+      pages: pages.length,
+      layoutCandidateCount: 0,
+      layoutError: '',
+      sourceKind: 'viewer',
+    },
+    validity: effectiveValidity,
+    pages: pages.map((page) => ({
+      page: page.pageNumber,
+      charCount: page.charCount,
+      candidateCount: candidates.filter((candidate) => candidate.page === page.pageNumber).length,
+    })),
+    candidates,
+    textLength: pages.reduce((sum, page) => sum + page.charCount, 0),
+  };
+}
+
 function normalizeSparPdfCandidateToOffer({
   candidate,
   pdfReference,
@@ -4742,6 +4872,7 @@ module.exports = {
   dateKey,
   extractSparPdfCandidates,
   extractSparPdfReference,
+  extractSparViewerReference,
   normalizeSparPdfCandidatesToOffers,
   priceFromUnitPrice,
   sourceKeyForFormat,

@@ -47,6 +47,7 @@ const {
   buildRejectedCandidateSamples: buildSparPdfRejectedCandidateSamples,
   buildValidityFromSource,
   extractSparPdfReference,
+  extractSparViewerReference,
   normalizeSparPdfCandidatesToOffers,
   sourceKeyForFormat,
   summarizeRejections: summarizeSparPdfRejections,
@@ -4463,7 +4464,178 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, crawlRunId = nul
   };
 }
 
-async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, region }) {
+async function crawlSparOfficialViewerLink({ source, viewerUrl, crawlJobId, crawlRunId = null, region }) {
+  const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
+  const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
+  const maxViewerBytes = Number(source.crawlPolicy?.maxViewerBytes || source.crawlPolicy?.maxPdfBytes || 20 * 1024 * 1024);
+  const maxPages = Number(source.crawlPolicy?.maxPdfPages || 24);
+  const { response, buffer, canonicalUrl } = await fetchBinary(viewerUrl, 'text/html,application/xhtml+xml,*/*', {
+    timeoutMs: Number(source.crawlPolicy?.timeoutMs || 120000),
+    maxContentLength: maxViewerBytes,
+  });
+
+  if (buffer.length > maxViewerBytes) {
+    throw new Error(`SPAR viewer exceeds configured maxViewerBytes ${maxViewerBytes}.`);
+  }
+
+  const viewerHtml = buffer.toString('utf8');
+  const viewerSha256 = createHash(buffer);
+  const validity = buildValidityFromSource(source);
+  const pdfReference = await extractSparViewerReference({
+    viewerHtml,
+    sourceUrl: canonicalUrl || viewerUrl,
+    sourceRetailerFormat,
+    validity,
+    maxPages,
+  });
+  const normalizedOffers = normalizeSparPdfCandidatesToOffers({
+    pdfReference,
+    source,
+    crawlJobId,
+    region,
+    pdfUrl: canonicalUrl || viewerUrl,
+    pdfSha256: viewerSha256,
+  });
+  const rejectionReasons = summarizeSparPdfRejections(pdfReference.candidates);
+  const rejectedCandidateSamples = buildSparPdfRejectedCandidateSamples({
+    candidates: pdfReference.candidates,
+    sourceKey,
+    retailerKey: source.retailerKey,
+    sourceRetailerFormat,
+    validityContext: validity.validityText || [
+      validity.validFrom ? validity.validFrom.toISOString().slice(0, 10) : '',
+      validity.validTo ? validity.validTo.toISOString().slice(0, 10) : '',
+    ].filter(Boolean).join(' - '),
+    maxSamplesPerSourceReason: 5,
+    maxSnippetLength: 220,
+  });
+
+  const rawDocument = await createCompactRawDocument({
+    sourceId: source._id,
+    crawlJobId,
+    retailerKey: source.retailerKey,
+    region,
+    documentType: 'html',
+    sourceType: SPAR_PDF_SOURCE_TYPE,
+    url: viewerUrl,
+    canonicalUrl: viewerUrl,
+    finalUrl: canonicalUrl,
+    title: source.label || 'SPAR official viewer flyer',
+    httpStatus: response.status,
+    contentType: response.headers?.['content-type'] || '',
+    downloadBytes: buffer.length,
+    contentHash: viewerSha256,
+    contentSnippet: pdfReference.candidates.slice(0, 8).map((candidate) => candidate.title || candidate.exclusionReason).join(' | '),
+    extractedPreview: pdfReference.candidates.slice(0, 12).map((candidate) => candidate.title || candidate.exclusionReason).filter(Boolean),
+    foundRawItems: pdfReference.candidates.length,
+    parsedOffers: normalizedOffers.length,
+    rejectedOffers: Math.max(0, pdfReference.candidates.length - normalizedOffers.length),
+    parserVersion: SPAR_PDF_PARSER_VERSION,
+    extractionConfidence: 0.76,
+    rejectionReasons,
+    payload: {
+      sourceKind: 'viewer',
+      sourceKey,
+      sourceType: SPAR_PDF_SOURCE_TYPE,
+      retailerKey: source.retailerKey,
+      retailerName: source.retailerName,
+      sourceRetailerFormat,
+      parserVersion: SPAR_PDF_PARSER_VERSION,
+      extractionMethod: 'viewer-pageTexts',
+      viewerUrl: canonicalUrl || viewerUrl,
+      viewerSha256,
+      detectedPageCount: pdfReference.file.pages,
+      detectedValidity: {
+        validFrom: validity.validFrom ? validity.validFrom.toISOString() : null,
+        validTo: validity.validTo ? validity.validTo.toISOString() : null,
+        validityText: validity.validityText || '',
+        validitySource: validity.validitySource || '',
+        validityConfidence: validity.validityConfidence ?? validity.confidence ?? 0,
+      },
+      pageCandidateCounts: pdfReference.pages,
+      rejectedCandidateSamples,
+    },
+  });
+
+  const seen = new Set();
+  const offerDocuments = normalizedOffers
+    .map((offer) => enrichOffersForStorage([offer], {
+      source,
+      sourceType: SPAR_PDF_SOURCE_TYPE,
+      parserVersion: SPAR_PDF_PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    })[0])
+    .filter(Boolean)
+    .filter((offer) => {
+      const key = [
+        offer.rawFacts?.candidateId || '',
+        offer.rawFacts?.page || '',
+        normalizeTitleForMatch(offer.title || ''),
+        String(offer.priceCurrent?.amount ?? ''),
+        String(offer.quantityText || ''),
+      ].join('::');
+
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    crawlRunId,
+    offerDocuments,
+    coverageGuard: {
+      minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? 0),
+      minReplacementRatio: Number(source.crawlPolicy?.coverageGuard?.minReplacementRatio ?? 0),
+      minAbsoluteDrop: Number(source.crawlPolicy?.coverageGuard?.minAbsoluteDrop ?? 0),
+    },
+  });
+  const replacementQuality = refreshResult.replacementQuality || (refreshResult.reason === 'coverage-drop-quality-risk' ? 'quality-risk' : 'complete');
+
+  logger.info('SPAR viewer crawl parsed flyer', {
+    sourceKey,
+    sourceRetailerFormat,
+    pages: pdfReference.file.pages,
+    rawCandidates: pdfReference.candidates.length,
+    rejectedCandidates: Math.max(0, pdfReference.candidates.length - offerDocuments.length),
+    offersStored: offerDocuments.length,
+    replacementQuality,
+    refreshReason: refreshResult.reason || '',
+  });
+
+  return {
+    offerDocuments,
+    rawDocuments: 1,
+    rawCandidateCount: pdfReference.candidates.length,
+    rejectionReasons,
+    validity,
+    pdfReports: [{
+      sourceKey,
+      sourceRetailerFormat,
+      status: offerDocuments.length > 0 ? 'success' : 'partial',
+      foundRawItems: pdfReference.candidates.length,
+      parsedOffers: offerDocuments.length,
+      rejectedCandidates: Math.max(0, pdfReference.candidates.length - offerDocuments.length),
+      rejectionReasons,
+      rejectedCandidateSamples,
+      replacementQuality,
+      refreshResult,
+      pages: pdfReference.file.pages,
+      rawDocumentId: rawDocument._id,
+      viewerUrl: canonicalUrl || viewerUrl,
+    }],
+    httpLog: {
+      status: response.status,
+      contentType: response.headers?.['content-type'] || '',
+      finalUrl: canonicalUrl || viewerUrl,
+      downloadBytes: buffer.length,
+      contentHash: viewerSha256,
+    },
+    refreshResult,
+  };
+}
+
+async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRunId = null, region }) {
   const entryPoints = Array.isArray(source.crawlPolicy?.entryPoints) && source.crawlPolicy.entryPoints.length > 0
     ? source.crawlPolicy.entryPoints
     : [source.sourceUrl];
@@ -4495,8 +4667,7 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, region 
     warningMessages.push(`${source.label || source.sourceUrl} had blocked/challenge-like discovery entrypoints.`);
   }
 
-  const status = discoveredLinks.length > 0 && blockedPages.length === 0 ? 'success' : 'partial';
-  const rawDocument = await createCompactRawDocument({
+  const discoveryRawDocument = await createCompactRawDocument({
     sourceId: source._id,
     crawlJobId,
     retailerKey: source.retailerKey,
@@ -4526,14 +4697,51 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, region 
       discovery,
     },
   });
+  const primaryDiscoveredLink = discoveredLinks.find((link) => link.kind === 'viewer' || link.kind === 'pdf') || null;
+  let parsedResult = null;
+
+  if (primaryDiscoveredLink?.kind === 'viewer') {
+    parsedResult = await crawlSparOfficialViewerLink({
+      source,
+      viewerUrl: primaryDiscoveredLink.url,
+      crawlJobId,
+      crawlRunId,
+      region,
+    });
+  } else if (primaryDiscoveredLink?.kind === 'pdf') {
+    parsedResult = await crawlSparOfficialPdfSource({
+      source: {
+        ...source,
+        sourceUrl: primaryDiscoveredLink.url,
+        sourceType: 'pdf',
+      },
+      crawlJobId,
+      crawlRunId,
+      region,
+    });
+  }
+
+  const parsedOffers = parsedResult?.offerDocuments?.length || 0;
+  const rawCandidateCount = parsedResult?.rawCandidateCount ?? discoveredLinks.length;
+  const rejectionReasons = parsedResult?.rejectionReasons || [];
+  const status = parsedOffers > 0
+    ? 'success'
+    : (discoveredLinks.length > 0 && blockedPages.length === 0 ? 'partial' : 'partial');
 
   return {
     sourceKey,
     status,
-    rawDocuments: 1,
-    rawDocumentId: rawDocument._id,
-    rawCandidateCount: discoveredLinks.length,
+    rawDocuments: 1 + (parsedResult?.rawDocuments || 0),
+    rawDocumentId: parsedResult?.pdfReports?.[0]?.rawDocumentId || discoveryRawDocument._id,
+    discoveryRawDocumentId: discoveryRawDocument._id,
+    rawCandidateCount,
     discoveredLinks: discoveredLinks.length,
+    parsedOffers,
+    offersStored: parsedOffers,
+    rejectedOffers: Math.max(0, rawCandidateCount - parsedOffers),
+    rejectionReasons,
+    pdfReports: parsedResult?.pdfReports || [],
+    refreshResult: parsedResult?.refreshResult || null,
     warningMessages,
     discovery,
   };
