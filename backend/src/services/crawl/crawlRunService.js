@@ -15,6 +15,7 @@ const EXPLICIT_RECOVERY_MIN_STALE_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_RUNTIME_MS = env.CRAWL_RUN_MAX_RUNTIME_MINUTES * 60 * 1000;
 const DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS = env.CRAWL_RUN_LOCK_HEARTBEAT_INTERVAL_SECONDS * 1000;
 const DEFAULT_STALE_HEARTBEAT_MS = env.CRAWL_RUN_STALE_HEARTBEAT_MINUTES * 60 * 1000;
+const DEFAULT_STARTUP_GRACE_MS = env.CRAWL_RUN_STARTUP_GRACE_SECONDS * 1000;
 const PROCESS_STARTED_AT = new Date();
 const CURRENT_PROCESS_OWNER_PREFIX = `${os.hostname()}:${process.pid}:`;
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
@@ -118,6 +119,70 @@ function createCrawlRunTimeoutError(timeoutMs) {
   const error = new Error(`CrawlRun exceeded maximum runtime of ${timeoutMs}ms.`);
   error.code = 'CRAWL_RUN_TIMEOUT';
   error.timeoutMs = timeoutMs;
+  return error;
+}
+
+function getStartupCrawlStartGuard({
+  options = {},
+  trigger = '',
+  envConfig = env,
+  now = new Date(),
+  processStartedAt = PROCESS_STARTED_AT,
+} = {}) {
+  const graceMs = Math.max(0, Number(envConfig.CRAWL_RUN_STARTUP_GRACE_SECONDS ?? 0) * 1000);
+  const processStartedAtTime = new Date(processStartedAt).getTime();
+  const nowTime = new Date(now).getTime();
+  const processAgeMs = Number.isFinite(processStartedAtTime) && Number.isFinite(nowTime)
+    ? Math.max(0, nowTime - processStartedAtTime)
+    : null;
+
+  if (envConfig.NODE_ENV !== 'production' || options.dryRun === true || graceMs <= 0) {
+    return {
+      blocked: false,
+      processAgeMs,
+      graceMs,
+      reason: 'not-applicable',
+    };
+  }
+
+  if (processAgeMs !== null && processAgeMs < graceMs) {
+    return {
+      blocked: true,
+      processAgeMs,
+      graceMs,
+      retryAfterSeconds: Math.ceil((graceMs - processAgeMs) / 1000),
+      reason: 'process-startup-grace',
+      trigger: String(trigger || ''),
+    };
+  }
+
+  return {
+    blocked: false,
+    processAgeMs,
+    graceMs,
+    reason: 'process-stable',
+  };
+}
+
+function buildStartupCrawlStartError(guard = {}) {
+  const retryAfterSeconds = Number.isFinite(Number(guard.retryAfterSeconds))
+    ? Number(guard.retryAfterSeconds)
+    : null;
+  const error = new Error(
+    retryAfterSeconds
+      ? `Crawl start blocked during backend startup grace period. Retry after ${retryAfterSeconds}s.`
+      : 'Crawl start blocked during backend startup grace period.'
+  );
+
+  error.statusCode = 409;
+  error.code = 'CRAWL_STARTUP_GRACE';
+  error.details = {
+    reason: guard.reason || 'process-startup-grace',
+    processAgeMs: guard.processAgeMs ?? null,
+    graceMs: guard.graceMs ?? null,
+    retryAfterSeconds,
+  };
+
   return error;
 }
 
@@ -1519,7 +1584,25 @@ async function startCrawlRun({
   region = '',
   crawlAllSourcesImpl = crawlAllSources,
   defer = true,
+  envConfig = env,
 } = {}) {
+  const startupGuard = getStartupCrawlStartGuard({
+    options,
+    trigger,
+    envConfig,
+  });
+
+  if (startupGuard.blocked) {
+    logger.warn('CrawlRun start blocked during backend startup grace period', {
+      trigger,
+      mode: determineMode(options),
+      processAgeMs: startupGuard.processAgeMs,
+      graceMs: startupGuard.graceMs,
+      retryAfterSeconds: startupGuard.retryAfterSeconds,
+    });
+    throw buildStartupCrawlStartError(startupGuard);
+  }
+
   const activeRun = await findActiveRun();
 
   if (activeRun) {
@@ -1617,15 +1700,18 @@ module.exports = {
     CURRENT_PROCESS_OWNER_PREFIX,
     DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS,
     DEFAULT_STALE_HEARTBEAT_MS,
+    DEFAULT_STARTUP_GRACE_MS,
     EXPLICIT_RECOVERY_MIN_STALE_MS,
     LOCK_STALE_MS,
     PROCESS_STARTED_AT,
+    buildStartupCrawlStartError,
     buildLockOwner,
     buildRunDocument,
     buildRunSummary,
     determineFinalStatus,
     determineMode,
     failStaleRun,
+    getStartupCrawlStartGuard,
     activeExecutionRunIds,
     isCurrentProcessLockOwner,
     interruptCurrentProcessCrawlRuns,

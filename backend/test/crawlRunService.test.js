@@ -18,6 +18,67 @@ test('determineMode marks full and scoped CrawlRuns correctly', () => {
   assert.equal(_private.determineMode({ sourceSelectionRequested: true }), 'scoped');
 });
 
+test('startup crawl guard blocks productive production crawls during deploy grace period', () => {
+  const processStartedAt = new Date('2026-06-14T17:28:46.814Z');
+  const guard = _private.getStartupCrawlStartGuard({
+    trigger: 'manual',
+    options: { sourceKeys: ['penny-official-site'], dryRun: false },
+    envConfig: {
+      NODE_ENV: 'production',
+      CRAWL_RUN_STARTUP_GRACE_SECONDS: 180,
+    },
+    processStartedAt,
+    now: new Date('2026-06-14T17:30:25.706Z'),
+  });
+
+  assert.equal(guard.blocked, true);
+  assert.equal(guard.reason, 'process-startup-grace');
+  assert.equal(guard.processAgeMs, 98892);
+  assert.equal(guard.retryAfterSeconds, 82);
+
+  const error = _private.buildStartupCrawlStartError(guard);
+  assert.equal(error.statusCode, 409);
+  assert.equal(error.code, 'CRAWL_STARTUP_GRACE');
+  assert.match(error.message, /Retry after 82s/);
+});
+
+test('startup crawl guard allows safe cases outside production startup risk', () => {
+  const processStartedAt = new Date('2026-06-14T17:28:46.814Z');
+  const base = {
+    trigger: 'manual',
+    processStartedAt,
+    now: new Date('2026-06-14T17:30:25.706Z'),
+  };
+
+  assert.equal(_private.getStartupCrawlStartGuard({
+    ...base,
+    options: { dryRun: true },
+    envConfig: {
+      NODE_ENV: 'production',
+      CRAWL_RUN_STARTUP_GRACE_SECONDS: 180,
+    },
+  }).blocked, false);
+
+  assert.equal(_private.getStartupCrawlStartGuard({
+    ...base,
+    options: { dryRun: false },
+    envConfig: {
+      NODE_ENV: 'development',
+      CRAWL_RUN_STARTUP_GRACE_SECONDS: 180,
+    },
+  }).blocked, false);
+
+  assert.equal(_private.getStartupCrawlStartGuard({
+    ...base,
+    options: { dryRun: false },
+    envConfig: {
+      NODE_ENV: 'production',
+      CRAWL_RUN_STARTUP_GRACE_SECONDS: 180,
+    },
+    now: new Date('2026-06-14T17:33:00.000Z'),
+  }).blocked, false);
+});
+
 test('buildRunSummary aggregates source, retailer, type, dedupe and filter metadata inputs compactly', () => {
   const result = {
     sourceCoverage: {
