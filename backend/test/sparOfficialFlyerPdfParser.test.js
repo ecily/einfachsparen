@@ -6,6 +6,9 @@ const {
   PDF_CATEGORY_MISMATCH_REVIEW_REASON,
 } = require('../src/services/crawl/pdfOfferParsing');
 const {
+  dateKey,
+} = require('../src/services/crawl/officialFlyerValidity');
+const {
   PARSER_VERSION,
   SOURCE_TYPE,
   buildRejectedCandidateSamples,
@@ -2110,6 +2113,7 @@ test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', as
   });
   const titles = offers.map((offer) => offer.title);
 
+  assert.equal(dateKey(reference.validity.validTo), '2026-06-17');
   assert.ok(titles.some((title) => /Puntigamer/i.test(title)));
   assert.ok(titles.some((title) => /Milka/i.test(title)));
   assert.ok(titles.some((title) => /Lotus Biscoff/i.test(title)));

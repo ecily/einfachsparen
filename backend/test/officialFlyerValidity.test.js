@@ -50,6 +50,7 @@ test('extracts official flyer-level validity ranges from Austrian title-page for
     'gueltig von 28.05. bis 02.06.2026',
     'Angebote gultig von Do. 28.5. bis Di. 2.6.2026',
     'Angebote g\u00fcltig von Do. 28.5. bis Di. 2.6.2026',
+    'Do., 28.5.2026 - Di., 2.6.2026',
   ];
 
   for (const text of cases) {

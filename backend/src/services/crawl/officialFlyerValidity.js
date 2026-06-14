@@ -114,6 +114,7 @@ function buildRangePatterns() {
     new RegExp(`\\bangebote?\\s+(?:gueltig|gultig)\\s+(?:von|ab)?\\s*(?:${weekday})?${date}\\s*(?:bis|-)\\s*(?:${weekday})?${date}`, 'i'),
     new RegExp(`\\b(?:gueltig|gultig)\\s+(?:von|ab)\\s*(?:${weekday})?${date}\\s*(?:bis|-)\\s*(?:${weekday})?${date}`, 'i'),
     new RegExp(`^\\s*von\\s+(?:${weekday})?${date}\\s*bis\\s*(?:${weekday})?${date}`, 'i'),
+    new RegExp(`^\\s*(?:${weekday})${date}\\s*-\\s*(?:${weekday})${date}\\s*$`, 'i'),
   ];
 }
 
@@ -170,11 +171,16 @@ function parseUntilMatch(text, contextYear) {
 }
 
 function extractOfficialFlyerValidityFromText(text = '', { contextYear } = {}) {
+  const rawLines = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => normalizeForValidity(line))
+    .filter(Boolean);
   const normalized = normalizeForValidity(text);
-  const lines = normalized
+  const splitLines = normalized
     .split(/\r?\n|(?<=\.)\s+(?=angebote?\s+gueltig|angebote?\s+gultig|gueltig\s+(?:von|bis)|gultig\s+(?:von|bis)|von\s+(?:mo|di|mi|do|fr|sa|so|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag))/i)
     .map(compactWhitespace)
     .filter(Boolean);
+  const lines = [...new Set([...rawLines, ...splitLines])];
   const candidates = lines.length ? lines : [normalized];
   const patterns = buildRangePatterns();
 
