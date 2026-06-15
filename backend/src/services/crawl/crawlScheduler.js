@@ -3,6 +3,32 @@ const env = require('../../config/env');
 const logger = require('../../lib/logger');
 const crawlRunService = require('./crawlRunService');
 
+const SAFE_PRODUCTION_DAILY_CRON = '0 4 * * *';
+const RISKY_VIENNA_DAILY_CRONS = new Set(['0 1 * * *', '0 2 * * *']);
+
+function resolveDailySchedule(envConfig = env) {
+  const cronExpression = String(envConfig.CRAWL_SCHEDULE_CRON || '').trim();
+  const timezone = String(envConfig.CRAWL_SCHEDULE_TIMEZONE || '').trim();
+
+  if (
+    envConfig.NODE_ENV === 'production'
+    && timezone === 'Europe/Vienna'
+    && RISKY_VIENNA_DAILY_CRONS.has(cronExpression)
+  ) {
+    return {
+      cron: SAFE_PRODUCTION_DAILY_CRON,
+      timezone,
+      normalizedFrom: cronExpression,
+    };
+  }
+
+  return {
+    cron: cronExpression,
+    timezone,
+    normalizedFrom: '',
+  };
+}
+
 async function executeScheduledCrawl({ trigger = 'scheduled', envConfig = env, crawlRunServiceImpl = crawlRunService } = {}) {
   const result = await crawlRunServiceImpl.startCrawlRun({
     trigger,
@@ -112,6 +138,7 @@ function startCrawlScheduler({
   scheduleInterruptedCrawlRunRecovery({ envConfig, crawlRunServiceImpl });
 
   const startupHandle = scheduleStartupCrawl({ envConfig, crawlRunServiceImpl });
+  const dailySchedule = resolveDailySchedule(envConfig);
 
   if (envConfig.CRAWL_SCHEDULE_ENABLED !== true) {
     logger.info('Daily crawl scheduler disabled', {
@@ -122,16 +149,16 @@ function startCrawlScheduler({
     return startupHandle;
   }
 
-  if (typeof cronImpl.validate === 'function' && !cronImpl.validate(envConfig.CRAWL_SCHEDULE_CRON)) {
+  if (typeof cronImpl.validate === 'function' && !cronImpl.validate(dailySchedule.cron)) {
     logger.error('Daily crawl scheduler not started because cron expression is invalid', {
-      cron: envConfig.CRAWL_SCHEDULE_CRON,
-      timezone: envConfig.CRAWL_SCHEDULE_TIMEZONE,
+      cron: dailySchedule.cron,
+      timezone: dailySchedule.timezone,
     });
     return startupHandle;
   }
 
   const task = cronImpl.schedule(
-    envConfig.CRAWL_SCHEDULE_CRON,
+    dailySchedule.cron,
     () => {
       executeScheduledCrawl({
         trigger: 'scheduled',
@@ -144,13 +171,14 @@ function startCrawlScheduler({
       });
     },
     {
-      timezone: envConfig.CRAWL_SCHEDULE_TIMEZONE,
+      timezone: dailySchedule.timezone,
     }
   );
 
   logger.info('Daily crawl scheduler started', {
-    cron: envConfig.CRAWL_SCHEDULE_CRON,
-    timezone: envConfig.CRAWL_SCHEDULE_TIMEZONE,
+    cron: dailySchedule.cron,
+    timezone: dailySchedule.timezone,
+    normalizedFrom: dailySchedule.normalizedFrom,
     runOnStart: envConfig.CRAWL_RUN_ON_START,
   });
 
@@ -162,6 +190,7 @@ module.exports = {
   startCrawlScheduler,
   _private: {
     recoverInterruptedCrawlRunsOnSchedulerStart,
+    resolveDailySchedule,
     scheduleInterruptedCrawlRunRecovery,
     scheduleStartupCrawl,
   },

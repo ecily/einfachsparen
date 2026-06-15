@@ -103,6 +103,34 @@ test('scheduler uses configured 01:00 Europe/Vienna cron job when provided by en
   assert.equal(cronCalls[0][2].timezone, 'Europe/Vienna');
 });
 
+test('production scheduler normalizes risky Vienna cron jobs away from deploy window', () => {
+  assert.deepEqual(_private.resolveDailySchedule(env({
+    NODE_ENV: 'production',
+    CRAWL_SCHEDULE_CRON: '0 1 * * *',
+    CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
+  })), {
+    cron: '0 4 * * *',
+    timezone: 'Europe/Vienna',
+    normalizedFrom: '0 1 * * *',
+  });
+
+  assert.deepEqual(_private.resolveDailySchedule(env({
+    NODE_ENV: 'production',
+    CRAWL_SCHEDULE_CRON: '0 2 * * *',
+    CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
+  })), {
+    cron: '0 4 * * *',
+    timezone: 'Europe/Vienna',
+    normalizedFrom: '0 2 * * *',
+  });
+
+  assert.equal(_private.resolveDailySchedule(env({
+    NODE_ENV: 'test',
+    CRAWL_SCHEDULE_CRON: '0 1 * * *',
+    CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
+  })).cron, '0 1 * * *');
+});
+
 test('scheduled execution starts a full CrawlRun through CrawlRun service and skips parallel runs', async () => {
   const calls = [];
   const accepted = await executeScheduledCrawl({
