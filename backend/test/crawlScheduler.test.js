@@ -13,7 +13,7 @@ function env(overrides = {}) {
     CRAWL_REGION: 'Steiermark',
     CRAWL_RUN_ON_START: false,
     CRAWL_SCHEDULE_ENABLED: false,
-    CRAWL_SCHEDULE_CRON: '0 2 * * *',
+    CRAWL_SCHEDULE_CRON: '0 4 * * *',
     CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
     CRAWL_INTERVAL_MINUTES: 360,
     ...overrides,
@@ -53,14 +53,14 @@ test('scheduler does not register a cron job when CRAWL_SCHEDULE_ENABLED is not 
   assert.equal(cronCalls.length, 0);
 });
 
-test('scheduler registers exactly one 02:00 Europe/Vienna cron job when enabled', () => {
+test('scheduler registers exactly one quiet-window Europe/Vienna cron job when enabled', () => {
   const cronCalls = [];
   const handle = startCrawlScheduler({
     envConfig: env({ CRAWL_SCHEDULE_ENABLED: true }),
     crawlRunServiceImpl: service([]),
     cronImpl: {
       validate(expression) {
-        assert.equal(expression, '0 2 * * *');
+        assert.equal(expression, '0 4 * * *');
         return true;
       },
       schedule(...args) {
@@ -72,7 +72,7 @@ test('scheduler registers exactly one 02:00 Europe/Vienna cron job when enabled'
 
   assert.deepEqual(handle, { task: 'scheduled' });
   assert.equal(cronCalls.length, 1);
-  assert.equal(cronCalls[0][0], '0 2 * * *');
+  assert.equal(cronCalls[0][0], '0 4 * * *');
   assert.equal(cronCalls[0][2].timezone, 'Europe/Vienna');
 });
 
@@ -114,6 +114,7 @@ test('scheduled execution starts a full CrawlRun through CrawlRun service and sk
   assert.equal(calls[0].trigger, 'scheduled');
   assert.deepEqual(calls[0].options, { dryRun: false });
   assert.equal(calls[0].region, 'Steiermark');
+  assert.equal(calls[0].envConfig.CRAWL_REGION, 'Steiermark');
 
   const skipped = await executeScheduledCrawl({
     envConfig: env(),

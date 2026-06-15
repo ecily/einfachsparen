@@ -316,6 +316,57 @@ test('dashboard crawl reliability treats final publish status as current system 
   assert.equal(reliability.sourceFailures.level, 'green');
 });
 
+test('dashboard classifies source-less process restart recovery as P0 runtime reliability', () => {
+  const latestScheduledFullCrawl = {
+    id: 'scheduled-restart-1',
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: '2026-06-14T23:00:00.064Z',
+    finishedAt: '2026-06-14T23:15:44.000Z',
+    lastStage: 'process-restart-recovery',
+    warnings: [
+      'Stale CrawlRun recovery after restart: Scheduler periodic recovery found an active CrawlRun from a previous process with a stale lock heartbeat.',
+    ],
+    summary: {
+      successfulSourcesCount: 0,
+      failedSourcesCount: 0,
+    },
+    sources: [],
+  };
+
+  const reliability = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl,
+    latestCrawl: {
+      id: 'scoped-success-1',
+      status: 'success',
+      trigger: 'manual',
+      mode: 'scoped',
+      dryRun: false,
+      finishedAt: '2026-06-14T10:03:55.072Z',
+    },
+    crawlHistory: [],
+    activeCrawlRun: null,
+    lockStatus: {
+      state: 'free',
+      isBlocked: false,
+    },
+    publishStatusSummary: {
+      status: 'final',
+      openCount: 0,
+    },
+  });
+
+  assert.equal(reliability.scheduledDaily.level, 'red');
+  assert.equal(reliability.currentCrawlSystem.level, 'green');
+  assert.equal(reliability.sourceFailures.level, 'red');
+  assert.equal(reliability.sourceFailures.failedSourcesCount, 0);
+  assert.equal(reliability.sourceFailures.p0ReliabilityCount, 1);
+  assert.equal(reliability.sourceFailures.p1SourceCoverageCount, 0);
+  assert.equal(reliability.sourceFailures.groups[0].classification, 'P0 Crawl Runtime');
+});
+
 test('dashboard crawl reliability stays red when publish status is open without final crawl proof', () => {
   const reliability = _private.buildCrawlReliabilityStatus({
     latestScheduledFullCrawl: null,

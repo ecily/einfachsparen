@@ -10,6 +10,7 @@ async function executeScheduledCrawl({ trigger = 'scheduled', envConfig = env, c
     options: {
       dryRun: false,
     },
+    envConfig,
   });
   const run = crawlRunServiceImpl.serializeCrawlRun(result.run);
 

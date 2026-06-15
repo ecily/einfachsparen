@@ -314,7 +314,51 @@ function isPolicyBoundedDashboardSource(source = {}) {
   );
 }
 
+function isSourceLessProcessRestartRecoveryRun(run) {
+  if (!run || run.status !== 'failed') return false;
+
+  const sourceCount = Array.isArray(run.sources) ? run.sources.length : 0;
+  if (sourceCount > 0) return false;
+
+  const successfulSourcesCount = numberFrom(run.summary?.successfulSourcesCount, 0);
+  const failedSourcesCount = numberFrom(run.summary?.failedSourcesCount, 0);
+  if (successfulSourcesCount > 0 || failedSourcesCount > 0) return false;
+
+  const text = [
+    run.lastStage,
+    ...(Array.isArray(run.warnings) ? run.warnings : []),
+    ...(Array.isArray(run.errorMessages) ? run.errorMessages : []),
+    run.summary?.error,
+    run.summary?.reason,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return /process-restart-recovery|stale crawlrun recovery after restart|previous process/.test(text);
+}
+
 function buildSourceFailureDiagnosis(run) {
+  if (isSourceLessProcessRestartRecoveryRun(run)) {
+    return {
+      level: 'red',
+      failedSourcesCount: 0,
+      p0ReliabilityCount: 1,
+      p1SourceCoverageCount: 0,
+      policyBoundedSourcesCount: 0,
+      notExecutedByPolicySourcesCount: 0,
+      reason: 'Reference crawl failed before any source produced a result because process-restart recovery finalized a previous-process run; this is P0 crawl runtime reliability, not a source/parser failure.',
+      groups: [
+        {
+          sourceType: 'crawl-runtime',
+          errorType: 'process-restart-recovery',
+          count: 1,
+          severity: 'red',
+          classification: 'P0 Crawl Runtime',
+          sourceKeys: [],
+        },
+      ],
+      policyBoundedGroups: [],
+    };
+  }
+
   const failedSources = (run?.sources || []).filter((source) => source.status === 'failed');
   const policyBoundedSources = (run?.sources || []).filter(isPolicyBoundedDashboardSource);
   const groups = new Map();
@@ -398,7 +442,10 @@ function buildCrawlReliabilityStatus({
     && latestScheduledFullCrawl.status === 'stale'
     && currentStateLevel === 'green'
   );
-  const sourceFailures = buildSourceFailureDiagnosis(latestManualFullCrawl || latestCrawl);
+  const sourceFailureReferenceCrawl = isSourceLessProcessRestartRecoveryRun(latestScheduledFullCrawl)
+    ? latestScheduledFullCrawl
+    : latestManualFullCrawl || latestCrawl || latestScheduledFullCrawl;
+  const sourceFailures = buildSourceFailureDiagnosis(sourceFailureReferenceCrawl);
 
   return {
     scheduledDaily: {
