@@ -1,7 +1,7 @@
 export function StickyBottomLine({ onNavigate }) {
   return (
     <div
-      aria-label="Copyright, Projektlink und Rechtliches"
+      aria-label="Copyright und Rechtliches"
       style={{
         position: 'fixed',
         left: 0,
@@ -25,20 +25,7 @@ export function StickyBottomLine({ onNavigate }) {
       }}
     >
       <span>
-        © 2026 - Ein Projekt von{' '}
-        <a
-          href="https://www.ecily.com"
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            color: 'var(--kk-primary)',
-            fontWeight: 850,
-            textDecoration: 'none',
-          }}
-        >
-          ecily/webentwicklung
-        </a>
-        .
+        © 2026
         <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('impressum')}>
           Impressum
         </button>
