@@ -1,6 +1,7 @@
 export function StickyBottomLine({ onNavigate }) {
   return (
     <div
+      className="sticky-bottom-line"
       aria-label="Copyright und Rechtliches"
       style={{
         position: 'fixed',
@@ -24,7 +25,7 @@ export function StickyBottomLine({ onNavigate }) {
         backdropFilter: 'blur(14px)',
       }}
     >
-      <span>
+      <span className="sticky-bottom-line__content">
         © 2026
         <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('impressum')}>
           Impressum

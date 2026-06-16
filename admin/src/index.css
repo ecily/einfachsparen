@@ -6334,10 +6334,10 @@ textarea:focus {
     overflow: auto;
   }
 
-  [aria-label="Copyright, Projektlink und Rechtliches"] {
-    display: block !important;
+  .sticky-bottom-line {
+    display: flex !important;
     min-height: auto !important;
-    padding: 0.48rem 0.6rem calc(0.48rem + env(safe-area-inset-bottom)) !important;
+    padding: 0.42rem 0.54rem calc(0.42rem + env(safe-area-inset-bottom)) !important;
     font-size: 0.7rem !important;
     line-height: 1.35 !important;
     color: color-mix(in srgb, var(--kk-muted) 78%, #ffffff) !important;
@@ -6345,19 +6345,25 @@ textarea:focus {
     box-shadow: 0 -6px 16px rgba(36, 52, 71, 0.05) !important;
   }
 
-  [aria-label="Copyright, Projektlink und Rechtliches"] span {
-    display: block;
+  .sticky-bottom-line__content {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.06rem 0.16rem;
     max-width: 100%;
   }
 
   .sticky-bottom-line__button {
-    margin-left: 0.32rem;
-    padding: 0.12rem 0.24rem;
+    margin-left: 0;
+    padding: 0.1rem 0.2rem;
     font-size: 0.7rem;
     font-weight: 650;
   }
 
   .sticky-bottom-line__button--feedback {
+    flex: 0 1 auto;
+    margin-left: 0.08rem;
     border-color: transparent;
     background: transparent;
     box-shadow: none;
