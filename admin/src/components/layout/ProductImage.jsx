@@ -56,18 +56,14 @@ function getPlaceholderCategory(offer) {
 function getPlaceholderCopy(offer) {
   if (hasOfficialSourceSignal(offer)) {
     return {
-      badge: 'Offizielles Angebot',
+      badge: 'Offiziell',
       label: 'Bild derzeit nicht verf\u00fcgbar',
-      detail: 'Preis und Details stammen aus offizieller Quelle.',
-      note: 'Bitte im Markt pr\u00fcfen.',
     }
   }
 
   return {
-    badge: 'Transparent',
+    badge: 'Ohne Bild',
     label: 'Bild derzeit nicht verf\u00fcgbar',
-    detail: 'Wir zeigen lieber kein Bild als ein unsicheres.',
-    note: 'Bitte im Markt pr\u00fcfen.',
   }
 }
 
@@ -88,7 +84,7 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
           isOfficialPlaceholder ? 'product-image--official-placeholder' : 'product-image--generic-placeholder'
         } product-image--placeholder-${placeholderCategory} ${compact ? 'product-image--compact' : ''}`}
         data-placeholder-category={placeholderCategory}
-        aria-label={`${placeholderCopy.label}: ${placeholderCopy.detail}`}
+        aria-label={placeholderCopy.label}
         role="img"
       >
         <span className="product-image__placeholder-mark" aria-hidden="true">
@@ -96,9 +92,6 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
         </span>
         <span className="product-image__placeholder-copy">
           <small className="product-image__placeholder-badge">{placeholderCopy.badge}</small>
-          <strong>{placeholderCopy.label}</strong>
-          <small>{placeholderCopy.detail}</small>
-          <small className="product-image__placeholder-note">{placeholderCopy.note}</small>
         </span>
       </div>
     )

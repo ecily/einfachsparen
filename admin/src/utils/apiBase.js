@@ -191,7 +191,7 @@ export async function fetchFilterRetailers() {
   const payload = await fetchJson('/filters/retailers')
   const retailers = extractArrayPayload(payload, ['retailers'])
 
-  return retailers
+  const publicRetailers = retailers
     .filter((item) => item && typeof item === 'object')
     .filter((item) => normalizeRetailerKey(item.retailerKey || item.retailerName) !== 'eurospar')
     .map((item, index) => ({
@@ -207,6 +207,21 @@ export async function fetchFilterRetailers() {
       isActive: item.isActive !== false,
       sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index,
     }))
+
+  if (!publicRetailers.some((item) => normalizeRetailerKey(item.retailerKey || item.retailerName) === 'pagro')) {
+    publicRetailers.push({
+      retailerKey: 'pagro',
+      retailerName: 'PAGRO',
+      offerCount: 0,
+      activeOfferCount: 0,
+      totalOffers: 0,
+      activeOffers: 0,
+      isActive: true,
+      sortOrder: 999,
+    })
+  }
+
+  return publicRetailers
     .sort((left, right) => {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.retailerName.localeCompare(right.retailerName, 'de')

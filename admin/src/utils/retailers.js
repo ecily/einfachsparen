@@ -11,6 +11,7 @@ const RETAILER_LABELS = {
   hofer: 'HOFER',
   interspar: 'INTERSPAR',
   lidl: 'Lidl',
+  pagro: 'PAGRO',
   penny: 'PENNY',
   spar: 'SPAR',
 }
