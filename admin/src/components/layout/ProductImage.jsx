@@ -28,19 +28,41 @@ function hasOfficialSourceSignal(offer) {
   return /\bofficial\b|flyer|flugblatt|prospekt|leaflet|pdf/.test(sourceText)
 }
 
+function getPlaceholderCategory(offer) {
+  const categoryText = [
+    offer?.displayCategory,
+    offer?.categoryPrimary,
+    offer?.categorySecondary,
+    offer?.subcategoryLabel,
+    offer?.title,
+  ]
+    .map(asSourceText)
+    .join(' ')
+    .toLowerCase()
+
+  if (/getr[aä]nk|bier|wein|saft|wasser|limonade|cola|kaffee/.test(categoryText)) return 'drinks'
+  if (/obst|gem[uü]se|frucht|salat|apfel|paradeiser|tomate|erdbeer|kirsche|banane/.test(categoryText)) return 'produce'
+  if (/drogerie|k[oö]rper|pflege|hygiene|shampoo|dusche|deo|creme|zahnpasta/.test(categoryText)) return 'care'
+  if (/haushalt|wasch|reiniger|papier|k[uü]che|toilettenpapier|sp[uü]l|putz/.test(categoryText)) return 'household'
+  if (/tier|katze|hund|futter|snack|dreamies|sheba/.test(categoryText)) return 'pet'
+  return 'generic'
+}
+
 function getPlaceholderCopy(offer) {
   if (hasOfficialSourceSignal(offer)) {
     return {
-      badge: 'Offizielle Quelle',
-      label: 'Angebot ohne Bild',
-      detail: 'Preis und Details stammen aus der Quelle.',
+      badge: 'Offizielles Angebot',
+      label: 'Bild derzeit nicht verfügbar',
+      detail: 'Preis und Details stammen aus offizieller Quelle.',
+      note: 'Bitte im Markt prüfen.',
     }
   }
 
   return {
-    badge: 'kaufklug',
-    label: 'Angebot ohne Bild',
-    detail: 'Preis und Bedingungen bitte prüfen.',
+    badge: 'Transparent',
+    label: 'Bild derzeit nicht verfügbar',
+    detail: 'Wir zeigen lieber kein Bild als ein unsicheres.',
+    note: 'Bitte im Markt prüfen.',
   }
 }
 
@@ -52,21 +74,26 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
   const currentSrc = imageSources.find((item) => !failedSources.has(item)) || ''
   const isOfficialPlaceholder = hasOfficialSourceSignal(offer)
   const placeholderCopy = getPlaceholderCopy(offer)
+  const placeholderCategory = getPlaceholderCategory(offer)
 
   if (!currentSrc) {
     return (
       <div
         className={`product-image product-image--placeholder ${
           isOfficialPlaceholder ? 'product-image--official-placeholder' : 'product-image--generic-placeholder'
-        } ${compact ? 'product-image--compact' : ''}`}
+        } product-image--placeholder-${placeholderCategory} ${compact ? 'product-image--compact' : ''}`}
+        data-placeholder-category={placeholderCategory}
         aria-label={`${placeholderCopy.label}: ${placeholderCopy.detail}`}
         role="img"
       >
-        <span className="product-image__placeholder-mark" aria-hidden="true" />
+        <span className="product-image__placeholder-mark" aria-hidden="true">
+          <span className="product-image__placeholder-symbol" />
+        </span>
         <span className="product-image__placeholder-copy">
           <small className="product-image__placeholder-badge">{placeholderCopy.badge}</small>
           <strong>{placeholderCopy.label}</strong>
           <small>{placeholderCopy.detail}</small>
+          <small className="product-image__placeholder-note">{placeholderCopy.note}</small>
         </span>
       </div>
     )
