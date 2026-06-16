@@ -1936,15 +1936,21 @@ a {
 }
 
 .product-image--placeholder {
+  --placeholder-accent: #315f51;
+  --placeholder-accent-2: #b98555;
+  --placeholder-wash: rgba(49, 95, 81, 0.1);
+  --placeholder-warm: rgba(185, 133, 85, 0.1);
+  box-sizing: border-box;
   align-content: center;
-  gap: 0.5rem;
+  justify-items: center;
+  gap: clamp(0.26rem, 4.5%, 0.44rem);
   aspect-ratio: 4 / 3;
-  min-height: 6.6rem;
-  padding: 0.74rem 0.7rem;
+  min-height: 6.8rem;
+  padding: clamp(0.52rem, 7%, 0.78rem) 0.68rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 247, 0.92)),
-    radial-gradient(circle at 18% 12%, rgba(31, 90, 75, 0.09), transparent 38%),
-    radial-gradient(circle at 88% 92%, rgba(178, 72, 62, 0.055), transparent 42%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 247, 0.93)),
+    radial-gradient(circle at 18% 14%, var(--placeholder-wash), transparent 42%),
+    radial-gradient(circle at 88% 92%, var(--placeholder-warm), transparent 44%);
   color: #35463f;
   text-align: center;
   box-shadow:
@@ -1952,14 +1958,84 @@ a {
     0 10px 22px rgba(36, 52, 71, 0.05);
 }
 
+.product-image--placeholder-beer {
+  --placeholder-accent: #6d7d2c;
+  --placeholder-accent-2: #d6a642;
+  --placeholder-wash: rgba(109, 125, 44, 0.12);
+  --placeholder-warm: rgba(214, 166, 66, 0.14);
+}
+
+.product-image--placeholder-coffee {
+  --placeholder-accent: #6f543d;
+  --placeholder-accent-2: #b4845f;
+  --placeholder-wash: rgba(111, 84, 61, 0.11);
+  --placeholder-warm: rgba(180, 132, 95, 0.14);
+}
+
+.product-image--placeholder-dairy {
+  --placeholder-accent: #8a6d25;
+  --placeholder-accent-2: #e0bd58;
+  --placeholder-wash: rgba(224, 189, 88, 0.14);
+  --placeholder-warm: rgba(255, 244, 202, 0.62);
+}
+
+.product-image--placeholder-bakery {
+  --placeholder-accent: #7b5a34;
+  --placeholder-accent-2: #c7904f;
+  --placeholder-wash: rgba(123, 90, 52, 0.09);
+  --placeholder-warm: rgba(199, 144, 79, 0.14);
+}
+
+.product-image--placeholder-fresh {
+  --placeholder-accent: #70645d;
+  --placeholder-accent-2: #be8b77;
+  --placeholder-wash: rgba(112, 100, 93, 0.1);
+  --placeholder-warm: rgba(190, 139, 119, 0.12);
+}
+
+.product-image--placeholder-drinks {
+  --placeholder-accent: #2f6c70;
+  --placeholder-accent-2: #85b8a1;
+  --placeholder-wash: rgba(47, 108, 112, 0.1);
+  --placeholder-warm: rgba(133, 184, 161, 0.12);
+}
+
+.product-image--placeholder-produce {
+  --placeholder-accent: #477a44;
+  --placeholder-accent-2: #d98b4a;
+  --placeholder-wash: rgba(71, 122, 68, 0.12);
+  --placeholder-warm: rgba(217, 139, 74, 0.13);
+}
+
+.product-image--placeholder-care {
+  --placeholder-accent: #4f7a83;
+  --placeholder-accent-2: #9fc9c5;
+  --placeholder-wash: rgba(79, 122, 131, 0.1);
+  --placeholder-warm: rgba(159, 201, 197, 0.13);
+}
+
+.product-image--placeholder-household {
+  --placeholder-accent: #536878;
+  --placeholder-accent-2: #a8bac6;
+  --placeholder-wash: rgba(83, 104, 120, 0.1);
+  --placeholder-warm: rgba(168, 186, 198, 0.12);
+}
+
+.product-image--placeholder-pet {
+  --placeholder-accent: #78614c;
+  --placeholder-accent-2: #c49a72;
+  --placeholder-wash: rgba(120, 97, 76, 0.1);
+  --placeholder-warm: rgba(196, 154, 114, 0.14);
+}
+
 .product-image--placeholder::before {
   content: "";
   position: absolute;
-  inset: 0.52rem auto auto 0.52rem;
-  width: 2.65rem;
+  inset: 0.48rem auto auto 0.52rem;
+  width: 2.45rem;
   height: 0.18rem;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(31, 90, 75, 0.22), rgba(72, 101, 129, 0.12));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--placeholder-accent) 28%, transparent), rgba(72, 101, 129, 0.1));
   pointer-events: none;
 }
 
@@ -1991,22 +2067,23 @@ a {
 }
 
 .product-image--compact.product-image--placeholder {
-  gap: 0.28rem;
-  min-height: 5.2rem;
-  padding: 0.5rem;
+  gap: 0.2rem;
+  min-height: 5.35rem;
+  padding: 0.42rem 0.38rem;
 }
 
 .product-image__placeholder-mark {
   position: relative;
   display: grid;
   place-items: center;
-  width: 2.68rem;
-  height: 2.02rem;
-  border-radius: 0.64rem;
-  border: 1px solid rgba(72, 101, 129, 0.18);
+  flex: 0 0 auto;
+  width: clamp(2.05rem, 34%, 2.72rem);
+  height: clamp(1.72rem, 28%, 2.12rem);
+  border-radius: 0.74rem;
+  border: 1px solid color-mix(in srgb, var(--placeholder-accent) 18%, rgba(72, 101, 129, 0.14));
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 246, 244, 0.94)),
-    linear-gradient(135deg, rgba(31, 90, 75, 0.12), rgba(72, 101, 129, 0.06));
+    linear-gradient(135deg, var(--placeholder-wash), rgba(72, 101, 129, 0.05));
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.78),
     0 8px 16px rgba(36, 52, 71, 0.07);
@@ -2017,7 +2094,7 @@ a {
   content: "";
   position: absolute;
   border-radius: 999px;
-  background: rgba(72, 101, 129, 0.28);
+  background: color-mix(in srgb, var(--placeholder-accent) 35%, rgba(72, 101, 129, 0.2));
 }
 
 .product-image__placeholder-mark::before {
@@ -2035,9 +2112,9 @@ a {
 .product-image__placeholder-symbol {
   position: relative;
   display: block;
-  width: 1.18rem;
-  height: 1.18rem;
-  opacity: 0.84;
+  width: 1.38rem;
+  height: 1.38rem;
+  opacity: 0.92;
 }
 
 .product-image__placeholder-symbol::before,
@@ -2049,12 +2126,106 @@ a {
 
 .product-image--placeholder-generic .product-image__placeholder-symbol::before {
   inset: 0.14rem;
-  border: 2px solid rgba(31, 90, 75, 0.34);
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 46%, transparent);
 }
 
 .product-image--placeholder-generic .product-image__placeholder-symbol::after {
   inset: 0.42rem 0.18rem 0.22rem 0.56rem;
-  background: rgba(31, 90, 75, 0.28);
+  background: color-mix(in srgb, var(--placeholder-accent-2) 34%, transparent);
+}
+
+.product-image--placeholder-beer .product-image__placeholder-symbol::before {
+  left: 0.24rem;
+  bottom: 0.12rem;
+  width: 0.58rem;
+  height: 1rem;
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 45%, transparent);
+  border-radius: 0.2rem 0.2rem 0.3rem 0.3rem;
+}
+
+.product-image--placeholder-beer .product-image__placeholder-symbol::after {
+  right: 0.12rem;
+  bottom: 0.16rem;
+  width: 0.5rem;
+  height: 0.76rem;
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent-2) 55%, transparent);
+  border-radius: 0.2rem 0.2rem 0.12rem 0.12rem;
+  box-shadow: inset 0 -0.28rem 0 color-mix(in srgb, var(--placeholder-accent-2) 22%, transparent);
+}
+
+.product-image--placeholder-coffee .product-image__placeholder-symbol::before {
+  left: 0.16rem;
+  bottom: 0.18rem;
+  width: 0.78rem;
+  height: 0.52rem;
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 48%, transparent);
+  border-radius: 0.18rem 0.18rem 0.36rem 0.36rem;
+}
+
+.product-image--placeholder-coffee .product-image__placeholder-symbol::after {
+  right: 0.1rem;
+  bottom: 0.3rem;
+  width: 0.32rem;
+  height: 0.32rem;
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent-2) 48%, transparent);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+}
+
+.product-image--placeholder-dairy .product-image__placeholder-symbol::before {
+  inset: 0.24rem 0.12rem 0.16rem 0.2rem;
+  background: color-mix(in srgb, var(--placeholder-accent-2) 28%, transparent);
+  clip-path: polygon(8% 75%, 70% 18%, 96% 72%, 36% 90%);
+  border-radius: 0.16rem;
+}
+
+.product-image--placeholder-dairy .product-image__placeholder-symbol::after {
+  left: 0.5rem;
+  top: 0.5rem;
+  width: 0.18rem;
+  height: 0.18rem;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0.32rem 0.16rem 0 rgba(255, 255, 255, 0.66),
+    0.56rem -0.04rem 0 rgba(255, 255, 255, 0.58);
+}
+
+.product-image--placeholder-bakery .product-image__placeholder-symbol::before {
+  left: 0.16rem;
+  right: 0.16rem;
+  bottom: 0.2rem;
+  height: 0.72rem;
+  background: color-mix(in srgb, var(--placeholder-accent-2) 26%, transparent);
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 32%, transparent);
+  border-radius: 999px 999px 0.38rem 0.38rem;
+}
+
+.product-image--placeholder-bakery .product-image__placeholder-symbol::after {
+  left: 0.42rem;
+  top: 0.5rem;
+  width: 0.12rem;
+  height: 0.46rem;
+  background: rgba(255, 255, 255, 0.7);
+  transform: rotate(24deg);
+  box-shadow: 0.34rem -0.02rem 0 rgba(255, 255, 255, 0.58);
+}
+
+.product-image--placeholder-fresh .product-image__placeholder-symbol::before {
+  left: 0.16rem;
+  right: 0.14rem;
+  top: 0.28rem;
+  height: 0.54rem;
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 38%, transparent);
+  border-radius: 70% 32% 70% 32%;
+}
+
+.product-image--placeholder-fresh .product-image__placeholder-symbol::after {
+  left: 0.62rem;
+  bottom: 0.18rem;
+  width: 0.16rem;
+  height: 0.52rem;
+  background: color-mix(in srgb, var(--placeholder-accent-2) 42%, transparent);
+  transform: rotate(42deg);
 }
 
 .product-image--placeholder-drinks .product-image__placeholder-symbol::before {
@@ -2062,7 +2233,7 @@ a {
   top: 0.04rem;
   width: 0.42rem;
   height: 1.08rem;
-  border: 2px solid rgba(31, 90, 75, 0.34);
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 44%, transparent);
   border-radius: 0.18rem 0.18rem 0.28rem 0.28rem;
 }
 
@@ -2071,7 +2242,7 @@ a {
   top: 0.5rem;
   width: 0.54rem;
   height: 0.18rem;
-  background: rgba(178, 72, 62, 0.24);
+  background: color-mix(in srgb, var(--placeholder-accent-2) 38%, transparent);
 }
 
 .product-image--placeholder-produce .product-image__placeholder-symbol::before {
@@ -2079,7 +2250,7 @@ a {
   bottom: 0.1rem;
   width: 0.58rem;
   height: 0.58rem;
-  background: rgba(178, 72, 62, 0.24);
+  background: color-mix(in srgb, var(--placeholder-accent-2) 38%, transparent);
 }
 
 .product-image--placeholder-produce .product-image__placeholder-symbol::after {
@@ -2087,7 +2258,7 @@ a {
   top: 0.1rem;
   width: 0.74rem;
   height: 0.45rem;
-  border: 2px solid rgba(31, 90, 75, 0.32);
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 42%, transparent);
   border-radius: 70% 0 70% 0;
   transform: rotate(-18deg);
 }
@@ -2095,7 +2266,7 @@ a {
 .product-image--placeholder-care .product-image__placeholder-symbol::before,
 .product-image--placeholder-household .product-image__placeholder-symbol::before {
   inset: 0.18rem 0.34rem 0.08rem;
-  border: 2px solid rgba(31, 90, 75, 0.32);
+  border: 2px solid color-mix(in srgb, var(--placeholder-accent) 42%, transparent);
   border-radius: 0.28rem;
 }
 
@@ -2104,7 +2275,7 @@ a {
   top: 0;
   width: 0.3rem;
   height: 0.28rem;
-  background: rgba(31, 90, 75, 0.24);
+  background: color-mix(in srgb, var(--placeholder-accent) 34%, transparent);
   border-radius: 0.08rem;
 }
 
@@ -2113,7 +2284,7 @@ a {
   right: 0.38rem;
   top: 0.5rem;
   height: 0.14rem;
-  background: rgba(178, 72, 62, 0.2);
+  background: color-mix(in srgb, var(--placeholder-accent-2) 32%, transparent);
 }
 
 .product-image--placeholder-pet .product-image__placeholder-symbol::before {
@@ -2121,7 +2292,7 @@ a {
   top: 0.36rem;
   width: 0.62rem;
   height: 0.54rem;
-  background: rgba(31, 90, 75, 0.24);
+  background: color-mix(in srgb, var(--placeholder-accent) 32%, transparent);
 }
 
 .product-image--placeholder-pet .product-image__placeholder-symbol::after {
@@ -2129,10 +2300,10 @@ a {
   top: 0.14rem;
   width: 0.28rem;
   height: 0.28rem;
-  background: rgba(178, 72, 62, 0.22);
+  background: color-mix(in srgb, var(--placeholder-accent-2) 34%, transparent);
   box-shadow:
-    0.56rem 0 0 rgba(178, 72, 62, 0.22),
-    0.28rem -0.08rem 0 rgba(31, 90, 75, 0.2);
+    0.56rem 0 0 color-mix(in srgb, var(--placeholder-accent-2) 34%, transparent),
+    0.28rem -0.08rem 0 color-mix(in srgb, var(--placeholder-accent) 28%, transparent);
 }
 
 .product-image--official-placeholder .product-image__placeholder-mark::before {
@@ -5151,32 +5322,32 @@ textarea:focus {
 
 .product-image--placeholder {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 247, 0.92)),
-    radial-gradient(circle at 18% 12%, rgba(31, 90, 75, 0.09), transparent 38%),
-    radial-gradient(circle at 88% 92%, rgba(178, 72, 62, 0.055), transparent 42%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 247, 0.93)),
+    radial-gradient(circle at 18% 14%, var(--placeholder-wash), transparent 42%),
+    radial-gradient(circle at 88% 92%, var(--placeholder-warm), transparent 44%);
   border-color: rgba(72, 101, 129, 0.16);
   color: #35463f;
 }
 
 .product-image--official-placeholder {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 247, 0.92)),
-    radial-gradient(circle at 18% 12%, rgba(31, 90, 75, 0.11), transparent 38%),
-    radial-gradient(circle at 88% 92%, rgba(178, 72, 62, 0.055), transparent 42%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 247, 0.94)),
+    radial-gradient(circle at 18% 14%, var(--placeholder-wash), transparent 42%),
+    radial-gradient(circle at 88% 92%, var(--placeholder-warm), transparent 44%);
 }
 
 .product-image__placeholder-mark {
-  border-color: rgba(72, 101, 129, 0.2);
+  border-color: color-mix(in srgb, var(--placeholder-accent) 18%, rgba(72, 101, 129, 0.14));
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 246, 244, 0.94)),
-    linear-gradient(135deg, rgba(31, 90, 75, 0.12), rgba(72, 101, 129, 0.06));
+    linear-gradient(135deg, var(--placeholder-wash), rgba(72, 101, 129, 0.05));
 }
 
 .product-image--official-placeholder .product-image__placeholder-mark {
-  border-color: rgba(72, 101, 129, 0.22);
+  border-color: color-mix(in srgb, var(--placeholder-accent) 22%, rgba(72, 101, 129, 0.14));
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 246, 244, 0.94)),
-    linear-gradient(135deg, rgba(31, 90, 75, 0.14), rgba(72, 101, 129, 0.06));
+    linear-gradient(135deg, var(--placeholder-wash), rgba(72, 101, 129, 0.06));
 }
 
 .product-image__placeholder-copy strong,
@@ -6210,21 +6381,23 @@ textarea:focus {
   }
 
   .product-image--placeholder {
-    gap: 0.26rem;
-    min-height: 5.35rem;
-    padding: 0.48rem;
+    gap: 0.18rem;
+    min-height: 5.45rem;
+    padding: 0.42rem 0.38rem;
   }
 
   .product-image__placeholder-copy {
-    gap: 0.1rem;
+    gap: 0.08rem;
   }
 
   .product-image__placeholder-copy strong {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
+    line-height: 1.12;
   }
 
   .product-image__placeholder-copy small {
-    font-size: 0.64rem;
+    font-size: 0.62rem;
+    line-height: 1.1;
   }
 
   .product-image__placeholder-note {
@@ -6232,7 +6405,8 @@ textarea:focus {
   }
 
   .product-image__placeholder-badge {
-    font-size: 0.58rem !important;
+    padding: 0.13rem 0.28rem;
+    font-size: 0.54rem !important;
   }
 
   .product-image:hover img,
@@ -7043,22 +7217,31 @@ textarea:focus {
   }
 
   .product-image--placeholder {
-    min-height: 4.55rem;
-    padding: 0.36rem;
+    gap: 0.14rem;
+    min-height: 4.75rem;
+    padding: 0.36rem 0.28rem;
   }
 
   .product-image--placeholder::before {
-    inset: 0.36rem auto auto 0.36rem;
-    width: 1.9rem;
+    inset: 0.28rem auto auto 0.3rem;
+    width: 1.45rem;
+    height: 0.13rem;
   }
 
   .product-image__placeholder-mark {
-    width: 1.42rem;
-    height: 1rem;
+    width: 1.56rem;
+    height: 1.18rem;
+    border-radius: 0.44rem;
+  }
+
+  .product-image__placeholder-symbol {
+    width: 0.94rem;
+    height: 0.94rem;
   }
 
   .product-image__placeholder-copy strong {
-    font-size: 0.66rem;
+    font-size: 0.62rem;
+    line-height: 1.08;
   }
 
   .product-image__placeholder-copy small:not(.product-image__placeholder-badge) {

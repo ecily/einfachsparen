@@ -40,10 +40,15 @@ function getPlaceholderCategory(offer) {
     .join(' ')
     .toLowerCase()
 
-  if (/getr[aä]nk|bier|wein|saft|wasser|limonade|cola|kaffee/.test(categoryText)) return 'drinks'
-  if (/obst|gem[uü]se|frucht|salat|apfel|paradeiser|tomate|erdbeer|kirsche|banane/.test(categoryText)) return 'produce'
-  if (/drogerie|k[oö]rper|pflege|hygiene|shampoo|dusche|deo|creme|zahnpasta/.test(categoryText)) return 'care'
-  if (/haushalt|wasch|reiniger|papier|k[uü]che|toilettenpapier|sp[uü]l|putz/.test(categoryText)) return 'household'
+  if (/bier|radler|maerzen|märzen|pils|stiegl|puntigamer|ottakringer|goesser|gösser/.test(categoryText)) return 'beer'
+  if (/kaffee|tee|espresso|cappuccino|melange|bohne/.test(categoryText)) return 'coffee'
+  if (/kaese|käse|molkerei|milch|joghurt|topfen|butter|gouda|emmentaler|mozzarella/.test(categoryText)) return 'dairy'
+  if (/brot|gebaeck|gebäck|backware|weckerl|semmel|brioche|toast|baguette/.test(categoryText)) return 'bakery'
+  if (/fleisch|wurst|fisch|hendl|schwein|rind|lachs|forelle|leberkaese|leberkäse/.test(categoryText)) return 'fresh'
+  if (/getraenk|getränk|wein|saft|wasser|limonade|cola/.test(categoryText)) return 'drinks'
+  if (/obst|gemuese|gemüse|frucht|salat|apfel|paradeiser|tomate|erdbeer|kirsche|banane/.test(categoryText)) return 'produce'
+  if (/drogerie|koerper|körper|pflege|hygiene|shampoo|dusche|deo|creme|zahnpasta/.test(categoryText)) return 'care'
+  if (/haushalt|wasch|reiniger|papier|kueche|küche|toilettenpapier|spuel|spül|putz/.test(categoryText)) return 'household'
   if (/tier|katze|hund|futter|snack|dreamies|sheba/.test(categoryText)) return 'pet'
   return 'generic'
 }
@@ -52,17 +57,17 @@ function getPlaceholderCopy(offer) {
   if (hasOfficialSourceSignal(offer)) {
     return {
       badge: 'Offizielles Angebot',
-      label: 'Bild derzeit nicht verfügbar',
+      label: 'Bild derzeit nicht verf\u00fcgbar',
       detail: 'Preis und Details stammen aus offizieller Quelle.',
-      note: 'Bitte im Markt prüfen.',
+      note: 'Bitte im Markt pr\u00fcfen.',
     }
   }
 
   return {
     badge: 'Transparent',
-    label: 'Bild derzeit nicht verfügbar',
+    label: 'Bild derzeit nicht verf\u00fcgbar',
     detail: 'Wir zeigen lieber kein Bild als ein unsicheres.',
-    note: 'Bitte im Markt prüfen.',
+    note: 'Bitte im Markt pr\u00fcfen.',
   }
 }
 
