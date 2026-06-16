@@ -45,7 +45,7 @@ const envSchema = z.object({
   CRAWL_REGION: z.string().default('Steiermark'),
   CRAWL_RUN_ON_START: booleanFromEnv.default(false),
   CRAWL_SCHEDULE_ENABLED: booleanFromEnv.default(false),
-  CRAWL_SCHEDULE_CRON: z.string().trim().default('0 4 * * *'),
+  CRAWL_SCHEDULE_CRON: z.string().trim().default('0 6 * * *'),
   CRAWL_SCHEDULE_TIMEZONE: z.string().trim().default('Europe/Vienna'),
   CRAWL_INTERVAL_MINUTES: z.coerce.number().int().min(15).max(1440).default(360),
   CRAWL_RUN_MAX_RUNTIME_MINUTES: z.coerce.number().int().min(5).max(1440).default(240),

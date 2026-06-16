@@ -3,8 +3,8 @@ const env = require('../../config/env');
 const logger = require('../../lib/logger');
 const crawlRunService = require('./crawlRunService');
 
-const SAFE_PRODUCTION_DAILY_CRON = '0 4 * * *';
-const RISKY_VIENNA_DAILY_CRONS = new Set(['0 1 * * *', '0 2 * * *']);
+const SAFE_PRODUCTION_DAILY_CRON = '0 6 * * *';
+const RISKY_VIENNA_DAILY_CRONS = new Set(['0 1 * * *', '0 2 * * *', '0 4 * * *']);
 
 function resolveDailySchedule(envConfig = env) {
   const cronExpression = String(envConfig.CRAWL_SCHEDULE_CRON || '').trim();

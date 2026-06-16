@@ -8,12 +8,12 @@ Daily scheduling is controlled by ENV:
 
 - `CRAWL_RUN_ON_START=false`
 - `CRAWL_SCHEDULE_ENABLED=true`
-- `CRAWL_SCHEDULE_CRON=0 4 * * *`
+- `CRAWL_SCHEDULE_CRON=0 6 * * *`
 - `CRAWL_SCHEDULE_TIMEZONE=Europe/Vienna`
 
 The scheduler is disabled unless `CRAWL_SCHEDULE_ENABLED` is explicitly `true`. Deploys and restarts must not trigger a crawl. The daily run is a full crawl over all active, enabled, crawlable sources. Disabled sources are not activated automatically.
 
-`0 4 * * *` in `Europe/Vienna` intentionally keeps the scheduled full crawl away from the observed DigitalOcean deploy/restart window around 01:00 local time. Production crawls are also blocked during the backend startup grace window.
+`0 6 * * *` in `Europe/Vienna` intentionally keeps the scheduled full crawl away from the observed DigitalOcean deploy/restart window. The previous `0 4 * * *` setting mapped to `02:00Z` during summer time and collided with a DigitalOcean restart on 2026-06-16. Production crawls are also blocked during the backend startup grace window.
 
 ## Lock and failure behavior
 

@@ -13,7 +13,7 @@ function env(overrides = {}) {
     CRAWL_REGION: 'Steiermark',
     CRAWL_RUN_ON_START: false,
     CRAWL_SCHEDULE_ENABLED: false,
-    CRAWL_SCHEDULE_CRON: '0 4 * * *',
+    CRAWL_SCHEDULE_CRON: '0 6 * * *',
     CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
     CRAWL_INTERVAL_MINUTES: 360,
     ...overrides,
@@ -60,7 +60,7 @@ test('scheduler registers exactly one quiet-window Europe/Vienna cron job when e
     crawlRunServiceImpl: service([]),
     cronImpl: {
       validate(expression) {
-        assert.equal(expression, '0 4 * * *');
+        assert.equal(expression, '0 6 * * *');
         return true;
       },
       schedule(...args) {
@@ -72,7 +72,7 @@ test('scheduler registers exactly one quiet-window Europe/Vienna cron job when e
 
   assert.deepEqual(handle, { task: 'scheduled' });
   assert.equal(cronCalls.length, 1);
-  assert.equal(cronCalls[0][0], '0 4 * * *');
+  assert.equal(cronCalls[0][0], '0 6 * * *');
   assert.equal(cronCalls[0][2].timezone, 'Europe/Vienna');
 });
 
@@ -109,7 +109,7 @@ test('production scheduler normalizes risky Vienna cron jobs away from deploy wi
     CRAWL_SCHEDULE_CRON: '0 1 * * *',
     CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
   })), {
-    cron: '0 4 * * *',
+    cron: '0 6 * * *',
     timezone: 'Europe/Vienna',
     normalizedFrom: '0 1 * * *',
   });
@@ -119,9 +119,19 @@ test('production scheduler normalizes risky Vienna cron jobs away from deploy wi
     CRAWL_SCHEDULE_CRON: '0 2 * * *',
     CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
   })), {
-    cron: '0 4 * * *',
+    cron: '0 6 * * *',
     timezone: 'Europe/Vienna',
     normalizedFrom: '0 2 * * *',
+  });
+
+  assert.deepEqual(_private.resolveDailySchedule(env({
+    NODE_ENV: 'production',
+    CRAWL_SCHEDULE_CRON: '0 4 * * *',
+    CRAWL_SCHEDULE_TIMEZONE: 'Europe/Vienna',
+  })), {
+    cron: '0 6 * * *',
+    timezone: 'Europe/Vienna',
+    normalizedFrom: '0 4 * * *',
   });
 
   assert.equal(_private.resolveDailySchedule(env({
