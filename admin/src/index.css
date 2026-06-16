@@ -3410,15 +3410,31 @@ a {
 
 .keyword-search-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.72rem;
+  min-width: 0;
 }
 
 .keyword-search-hero,
 .keyword-search-results {
   display: grid;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.72rem;
+  max-width: 100%;
+  min-width: 0;
   padding: clamp(0.82rem, 2.2vw, 1.12rem);
   scroll-margin-top: 7rem;
+}
+
+.keyword-search-results > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.keyword-search-results .empty-state {
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 .keyword-search-hero {
@@ -4940,6 +4956,7 @@ textarea:focus {
 }
 
 .keyword-search-page .keyword-search-hero {
+  box-sizing: border-box;
   position: relative;
   border-color: rgba(36, 52, 71, 0.2);
   background:
@@ -6242,8 +6259,10 @@ textarea:focus {
   }
 
   .keyword-search-form__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.42rem;
+    grid-template-columns: minmax(0, 1fr) minmax(3.25rem, auto);
+    gap: 0.3rem;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .keyword-search-controls,
@@ -7097,8 +7116,26 @@ textarea:focus {
 
   .keyword-search-form .primary-action-button {
     min-height: 54px;
-    padding-inline: 0.82rem;
+    min-width: 0;
+    padding-inline: 0.68rem;
     font-size: 0.96rem;
+  }
+
+  .search-landing-hero,
+  .search-landing-hero__usp,
+  .hero-market-strip,
+  .hero-trust-row,
+  .keyword-search-page,
+  .keyword-search-hero,
+  .keyword-search-form,
+  .keyword-search-examples {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .hero-austria-phrase,
+  .hero-austria-accent {
+    overflow-wrap: anywhere;
   }
 
   .keyword-search-page .keyword-search-hero {
