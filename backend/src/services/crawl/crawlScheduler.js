@@ -273,6 +273,42 @@ async function planRecoveredScheduledReplacements({
   return planned;
 }
 
+async function findPendingScheduledReplacementItems({ crawlRunServiceImpl = crawlRunService } = {}) {
+  if (typeof crawlRunServiceImpl.findPendingScheduledReplacementCandidates !== 'function') {
+    return [];
+  }
+
+  return crawlRunServiceImpl.findPendingScheduledReplacementCandidates();
+}
+
+async function reconcileScheduledReplacementCandidates({
+  recoveryResult,
+  envConfig = env,
+  crawlRunServiceImpl = crawlRunService,
+  setTimeoutImpl = setTimeout,
+} = {}) {
+  const recovered = Array.isArray(recoveryResult?.recovered) ? recoveryResult.recovered : [];
+  const pending = await findPendingScheduledReplacementItems({ crawlRunServiceImpl });
+  const seen = new Set();
+  const candidates = [];
+
+  for (const item of [...recovered, ...pending]) {
+    const runId = String(item?.runId || '');
+    if (!runId || seen.has(runId)) {
+      continue;
+    }
+    seen.add(runId);
+    candidates.push(item);
+  }
+
+  return planRecoveredScheduledReplacements({
+    recoveryResult: { recovered: candidates },
+    envConfig,
+    crawlRunServiceImpl,
+    setTimeoutImpl,
+  });
+}
+
 function scheduleStartupCrawl({ envConfig = env, crawlRunServiceImpl = crawlRunService } = {}) {
   if (!envConfig.CRAWL_RUN_ON_START) {
     return null;
@@ -307,7 +343,7 @@ function recoverInterruptedCrawlRunsOnSchedulerStart({
 
   return crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart({
     reason: 'Scheduler startup found an active CrawlRun from a previous process with a stale lock heartbeat.',
-  }).then((result) => planRecoveredScheduledReplacements({
+  }).then((result) => reconcileScheduledReplacementCandidates({
     recoveryResult: result,
     envConfig,
     crawlRunServiceImpl,
@@ -334,7 +370,7 @@ function scheduleInterruptedCrawlRunRecovery({
   const runRecovery = () => {
     crawlRunServiceImpl.recoverInterruptedCrawlRunsAfterRestart({
       reason: 'Scheduler periodic recovery found an active CrawlRun from a previous process with a stale lock heartbeat.',
-    }).then((result) => planRecoveredScheduledReplacements({
+    }).then((result) => reconcileScheduledReplacementCandidates({
       recoveryResult: result,
       envConfig,
       crawlRunServiceImpl,
@@ -423,8 +459,10 @@ module.exports = {
   startCrawlScheduler,
   _private: {
     executeScheduledReplacementCrawlWithDeferredStartup,
+    findPendingScheduledReplacementItems,
     isStartupGraceError,
     planRecoveredScheduledReplacements,
+    reconcileScheduledReplacementCandidates,
     recoverInterruptedCrawlRunsOnSchedulerStart,
     resolveDailySchedule,
     retryDelayMsFromStartupGrace,

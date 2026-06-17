@@ -328,6 +328,94 @@ test('scheduler startup recovery plans exactly one deferred replacement for sour
   assert.equal(timeouts[0].delayMs, 11000);
 });
 
+test('scheduler startup recovery reconciles persisted replacement-required runs after a second restart', async () => {
+  const replacementCalls = [];
+  const pendingCalls = [];
+
+  await _private.recoverInterruptedCrawlRunsOnSchedulerStart({
+    envConfig: env(),
+    crawlRunServiceImpl: {
+      async recoverInterruptedCrawlRunsAfterRestart() {
+        return { recovered: [], skipped: [] };
+      },
+      async findPendingScheduledReplacementCandidates() {
+        pendingCalls.push(true);
+        return [
+          {
+            runId: 'persisted-original-run',
+            trigger: 'scheduled',
+            mode: 'full',
+            dryRun: false,
+            sourceLess: true,
+            replacementCandidate: true,
+          },
+        ];
+      },
+      async startScheduledReplacementCrawlRun(payload) {
+        replacementCalls.push(payload);
+        return {
+          accepted: true,
+          alreadyRunning: false,
+          run: { _id: 'replacement-run', status: 'queued', result: {} },
+        };
+      },
+    },
+    setTimeoutImpl() {
+      throw new Error('unexpected timeout');
+    },
+  });
+
+  assert.equal(pendingCalls.length, 1);
+  assert.equal(replacementCalls.length, 1);
+  assert.equal(replacementCalls[0].originalRunId, 'persisted-original-run');
+});
+
+test('scheduler replacement reconciliation deduplicates active recovery and persisted pending candidates', async () => {
+  const replacementCalls = [];
+
+  await _private.reconcileScheduledReplacementCandidates({
+    recoveryResult: {
+      recovered: [
+        {
+          runId: 'same-original-run',
+          replacementCandidate: true,
+        },
+      ],
+    },
+    envConfig: env(),
+    crawlRunServiceImpl: {
+      async findPendingScheduledReplacementCandidates() {
+        return [
+          {
+            runId: 'same-original-run',
+            replacementCandidate: true,
+          },
+        ];
+      },
+      async startScheduledReplacementCrawlRun(payload) {
+        replacementCalls.push(payload);
+        return {
+          accepted: true,
+          alreadyRunning: false,
+          run: { _id: 'replacement-run', status: 'queued', result: {} },
+        };
+      },
+    },
+  });
+
+  assert.equal(replacementCalls.length, 1);
+});
+
+test('scheduler replacement reconciliation ignores services without persisted pending support', async () => {
+  const planned = await _private.reconcileScheduledReplacementCandidates({
+    recoveryResult: { recovered: [] },
+    envConfig: env(),
+    crawlRunServiceImpl: {},
+  });
+
+  assert.deepEqual(planned, []);
+});
+
 test('deferred replacement planning is not duplicated for the same original run', async () => {
   const timeouts = [];
   const first = await _private.executeScheduledReplacementCrawlWithDeferredStartup({

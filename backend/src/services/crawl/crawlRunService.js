@@ -1260,6 +1260,42 @@ async function startScheduledReplacementCrawlRun({
   });
 }
 
+async function findPendingScheduledReplacementCandidates({ limit = 5 } = {}) {
+  const candidates = await CrawlRun.find({
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    status: 'failed',
+    'metadata.scheduledReplacement.status': 'required',
+  })
+    .sort({ finishedAt: -1, startedAt: -1, createdAt: -1 })
+    .limit(Math.max(1, Math.min(20, Number(limit) || 5)));
+
+  const pending = [];
+
+  for (const run of candidates) {
+    if (!isSourceLessScheduledRestartRecoveryRun(run)) {
+      continue;
+    }
+
+    const readiness = await assessScheduledReplacementReadiness({ originalRunId: run._id });
+
+    if (readiness.eligible) {
+      pending.push({
+        runId: asStringId(run._id),
+        trigger: run.trigger || '',
+        mode: run.mode || '',
+        dryRun: run.dryRun === true,
+        sourceLess: true,
+        replacementCandidate: true,
+        reason: readiness.reason,
+      });
+    }
+  }
+
+  return pending;
+}
+
 async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now = new Date() } = {}) {
   if (!mongoose.Types.ObjectId.isValid(String(runId || ''))) {
     return {
@@ -1922,6 +1958,7 @@ module.exports = {
   startCrawlRun,
   startScheduledReplacementCrawlRun,
   assessScheduledReplacementReadiness,
+  findPendingScheduledReplacementCandidates,
   executeCrawlRun,
   getLatestCrawlRun,
   getCrawlRunById,
@@ -1950,6 +1987,7 @@ module.exports = {
     activeExecutionRunIds,
     findExistingScheduledReplacementRun,
     findNewerEffectiveScheduledFullRun,
+    findPendingScheduledReplacementCandidates,
     hasOpenOfferPublishStatus,
     hasSourceExecutionEvidence,
     isCurrentProcessLockOwner,
