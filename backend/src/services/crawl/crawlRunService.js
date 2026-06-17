@@ -27,6 +27,8 @@ const OFFER_PUBLISH_STATUS_BY_RUN_STATUS = {
   stale: 'crawl-run-stale',
   skipped: 'crawl-run-skipped',
 };
+const FINAL_OFFER_PUBLISH_STATUSES = Object.values(OFFER_PUBLISH_STATUS_BY_RUN_STATUS);
+const TERMINAL_RUN_STATUSES = ['success', 'partial', 'failed', 'skipped', 'stale'];
 
 function compactStrings(values = []) {
   if (!Array.isArray(values)) return [];
@@ -608,6 +610,7 @@ function serializeCrawlRun(run) {
     warnings: compactStrings(plain.warnings || []),
     metadata: {
       progress: sanitizeDiagnosticValue(plain.metadata?.progress || null),
+      scheduledReplacement: sanitizeDiagnosticValue(plain.metadata?.scheduledReplacement || null),
     },
   };
 }
@@ -621,6 +624,17 @@ function buildRunDocument({ runId, trigger, region, options = {} }) {
     || sourceKeys.length > 0
     || sourceIds.length > 0
   );
+
+  const scheduledReplacement = options.scheduledReplacement || null;
+  const metadata = {};
+
+  if (scheduledReplacement?.originalRunId) {
+    metadata.scheduledReplacement = {
+      originalRunId: asStringId(scheduledReplacement.originalRunId),
+      reason: compactErrorMessage(scheduledReplacement.reason || 'source-less-process-restart-recovery'),
+      plannedAt: scheduledReplacement.plannedAt || new Date(),
+    };
+  }
 
   return new CrawlRun({
     _id: runId,
@@ -648,6 +662,7 @@ function buildRunDocument({ runId, trigger, region, options = {} }) {
       requestedSourceKeys: sourceKeys,
       requestedSourceIds: sourceIds,
     },
+    metadata,
   });
 }
 
@@ -1051,6 +1066,200 @@ function isRecoverableInterruptedRunAfterRestart({
   };
 }
 
+function hasSourceExecutionEvidence(run = {}) {
+  const sources = Array.isArray(run.result?.sources) ? run.result.sources : [];
+  const successful = numberFrom(run.summary?.successfulSourcesCount);
+  const failed = numberFrom(run.summary?.failedSourcesCount);
+  const stage = String(run.metadata?.progress?.stage || '');
+
+  return (
+    sources.length > 0
+    || successful > 0
+    || failed > 0
+    || /^source-|^crawl-dispatcher|^publish-status/.test(stage)
+  );
+}
+
+function isSourceLessScheduledRestartRecoveryRun(run = {}) {
+  if (!run) return false;
+  const shutdownSignal = String(run.metadata?.shutdown?.signal || '');
+  const progressStage = String(run.metadata?.progress?.stage || '');
+
+  return (
+    String(run.trigger || '') === 'scheduled'
+    && String(run.mode || '') === 'full'
+    && run.dryRun !== true
+    && String(run.status || '') === 'failed'
+    && (shutdownSignal === 'process-restart-recovery' || progressStage === 'process-restart-recovery')
+    && !hasSourceExecutionEvidence(run)
+  );
+}
+
+async function findExistingScheduledReplacementRun(originalRunId) {
+  const id = asStringId(originalRunId);
+  if (!id) return null;
+
+  return CrawlRun.findOne({
+    _id: { $ne: originalRunId },
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    'metadata.scheduledReplacement.originalRunId': id,
+  }).sort({ startedAt: -1, createdAt: -1 });
+}
+
+async function findNewerEffectiveScheduledFullRun(originalRun) {
+  const startedAt = originalRun?.startedAt || originalRun?.createdAt;
+  const startedAtDate = startedAt ? new Date(startedAt) : null;
+  const query = {
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+  };
+
+  if (startedAtDate && !Number.isNaN(startedAtDate.getTime())) {
+    query.$or = [
+      { startedAt: { $gt: startedAtDate } },
+      { createdAt: { $gt: startedAtDate } },
+    ];
+  }
+
+  const newerRuns = await CrawlRun.find(query)
+    .sort({ startedAt: -1, createdAt: -1 })
+    .limit(10);
+
+  return newerRuns.find((run) => (
+    TERMINAL_RUN_STATUSES.includes(run.status)
+      ? (run.status === 'success' || run.status === 'partial' || hasSourceExecutionEvidence(run))
+      : ACTIVE_RUN_STATUSES.includes(run.status)
+  )) || null;
+}
+
+async function hasOpenOfferPublishStatus() {
+  const count = await Offer.countDocuments({
+    status: 'active',
+    isActiveNow: true,
+    publishStatus: { $nin: FINAL_OFFER_PUBLISH_STATUSES },
+  });
+  return count > 0;
+}
+
+async function assessScheduledReplacementReadiness({ originalRunId } = {}) {
+  if (!mongoose.Types.ObjectId.isValid(String(originalRunId || ''))) {
+    return { eligible: false, reason: 'invalid-original-run-id' };
+  }
+
+  const originalRun = await CrawlRun.findById(originalRunId);
+
+  if (!originalRun) {
+    return { eligible: false, reason: 'original-run-not-found' };
+  }
+
+  if (!isSourceLessScheduledRestartRecoveryRun(originalRun)) {
+    return {
+      eligible: false,
+      reason: 'original-run-not-source-less-scheduled-restart',
+      originalRun,
+    };
+  }
+
+  const existingReplacement = await findExistingScheduledReplacementRun(originalRun._id);
+
+  if (existingReplacement) {
+    return {
+      eligible: false,
+      reason: 'replacement-already-exists',
+      originalRun,
+      existingReplacement,
+    };
+  }
+
+  const newerEffectiveRun = await findNewerEffectiveScheduledFullRun(originalRun);
+
+  if (newerEffectiveRun) {
+    return {
+      eligible: false,
+      reason: 'newer-effective-scheduled-full-exists',
+      originalRun,
+      newerEffectiveRun,
+    };
+  }
+
+  const activeRun = await findActiveRun();
+
+  if (activeRun) {
+    return {
+      eligible: false,
+      reason: 'active-crawl-run-exists',
+      originalRun,
+      activeRun,
+    };
+  }
+
+  const lock = await CrawlRunLock.findById(GLOBAL_CRAWL_LOCK_KEY).lean();
+
+  if (lock?.runId) {
+    return {
+      eligible: false,
+      reason: 'global-lock-active',
+      originalRun,
+      lock: serializeLockForAudit(lock),
+    };
+  }
+
+  if (await hasOpenOfferPublishStatus()) {
+    return {
+      eligible: false,
+      reason: 'publish-status-open',
+      originalRun,
+    };
+  }
+
+  return {
+    eligible: true,
+    reason: 'eligible-source-less-scheduled-restart',
+    originalRun,
+  };
+}
+
+async function startScheduledReplacementCrawlRun({
+  originalRunId,
+  region = '',
+  envConfig = env,
+  crawlAllSourcesImpl = crawlAllSources,
+  defer = true,
+} = {}) {
+  const readiness = await assessScheduledReplacementReadiness({ originalRunId });
+
+  if (!readiness.eligible) {
+    return {
+      accepted: false,
+      alreadyRunning: false,
+      replacementSkipped: true,
+      reason: readiness.reason,
+      originalRun: readiness.originalRun || null,
+      existingReplacement: readiness.existingReplacement || null,
+      newerEffectiveRun: readiness.newerEffectiveRun || null,
+    };
+  }
+
+  return startCrawlRun({
+    trigger: 'scheduled',
+    region,
+    options: {
+      dryRun: false,
+      scheduledReplacement: {
+        originalRunId,
+        reason: readiness.reason,
+        plannedAt: new Date(),
+      },
+    },
+    envConfig,
+    crawlAllSourcesImpl,
+    defer,
+  });
+}
+
 async function recoverStaleCrawlRun({ runId, reason = '', staleAfterMinutes, now = new Date() } = {}) {
   if (!mongoose.Types.ObjectId.isValid(String(runId || ''))) {
     return {
@@ -1185,6 +1394,12 @@ async function recoverInterruptedCrawlRunsAfterRestart({
     const durationMs = Math.max(0, now.getTime() - new Date(reference).getTime());
     const auditReason = compactRecoveryReason(reason);
     const auditMessage = `Interrupted CrawlRun recovery after restart: ${auditReason}`;
+    const replacementCandidate = (
+      String(run.trigger || '') === 'scheduled'
+      && String(run.mode || '') === 'full'
+      && run.dryRun !== true
+      && !hasSourceExecutionEvidence(run)
+    );
     const updatedRun = await CrawlRun.findOneAndUpdate(
       {
         _id: run._id,
@@ -1227,10 +1442,22 @@ async function recoverInterruptedCrawlRunsAfterRestart({
             trigger: run.trigger || '',
             runStatus: 'failed',
           }, now),
+          ...(replacementCandidate
+            ? {
+              'metadata.scheduledReplacement': {
+                status: 'required',
+                reason: 'source-less-process-restart-recovery',
+                originalRunId: asStringId(run._id),
+                detectedAt: now,
+              },
+            }
+            : {}),
         },
         $push: {
           warnings: auditMessage,
-          errorMessages: 'CrawlRun was marked failed after process restart; no automatic replacement crawl was started.',
+          errorMessages: replacementCandidate
+            ? 'CrawlRun was marked failed after process restart; a safe scheduled replacement crawl is required.'
+            : 'CrawlRun was marked failed after process restart; no automatic replacement crawl was started.',
         },
       },
       { new: true }
@@ -1269,6 +1496,11 @@ async function recoverInterruptedCrawlRunsAfterRestart({
       ageMs: recoverable.ageMs,
       heartbeatAgeMs: recoverable.heartbeatAgeMs,
       staleAfterMs,
+      trigger: run.trigger || '',
+      mode: run.mode || '',
+      dryRun: run.dryRun === true,
+      sourceLess: !hasSourceExecutionEvidence(run),
+      replacementCandidate,
     });
   }
 
@@ -1688,6 +1920,8 @@ async function getCrawlRunById(runId) {
 module.exports = {
   GLOBAL_CRAWL_LOCK_KEY,
   startCrawlRun,
+  startScheduledReplacementCrawlRun,
+  assessScheduledReplacementReadiness,
   executeCrawlRun,
   getLatestCrawlRun,
   getCrawlRunById,
@@ -1712,10 +1946,16 @@ module.exports = {
     determineMode,
     failStaleRun,
     getStartupCrawlStartGuard,
+    assessScheduledReplacementReadiness,
     activeExecutionRunIds,
+    findExistingScheduledReplacementRun,
+    findNewerEffectiveScheduledFullRun,
+    hasOpenOfferPublishStatus,
+    hasSourceExecutionEvidence,
     isCurrentProcessLockOwner,
     interruptCurrentProcessCrawlRuns,
     isRecoverableInterruptedRunAfterRestart,
+    isSourceLessScheduledRestartRecoveryRun,
     isRecoverableStaleRun,
     isRunStale,
     markOfferPublishStatusForRun,

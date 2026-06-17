@@ -15,9 +15,15 @@ The scheduler is disabled unless `CRAWL_SCHEDULE_ENABLED` is explicitly `true`. 
 
 `37 6 * * *` in `Europe/Vienna` intentionally keeps the scheduled full crawl on an unusual minute and away from the observed DigitalOcean deploy/restart window. The previous `0 4 * * *` setting mapped to `02:00Z` during summer time and collided with a DigitalOcean restart on 2026-06-16; full-hour starts such as `0 6 * * *` are normalized away in production as an extra collision guard. Production crawls are also blocked during the backend startup grace window.
 
+If the cron fires while the backend process is still inside the startup grace window, the scheduler must not create a failed CrawlRun. It defers the scheduled daily once until the grace window has elapsed, then starts the normal scheduled full crawl.
+
 ## Lock and failure behavior
 
 A DB-backed global CrawlRun lock prevents parallel full crawls across app instances. If a manual or scheduled crawl is already `queued` or `running`, a second start returns the existing `runId` instead of starting another run. Stale lock recovery is conservative: a stuck run is considered stale after 18 hours and is marked failed before a new run can acquire the lock.
+
+If a previous-process scheduled full crawl is recovered after a deploy/restart before any source ran (`sourceOk=0`, `sourceFail=0`, no source results, `process-restart-recovery`), the scheduler marks the original run as runtime-failed and plans exactly one safe scheduled replacement. The replacement is a normal `scheduled/full` CrawlRun with `metadata.scheduledReplacement.originalRunId` pointing to the interrupted run. It still respects startup grace, the global lock, publish finality, and duplicate/newer-run checks.
+
+No automatic replacement is planned for source/parser failures, partial/success runs, runs with source execution evidence, manual/scoped runs, open publish status, active locks, existing replacements, or newer effective scheduled full crawls. Those cases require normal source-quality triage or explicit operator action.
 
 Source failures are reported as `partial` or `failed`; they are not silently converted to success. Existing live offers for a failed or empty-yield source are retained. Source-level offer refresh is guarded so a source is not cleared before its new offers have been built. On MongoDB deployments that support transactions, source offer replacement is transactional; otherwise the fallback inserts the new source snapshot before deleting previous offers for that source.
 
