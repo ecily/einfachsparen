@@ -23,6 +23,10 @@ const SOURCE_TIMEOUT_ERROR_CODE = 'CRAWL_SOURCE_TIMEOUT';
 const FULL_CRAWL_BOUNDED_SOURCE_KEYS = new Set([
   'spar-official-flyer-pdf',
 ]);
+const FULL_CRAWL_ALLOWED_CURRENT_DISCOVERY_FORMATS = new Set([
+  'spar',
+  'interspar',
+]);
 
 async function reportCrawlProgress(onProgress, progress) {
   if (typeof onProgress !== 'function') {
@@ -98,6 +102,16 @@ function isSourceTimeoutError(error) {
 
 function isFullCrawlBoundedSource(source = {}) {
   const sourceKey = deriveSourceKey(source);
+  const sourceRetailerFormat = String(source.sourceRetailerFormat || source.retailerKey || '').toLowerCase();
+  const isAllowedSparFamilyCurrentDiscovery = source?.crawlPolicy?.currentDiscovery === true
+    && source.parserHint === 'spar-family-flyer-discovery'
+    && source.channel === 'official-flyer'
+    && FULL_CRAWL_ALLOWED_CURRENT_DISCOVERY_FORMATS.has(sourceRetailerFormat);
+
+  if (isAllowedSparFamilyCurrentDiscovery) {
+    return false;
+  }
+
   return (
     FULL_CRAWL_BOUNDED_SOURCE_KEYS.has(sourceKey)
     || source?.crawlPolicy?.fullCrawlDisabled === true

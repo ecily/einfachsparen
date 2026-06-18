@@ -414,6 +414,129 @@ test('crawlAllSources bounds scoped-only SPAR PDF source before full crawl execu
   assert.equal(createdJobs[0].metadata.boundedSource.notExecutedByPolicy, true);
 });
 
+test('crawlAllSources allows SPAR and INTERSPAR current flyer discovery in full crawls', async () => {
+  const runId = new mongoose.Types.ObjectId();
+  const sparSourceId = new mongoose.Types.ObjectId();
+  const intersparSourceId = new mongoose.Types.ObjectId();
+  const eurosparSourceId = new mongoose.Types.ObjectId();
+  const sources = [
+    {
+      _id: sparSourceId,
+      active: true,
+      enabled: true,
+      retailerKey: 'spar',
+      retailerName: 'SPAR',
+      channel: 'official-flyer',
+      sourceType: 'flyer',
+      sourceRetailerFormat: 'spar',
+      sourceUrl: 'https://www.spar.at/aktionen/steiermark',
+      label: 'SPAR Current Flyer Discovery',
+      parserHint: 'spar-family-flyer-discovery',
+      crawlPolicy: {
+        scopedOnly: true,
+        currentDiscovery: true,
+        currentSnapshot: true,
+      },
+    },
+    {
+      _id: intersparSourceId,
+      active: true,
+      enabled: true,
+      retailerKey: 'interspar',
+      retailerName: 'INTERSPAR',
+      channel: 'official-flyer',
+      sourceType: 'flyer',
+      sourceRetailerFormat: 'interspar',
+      sourceUrl: 'https://www.interspar.at/aktionen/steiermark',
+      label: 'INTERSPAR Current Flyer Discovery',
+      parserHint: 'spar-family-flyer-discovery',
+      crawlPolicy: {
+        scopedOnly: true,
+        currentDiscovery: true,
+        currentSnapshot: true,
+      },
+    },
+    {
+      _id: eurosparSourceId,
+      active: true,
+      enabled: true,
+      retailerKey: 'eurospar',
+      retailerName: 'EUROSPAR',
+      channel: 'official-flyer',
+      sourceType: 'flyer',
+      sourceRetailerFormat: 'eurospar',
+      sourceUrl: 'https://www.spar.at/aktionen/steiermark/eurospar',
+      label: 'EUROSPAR Current Flyer Discovery',
+      parserHint: 'spar-family-flyer-discovery',
+      crawlPolicy: {
+        scopedOnly: true,
+        currentDiscovery: true,
+        currentSnapshot: true,
+      },
+    },
+  ];
+  const sourceCalls = [];
+  const createdJobs = [];
+
+  const result = await crawlAllSources({
+    region: 'AT',
+    trigger: 'scheduled',
+    crawlRunId: runId,
+    SourceModel: {
+      async countDocuments(filter) {
+        if (filter?.enabled === false) return 0;
+        return sources.length;
+      },
+      find(filter = {}) {
+        return makeSourceQuery(filter?.enabled === false ? [] : sources);
+      },
+    },
+    OfferModel: {
+      async aggregate() {
+        return [];
+      },
+    },
+    CrawlJobModel: {
+      async create(document) {
+        createdJobs.push(document);
+        return document;
+      },
+    },
+    async runSourceInChildProcessImpl({ source }) {
+      sourceCalls.push(source);
+      return {
+        sourceId: String(source._id),
+        retailerKey: source.retailerKey,
+        retailerName: source.retailerName,
+        channel: source.channel,
+        sourceType: source.sourceType,
+        sourceKey: `${source.sourceRetailerFormat}-official-flyer-current`,
+        status: 'success',
+        foundRawItems: 2,
+        parsedOffers: 1,
+        offersStored: 1,
+      };
+    },
+    async dedupeOffersAcrossSourcesImpl() {
+      return { duplicateGroups: 0, removedOffers: 0 };
+    },
+    async rebuildFilterMetadataImpl() {
+      return { ok: true, processedOffers: 2 };
+    },
+    clearRankingResponseCacheImpl() {},
+    async ensureManualCategoryOverrideCacheLoadedImpl() {},
+  });
+
+  assert.deepEqual(sourceCalls.map((source) => source.sourceRetailerFormat), ['spar', 'interspar']);
+  assert.equal(result.sources.find((source) => source.sourceKey === 'spar-official-flyer-current').status, 'success');
+  assert.equal(result.sources.find((source) => source.sourceKey === 'interspar-official-flyer-current').status, 'success');
+  const eurosparResult = result.sources.find((source) => source.sourceKey === 'eurospar-official-flyer-current');
+  assert.equal(eurosparResult.status, 'skipped');
+  assert.equal(eurosparResult.skippedReason, 'full-crawl-scoped-only-source');
+  assert.equal(createdJobs.length, 1);
+  assert.equal(createdJobs[0].metadata.sourceKey, 'eurospar-official-flyer-current');
+});
+
 test('source timeout helper keeps configured source timeout bounded', () => {
   assert.equal(_private.sourceTimeoutMs({ crawlPolicy: { sourceTimeoutMs: 1 } }), 250);
   assert.equal(_private.sourceTimeoutMs({ crawlPolicy: { sourceTimeoutMs: 2000 } }), 2000);
