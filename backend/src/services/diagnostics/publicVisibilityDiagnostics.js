@@ -23,6 +23,7 @@ const ALLOWED_RETAILERS = new Set(['spar', 'interspar']);
 const DEFAULT_RETAILERS = ['spar', 'interspar'];
 const CANDIDATE_LIMIT = 1000;
 const EXAMPLES_PER_RETAILER = 20;
+const EXAMPLES_PER_REASON = 3;
 
 const VISIBILITY_DIAGNOSTIC_FIELDS = [
   '_id',
@@ -264,6 +265,7 @@ async function buildRetailerVisibilityDiagnostics({
   const programIds = new Set(programEligibleOffers.map((offer) => String(offer._id || offer.id || '')));
   const rejectReasonCounts = {};
   const rejectExamples = [];
+  const rejectExamplesByReason = {};
   const sourceClassCounts = {};
   const sourceKeyCounts = {};
 
@@ -289,8 +291,15 @@ async function buildRetailerVisibilityDiagnostics({
     const primary = reasons[0];
     addCount(rejectReasonCounts, primary);
 
+    const example = buildRejectExample(offer, primary, reasons.slice(1), now);
+
     if (rejectExamples.length < EXAMPLES_PER_RETAILER) {
-      rejectExamples.push(buildRejectExample(offer, primary, reasons.slice(1), now));
+      rejectExamples.push(example);
+    }
+
+    rejectExamplesByReason[primary] = rejectExamplesByReason[primary] || [];
+    if (rejectExamplesByReason[primary].length < EXAMPLES_PER_REASON) {
+      rejectExamplesByReason[primary].push(example);
     }
   }
 
@@ -307,6 +316,7 @@ async function buildRetailerVisibilityDiagnostics({
     },
     rejectReasonCounts,
     rejectExamples,
+    rejectExamplesByReason,
     sourceClassCounts,
     sourceKeyCounts,
   };
@@ -344,6 +354,7 @@ module.exports = {
   _private: {
     ALLOWED_RETAILERS,
     CANDIDATE_LIMIT,
+    EXAMPLES_PER_REASON,
     EXAMPLES_PER_RETAILER,
     VISIBILITY_DIAGNOSTIC_FIELDS,
     buildRejectExample,

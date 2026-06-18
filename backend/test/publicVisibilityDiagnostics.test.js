@@ -134,6 +134,11 @@ test('public visibility diagnostics counts SPAR freshness rejects and keeps exam
   assert.equal(spar.rejectExamples[0].freshness.hasValidityEvidence, true);
   assert.equal(spar.rejectExamples[1].officialOrAggregator, 'aggregator');
   assert.equal(spar.rejectExamples[1].freshness.sourceClass, 'aggregator-ppcv');
+  assert.equal(spar.rejectExamplesByReason['validTo-expired'][0].offerReference, 'expired-offer');
+  assert.equal(
+    spar.rejectExamplesByReason['stale-retained-aggregator-without-public-freshness'][0].offerReference,
+    'stale-aggregator-offer'
+  );
   assert.equal(calls.limit, _private.CANDIDATE_LIMIT);
   assert.equal(calls.rankingArgs.retailers, 'spar');
   assert.equal(calls.rankingArgs.limit, 'all');
