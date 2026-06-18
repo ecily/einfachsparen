@@ -73,8 +73,16 @@ const VALIDITY_TERMS = [
 ];
 
 const CURRENT_FALLBACK_VIEWER_PATTERNS = [
+  /kw[-_ ]?25\b/i,
+  /steiermark_kw25/i,
+  /260618/i,
+];
+
+const STALE_CURRENT_FALLBACK_PATTERNS = [
   /kw[-_ ]?24\b/i,
   /steiermark_kw24/i,
+  /260611/i,
+  /260603/i,
 ];
 
 function normalizeForScan(value) {
@@ -176,6 +184,8 @@ function isOfficialSparFamilyViewerUrl(value) {
 }
 
 function isRelevantSparFamilyPdfUrl(value) {
+  if (!isOfficialSparFamilyPdfUrl(value)) return false;
+
   try {
     const parsed = new URL(value);
     const path = parsed.pathname.toLowerCase();
@@ -203,7 +213,15 @@ function isRelevantSparFamilyViewerUrl(value) {
 
 function isCurrentFallbackViewerUrl(value) {
   const url = canonicalDiscoveryUrl(value);
-  if (!url || !isRelevantSparFamilyViewerUrl(url)) {
+  if (!url) {
+    return false;
+  }
+
+  if (STALE_CURRENT_FALLBACK_PATTERNS.some((pattern) => pattern.test(url))) {
+    return false;
+  }
+
+  if (!isRelevantSparFamilyViewerUrl(url) && !isRelevantSparFamilyPdfUrl(url)) {
     return false;
   }
 
@@ -226,7 +244,7 @@ function buildFallbackViewerLinks(fallbackViewerUrls = [], {
     links.push({
       url,
       discoveredFrom: 'configured-current-viewer-fallback',
-      kind: 'viewer',
+      kind: isOfficialSparFamilyPdfUrl(url) ? 'pdf' : 'viewer',
     });
 
     if (links.length >= maxLinks) {

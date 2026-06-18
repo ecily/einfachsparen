@@ -14,6 +14,7 @@ const {
   extractSparFamilyViewerLinksFromHtml,
   getBackendSparFamilyPdfSources,
   inferFolderType,
+  isCurrentFallbackViewerUrl,
   isOfficialSparFamilyViewerUrl,
   isOfficialSparFamilyPdfUrl,
 } = require('../src/services/crawl/sparFamilyFlyerDiscovery');
@@ -140,43 +141,43 @@ test('models 403 or Cloudflare pages as blocked without extracting links', async
   assert.equal(result.pdfs.length, 0);
 });
 
-test('uses configured current viewer fallback when official entrypoint is blocked', async () => {
+test('uses configured current PDF fallback when official entrypoint is blocked', async () => {
   const entrypointUrl = 'https://www.spar.at/aktionen/steiermark';
-  const viewerUrl = 'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/';
-  const viewerHtml = `
-    <script>
-      window.staticSettings = {
-        "paperCompleteUrl":"https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/",
-        "name":"260611-1-Flugblatt KW 24",
-        "pageTitle":"Do., 11.06.26 - Mi., 17.06.26",
-        "pages":[{"number":1},{"number":2}],
-        "pageTexts":["gueltig bis 17.06.2026","Stiegl Goldbraeu Aktion"]
-      };
-    </script>
-  `;
+  const pdfUrl = 'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx';
   const httpClient = createHttpClient({
     htmlByUrl: {
       [entrypointUrl]: '<html><title>Just a moment...</title><body>Cloudflare</body></html>',
-      [viewerUrl]: viewerHtml,
     },
     statusByUrl: {
       [entrypointUrl]: 403,
     },
   });
+  const metadataCalls = [];
 
   const result = await discoverSparFamilyFlyers({
     entryPoints: [entrypointUrl],
-    fallbackViewerUrls: [viewerUrl],
+    fallbackViewerUrls: [pdfUrl],
     httpClient,
+    pdfMetadataLoader: async (url) => {
+      metadataCalls.push(url);
+      return {
+        fetchStatus: 'ok',
+        httpStatus: 200,
+        pageCount: 2,
+        text: 'Do., 18.06.26 - Di., 30.06.26 Aperol Aktion',
+        error: '',
+      };
+    },
     limits: { maxPdfMetadataLookups: 1 },
   });
 
-  assert.deepEqual(httpClient.calls, [entrypointUrl, viewerUrl]);
+  assert.deepEqual(httpClient.calls, [entrypointUrl]);
+  assert.deepEqual(metadataCalls, [pdfUrl]);
   assert.equal(result.checkedPages[0].fetchStatus, 'blocked');
-  assert.deepEqual(result.fallbackViewerUrls, [viewerUrl]);
+  assert.deepEqual(result.fallbackViewerUrls, [pdfUrl]);
   assert.equal(result.pdfs.length, 1);
-  assert.equal(result.pdfs[0].url, viewerUrl);
-  assert.equal(result.pdfs[0].kind, 'viewer');
+  assert.equal(result.pdfs[0].url, pdfUrl);
+  assert.equal(result.pdfs[0].kind, 'pdf');
   assert.equal(result.pdfs[0].sourceGuess, 'spar');
   assert.equal(result.pdfs[0].folderType, 'regular flyer');
   assert.equal(result.pdfs[0].fetchStatus, 'ok');
@@ -184,9 +185,9 @@ test('uses configured current viewer fallback when official entrypoint is blocke
   assert.equal(result.pdfs[0].containsValidityTerms, true);
 });
 
-test('ignores configured fallback viewers that are not the current KW24 official path', async () => {
+test('ignores stale configured current fallbacks without fetching them', async () => {
   const entrypointUrl = 'https://www.spar.at/aktionen/steiermark';
-  const historicalViewerUrl = 'https://flugblatt.spar.at/steiermark/spar/260603-1-flugblatt-kw-23/';
+  const historicalViewerUrl = 'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/';
   const httpClient = createHttpClient({
     htmlByUrl: {
       [entrypointUrl]: '<html><title>Just a moment...</title><body>Cloudflare</body></html>',
@@ -207,6 +208,15 @@ test('ignores configured fallback viewers that are not the current KW24 official
   assert.deepEqual(httpClient.calls, [entrypointUrl]);
   assert.deepEqual(result.fallbackViewerUrls, []);
   assert.equal(result.pdfs.length, 0);
+});
+
+test('only accepts current SPAR-family fallback URLs', () => {
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx'), true);
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/'), true);
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx'), true);
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/getPdf.ashx'), false);
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw24/'), false);
+  assert.equal(isCurrentFallbackViewerUrl('https://example.test/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx'), false);
 });
 
 test('enforces maxEntryPoints maxLinks and maxPdfMetadataLookups', async () => {
@@ -446,10 +456,10 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   assert.equal(currentSources.every((source) => !/^(?:[A-Z]:\\|file:|https?:\/\/(?:www\.)?aktionsfinder\.at|https?:\/\/(?:www\.)?marktguru\.at)/i.test(source.sourceUrl)), true);
   const byKey = new Map(currentSources.map((source) => [deriveSourceKey(source), source]));
   assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
-    'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/',
+    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
   ]);
   assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
-    'https://flugblatt.interspar.at/steiermark/steiermark_kw24/',
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
   ]);
   assert.equal(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
 });
