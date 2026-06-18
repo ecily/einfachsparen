@@ -23,7 +23,23 @@ A DB-backed global CrawlRun lock prevents parallel full crawls across app instan
 
 If a previous-process scheduled full crawl is recovered after a deploy/restart before any source ran (`sourceOk=0`, `sourceFail=0`, no source results, `process-restart-recovery`), the scheduler marks the original run as runtime-failed and plans exactly one safe scheduled replacement. The replacement is a normal `scheduled/full` CrawlRun with `metadata.scheduledReplacement.originalRunId` pointing to the interrupted run. It still respects startup grace, the global lock, publish finality, and duplicate/newer-run checks.
 
-No automatic replacement is planned for source/parser failures, partial/success runs, runs with source execution evidence, manual/scoped runs, open publish status, active locks, existing replacements, or newer effective scheduled full crawls. Those cases require normal source-quality triage or explicit operator action.
+2026-06-18 live failure note: run `6a3375ec13a1488ca568c72c` proved that `source-started` alone is not sufficient source execution evidence. The process restarted about 45 seconds after the scheduled daily started; recovery later saw no source results, no successful or failed source count, and no replacement metadata. Replacement eligibility must therefore treat `source-started` as pre-result progress. Source evidence starts only when a source result/count exists, `finishedSourceCount > 0`, `source-finished`, `source-jobs-finished`, or later dedupe/filter/publish progress is present.
+
+Replacement reconciliation is persistent across restarts. On scheduler startup and periodic recovery it checks both:
+
+- failed scheduled/full runs explicitly marked `metadata.scheduledReplacement.status=required`
+- the latest untagged source-less scheduled/full process-restart-recovery failure, including explicit `metadata.scheduledReplacement=null`, for backward compatibility with the 2026-06-18 live run
+
+If readiness still passes and no replacement/newer effective scheduled full run exists, the scheduler persists `metadata.scheduledReplacement.status=required` on untagged legacy failures, then starts or defers exactly one replacement. Publish readiness uses the same intermediate-only semantics as the dashboard: `source-written`, `queued`, `running`, and empty status block replacement; historical `unknown` status is diagnostic but not an open publish blocker. A deferred replacement must not depend solely on an in-memory timer; after another restart, the new process must rediscover the original run from DB metadata or from the latest untagged source-less restart failure.
+
+No automatic replacement is planned for source/parser failures, partial/success runs, runs with source execution evidence, manual/scoped runs, open publish status, active locks, blocking existing replacements, or newer effective scheduled full crawls. A blocking existing replacement is active, success/partial, or has source execution evidence. A source-less failed replacement caused by another restart does not permanently block a retry. Those cases require normal source-quality triage or explicit operator action.
+
+Dashboard/Essence status:
+
+- original failed + no replacement metadata/run remains red
+- original failed + `required`/`planned` replacement is yellow/action
+- replacement queued/running is yellow
+- replacement success/partial, or source-started/source-finished replacement progress, becomes the effective scheduled daily and must not be reported as "no automatic replacement"
 
 Source failures are reported as `partial` or `failed`; they are not silently converted to success. Existing live offers for a failed or empty-yield source are retained. Source-level offer refresh is guarded so a source is not cleared before its new offers have been built. On MongoDB deployments that support transactions, source offer replacement is transactional; otherwise the fallback inserts the new source snapshot before deleting previous offers for that source.
 

@@ -84,6 +84,136 @@ test('dashboard publish status summary classifies final and open aggregate rows'
   assert.equal(summary.statuses.find((row) => row.status === 'unknown').intermediate, false);
 });
 
+test('dashboard daily reliability distinguishes missing, planned and active scheduled replacements', () => {
+  const lockStatus = { state: 'free', isBlocked: false };
+  const publishStatusSummary = { status: 'final', openCount: 0 };
+  const sourceLessFailure = {
+    id: '6a3375ec13a1488ca568c72c',
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: '2026-06-18T04:37:00.096Z',
+    finishedAt: '2026-06-18T04:52:47.750Z',
+    lastStage: 'process-restart-recovery',
+    summary: { successfulSourcesCount: 0, failedSourcesCount: 0 },
+    sources: [],
+    warnings: [
+      'Interrupted CrawlRun recovery after restart: Scheduler periodic recovery found an active CrawlRun from a previous process with a stale lock heartbeat.',
+    ],
+    errorMessages: [
+      'CrawlRun was marked failed after process restart; no automatic replacement crawl was started.',
+    ],
+    metadata: { scheduledReplacement: null },
+  };
+  const missingReplacement = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: sourceLessFailure,
+    latestCrawl: sourceLessFailure,
+    crawlHistory: [sourceLessFailure],
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  });
+
+  assert.equal(missingReplacement.scheduledDaily.level, 'red');
+  assert.equal(missingReplacement.sourceFailures.level, 'red');
+  assert.equal(_private.buildExecutiveStatus({
+    latestCrawl: sourceLessFailure,
+    latestScheduledFullCrawl: sourceLessFailure,
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  }).level, 'red');
+
+  const requiredReplacement = {
+    ...sourceLessFailure,
+    metadata: {
+      scheduledReplacement: {
+        status: 'required',
+        originalRunId: sourceLessFailure.id,
+      },
+    },
+  };
+  const requiredStatus = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: requiredReplacement,
+    latestCrawl: requiredReplacement,
+    crawlHistory: [requiredReplacement],
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  });
+
+  assert.equal(requiredStatus.scheduledDaily.level, 'yellow');
+  assert.equal(requiredStatus.sourceFailures.level, 'yellow');
+  assert.equal(_private.buildExecutiveStatus({
+    latestCrawl: requiredReplacement,
+    latestScheduledFullCrawl: requiredReplacement,
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  }).level, 'yellow');
+
+  const runningReplacement = {
+    id: 'replacement-run',
+    status: 'running',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: '2026-06-18T04:55:00.000Z',
+    summary: {},
+    sources: [],
+    warnings: [],
+    errorMessages: [],
+    metadata: {
+      scheduledReplacement: {
+        originalRunId: sourceLessFailure.id,
+      },
+    },
+  };
+  const runningStatus = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: runningReplacement,
+    latestCrawl: runningReplacement,
+    crawlHistory: [runningReplacement, requiredReplacement],
+    activeCrawlRun: runningReplacement,
+    lockStatus,
+    publishStatusSummary,
+  });
+
+  assert.equal(runningStatus.scheduledDaily.level, 'yellow');
+  assert.equal(_private.buildExecutiveStatus({
+    latestCrawl: runningReplacement,
+    latestScheduledFullCrawl: runningReplacement,
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  }).level, 'yellow');
+
+  const successfulReplacement = {
+    ...runningReplacement,
+    status: 'success',
+    finishedAt: '2026-06-18T05:30:00.000Z',
+    summary: { successfulSourcesCount: 3, failedSourcesCount: 0 },
+    sources: [{ sourceKey: 'penny-official-site', status: 'success' }],
+  };
+  const successStatus = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: successfulReplacement,
+    latestCrawl: successfulReplacement,
+    crawlHistory: [successfulReplacement, requiredReplacement],
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  });
+
+  assert.equal(successStatus.scheduledDaily.level, 'green');
+  assert.equal(_private.buildExecutiveStatus({
+    latestCrawl: successfulReplacement,
+    latestScheduledFullCrawl: successfulReplacement,
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  }).level, 'green');
+});
+
 test('dashboard aggregate diagnostics build offer KPIs without loading offer documents', () => {
   const result = _private.buildOfferDiagnosticsFromAggregateResult({
     summary: [{

@@ -775,6 +775,290 @@ test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs failed 
   assert.ok(lockUpdates.some((call) => call.update?.$set?.status === 'released'));
 });
 
+test('source-started without finished source result remains scheduled replacement eligible after restart recovery', async () => {
+  const { recoverInterruptedCrawlRunsAfterRestart } = require('../src/services/crawl/crawlRunService');
+  const runId = new mongoose.Types.ObjectId();
+  const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 2 * 60 * 60 * 1000);
+  const run = {
+    _id: runId,
+    status: 'running',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 2 * 60 * 1000),
+    summary: { successfulSourcesCount: 0, failedSourcesCount: 0 },
+    result: { sources: [] },
+    metadata: {
+      progress: {
+        stage: 'source-started',
+        sourceIndex: 1,
+        sourceCount: 12,
+        currentSourceKey: 'penny-official-site',
+      },
+    },
+    warnings: [],
+    errorMessages: [],
+  };
+  const lock = {
+    runId,
+    status: 'running',
+    heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+  };
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindOneAndUpdate: CrawlRun.findOneAndUpdate,
+    crawlRunLockFindById: CrawlRunLock.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const runUpdates = [];
+  let activeRuns = [run];
+
+  CrawlRun.find = () => ({
+    sort() {
+      return activeRuns;
+    },
+  });
+  CrawlRun.findOneAndUpdate = async (filter, update) => {
+    runUpdates.push({ filter, update });
+    activeRuns = [];
+    return { ...run, status: 'failed' };
+  };
+  CrawlRunLock.findById = () => ({
+    lean: async () => lock,
+  });
+  CrawlRunLock.updateOne = async () => ({ modifiedCount: 1 });
+  Offer.updateMany = async () => ({ matchedCount: 0, modifiedCount: 0 });
+
+  try {
+    const result = await recoverInterruptedCrawlRunsAfterRestart({
+      now,
+      staleAfterMs: 60 * 60 * 1000,
+      reason: 'live restart recovery',
+    });
+
+    assert.equal(result.recovered.length, 1);
+    assert.equal(result.recovered[0].replacementCandidate, true);
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
+    CrawlRunLock.findById = originals.crawlRunLockFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+
+  assert.equal(runUpdates[0].update.$set['metadata.scheduledReplacement'].status, 'required');
+  assert.equal(
+    runUpdates[0].update.$push.errorMessages,
+    'CrawlRun was marked failed after process restart; a safe scheduled replacement crawl is required.'
+  );
+});
+
+test('source execution evidence starts only after a source finished or produced results', () => {
+  assert.equal(_private.hasSourceExecutionEvidence({
+    result: { sources: [] },
+    summary: { successfulSourcesCount: 0, failedSourcesCount: 0 },
+    metadata: { progress: { stage: 'source-started' } },
+  }), false);
+
+  assert.equal(_private.hasSourceExecutionEvidence({
+    result: { sources: [] },
+    summary: { successfulSourcesCount: 0, failedSourcesCount: 0 },
+    metadata: { progress: { stage: 'source-finished', finishedSourceCount: 1 } },
+  }), true);
+
+  assert.equal(_private.hasSourceExecutionEvidence({
+    result: { sources: [{ sourceKey: 'spar-official-flyer-current', status: 'success' }] },
+    summary: {},
+    metadata: { progress: { stage: 'process-restart-recovery' } },
+  }), true);
+});
+
+test('findPendingScheduledReplacementCandidates includes latest untagged source-less restart failure', async () => {
+  const originalRunId = new mongoose.Types.ObjectId();
+  const untaggedRun = {
+    _id: originalRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T04:37:00.096Z'),
+    finishedAt: new Date('2026-06-18T04:52:47.750Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: null,
+      progress: { stage: 'process-restart-recovery' },
+    },
+    warnings: [
+      'Interrupted CrawlRun recovery after restart: Scheduler periodic recovery found an active CrawlRun from a previous process with a stale lock heartbeat.',
+    ],
+    errorMessages: [
+      'CrawlRun was marked failed after process restart; no automatic replacement crawl was started.',
+    ],
+  };
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindOne: CrawlRun.findOne,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunUpdateOne: CrawlRun.updateOne,
+    crawlRunCollectionFind: CrawlRun.collection.find,
+    crawlRunLockFindById: CrawlRunLock.findById,
+    offerCountDocuments: Offer.countDocuments,
+  };
+  const markerUpdates = [];
+  let rawCollectionQuery = null;
+
+  CrawlRun.find = (query = {}) => ({
+    sort() {
+      return {
+        limit() {
+          if (query['metadata.scheduledReplacement.status'] === 'required') {
+            return [];
+          }
+          return [];
+        },
+      };
+    },
+  });
+  CrawlRun.findOne = (query = {}) => ({
+    sort() {
+      if (query['metadata.scheduledReplacement.originalRunId']) {
+        return null;
+      }
+      if (query.status?.$in) {
+        return null;
+      }
+      return null;
+    },
+  });
+  CrawlRun.collection.find = (query = {}) => {
+    rawCollectionQuery = query;
+    return {
+      sort() {
+        return {
+          limit() {
+            return {
+              toArray: async () => [untaggedRun],
+            };
+          },
+        };
+      },
+    };
+  };
+  CrawlRun.findById = async () => untaggedRun;
+  CrawlRun.updateOne = async (filter, update) => {
+    markerUpdates.push({ filter, update });
+    return { modifiedCount: 1 };
+  };
+  CrawlRunLock.findById = () => ({
+    lean: async () => ({ status: 'released', runId: null }),
+  });
+  Offer.countDocuments = async () => 0;
+
+  try {
+    const pending = await _private.findPendingScheduledReplacementCandidates();
+
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].runId, String(originalRunId));
+    assert.equal(pending[0].replacementCandidate, true);
+    assert.equal(pending[0].marker.marked, true);
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findOne = originals.crawlRunFindOne;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRun.updateOne = originals.crawlRunUpdateOne;
+    CrawlRun.collection.find = originals.crawlRunCollectionFind;
+    CrawlRunLock.findById = originals.crawlRunLockFindById;
+    Offer.countDocuments = originals.offerCountDocuments;
+  }
+
+  assert.equal(markerUpdates.length, 1);
+  assert.equal(markerUpdates[0].filter._id, originalRunId);
+  assert.equal(markerUpdates[0].update.$set['metadata.scheduledReplacement'].status, 'required');
+  assert.equal(markerUpdates[0].update.$set['metadata.scheduledReplacement'].originalRunId, String(originalRunId));
+  assert.deepEqual(rawCollectionQuery, {
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    status: 'failed',
+  });
+});
+
+test('open publish status guard matches dashboard intermediate-only semantics', async () => {
+  const original = Offer.countDocuments;
+  let query = null;
+
+  Offer.countDocuments = async (input) => {
+    query = input;
+    return 0;
+  };
+
+  try {
+    const hasOpen = await _private.hasOpenOfferPublishStatus();
+
+    assert.equal(hasOpen, false);
+  } finally {
+    Offer.countDocuments = original;
+  }
+
+  assert.deepEqual(query, {
+    status: 'active',
+    isActiveNow: true,
+    publishStatus: { $in: ['', 'source-written', 'queued', 'running'] },
+  });
+});
+
+test('existing scheduled replacement guard ignores source-less failed replacement retries', async () => {
+  const original = CrawlRun.find;
+  const originalRunId = new mongoose.Types.ObjectId();
+  const replacementId = new mongoose.Types.ObjectId();
+  let replacementRuns = [];
+
+  CrawlRun.find = () => ({
+    sort() {
+      return {
+        limit() {
+          return replacementRuns;
+        },
+      };
+    },
+  });
+
+  try {
+    replacementRuns = [
+      {
+        _id: replacementId,
+        status: 'failed',
+        trigger: 'scheduled',
+        mode: 'full',
+        dryRun: false,
+        summary: {},
+        result: { sources: [] },
+        metadata: {
+          scheduledReplacement: { originalRunId: String(originalRunId) },
+          progress: { stage: 'process-restart-recovery' },
+        },
+      },
+    ];
+    assert.equal(await _private.findExistingScheduledReplacementRun(originalRunId), null);
+
+    replacementRuns = [{ ...replacementRuns[0], status: 'running' }];
+    assert.equal(await _private.findExistingScheduledReplacementRun(originalRunId), replacementRuns[0]);
+
+    replacementRuns = [
+      {
+        ...replacementRuns[0],
+        status: 'failed',
+        result: { sources: [{ sourceKey: 'hofer-official', status: 'failed' }] },
+      },
+    ];
+    assert.equal(await _private.findExistingScheduledReplacementRun(originalRunId), replacementRuns[0]);
+  } finally {
+    CrawlRun.find = original;
+  }
+});
+
 test('recoverStaleCrawlRun releases matching lock even when publish status marking fails', async () => {
   const { recoverStaleCrawlRun } = require('../src/services/crawl/crawlRunService');
   const runId = new mongoose.Types.ObjectId();

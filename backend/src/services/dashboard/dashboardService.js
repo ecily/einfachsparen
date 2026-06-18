@@ -256,6 +256,9 @@ function serializeCrawlRun(run) {
     publishMatchedCount: progress.matchedCount ?? null,
     publishModifiedCount: progress.modifiedCount ?? null,
     publishStatusUpdatedAt: toIsoOrNull(progress.updatedAt),
+    metadata: {
+      scheduledReplacement: plain.metadata?.scheduledReplacement || null,
+    },
     summary: plain.summary || {},
     perRetailer: Array.isArray(plain.perRetailer) ? plain.perRetailer : [],
     sourceTypes: Array.isArray(plain.sourceTypes) ? plain.sourceTypes : [],
@@ -278,6 +281,7 @@ function serializeCrawlRun(run) {
 
 function crawlStatusLevel(run) {
   if (!run) return 'yellow';
+  if (ACTIVE_CRAWL_STATUSES.has(run.status)) return 'yellow';
   if (run.status === 'failed' || run.status === 'stale') return 'red';
   if (run.status === 'partial' || run.status === 'skipped') return 'yellow';
   if (run.status === 'success') return 'green';
@@ -335,22 +339,45 @@ function isSourceLessProcessRestartRecoveryRun(run) {
   return /process-restart-recovery|stale crawlrun recovery after restart|previous process/.test(text);
 }
 
+function getScheduledReplacementStatus(run = {}) {
+  const replacement = run?.metadata?.scheduledReplacement || {};
+  const status = String(replacement.status || '').trim();
+
+  if (status === 'required' || status === 'planned') {
+    return status;
+  }
+
+  return '';
+}
+
+function scheduledDailyStatusLevel(run) {
+  if (!run) return 'yellow';
+  if (isSourceLessProcessRestartRecoveryRun(run) && getScheduledReplacementStatus(run)) {
+    return 'yellow';
+  }
+  return crawlStatusLevel(run);
+}
+
 function buildSourceFailureDiagnosis(run) {
   if (isSourceLessProcessRestartRecoveryRun(run)) {
+    const replacementStatus = getScheduledReplacementStatus(run);
+
     return {
-      level: 'red',
+      level: replacementStatus ? 'yellow' : 'red',
       failedSourcesCount: 0,
       p0ReliabilityCount: 1,
       p1SourceCoverageCount: 0,
       policyBoundedSourcesCount: 0,
       notExecutedByPolicySourcesCount: 0,
-      reason: 'Reference crawl failed before any source produced a result because process-restart recovery finalized a previous-process run; this is P0 crawl runtime reliability, not a source/parser failure.',
+      reason: replacementStatus
+        ? `Reference crawl failed before any source produced a result; scheduled replacement is ${replacementStatus}.`
+        : 'Reference crawl failed before any source produced a result because process-restart recovery finalized a previous-process run; this is P0 crawl runtime reliability, not a source/parser failure.',
       groups: [
         {
           sourceType: 'crawl-runtime',
           errorType: 'process-restart-recovery',
           count: 1,
-          severity: 'red',
+          severity: replacementStatus ? 'yellow' : 'red',
           classification: 'P0 Crawl Runtime',
           sourceKeys: [],
         },
@@ -425,7 +452,7 @@ function buildCrawlReliabilityStatus({
       ? latestCrawl
       : null
   );
-  const scheduledLevel = crawlStatusLevel(latestScheduledFullCrawl);
+  const scheduledLevel = scheduledDailyStatusLevel(latestScheduledFullCrawl);
   const lockFree = lockStatus?.isBlocked === false;
   const hasActiveBlockedRun = Boolean(activeCrawlRun && ACTIVE_CRAWL_STATUSES.has(activeCrawlRun.status));
   const manualFullTerminal = latestManualFullCrawl
@@ -455,7 +482,9 @@ function buildCrawlReliabilityStatus({
       startedAt: latestScheduledFullCrawl?.startedAt || null,
       finishedAt: latestScheduledFullCrawl?.finishedAt || null,
       reason: latestScheduledFullCrawl
-        ? scheduledLevel === 'red'
+        ? getScheduledReplacementStatus(latestScheduledFullCrawl)
+          ? 'Latest scheduled full crawl failed source-less after restart; a scheduled replacement is required/planned.'
+          : scheduledLevel === 'red'
           ? 'Latest scheduled full crawl is not healthy; keep scheduled daily reliability on watch.'
           : 'Latest scheduled full crawl is terminal.'
         : 'No scheduled full crawl is available.',
@@ -1124,13 +1153,16 @@ function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCra
     reasons.push('Keine CrawlRun-Lineage gefunden.');
   } else {
     if (referenceRun.status === 'failed') {
-      level = 'red';
-      reasons.push('Letzter Daily Crawl ist fehlgeschlagen.');
+      const replacementStatus = getScheduledReplacementStatus(referenceRun);
+      level = replacementStatus ? 'yellow' : 'red';
+      reasons.push(replacementStatus
+        ? `Letzter Daily Crawl ist source-los fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
+        : 'Letzter Daily Crawl ist fehlgeschlagen.');
     } else if (referenceRun.status === 'stale') {
       level = 'red';
       reasons.push('Letzter Daily Crawl wurde stale, weil der Heartbeat oder Prozessstatus nicht mehr vertrauenswuerdig war.');
     } else if (!TERMINAL_CRAWL_STATUSES.has(referenceRun.status)) {
-      level = 'red';
+      level = 'yellow';
       reasons.push('Letzter Daily Crawl ist nicht terminal abgeschlossen.');
     } else if (!referenceRun.finishedAt) {
       level = 'red';
@@ -1145,7 +1177,7 @@ function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCra
   }
 
   if (activeCrawlRun && ACTIVE_CRAWL_STATUSES.has(activeCrawlRun.status)) {
-    level = 'red';
+    level = level === 'red' ? 'red' : 'yellow';
     reasons.push('Es gibt eine aktive CrawlRun-Situation.');
   }
 
@@ -1186,10 +1218,13 @@ function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, 
   }
 
   if (latestCrawl?.status === 'failed') {
+    const replacementStatus = getScheduledReplacementStatus(latestCrawl);
     issues.push({
-      severity: 'red',
-      title: 'Letzter Crawl failed',
-      detail: compactStrings(latestCrawl.errorMessages, 1)[0] || 'Fehlerdetails im CrawlRun pruefen.',
+      severity: replacementStatus ? 'yellow' : 'red',
+      title: replacementStatus ? 'Scheduled Replacement ausstehend' : 'Letzter Crawl failed',
+      detail: replacementStatus
+        ? `Source-loser Daily ist fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
+        : compactStrings(latestCrawl.errorMessages, 1)[0] || 'Fehlerdetails im CrawlRun pruefen.',
     });
   }
 

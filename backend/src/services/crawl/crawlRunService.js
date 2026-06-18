@@ -28,6 +28,7 @@ const OFFER_PUBLISH_STATUS_BY_RUN_STATUS = {
   skipped: 'crawl-run-skipped',
 };
 const FINAL_OFFER_PUBLISH_STATUSES = Object.values(OFFER_PUBLISH_STATUS_BY_RUN_STATUS);
+const INTERMEDIATE_OFFER_PUBLISH_STATUSES = ['', 'source-written', 'queued', 'running'];
 const TERMINAL_RUN_STATUSES = ['success', 'partial', 'failed', 'skipped', 'stale'];
 
 function compactStrings(values = []) {
@@ -1070,13 +1071,18 @@ function hasSourceExecutionEvidence(run = {}) {
   const sources = Array.isArray(run.result?.sources) ? run.result.sources : [];
   const successful = numberFrom(run.summary?.successfulSourcesCount);
   const failed = numberFrom(run.summary?.failedSourcesCount);
-  const stage = String(run.metadata?.progress?.stage || '');
+  const progress = run.metadata?.progress || {};
+  const stage = String(progress.stage || '');
+  const finishedSourceCount = numberFrom(progress.finishedSourceCount);
 
   return (
     sources.length > 0
     || successful > 0
     || failed > 0
-    || /^source-|^crawl-dispatcher|^publish-status/.test(stage)
+    || finishedSourceCount > 0
+    || stage === 'source-finished'
+    || stage === 'source-jobs-finished'
+    || /^dedupe-|^filter-metadata-|^publish-status/.test(stage)
   );
 }
 
@@ -1099,13 +1105,22 @@ async function findExistingScheduledReplacementRun(originalRunId) {
   const id = asStringId(originalRunId);
   if (!id) return null;
 
-  return CrawlRun.findOne({
+  const replacementRuns = await CrawlRun.find({
     _id: { $ne: originalRunId },
     trigger: 'scheduled',
     mode: 'full',
     dryRun: false,
     'metadata.scheduledReplacement.originalRunId': id,
-  }).sort({ startedAt: -1, createdAt: -1 });
+  })
+    .sort({ startedAt: -1, createdAt: -1 })
+    .limit(10);
+
+  return replacementRuns.find((run) => (
+    ACTIVE_RUN_STATUSES.includes(run.status)
+    || run.status === 'success'
+    || run.status === 'partial'
+    || hasSourceExecutionEvidence(run)
+  )) || null;
 }
 
 async function findNewerEffectiveScheduledFullRun(originalRun) {
@@ -1139,7 +1154,7 @@ async function hasOpenOfferPublishStatus() {
   const count = await Offer.countDocuments({
     status: 'active',
     isActiveNow: true,
-    publishStatus: { $nin: FINAL_OFFER_PUBLISH_STATUSES },
+    publishStatus: { $in: INTERMEDIATE_OFFER_PUBLISH_STATUSES },
   });
   return count > 0;
 }
@@ -1260,8 +1275,68 @@ async function startScheduledReplacementCrawlRun({
   });
 }
 
+async function persistScheduledReplacementRequiredMarker(run, { now = new Date() } = {}) {
+  const originalRunId = asStringId(run?._id);
+
+  if (!originalRunId || run?.metadata?.scheduledReplacement?.status) {
+    return { marked: false, reason: 'marker-already-present' };
+  }
+
+  const result = await CrawlRun.updateOne(
+    {
+      _id: run._id,
+      trigger: 'scheduled',
+      mode: 'full',
+      dryRun: false,
+      status: 'failed',
+      $or: [
+        { 'metadata.scheduledReplacement.status': { $exists: false } },
+        { 'metadata.scheduledReplacement': null },
+      ],
+    },
+    {
+      $set: {
+        'metadata.scheduledReplacement': {
+          status: 'required',
+          reason: 'source-less-process-restart-recovery',
+          originalRunId,
+          detectedAt: run.metadata?.shutdown?.interruptedAt || run.finishedAt || now,
+          reconciledAt: now,
+        },
+      },
+    }
+  );
+
+  const modifiedCount = numberFrom(result?.modifiedCount ?? result?.nModified);
+
+  return {
+    marked: modifiedCount > 0,
+    reason: modifiedCount > 0 ? 'marker-persisted' : 'marker-not-modified',
+  };
+}
+
+async function findLatestUntaggedSourceLessScheduledRestartFailure({ limit = 10 } = {}) {
+  const candidateLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+  const runs = await CrawlRun.collection
+    .find({
+      trigger: 'scheduled',
+      mode: 'full',
+      dryRun: false,
+      status: 'failed',
+    })
+    .sort({ finishedAt: -1, startedAt: -1, createdAt: -1 })
+    .limit(candidateLimit)
+    .toArray();
+
+  return runs.find((run) => (
+    !run?.metadata?.scheduledReplacement?.status
+    && isSourceLessScheduledRestartRecoveryRun(run)
+  )) || null;
+}
+
 async function findPendingScheduledReplacementCandidates({ limit = 5 } = {}) {
-  const candidates = await CrawlRun.find({
+  const candidateLimit = Math.max(1, Math.min(20, Number(limit) || 5));
+  const requiredCandidates = await CrawlRun.find({
     trigger: 'scheduled',
     mode: 'full',
     dryRun: false,
@@ -1269,11 +1344,19 @@ async function findPendingScheduledReplacementCandidates({ limit = 5 } = {}) {
     'metadata.scheduledReplacement.status': 'required',
   })
     .sort({ finishedAt: -1, startedAt: -1, createdAt: -1 })
-    .limit(Math.max(1, Math.min(20, Number(limit) || 5)));
+    .limit(candidateLimit);
+  const latestUntaggedRestartFailure = await findLatestUntaggedSourceLessScheduledRestartFailure({
+    limit: candidateLimit,
+  });
+  const candidateMap = new Map();
+
+  for (const run of [...requiredCandidates, latestUntaggedRestartFailure].filter(Boolean)) {
+    candidateMap.set(asStringId(run._id), run);
+  }
 
   const pending = [];
 
-  for (const run of candidates) {
+  for (const run of candidateMap.values()) {
     if (!isSourceLessScheduledRestartRecoveryRun(run)) {
       continue;
     }
@@ -1281,6 +1364,8 @@ async function findPendingScheduledReplacementCandidates({ limit = 5 } = {}) {
     const readiness = await assessScheduledReplacementReadiness({ originalRunId: run._id });
 
     if (readiness.eligible) {
+      const marker = await persistScheduledReplacementRequiredMarker(run);
+
       pending.push({
         runId: asStringId(run._id),
         trigger: run.trigger || '',
@@ -1289,6 +1374,7 @@ async function findPendingScheduledReplacementCandidates({ limit = 5 } = {}) {
         sourceLess: true,
         replacementCandidate: true,
         reason: readiness.reason,
+        marker,
       });
     }
   }
@@ -1986,8 +2072,10 @@ module.exports = {
     assessScheduledReplacementReadiness,
     activeExecutionRunIds,
     findExistingScheduledReplacementRun,
+    findLatestUntaggedSourceLessScheduledRestartFailure,
     findNewerEffectiveScheduledFullRun,
     findPendingScheduledReplacementCandidates,
+    persistScheduledReplacementRequiredMarker,
     hasOpenOfferPublishStatus,
     hasSourceExecutionEvidence,
     isCurrentProcessLockOwner,
