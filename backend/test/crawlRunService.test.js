@@ -861,6 +861,7 @@ test('source-started without finished source result remains scheduled replacemen
 
 test('scheduled replacement readiness stops after the automatic attempt limit', async () => {
   const originalRunId = new mongoose.Types.ObjectId();
+  const replacementRunId = new mongoose.Types.ObjectId();
   const originalRun = {
     _id: originalRunId,
     status: 'failed',
@@ -872,19 +873,41 @@ test('scheduled replacement readiness stops after the automatic attempt limit', 
     result: { sources: [] },
     metadata: { progress: { stage: 'process-restart-recovery' } },
   };
+  const replacementRun = {
+    _id: replacementRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T04:53:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        originalRunId: String(originalRunId),
+        reason: 'eligible-source-less-scheduled-restart',
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
   const originals = {
+    crawlRunFind: CrawlRun.find,
     crawlRunFindById: CrawlRun.findById,
     crawlRunCountDocuments: CrawlRun.countDocuments,
   };
 
   CrawlRun.findById = async () => originalRun;
-  CrawlRun.countDocuments = async (query) => {
-    assert.deepEqual(query.startedAt, {
-      $gte: new Date('2026-06-18T00:00:00.000Z'),
-      $lt: new Date('2026-06-19T00:00:00.000Z'),
-    });
-    assert.equal(query['metadata.scheduledReplacement.reason'], 'eligible-source-less-scheduled-restart');
-    return _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS;
+  CrawlRun.find = () => ({
+    sort() {
+      return {
+        limit() {
+          return [replacementRun];
+        },
+      };
+    },
+  });
+  CrawlRun.countDocuments = async () => {
+    throw new Error('replacement attempts must be counted from the persistent chain');
   };
 
   try {
@@ -897,14 +920,127 @@ test('scheduled replacement readiness stops after the automatic attempt limit', 
     assert.equal(readiness.operatorActionRequired, true);
     assert.equal(readiness.replacementAttemptCount, _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS);
   } finally {
+    CrawlRun.find = originals.crawlRunFind;
     CrawlRun.findById = originals.crawlRunFindById;
     CrawlRun.countDocuments = originals.crawlRunCountDocuments;
   }
 });
 
-test('startScheduledReplacementCrawlRun reports operator action when replacement attempts are exhausted', async () => {
+test('scheduled replacement readiness blocks exhausted descendants in the root chain', async () => {
+  const originalRunId = new mongoose.Types.ObjectId();
+  const firstReplacementId = new mongoose.Types.ObjectId();
+  const exhaustedReplacementId = new mongoose.Types.ObjectId();
+  const originalRun = {
+    _id: originalRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T04:37:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        status: 'required',
+        originalRunId: String(originalRunId),
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
+  const firstReplacement = {
+    _id: firstReplacementId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T09:04:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        originalRunId: String(originalRunId),
+        reason: 'eligible-source-less-scheduled-restart',
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
+  const exhaustedReplacement = {
+    _id: exhaustedReplacementId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T09:21:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        status: _private.SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS,
+        originalRunId: String(firstReplacementId),
+        reason: 'replacement-attempt-limit-exhausted',
+        operatorActionRequired: true,
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunCountDocuments: CrawlRun.countDocuments,
+  };
+  const findQueries = [];
+
+  CrawlRun.findById = async (id) => {
+    const idString = String(id);
+    if (idString === String(originalRunId)) return originalRun;
+    if (idString === String(firstReplacementId)) return firstReplacement;
+    if (idString === String(exhaustedReplacementId)) return exhaustedReplacement;
+    return null;
+  };
+  CrawlRun.find = (query = {}) => ({
+    sort() {
+      return {
+        limit() {
+          findQueries.push(query);
+          const parentIds = query['metadata.scheduledReplacement.originalRunId']?.$in || [];
+          return [firstReplacement, exhaustedReplacement].filter((run) => (
+            parentIds.includes(String(run.metadata.scheduledReplacement.originalRunId))
+          ));
+        },
+      };
+    },
+  });
+  CrawlRun.countDocuments = async () => {
+    throw new Error('exhausted descendants must block before legacy attempt counting');
+  };
+
+  try {
+    const readiness = await _private.assessScheduledReplacementReadiness({
+      originalRunId,
+    });
+
+    assert.equal(readiness.eligible, false);
+    assert.equal(readiness.reason, 'replacement-attempt-limit-exhausted');
+    assert.equal(readiness.operatorActionRequired, true);
+    assert.equal(String(readiness.exhaustedRun._id), String(exhaustedReplacementId));
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRun.countDocuments = originals.crawlRunCountDocuments;
+  }
+
+  assert.equal(findQueries.length >= 2, true);
+  assert.deepEqual(findQueries[0]['metadata.scheduledReplacement.originalRunId'].$in, [String(originalRunId)]);
+  assert.deepEqual(
+    findQueries[1]['metadata.scheduledReplacement.originalRunId'].$in.sort(),
+    [String(originalRunId), String(firstReplacementId)].sort()
+  );
+});
+
+test('startScheduledReplacementCrawlRun does not reset attempts for replacement descendants', async () => {
   const { startScheduledReplacementCrawlRun } = require('../src/services/crawl/crawlRunService');
   const originalRunId = new mongoose.Types.ObjectId();
+  const replacementRunId = new mongoose.Types.ObjectId();
   const originalRun = {
     _id: originalRunId,
     status: 'failed',
@@ -916,12 +1052,118 @@ test('startScheduledReplacementCrawlRun reports operator action when replacement
     result: { sources: [] },
     metadata: { progress: { stage: 'process-restart-recovery' } },
   };
+  const replacementRun = {
+    _id: replacementRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T09:04:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        originalRunId: String(originalRunId),
+        reason: 'eligible-source-less-scheduled-restart',
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
   const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunCountDocuments: CrawlRun.countDocuments,
+  };
+
+  CrawlRun.findById = async (id) => {
+    const idString = String(id);
+    if (idString === String(originalRunId)) return originalRun;
+    if (idString === String(replacementRunId)) return replacementRun;
+    return null;
+  };
+  CrawlRun.find = (query = {}) => ({
+    sort() {
+      return {
+        limit() {
+          const parentIds = query['metadata.scheduledReplacement.originalRunId']?.$in || [];
+          return parentIds.includes(String(originalRunId)) ? [replacementRun] : [];
+        },
+      };
+    },
+  });
+  CrawlRun.countDocuments = async () => 0;
+
+  try {
+    const result = await startScheduledReplacementCrawlRun({
+      originalRunId: replacementRunId,
+      region: 'AT',
+      defer: true,
+      crawlAllSourcesImpl: async () => {
+        throw new Error('must not start replacement descendant');
+      },
+    });
+
+    assert.equal(result.accepted, false);
+    assert.equal(result.replacementSkipped, true);
+    assert.equal(result.reason, 'replacement-attempt-limit-exhausted');
+    assert.equal(result.operatorActionRequired, true);
+    assert.equal(result.replacementAttemptCount, _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS);
+    assert.equal(String(result.originalRun._id), String(originalRunId));
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRun.countDocuments = originals.crawlRunCountDocuments;
+  }
+});
+
+test('startScheduledReplacementCrawlRun reports operator action when replacement attempts are exhausted', async () => {
+  const { startScheduledReplacementCrawlRun } = require('../src/services/crawl/crawlRunService');
+  const originalRunId = new mongoose.Types.ObjectId();
+  const replacementRunId = new mongoose.Types.ObjectId();
+  const originalRun = {
+    _id: originalRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T04:37:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: { progress: { stage: 'process-restart-recovery' } },
+  };
+  const replacementRun = {
+    _id: replacementRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        originalRunId: String(originalRunId),
+        reason: 'eligible-source-less-scheduled-restart',
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
+  const originals = {
+    crawlRunFind: CrawlRun.find,
     crawlRunFindById: CrawlRun.findById,
     crawlRunCountDocuments: CrawlRun.countDocuments,
   };
 
   CrawlRun.findById = async () => originalRun;
+  CrawlRun.find = (query = {}) => ({
+    sort() {
+      return {
+        limit() {
+          const parentIds = query['metadata.scheduledReplacement.originalRunId']?.$in || [];
+          return parentIds.includes(String(originalRunId)) ? [replacementRun] : [];
+        },
+      };
+    },
+  });
   CrawlRun.countDocuments = async () => _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS;
 
   try {
@@ -940,6 +1182,7 @@ test('startScheduledReplacementCrawlRun reports operator action when replacement
     assert.equal(result.operatorActionRequired, true);
     assert.equal(result.replacementAttemptCount, _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS);
   } finally {
+    CrawlRun.find = originals.crawlRunFind;
     CrawlRun.findById = originals.crawlRunFindById;
     CrawlRun.countDocuments = originals.crawlRunCountDocuments;
   }
@@ -1164,6 +1407,130 @@ test('findPendingScheduledReplacementCandidates includes latest untagged source-
     dryRun: false,
     status: 'failed',
   });
+});
+
+test('findPendingScheduledReplacementCandidates does not re-plan exhausted replacement chains', async () => {
+  const originalRunId = new mongoose.Types.ObjectId();
+  const replacementRunId = new mongoose.Types.ObjectId();
+  const exhaustedRunId = new mongoose.Types.ObjectId();
+  const originalRun = {
+    _id: originalRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T04:37:00.096Z'),
+    finishedAt: new Date('2026-06-18T04:52:47.750Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        status: 'required',
+        originalRunId: String(originalRunId),
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
+  const replacementRun = {
+    _id: replacementRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T09:04:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        originalRunId: String(originalRunId),
+        reason: 'eligible-source-less-scheduled-restart',
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
+  const exhaustedRun = {
+    _id: exhaustedRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T09:21:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        status: _private.SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS,
+        originalRunId: String(replacementRunId),
+        reason: 'replacement-attempt-limit-exhausted',
+        operatorActionRequired: true,
+      },
+      progress: { stage: 'process-restart-recovery' },
+    },
+  };
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunUpdateOne: CrawlRun.updateOne,
+    crawlRunCollectionFind: CrawlRun.collection.find,
+  };
+  const markerUpdates = [];
+
+  CrawlRun.find = (query = {}) => ({
+    sort() {
+      return {
+        limit() {
+          if (query['metadata.scheduledReplacement.status'] === 'required') {
+            return [originalRun];
+          }
+          const parentIds = query['metadata.scheduledReplacement.originalRunId']?.$in || [];
+          return [replacementRun, exhaustedRun].filter((run) => (
+            parentIds.includes(String(run.metadata.scheduledReplacement.originalRunId))
+          ));
+        },
+      };
+    },
+  });
+  CrawlRun.findById = async (id) => {
+    const idString = String(id);
+    if (idString === String(originalRunId)) return originalRun;
+    if (idString === String(replacementRunId)) return replacementRun;
+    if (idString === String(exhaustedRunId)) return exhaustedRun;
+    return null;
+  };
+  CrawlRun.updateOne = async (filter, update) => {
+    markerUpdates.push({ filter, update });
+    return { modifiedCount: 1 };
+  };
+  CrawlRun.collection.find = () => ({
+    sort() {
+      return {
+        limit() {
+          return {
+            toArray: async () => [],
+          };
+        },
+      };
+    },
+  });
+
+  try {
+    const pending = await _private.findPendingScheduledReplacementCandidates();
+
+    assert.deepEqual(pending, []);
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRun.updateOne = originals.crawlRunUpdateOne;
+    CrawlRun.collection.find = originals.crawlRunCollectionFind;
+  }
+
+  assert.equal(markerUpdates.length, 1);
+  assert.equal(markerUpdates[0].filter._id, originalRunId);
+  assert.equal(
+    markerUpdates[0].update.$set['metadata.scheduledReplacement'].status,
+    _private.SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS
+  );
+  assert.equal(markerUpdates[0].update.$set['metadata.scheduledReplacement'].operatorActionRequired, true);
 });
 
 test('open publish status guard matches dashboard intermediate-only semantics', async () => {

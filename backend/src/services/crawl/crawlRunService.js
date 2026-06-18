@@ -1121,6 +1121,14 @@ function isScheduledReplacementAttemptRun(run = {}) {
   return Boolean(originalRunId && originalRunId !== runId);
 }
 
+function isScheduledReplacementExhaustedRun(run = {}) {
+  const scheduledReplacement = run?.metadata?.scheduledReplacement || {};
+  return (
+    scheduledReplacement.status === SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS
+    || scheduledReplacement.operatorActionRequired === true
+  );
+}
+
 function buildScheduledReplacementExhaustedMarker(run, {
   now = new Date(),
   attemptCount = MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
@@ -1150,8 +1158,93 @@ function buildReplacementAttemptWindow(run = {}) {
   return { start, end: addUtcDays(start, 1) };
 }
 
+async function findScheduledReplacementChainRuns(rootRunOrId, { limit = 100 } = {}) {
+  const rootRunId = asStringId(rootRunOrId?._id || rootRunOrId);
+  if (!rootRunId) return [];
+
+  const maxRuns = Math.max(1, Math.min(500, Number(limit) || 100));
+  const seenIds = new Set([rootRunId]);
+  const chain = [];
+
+  while (seenIds.size <= maxRuns) {
+    const knownIds = [...seenIds];
+    const query = CrawlRun.find({
+      trigger: 'scheduled',
+      mode: 'full',
+      dryRun: false,
+      'metadata.scheduledReplacement.originalRunId': { $in: knownIds },
+    })
+      .sort({ startedAt: 1, createdAt: 1 });
+    const batch = await (typeof query.limit === 'function' ? query.limit(maxRuns) : query);
+
+    const nextRuns = (Array.isArray(batch) ? batch : []).filter((candidate) => {
+      const candidateId = asStringId(candidate?._id || candidate?.id);
+      return candidateId && !seenIds.has(candidateId);
+    });
+
+    if (nextRuns.length === 0) {
+      break;
+    }
+
+    for (const nextRun of nextRuns) {
+      const nextRunId = asStringId(nextRun?._id || nextRun?.id);
+      seenIds.add(nextRunId);
+      chain.push(nextRun);
+
+      if (seenIds.size >= maxRuns) {
+        break;
+      }
+    }
+  }
+
+  return chain;
+}
+
+async function resolveScheduledReplacementRootRun(run = {}) {
+  let currentRun = run;
+  const seenIds = new Set();
+
+  for (let depth = 0; depth < 20; depth += 1) {
+    const currentRunId = asStringId(currentRun?._id || currentRun?.id);
+    const parentRunId = asStringId(currentRun?.metadata?.scheduledReplacement?.originalRunId);
+
+    if (!currentRunId || !parentRunId || parentRunId === currentRunId || seenIds.has(parentRunId)) {
+      return currentRun || null;
+    }
+
+    seenIds.add(currentRunId);
+
+    if (!mongoose.Types.ObjectId.isValid(parentRunId)) {
+      return currentRun || null;
+    }
+
+    const parentRun = await CrawlRun.findById(parentRunId);
+    if (!parentRun) {
+      return currentRun || null;
+    }
+
+    currentRun = parentRun;
+  }
+
+  return currentRun || null;
+}
+
+function countReplacementAttemptsInChain(chainRuns = []) {
+  return chainRuns.filter((run) => (
+    String(run?.metadata?.scheduledReplacement?.reason || '') === 'eligible-source-less-scheduled-restart'
+  )).length;
+}
+
 async function countScheduledReplacementAttemptsForRun(run = {}) {
-  const window = buildReplacementAttemptWindow(run);
+  const rootRun = await resolveScheduledReplacementRootRun(run);
+  const chainRuns = await findScheduledReplacementChainRuns(rootRun || run);
+  const chainAttemptCount = countReplacementAttemptsInChain(chainRuns);
+
+  if (chainAttemptCount > 0) {
+    return chainAttemptCount;
+  }
+
+  const window = buildReplacementAttemptWindow(rootRun || run);
   if (!window) return 0;
 
   return CrawlRun.countDocuments({
@@ -1210,15 +1303,7 @@ async function findExistingScheduledReplacementRun(originalRunId) {
   const id = asStringId(originalRunId);
   if (!id) return null;
 
-  const replacementRuns = await CrawlRun.find({
-    _id: { $ne: originalRunId },
-    trigger: 'scheduled',
-    mode: 'full',
-    dryRun: false,
-    'metadata.scheduledReplacement.originalRunId': id,
-  })
-    .sort({ startedAt: -1, createdAt: -1 })
-    .limit(10);
+  const replacementRuns = await findScheduledReplacementChainRuns(id, { limit: 100 });
 
   return replacementRuns.find((run) => (
     ACTIVE_RUN_STATUSES.includes(run.status)
@@ -1269,11 +1354,13 @@ async function assessScheduledReplacementReadiness({ originalRunId } = {}) {
     return { eligible: false, reason: 'invalid-original-run-id' };
   }
 
-  const originalRun = await CrawlRun.findById(originalRunId);
+  const requestedRun = await CrawlRun.findById(originalRunId);
 
-  if (!originalRun) {
+  if (!requestedRun) {
     return { eligible: false, reason: 'original-run-not-found' };
   }
+
+  const originalRun = await resolveScheduledReplacementRootRun(requestedRun);
 
   if (!isSourceLessScheduledRestartRecoveryRun(originalRun)) {
     return {
@@ -1283,13 +1370,16 @@ async function assessScheduledReplacementReadiness({ originalRunId } = {}) {
     };
   }
 
-  const replacementAttemptCount = await countScheduledReplacementAttemptsForRun(originalRun);
+  const chainRuns = await findScheduledReplacementChainRuns(originalRun);
+  const exhaustedRun = [originalRun, ...chainRuns].find(isScheduledReplacementExhaustedRun);
+  const replacementAttemptCount = countReplacementAttemptsInChain(chainRuns);
 
-  if (replacementAttemptCount >= MAX_SCHEDULED_REPLACEMENT_ATTEMPTS) {
+  if (exhaustedRun || replacementAttemptCount >= MAX_SCHEDULED_REPLACEMENT_ATTEMPTS) {
     return {
       eligible: false,
       reason: 'replacement-attempt-limit-exhausted',
       originalRun,
+      exhaustedRun: exhaustedRun || null,
       replacementAttemptCount,
       maxReplacementAttempts: MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
       operatorActionRequired: true,
@@ -1379,13 +1469,15 @@ async function startScheduledReplacementCrawlRun({
     };
   }
 
+  const replacementOriginalRunId = asStringId(readiness.originalRun?._id) || originalRunId;
+
   return startCrawlRun({
     trigger: 'scheduled',
     region,
     options: {
       dryRun: false,
       scheduledReplacement: {
-        originalRunId,
+        originalRunId: replacementOriginalRunId,
         reason: readiness.reason,
         plannedAt: new Date(),
       },
@@ -2224,10 +2316,13 @@ module.exports = {
     findLatestUntaggedSourceLessScheduledRestartFailure,
     findNewerEffectiveScheduledFullRun,
     findPendingScheduledReplacementCandidates,
+    findScheduledReplacementChainRuns,
     persistScheduledReplacementRequiredMarker,
+    resolveScheduledReplacementRootRun,
     hasOpenOfferPublishStatus,
     hasSourceExecutionEvidence,
     isScheduledReplacementAttemptRun,
+    isScheduledReplacementExhaustedRun,
     persistScheduledReplacementExhaustedMarker,
     isCurrentProcessLockOwner,
     interruptCurrentProcessCrawlRuns,
