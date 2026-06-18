@@ -841,6 +841,8 @@ test('source-started without finished source result remains scheduled replacemen
 
     assert.equal(result.recovered.length, 1);
     assert.equal(result.recovered[0].replacementCandidate, true);
+    assert.equal(result.recovered[0].replacementAttemptsExhausted, false);
+    assert.equal(result.recovered[0].operatorActionRequired, false);
   } finally {
     CrawlRun.find = originals.crawlRunFind;
     CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
@@ -1006,7 +1008,9 @@ test('recoverInterruptedCrawlRunsAfterRestart exhausts source-less replacement r
     });
 
     assert.equal(result.recovered.length, 1);
-    assert.equal(result.recovered[0].replacementCandidate, true);
+    assert.equal(result.recovered[0].replacementCandidate, false);
+    assert.equal(result.recovered[0].replacementAttemptsExhausted, true);
+    assert.equal(result.recovered[0].operatorActionRequired, true);
   } finally {
     CrawlRun.find = originals.crawlRunFind;
     CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;

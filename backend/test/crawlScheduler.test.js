@@ -406,6 +406,36 @@ test('scheduler replacement reconciliation deduplicates active recovery and pers
   assert.equal(replacementCalls.length, 1);
 });
 
+test('scheduler replacement reconciliation does not plan exhausted recovered replacements', async () => {
+  let replacementCalled = false;
+
+  const planned = await _private.reconcileScheduledReplacementCandidates({
+    recoveryResult: {
+      recovered: [
+        {
+          runId: 'exhausted-run',
+          replacementCandidate: false,
+          replacementAttemptsExhausted: true,
+          operatorActionRequired: true,
+        },
+      ],
+    },
+    envConfig: env(),
+    crawlRunServiceImpl: {
+      async findPendingScheduledReplacementCandidates() {
+        return [];
+      },
+      async startScheduledReplacementCrawlRun() {
+        replacementCalled = true;
+        throw new Error('must not plan exhausted replacement');
+      },
+    },
+  });
+
+  assert.deepEqual(planned, []);
+  assert.equal(replacementCalled, false);
+});
+
 test('scheduler replacement reconciliation ignores services without persisted pending support', async () => {
   const planned = await _private.reconcileScheduledReplacementCandidates({
     recoveryResult: { recovered: [] },

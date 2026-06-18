@@ -1763,7 +1763,9 @@ async function recoverInterruptedCrawlRunsAfterRestart({
       mode: run.mode || '',
       dryRun: run.dryRun === true,
       sourceLess: !hasSourceExecutionEvidence(run),
-      replacementCandidate,
+      replacementCandidate: replacementCandidate && !replacementAttemptsExhausted,
+      replacementAttemptsExhausted,
+      operatorActionRequired: replacementAttemptsExhausted,
     });
   }
 
