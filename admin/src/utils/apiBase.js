@@ -208,19 +208,6 @@ export async function fetchFilterRetailers() {
       sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index,
     }))
 
-  if (!publicRetailers.some((item) => normalizeRetailerKey(item.retailerKey || item.retailerName) === 'pagro')) {
-    publicRetailers.push({
-      retailerKey: 'pagro',
-      retailerName: 'PAGRO',
-      offerCount: 0,
-      activeOfferCount: 0,
-      totalOffers: 0,
-      activeOffers: 0,
-      isActive: true,
-      sortOrder: 999,
-    })
-  }
-
   return publicRetailers
     .sort((left, right) => {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder

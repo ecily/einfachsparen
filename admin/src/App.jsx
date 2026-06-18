@@ -143,9 +143,6 @@ function SearchLandingHero() {
       ['dm', 'dm'],
       ['bipa', 'BIPA'],
     ],
-    [
-      ['pagro', 'PAGRO'],
-    ],
   ]
   const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung', 'Pfeilschnell']
 

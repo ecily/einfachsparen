@@ -2,6 +2,7 @@
 
 ## Dauerhaft relevante Befunde
 
+- PAGRO Beta-UI Ruecknahme am 2026-06-18: PAGRO wurde aus den oeffentlichen Beta-Haendlerchips und dem Frontend-Retailer-Fallback entfernt, weil Public-Facets PAGRO nicht liefern, Public Ranking fuer `retailers=pagro` 0 Ergebnisse liefert und `officialOffers=0` keine belastbare Beta-Erwartung rechtfertigt. Backend-Daten, Admin, Diagnostik, Sources und interne KPIs bleiben unveraendert. Commit-SHA: siehe Abschlussbericht zum Commit `Remove PAGRO from public beta UI`. SPAR/INTERSPAR bleiben der Fokus: SPAR hat Dashboard-Bestand (`activeOffers=367`) und Ranking-Kandidaten (`candidateCount=363`), aber Public-Facets/Ranking 0; INTERSPAR hat `candidateCount=314`, aber nur 13 public Ergebnisse. Live-Signale zeigen als offene Ursache die Public-Freshness-/Eligibility-Stufe nach Candidate-Load; lokale konkrete Reject-Reason-Beispiele waren wegen Atlas-IP-Allowlist fuer direkte DB-Reads nicht verfuegbar. Checks: Frontend lint/build und `git diff --check`.
 - PENNY official-site Fix ist live und im scheduled Full Crawl `6a2b3df06d4045acec01934f` bestaetigt: `penny-official-site` lieferte raw/API 301, parsed 243, stored 243.
 - PENNY KW24 PDF liegt lokal unter `C:\Users\Nutzer\Downloads\Digitales_Flugblatt_PP_KW24.pdf` und ist als harte Prospekt-Evidence nutzbar.
 - PENNY Seiten 6/7: `Schopf od. Karree` ist ein bestaetigter PDF-vs-Web-Konflikt. PDF zeigt `6,99` pro kg, PENNY-Web/kaufklug zeigen `3,49` fuer `500 g Packung` mit `6,98/kg`.
