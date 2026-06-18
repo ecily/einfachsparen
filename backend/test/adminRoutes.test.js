@@ -508,6 +508,45 @@ test('GET /api/admin/source-transport-matrix delegates only parsed allowlist IDs
   assert.equal(calls[0].maxCombinations, 20);
 });
 
+test('GET /api/admin/public-visibility-diagnostics delegates SPAR/INTERSPAR read-only diagnostics', async () => {
+  const calls = [];
+  const router = createAdminRouter({
+    publicVisibilityDiagnosticsServiceImpl: {
+      async buildPublicVisibilityDiagnostics(options) {
+        calls.push(options);
+        return {
+          ok: true,
+          readOnly: true,
+          generatedAt: '2026-06-18T14:45:00.000Z',
+          allowedRetailers: ['spar', 'interspar'],
+          retailers: [
+            {
+              retailerKey: 'spar',
+              candidateCount: 363,
+              publicResultCount: 0,
+              rejectReasonCounts: { 'validTo-expired': 300 },
+              rejectExamples: [],
+            },
+          ],
+        };
+      },
+    },
+  });
+  const app = buildTestApp(router);
+
+  const response = await requestJson(app, {
+    path: '/api/admin/public-visibility-diagnostics?retailers=spar,interspar',
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.readOnly, true);
+  assert.deepEqual(calls, [{ retailers: 'spar,interspar' }]);
+  assert.equal(response.body.adminEndpoint.readOnly, true);
+  assert.equal(response.body.adminEndpoint.exposesRawOffers, false);
+  assert.deepEqual(response.body.adminEndpoint.mutatesCollections, []);
+});
+
 test('GET /api/admin/offer-feedback/summary liefert aggregierte Feedback-Kennzahlen', async (t) => {
   const adminKey = withAdminApiKey(t);
   const model = createSummaryOfferFeedbackModel();

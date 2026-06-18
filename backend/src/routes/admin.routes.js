@@ -4,6 +4,7 @@ const { getDatabaseState } = require('../config/mongodb');
 const OfferFeedback = require('../models/OfferFeedback');
 const { buildSafeBuildInfo } = require('../services/buildInfo');
 const sourceTransportMatrixService = require('../services/diagnostics/sourceTransportMatrix');
+const publicVisibilityDiagnosticsService = require('../services/diagnostics/publicVisibilityDiagnostics');
 const filterMetadataService = require('../services/filters/filterMetadataService');
 
 const FILTER_METADATA_COLLECTIONS = [
@@ -504,6 +505,7 @@ function createAdminRouter({
   envConfig = env,
   filterMetadataServiceImpl = filterMetadataService,
   sourceTransportMatrixServiceImpl = sourceTransportMatrixService,
+  publicVisibilityDiagnosticsServiceImpl = publicVisibilityDiagnosticsService,
   dbStateProvider = getDatabaseState,
   buildInfoProvider = buildSafeBuildInfo,
   OfferFeedbackModel = OfferFeedback,
@@ -579,6 +581,28 @@ function createAdminRouter({
           readOnly: true,
           allowlistedTargetsOnly: true,
           freeUrlInputAllowed: false,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/public-visibility-diagnostics', async (req, res, next) => {
+    try {
+      const retailers = req.query.retailers || req.query.retailer || '';
+      const report = await publicVisibilityDiagnosticsServiceImpl.buildPublicVisibilityDiagnostics({
+        retailers,
+      });
+
+      res.json({
+        ...report,
+        adminEndpoint: {
+          path: '/api/admin/public-visibility-diagnostics',
+          readOnly: true,
+          allowedRetailers: report.allowedRetailers || [],
+          exposesRawOffers: false,
+          mutatesCollections: [],
         },
       });
     } catch (error) {
