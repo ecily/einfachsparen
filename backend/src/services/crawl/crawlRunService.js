@@ -16,6 +16,8 @@ const DEFAULT_MAX_RUNTIME_MS = env.CRAWL_RUN_MAX_RUNTIME_MINUTES * 60 * 1000;
 const DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS = env.CRAWL_RUN_LOCK_HEARTBEAT_INTERVAL_SECONDS * 1000;
 const DEFAULT_STALE_HEARTBEAT_MS = env.CRAWL_RUN_STALE_HEARTBEAT_MINUTES * 60 * 1000;
 const DEFAULT_STARTUP_GRACE_MS = env.CRAWL_RUN_STARTUP_GRACE_SECONDS * 1000;
+const MAX_SCHEDULED_REPLACEMENT_ATTEMPTS = 1;
+const SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS = 'replacementFailedExhausted';
 const PROCESS_STARTED_AT = new Date();
 const CURRENT_PROCESS_OWNER_PREFIX = `${os.hostname()}:${process.pid}:`;
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
@@ -55,6 +57,18 @@ function asStringId(value) {
   }
   if (value._id && value._id !== value) return asStringId(value._id);
   return String(value);
+}
+
+function startOfUtcDay(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function addUtcDays(date, days) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 }
 
 function toIsoOrNull(value) {
@@ -1101,6 +1115,97 @@ function isSourceLessScheduledRestartRecoveryRun(run = {}) {
   );
 }
 
+function isScheduledReplacementAttemptRun(run = {}) {
+  const runId = asStringId(run?._id || run?.id);
+  const originalRunId = asStringId(run?.metadata?.scheduledReplacement?.originalRunId);
+  return Boolean(originalRunId && originalRunId !== runId);
+}
+
+function buildScheduledReplacementExhaustedMarker(run, {
+  now = new Date(),
+  attemptCount = MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
+  maxAttempts = MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
+} = {}) {
+  const runId = asStringId(run?._id || run?.id);
+  const existingReplacement = run?.metadata?.scheduledReplacement || {};
+  const originalRunId = asStringId(existingReplacement.originalRunId) || runId;
+
+  return {
+    ...existingReplacement,
+    status: SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS,
+    reason: 'replacement-attempt-limit-exhausted',
+    originalRunId,
+    exhaustedRunId: runId,
+    attemptCount,
+    maxAttempts,
+    operatorActionRequired: true,
+    exhaustedAt: now,
+  };
+}
+
+function buildReplacementAttemptWindow(run = {}) {
+  const reference = run.startedAt || run.createdAt || run.finishedAt;
+  const start = startOfUtcDay(reference);
+  if (!start) return null;
+  return { start, end: addUtcDays(start, 1) };
+}
+
+async function countScheduledReplacementAttemptsForRun(run = {}) {
+  const window = buildReplacementAttemptWindow(run);
+  if (!window) return 0;
+
+  return CrawlRun.countDocuments({
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: { $gte: window.start, $lt: window.end },
+    'metadata.scheduledReplacement.reason': 'eligible-source-less-scheduled-restart',
+  });
+}
+
+async function persistScheduledReplacementExhaustedMarker(run, {
+  now = new Date(),
+  attemptCount = MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
+  maxAttempts = MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
+} = {}) {
+  const runId = asStringId(run?._id);
+
+  if (!runId) {
+    return { marked: false, reason: 'invalid-run-id' };
+  }
+
+  const result = await CrawlRun.updateOne(
+    {
+      _id: run._id,
+      trigger: 'scheduled',
+      mode: 'full',
+      dryRun: false,
+      status: 'failed',
+      $or: [
+        { 'metadata.scheduledReplacement.status': { $exists: false } },
+        { 'metadata.scheduledReplacement.status': { $in: ['', 'required', 'planned'] } },
+        { 'metadata.scheduledReplacement': null },
+      ],
+    },
+    {
+      $set: {
+        'metadata.scheduledReplacement': buildScheduledReplacementExhaustedMarker(run, {
+          now,
+          attemptCount,
+          maxAttempts,
+        }),
+      },
+    }
+  );
+
+  const modifiedCount = numberFrom(result?.modifiedCount ?? result?.nModified);
+
+  return {
+    marked: modifiedCount > 0,
+    reason: modifiedCount > 0 ? 'exhausted-marker-persisted' : 'exhausted-marker-not-modified',
+  };
+}
+
 async function findExistingScheduledReplacementRun(originalRunId) {
   const id = asStringId(originalRunId);
   if (!id) return null;
@@ -1175,6 +1280,19 @@ async function assessScheduledReplacementReadiness({ originalRunId } = {}) {
       eligible: false,
       reason: 'original-run-not-source-less-scheduled-restart',
       originalRun,
+    };
+  }
+
+  const replacementAttemptCount = await countScheduledReplacementAttemptsForRun(originalRun);
+
+  if (replacementAttemptCount >= MAX_SCHEDULED_REPLACEMENT_ATTEMPTS) {
+    return {
+      eligible: false,
+      reason: 'replacement-attempt-limit-exhausted',
+      originalRun,
+      replacementAttemptCount,
+      maxReplacementAttempts: MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
+      operatorActionRequired: true,
     };
   }
 
@@ -1255,6 +1373,9 @@ async function startScheduledReplacementCrawlRun({
       originalRun: readiness.originalRun || null,
       existingReplacement: readiness.existingReplacement || null,
       newerEffectiveRun: readiness.newerEffectiveRun || null,
+      replacementAttemptCount: readiness.replacementAttemptCount ?? null,
+      maxReplacementAttempts: readiness.maxReplacementAttempts ?? null,
+      operatorActionRequired: readiness.operatorActionRequired === true,
     };
   }
 
@@ -1362,6 +1483,14 @@ async function findPendingScheduledReplacementCandidates({ limit = 5 } = {}) {
     }
 
     const readiness = await assessScheduledReplacementReadiness({ originalRunId: run._id });
+
+    if (readiness.reason === 'replacement-attempt-limit-exhausted') {
+      await persistScheduledReplacementExhaustedMarker(run, {
+        attemptCount: readiness.replacementAttemptCount,
+        maxAttempts: readiness.maxReplacementAttempts,
+      });
+      continue;
+    }
 
     if (readiness.eligible) {
       const marker = await persistScheduledReplacementRequiredMarker(run);
@@ -1522,6 +1651,10 @@ async function recoverInterruptedCrawlRunsAfterRestart({
       && run.dryRun !== true
       && !hasSourceExecutionEvidence(run)
     );
+    const replacementAttemptsExhausted = replacementCandidate && (
+      isScheduledReplacementAttemptRun(run)
+      || await countScheduledReplacementAttemptsForRun(run) >= MAX_SCHEDULED_REPLACEMENT_ATTEMPTS
+    );
     const updatedRun = await CrawlRun.findOneAndUpdate(
       {
         _id: run._id,
@@ -1566,19 +1699,27 @@ async function recoverInterruptedCrawlRunsAfterRestart({
           }, now),
           ...(replacementCandidate
             ? {
-              'metadata.scheduledReplacement': {
-                status: 'required',
-                reason: 'source-less-process-restart-recovery',
-                originalRunId: asStringId(run._id),
-                detectedAt: now,
-              },
+              'metadata.scheduledReplacement': replacementAttemptsExhausted
+                ? buildScheduledReplacementExhaustedMarker(run, {
+                  now,
+                  attemptCount: MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
+                  maxAttempts: MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
+                })
+                : {
+                  status: 'required',
+                  reason: 'source-less-process-restart-recovery',
+                  originalRunId: asStringId(run._id),
+                  detectedAt: now,
+                },
             }
             : {}),
         },
         $push: {
           warnings: auditMessage,
           errorMessages: replacementCandidate
-            ? 'CrawlRun was marked failed after process restart; a safe scheduled replacement crawl is required.'
+            ? replacementAttemptsExhausted
+              ? 'CrawlRun was marked failed after process restart; scheduled replacement attempts are exhausted and operator action is required.'
+              : 'CrawlRun was marked failed after process restart; a safe scheduled replacement crawl is required.'
             : 'CrawlRun was marked failed after process restart; no automatic replacement crawl was started.',
         },
       },
@@ -2060,8 +2201,13 @@ module.exports = {
     DEFAULT_STARTUP_GRACE_MS,
     EXPLICIT_RECOVERY_MIN_STALE_MS,
     LOCK_STALE_MS,
+    MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
     PROCESS_STARTED_AT,
+    SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS,
+    addUtcDays,
     buildStartupCrawlStartError,
+    buildReplacementAttemptWindow,
+    buildScheduledReplacementExhaustedMarker,
     buildLockOwner,
     buildRunDocument,
     buildRunSummary,
@@ -2071,6 +2217,7 @@ module.exports = {
     getStartupCrawlStartGuard,
     assessScheduledReplacementReadiness,
     activeExecutionRunIds,
+    countScheduledReplacementAttemptsForRun,
     findExistingScheduledReplacementRun,
     findLatestUntaggedSourceLessScheduledRestartFailure,
     findNewerEffectiveScheduledFullRun,
@@ -2078,6 +2225,8 @@ module.exports = {
     persistScheduledReplacementRequiredMarker,
     hasOpenOfferPublishStatus,
     hasSourceExecutionEvidence,
+    isScheduledReplacementAttemptRun,
+    persistScheduledReplacementExhaustedMarker,
     isCurrentProcessLockOwner,
     interruptCurrentProcessCrawlRuns,
     isRecoverableInterruptedRunAfterRestart,
@@ -2092,6 +2241,7 @@ module.exports = {
     sanitizeJsonValue,
     sanitizeDiagnosticValue,
     serializeLockForAudit,
+    startOfUtcDay,
     startCrawlRunLockHeartbeat,
     updateCrawlRunLockHeartbeat,
     withCrawlRunTimeout,

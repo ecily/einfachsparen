@@ -698,6 +698,7 @@ test('recoverInterruptedCrawlRunsAfterRestart marks old interrupted runs failed 
   const originals = {
     crawlRunFind: CrawlRun.find,
     crawlRunFindOneAndUpdate: CrawlRun.findOneAndUpdate,
+    crawlRunCountDocuments: CrawlRun.countDocuments,
     crawlRunLockFindById: CrawlRunLock.findById,
     crawlRunLockUpdateOne: CrawlRunLock.updateOne,
     offerUpdateMany: Offer.updateMany,
@@ -824,6 +825,7 @@ test('source-started without finished source result remains scheduled replacemen
     activeRuns = [];
     return { ...run, status: 'failed' };
   };
+  CrawlRun.countDocuments = async () => 0;
   CrawlRunLock.findById = () => ({
     lean: async () => lock,
   });
@@ -842,6 +844,7 @@ test('source-started without finished source result remains scheduled replacemen
   } finally {
     CrawlRun.find = originals.crawlRunFind;
     CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
+    CrawlRun.countDocuments = originals.crawlRunCountDocuments;
     CrawlRunLock.findById = originals.crawlRunLockFindById;
     CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
     Offer.updateMany = originals.offerUpdateMany;
@@ -851,6 +854,177 @@ test('source-started without finished source result remains scheduled replacemen
   assert.equal(
     runUpdates[0].update.$push.errorMessages,
     'CrawlRun was marked failed after process restart; a safe scheduled replacement crawl is required.'
+  );
+});
+
+test('scheduled replacement readiness stops after the automatic attempt limit', async () => {
+  const originalRunId = new mongoose.Types.ObjectId();
+  const originalRun = {
+    _id: originalRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T04:37:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: { progress: { stage: 'process-restart-recovery' } },
+  };
+  const originals = {
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunCountDocuments: CrawlRun.countDocuments,
+  };
+
+  CrawlRun.findById = async () => originalRun;
+  CrawlRun.countDocuments = async (query) => {
+    assert.deepEqual(query.startedAt, {
+      $gte: new Date('2026-06-18T00:00:00.000Z'),
+      $lt: new Date('2026-06-19T00:00:00.000Z'),
+    });
+    assert.equal(query['metadata.scheduledReplacement.reason'], 'eligible-source-less-scheduled-restart');
+    return _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS;
+  };
+
+  try {
+    const readiness = await _private.assessScheduledReplacementReadiness({
+      originalRunId,
+    });
+
+    assert.equal(readiness.eligible, false);
+    assert.equal(readiness.reason, 'replacement-attempt-limit-exhausted');
+    assert.equal(readiness.operatorActionRequired, true);
+    assert.equal(readiness.replacementAttemptCount, _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS);
+  } finally {
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRun.countDocuments = originals.crawlRunCountDocuments;
+  }
+});
+
+test('startScheduledReplacementCrawlRun reports operator action when replacement attempts are exhausted', async () => {
+  const { startScheduledReplacementCrawlRun } = require('../src/services/crawl/crawlRunService');
+  const originalRunId = new mongoose.Types.ObjectId();
+  const originalRun = {
+    _id: originalRunId,
+    status: 'failed',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date('2026-06-18T04:37:00.000Z'),
+    summary: {},
+    result: { sources: [] },
+    metadata: { progress: { stage: 'process-restart-recovery' } },
+  };
+  const originals = {
+    crawlRunFindById: CrawlRun.findById,
+    crawlRunCountDocuments: CrawlRun.countDocuments,
+  };
+
+  CrawlRun.findById = async () => originalRun;
+  CrawlRun.countDocuments = async () => _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS;
+
+  try {
+    const result = await startScheduledReplacementCrawlRun({
+      originalRunId,
+      region: 'AT',
+      defer: false,
+      crawlAllSourcesImpl: async () => {
+        throw new Error('must not start replacement crawl');
+      },
+    });
+
+    assert.equal(result.accepted, false);
+    assert.equal(result.replacementSkipped, true);
+    assert.equal(result.reason, 'replacement-attempt-limit-exhausted');
+    assert.equal(result.operatorActionRequired, true);
+    assert.equal(result.replacementAttemptCount, _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS);
+  } finally {
+    CrawlRun.findById = originals.crawlRunFindById;
+    CrawlRun.countDocuments = originals.crawlRunCountDocuments;
+  }
+});
+
+test('recoverInterruptedCrawlRunsAfterRestart exhausts source-less replacement runs instead of requiring another replacement', async () => {
+  const { recoverInterruptedCrawlRunsAfterRestart } = require('../src/services/crawl/crawlRunService');
+  const originalRunId = new mongoose.Types.ObjectId();
+  const runId = new mongoose.Types.ObjectId();
+  const now = new Date(_private.PROCESS_STARTED_AT.getTime() + 2 * 60 * 60 * 1000);
+  const run = {
+    _id: runId,
+    status: 'running',
+    trigger: 'scheduled',
+    mode: 'full',
+    dryRun: false,
+    startedAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 2 * 60 * 1000),
+    summary: { successfulSourcesCount: 0, failedSourcesCount: 0 },
+    result: { sources: [] },
+    metadata: {
+      scheduledReplacement: {
+        originalRunId: String(originalRunId),
+        reason: 'eligible-source-less-scheduled-restart',
+      },
+      progress: { stage: 'source-started' },
+    },
+    warnings: [],
+    errorMessages: [],
+  };
+  const lock = {
+    runId,
+    status: 'running',
+    heartbeatAt: new Date(_private.PROCESS_STARTED_AT.getTime() - 60 * 1000),
+  };
+  const originals = {
+    crawlRunFind: CrawlRun.find,
+    crawlRunFindOneAndUpdate: CrawlRun.findOneAndUpdate,
+    crawlRunCountDocuments: CrawlRun.countDocuments,
+    crawlRunLockFindById: CrawlRunLock.findById,
+    crawlRunLockUpdateOne: CrawlRunLock.updateOne,
+    offerUpdateMany: Offer.updateMany,
+  };
+  const runUpdates = [];
+
+  CrawlRun.find = () => ({
+    sort() {
+      return [run];
+    },
+  });
+  CrawlRun.findOneAndUpdate = async (filter, update) => {
+    runUpdates.push({ filter, update });
+    return { ...run, status: 'failed' };
+  };
+  CrawlRun.countDocuments = async () => _private.MAX_SCHEDULED_REPLACEMENT_ATTEMPTS;
+  CrawlRunLock.findById = () => ({
+    lean: async () => lock,
+  });
+  CrawlRunLock.updateOne = async () => ({ modifiedCount: 1 });
+  Offer.updateMany = async () => ({ matchedCount: 0, modifiedCount: 0 });
+
+  try {
+    const result = await recoverInterruptedCrawlRunsAfterRestart({
+      now,
+      staleAfterMs: 60 * 60 * 1000,
+      reason: 'replacement restart recovery',
+    });
+
+    assert.equal(result.recovered.length, 1);
+    assert.equal(result.recovered[0].replacementCandidate, true);
+  } finally {
+    CrawlRun.find = originals.crawlRunFind;
+    CrawlRun.findOneAndUpdate = originals.crawlRunFindOneAndUpdate;
+    CrawlRun.countDocuments = originals.crawlRunCountDocuments;
+    CrawlRunLock.findById = originals.crawlRunLockFindById;
+    CrawlRunLock.updateOne = originals.crawlRunLockUpdateOne;
+    Offer.updateMany = originals.offerUpdateMany;
+  }
+
+  const marker = runUpdates[0].update.$set['metadata.scheduledReplacement'];
+  assert.equal(marker.status, _private.SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS);
+  assert.equal(marker.reason, 'replacement-attempt-limit-exhausted');
+  assert.equal(marker.originalRunId, String(originalRunId));
+  assert.equal(marker.exhaustedRunId, String(runId));
+  assert.equal(marker.operatorActionRequired, true);
+  assert.equal(
+    runUpdates[0].update.$push.errorMessages,
+    'CrawlRun was marked failed after process restart; scheduled replacement attempts are exhausted and operator action is required.'
   );
 });
 
@@ -902,6 +1076,7 @@ test('findPendingScheduledReplacementCandidates includes latest untagged source-
     crawlRunFindOne: CrawlRun.findOne,
     crawlRunFindById: CrawlRun.findById,
     crawlRunUpdateOne: CrawlRun.updateOne,
+    crawlRunCountDocuments: CrawlRun.countDocuments,
     crawlRunCollectionFind: CrawlRun.collection.find,
     crawlRunLockFindById: CrawlRunLock.findById,
     offerCountDocuments: Offer.countDocuments,
@@ -947,6 +1122,7 @@ test('findPendingScheduledReplacementCandidates includes latest untagged source-
     };
   };
   CrawlRun.findById = async () => untaggedRun;
+  CrawlRun.countDocuments = async () => 0;
   CrawlRun.updateOne = async (filter, update) => {
     markerUpdates.push({ filter, update });
     return { modifiedCount: 1 };
@@ -968,6 +1144,7 @@ test('findPendingScheduledReplacementCandidates includes latest untagged source-
     CrawlRun.findOne = originals.crawlRunFindOne;
     CrawlRun.findById = originals.crawlRunFindById;
     CrawlRun.updateOne = originals.crawlRunUpdateOne;
+    CrawlRun.countDocuments = originals.crawlRunCountDocuments;
     CrawlRun.collection.find = originals.crawlRunCollectionFind;
     CrawlRunLock.findById = originals.crawlRunLockFindById;
     Offer.countDocuments = originals.offerCountDocuments;

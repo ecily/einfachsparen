@@ -153,6 +153,38 @@ test('dashboard daily reliability distinguishes missing, planned and active sche
     publishStatusSummary,
   }).level, 'yellow');
 
+  const exhaustedReplacement = {
+    ...sourceLessFailure,
+    metadata: {
+      scheduledReplacement: {
+        status: 'replacementFailedExhausted',
+        originalRunId: sourceLessFailure.id,
+        attemptCount: 1,
+        maxAttempts: 1,
+        operatorActionRequired: true,
+      },
+    },
+  };
+  const exhaustedStatus = _private.buildCrawlReliabilityStatus({
+    latestScheduledFullCrawl: exhaustedReplacement,
+    latestCrawl: exhaustedReplacement,
+    crawlHistory: [exhaustedReplacement],
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  });
+
+  assert.equal(exhaustedStatus.scheduledDaily.level, 'red');
+  assert.equal(exhaustedStatus.sourceFailures.level, 'red');
+  assert.match(exhaustedStatus.scheduledDaily.reason, /operator action is required/i);
+  assert.equal(_private.buildExecutiveStatus({
+    latestCrawl: exhaustedReplacement,
+    latestScheduledFullCrawl: exhaustedReplacement,
+    activeCrawlRun: null,
+    lockStatus,
+    publishStatusSummary,
+  }).level, 'red');
+
   const runningReplacement = {
     id: 'replacement-run',
     status: 'running',

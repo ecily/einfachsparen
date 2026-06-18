@@ -343,15 +343,22 @@ function getScheduledReplacementStatus(run = {}) {
   const replacement = run?.metadata?.scheduledReplacement || {};
   const status = String(replacement.status || '').trim();
 
-  if (status === 'required' || status === 'planned') {
+  if (status === 'required' || status === 'planned' || status === 'replacementFailedExhausted') {
     return status;
   }
 
   return '';
 }
 
+function isScheduledReplacementExhausted(run = {}) {
+  return getScheduledReplacementStatus(run) === 'replacementFailedExhausted';
+}
+
 function scheduledDailyStatusLevel(run) {
   if (!run) return 'yellow';
+  if (isScheduledReplacementExhausted(run)) {
+    return 'red';
+  }
   if (isSourceLessProcessRestartRecoveryRun(run) && getScheduledReplacementStatus(run)) {
     return 'yellow';
   }
@@ -363,21 +370,23 @@ function buildSourceFailureDiagnosis(run) {
     const replacementStatus = getScheduledReplacementStatus(run);
 
     return {
-      level: replacementStatus ? 'yellow' : 'red',
+      level: isScheduledReplacementExhausted(run) ? 'red' : replacementStatus ? 'yellow' : 'red',
       failedSourcesCount: 0,
       p0ReliabilityCount: 1,
       p1SourceCoverageCount: 0,
       policyBoundedSourcesCount: 0,
       notExecutedByPolicySourcesCount: 0,
       reason: replacementStatus
-        ? `Reference crawl failed before any source produced a result; scheduled replacement is ${replacementStatus}.`
+        ? isScheduledReplacementExhausted(run)
+          ? 'Reference crawl failed source-less after restart; automatic replacement attempts are exhausted and operator action is required.'
+          : `Reference crawl failed before any source produced a result; scheduled replacement is ${replacementStatus}.`
         : 'Reference crawl failed before any source produced a result because process-restart recovery finalized a previous-process run; this is P0 crawl runtime reliability, not a source/parser failure.',
       groups: [
         {
           sourceType: 'crawl-runtime',
           errorType: 'process-restart-recovery',
           count: 1,
-          severity: replacementStatus ? 'yellow' : 'red',
+          severity: isScheduledReplacementExhausted(run) ? 'red' : replacementStatus ? 'yellow' : 'red',
           classification: 'P0 Crawl Runtime',
           sourceKeys: [],
         },
@@ -482,7 +491,9 @@ function buildCrawlReliabilityStatus({
       startedAt: latestScheduledFullCrawl?.startedAt || null,
       finishedAt: latestScheduledFullCrawl?.finishedAt || null,
       reason: latestScheduledFullCrawl
-        ? getScheduledReplacementStatus(latestScheduledFullCrawl)
+        ? isScheduledReplacementExhausted(latestScheduledFullCrawl)
+          ? 'Latest scheduled full crawl failed source-less after restart; automatic replacement attempts are exhausted and operator action is required.'
+          : getScheduledReplacementStatus(latestScheduledFullCrawl)
           ? 'Latest scheduled full crawl failed source-less after restart; a scheduled replacement is required/planned.'
           : scheduledLevel === 'red'
           ? 'Latest scheduled full crawl is not healthy; keep scheduled daily reliability on watch.'
@@ -1154,9 +1165,11 @@ function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCra
   } else {
     if (referenceRun.status === 'failed') {
       const replacementStatus = getScheduledReplacementStatus(referenceRun);
-      level = replacementStatus ? 'yellow' : 'red';
+      level = isScheduledReplacementExhausted(referenceRun) ? 'red' : replacementStatus ? 'yellow' : 'red';
       reasons.push(replacementStatus
-        ? `Letzter Daily Crawl ist source-los fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
+        ? isScheduledReplacementExhausted(referenceRun)
+          ? 'Letzter Daily Crawl ist source-los fehlgeschlagen; automatische Replacement-Versuche sind ausgeschoepft und Operator-Handlung ist erforderlich.'
+          : `Letzter Daily Crawl ist source-los fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
         : 'Letzter Daily Crawl ist fehlgeschlagen.');
     } else if (referenceRun.status === 'stale') {
       level = 'red';
@@ -1220,10 +1233,14 @@ function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, 
   if (latestCrawl?.status === 'failed') {
     const replacementStatus = getScheduledReplacementStatus(latestCrawl);
     issues.push({
-      severity: replacementStatus ? 'yellow' : 'red',
-      title: replacementStatus ? 'Scheduled Replacement ausstehend' : 'Letzter Crawl failed',
+      severity: isScheduledReplacementExhausted(latestCrawl) ? 'red' : replacementStatus ? 'yellow' : 'red',
+      title: isScheduledReplacementExhausted(latestCrawl)
+        ? 'Scheduled Replacement ausgeschoepft'
+        : replacementStatus ? 'Scheduled Replacement ausstehend' : 'Letzter Crawl failed',
       detail: replacementStatus
-        ? `Source-loser Daily ist fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
+        ? isScheduledReplacementExhausted(latestCrawl)
+          ? 'Source-loser Daily ist wiederholt fehlgeschlagen; automatische Replacements sind gestoppt, Runtime-/Plattform-Pruefung erforderlich.'
+          : `Source-loser Daily ist fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
         : compactStrings(latestCrawl.errorMessages, 1)[0] || 'Fehlerdetails im CrawlRun pruefen.',
     });
   }
