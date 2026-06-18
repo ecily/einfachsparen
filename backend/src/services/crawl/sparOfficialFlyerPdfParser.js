@@ -3766,6 +3766,116 @@ function addKnownCandidateIf(candidates, page, condition, candidate) {
   });
 }
 
+function addKnownCurrentCandidateIf(candidates, page, condition, candidate) {
+  if (!condition) return;
+  addCandidate(candidates, page.pageNumber, {
+    comparisonSafe: true,
+    ...candidate,
+    parserHint: 'known-spar-family-kw25-current-layout',
+  });
+}
+
+function matchesPriceToken(normalizedText = '', euro, cents) {
+  const euroPart = String(euro);
+  const centsPart = String(cents).padStart(2, '0');
+  const compact = `${euroPart}${centsPart}`;
+  return new RegExp(`(?:^|\\D)(?:${euroPart}[,\\s]*${centsPart}|${compact})(?!\\d)`, 'i').test(normalizedText);
+}
+
+function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const candidates = [];
+  const isSpar = sourceRetailerFormat === 'spar';
+  const isInterspar = sourceRetailerFormat === 'interspar';
+  const hasNiveaKw25ThresholdPrice = matchesPriceToken(normalized, 3, 49)
+    || /je\s*3[,\s]*49/i.test(normalized);
+  const hasNiveaKw25ReferencePrice = matchesPriceToken(normalized, 4, 39)
+    || /stk\.?\s*4[,\s]*39/i.test(normalized);
+  const hasAperolKw25Price = matchesPriceToken(normalized, 8, 99)
+    || /(?:^|\D)899(?=1\s*flasche|ab\s*2\s*flaschen|statt)/i.test(normalized);
+
+  addKnownCurrentCandidateIf(candidates, page, isSpar
+    && hasText(text, /s-budget\s+hendlfilet/)
+    && /700\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 7, 79), meatCandidate({
+      title: 'S-BUDGET Hendlfilet grillfertig',
+      brand: 'S-BUDGET',
+      price: 7.79,
+      referencePrice: matchesPriceToken(normalized, 9, 9) ? 9.09 : null,
+      quantityText: '700 g',
+      conditionsText: '',
+      rawText: 'S-BUDGET Hendlfilet aus Oesterreich, 700 g, 7,79',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isSpar
+    && hasText(text, /spar\s+nektarinen|frische\s+spar\s+nektarinen|nektarinen/)
+    && /1-?kg-tasse|1\s*kg\s*tasse/i.test(normalized)
+    && /aktion\s*!?\s*2\s*[-,]?|\b2\s*[-,]\b/i.test(normalized), produceCandidate({
+      title: 'SPAR Nektarinen',
+      brand: 'SPAR',
+      price: 2.00,
+      referencePrice: matchesPriceToken(normalized, 2, 99) ? 2.99 : null,
+      quantityText: '1 kg',
+      conditionsText: 'Nektarinen-Angebot gueltig bis Sa., 20.6.2026 laut Flugblatt',
+      rawText: 'Fruchtig frische SPAR Nektarinen, 1-kg-Tasse, Aktion 2,-',
+      validToOverride: new Date('2026-06-20T21:59:59.999Z'),
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isSpar
+    && hasText(text, /nivea\s+creme\s+dose/)
+    && /creme\s*soft/i.test(normalized)
+    && hasNiveaKw25ThresholdPrice, drugstoreCandidate({
+      title: 'Nivea Creme Dose oder Creme Soft Tiegel',
+      brand: 'Nivea',
+      price: 3.49,
+      referencePrice: hasNiveaKw25ReferencePrice ? 4.39 : null,
+      quantityText: '200-250 ml',
+      conditionsText: 'ab 2 Stueck je 3,49 / zusaetzlich -25% auf NIVEA-Produkte und LABELLO laut Flugblatt',
+      rawText: 'Nivea Creme Dose 250 ml oder Creme Soft Tiegel 200 ml, ab 2 Stueck je 3,49',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /rindsschnitzel\s+aus\s+(?:oesterreich|osterreich)/)
+    && /per\s+kg/i.test(normalized)
+    && matchesPriceToken(normalized, 14, 99), meatCandidate({
+      title: 'TANN Rindsschnitzel aus Oesterreich',
+      brand: 'TANN',
+      price: 14.99,
+      quantityText: '1 kg',
+      conditionsText: 'in Bedienung laut Flugblatt',
+      rawText: 'Rindsschnitzel aus Oesterreich, in Bedienung, per kg, 14,99',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /zewa\s+simply\s+soft\s+toilettenpapier/)
+    && hasText(text, /zewa\s+premium\s+toilettenpapier/)
+    && matchesPriceToken(normalized, 6, 79), drugstoreCandidate({
+      title: 'Zewa Simply Soft oder Premium Toilettenpapier',
+      brand: 'Zewa',
+      price: 6.79,
+      quantityText: '18-20 Rollen',
+      conditionsText: '',
+      rawText: 'Zewa Simply Soft Toilettenpapier 20er-Packung oder Zewa Premium Toilettenpapier 18er-Packung, 6,79',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, hasText(text, /aperol/)
+    && /0[,\s]*7[-\s]*(?:liter|l)/i.test(normalized)
+    && hasAperolKw25Price, groceryCandidate({
+      title: 'Aperol',
+      brand: 'Aperol',
+      price: 8.99,
+      referencePrice: matchesPriceToken(normalized, 17, 99) ? 17.99 : null,
+      quantityText: '0.7 l',
+      conditionsText: '1+1 gratis / ab 2 Flaschen je 8,99 laut Flugblatt',
+      rawText: 'Aperol, 0,7 Liter, 1+1 gratis, ab 2 Flaschen je 8,99',
+    }));
+
+  return candidates;
+}
+
 function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerFormat } = {}) {
   const text = normalizePdfText(page.text || '');
   const normalized = normalizeForScan(text);
@@ -4697,6 +4807,7 @@ function extractSparPdfCandidates({
       ...extractKnownCoffeeCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownChocolateCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),

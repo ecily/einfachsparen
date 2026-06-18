@@ -2161,3 +2161,101 @@ test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', as
   assert.equal(lachsfilet.validFrom.toISOString(), '2026-06-11T22:00:00.000Z');
   assert.equal(lachsfilet.validTo.toISOString(), '2026-06-13T21:59:59.999Z');
 });
+
+test('extracts SPAR KW25 current cover controls from official PDF text', () => {
+  const validity = {
+    validFrom: new Date('2026-06-17T22:00:00.000Z'),
+    validTo: new Date('2026-06-30T21:59:59.999Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: [
+          'KW 25 Angebote gueltig ab Donnerstag, 18.6. bis Dienstag, 30.6.2026',
+          'Nektarinen-Angebot gueltig bis Sa., 20.6.2026',
+          'Nivea Creme Dose 250 ml oder Creme Soft Tiegel 200 ml',
+          '1 Fl. 17,99 ab 2 Fl. je 8,99(per Liter 12,84) 1 + 1 GRATIS Aperol 0,7 Liter',
+          '7,79 statt 9,09 Ersparnis 1,30 (per kg 11,13)',
+          'S-BUDGET Hendlfilet aus Oesterreich, in Selbstbedienung, 700 g',
+          '-25% auf alle NIVEA-PRODUKTE und LABELLO 1 Stk. 4,39 ab 2 Stk. je 3,49 2,62',
+          'fruchtig, frische SPAR Nektarinen Klasse 1, 1-kg-Tasse statt 2,99 Aktion! 2,-',
+        ].join(' '),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000779',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
+    pdfSha256: 'kw25-spar-cover-fixture',
+  });
+
+  const aperol = offers.find((offer) => offer.title === 'Aperol');
+  const hendlfilet = offers.find((offer) => /Hendlfilet/i.test(offer.title));
+  const nektarinen = offers.find((offer) => /Nektarinen/i.test(offer.title));
+  const nivea = offers.find((offer) => /Nivea/i.test(offer.title));
+
+  assert.ok(aperol);
+  assert.equal(aperol.priceCurrent.amount, 8.99);
+  assert.match(aperol.conditionsText, /1\+1 gratis/);
+  assert.ok(hendlfilet);
+  assert.equal(hendlfilet.priceCurrent.amount, 7.79);
+  assert.equal(hendlfilet.priceReference.amount, 9.09);
+  assert.equal(hendlfilet.quantityText, '700 g');
+  assert.ok(nektarinen);
+  assert.equal(nektarinen.priceCurrent.amount, 2.00);
+  assert.equal(dateKey(nektarinen.validTo), '2026-06-20');
+  assert.ok(nivea);
+  assert.equal(nivea.priceCurrent.amount, 3.49);
+  assert.equal(nivea.priceReference.amount, 4.39);
+  assert.match(nivea.conditionsText, /NIVEA-Produkte/);
+});
+
+test('extracts INTERSPAR KW25 current cover controls from official PDF text', () => {
+  const validity = {
+    validFrom: new Date('2026-06-17T22:00:00.000Z'),
+    validTo: new Date('2026-06-30T21:59:59.999Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: [
+          'Angebote gueltig von Do, 18.6. bis Di, 30.6.2026',
+          'Rindsschnitzel aus Oesterreich Geschnitten, nur 2-3 % Fett. In Bedienung per kg Niedrigster 30-Tage-Preis 19,99 1499',
+          'Zewa Simply Soft Toilettenpapier 3-lagig, verschiedene Sorten, 20er-Packung oder Zewa Premium Toilettenpapier 4-lagig, 18er-Packung 679',
+          'Aperol 0,7-Liter-Flasche (= per Liter 12,84) 899 1 Flasche 17,99 ab 2 Flaschen je 1 + 1 GRATIS',
+        ].join(' '),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000780',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
+    pdfSha256: 'kw25-interspar-cover-fixture',
+  });
+
+  const aperol = offers.find((offer) => offer.title === 'Aperol');
+  const rindsschnitzel = offers.find((offer) => /Rindsschnitzel/i.test(offer.title));
+  const zewa = offers.find((offer) => /Zewa/i.test(offer.title));
+
+  assert.ok(aperol);
+  assert.equal(aperol.priceCurrent.amount, 8.99);
+  assert.match(aperol.conditionsText, /1\+1 gratis/);
+  assert.ok(rindsschnitzel);
+  assert.equal(rindsschnitzel.priceCurrent.amount, 14.99);
+  assert.equal(rindsschnitzel.quantityText, '1 kg');
+  assert.ok(zewa);
+  assert.equal(zewa.priceCurrent.amount, 6.79);
+  assert.equal(zewa.quantityText, '18-20 Rollen');
+});

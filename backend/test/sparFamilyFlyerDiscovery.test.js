@@ -458,8 +458,10 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
     'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
   ]);
+  assert.equal(byKey.get('spar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
   assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
     'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
   ]);
+  assert.equal(byKey.get('interspar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
   assert.equal(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
 });

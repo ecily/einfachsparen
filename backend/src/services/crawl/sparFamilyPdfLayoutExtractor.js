@@ -253,6 +253,8 @@ function buildLayoutCandidate({ pageNumber, anchor, items, sourceRetailerFormat 
 }
 
 function canonicalizeValidatedLayoutCandidate(candidate = {}) {
+  if (!candidate) return null;
+
   const text = normalizeForScan(`${candidate.title || ''} ${candidate.rawText || ''}`);
 
   if (
