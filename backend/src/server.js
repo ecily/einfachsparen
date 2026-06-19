@@ -5,6 +5,10 @@ const { connectToDatabase } = require('./config/mongodb');
 const { ensureSourceRegistry } = require('./services/sources/sourceRegistry');
 const { startCrawlScheduler } = require('./services/crawl/crawlScheduler');
 const { interruptCurrentProcessCrawlRuns } = require('./services/crawl/crawlRunService');
+const {
+  installProcessLifecycleDiagnostics,
+  logBackendRuntimeStarted,
+} = require('./services/runtime/runtimeDiagnostics');
 const logger = require('./lib/logger');
 
 const SHUTDOWN_TIMEOUT_MS = 8000;
@@ -81,6 +85,9 @@ function installShutdownHandlers(server) {
 }
 
 async function start() {
+  installProcessLifecycleDiagnostics({ loggerImpl: logger });
+  logBackendRuntimeStarted({ loggerImpl: logger });
+
   await connectToDatabase();
   await ensureSourceRegistry();
 

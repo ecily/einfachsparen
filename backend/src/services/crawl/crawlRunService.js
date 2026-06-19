@@ -6,6 +6,10 @@ const Offer = require('../../models/Offer');
 const env = require('../../config/env');
 const { crawlAllSources } = require('./crawlDispatcher');
 const { buildCoverageMetrics, compactRejectionReasons } = require('./crawlAudit');
+const {
+  logCrawlRuntimeHeartbeat,
+  logCrawlRuntimeProgress,
+} = require('../runtime/runtimeDiagnostics');
 const logger = require('../../lib/logger');
 
 const GLOBAL_CRAWL_LOCK_KEY = 'crawl-run-global';
@@ -296,9 +300,13 @@ function buildCrawlRunProgressMarker(progress = {}, now = new Date()) {
 }
 
 async function updateCrawlRunProgress(runId, progress) {
+  const marker = buildCrawlRunProgressMarker(progress);
+  rememberActiveExecutionProgress(runId, marker);
+  logCrawlRuntimeProgress({ runId, trigger: marker.trigger || '', progress: marker });
+
   return CrawlRun.findByIdAndUpdate(runId, {
     $set: {
-      'metadata.progress': buildCrawlRunProgressMarker(progress),
+      'metadata.progress': marker,
     },
   });
 }
@@ -898,6 +906,13 @@ function startCrawlRunLockHeartbeat({
         loggerImpl.warn('CrawlRun lock heartbeat did not match an active lock', {
           runId: String(runId),
           trigger,
+        });
+      } else {
+        logCrawlRuntimeHeartbeat({
+          runId,
+          trigger,
+          progress: getActiveExecutionProgress(runId),
+          loggerImpl,
         });
       }
     } catch (error) {
@@ -1886,6 +1901,23 @@ function trackActiveExecution(runId, { trigger = '', startedAt = new Date() } = 
     trigger,
     startedAt,
   });
+}
+
+function rememberActiveExecutionProgress(runId, progress = {}) {
+  const id = String(runId || '');
+  const execution = activeExecutionRunIds.get(id);
+
+  if (!execution) return;
+
+  activeExecutionRunIds.set(id, {
+    ...execution,
+    progress,
+  });
+}
+
+function getActiveExecutionProgress(runId) {
+  const execution = activeExecutionRunIds.get(String(runId || ''));
+  return execution?.progress || {};
 }
 
 function untrackActiveExecution(runId) {
