@@ -1572,6 +1572,93 @@ test('ranking response corrects stale BIPA fragrance giftset wine category with 
   assert.equal(wine.categorySecondary, 'Wein & Sekt');
 });
 
+test('ranking response corrects stale active categories from remaining category feedback clusters', () => {
+  const cases = [
+    {
+      title: 'Face Beard 6-in-1 Multi Trimmer',
+      retailerKey: 'bipa',
+      categoryPrimary: 'Baby / Kinder',
+      categorySecondary: 'Babybedarf',
+      expectedPrimary: 'Drogerie / Hygiene',
+      expectedSecondary: 'Rasur',
+      guard: 'bipa-grooming-device',
+    },
+    {
+      title: 'Hof Cat Hof Cat Bio Fisch',
+      retailerKey: 'billa-plus',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      expectedPrimary: 'Tierbedarf',
+      expectedSecondary: 'Katzenfutter',
+      guard: 'billa-plus-hof-cat',
+    },
+    {
+      title: 'BBQ Marinierter Grillkaese, BBQ',
+      retailerKey: 'hofer',
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      expectedPrimary: 'Lebensmittel',
+      expectedSecondary: 'Kaese',
+      guard: 'hofer-grillkaese',
+    },
+    {
+      title: 'CHOCEUR Schoko & Keks, Milch',
+      retailerKey: 'hofer',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Milchprodukte',
+      expectedPrimary: 'Lebensmittel',
+      expectedSecondary: 'Suesswaren & Knabbereien',
+      guard: 'hofer-chocolate',
+    },
+    {
+      title: 'MILSANI Pizzakaese',
+      retailerKey: 'hofer',
+      categoryPrimary: 'Unkategorisiert',
+      categorySecondary: '',
+      expectedPrimary: 'Lebensmittel',
+      expectedSecondary: 'Kaese',
+      guard: 'hofer-milsani-kaese',
+    },
+    {
+      title: 'SAMSUNG Galaxy A26-5G',
+      retailerKey: 'hofer',
+      categoryPrimary: 'Unkategorisiert',
+      categorySecondary: '',
+      expectedPrimary: 'Technik / Elektronik',
+      expectedSecondary: 'Handys & Router',
+      guard: 'hofer-mobile-phone',
+    },
+    {
+      title: 'Bio Limetten',
+      retailerKey: 'lidl',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Sonstiges',
+      expectedPrimary: 'Lebensmittel',
+      expectedSecondary: 'Obst & Gemuese',
+      guard: 'lidl-limetten',
+    },
+  ];
+
+  for (const item of cases) {
+    const ranked = buildRankedOffer(offer({
+      retailerName: item.retailerKey,
+      retailerKey: item.retailerKey,
+      title: item.title,
+      categoryPrimary: item.categoryPrimary,
+      categorySecondary: item.categorySecondary,
+      categoryKey: 'stale',
+      subcategoryKey: 'stale',
+      rawFacts: {},
+    }));
+
+    assert.equal(ranked.categoryPrimary, item.expectedPrimary, item.title);
+    assert.equal(ranked.categorySecondary, item.expectedSecondary, item.title);
+    assert.equal(ranked.displayCategory, item.expectedSecondary, item.title);
+    assert.notEqual(ranked.categoryKey, 'stale', item.title);
+    assert.notEqual(ranked.subcategoryKey, 'stale', item.title);
+  }
+});
+
 test('specific room scent and cat litter queries remain findable', () => {
   const roomScent = offer({
     title: 'Raumduft Lavendel',
@@ -7061,7 +7148,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,

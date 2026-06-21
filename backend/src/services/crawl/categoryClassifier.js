@@ -168,7 +168,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Tiefkuehl- & Fertigprodukte',
   },
   {
-    patterns: [/\b(?:grill[-\s/]*bratkaese|grillkaese|bratkaese|halloumi)\b/],
+    patterns: [/\b(?:grill[-\s/]*bratkaese|grillkaese|grillkase|bratkaese|bratkase|halloumi)\b/],
     main: 'Lebensmittel',
     sub: 'Kaese',
   },
@@ -188,7 +188,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Brot & Gebaeck',
   },
   {
-    patterns: [/\b(liptauer|cremoso\s+di\s+bufala|parmigiano\s+reggiano|butterkase|butterkaese)\b/],
+    patterns: [/\b(liptauer|cremoso\s+di\s+bufala|parmigiano\s+reggiano|butterkase|butterkaese|pizzakase|pizzakaese|schmelzkase|schmelzkaese|schmelzkaseecken|schmelzkaeseecken|tilsiter)\b/],
     main: 'Lebensmittel',
     sub: 'Kaese',
   },
@@ -299,7 +299,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Milchprodukte',
   },
   {
-    patterns: [/\b(sheba|poesie)\b/],
+    patterns: [/\b(sheba|poesie|hof\s+cat)\b/],
     main: 'Tierbedarf',
     sub: 'Katzenfutter',
   },
@@ -368,6 +368,16 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Koerperpflege',
   },
   {
+    patterns: [/\b(face\s+beard|barttrimmer|bartrasierer|beard\s+trimmer|multi\s+trimmer|multitrimmer|trimmer)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Rasur',
+  },
+  {
+    patterns: [/\b(warmluftbuerste|warmluftburste|warmluftbÃ¼rste|lockenstab|haarglaetter|haarglatter|haarstyler)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Haarpflege',
+  },
+  {
     patterns: [/\b(blue star|wc[-\s]?reiniger|wc[-\s]?steine|wc[-\s]?kraft[-\s]?tabs|spuelkastenwuerfel|spulkastenwurfel|spuelkastenwurfel|spulkastenwuerfel|badreiniger|power reiniger)\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
@@ -378,7 +388,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Frotteewaren',
   },
   {
-    patterns: [/\b(handy|handys|smartphone|router|simkarte|sim karte|wertkarte|mobilfunk)\b/],
+    patterns: [/\b(handy|handys|smartphone|router|simkarte|sim karte|wertkarte|mobilfunk|galaxy\s+a\d+[a-z]?|redmi\s+\d+[a-z]?|iphone)\b/],
     main: 'Technik / Elektronik',
     sub: 'Handys & Router',
   },

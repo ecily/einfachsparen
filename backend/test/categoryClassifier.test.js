@@ -524,3 +524,25 @@ test('classifies sausage products with cheese variants as meat and sausage', () 
     assert.equal(decision.secondaryCategory, 'Fleisch, Wurst & Fisch', title);
   }
 });
+
+test('classifies remaining category feedback clusters with narrow product anchors', () => {
+  const cases = [
+    ['Face Beard 6-in-1 Multi Trimmer', 'Drogerie / Hygiene', 'Rasur'],
+    ['Warmluftbuerste Shape&Smooth', 'Drogerie / Hygiene', 'Haarpflege'],
+    ['Hof Cat Hof Cat Bio Fisch', 'Tierbedarf', 'Katzenfutter'],
+    ['BBQ Marinierter Grillkaese, BBQ', 'Lebensmittel', 'Kaese'],
+    ['MILSANI Pizzakaese', 'Lebensmittel', 'Kaese'],
+    ['MILSANI Schmelzkaeseecken', 'Lebensmittel', 'Kaese'],
+    ['MILSANI Tilsiter', 'Lebensmittel', 'Kaese'],
+    ['SAMSUNG Galaxy A26-5G', 'Technik / Elektronik', 'Handys & Router'],
+    ['XIAOMI Redmi 15C, 4+128', 'Technik / Elektronik', 'Handys & Router'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+    assert.equal(decision.needsReview, false, title);
+  }
+});

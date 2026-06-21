@@ -133,7 +133,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
@@ -4568,12 +4568,10 @@ function withResponseInferredQuantityFields(offer = {}) {
 }
 
 function withResponseCategoryGuardFields(offer = {}) {
-  if (String(offer?.retailerKey || '').toLowerCase() !== 'bipa') {
-    return offer;
-  }
-
+  const retailerKey = String(offer?.retailerKey || '').toLowerCase();
   const currentPrimary = normalizeSearchText(offer.categoryPrimary || '');
   const currentSecondary = normalizeSearchText(offer.categorySecondary || '');
+  const titleText = normalizeTitleForMatch(offer.title || '');
   const isDrinkCategory = currentPrimary === 'getraenke' || currentSecondary === 'wein sekt';
   const contextText = [
     offer.brand,
@@ -4590,6 +4588,8 @@ function withResponseCategoryGuardFields(offer = {}) {
   });
 
   if (
+    retailerKey === 'bipa'
+    &&
     isDrinkCategory
     && decision.primaryCategory === 'Drogerie / Hygiene'
     && decision.secondaryCategory === 'Kosmetik & Make-up'
@@ -4608,6 +4608,95 @@ function withResponseCategoryGuardFields(offer = {}) {
         responseCategoryGuard: 'bipa-fragrance-giftset',
       },
     };
+  }
+
+  const guardedCategoryKey = normalizeSearchText(decision.secondaryCategory || decision.primaryCategory)
+    .replace(/\s+/g, '-');
+  const applyGuard = (reason) => ({
+    ...offer,
+    categoryPrimary: decision.primaryCategory,
+    categorySecondary: decision.secondaryCategory,
+    categoryKey: guardedCategoryKey,
+    subcategoryKey: guardedCategoryKey,
+    categoryConfidence: Math.max(Number(offer.categoryConfidence || 0), decision.categoryConfidence),
+    subcategoryConfidence: Math.max(Number(offer.subcategoryConfidence || 0), decision.subcategoryConfidence),
+    rawFacts: {
+      ...(offer.rawFacts || {}),
+      responseCategoryGuard: reason,
+    },
+  });
+
+  if (
+    retailerKey === 'bipa'
+    && currentPrimary === 'baby kinder'
+    && currentSecondary === 'babybedarf'
+    && decision.primaryCategory === 'Drogerie / Hygiene'
+    && ['Rasur', 'Haarpflege', 'Koerperpflege'].includes(decision.secondaryCategory)
+    && decision.categoryConfidence >= 0.9
+  ) {
+    return applyGuard('bipa-grooming-device');
+  }
+
+  if (
+    retailerKey === 'billa-plus'
+    && titleText.includes('hof cat')
+    && decision.primaryCategory === 'Tierbedarf'
+    && decision.secondaryCategory === 'Katzenfutter'
+  ) {
+    return applyGuard('billa-plus-hof-cat');
+  }
+
+  if (
+    retailerKey === 'hofer'
+    && currentPrimary === 'technik elektronik'
+    && currentSecondary === 'kuechengeraete'
+    && decision.primaryCategory === 'Lebensmittel'
+    && decision.secondaryCategory === 'Kaese'
+    && /\b(grillkaese|grillkase|bratkaese|bratkase|halloumi)\b/.test(titleText)
+  ) {
+    return applyGuard('hofer-grillkaese');
+  }
+
+  if (
+    retailerKey === 'hofer'
+    && currentPrimary === 'lebensmittel'
+    && currentSecondary === 'milchprodukte'
+    && decision.primaryCategory === 'Lebensmittel'
+    && decision.secondaryCategory === 'Suesswaren & Knabbereien'
+    && /\b(choceur|moser\s+roth|schoko|choco|praline|pralinen|peanut\s+cluster)\b/.test(titleText)
+  ) {
+    return applyGuard('hofer-chocolate');
+  }
+
+  if (
+    retailerKey === 'hofer'
+    && currentPrimary === 'unkategorisiert'
+    && decision.primaryCategory === 'Lebensmittel'
+    && decision.secondaryCategory === 'Kaese'
+    && /\b(milsani|pizzakase|schmelzkase|tilsiter)\b/.test(titleText)
+  ) {
+    return applyGuard('hofer-milsani-kaese');
+  }
+
+  if (
+    retailerKey === 'hofer'
+    && currentPrimary === 'unkategorisiert'
+    && decision.primaryCategory === 'Technik / Elektronik'
+    && decision.secondaryCategory === 'Handys & Router'
+    && /\b(samsung|galaxy|xiaomi|redmi|iphone)\b/.test(titleText)
+  ) {
+    return applyGuard('hofer-mobile-phone');
+  }
+
+  if (
+    retailerKey === 'lidl'
+    && currentPrimary === 'lebensmittel'
+    && currentSecondary === 'sonstiges'
+    && decision.primaryCategory === 'Lebensmittel'
+    && decision.secondaryCategory === 'Obst & Gemuese'
+    && /\blimetten?\b/.test(titleText)
+  ) {
+    return applyGuard('lidl-limetten');
   }
 
   return offer;
