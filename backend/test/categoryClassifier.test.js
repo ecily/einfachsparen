@@ -229,6 +229,12 @@ test('keeps HOFER and Lidl feedback food anchors out of household and electronic
     ['BACKBOX Laugenwuchtel', 'Lebensmittel', 'Brot & Gebaeck'],
     ['BACKBOX Chili Cheese Hot Dog', 'Lebensmittel', 'Brot & Gebaeck'],
     ['DR. OETKER Ristorante 2er, 710 g/640 g', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
+    ['ZURUECK ZUM URSPRUNG Grill-/Bratkaese nach Halloumi Art', 'Lebensmittel', 'Kaese'],
+    ['BBQ Marinierter Grillkaese, BBQ', 'Lebensmittel', 'Kaese'],
+    ['CHOCEUR Choco Changer, Vollmilch Nuss', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['BIO Organic Fairtrade Schoko, Milch', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['CHOCEUR Peanut Cluster, Milch', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['MOSER ROTH Delice Pralinen, Vollmilch', 'Lebensmittel', 'Suesswaren & Knabbereien'],
     ['Marillen', 'Lebensmittel', 'Obst & Gemuese'],
     ['Butterkaese in Scheiben', 'Lebensmittel', 'Kaese'],
   ];
@@ -249,6 +255,7 @@ test('does not overcorrect real household and kitchen devices to food', () => {
     ['Frischhaltefolie 3 Rollen', 'Haushalt', 'Aufbewahrung & Folien'],
     ['Aufbewahrungsbox Kueche', 'Haushalt', 'Kuechenhelfer'],
     ['Kontaktgrill', 'Technik / Elektronik', 'Kuechengeraete'],
+    ['MEDION 4 in 1 Mikrowelle MD12041, schwarz:HD', 'Technik / Elektronik', 'Kuechengeraete'],
   ];
 
   for (const [title, primaryCategory, secondaryCategory] of cases) {

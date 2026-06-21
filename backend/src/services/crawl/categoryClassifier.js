@@ -168,6 +168,16 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Tiefkuehl- & Fertigprodukte',
   },
   {
+    patterns: [/\b(?:grill[-\s/]*bratkaese|grillkaese|bratkaese|halloumi)\b/],
+    main: 'Lebensmittel',
+    sub: 'Kaese',
+  },
+  {
+    patterns: [/\b(choceur|moser\s+roth|schoko|choco|praline|pralinen|peanut\s+cluster)\b/],
+    main: 'Lebensmittel',
+    sub: 'Suesswaren & Knabbereien',
+  },
+  {
     patterns: [/\bpotato\s+wedges\b/],
     main: 'Lebensmittel',
     sub: 'Tiefkuehl- & Fertigprodukte',
@@ -252,6 +262,11 @@ const HARD_CATEGORY_OVERRIDES = [
   },
   {
     patterns: [/\b(kaffeevollautomat|kaffee vollautomat|kaffeemaschine|espressoautomat|heissluftfritteuse|heisluftfritteuse|optigrill|kontaktgrill|dampfglatter|dampfglaetter|dampfglÃ¤tter|aerosteam)\b/],
+    main: 'Technik / Elektronik',
+    sub: 'Kuechengeraete',
+  },
+  {
+    patterns: [/\b(?:medion\b.*\bmikrowelle\b|\bmikrowelle\b.*\b(?:md\d+|\d+\s*in\s*1|watt|grill|heissluft|heisluft)\b)/],
     main: 'Technik / Elektronik',
     sub: 'Kuechengeraete',
   },
