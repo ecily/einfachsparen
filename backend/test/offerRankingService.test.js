@@ -1404,6 +1404,42 @@ test('beer query rejects textile side hits even when category is misclassified a
   ]);
 });
 
+test('generic sauce query rejects pet-food in-sauce side hits without hiding pet-food intent', () => {
+  const foodSauce = offer({
+    title: 'BILLA Bio BBQ Sauce',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Saucen, Oele & Gewuerze',
+    categoryKey: 'saucen-oele-gewuerze',
+    subcategoryKey: 'saucen-oele-gewuerze',
+    searchText: 'billa bio bbq sauce lebensmittel saucen gewuerze',
+  });
+  const sheba = offer({
+    title: 'Sheba Selection in Sauce Herzhafte Komposition 4-Pack',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenfutter',
+    categoryKey: 'katzenfutter',
+    subcategoryKey: 'katzenfutter',
+    searchText: 'sheba selection in sauce katzenfutter tierbedarf',
+  });
+  const poesie = offer({
+    title: 'Poesie Sauce mit Seelachs und Tomate',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Saucen, Oele & Gewuerze',
+    categoryKey: 'saucen-oele-gewuerze',
+    subcategoryKey: 'saucen-oele-gewuerze',
+    searchText: 'poesie sauce seelachs tomate lebensmittel saucen',
+  });
+
+  assert.equal(scoreOfferAgainstQuery(sheba, 'sauce'), 0);
+  assert.equal(scoreOfferAgainstQuery(poesie, 'sauce'), 0);
+  assert.deepEqual(applyQueryMatch([sheba, foodSauce, poesie], 'sauce').map((item) => item.title), [
+    'BILLA Bio BBQ Sauce',
+  ]);
+  assert.equal(scoreOfferAgainstQuery(sheba, 'katzenfutter sauce') > 0, true);
+  assert.equal(scoreOfferAgainstQuery(sheba, 'sheba') > 0, true);
+  assert.equal(scoreOfferAgainstQuery(poesie, 'poesie') > 0, true);
+});
+
 test('generic duft query ranks fragrances ahead of scented side hits without hiding specific side queries', () => {
   const perfume = offer({
     title: 'Boss Bottled Eau de Toilette 100ml',

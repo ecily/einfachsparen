@@ -353,6 +353,8 @@ test('keeps Sheba and Vitakraft pet-food anchors ahead of human-food terms', () 
     { title: 'Vitakraft Poesie mit Huhn und Gartengemuese in Sauce' },
     { title: 'Vitakraft Poesie Sauce mit Seelachs und Tomate' },
     { title: 'Poesie mit Huhn und Gartengemuese in Sauce', contextText: 'Vitakraft' },
+    { title: 'Poesie mit Huhn und Gartengemuese in Sauce' },
+    { title: 'Poesie Sauce mit Seelachs und Tomate' },
   ];
 
   for (const input of catFoodCases) {

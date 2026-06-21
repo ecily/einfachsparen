@@ -299,7 +299,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Milchprodukte',
   },
   {
-    patterns: [/\bsheba\b/],
+    patterns: [/\b(sheba|poesie)\b/],
     main: 'Tierbedarf',
     sub: 'Katzenfutter',
   },

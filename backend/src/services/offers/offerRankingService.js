@@ -133,7 +133,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
@@ -2543,6 +2543,7 @@ function getPetFoodOfferIntent({ titleTokens, categoryTokens, comparisonTokens, 
     'haustierfutter',
     'katzenfutter',
     'katzensnack',
+    'poesie',
     'nassfutter',
     'sheba',
     'tierfutter',
@@ -3610,6 +3611,7 @@ function scoreOfferAgainstQuery(offer, query) {
   const genericDogFoodQuery = context?.key === 'hundefutter' && queryTokens.length === 1 && queryTokens[0] === 'hundefutter';
   const genericRiceQuery = context?.key === 'reis' && queryTokens.length === 1 && queryTokens[0] === 'reis';
   const genericBeerQuery = context?.key === 'bier' && queryTokens.length === 1 && queryTokens[0] === 'bier';
+  const genericSauceQuery = queryTokens.length === 1 && ['sauce', 'saucen', 'sosse', 'sossen'].includes(queryTokens[0]);
   const wurstIntentQuery = context?.key === 'wurst' && queryTokens.includes('wurst');
   const genericTeeQuery = context?.key === 'tee' && queryTokens.length === 1 && queryTokens[0] === 'tee';
   const genericFischQuery = context?.key === 'fisch' && queryTokens.length === 1 && queryTokens[0] === 'fisch';
@@ -3630,6 +3632,23 @@ function scoreOfferAgainstQuery(offer, query) {
     )
   ) {
     return 0;
+  }
+
+  if (genericSauceQuery) {
+    const petFoodSide = getPetFoodOfferIntent({
+      titleTokens,
+      categoryTokens,
+      comparisonTokens,
+      aggregateTokens,
+    }).petFood || hasAnyTokenMatch(
+      titleTokens.concat(categoryTokens, comparisonTokens, aggregateTokens),
+      ['gourmet', 'poesie', 'purina', 'sheba', 'whiskas', 'felix', 'pedigree', 'katzenfutter', 'hundefutter', 'tierfutter', 'tiernahrung', 'nassfutter', 'trockenfutter', 'tierbedarf'],
+      { exact: true, suffix: true }
+    );
+
+    if (petFoodSide) {
+      return 0;
+    }
   }
 
   if (
