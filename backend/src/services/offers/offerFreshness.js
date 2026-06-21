@@ -270,7 +270,7 @@ function isOfferFreshForActiveUse(offer = {}, now = new Date()) {
   if (isSnapshotTooOld(offer, now)) return false;
   if (!hasVisibleCustomerProgramCondition(offer)) return false;
 
-  const sourceQuality = classifyOfferSourceQuality(offer);
+  const sourceQuality = classifyOfferSourceQuality(offer, now);
   if (isStaleRetainedAggregatorWithoutPublicFreshness(offer, sourceQuality, now)) return false;
   if (sourceQuality.isLowConfidenceAggregator) return false;
   if (

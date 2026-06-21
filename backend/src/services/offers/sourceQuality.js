@@ -101,7 +101,7 @@ function hasFreshCrawlEvidence(
   return now.getTime() - observedAt.getTime() <= maxAgeDays * DAY_MS;
 }
 
-function classifyOfferSourceQuality(offer = {}) {
+function classifyOfferSourceQuality(offer = {}, now = new Date()) {
   const sourceTypes = collectOfferSourceTypes(offer);
   const isOfficial = hasOfficialEvidence(offer);
   const isAktionsfinder = hasAktionsfinderEvidence(offer);
@@ -111,7 +111,7 @@ function classifyOfferSourceQuality(offer = {}) {
   const isPpcv = isAktionsfinder && hasAktionsfinderPpcvEvidence(offer);
   const hasDetailEvidence = isAktionsfinder ? hasAktionsfinderDetailEvidence(offer) : false;
   const validityEvidence = hasValidityEvidence(offer);
-  const freshCrawlEvidence = hasFreshCrawlEvidence(offer);
+  const freshCrawlEvidence = hasFreshCrawlEvidence(offer, now);
   const lowConfidencePpcv = Boolean(
     isPpcv
     && !isOfficial

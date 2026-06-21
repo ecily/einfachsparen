@@ -5670,7 +5670,7 @@ test('fresh active filter allows fresh plausible Aktionsfinder ppcv without vali
     comparableUnit: 'kg',
   });
 
-  const quality = classifyOfferSourceQuality(freshPpcv);
+  const quality = classifyOfferSourceQuality(freshPpcv, now);
 
   assert.equal(quality.sourceClass, 'aggregator-ppcv');
   assert.equal(quality.hasFreshCrawlEvidence, true);

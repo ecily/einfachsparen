@@ -6014,6 +6014,19 @@ function haveSameVisibleCardValidity(left, right) {
   return leftLabel === rightLabel;
 }
 
+function haveSameVisibleCardDateRange(left, right) {
+  const leftFrom = getResponseDateKey(left?.validFrom);
+  const rightFrom = getResponseDateKey(right?.validFrom);
+  const leftTo = getResponseDateKey(left?.validTo);
+  const rightTo = getResponseDateKey(right?.validTo);
+
+  if (!leftFrom || !rightFrom || !leftTo || !rightTo) {
+    return false;
+  }
+
+  return leftFrom === rightFrom && leftTo === rightTo;
+}
+
 function getResponseRawVariantKey(offer) {
   const rawVariantKeys = [
     'abmessung',
@@ -6454,13 +6467,19 @@ function hasSameVisibleCardFingerprint(left, right) {
     return false;
   }
 
-  if (!haveSameVisibleQuantity(left, right)) {
-    if (!hasSameBrokenQuantityVisibleCardFingerprint(left, right)) {
-      return false;
-    }
+  const sameVisibleQuantity = haveSameVisibleQuantity(left, right);
+  const sameBrokenQuantityFingerprint = sameVisibleQuantity
+    ? false
+    : hasSameBrokenQuantityVisibleCardFingerprint(left, right);
+
+  if (!sameVisibleQuantity && !sameBrokenQuantityFingerprint) {
+    return false;
   }
 
-  if (!haveSameVisibleCardValidity(left, right)) {
+  if (
+    !haveSameVisibleCardValidity(left, right)
+    && !(sameBrokenQuantityFingerprint && haveSameVisibleCardDateRange(left, right))
+  ) {
     return false;
   }
 
@@ -6486,7 +6505,7 @@ function hasSameBrokenQuantityVisibleCardFingerprint(left, right) {
     return false;
   }
 
-  if (!haveSameVisibleCardValidity(left, right) || !haveSameVisibleCardConditions(left, right)) {
+  if (!haveSameVisibleCardConditions(left, right)) {
     return false;
   }
 
