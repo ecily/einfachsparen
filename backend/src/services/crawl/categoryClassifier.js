@@ -208,7 +208,15 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Wein & Sekt',
   },
   {
-    patterns: [/\b(parkside|cutter[-\s]?set|maler[-\s]?starter[-\s]?set)\b/],
+    patterns: [
+      /\b(?:criv[it]?|parkside)?\s*(?:herren|damen|kinder|damen[-/\s]+herren)\b.*\b(?:arbeitshose|arbeitslatzhose|arbeitsbundhose|stretch\s+arbeitshose|laufshorts|laufshirt|laufschuhe|shorts|clogs|sneakersocken|boxershorts|socken)\b/,
+      /\b(?:arbeitshose|arbeitslatzhose|arbeitsbundhose|stretch\s+arbeitshose|laufshorts|laufshirt|laufschuhe|shorts|clogs|sneakersocken|boxershorts|socken)\b.*\b(?:herren|damen|kinder|damen[-/\s]+herren)\b/,
+    ],
+    main: 'Kleidung / Mode',
+    sub: 'Herrenbekleidung',
+  },
+  {
+    patterns: [/\b(parkside|cutter[-\s]?set|maler[-\s]?starter[-\s]?set|schlagnuss|schlagnuss[-\s]?satz|ausbesserungspolierer|polierer)\b/],
     main: 'Technik / Elektronik',
     sub: 'Werkzeug & Akkus',
   },
@@ -259,6 +267,11 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(einweghandschuhe|reinigungstucher|reinigungstuecher|putztucher|putztuecher|wischtucher|wischtuecher)\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
+  },
+  {
+    patterns: [/\b(waeschekorb|waschekorb|waeschewanne|waschewanne|waeschekorb[-/\s]*wanne|waschekorb[-/\s]*wanne)\b/],
+    main: 'Haushalt',
+    sub: 'Aufbewahrung & Folien',
   },
   {
     patterns: [/\b(kaffeevollautomat|kaffee vollautomat|kaffeemaschine|espressoautomat|heissluftfritteuse|heisluftfritteuse|optigrill|kontaktgrill|dampfglatter|dampfglaetter|dampfglÃ¤tter|aerosteam)\b/],
@@ -530,7 +543,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Milchgetraenke',
   },
   {
-    patterns: [/\b(paradeiser|tomate|tomaten|gurke|paprika|salat|kartoffel|erdapfel|zwiebel|karotte|moehre|mohre|radieschen|apfel|banane|zitrone|beere|erdbeere|erdbeeren|mango|mangos|nektarine|nektarinen|kresse)\b/],
+    patterns: [/\b(paradeiser|tomate|tomaten|gurke|paprika|salat|kartoffel|erdapfel|zwiebel|karotte|moehre|mohre|radieschen|apfel|banane|zitrone|limette|limetten|beere|erdbeere|erdbeeren|mango|mangos|nektarine|nektarinen|kresse)\b/],
     main: 'Lebensmittel',
     sub: 'Obst & Gemuese',
   },

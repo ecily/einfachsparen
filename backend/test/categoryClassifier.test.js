@@ -221,6 +221,26 @@ test('classifies weighted Lidl Griller offers as food without reclassifying gril
   assert.equal(grillDevice.secondaryCategory, 'Kuechengeraete');
 });
 
+test('keeps Lidl Parkside clothing and tool feedback anchors in narrow categories', () => {
+  const cases = [
+    ['Herren Arbeitshose', 'Kleidung / Mode', 'Herrenbekleidung'],
+    ['Herren Arbeitslatzhose', 'Kleidung / Mode', 'Herrenbekleidung'],
+    ['Herren Stretch Arbeitshose', 'Kleidung / Mode', 'Herrenbekleidung'],
+    ['CRIVIT Herren Laufshorts', 'Kleidung / Mode', 'Herrenbekleidung'],
+    ['Schlagnuss-Satz, 8-teilig oder 21-teilig', 'Technik / Elektronik', 'Werkzeug & Akkus'],
+    ['Akku-Ausbesserungspolierer, 12 V', 'Technik / Elektronik', 'Werkzeug & Akkus'],
+    ['W5 Waeschekorb/-wanne', 'Haushalt', 'Aufbewahrung & Folien'],
+    ['Bio Limetten', 'Lebensmittel', 'Obst & Gemuese'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+  }
+});
+
 test('keeps HOFER and Lidl feedback food anchors out of household and electronics categories', () => {
   const cases = [
     ["PIZZ'AH Picco Belli, Flammkuchen", 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],

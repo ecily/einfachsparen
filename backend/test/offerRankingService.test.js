@@ -1380,6 +1380,30 @@ test('beer query rejects hair care weizen false positives even when category is 
   ]);
 });
 
+test('beer query rejects textile side hits even when category is misclassified as beer', () => {
+  const beer = offer({
+    title: 'Wieselburger Bier 0,5 l',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    searchText: 'wieselburger bier getraenke',
+  });
+  const shorts = offer({
+    title: 'CRIVIT Herren Laufshorts',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    categoryKey: 'bier',
+    subcategoryKey: 'bier',
+    searchText: 'crivit herren laufshorts bier',
+  });
+
+  assert.equal(scoreOfferAgainstQuery(shorts, 'bier'), 0);
+  assert.deepEqual(applyQueryMatch([shorts, beer], 'bier').map((item) => item.title), [
+    'Wieselburger Bier 0,5 l',
+  ]);
+});
+
 test('generic duft query ranks fragrances ahead of scented side hits without hiding specific side queries', () => {
   const perfume = offer({
     title: 'Boss Bottled Eau de Toilette 100ml',
@@ -7001,7 +7025,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
