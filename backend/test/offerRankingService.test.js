@@ -1637,6 +1637,15 @@ test('ranking response corrects stale active categories from remaining category 
       expectedSecondary: 'Obst & Gemuese',
       guard: 'lidl-limetten',
     },
+    {
+      title: 'PARKSIDE Herren kurze Arbeitsbundhose',
+      retailerKey: 'lidl',
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Werkzeug & Akkus',
+      expectedPrimary: 'Kleidung / Mode',
+      expectedSecondary: 'Herrenbekleidung',
+      guard: 'lidl-parkside-workwear',
+    },
   ];
 
   for (const item of cases) {

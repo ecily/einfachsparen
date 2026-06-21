@@ -4699,6 +4699,17 @@ function withResponseCategoryGuardFields(offer = {}) {
     return applyGuard('lidl-limetten');
   }
 
+  if (
+    retailerKey === 'lidl'
+    && currentPrimary === 'technik elektronik'
+    && currentSecondary === 'werkzeug akkus'
+    && decision.primaryCategory === 'Kleidung / Mode'
+    && decision.secondaryCategory === 'Herrenbekleidung'
+    && /\b(herren)\b.*\b(arbeitshose|arbeitslatzhose|arbeitsbundhose|arbeitssocken|socken)\b/.test(titleText)
+  ) {
+    return applyGuard('lidl-parkside-workwear');
+  }
+
   return offer;
 }
 
