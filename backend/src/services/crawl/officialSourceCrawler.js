@@ -210,6 +210,65 @@ function buildFetchDiagnostic(url, error = {}) {
   };
 }
 
+function isBillaSteiermarkPublitasSource(source = {}) {
+  const url = String(source.sourceUrl || '').toLowerCase();
+  return /^billa(?:-plus)?$/.test(String(source.retailerKey || '').toLowerCase())
+    && source.channel === 'official-flyer'
+    && /view\.publitas\.com\/(?:billa-at|billa-plus)\//i.test(url)
+    && /steiermark/.test(url);
+}
+
+function isRetiredPublitasNotFoundDiagnostic(diagnostic = {}) {
+  return Number(diagnostic.httpStatus) === 404
+    && /publitas\.com/i.test(`${diagnostic.url || ''} ${diagnostic.finalUrl || ''}`)
+    && /upps,\s*diese ausgabe wurde nicht gefunden/i.test(String(diagnostic.htmlTitle || ''));
+}
+
+function isRetiredBillaSteiermarkPublitasError(source = {}, diagnostic = {}) {
+  return isBillaSteiermarkPublitasSource(source)
+    && isRetiredPublitasNotFoundDiagnostic(diagnostic);
+}
+
+function buildRetiredBillaPublitasSourceResult({ source = {}, diagnostic = {} } = {}) {
+  const sourceKey = billaSourceKeyForRetailer(source.retailerKey, source.sourceUrl);
+  const sourceId = source._id ? String(source._id) : '';
+
+  return {
+    sourceId,
+    retailerKey: source.retailerKey,
+    retailerName: source.retailerName,
+    channel: source.channel,
+    sourceType: source.sourceType || source.channel || 'flyer',
+    sourceKey,
+    status: 'skipped',
+    skipped: true,
+    skippedReason: 'retired-publitas-issue',
+    message: 'Retired BILLA/BILLA Plus Steiermark Publitas issue was ignored; previous data remains retained and public freshness filters decide visibility.',
+    error: '',
+    foundRawItems: 0,
+    parsedOffers: 0,
+    offersStored: 0,
+    rejectedOffers: 0,
+    evidenceMatched: 0,
+    discoveredLinks: 0,
+    sourceUrl: source.sourceUrl,
+    httpStatus: diagnostic.httpStatus ?? null,
+    contentType: diagnostic.contentType || '',
+    finalUrl: diagnostic.finalUrl || source.sourceUrl,
+    failureStage: 'source-retired-before-extraction',
+    diagnostic: {
+      ...diagnostic,
+      sourceId,
+      sourceKey,
+      retiredSource: true,
+      retainedPreviousData: true,
+      publicFreshnessRequired: true,
+      retirementReason: 'publitas-issue-not-found',
+      failureStage: 'source-retired-before-extraction',
+    },
+  };
+}
+
 function attachFetchDiagnostic(error, url) {
   error.diagnostic = {
     ...(error.diagnostic || {}),
@@ -7603,9 +7662,19 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       sourceUrl: source.sourceUrl,
     },
   });
+  const deferRawDocumentClear = isBillaSteiermarkPublitasSource(source);
+  let rawDocumentsCleared = false;
+  const clearSourceRawDocuments = async () => {
+    if (!rawDocumentsCleared) {
+      await clearRawDocumentsForSource(source._id);
+      rawDocumentsCleared = true;
+    }
+  };
 
   try {
-    await clearRawDocumentsForSource(source._id);
+    if (!deferRawDocumentClear) {
+      await clearSourceRawDocuments();
+    }
     throwIfAborted(signal);
 
     if (isSparFamilyFlyerDiscoverySource(source)) {
@@ -7865,6 +7934,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
 
     const { response, html, canonicalUrl } = await fetchSourceHtml(source.sourceUrl, source, { signal });
     throwIfAborted(signal);
+    await clearSourceRawDocuments();
     const httpLog = buildHttpLogFromResponse(response, html);
     const links = extractRelevantLinks({
       html,
@@ -8194,6 +8264,54 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
     };
   } catch (error) {
     const diagnostic = error.diagnostic || buildFetchDiagnostic(source.sourceUrl, error);
+    if (isRetiredBillaSteiermarkPublitasError(source, diagnostic)) {
+      const retiredResult = buildRetiredBillaPublitasSourceResult({ source, diagnostic });
+
+      await CrawlJob.findByIdAndUpdate(crawlJob._id, {
+        status: 'skipped',
+        finishedAt: new Date(),
+        sourceType: source.sourceType || source.channel || '',
+        sourceUrl: source.sourceUrl,
+        parserVersion: PARSER_VERSION,
+        normalizationVersion: NORMALIZATION_VERSION,
+        stats: {
+          foundRawItems: 0,
+          parsedOffers: 0,
+          productiveOffers: 0,
+          rejectedOffers: 0,
+          discoveredPages: 1,
+          rawDocuments: 0,
+          offersExtracted: 0,
+          offersStored: 0,
+          warnings: 1,
+          errors: 0,
+        },
+        httpLog: {
+          status: diagnostic.httpStatus ?? null,
+          contentType: diagnostic.contentType || '',
+          finalUrl: diagnostic.finalUrl || source.sourceUrl,
+          downloadBytes: Number(diagnostic.downloadBytes || 0),
+          contentHash: '',
+        },
+        warningMessages: [retiredResult.message],
+        errorMessages: [],
+        metadata: {
+          sourceLabel: source.label,
+          sourceUrl: source.sourceUrl,
+          sourceKey: retiredResult.sourceKey,
+          fetchDiagnostic: diagnostic,
+          retiredSource: retiredResult.diagnostic,
+        },
+      });
+
+      await Source.findByIdAndUpdate(source._id, {
+        latestRunAt: new Date(),
+        latestStatus: 'inactive',
+      });
+
+      return retiredResult;
+    }
+
     await CrawlJob.findByIdAndUpdate(crawlJob._id, {
       status: 'failed',
       finishedAt: new Date(),
@@ -8268,6 +8386,10 @@ module.exports = {
     isHoferOfferPageUrl,
     selectBillaFlyerPdfLinks,
     crawlBillaOfficialFlyers,
+    isBillaSteiermarkPublitasSource,
+    isRetiredPublitasNotFoundDiagnostic,
+    isRetiredBillaSteiermarkPublitasError,
+    buildRetiredBillaPublitasSourceResult,
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
     parseLidlFlyerDate,

@@ -39,6 +39,30 @@ test('global public-active filter rejects expired offer-level validity even when
   assert.equal(isOfferFreshForActiveUse(offer, new Date('2026-06-14T10:00:00+02:00')), false);
 });
 
+test('global public-active filter hides retained expired BILLA Publitas flyer offers', () => {
+  const offer = {
+    title: 'BILLA Ja Natuerlich Bio Joghurt',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    sourceKey: 'billa-official-flyer-steiermark',
+    sourceType: 'billa-official-flyer-pdf',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: new Date('2026-06-10T22:00:00.000Z'),
+    validTo: new Date('2026-06-17T21:59:59.999Z'),
+    publishStatus: 'crawl-run-partial',
+    sourceRunStatus: 'success',
+    priceCurrent: { amount: 1.49, currency: 'EUR' },
+    quantityText: '500 g',
+    rawFacts: {
+      sourceRunStatus: 'success',
+      sourceKey: 'billa-official-flyer-steiermark',
+    },
+  };
+
+  assert.equal(isOfferFreshForActiveUse(offer, new Date('2026-06-22T10:00:00+02:00')), false);
+});
+
 test('global validity rules keep flyer-level validity as fallback for normal weekly offers', () => {
   const status = buildOfferStatus(
     new Date('2026-06-10T22:00:00.000Z'),

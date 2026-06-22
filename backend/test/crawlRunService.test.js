@@ -280,6 +280,73 @@ test('determineFinalStatus does not turn a full crawl partial only because polic
   );
 });
 
+test('determineFinalStatus treats retired BILLA Publitas skipped sources as non-fatal', () => {
+  const result = {
+    sourceCoverage: {
+      totalRegisteredSources: 3,
+      activeEligibleSources: 3,
+    },
+    matchedSources: [
+      { sourceId: 's1', sourceKey: 'billa-official-flyer-steiermark', retailerKey: 'billa', channel: 'official-flyer', sourceType: 'flyer' },
+      { sourceId: 's2', sourceKey: 'billa-plus-official-flyer-steiermark', retailerKey: 'billa-plus', channel: 'official-flyer', sourceType: 'flyer' },
+      { sourceId: 's3', sourceKey: 'billa-official-site', retailerKey: 'billa', channel: 'official-site', sourceType: 'offers-page' },
+    ],
+    sources: [
+      {
+        sourceId: 's1',
+        sourceKey: 'billa-official-flyer-steiermark',
+        retailerKey: 'billa',
+        channel: 'official-flyer',
+        sourceType: 'flyer',
+        status: 'skipped',
+        skipped: true,
+        skippedReason: 'retired-publitas-issue',
+        diagnostic: {
+          retiredSource: true,
+          retainedPreviousData: true,
+          publicFreshnessRequired: true,
+        },
+      },
+      {
+        sourceId: 's2',
+        sourceKey: 'billa-plus-official-flyer-steiermark',
+        retailerKey: 'billa-plus',
+        channel: 'official-flyer',
+        sourceType: 'flyer',
+        status: 'skipped',
+        skipped: true,
+        skippedReason: 'retired-publitas-issue',
+        diagnostic: {
+          retiredSource: true,
+          retainedPreviousData: true,
+          publicFreshnessRequired: true,
+        },
+      },
+      {
+        sourceId: 's3',
+        sourceKey: 'billa-official-site',
+        retailerKey: 'billa',
+        channel: 'official-site',
+        sourceType: 'offers-page',
+        status: 'success',
+        offersStored: 4,
+      },
+    ],
+  };
+
+  const summary = _private.buildRunSummary(result);
+
+  assert.equal(summary.summary.failedSourcesCount, 0);
+  assert.equal(summary.summary.partialSourcesCount, 0);
+  assert.equal(summary.summary.skippedSourcesCount, 2);
+  assert.equal(summary.summary.policyBoundedSourcesCount, 0);
+  assert.equal(summary.summary.matchedSourcesCount, 3);
+  assert.equal(
+    _private.determineFinalStatus({ crawlResult: result, summary: summary.summary, mode: 'full' }),
+    'success'
+  );
+});
+
 test('buildRunSummary exposes parser coverage rejection taxonomy and alert flags', () => {
   const summary = _private.buildRunSummary({
     matchedSources: [

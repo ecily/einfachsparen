@@ -3920,6 +3920,101 @@ test('BILLA flyer source selects official Publitas Steiermark PDF links and sour
   assert.equal(billaPdfSourceKeyForRetailer('billa-plus', billaPlusSourceDef.sourceUrl), 'billa-plus-official-flyer-steiermark');
 });
 
+test('BILLA Steiermark Publitas retired 404 is skipped and retains previous public data', () => {
+  const billaSourceDef = billaFlyerSource({
+    label: 'BILLA Flugblatt Steiermark',
+    sourceUrl: 'https://view.publitas.com/billa-at/billa_fb_kw24_2026_steiermark/',
+    regionScope: 'Steiermark',
+  });
+  const diagnostic = {
+    url: billaSourceDef.sourceUrl,
+    finalUrl: billaSourceDef.sourceUrl,
+    httpStatus: 404,
+    contentType: 'text/html; charset=utf-8',
+    htmlTitle: 'Upps, diese Ausgabe wurde nicht gefunden.',
+  };
+
+  assert.equal(__private.isBillaSteiermarkPublitasSource(billaSourceDef), true);
+  assert.equal(__private.isRetiredBillaSteiermarkPublitasError(billaSourceDef, diagnostic), true);
+
+  const result = __private.buildRetiredBillaPublitasSourceResult({
+    source: billaSourceDef,
+    diagnostic,
+  });
+
+  assert.equal(result.status, 'skipped');
+  assert.equal(result.skippedReason, 'retired-publitas-issue');
+  assert.equal(result.sourceKey, 'billa-official-flyer-steiermark');
+  assert.equal(result.offersStored, 0);
+  assert.equal(result.diagnostic.retiredSource, true);
+  assert.equal(result.diagnostic.retainedPreviousData, true);
+  assert.equal(result.diagnostic.publicFreshnessRequired, true);
+});
+
+test('BILLA PLUS Steiermark Publitas retired 404 is skipped with retailer-specific source key', () => {
+  const billaPlusSourceDef = billaFlyerSource({
+    retailerKey: 'billa-plus',
+    retailerName: 'Billa Plus',
+    label: 'BILLA PLUS Flugblatt Steiermark',
+    sourceUrl: 'https://view.publitas.com/billa-plus/billa_plus_fb_kw24_2026_steiermark/',
+    regionScope: 'Steiermark',
+  });
+  const diagnostic = {
+    url: billaPlusSourceDef.sourceUrl,
+    finalUrl: billaPlusSourceDef.sourceUrl,
+    httpStatus: 404,
+    contentType: 'text/html; charset=utf-8',
+    htmlTitle: 'Upps, diese Ausgabe wurde nicht gefunden.',
+  };
+
+  assert.equal(__private.isBillaSteiermarkPublitasSource(billaPlusSourceDef), true);
+  assert.equal(__private.isRetiredBillaSteiermarkPublitasError(billaPlusSourceDef, diagnostic), true);
+  assert.equal(
+    __private.buildRetiredBillaPublitasSourceResult({
+      source: billaPlusSourceDef,
+      diagnostic,
+    }).sourceKey,
+    'billa-plus-official-flyer-steiermark'
+  );
+});
+
+test('BILLA Steiermark Publitas retirement only accepts explicit not-found 404', () => {
+  const billaSourceDef = billaFlyerSource({
+    label: 'BILLA Flugblatt Steiermark',
+    sourceUrl: 'https://view.publitas.com/billa-at/billa_fb_kw24_2026_steiermark/',
+    regionScope: 'Steiermark',
+  });
+
+  assert.equal(__private.isRetiredBillaSteiermarkPublitasError(billaSourceDef, {
+    url: billaSourceDef.sourceUrl,
+    finalUrl: billaSourceDef.sourceUrl,
+    httpStatus: 500,
+    htmlTitle: 'Upps, diese Ausgabe wurde nicht gefunden.',
+  }), false);
+  assert.equal(__private.isRetiredBillaSteiermarkPublitasError(billaSourceDef, {
+    url: billaSourceDef.sourceUrl,
+    finalUrl: billaSourceDef.sourceUrl,
+    httpStatus: 404,
+    htmlTitle: 'BILLA Flugblatt Steiermark',
+  }), false);
+  assert.equal(__private.isRetiredBillaSteiermarkPublitasError({
+    ...billaSourceDef,
+    sourceUrl: 'https://view.publitas.com/billa-at/billa_fb_kw25_2026_wien/',
+  }, {
+    url: 'https://view.publitas.com/billa-at/billa_fb_kw25_2026_wien/',
+    finalUrl: 'https://view.publitas.com/billa-at/billa_fb_kw25_2026_wien/',
+    httpStatus: 404,
+    htmlTitle: 'Upps, diese Ausgabe wurde nicht gefunden.',
+  }), false);
+  assert.equal(__private.isRetiredBillaSteiermarkPublitasError(billaSourceDef, {
+    url: billaSourceDef.sourceUrl,
+    finalUrl: billaSourceDef.sourceUrl,
+    httpStatus: null,
+    errorCode: 'ECONNABORTED',
+    errorMessage: 'timeout of 30000ms exceeded',
+  }), false);
+});
+
 test('BILLA action HTML parser selects FR-SA price window for Dallmayr on Friday', () => {
   const parsed = __private.parseBillaActionTeaserName(`
     Dallmayr Prodomo Kaffee in verschiedenen Sorten, 500 Gramm Packung.
