@@ -239,7 +239,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Pasta, Reis & Konserven',
   },
   {
-    patterns: [/\bfelix\b.*\bgefuellte\s+paprika\b/],
+    patterns: [/\bfelix\b.*\b(gefuellte|gefullte)\s+paprika\b/],
     main: 'Lebensmittel',
     sub: 'Pasta, Reis & Konserven',
   },

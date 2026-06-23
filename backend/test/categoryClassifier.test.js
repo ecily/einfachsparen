@@ -571,7 +571,7 @@ test('keeps dm cosmetic wine-word color names out of drinks categories', () => {
 
 test('keeps Felix filled paprika human food even with polluted pet context', () => {
   const decision = determineCategoryDecision({
-    title: 'Felix Felix Gefuellte Paprika',
+    title: 'Felix Felix Gef\u00fcllte Paprika',
     contextText: 'Tierbedarf Katzenfutter',
     sourceCategory: 'Tierbedarf Katzenfutter',
   });

@@ -133,7 +133,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
@@ -3478,7 +3478,7 @@ function isFelixFilledPaprikaHumanFood({ titleTokens = [], aggregateTokens = [] 
   const tokens = titleTokens.concat(aggregateTokens);
 
   return hasAnyTokenMatch(tokens, ['felix'], { exact: true, suffix: false }) &&
-    hasAnyTokenMatch(tokens, ['gefuellte'], { exact: true, suffix: false }) &&
+    hasAnyTokenMatch(tokens, ['gefuellte', 'gefullte'], { exact: true, suffix: false }) &&
     hasAnyTokenMatch(tokens, ['paprika'], { exact: true, suffix: false });
 }
 
@@ -4718,7 +4718,7 @@ function withResponseCategoryGuardFields(offer = {}) {
     && currentSecondary === 'katzenfutter'
     && decision.primaryCategory === 'Lebensmittel'
     && decision.secondaryCategory === 'Pasta, Reis & Konserven'
-    && /\bfelix\b.*\bgefuellte\s+paprika\b/.test(titleText)
+    && /\bfelix\b.*\b(gefuellte|gefullte)\s+paprika\b/.test(titleText)
   ) {
     return applyGuard(`${retailerKey}-felix-filled-paprika-human-food`);
   }
