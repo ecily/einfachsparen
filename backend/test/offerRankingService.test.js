@@ -2469,6 +2469,63 @@ test('pet food intent finds dog food products and excludes Fruchtbar baby food f
   ]);
 });
 
+test('generic pet queries exclude Felix filled paprika but keep real Felix cat food', () => {
+  const filledPaprika = offer({
+    _id: 'felix-paprika',
+    title: 'Felix Felix Gefuellte Paprika',
+    brand: 'Felix',
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenfutter',
+    categoryKey: 'katzenfutter',
+    subcategoryKey: 'katzenfutter',
+    searchText: 'felix felix gefuellte paprika tierbedarf katzenfutter',
+  });
+  const catFood = offer({
+    _id: 'felix-cat-food',
+    title: 'Felix Katzennahrung 12 x 85 g',
+    brand: 'Felix',
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    categoryPrimary: 'Tierbedarf',
+    categorySecondary: 'Katzenfutter',
+    categoryKey: 'katzenfutter',
+    subcategoryKey: 'katzenfutter',
+    searchText: 'felix katzennahrung katzenfutter tierbedarf',
+  });
+
+  assert.equal(scoreOfferAgainstQuery(filledPaprika, 'tierbedarf'), 0);
+  assert.ok(scoreOfferAgainstQuery(catFood, 'tierbedarf') > 0);
+  assert.deepEqual(applyQueryMatch([filledPaprika, catFood], 'tierbedarf').map((item) => item._id), [
+    'felix-cat-food',
+  ]);
+  assert.ok(scoreOfferAgainstQuery(filledPaprika, 'Felix Gefuellte Paprika') > 0);
+  assert.deepEqual(applyQueryMatch([filledPaprika], 'Felix Gefuellte Paprika').map((item) => item._id), [
+    'felix-paprika',
+  ]);
+});
+
+test('BILLA Felix filled paprika response category is guarded back to human food', () => {
+  for (const retailerKey of ['billa', 'billa-plus']) {
+    const ranked = buildRankedOffer(offer({
+      title: 'Felix Felix Gefuellte Paprika',
+      brand: 'Felix',
+      retailerKey,
+      retailerName: retailerKey === 'billa' ? 'BILLA' : 'BILLA Plus',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      categoryKey: 'katzenfutter',
+      subcategoryKey: 'katzenfutter',
+      searchText: 'felix felix gefuellte paprika tierbedarf katzenfutter',
+    }));
+
+    assert.equal(ranked.categoryPrimary, 'Lebensmittel');
+    assert.equal(ranked.categorySecondary, 'Pasta, Reis & Konserven');
+    assert.equal(ranked.categoryKey, 'pasta-reis-konserven');
+  }
+});
+
 test('cat litter intent finds litter and excludes cat food', () => {
   const litter = offer({
     title: 'ZooRoyal Ultra Klumpstreu Pinienduft 5 Liter',
@@ -7216,7 +7273,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
