@@ -133,7 +133,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
@@ -3418,6 +3418,62 @@ function isUnsupportedKaffeeSideHit({ titleTokens, comparisonTokens, aggregateTo
   return cosmeticSide || !coffeeProduct;
 }
 
+const DM_BIPA_COSMETIC_SIDE_TOKENS = [
+  'art',
+  'blush',
+  'catrice',
+  'diamond',
+  'eyeliner',
+  'frosted',
+  'gloss',
+  'highlighter',
+  'kajal',
+  'lidschatten',
+  'lipgloss',
+  'lipliner',
+  'lippenstift',
+  'makeup',
+  'mascara',
+  'mineral',
+  'plumper',
+  'puder',
+];
+
+function isDmBipaCosmeticSideHitForWineQuery({ offer = {}, queryTokens = [], titleTokens = [], categoryTokens = [], aggregateTokens = [] } = {}) {
+  if (!(queryTokens.length === 1 && queryTokens[0] === 'wein')) {
+    return false;
+  }
+
+  const retailerKey = normalizeRetailerKey(offer.retailerKey || offer.retailerName || '');
+
+  if (!['dm', 'bipa'].includes(retailerKey)) {
+    return false;
+  }
+
+  const tokens = titleTokens.concat(categoryTokens, aggregateTokens);
+  const hasCosmeticSignal = hasAnyTokenMatch(tokens, DM_BIPA_COSMETIC_SIDE_TOKENS, {
+    exact: true,
+    suffix: false,
+  }) || hasAnyTokenMatch(tokens, ['kosmetik', 'make'], {
+    exact: true,
+    suffix: true,
+  });
+  const hasRealWineSignal = hasAnyTokenMatch(titleTokens, [
+    'rotwein',
+    'rosewein',
+    'sekt',
+    'weisswein',
+    'wein',
+    'weine',
+    'zweigelt',
+  ], {
+    exact: true,
+    suffix: false,
+  });
+
+  return hasCosmeticSignal && !hasRealWineSignal;
+}
+
 function scoreKaffeeSearchIntent({ titleTokens, categoryTokens, comparisonTokens, aggregateTokens }) {
   const { coffeeProduct, cosmeticSide, teaSide } = getKaffeeOfferIntent({
     titleTokens,
@@ -3494,6 +3550,16 @@ function scoreOfferAgainstQuery(offer, query) {
     kaffeeIntentQuery &&
     isUnsupportedKaffeeSideHit({ titleTokens, comparisonTokens, aggregateTokens })
   ) {
+    return 0;
+  }
+
+  if (isDmBipaCosmeticSideHitForWineQuery({
+    offer,
+    queryTokens,
+    titleTokens,
+    categoryTokens,
+    aggregateTokens,
+  })) {
     return 0;
   }
 
@@ -4588,7 +4654,7 @@ function withResponseCategoryGuardFields(offer = {}) {
   });
 
   if (
-    retailerKey === 'bipa'
+    ['bipa', 'dm'].includes(retailerKey)
     &&
     isDrinkCategory
     && decision.primaryCategory === 'Drogerie / Hygiene'
@@ -4605,7 +4671,7 @@ function withResponseCategoryGuardFields(offer = {}) {
       subcategoryConfidence: Math.max(Number(offer.subcategoryConfidence || 0), decision.subcategoryConfidence),
       rawFacts: {
         ...(offer.rawFacts || {}),
-        responseCategoryGuard: 'bipa-fragrance-giftset',
+        responseCategoryGuard: `${retailerKey}-cosmetic-wine-category`,
       },
     };
   }

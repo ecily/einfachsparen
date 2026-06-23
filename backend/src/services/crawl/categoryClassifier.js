@@ -239,7 +239,12 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Pasta, Reis & Konserven',
   },
   {
-    patterns: [/\b(eyeliner|mascara|kajal|lipliner|lippenstift)\b/],
+    patterns: [/\bfelix\b.*\bgefuellte\s+paprika\b/],
+    main: 'Lebensmittel',
+    sub: 'Pasta, Reis & Konserven',
+  },
+  {
+    patterns: [/\b(art\s+couleurs|blush|catrice|diamond\s+plumper|eyeliner|highlighter|kajal|lidschatten|lipgloss|lipliner|lippenstift|make[-\s]?up|mascara|mineral\s+wear|puder)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Kosmetik & Make-up',
   },

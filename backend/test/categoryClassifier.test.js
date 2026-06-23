@@ -530,6 +530,7 @@ test('classifies remaining category feedback clusters with narrow product anchor
     ['Face Beard 6-in-1 Multi Trimmer', 'Drogerie / Hygiene', 'Rasur'],
     ['Warmluftbuerste Shape&Smooth', 'Drogerie / Hygiene', 'Haarpflege'],
     ['Hof Cat Hof Cat Bio Fisch', 'Tierbedarf', 'Katzenfutter'],
+    ['Felix Felix Gefuellte Paprika', 'Lebensmittel', 'Pasta, Reis & Konserven'],
     ['BBQ Marinierter Grillkaese, BBQ', 'Lebensmittel', 'Kaese'],
     ['MILSANI Pizzakaese', 'Lebensmittel', 'Kaese'],
     ['MILSANI Schmelzkaeseecken', 'Lebensmittel', 'Kaese'],
@@ -545,4 +546,37 @@ test('classifies remaining category feedback clusters with narrow product anchor
     assert.equal(decision.secondaryCategory, secondaryCategory, title);
     assert.equal(decision.needsReview, false, title);
   }
+});
+
+test('keeps dm cosmetic wine-word color names out of drinks categories', () => {
+  const cases = [
+    'Lipgloss Mineral Wear Diamond Plumper Champagner, 5 ml',
+    'CATRICE Lidschatten Art Couleurs 460 Frosted Dust',
+    'Blush Liquid Hollyglazing C02 Wine Not?, 2,8 ml',
+    'Puder Glitter Dream Cushion Brides & Besties C01 Champagne Showers, 3,5 g',
+  ];
+
+  for (const title of cases) {
+    const decision = determineCategoryDecision({
+      title,
+      contextText: 'dm Kosmetik Make-up',
+      sourceCategory: 'Kosmetik Make-up',
+    });
+
+    assert.equal(decision.primaryCategory, 'Drogerie / Hygiene', title);
+    assert.equal(decision.secondaryCategory, 'Kosmetik & Make-up', title);
+    assert.equal(decision.needsReview, false, title);
+  }
+});
+
+test('keeps Felix filled paprika human food even with polluted pet context', () => {
+  const decision = determineCategoryDecision({
+    title: 'Felix Felix Gefuellte Paprika',
+    contextText: 'Tierbedarf Katzenfutter',
+    sourceCategory: 'Tierbedarf Katzenfutter',
+  });
+
+  assert.equal(decision.primaryCategory, 'Lebensmittel');
+  assert.equal(decision.secondaryCategory, 'Pasta, Reis & Konserven');
+  assert.equal(decision.needsReview, false);
 });
