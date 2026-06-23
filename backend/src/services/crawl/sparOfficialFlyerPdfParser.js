@@ -3836,6 +3836,65 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
       comparisonSafe: false,
     }));
 
+  addKnownCurrentCandidateIf(candidates, page, isSpar
+    && hasText(text, /iglo\s+feinste\s+backhendlstreifen/)
+    && /200\s*-\s*250\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 4, 49), frozenCandidate({
+      title: 'Iglo Feinste Backhendlstreifen',
+      brand: 'Iglo',
+      price: 4.49,
+      referencePrice: matchesPriceToken(normalized, 8, 99) ? 8.99 : null,
+      quantityText: '200-250 g',
+      conditionsText: '1+1 gratis / ab 2 Packungen je 4,49 laut Flugblatt',
+      rawText: 'Iglo Feinste Backhendlstreifen, 200-250 g, ab 2 Packungen je 4,49',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isSpar
+    && hasText(text, /iglo\s+dorsch/)
+    && hasText(text, /zander\s+naturfilets|premium\s+atlantik\s+lachs|goldbrasse/)
+    && /200\s*-\s*480\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 8, 49), fishCandidate({
+      title: 'Iglo Dorsch, Zander, Lachs, Forelle oder Goldbrasse',
+      brand: 'Iglo',
+      price: 8.49,
+      referencePrice: matchesPriceToken(normalized, 16, 99) ? 16.99 : null,
+      quantityText: '200-480 g',
+      conditionsText: '1+1 gratis / ab 2 Packungen je 8,49 laut Flugblatt',
+      rawText: 'Iglo Dorsch, Zander Naturfilets, Premium Atlantik Lachs, Forelle oder Goldbrasse, 200-480 g, ab 2 Packungen je 8,49',
+      comparisonSafe: false,
+      searchKeywords: 'iglo fisch dorsch zander lachs forelle goldbrasse tiefkuehl',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isSpar
+    && hasText(text, /dr\.?\s*oetker\s+pizza\s+ristorante/)
+    && /320\s*-\s*390\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 2, 66), frozenCandidate({
+      title: 'Dr. Oetker Pizza Ristorante',
+      brand: 'Dr. Oetker',
+      price: 2.66,
+      referencePrice: matchesPriceToken(normalized, 3, 99) ? 3.99 : null,
+      quantityText: '320-390 g',
+      conditionsText: '2+1 gratis / ab 3 Packungen je 2,66 laut Flugblatt',
+      rawText: 'Dr. Oetker Pizza Ristorante, 320-390 g, ab 3 Packungen je 2,66',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isSpar
+    && hasText(text, /bio-lachsfilet/)
+    && /200\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 6, 99), fishCandidate({
+      title: 'Bio-Lachsfilet',
+      brand: 'SPAR Natur Pur',
+      price: 6.99,
+      referencePrice: matchesPriceToken(normalized, 7, 99) ? 7.99 : null,
+      quantityText: '200 g',
+      conditionsText: 'ab 2 Packungen je 6,99 / nur gueltig am Fr., 19.6. und Sa., 20.6.2026 laut Flugblatt',
+      rawText: 'Bio-Lachsfilet, 200 g, ab 2 Packungen je 6,99',
+      validFromOverride: new Date('2026-06-18T22:00:00.000Z'),
+      validToOverride: new Date('2026-06-20T21:59:59.999Z'),
+    }));
+
   addKnownCurrentCandidateIf(candidates, page, isInterspar
     && hasText(text, /rindsschnitzel\s+aus\s+(?:oesterreich|osterreich)/)
     && /per\s+kg/i.test(normalized)
@@ -3859,6 +3918,250 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
       conditionsText: '',
       rawText: 'Zewa Simply Soft Toilettenpapier 20er-Packung oder Zewa Premium Toilettenpapier 18er-Packung, 6,79',
       comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /goesser\s+naturradler|g.sser\s+naturradler/)
+    && /0[,\s]*33[-\s]*liter[-\s]*flasche/i.test(normalized)
+    && matchesPriceToken(normalized, 0, 71), beerCandidate({
+      title: 'Goesser Naturradler alkoholfrei oder Naturgold alkoholfrei',
+      brand: 'Goesser',
+      price: 0.71,
+      referencePrice: matchesPriceToken(normalized, 1, 43) ? 1.43 : null,
+      quantityText: '0.33 l',
+      conditionsText: '12+12 gratis / ab 24 Flaschen je 0,71 laut Flugblatt',
+      rawText: 'Goesser Naturradler Zitrone alkoholfrei oder Naturgold alkoholfrei, 0,33-Liter-Flasche, ab 24 Flaschen je 0,71',
+      comparisonSafe: false,
+      searchKeywords: 'goesser naturradler naturgold alkoholfrei bier radler',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /la\s+gioiosa\s+sparkling/)
+    && /0[,\s]*75[-\s]*liter[-\s]*flasche/i.test(normalized)
+    && matchesPriceToken(normalized, 4, 99), wineCandidate({
+      title: 'La Gioiosa Sparkling alkoholfrei',
+      brand: 'La Gioiosa',
+      price: 4.99,
+      referencePrice: matchesPriceToken(normalized, 6, 99) ? 6.99 : null,
+      quantityText: '0.75 l',
+      conditionsText: 'laut Flugblatt',
+      rawText: 'La Gioiosa Sparkling alkoholfrei oder Sparkling Rose alkoholfrei, 0,75-Liter-Flasche, 4,99',
+      comparisonSafe: false,
+      searchKeywords: 'la gioiosa sparkling alkoholfrei schaumwein alkoholfrei',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /pitu\s+cachaca/)
+    && /0[,\s]*7[-\s]*liter[-\s]*flasche/i.test(normalized)
+    && matchesPriceToken(normalized, 14, 99), groceryCandidate({
+      title: 'Pitu Cachaca',
+      brand: 'Pitu',
+      price: 14.99,
+      quantityText: '0.7 l',
+      conditionsText: 'Aktion laut Flugblatt',
+      rawText: 'Pitu Cachaca, 0,7-Liter-Flasche, 14,99',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Spirituosen',
+      categoryKey: 'spirituosen',
+      searchKeywords: 'pitu cachaca spirituosen caipirinha',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /isostar\s+sport-riegel/)
+    && /3\s*x\s*40\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 2, 49), sweetCandidate({
+      title: 'Isostar Sport- oder Protein-Riegel',
+      brand: 'Isostar',
+      price: 2.49,
+      referencePrice: matchesPriceToken(normalized, 3, 69) ? 3.69 : null,
+      quantityText: '3 x 35-40 g',
+      conditionsText: 'ab 2 Packungen je 2,49 laut Flugblatt',
+      rawText: 'Isostar Sport-Riegel 3 x 40 g oder Protein-Riegel 3 x 35 g, ab 2 Packungen je 2,49',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /schaerdinger\s+protein\s+traum|sch.r.dinger\s+protein\s+traum/)
+    && /200[-\s]*g[-\s]*becher/i.test(normalized)
+    && matchesPriceToken(normalized, 0, 86), dairyCandidate({
+      title: 'Schaerdinger Protein Traum Pudding',
+      brand: 'Schaerdinger',
+      price: 0.86,
+      referencePrice: matchesPriceToken(normalized, 1, 29) ? 1.29 : null,
+      quantityText: '200 g',
+      conditionsText: '2+1 gratis / ab 3 Bechern je 0,86 laut Flugblatt',
+      rawText: 'Schaerdinger Protein Traum Pudding, 200-g-Becher, ab 3 Bechern je 0,86',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /nocco/)
+    && /0[,\s]*33[-\s]*liter[-\s]*dose/i.test(normalized)
+    && matchesPriceToken(normalized, 1, 79), groceryCandidate({
+      title: 'Nocco',
+      brand: 'Nocco',
+      price: 1.79,
+      referencePrice: matchesPriceToken(normalized, 1, 99) ? 1.99 : null,
+      quantityText: '0.33 l',
+      conditionsText: 'ab 2 Dosen je 1,79 laut Flugblatt',
+      rawText: 'Nocco, verschiedene Sorten, 0,33-Liter-Dose, ab 2 Dosen je 1,79',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Alkoholfreie Getraenke',
+      categoryKey: 'alkoholfreie-getraenke',
+      searchKeywords: 'nocco energy drink alkoholfrei dose',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /rindfleischlasagne/)
+    && /per\s+st(?:ueck|uck)/i.test(normalized)
+    && matchesPriceToken(normalized, 4, 99), groceryCandidate({
+      title: 'Rindfleischlasagne oder Spinatlasagne',
+      brand: 'INTERSPAR',
+      price: 4.99,
+      referencePrice: matchesPriceToken(normalized, 6, 49) ? 6.49 : null,
+      quantityText: '1 Stueck',
+      conditionsText: 'Heisse Theke / per Stueck laut Flugblatt',
+      rawText: 'Rindfleischlasagne oder Spinatlasagne, per Stueck, 4,99',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      searchKeywords: 'lasagne rindfleischlasagne spinatlasagne heisse theke',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /branzino/)
+    && /per\s+100\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 2, 49), fishCandidate({
+      title: 'Branzino',
+      brand: 'INTERSPAR',
+      price: 2.49,
+      quantityText: '100 g',
+      conditionsText: 'in Bedienung / Angebot gueltig bis Mi., 8.7.2026 laut Flugblatt',
+      rawText: 'Branzino, in Bedienung, per 100 g, 2,49',
+      validToOverride: new Date('2026-07-08T21:59:59.999Z'),
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /bio-mohnflesserl/)
+    && /bei\s+3\s+st(?:ueck|uck)\s+je/i.test(normalized)
+    && matchesPriceToken(normalized, 0, 83), bakeryCandidate({
+      title: 'Bio-Mohnflesserl',
+      brand: 'INTERSPAR',
+      price: 0.83,
+      referencePrice: matchesPriceToken(normalized, 1, 25) ? 1.25 : null,
+      quantityText: '1 Stueck',
+      conditionsText: '2+1 gratis / bei 3 Stueck je 0,83 laut Flugblatt',
+      rawText: 'Bio-Mohnflesserl, bei 3 Stueck je 0,83',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /focaccia\s+tomate\s*&?\s*oliven|focaccia\s+tomate/)
+    && /350\s*g/i.test(normalized)
+    && matchesPriceToken(normalized, 3, 29), bakeryCandidate({
+      title: 'Focaccia Tomate & Oliven',
+      brand: 'INTERSPAR',
+      price: 3.29,
+      referencePrice: matchesPriceToken(normalized, 3, 79) ? 3.79 : null,
+      quantityText: '350 g',
+      conditionsText: 'per Stueck laut Flugblatt',
+      rawText: 'Focaccia Tomate & Oliven, 350 g, per Stueck, 3,29',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /thomy\s+ketch&co|thomy\s+ketch/)
+    && /170[-\s]*g.*190[-\s]*g/i.test(normalized)
+    && matchesPriceToken(normalized, 1, 99), groceryCandidate({
+      title: 'Thomy Ketch&Co, Mayonnaise oder Hot Sriracha Mayo',
+      brand: 'Thomy',
+      price: 1.99,
+      referencePrice: matchesPriceToken(normalized, 2, 29) ? 2.29 : null,
+      quantityText: '170-190 g',
+      conditionsText: 'laut Flugblatt',
+      rawText: 'Thomy Ketch&Co, Mayonnaise oder Hot Sriracha Mayo, 170-190 g, 1,99',
+      categorySecondary: 'Saucen & Gewuerze',
+      categoryKey: 'saucen-gewuerze',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /hornig\s+caff/)
+    && /1[-\s]*kg[-\s]*packung/i.test(normalized)
+    && matchesPriceToken(normalized, 23, 99), groceryCandidate({
+      title: 'Hornig Caffe Crema',
+      brand: 'Hornig',
+      price: 23.99,
+      referencePrice: matchesPriceToken(normalized, 29, 99) ? 29.99 : null,
+      quantityText: '1 kg',
+      conditionsText: 'laut Flugblatt',
+      rawText: 'Hornig Caffe Crema oder Caffe Crema Intenso, 1-kg-Packung, 23,99',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      categoryKey: 'kaffee-tee',
+      searchKeywords: 'hornig caffe crema kaffee ganze bohne',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /somat\s+vorteilspack/)
+    && /(?:caps|tabs)/i.test(normalized)
+    && matchesPriceToken(normalized, 13, 49), drugstoreCandidate({
+      title: 'Somat Vorteilspack Caps oder Tabs',
+      brand: 'Somat',
+      price: 13.49,
+      quantityText: '75-100 WG',
+      conditionsText: 'Aktion laut Flugblatt',
+      rawText: 'Somat Vorteilspack Caps 75/84 WG oder Tabs 84/100 WG, 13,49',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /felix\s+katzensnacks/)
+    && /180[-\s]*g.*200[-\s]*g|12\s*x\s*10[-\s]*g/i.test(normalized)
+    && matchesPriceToken(normalized, 3, 49), groceryCandidate({
+      title: 'Felix Katzensnacks oder Deli Moments',
+      brand: 'Felix',
+      price: 3.49,
+      referencePrice: matchesPriceToken(normalized, 3, 99) ? 3.99 : null,
+      quantityText: '120-200 g',
+      conditionsText: 'ab 2 Packungen je 3,49 laut Flugblatt',
+      rawText: 'Felix Katzensnacks 180-200 g oder Felix Deli Moments 12 x 10 g, ab 2 Packungen je 3,49',
+      categoryPrimary: 'Tierbedarf',
+      categorySecondary: 'Katzenfutter',
+      categoryKey: 'katzenfutter',
+      searchKeywords: 'felix katzensnacks deli moments katzenfutter tierbedarf',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /spar\s+alufolie/)
+    && /30\s*m/i.test(normalized)
+    && matchesPriceToken(normalized, 2, 99), nonFoodPieceCandidate({
+      title: 'SPAR Alufolie 30 m',
+      brand: 'SPAR',
+      price: 2.99,
+      referencePrice: matchesPriceToken(normalized, 3, 49) ? 3.49 : null,
+      conditionsText: 'ab 2 Stueck je 2,99 laut Flugblatt',
+      rawText: 'SPAR Alufolie 30 m, ab 2 Stueck je 2,99',
+      categoryPrimary: 'Haushalt',
+      categorySecondary: 'Kueche & Aufbewahrung',
+      categoryKey: 'kueche-aufbewahrung',
+      searchKeywords: 'spar alufolie haushalt kueche 30 m',
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page, isInterspar
+    && hasText(text, /delonghi\s+kaffeevollautomat/)
+    && /ecam220\.?20w/i.test(normalized)
+    && (matchesPriceToken(normalized, 299, 0) || /(?:^|\D)299\s*[-,](?!\d)/i.test(normalized)), nonFoodPieceCandidate({
+      title: 'DeLonghi Kaffeevollautomat ECAM220.20W',
+      brand: 'DeLonghi',
+      price: 299.00,
+      referencePrice: (matchesPriceToken(normalized, 349, 0) || /(?:^|\D)349\s*[-,](?!\d)/i.test(normalized)) ? 349.00 : null,
+      conditionsText: 'laut Flugblatt',
+      rawText: 'DeLonghi Kaffeevollautomat ECAM220.20W, 299,- statt 349,-',
+      categoryPrimary: 'Technik / Elektronik',
+      categorySecondary: 'Kuechengeraete',
+      categoryKey: 'kuechengeraete',
+      searchKeywords: 'delonghi kaffeevollautomat kaffeemaschine ecam22020w',
     }));
 
   addKnownCurrentCandidateIf(candidates, page, hasText(text, /aperol/)

@@ -2259,3 +2259,171 @@ test('extracts INTERSPAR KW25 current cover controls from official PDF text', ()
   assert.equal(zewa.priceCurrent.amount, 6.79);
   assert.equal(zewa.quantityText, '18-20 Rollen');
 });
+
+test('extracts SPAR KW25 current page 11 frozen fish and pizza controls from official PDF text', () => {
+  const validity = {
+    validFrom: new Date('2026-06-17T22:00:00.000Z'),
+    validTo: new Date('2026-06-30T21:59:59.999Z'),
+  };
+  const pages = [
+    {
+      pageNumber: 11,
+      text: [
+        'Freitag & Samstag Angebote gueltig bei 11',
+        '1 Pkg. 8,99 ab 2 Pkg. je 4,49 (per kg 17,96-22,45) 1 + 1 GRATIS',
+        'Iglo Feinste Backhendlstreifen versch. Sorten, tiefgekuehlt, 200-250 g',
+        '1 Pkg. 16,99 ab 2 Pkg. je 8,49 (per kg 17,69-42,45) 1 + 1 GRATIS',
+        'Iglo Dorsch natur oder paniert, Dorsch in Knusperbroesel, Zander Naturfilets, Premium Atlantik Lachs, Forelle Naturfilets oder ASC Goldbrasse',
+        '100% Filet aus nachhaltigem Fischfang, tiefgekuehlt, 200-480 g',
+        '1 Pkg. 3,99 ab 3 Pkg. je 2,66 (per kg 6,82-8,31) 2 + 1 GRATIS',
+        'Dr. Oetker Pizza Ristorante versch. Sorten, tiefgekuehlt, 320-390 g',
+        'Bio-Lachsfilet aus Aquakultur Norwegen, in Selbstbedienung, 200 g',
+        'Nur gueltig am Fr., 19.6. bis Sa., 20.6.2026 Mengenvorteil 1 Pkg. 7,99 ab 2 Pkg. je 6,99 (per kg 34,95)',
+      ].join(' '),
+    },
+  ];
+  const baseline = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [{ pageNumber: 11, text: 'Freitag & Samstag Angebote gueltig bei 11 Rabattmarkerl ohne konkretes Produkt 1 + 1 GRATIS' }],
+  }).filter((candidate) => !candidate.exclusionReason);
+  const candidates = extractSparPdfCandidates({ sourceRetailerFormat: 'spar', validity, pages });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000781',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
+    pdfSha256: 'kw25-spar-page-11-fixture',
+  });
+
+  const backhendl = offers.find((offer) => /Backhendlstreifen/i.test(offer.title));
+  const igloFish = offers.find((offer) => /Iglo Dorsch/i.test(offer.title));
+  const pizza = offers.find((offer) => /Pizza Ristorante/i.test(offer.title));
+  const bioLachs = offers.find((offer) => offer.title === 'Bio-Lachsfilet');
+  const titles = offers.map((offer) => offer.title);
+
+  assert.ok(offers.length > baseline.length);
+  assert.ok(backhendl);
+  assert.equal(backhendl.priceCurrent.amount, 4.49);
+  assert.equal(backhendl.quantityText, '200-250 g');
+  assert.equal(dateKey(backhendl.validTo), '2026-06-30');
+  assert.ok(igloFish);
+  assert.equal(igloFish.priceCurrent.amount, 8.49);
+  assert.match(igloFish.categorySecondary, /Fleisch|Fisch/);
+  assert.ok(pizza);
+  assert.equal(pizza.priceCurrent.amount, 2.66);
+  assert.equal(pizza.quantityText, '320-390 g');
+  assert.ok(bioLachs);
+  assert.equal(bioLachs.priceCurrent.amount, 6.99);
+  assert.equal(bioLachs.validFrom.toISOString(), '2026-06-18T22:00:00.000Z');
+  assert.equal(bioLachs.validTo.toISOString(), '2026-06-20T21:59:59.999Z');
+  assert.equal(titles.some((title) => /Freitag|Rabattmarkerl|GRATIS/i.test(title)), false);
+});
+
+test('extracts selected INTERSPAR KW25 current missed page offers without fragment explosion', () => {
+  const validity = {
+    validFrom: new Date('2026-06-17T22:00:00.000Z'),
+    validTo: new Date('2026-06-30T21:59:59.999Z'),
+  };
+  const pages = [
+    {
+      pageNumber: 4,
+      text: [
+        'GENIESSEN GEHT AUCH OHNE! Goesser Naturradler Zitrone alkoholfrei oder Naturgold alkoholfrei 0,33-Liter-Flasche (= per 0,5 Liter 1,08)',
+        '0 71 24er-Tray 17,04 1 Flasche 1,43 ab 24 Flaschen je 12 + 12 GRATIS',
+        'La Gioiosa Sparkling alkoholfrei oder La Gioiosa Sparkling Rose alkoholfrei Ideal als Aperitif. 0,75-Liter-Flasche (= per Liter 6,65)',
+        '4 99 statt 6,99 28% billiger!',
+      ].join(' '),
+    },
+    {
+      pageNumber: 5,
+      text: [
+        'Isostar Sport-Riegel 3 x 40 g oder Protein-Riegel 3 x 35 g, verschiedene Sorten (= per kg 20,75/23,71)',
+        '2 49 1 Packung 3,69 ab 2 Packungen je 32% billiger! MENGEN VORTEIL',
+        'Schaerdinger Protein Traum Pudding Vanille oder Schoko, 200-g-Becher (= per kg 4,30)',
+        '0 86 1 Becher 1,29 ab 3 Becher je 2 + 1 GRATIS',
+        'Nocco Verschiedene Sorten, jetzt NEU: Grand Sour, 0,33-Liter-Dose (= per Liter 5,42)',
+        '1 79 1 Dose 1,99 ab 2 Dosen je Sie sparen 0,40!',
+      ].join(' '),
+    },
+    {
+      pageNumber: 6,
+      text: 'weinwelt.at Pitu Cachaca Brasilien 0,7-Liter-Flasche (= per Liter 21,41) 14 99 AKTION!',
+    },
+    {
+      pageNumber: 9,
+      text: 'Rindfleischlasagne oder Spinatlasagne In allen INTERSPAR-Maerkten mit Heisser Theke erhaeltlich, per Stueck 23% billiger! 4 99 statt 6,49',
+    },
+    {
+      pageNumber: 10,
+      text: 'Branzino Aus Aquakultur Kroatien. In Bedienung per 100 g (= per kg 24,90) Angebot gueltig bis Mi, 8.7. 2 49 AKTION!',
+    },
+    {
+      pageNumber: 11,
+      text: [
+        'Bio-Mohnflesserl Der Gebaeckklassiker aus Oesterreich, frisch gebacken aus der INTERSPAR-Backstube.',
+        '0 83 1 Stueck 1,25 bei 3 Stueck je 2+1 GRATIS',
+        'Focaccia Tomate & Oliven Frisch gebacken aus der INTERSPAR-Backstube. 350 g per Stueck (= per kg 9,40)',
+        '3 29 statt 3,79 Sie sparen 0,50!',
+      ].join(' '),
+    },
+    {
+      pageNumber: 13,
+      text: [
+        'Thomy Ketch&Co, Mayonnaise oder Hot Sriracha Mayo 170-g-190-g-Tube (= per kg 10,47/11,71) 1 99 statt 2,29/2,79',
+        'Hornig Caffe Crema oder Caffe Crema Intenso Ganze Bohne, 1-kg-Packung 23 99 statt 29,99 20% billiger!',
+      ].join(' '),
+    },
+    {
+      pageNumber: 15,
+      text: [
+        'Somat Vorteilspack Caps 75/84 WG oder Tabs 84/100 WG (= per WG 0,13-0,18) 13 49 AKTION!',
+        'Felix Katzensnacks 180-g-200-g-Maxi Pack oder Felix Deli Moments 12 x 10-g-Maxi Pack, verschiedene Sorten (= per kg 17,45-29,08)',
+        '3 49 1 Packung 3,99 ab 2 Packungen je Sie sparen 1,-! MENGEN VORTEIL',
+        'Prozentaktion gilt auch auf Aktionspreise und bereits reduzierte Ware. Nicht mit anderen Prozentaktionen und Gutscheinen kombinierbar.',
+      ].join(' '),
+    },
+    {
+      pageNumber: 18,
+      text: [
+        'SPAR Alufolie 30 m Zum Backen, Grillen und Frischhalten geeignet.',
+        '2 99 1 Stueck 3,49 ab 2 Stueck je Sie sparen 1,-! MENGEN VORTEIL',
+        'DeLonghi Kaffeevollautomat Mod.-Nr.: ECAM220.20W, 2 Jahre Garantie',
+        'Sie sparen 50,-! 299,- statt 349,- interspar.at 15 bar Pumpendruck',
+      ].join(' '),
+    },
+  ];
+  const candidates = extractSparPdfCandidates({ sourceRetailerFormat: 'interspar', validity, pages });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000782',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
+    pdfSha256: 'kw25-interspar-current-missed-pages-fixture',
+  });
+  const byTitle = (pattern) => offers.find((offer) => pattern.test(offer.title));
+  const titles = offers.map((offer) => offer.title);
+
+  assert.ok(offers.length >= 14);
+  assert.ok(offers.length < 30);
+  assert.equal(byTitle(/Goesser Naturradler/i).priceCurrent.amount, 0.71);
+  assert.equal(byTitle(/La Gioiosa/i).priceCurrent.amount, 4.99);
+  assert.equal(byTitle(/Pitu/i).priceCurrent.amount, 14.99);
+  assert.equal(byTitle(/Isostar/i).priceCurrent.amount, 2.49);
+  assert.equal(byTitle(/Protein Traum/i).priceCurrent.amount, 0.86);
+  assert.equal(byTitle(/Nocco/i).priceCurrent.amount, 1.79);
+  assert.equal(byTitle(/Rindfleischlasagne/i).priceCurrent.amount, 4.99);
+  assert.equal(byTitle(/Branzino/i).priceCurrent.amount, 2.49);
+  assert.equal(byTitle(/Branzino/i).validTo.toISOString(), '2026-07-08T21:59:59.999Z');
+  assert.equal(byTitle(/Bio-Mohnflesserl/i).priceCurrent.amount, 0.83);
+  assert.equal(byTitle(/Focaccia/i).priceCurrent.amount, 3.29);
+  assert.equal(byTitle(/Thomy/i).priceCurrent.amount, 1.99);
+  assert.equal(byTitle(/Hornig/i).priceCurrent.amount, 23.99);
+  assert.equal(byTitle(/Somat/i).priceCurrent.amount, 13.49);
+  assert.equal(byTitle(/Felix Katzensnacks/i).categoryPrimary, 'Tierbedarf');
+  assert.equal(byTitle(/SPAR Alufolie/i).priceCurrent.amount, 2.99);
+  assert.equal(byTitle(/DeLonghi Kaffeevollautomat/i).priceCurrent.amount, 299.00);
+  assert.equal(titles.some((title) => /Prozentaktion|Stattpreise|weinwelt|GENIESSEN GEHT/i.test(title)), false);
+});
