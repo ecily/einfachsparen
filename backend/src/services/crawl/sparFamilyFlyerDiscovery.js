@@ -85,6 +85,45 @@ const STALE_CURRENT_FALLBACK_PATTERNS = [
   /260603/i,
 ];
 
+const ACTION_INDEX_FOLDER_TYPES = Object.freeze({
+  MAIN_FLYER: 'main-flyer',
+  ENJOY: 'enjoy',
+  FRUIT_VEGETABLE: 'fruit-vegetable',
+  GRILLEN: 'grillen',
+  MONATSSPARER: 'monatssparer',
+  COUPON: 'coupon/gutschein',
+  INSERT: 'insert/einleger',
+  ONLINE_FLYER: 'online-flyer',
+  MAGAZINE: 'magazine',
+  HOME_NONFOOD: 'home/nonfood',
+  SCHOOL: 'school',
+  PARTYSERVICE: 'partyservice',
+  WINE: 'wine',
+  UNKNOWN: 'unknown',
+});
+
+const ACTION_INDEX_LOW_RISK_FOLDERS = new Set([
+  ACTION_INDEX_FOLDER_TYPES.MAIN_FLYER,
+  ACTION_INDEX_FOLDER_TYPES.ONLINE_FLYER,
+]);
+
+const ACTION_INDEX_MEDIUM_RISK_FOLDERS = new Set([
+  ACTION_INDEX_FOLDER_TYPES.ENJOY,
+  ACTION_INDEX_FOLDER_TYPES.FRUIT_VEGETABLE,
+  ACTION_INDEX_FOLDER_TYPES.GRILLEN,
+  ACTION_INDEX_FOLDER_TYPES.MONATSSPARER,
+  ACTION_INDEX_FOLDER_TYPES.COUPON,
+  ACTION_INDEX_FOLDER_TYPES.INSERT,
+]);
+
+const ACTION_INDEX_HIGH_RISK_FOLDERS = new Set([
+  ACTION_INDEX_FOLDER_TYPES.MAGAZINE,
+  ACTION_INDEX_FOLDER_TYPES.HOME_NONFOOD,
+  ACTION_INDEX_FOLDER_TYPES.SCHOOL,
+  ACTION_INDEX_FOLDER_TYPES.PARTYSERVICE,
+  ACTION_INDEX_FOLDER_TYPES.WINE,
+]);
+
 function normalizeForScan(value) {
   return String(value || '')
     .toLowerCase()
@@ -518,6 +557,243 @@ function inferFolderType(url, text = '') {
   }
 
   return 'unknown';
+}
+
+function inferActionIndexFolderType(url = '', text = '') {
+  const normalizedUrl = normalizeForScan(url);
+  const normalizedText = normalizeForScan(text);
+  const normalized = `${normalizedUrl} ${normalizedText}`.trim();
+
+  if (/\bpartyservice\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.PARTYSERVICE;
+  if (/\bschule\b|\bschul\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.SCHOOL;
+  if (/\bweinwelt\b|\bwein\b|\bbestseller\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.WINE;
+  if (/\bmein zuhause\b|\bzuhause\b|\bhaushalt\b|\bnonfood\b|\bnon food\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.HOME_NONFOOD;
+  if (/\bmagazin\b|\bmagazine\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.MAGAZINE;
+  if (/\beinleger\b|\beiinleger\b|\bbeileger\b|\binsert\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.INSERT;
+  if (/\bgutschein\b|\bgutscheinheft\b|\bcoupon\b|\brabattmarke\b|\brabattmarken\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.COUPON;
+  if (/\bmonatssparer\b|\bmonat\s*sparer\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.MONATSSPARER;
+  if (/\bgrillen\b|\bgrill\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.GRILLEN;
+  if (/\bobst\b|\bgemuese\b|\bgemuse\b|\bfrucht\b|\bfrische\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.FRUIT_VEGETABLE;
+  if (/\benjoy\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.ENJOY;
+  if (/\bonline\s*flugblatt\b|\bonline-flugblatt\b|steiermark[_ -]kw\d+/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.ONLINE_FLYER;
+  if (/\bflugblatt\b|\bkw\s*\d+\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.MAIN_FLYER;
+
+  return ACTION_INDEX_FOLDER_TYPES.UNKNOWN;
+}
+
+function inferActionIndexRetailerFormat(url = '', text = '') {
+  const classification = classifySparFamilyFlyerUrl(url);
+  if (['spar', 'eurospar', 'interspar'].includes(classification.sourceGuess)) {
+    return classification.sourceGuess;
+  }
+
+  const normalized = normalizeForScan(`${url} ${text}`);
+  if (/\beurospar\b/.test(normalized)) return 'eurospar';
+  if (/\binterspar\b/.test(normalized) || /flugblatt\.interspar\.at/i.test(url)) return 'interspar';
+  if (/\bspar\b/.test(normalized) || /flugblatt\.spar\.at/i.test(url)) return 'spar';
+
+  return 'unknown';
+}
+
+function inferActionIndexRegion(url = '', text = '') {
+  const normalized = normalizeForScan(`${url} ${text}`);
+  if (/\bsteiermark\b|\/steiermark\//.test(normalized)) return 'steiermark';
+  if (/\boesterreich\b|\bosterreich\b|\baustria\b|\/oesterreich\/|\/osterreich\//.test(normalized)) return 'austria';
+  return 'unknown';
+}
+
+function inferActionIndexLinkType(url = '') {
+  const canonicalUrl = canonicalDiscoveryUrl(url);
+  if (isOfficialSparFamilyPdfUrl(canonicalUrl)) return 'pdf';
+  if (isOfficialSparFamilyViewerUrl(canonicalUrl)) return 'viewer';
+
+  try {
+    const parsed = new URL(canonicalUrl || url);
+    if (/^https?:$/i.test(parsed.protocol)) return 'html';
+  } catch (error) {
+    return 'unknown';
+  }
+
+  return 'unknown';
+}
+
+function parseActionIndexDate(value = '') {
+  const match = String(value || '').match(/\b(\d{1,2})\.(\d{1,2})\.(?:(\d{2}|\d{4}))?\b/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const rawYear = match[3] ? Number(match[3]) : 2026;
+  const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+  if (!day || !month || !year) return null;
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function parseActionIndexValidity(text = '') {
+  const value = String(text || '');
+  const matches = [...value.matchAll(/\b\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4})?\b/g)].map((match) => match[0]);
+  if (matches.length === 0) {
+    return {
+      validFrom: null,
+      validTo: null,
+      unknown: true,
+    };
+  }
+
+  return {
+    validFrom: parseActionIndexDate(matches[0]),
+    validTo: parseActionIndexDate(matches[1] || matches[0]),
+    unknown: false,
+  };
+}
+
+function inferActionIndexRisk(folderType) {
+  if (ACTION_INDEX_LOW_RISK_FOLDERS.has(folderType)) return 'low';
+  if (ACTION_INDEX_MEDIUM_RISK_FOLDERS.has(folderType)) return 'medium';
+  if (ACTION_INDEX_HIGH_RISK_FOLDERS.has(folderType)) return 'high';
+  return 'high';
+}
+
+function inferActionIndexSupport({ retailerFormat, folderType }) {
+  if (retailerFormat === 'eurospar') {
+    return {
+      kaufklugSupport: 'public-disabled',
+      reason: 'EUROSPAR current discovery exists but remains policy-bounded/public-disabled until official current coverage is proven.',
+    };
+  }
+
+  if (retailerFormat === 'spar' && folderType === ACTION_INDEX_FOLDER_TYPES.MAIN_FLYER) {
+    return {
+      kaufklugSupport: 'supported-currently',
+      reason: 'SPAR current flyer discovery/parser is active, but only the primary discovered link is parsed.',
+    };
+  }
+
+  if (retailerFormat === 'interspar' && folderType === ACTION_INDEX_FOLDER_TYPES.ONLINE_FLYER) {
+    return {
+      kaufklugSupport: 'supported-currently',
+      reason: 'INTERSPAR current flyer discovery/parser is active for Steiermark online flyers, but only the primary discovered link is parsed.',
+    };
+  }
+
+  if (
+    retailerFormat === 'spar'
+    && [
+      ACTION_INDEX_FOLDER_TYPES.ENJOY,
+      ACTION_INDEX_FOLDER_TYPES.FRUIT_VEGETABLE,
+      ACTION_INDEX_FOLDER_TYPES.GRILLEN,
+      ACTION_INDEX_FOLDER_TYPES.MONATSSPARER,
+      ACTION_INDEX_FOLDER_TYPES.COUPON,
+    ].includes(folderType)
+  ) {
+    return {
+      kaufklugSupport: 'partially-supported',
+      reason: 'Official SPAR supplemental flyers are recognized or exist as scoped snapshots, but current multi-link parsing is not productive.',
+    };
+  }
+
+  if (
+    retailerFormat === 'interspar'
+    && [
+      ACTION_INDEX_FOLDER_TYPES.HOME_NONFOOD,
+      ACTION_INDEX_FOLDER_TYPES.WINE,
+      ACTION_INDEX_FOLDER_TYPES.MAGAZINE,
+    ].includes(folderType)
+  ) {
+    return {
+      kaufklugSupport: 'partially-supported',
+      reason: 'Some INTERSPAR special PDFs exist as scoped diagnostics/snapshots, but they are high-risk and not broad current public truth.',
+    };
+  }
+
+  if (retailerFormat === 'interspar' && [
+    ACTION_INDEX_FOLDER_TYPES.SCHOOL,
+    ACTION_INDEX_FOLDER_TYPES.PARTYSERVICE,
+  ].includes(folderType)) {
+    return {
+      kaufklugSupport: 'unsupported',
+      reason: 'Special INTERSPAR folder type is not part of current productive offer extraction.',
+    };
+  }
+
+  return {
+    kaufklugSupport: 'unsupported',
+    reason: 'No current safe productive parser/support path is registered for this official folder type.',
+  };
+}
+
+function recommendedActionIndexNextStep({ retailerFormat, folderType, risk, kaufklugSupport }) {
+  if (risk === 'low' && kaufklugSupport === 'supported-currently') {
+    return 'Keep as first P1b candidate for combined parse-then-replace; prove multiple links cannot overwrite each other.';
+  }
+
+  if (risk === 'low' && retailerFormat === 'eurospar') {
+    return 'Keep diagnostic-only until EUROSPAR current coverage and public policy are explicitly approved.';
+  }
+
+  if (risk === 'medium') {
+    return 'Keep in diagnostic matrix; add fixtures and reject-sample tests before any productive parse scope.';
+  }
+
+  return 'Keep diagnostic-only; do not include in P1b production scope before separate parser/evidence audit.';
+}
+
+function classifySparFamilyActionIndexLink({ url = '', label = '', discoveredFrom = '' } = {}) {
+  const canonicalUrl = canonicalDiscoveryUrl(url) || toAbsoluteUrl(url);
+  const retailerFormat = inferActionIndexRetailerFormat(canonicalUrl, label);
+  const folderType = inferActionIndexFolderType(canonicalUrl, label);
+  const region = inferActionIndexRegion(canonicalUrl, label);
+  const linkType = inferActionIndexLinkType(canonicalUrl);
+  const validity = parseActionIndexValidity(label);
+  const risk = inferActionIndexRisk(folderType);
+  const support = inferActionIndexSupport({ retailerFormat, folderType });
+
+  return {
+    url: canonicalUrl,
+    urlClass: canonicalUrl.replace(/\?.*$/, ''),
+    label: String(label || '').replace(/\s+/g, ' ').trim(),
+    discoveredFrom,
+    retailerFormat,
+    folderType,
+    region,
+    linkType,
+    validity,
+    risk,
+    kaufklugSupport: support.kaufklugSupport,
+    reason: support.reason,
+    expectedBenefit: risk === 'low' ? 'high' : (risk === 'medium' ? 'medium' : 'low'),
+    parserRisk: risk,
+    recommendedNextStep: recommendedActionIndexNextStep({
+      retailerFormat,
+      folderType,
+      risk,
+      kaufklugSupport: support.kaufklugSupport,
+    }),
+  };
+}
+
+function buildSparFamilyActionIndexMatrix(links = []) {
+  const rows = (Array.isArray(links) ? links : []).map(classifySparFamilyActionIndexLink);
+  const groupOrder = {
+    spar: 0,
+    eurospar: 1,
+    interspar: 2,
+    unknown: 3,
+  };
+  const riskOrder = {
+    low: 0,
+    medium: 1,
+    high: 2,
+  };
+
+  return [...rows].sort((left, right) => {
+    const formatCompare = (groupOrder[left.retailerFormat] ?? 99) - (groupOrder[right.retailerFormat] ?? 99);
+    if (formatCompare !== 0) return formatCompare;
+    const riskCompare = (riskOrder[left.risk] ?? 99) - (riskOrder[right.risk] ?? 99);
+    if (riskCompare !== 0) return riskCompare;
+    return `${left.folderType} ${left.urlClass}`.localeCompare(`${right.folderType} ${right.urlClass}`);
+  });
 }
 
 function isBlockedLikely({ status = null, body = '' } = {}) {
@@ -963,10 +1239,13 @@ module.exports = {
   DEFAULT_LIMITS,
   NON_FOOD_TERMS,
   VALIDITY_TERMS,
+  ACTION_INDEX_FOLDER_TYPES,
+  buildSparFamilyActionIndexMatrix,
   buildSafetyMetadata,
   buildFallbackViewerLinks,
   buildSparFamilyFlyerInventoryReport,
   canonicalDiscoveryUrl,
+  classifySparFamilyActionIndexLink,
   classifySparFamilyPdfUrl,
   classifySparFamilyFlyerUrl,
   decodeUrlText,

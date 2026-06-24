@@ -1,12 +1,15 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const mongoose = require('mongoose');
+const officialActionIndexLinks = require('./fixtures/spar-official-action-index-links.json');
 
 const {
   deriveSourceKey,
 } = require('../src/services/crawl/crawlSourceSelection');
 const {
+  buildSparFamilyActionIndexMatrix,
   buildSparFamilyFlyerInventoryReport,
+  classifySparFamilyActionIndexLink,
   classifySparFamilyFlyerUrl,
   classifySparFamilyPdfUrl,
   discoverSparFamilyFlyers,
@@ -464,4 +467,68 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   ]);
   assert.equal(byKey.get('interspar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
   assert.equal(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
+});
+
+test('classifies official SPAR-family action index links into diagnostic matrix fields', () => {
+  const matrix = buildSparFamilyActionIndexMatrix(officialActionIndexLinks);
+  const byFolder = new Map(matrix.map((row) => [`${row.retailerFormat}:${row.folderType}`, row]));
+
+  assert.equal(matrix.length, officialActionIndexLinks.length);
+  assert.equal(matrix.every((row) => row.url.startsWith('https://flugblatt.')), true);
+  assert.equal(matrix.every((row) => row.urlClass && !row.urlClass.includes('?')), true);
+  assert.equal(matrix.every((row) => row.reason && row.recommendedNextStep), true);
+  assert.equal(matrix.every((row) => row.validity && Object.prototype.hasOwnProperty.call(row.validity, 'unknown')), true);
+
+  for (const row of matrix) {
+    assert.ok(['spar', 'eurospar', 'interspar', 'unknown'].includes(row.retailerFormat), row.url);
+    assert.ok(['viewer', 'pdf', 'html', 'unknown'].includes(row.linkType), row.url);
+    assert.ok(['steiermark', 'austria', 'unknown'].includes(row.region), row.url);
+    assert.ok(['low', 'medium', 'high'].includes(row.risk), row.url);
+    assert.ok(['supported-currently', 'partially-supported', 'unsupported', 'policy-bounded', 'public-disabled'].includes(row.kaufklugSupport), row.url);
+  }
+
+  assert.equal(byFolder.get('spar:main-flyer').risk, 'low');
+  assert.equal(byFolder.get('spar:main-flyer').kaufklugSupport, 'supported-currently');
+  assert.equal(byFolder.get('spar:fruit-vegetable').risk, 'medium');
+  assert.equal(byFolder.get('spar:monatssparer').kaufklugSupport, 'partially-supported');
+  assert.equal(byFolder.get('eurospar:main-flyer').risk, 'low');
+  assert.equal(byFolder.get('eurospar:main-flyer').kaufklugSupport, 'public-disabled');
+  assert.equal(byFolder.get('eurospar:insert/einleger').risk, 'medium');
+  assert.equal(byFolder.get('interspar:online-flyer').risk, 'low');
+  assert.equal(byFolder.get('interspar:online-flyer').kaufklugSupport, 'supported-currently');
+  assert.equal(byFolder.get('interspar:school').risk, 'high');
+  assert.equal(byFolder.get('interspar:partyservice').kaufklugSupport, 'unsupported');
+  assert.equal(byFolder.get('interspar:wine').risk, 'high');
+});
+
+test('extracts action index validity from visible labels without fetching live pages', () => {
+  const row = classifySparFamilyActionIndexLink({
+    url: 'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx?tracking=ignored',
+    label: 'INTERSPAR Online-Flugblatt Steiermark KW 26 Do., 25.06.26 - Di., 30.06.26 Zum Flugblatt',
+    discoveredFrom: 'fixture',
+  });
+
+  assert.equal(row.url, 'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx?tracking=ignored');
+  assert.equal(row.urlClass, 'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx');
+  assert.equal(row.retailerFormat, 'interspar');
+  assert.equal(row.folderType, 'online-flyer');
+  assert.equal(row.region, 'steiermark');
+  assert.equal(row.linkType, 'pdf');
+  assert.deepEqual(row.validity, {
+    validFrom: '2026-06-25',
+    validTo: '2026-06-30',
+    unknown: false,
+  });
+});
+
+test('action index matrix keeps high-risk special folders diagnostic-only', () => {
+  const matrix = buildSparFamilyActionIndexMatrix(officialActionIndexLinks);
+  const highRiskRows = matrix.filter((row) => row.risk === 'high');
+
+  assert.ok(highRiskRows.length >= 4);
+  assert.equal(highRiskRows.every((row) => /diagnostic-only|not part of current productive|high-risk/i.test(`${row.recommendedNextStep} ${row.reason}`)), true);
+  assert.equal(highRiskRows.some((row) => row.folderType === 'home/nonfood'), true);
+  assert.equal(highRiskRows.some((row) => row.folderType === 'school'), true);
+  assert.equal(highRiskRows.some((row) => row.folderType === 'partyservice'), true);
+  assert.equal(highRiskRows.some((row) => row.folderType === 'wine'), true);
 });
