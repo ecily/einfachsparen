@@ -1,0 +1,338 @@
+{
+  "sparHappyPath": {
+    "group": {
+      "retailerFormat": "spar",
+      "region": "steiermark",
+      "sourceKey": "spar-official-flyer-current"
+    },
+    "links": [
+      {
+        "urlClass": "spar-main-flyer-weekly",
+        "folderType": "main-flyer",
+        "validity": {
+          "validFrom": "2026-06-24T00:00:00.000Z",
+          "validTo": "2026-06-30T21:59:59.999Z"
+        },
+        "parseResult": {
+          "status": "success",
+          "httpStatus": 200,
+          "rawCandidateCount": 3,
+          "offers": [
+            {
+              "title": "Recheis Goldmarke",
+              "quantityText": "500 g",
+              "priceCurrent": { "amount": 1.99 }
+            },
+            {
+              "title": "DESPAR Olio Extra Vergine",
+              "quantityText": "1 l",
+              "priceCurrent": { "amount": 7.99 },
+              "dedupeKey": "despar-olio-1l-799-week"
+            },
+            {
+              "title": "DESPAR Pasta",
+              "quantityText": "500 g",
+              "priceCurrent": { "amount": 0.99 }
+            }
+          ]
+        }
+      },
+      {
+        "urlClass": "spar-main-flyer-regional-extra",
+        "folderType": "main-flyer",
+        "validity": {
+          "validFrom": "2026-06-24T00:00:00.000Z",
+          "validTo": "2026-06-30T21:59:59.999Z"
+        },
+        "parseResult": {
+          "status": "success",
+          "httpStatus": 200,
+          "rawCandidateCount": 2,
+          "offers": [
+            {
+              "title": "DESPAR Olio Extra Vergine",
+              "quantityText": "1 l",
+              "priceCurrent": { "amount": 7.99 },
+              "dedupeKey": "despar-olio-1l-799-week"
+            },
+            {
+              "title": "DESPAR Olio Extra Vergine Bio",
+              "quantityText": "500 ml",
+              "priceCurrent": { "amount": 5.49 },
+              "dedupeKey": "despar-olio-bio-500ml-549-week"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "intersparHappyPath": {
+    "group": {
+      "retailerFormat": "interspar",
+      "region": "steiermark",
+      "sourceKey": "interspar-official-flyer-current"
+    },
+    "links": [
+      {
+        "urlClass": "interspar-online-flyer-weekly",
+        "folderType": "online-flyer",
+        "validity": {
+          "validFrom": "2026-06-24T00:00:00.000Z",
+          "validTo": "2026-06-30T21:59:59.999Z"
+        },
+        "parseResult": {
+          "status": "success",
+          "httpStatus": 200,
+          "rawCandidateCount": 3,
+          "rejectionReasons": [
+            { "reason": "generic-fragment-title", "count": 1 }
+          ],
+          "offers": [
+            {
+              "title": "Goesser Naturradler alkoholfrei",
+              "quantityText": "0,5 l",
+              "priceCurrent": { "amount": 0.79 }
+            },
+            {
+              "title": "Schaerdinger Protein Traum",
+              "quantityText": "200 g",
+              "priceCurrent": { "amount": 0.99 }
+            }
+          ]
+        }
+      },
+      {
+        "urlClass": "interspar-online-flyer-regional-extra",
+        "folderType": "online-flyer",
+        "validity": {
+          "validFrom": "2026-06-24T00:00:00.000Z",
+          "validTo": "2026-06-30T21:59:59.999Z"
+        },
+        "parseResult": {
+          "status": "success",
+          "httpStatus": 200,
+          "rawCandidateCount": 2,
+          "offers": [
+            {
+              "title": "Nocco BCAA",
+              "quantityText": "330 ml",
+              "priceCurrent": { "amount": 1.49 }
+            },
+            {
+              "title": "Bio-Mohnflesserl",
+              "quantityText": "Stueck",
+              "priceCurrent": { "amount": 0.89 }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "stopRuleCases": {
+    "zeroParsed": {
+      "group": {
+        "retailerFormat": "spar",
+        "region": "steiermark",
+        "sourceKey": "spar-official-flyer-current"
+      },
+      "links": [
+        {
+          "urlClass": "spar-main-flyer-weekly",
+          "folderType": "main-flyer",
+          "validity": {
+            "validFrom": "2026-06-24T00:00:00.000Z",
+            "validTo": "2026-06-30T21:59:59.999Z"
+          },
+          "parseResult": {
+            "status": "success",
+            "httpStatus": 200,
+            "rawCandidateCount": 8,
+            "offers": []
+          }
+        }
+      ]
+    },
+    "coverageDrop": {
+      "group": {
+        "retailerFormat": "spar",
+        "region": "steiermark",
+        "sourceKey": "spar-official-flyer-current",
+        "baselineStoredCount": 28
+      },
+      "links": [
+        {
+          "urlClass": "spar-main-flyer-weekly",
+          "folderType": "main-flyer",
+          "validity": {
+            "validFrom": "2026-06-24T00:00:00.000Z",
+            "validTo": "2026-06-30T21:59:59.999Z"
+          },
+          "parseResult": {
+            "status": "success",
+            "httpStatus": 200,
+            "rawCandidateCount": 5,
+            "offers": [
+              {
+                "title": "Recheis Goldmarke",
+                "quantityText": "500 g",
+                "priceCurrent": { "amount": 1.99 }
+              },
+              {
+                "title": "DESPAR Pasta",
+                "quantityText": "500 g",
+                "priceCurrent": { "amount": 0.99 }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "fragmentHeavy": {
+      "group": {
+        "retailerFormat": "spar",
+        "region": "steiermark",
+        "sourceKey": "spar-official-flyer-current"
+      },
+      "links": [
+        {
+          "urlClass": "spar-main-flyer-weekly",
+          "folderType": "main-flyer",
+          "validity": {
+            "validFrom": "2026-06-24T00:00:00.000Z",
+            "validTo": "2026-06-30T21:59:59.999Z"
+          },
+          "parseResult": {
+            "status": "success",
+            "httpStatus": 200,
+            "rawCandidateCount": 8,
+            "rejectionReasons": [
+              { "reason": "generic-fragment-title", "count": 4 }
+            ],
+            "offers": [
+              {
+                "title": "Ariel Waschmittel",
+                "quantityText": "Packung",
+                "priceCurrent": { "amount": 8.99 }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "missingValidity": {
+      "group": {
+        "retailerFormat": "interspar",
+        "region": "steiermark",
+        "sourceKey": "interspar-official-flyer-current"
+      },
+      "links": [
+        {
+          "urlClass": "interspar-online-flyer-weekly",
+          "folderType": "online-flyer",
+          "parseResult": {
+            "status": "success",
+            "httpStatus": 200,
+            "rawCandidateCount": 1,
+            "offers": [
+              {
+                "title": "Nocco BCAA",
+                "quantityText": "330 ml",
+                "priceCurrent": { "amount": 1.49 }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "transportBlocked": {
+      "group": {
+        "retailerFormat": "spar",
+        "region": "steiermark",
+        "sourceKey": "spar-official-flyer-current"
+      },
+      "links": [
+        {
+          "urlClass": "spar-main-flyer-weekly",
+          "folderType": "main-flyer",
+          "validity": {
+            "validFrom": "2026-06-24T00:00:00.000Z",
+            "validTo": "2026-06-30T21:59:59.999Z"
+          },
+          "parseResult": {
+            "status": "blocked",
+            "httpStatus": 429,
+            "rawCandidateCount": 0,
+            "offers": []
+          }
+        }
+      ]
+    },
+    "offersWithoutPrice": {
+      "group": {
+        "retailerFormat": "interspar",
+        "region": "steiermark",
+        "sourceKey": "interspar-official-flyer-current"
+      },
+      "links": [
+        {
+          "urlClass": "interspar-online-flyer-weekly",
+          "folderType": "online-flyer",
+          "validity": {
+            "validFrom": "2026-06-24T00:00:00.000Z",
+            "validTo": "2026-06-30T21:59:59.999Z"
+          },
+          "parseResult": {
+            "status": "success",
+            "httpStatus": 200,
+            "rawCandidateCount": 1,
+            "offers": [
+              {
+                "title": "Felix Katzensnacks",
+                "quantityText": "Packung"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "parserExplosion": {
+      "group": {
+        "retailerFormat": "spar",
+        "region": "steiermark",
+        "sourceKey": "spar-official-flyer-current"
+      },
+      "links": [
+        {
+          "urlClass": "spar-main-flyer-weekly",
+          "folderType": "main-flyer",
+          "validity": {
+            "validFrom": "2026-06-24T00:00:00.000Z",
+            "validTo": "2026-06-30T21:59:59.999Z"
+          },
+          "parseResult": {
+            "status": "success",
+            "httpStatus": 200,
+            "rawCandidateCount": 1,
+            "offers": [
+              {
+                "title": "Ariel Waschmittel",
+                "quantityText": "Packung",
+                "priceCurrent": { "amount": 8.99 }
+              },
+              {
+                "title": "Zewa Kuechenrolle",
+                "quantityText": "Packung",
+                "priceCurrent": { "amount": 3.99 }
+              },
+              {
+                "title": "Recheis Goldmarke",
+                "quantityText": "500 g",
+                "priceCurrent": { "amount": 1.99 }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
