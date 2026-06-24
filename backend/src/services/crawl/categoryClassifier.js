@@ -208,6 +208,21 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Wein & Sekt',
   },
   {
+    patterns: [/\bpilsner\s+urquell\b|\burquell\b.*\bpilsner\b/],
+    main: 'Getraenke',
+    sub: 'Bier',
+  },
+  {
+    patterns: [/\baperol\b/],
+    main: 'Getraenke',
+    sub: 'Spirituosen',
+  },
+  {
+    patterns: [/\bnic\s*nacs\b|\bnicnacs\b/],
+    main: 'Lebensmittel',
+    sub: 'Suesswaren & Knabbereien',
+  },
+  {
     patterns: [
       /\b(?:criv[it]?|parkside)?\s*(?:herren|damen|kinder|damen[-/\s]+herren)\b.*\b(?:arbeitshose|arbeitslatzhose|arbeitsbundhose|stretch\s+arbeitshose|laufshorts|laufshirt|laufschuhe|shorts|clogs|sneakersocken|boxershorts|socken)\b/,
       /\b(?:arbeitshose|arbeitslatzhose|arbeitsbundhose|stretch\s+arbeitshose|laufshorts|laufshirt|laufschuhe|shorts|clogs|sneakersocken|boxershorts|socken)\b.*\b(?:herren|damen|kinder|damen[-/\s]+herren)\b/,

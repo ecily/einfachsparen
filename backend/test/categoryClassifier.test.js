@@ -195,6 +195,9 @@ test('keeps beta feedback category false positives in their product categories',
     ['PARKSIDE Maler-Starter-Set', 'Technik / Elektronik', 'Werkzeug & Akkus'],
     ['Grilltaler', 'Lebensmittel', 'Kaese'],
     ['WIESENTALER Frische Karree-Koteletts mariniert Lidl 350 Gramm', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Pilsner Urquell 0,5 Liter', 'Getraenke', 'Bier'],
+    ['Lorenz Nic Nacs versch. Sorten 110 g', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['Aperol 0,7 Liter', 'Getraenke', 'Spirituosen'],
   ];
 
   for (const [title, primaryCategory, secondaryCategory] of cases) {

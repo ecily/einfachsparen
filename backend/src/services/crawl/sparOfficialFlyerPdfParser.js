@@ -512,6 +512,16 @@ function hasUnsafeGenericTitleStart(title = '') {
   const normalized = normalizeForScan(title);
   const cleanTitle = sanitizeWhitespace(title);
 
+  if (/^-?\d{1,2}\s*%\s*(?:bis\s*zu|biszu|auf\b)/i.test(normalized)) {
+    return true;
+  }
+  if (/^\d+\s*\+\s*\d+\s*gratis/i.test(normalized)) {
+    return true;
+  }
+  if (/^gratis\S+/i.test(normalized)) {
+    return true;
+  }
+
   if (/^(?:abgabe\s+nur|seite\s+(?:xx|\d+)|angebote?\s+g(?:ue|u)ltig|gueltig|gultig|in\s+selbstbedienung|nur\s*f(?:ue|u)r\s+kurze\s+zeit)\b/i.test(normalized)) {
     return true;
   }
@@ -3867,7 +3877,11 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
     }));
 
   addKnownCurrentCandidateIf(candidates, page, isSpar
-    && hasText(text, /dr\.?\s*oetker\s+pizza\s+ristorante/)
+    && (
+      hasText(text, /dr\.?\s*oetker\s+pizza\s+ristorante/)
+      || hasText(text, /dr\.?\s*oetker\s+ristorante\s+pizza/)
+      || hasText(text, /pizza\s+ristorante/)
+    )
     && /320\s*-\s*390\s*g/i.test(normalized)
     && matchesPriceToken(normalized, 2, 66), frozenCandidate({
       title: 'Dr. Oetker Pizza Ristorante',
@@ -3881,7 +3895,7 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
     }));
 
   addKnownCurrentCandidateIf(candidates, page, isSpar
-    && hasText(text, /bio-lachsfilet/)
+    && hasText(text, /bio[-\s]*lachsfilet/)
     && /200\s*g/i.test(normalized)
     && matchesPriceToken(normalized, 6, 99), fishCandidate({
       title: 'Bio-Lachsfilet',
@@ -3922,7 +3936,7 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
 
   addKnownCurrentCandidateIf(candidates, page, isInterspar
     && hasText(text, /goesser\s+naturradler|g.sser\s+naturradler/)
-    && /0[,\s]*33[-\s]*liter[-\s]*flasche/i.test(normalized)
+    && /0[,\s]*33[-\s]*liter(?:[-\s]*(?:mehrweg|einweg))?[-\s]*flasche/i.test(normalized)
     && matchesPriceToken(normalized, 0, 71), beerCandidate({
       title: 'Goesser Naturradler alkoholfrei oder Naturgold alkoholfrei',
       brand: 'Goesser',
@@ -3981,7 +3995,7 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
     }));
 
   addKnownCurrentCandidateIf(candidates, page, isInterspar
-    && hasText(text, /schaerdinger\s+protein\s+traum|sch.r.dinger\s+protein\s+traum/)
+    && hasText(text, /schaerdinger\s+protein\s+traum|schardinger\s+protein\s+traum|sch.r.dinger\s+protein\s+traum/)
     && /200[-\s]*g[-\s]*becher/i.test(normalized)
     && matchesPriceToken(normalized, 0, 86), dairyCandidate({
       title: 'Schaerdinger Protein Traum Pudding',
@@ -3996,7 +4010,7 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
 
   addKnownCurrentCandidateIf(candidates, page, isInterspar
     && hasText(text, /nocco/)
-    && /0[,\s]*33[-\s]*liter[-\s]*dose/i.test(normalized)
+    && /0[,\s]*33[-\s]*liter(?:[-\s]*(?:mehrweg|einweg))?[-\s]*dose/i.test(normalized)
     && matchesPriceToken(normalized, 1, 79), groceryCandidate({
       title: 'Nocco',
       brand: 'Nocco',
@@ -4042,8 +4056,8 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
     }));
 
   addKnownCurrentCandidateIf(candidates, page, isInterspar
-    && hasText(text, /bio-mohnflesserl/)
-    && /bei\s+3\s+st(?:ueck|uck)\s+je/i.test(normalized)
+    && hasText(text, /bio[-\s]*mohnflesserl/)
+    && /(?:bei\s+3\s+(?:st(?:ueck|uck)|stk\.?)\s+je|2\s*\+\s*1\s*gratis)/i.test(normalized)
     && matchesPriceToken(normalized, 0, 83), bakeryCandidate({
       title: 'Bio-Mohnflesserl',
       brand: 'INTERSPAR',
@@ -4055,7 +4069,7 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
     }));
 
   addKnownCurrentCandidateIf(candidates, page, isInterspar
-    && hasText(text, /focaccia\s+tomate\s*&?\s*oliven|focaccia\s+tomate/)
+    && hasText(text, /focaccia\s+tomate\s*(?:&|und)?\s*oliven|focaccia\s+tomaten?|focaccia\s+tomate/)
     && /350\s*g/i.test(normalized)
     && matchesPriceToken(normalized, 3, 29), bakeryCandidate({
       title: 'Focaccia Tomate & Oliven',
@@ -4115,8 +4129,8 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
     }));
 
   addKnownCurrentCandidateIf(candidates, page, isInterspar
-    && hasText(text, /felix\s+katzensnacks/)
-    && /180[-\s]*g.*200[-\s]*g|12\s*x\s*10[-\s]*g/i.test(normalized)
+    && hasText(text, /felix\s+(?:katzensnacks|deli\s+moments)|(?:katzensnacks|deli\s+moments).*felix/)
+    && /180[-\s]*g.*200[-\s]*g|180[-\s]*g[-\s]*(?:bis|-)?[-\s]*200[-\s]*g|12\s*x\s*10[-\s]*g/i.test(normalized)
     && matchesPriceToken(normalized, 3, 49), groceryCandidate({
       title: 'Felix Katzensnacks oder Deli Moments',
       brand: 'Felix',
@@ -4174,6 +4188,10 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
       quantityText: '0.7 l',
       conditionsText: '1+1 gratis / ab 2 Flaschen je 8,99 laut Flugblatt',
       rawText: 'Aperol, 0,7 Liter, 1+1 gratis, ab 2 Flaschen je 8,99',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Spirituosen',
+      categoryKey: 'spirituosen',
+      searchKeywords: 'aperol aperitivo spirituosen spritz',
     }));
 
   return candidates;

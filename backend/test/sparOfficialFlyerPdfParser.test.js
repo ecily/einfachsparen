@@ -819,6 +819,41 @@ test('generic SPAR PDF extraction keeps unsafe fragment starts rejected', () => 
   assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'));
 });
 
+test('generic SPAR PDF extraction rejects visible KW25 fragment false positives', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 11,
+        text: ['-25%bis zu DESPAR Pragaschinken', '100 g', '1,99'].join('\n'),
+      },
+      {
+        pageNumber: 12,
+        text: ['-32%bis zu Wiesbauer Wurst', '100 g', '1,49'].join('\n'),
+      },
+      {
+        pageNumber: 13,
+        text: ['4+4 GRATISPilsner Urquell', '0,5 Liter', '7,99'].join('\n'),
+      },
+      {
+        pageNumber: 14,
+        text: ['GRATISMikado versch. Sorten', '75 g', '1,99'].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted.some((candidate) => /^-25%bis zu/i.test(candidate.title)), false);
+  assert.equal(accepted.some((candidate) => /^-32%bis zu/i.test(candidate.title)), false);
+  assert.equal(accepted.some((candidate) => /^4\+4\s+GRATIS/i.test(candidate.title)), false);
+  assert.equal(accepted.some((candidate) => /^GRATIS\S+/i.test(candidate.title)), false);
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title' && /DESPAR Pragaschinken/i.test(candidate.rawText)));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title' && /Wiesbauer/i.test(candidate.rawText)));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title' && /Pilsner Urquell/i.test(candidate.rawText)));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title' && /GRATISMikado/i.test(candidate.rawText)));
+});
+
 test('rejects generic PDF promotion fragments and cleans leading price/date artifacts', () => {
   const candidates = extractSparPdfCandidates({
     sourceRetailerFormat: 'spar',
@@ -2426,4 +2461,103 @@ test('extracts selected INTERSPAR KW25 current missed page offers without fragme
   assert.equal(byTitle(/SPAR Alufolie/i).priceCurrent.amount, 2.99);
   assert.equal(byTitle(/DeLonghi Kaffeevollautomat/i).priceCurrent.amount, 299.00);
   assert.equal(titles.some((title) => /Prozentaktion|Stattpreise|weinwelt|GENIESSEN GEHT/i.test(title)), false);
+});
+
+test('extracts KW25 current target offers from productive textlayer variants', () => {
+  const validity = {
+    validFrom: new Date('2026-06-17T22:00:00.000Z'),
+    validTo: new Date('2026-06-30T21:59:59.999Z'),
+  };
+  const sparCandidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 11,
+        text: [
+          'Dr. Oetker Ristorante Pizza versch. Sorten, tiefgekuehlt, 320-390 g',
+          '1 Pkg. 3,99 ab 3 Pkg. je 2 66 2 + 1 GRATIS',
+          'Bio Lachsfilet aus Aquakultur Norwegen, in Selbstbedienung, 200 g',
+          '1 Pkg. 7,99 ab 2 Pkg. je 6 99',
+        ].join(' '),
+      },
+    ],
+  });
+  const sparOffers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates: sparCandidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000783',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
+    pdfSha256: 'kw25-spar-textlayer-variant-fixture',
+  });
+
+  const pizza = sparOffers.find((offer) => /Pizza Ristorante/i.test(offer.title));
+  const bioLachs = sparOffers.find((offer) => offer.title === 'Bio-Lachsfilet');
+
+  assert.ok(pizza);
+  assert.equal(pizza.priceCurrent.amount, 2.66);
+  assert.equal(pizza.quantityText, '320-390 g');
+  assert.equal(pizza.categoryPrimary, 'Lebensmittel');
+  assert.equal(pizza.quality.comparisonSafe, false);
+  assert.ok(bioLachs);
+  assert.equal(bioLachs.priceCurrent.amount, 6.99);
+  assert.equal(bioLachs.quantityText, '200 g');
+  assert.equal(bioLachs.categoryPrimary, 'Lebensmittel');
+
+  const intersparCandidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity,
+    pages: [
+      {
+        pageNumber: 4,
+        text: [
+          'Goesser Naturradler Zitrone alkoholfrei oder Naturgold alkoholfrei 0,33-Liter-MEHRWEG-Flasche',
+          '0 71 1 Flasche 1,43 ab 24 Flaschen je 12 + 12 GRATIS',
+        ].join(' '),
+      },
+      {
+        pageNumber: 5,
+        text: [
+          'Schardinger Protein Traum Pudding Vanille oder Schoko, 200-g-Becher',
+          '0 86 1 Becher 1,29 ab 3 Becher je 2 + 1 GRATIS',
+          'Nocco verschiedene Sorten, 0,33-Liter-EINWEG-Dose',
+          '1 79 1 Dose 1,99 ab 2 Dosen je',
+        ].join(' '),
+      },
+      {
+        pageNumber: 11,
+        text: [
+          'SPAR Natur Pur BIO-Mohnflesserl 100% Bio-Mehl aus Oesterreich',
+          '0 83 1 Stk. 1,25 bei 3 Stk. je 2+1 GRATIS',
+          'Focaccia Tomate und Oliven frisch gebacken, 350 g per Stueck',
+          '3 29 statt 3,79',
+        ].join(' '),
+      },
+      {
+        pageNumber: 15,
+        text: [
+          'Felix Deli Moments oder Felix Katzensnacks 180-g-200-g-Maxi Pack, verschiedene Sorten',
+          '3 49 1 Packung 3,99 ab 2 Packungen je',
+        ].join(' '),
+      },
+    ],
+  });
+  const intersparOffers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates: intersparCandidates },
+    source: source('interspar'),
+    crawlJobId: '000000000000000000000784',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
+    pdfSha256: 'kw25-interspar-textlayer-variant-fixture',
+  });
+  const byTitle = (pattern) => intersparOffers.find((offer) => pattern.test(offer.title));
+
+  assert.equal(byTitle(/Goesser Naturradler/i).priceCurrent.amount, 0.71);
+  assert.equal(byTitle(/Protein Traum/i).priceCurrent.amount, 0.86);
+  assert.equal(byTitle(/Nocco/i).priceCurrent.amount, 1.79);
+  assert.equal(byTitle(/Bio-Mohnflesserl/i).priceCurrent.amount, 0.83);
+  assert.equal(byTitle(/Focaccia/i).priceCurrent.amount, 3.29);
+  assert.equal(byTitle(/Felix Katzensnacks/i).priceCurrent.amount, 3.49);
+  assert.equal(intersparOffers.some((offer) => /Prozentaktion|Stattpreise|GRATIS/i.test(offer.title)), false);
 });
