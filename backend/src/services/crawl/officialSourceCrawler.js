@@ -73,6 +73,9 @@ const {
 const {
   discoverSparFamilyFlyers,
 } = require('./sparFamilyFlyerDiscovery');
+const {
+  buildSparFamilyMultiLinkReplacementPlan,
+} = require('./sparFamilyMultiLinkReplacementPlan');
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const logger = require('../../lib/logger');
@@ -4321,6 +4324,57 @@ function isSparFamilyFlyerDiscoverySource(source = {}) {
     || source.crawlPolicy?.currentDiscovery === true;
 }
 
+function isSparFamilyMultiLinkCurrentSource(source = {}, sourceKey = '') {
+  const effectiveSourceKey = sourceKey || `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
+  return source.crawlPolicy?.currentDiscovery === true
+    && source.regionScope === 'Steiermark'
+    && (
+      (effectiveSourceKey === 'spar-official-flyer-current' && source.sourceRetailerFormat === 'spar')
+      || (effectiveSourceKey === 'interspar-official-flyer-current' && source.sourceRetailerFormat === 'interspar')
+    );
+}
+
+function isAllowedSparFamilyMultiLinkCurrentLink(link = {}, source = {}) {
+  const retailerFormat = source.sourceRetailerFormat || source.retailerKey || '';
+  const kind = link.kind || '';
+  const folderType = String(link.folderType || '').toLowerCase();
+
+  if (!['viewer', 'pdf'].includes(kind)) return false;
+  if (link.sourceGuess && link.sourceGuess !== retailerFormat) return false;
+  if (retailerFormat === 'spar') return folderType === 'regular flyer';
+  if (retailerFormat === 'interspar') return folderType === 'regular flyer';
+  return false;
+}
+
+function selectSparFamilyMultiLinkCurrentLinks(discoveredLinks = [], source = {}) {
+  if (!isSparFamilyMultiLinkCurrentSource(source)) return [];
+  return (Array.isArray(discoveredLinks) ? discoveredLinks : [])
+    .filter((link) => isAllowedSparFamilyMultiLinkCurrentLink(link, source));
+}
+
+function buildActiveSourceOfferFilterForCrawler(sourceId) {
+  return {
+    sourceId,
+    $or: [
+      { status: 'active' },
+      { isActiveNow: true },
+      { isActiveToday: true },
+    ],
+  };
+}
+
+async function countActiveSourceOffersForReplacement(sourceId, OfferModel = Offer) {
+  if (!sourceId || typeof OfferModel.countDocuments !== 'function') return 0;
+  return OfferModel.countDocuments(buildActiveSourceOfferFilterForCrawler(sourceId));
+}
+
+function buildMultiLinkStopRejectionReasons(stopReasons = []) {
+  return (Array.isArray(stopReasons) ? stopReasons : []).map((reason) => ({
+    reason: `multi-link-${reason}`,
+    count: 1,
+  }));
+}
+
 function shouldWarnOfficialSourceZeroStored({ source = {}, rawCandidateCount = 0, offersStored = 0 } = {}) {
   const channel = String(source.channel || '');
   const sourceType = String(source.sourceType || '');
@@ -4354,7 +4408,13 @@ function buildOfficialSourceZeroStoredGate({ source = {}, rawCandidateCount = 0,
   };
 }
 
-async function crawlSparOfficialPdfSource({ source, crawlJobId, crawlRunId = null, region }) {
+async function crawlSparOfficialPdfSource({
+  source,
+  crawlJobId,
+  crawlRunId = null,
+  region,
+  replaceOffers = true,
+}) {
   const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
   const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
   const maxPdfBytes = Number(source.crawlPolicy?.maxPdfBytes || 40 * 1024 * 1024);
@@ -4469,16 +4529,26 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, crawlRunId = nul
       return true;
     });
 
-  const refreshResult = await replaceOffersForSource({
-    sourceId: source._id,
-    crawlRunId,
-    offerDocuments,
-    coverageGuard: {
-      minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? 50),
-      minReplacementRatio: Number(source.crawlPolicy?.coverageGuard?.minReplacementRatio ?? 0.35),
-      minAbsoluteDrop: Number(source.crawlPolicy?.coverageGuard?.minAbsoluteDrop ?? 25),
-    },
-  });
+  const refreshResult = replaceOffers
+    ? await replaceOffersForSource({
+      sourceId: source._id,
+      crawlRunId,
+      offerDocuments,
+      coverageGuard: {
+        minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? 50),
+        minReplacementRatio: Number(source.crawlPolicy?.coverageGuard?.minReplacementRatio ?? 0.35),
+        minAbsoluteDrop: Number(source.crawlPolicy?.coverageGuard?.minAbsoluteDrop ?? 25),
+      },
+    })
+    : {
+      insertedOffers: 0,
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
+      skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
+      reason: 'multi-link-parse-only',
+      transactional: false,
+    };
   const replacementQuality = refreshResult.replacementQuality || (refreshResult.reason === 'coverage-drop-quality-risk' ? 'quality-risk' : 'complete');
 
   logger.info('SPAR PDF crawl parsed flyer', {
@@ -4523,7 +4593,14 @@ async function crawlSparOfficialPdfSource({ source, crawlJobId, crawlRunId = nul
   };
 }
 
-async function crawlSparOfficialViewerLink({ source, viewerUrl, crawlJobId, crawlRunId = null, region }) {
+async function crawlSparOfficialViewerLink({
+  source,
+  viewerUrl,
+  crawlJobId,
+  crawlRunId = null,
+  region,
+  replaceOffers = true,
+}) {
   const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
   const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
   const maxViewerBytes = Number(source.crawlPolicy?.maxViewerBytes || source.crawlPolicy?.maxPdfBytes || 20 * 1024 * 1024);
@@ -4639,16 +4716,26 @@ async function crawlSparOfficialViewerLink({ source, viewerUrl, crawlJobId, craw
       return true;
     });
 
-  const refreshResult = await replaceOffersForSource({
-    sourceId: source._id,
-    crawlRunId,
-    offerDocuments,
-    coverageGuard: {
-      minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? 0),
-      minReplacementRatio: Number(source.crawlPolicy?.coverageGuard?.minReplacementRatio ?? 0),
-      minAbsoluteDrop: Number(source.crawlPolicy?.coverageGuard?.minAbsoluteDrop ?? 0),
-    },
-  });
+  const refreshResult = replaceOffers
+    ? await replaceOffersForSource({
+      sourceId: source._id,
+      crawlRunId,
+      offerDocuments,
+      coverageGuard: {
+        minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? 0),
+        minReplacementRatio: Number(source.crawlPolicy?.coverageGuard?.minReplacementRatio ?? 0),
+        minAbsoluteDrop: Number(source.crawlPolicy?.coverageGuard?.minAbsoluteDrop ?? 0),
+      },
+    })
+    : {
+      insertedOffers: 0,
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
+      skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
+      reason: 'multi-link-parse-only',
+      transactional: false,
+    };
   const replacementQuality = refreshResult.replacementQuality || (refreshResult.reason === 'coverage-drop-quality-risk' ? 'quality-risk' : 'complete');
 
   logger.info('SPAR viewer crawl parsed flyer', {
@@ -4756,6 +4843,174 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRu
       discovery,
     },
   });
+  const multiLinkLinks = selectSparFamilyMultiLinkCurrentLinks(discoveredLinks, source);
+
+  if (multiLinkLinks.length > 0) {
+    const parsedLinkResults = [];
+    const parseErrorMessages = [];
+
+    for (const link of multiLinkLinks) {
+      try {
+        const parsedLinkResult = link.kind === 'viewer'
+          ? await crawlSparOfficialViewerLink({
+            source,
+            viewerUrl: link.url,
+            crawlJobId,
+            crawlRunId,
+            region,
+            replaceOffers: false,
+          })
+          : await crawlSparOfficialPdfSource({
+            source: {
+              ...source,
+              sourceUrl: link.url,
+              sourceType: 'pdf',
+            },
+            crawlJobId,
+            crawlRunId,
+            region,
+            replaceOffers: false,
+          });
+
+        parsedLinkResults.push({ link, parsedResult: parsedLinkResult });
+      } catch (error) {
+        parseErrorMessages.push(`${link.url} failed during multi-link parse: ${error.message || String(error)}`);
+        parsedLinkResults.push({
+          link,
+          parsedResult: {
+            offerDocuments: [],
+            rawDocuments: 0,
+            rawCandidateCount: 0,
+            rejectionReasons: [{ reason: 'multi-link-parse-error', count: 1 }],
+            validity: null,
+            pdfReports: [{
+              sourceKey,
+              sourceRetailerFormat: source.sourceRetailerFormat || '',
+              status: 'failed',
+              foundRawItems: 0,
+              parsedOffers: 0,
+              rejectedCandidates: 0,
+              rejectionReasons: [{ reason: 'multi-link-parse-error', count: 1 }],
+              error: error.message || String(error),
+              viewerUrl: link.url,
+            }],
+            httpLog: {
+              status: link.httpStatus || null,
+              contentType: '',
+              finalUrl: link.url,
+              downloadBytes: 0,
+              contentHash: '',
+            },
+            refreshResult: {
+              reason: 'multi-link-parse-error',
+              skippedPreviousOfferDeactivation: true,
+              skippedPreviousOfferRemoval: true,
+            },
+          },
+          parseError: error,
+        });
+      }
+    }
+
+    const baselineStoredCount = await countActiveSourceOffersForReplacement(source._id);
+    const plan = buildSparFamilyMultiLinkReplacementPlan({
+      group: {
+        retailerFormat: source.sourceRetailerFormat || source.retailerKey || '',
+        region,
+        sourceKey,
+        baselineStoredCount,
+      },
+      links: parsedLinkResults.map(({ link, parsedResult, parseError }) => ({
+        url: link.url,
+        urlClass: link.url,
+        folderType: link.folderType || '',
+        validity: parsedResult?.validity || null,
+        parseResult: {
+          status: parseError ? 'transport-error' : (parsedResult?.pdfReports?.[0]?.status || 'success'),
+          fetchStatus: parseError ? 'transport-error' : (link.fetchStatus || ''),
+          httpStatus: parsedResult?.httpLog?.status ?? link.httpStatus ?? null,
+          rawCandidateCount: parsedResult?.rawCandidateCount || 0,
+          offers: parsedResult?.offerDocuments || [],
+          rejectionReasons: parsedResult?.rejectionReasons || [],
+        },
+      })),
+      stopRules: source.crawlPolicy?.multiLinkStopRules || source.crawlPolicy?.coverageGuard || {},
+      diagnosticOnly: false,
+      productionEnabled: true,
+    });
+    const parseRejectionReasons = parsedLinkResults.flatMap(({ parsedResult }) => parsedResult?.rejectionReasons || []);
+    const stopRejectionReasons = buildMultiLinkStopRejectionReasons(plan.stopReasons);
+    const replacementCoverageGuard = {
+      minBaseline: Number(source.crawlPolicy?.coverageGuard?.minBaseline ?? source.crawlPolicy?.multiLinkStopRules?.minBaseline ?? 10),
+      minReplacementRatio: Number(source.crawlPolicy?.coverageGuard?.minReplacementRatio ?? source.crawlPolicy?.multiLinkStopRules?.minReplacementRatio ?? 0.65),
+      minAbsoluteDrop: Number(source.crawlPolicy?.coverageGuard?.minAbsoluteDrop ?? source.crawlPolicy?.multiLinkStopRules?.minAbsoluteDrop ?? 8),
+    };
+    let refreshResult = {
+      insertedOffers: 0,
+      removedPreviousOffers: 0,
+      deactivatedPreviousOffers: 0,
+      skippedPreviousOfferRemoval: true,
+      skippedPreviousOfferDeactivation: true,
+      reason: plan.status === 'blocked' ? `multi-link-${plan.stopReasons.join('+') || 'blocked'}` : 'not-run',
+      replacementQuality: plan.status === 'blocked' ? 'quality-risk' : 'pending',
+      transactional: false,
+    };
+
+    if (plan.shouldReplaceOnce) {
+      refreshResult = await replaceOffersForSource({
+        sourceId: source._id,
+        crawlRunId,
+        offerDocuments: plan.offerDocuments,
+        coverageGuard: replacementCoverageGuard,
+      });
+    }
+
+    const replacementQuality = refreshResult.replacementQuality || (refreshResult.reason === 'coverage-drop-quality-risk' ? 'quality-risk' : 'complete');
+    const status = plan.shouldReplaceOnce && replacementQuality !== 'quality-risk' ? 'success' : 'partial';
+    const offersStored = plan.shouldReplaceOnce && replacementQuality !== 'quality-risk'
+      ? plan.offerDocuments.length
+      : 0;
+    const parsedOffers = plan.shouldReplaceOnce ? plan.offerDocuments.length : 0;
+    const pdfReports = parsedLinkResults.flatMap(({ parsedResult }) => parsedResult?.pdfReports || []);
+
+    return {
+      sourceKey,
+      status,
+      rawDocuments: 1 + parsedLinkResults.reduce((sum, item) => sum + Number(item.parsedResult?.rawDocuments || 0), 0),
+      rawDocumentId: pdfReports[0]?.rawDocumentId || discoveryRawDocument._id,
+      discoveryRawDocumentId: discoveryRawDocument._id,
+      rawCandidateCount: plan.rawCandidateCount,
+      discoveredLinks: discoveredLinks.length,
+      selectedMultiLinkCount: multiLinkLinks.length,
+      offerDocuments: plan.shouldReplaceOnce && replacementQuality !== 'quality-risk' ? plan.offerDocuments : [],
+      parsedOffers,
+      offersStored,
+      rejectedOffers: Math.max(0, plan.rawCandidateCount - offersStored),
+      rejectionReasons: [
+        ...parseRejectionReasons,
+        ...stopRejectionReasons,
+        ...(replacementQuality === 'quality-risk' && refreshResult.reason ? [{ reason: refreshResult.reason, count: 1 }] : []),
+      ],
+      pdfReports,
+      refreshResult,
+      warningMessages: [
+        ...warningMessages,
+        ...parseErrorMessages,
+        ...(plan.status === 'blocked' ? [`SPAR-family multi-link replacement kept existing offers: ${plan.stopReasons.join(', ') || 'blocked'}.`] : []),
+        ...(replacementQuality === 'quality-risk' && refreshResult.coverageRisk
+          ? [`SPAR-family multi-link replacement protected previous offers because coverage dropped (${refreshResult.coverageRisk.previousActiveCount} -> ${refreshResult.coverageRisk.nextCount}).`]
+          : []),
+      ],
+      errorMessages: parseErrorMessages,
+      validity: parsedLinkResults.find((item) => item.parsedResult?.validity)?.parsedResult?.validity || null,
+      discovery,
+      multiLinkPlan: {
+        ...plan,
+        offerDocuments: undefined,
+      },
+    };
+  }
+
   const primaryDiscoveredLink = discoveredLinks.find((link) => link.kind === 'viewer' || link.kind === 'pdf') || null;
   let parsedResult = null;
 
@@ -7681,6 +7936,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       const discoveryResult = await crawlSparFamilyFlyerDiscoverySource({
         source,
         crawlJobId: crawlJob._id,
+        crawlRunId,
         region,
       });
 
@@ -7700,7 +7956,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
           parsedViewerReports: discoveryResult.pdfReports || [],
         },
         warningMessages: discoveryResult.warningMessages,
-        errorMessages: [],
+        errorMessages: discoveryResult.errorMessages || [],
         extraRejectionReasons: discoveryResult.rejectionReasons?.length ? discoveryResult.rejectionReasons : discoveryResult.rawCandidateCount > 0 ? [] : [{
           reason: 'spar-family-current-flyer-discovery-zero-links',
           count: 1,
@@ -7713,6 +7969,9 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
           sourceKey: discoveryResult.sourceKey,
           discovery: discoveryResult.discovery,
           parsedViewerReports: discoveryResult.pdfReports || [],
+          selectedMultiLinkCount: discoveryResult.selectedMultiLinkCount || 0,
+          multiLinkPlan: discoveryResult.multiLinkPlan || null,
+          refreshResult: discoveryResult.refreshResult || null,
         },
       }));
 
@@ -7745,6 +8004,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         }),
         evidenceMatched: discoveryResult.parsedOffers || 0,
         discoveredLinks: discoveryResult.discoveredLinks,
+        selectedMultiLinkCount: discoveryResult.selectedMultiLinkCount || 0,
         pdfReports: discoveryResult.pdfReports || [],
         refreshResult: discoveryResult.refreshResult || null,
         sourceUrl: source.sourceUrl,
@@ -8390,6 +8650,10 @@ module.exports = {
     isRetiredPublitasNotFoundDiagnostic,
     isRetiredBillaSteiermarkPublitasError,
     buildRetiredBillaPublitasSourceResult,
+    isSparFamilyMultiLinkCurrentSource,
+    isAllowedSparFamilyMultiLinkCurrentLink,
+    selectSparFamilyMultiLinkCurrentLinks,
+    buildMultiLinkStopRejectionReasons,
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
     parseLidlFlyerDate,

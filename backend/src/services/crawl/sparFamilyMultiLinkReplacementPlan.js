@@ -188,6 +188,8 @@ function buildSparFamilyMultiLinkReplacementPlan({
   group = {},
   links = [],
   stopRules = {},
+  diagnosticOnly = true,
+  productionEnabled = false,
 } = {}) {
   const rules = { ...DEFAULT_STOP_RULES, ...(stopRules || {}) };
   const normalizedGroup = {
@@ -286,8 +288,8 @@ function buildSparFamilyMultiLinkReplacementPlan({
   const ready = uniqueStopReasons.length === 0;
 
   return {
-    diagnosticOnly: true,
-    productionEnabled: false,
+    diagnosticOnly,
+    productionEnabled,
     replacementScope,
     status: ready ? 'ready-for-atomic-replacement' : 'blocked',
     shouldReplaceOnce: ready,

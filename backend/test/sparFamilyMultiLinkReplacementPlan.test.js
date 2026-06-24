@@ -56,6 +56,18 @@ test('plans SPAR main current links as one atomic replacement after all links ar
   }
 });
 
+test('can mark the same replacement plan as production-enabled for the integrated crawler path', () => {
+  const plan = buildPlan(fixtures.sparHappyPath, {
+    diagnosticOnly: false,
+    productionEnabled: true,
+  });
+
+  assert.equal(plan.diagnosticOnly, false);
+  assert.equal(plan.productionEnabled, true);
+  assert.equal(plan.status, 'ready-for-atomic-replacement');
+  assert.equal(plan.plannedReplaceCallCount, 1);
+});
+
 test('dedupes exact cross-link duplicates without dropping distinct offer variants', () => {
   const plan = buildPlan(fixtures.sparHappyPath);
   const titles = plan.offerDocuments.map((offer) => offer.title).sort();
