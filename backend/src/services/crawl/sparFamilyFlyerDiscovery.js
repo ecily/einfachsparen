@@ -1123,13 +1123,17 @@ async function discoverSparFamilyFlyers({
     discovered.push(...result.links);
   }
 
-  if (discovered.length === 0 && Array.isArray(fallbackViewerUrls) && fallbackViewerUrls.length > 0) {
-    discovered.push(...buildFallbackViewerLinks(fallbackViewerUrls, {
-      maxLinks: effectiveLimits.maxLinks,
-    }));
+  const fallbackLinks = buildFallbackViewerLinks(fallbackViewerUrls, {
+    maxLinks: effectiveLimits.maxLinks,
+  });
+
+  if (fallbackLinks.length > 0) {
+    discovered.push(...fallbackLinks);
   }
 
-  const uniqueLinks = mergeDiscoveredLinks(discovered, { maxLinks: effectiveLimits.maxLinks });
+  const uniqueLinks = mergeDiscoveredLinks(discovered, {
+    maxLinks: effectiveLimits.maxLinks + fallbackLinks.length,
+  });
   const enrichedLinks = [];
 
   for (let index = 0; index < uniqueLinks.length; index += 1) {

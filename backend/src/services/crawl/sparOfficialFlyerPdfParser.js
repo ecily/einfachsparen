@@ -622,6 +622,30 @@ function hasGenericMergeRisk(blockLines = [], quantityText = '') {
     || /\baktionen\s+nicht\s+g.{0,6}ltig\b/i.test(afterQuantity);
 }
 
+function hasLowerThresholdPriceInBlock(blockLines = [], price = null) {
+  const currentPrice = Number(price);
+  if (!(currentPrice > 0)) return false;
+
+  const text = normalizePriceText(blockLines.join(' '));
+  const matches = [...text.matchAll(/\bab\s+\d+\s*(?:stk|stueck|fl|flaschen|ds|dosen|pkg|packungen|be|becher|gl|glaeser)?\.?\s+(?:je\s+)?(\d{1,3}[,.]\d{2})\b/gi)];
+
+  return matches.some((match) => {
+    const thresholdPrice = Number(String(match[1] || '').replace(',', '.'));
+    return Number.isFinite(thresholdPrice) && thresholdPrice > 0 && thresholdPrice < currentPrice;
+  });
+}
+
+function hasKnownDenseLayoutMergeTitle(title = '', blockLines = []) {
+  const normalized = normalizeForScan([title, ...blockLines].join(' '));
+
+  return (
+    /\bbio-dinkel\b.*\bvollkornbrot\b.*\b(?:kaese?krainer|kasekrainer)\b.*\bbuttertoast\b/i.test(normalized)
+    || /\bschweinsbauch\b.*\bfleisch\b.*\bbauernsulz\b/i.test(normalized)
+    || /\b(?:schuettdosen|schuttdosen)\b.*\baufbewahrungsdose\b.*\bcerealien\b.*\bcornflakes\b.*\bmehl\b.*\bzucker\b.*\breis\b/i.test(normalized)
+    || /\bhalbbaguette\b.*\bvitaminwasser\b/i.test(normalized)
+  );
+}
+
 function extractGenericConditionsText(blockLines = []) {
   const text = normalizePriceText(blockLines.join(' '));
   const conditions = [];
@@ -792,6 +816,22 @@ function extractGenericFlyerCandidatesFromPage(page, { sourceRetailerFormat = 's
     }
 
     if (hasUnsafeGenericTitleStart(title)) {
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-fragment-title', blockLines.join(' '), {
+        blockIndex: index,
+        parserHint: 'generic-text-layer-price-block',
+      });
+      continue;
+    }
+
+    if (hasKnownDenseLayoutMergeTitle(title, blockLines)) {
+      addRejectedCandidate(candidates, page.pageNumber, 'generic-merge-risk', blockLines.join(' '), {
+        blockIndex: index,
+        parserHint: 'generic-text-layer-price-block',
+      });
+      continue;
+    }
+
+    if (hasLowerThresholdPriceInBlock(blockLines, price)) {
       addRejectedCandidate(candidates, page.pageNumber, 'generic-fragment-title', blockLines.join(' '), {
         blockIndex: index,
         parserHint: 'generic-text-layer-price-block',
@@ -4250,6 +4290,277 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
   return candidates;
 }
 
+function extractKnownSparEnjoyKw26CandidatesFromPage(page, { sourceRetailerFormat } = {}) {
+  if (sourceRetailerFormat !== 'spar') return [];
+
+  const text = normalizePdfText(page.text || '');
+  const normalized = normalizeForScan(text);
+  const compact = normalized.replace(/[^a-z0-9]+/g, '');
+  const candidates = [];
+  const hasEnjoyText = (pattern, compactSignature = '') => (
+    pattern.test(text)
+    || pattern.test(normalized)
+    || (compactSignature && compact.includes(compactSignature))
+  );
+  const hasEnjoyPrice = (euro, cents) => {
+    const centsText = String(cents).padStart(2, '0');
+    const compact = `${euro}${centsText}`;
+    const pattern = new RegExp(`(?:${euro}\\s*[,\\.\\s]?\\s*${centsText}|${compact})`, 'i');
+    return pattern.test(text) || pattern.test(normalized);
+  };
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+salate/i, 'sparenjoysalate')
+      && hasEnjoyPrice(3, 49), groceryCandidate({
+      title: 'SPAR enjoy Salate',
+      brand: 'SPAR enjoy',
+      price: 3.49,
+      referencePrice: matchesPriceToken(normalized, 4, 29) ? 4.29 : null,
+      quantityText: '220-250 g',
+      conditionsText: 'verschiedene Sorten laut Flugblatt',
+      rawText: 'SPAR enjoy Salate, verschiedene Sorten, 220-250 g, 3,49',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      searchKeywords: 'spar enjoy salate ready to eat salat',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+sandwich/i, 'sparenjoysandwich')
+      && hasEnjoyPrice(1, 79), groceryCandidate({
+      title: 'SPAR enjoy Sandwich',
+      brand: 'SPAR enjoy',
+      price: 1.79,
+      referencePrice: matchesPriceToken(normalized, 2, 29) ? 2.29 : null,
+      quantityText: '160-170 g',
+      conditionsText: 'verschiedene Sorten laut Flugblatt',
+      rawText: 'SPAR enjoy Sandwich, verschiedene Sorten, gekuehlt, 160-170 g, 1,79',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      searchKeywords: 'spar enjoy sandwich ready to eat',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+smoothie/i, 'sparenjoysmoothie')
+      && /water\s+mango\s+tango|pink\s+dragon/i.test(normalized)
+      && /0[,\s]*33\s*liter/i.test(normalized)
+      && hasEnjoyPrice(0, 99), groceryCandidate({
+      title: 'SPAR enjoy Smoothie & Water',
+      brand: 'SPAR enjoy',
+      price: 0.99,
+      referencePrice: matchesPriceToken(normalized, 1, 49) ? 1.49 : null,
+      quantityText: '0.33 l',
+      conditionsText: 'ab 2 Flaschen je 0,99 laut Flugblatt',
+      rawText: 'SPAR enjoy Smoothie & Water Mango Tango oder Pink Dragon, 0,33 Liter, ab 2 Flaschen je 0,99',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Alkoholfreie Getraenke',
+      categoryKey: 'alkoholfreie-getraenke',
+      searchKeywords: 'spar enjoy smoothie water mango tango pink dragon',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+by\s+neni\s+salate/i, 'sparenjoybynenisalate')
+      && hasEnjoyPrice(1, 99), groceryCandidate({
+      title: 'SPAR enjoy by Neni Salate',
+      brand: 'SPAR enjoy',
+      price: 1.99,
+      referencePrice: matchesPriceToken(normalized, 2, 79) ? 2.79 : null,
+      quantityText: '200-225 g',
+      conditionsText: 'verschiedene Sorten laut Flugblatt',
+      rawText: 'SPAR enjoy by Neni Salate, gekuehlt, verschiedene Sorten, 200-225 g, 1,99',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      searchKeywords: 'spar enjoy neni salate ready to eat',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+wraps/i, 'sparenjoywraps')
+      && hasEnjoyPrice(1, 99), groceryCandidate({
+      title: 'SPAR enjoy Wraps',
+      brand: 'SPAR enjoy',
+      price: 1.99,
+      referencePrice: matchesPriceToken(normalized, 2, 39) ? 2.39 : null,
+      quantityText: '180-200 g',
+      conditionsText: 'verschiedene Sorten laut Flugblatt',
+      rawText: 'SPAR enjoy Wraps, gekuehlt, verschiedene Sorten, 180-200 g, 1,99',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      searchKeywords: 'spar enjoy wraps ready to eat',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+laugenbaguette/i, 'sparenjoylaugenbaguette')
+      && /180\s*g/i.test(normalized)
+      && hasEnjoyPrice(2, 29), bakeryCandidate({
+      title: 'SPAR enjoy Laugenbaguette',
+      brand: 'SPAR enjoy',
+      price: 2.29,
+      referencePrice: matchesPriceToken(normalized, 2, 79) ? 2.79 : null,
+      quantityText: '180 g',
+      conditionsText: 'mit Thunfisch oder Cheddar laut Flugblatt',
+      rawText: 'SPAR enjoy Laugenbaguette mit Thunfisch oder mit Cheddar, gekuehlt, 180 g, 2,29',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+nudelsalat/i, 'sparenjoynudelsalat')
+      && /170\s*g/i.test(normalized)
+      && hasEnjoyPrice(2, 29), groceryCandidate({
+      title: 'SPAR enjoy Nudelsalat',
+      brand: 'SPAR enjoy',
+      price: 2.29,
+      referencePrice: matchesPriceToken(normalized, 2, 79) ? 2.79 : null,
+      quantityText: '170 g',
+      conditionsText: 'mit Huhn oder Thunfisch laut Flugblatt',
+      rawText: 'SPAR enjoy Nudelsalat mit Huhnerbruststreifen oder Nudel Thunfischsalat, gekuehlt, 170 g, 2,29',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      searchKeywords: 'spar enjoy nudelsalat huhn thunfisch ready to eat',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+bubble\s+tea/i, 'sparenjoybubbletea')
+      && /0[,\s]*45\s*liter/i.test(normalized)
+      && hasEnjoyPrice(2, 99), groceryCandidate({
+      title: 'SPAR enjoy Bubble Tea',
+      brand: 'SPAR enjoy',
+      price: 2.99,
+      referencePrice: matchesPriceToken(normalized, 3, 99) ? 3.99 : null,
+      quantityText: '0.45 l',
+      conditionsText: 'ab 2 Becher je 2,99 laut Flugblatt',
+      rawText: 'SPAR enjoy Bubble Tea Waldbeeregeschmack vegan, 0,45 Liter, ab 2 Becher je 2,99',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Alkoholfreie Getraenke',
+      categoryKey: 'alkoholfreie-getraenke',
+      searchKeywords: 'spar enjoy bubble tea waldbeere vegan',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+enjoy\s+dark\s+chocolate|chocolate\s+chip\s+cookie/i, 'sparenjoydarkchocolate')
+      && /60\s*g/i.test(normalized)
+      && hasEnjoyPrice(1, 29), sweetCandidate({
+      title: 'SPAR enjoy Cookie',
+      brand: 'SPAR enjoy',
+      price: 1.29,
+      quantityText: '60 g',
+      conditionsText: 'Dark Chocolate oder Chocolate Chip Cookie laut Flugblatt',
+      rawText: 'SPAR enjoy Dark Chocolate oder Chocolate Chip Cookie, 60 g, 1,29',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+feine\s+k(?:ue|u|.)che\s+kr(?:ae|a|.)uter/i, 'sparfeinekuchekrauter')
+      && /175\s*g/i.test(normalized)
+      && hasEnjoyPrice(0, 79), bakeryCandidate({
+      title: 'SPAR Feine Kueche Kraeuter- oder Knoblauchbaguette',
+      brand: 'SPAR Feine Kueche',
+      price: 0.79,
+      referencePrice: matchesPriceToken(normalized, 1, 19) ? 1.19 : null,
+      quantityText: '175 g',
+      conditionsText: 'ab 2 Packungen je 0,79 laut Flugblatt',
+      rawText: 'SPAR Feine Kueche Kraeuter- oder Knoblauchbaguette, gekuehlt, vegan, 175 g, ab 2 Packungen je 0,79',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+feine\s+k(?:ue|u|.)che\s+fertig/i, 'sparfeinekuchefertig')
+      && hasEnjoyPrice(2, 99), groceryCandidate({
+      title: 'SPAR Feine Kueche Fertiggerichte',
+      brand: 'SPAR Feine Kueche',
+      price: 2.99,
+      referencePrice: matchesPriceToken(normalized, 3, 69) ? 3.69 : null,
+      quantityText: '330-450 g',
+      conditionsText: 'verschiedene Sorten laut Flugblatt',
+      rawText: 'SPAR Feine Kueche Fertiggerichte, gekuehlt, verschiedene Sorten, 330-450 g, 2,99',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      searchKeywords: 'spar feine kueche fertiggerichte gekuehlt',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+feine\s+k(?:ue|u|.)che\s+kn(?:oe|o|.)del/i, 'sparfeinekucheknodel')
+      && /400\s*g/i.test(normalized)
+      && hasEnjoyPrice(2, 29), frozenCandidate({
+      title: 'SPAR Feine Kueche Knoedel',
+      brand: 'SPAR Feine Kueche',
+      price: 2.29,
+      referencePrice: matchesPriceToken(normalized, 3, 29) ? 3.29 : null,
+      quantityText: '400 g',
+      conditionsText: 'verschiedene Sorten laut Flugblatt',
+      rawText: 'SPAR Feine Kueche Knoedel, tiefgekuehlt, verschiedene Sorten, 400 g, 2,29',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+feine\s+k(?:ue|u|.)che\s+mohnnudeln/i, 'sparfeinekuchemohnnudeln')
+      && /500\s*g/i.test(normalized)
+      && hasEnjoyPrice(1, 99), frozenCandidate({
+      title: 'SPAR Feine Kueche Mohnnudeln',
+      brand: 'SPAR Feine Kueche',
+      price: 1.99,
+      referencePrice: matchesPriceToken(normalized, 2, 49) ? 2.49 : null,
+      quantityText: '500 g',
+      conditionsText: 'ab 2 Packungen je 1,99 laut Flugblatt',
+      rawText: 'SPAR Feine Kueche Mohnnudeln, tiefgekuehlt, 500 g, ab 2 Packungen je 1,99',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+feine\s+k(?:ue|u|.)che\s+4\s+h(?:ue|u|.)hner/i, 'sparfeinekuche4huhner')
+      && /500\s*g/i.test(normalized)
+      && hasEnjoyPrice(5, 99), frozenCandidate({
+      title: 'SPAR Feine Kueche 4 Huehner-Schnitzel',
+      brand: 'SPAR Feine Kueche',
+      price: 5.99,
+      referencePrice: matchesPriceToken(normalized, 6, 79) ? 6.79 : null,
+      quantityText: '500 g',
+      conditionsText: 'ab 2 Packungen je 5,99 laut Flugblatt',
+      rawText: 'SPAR Feine Kueche 4 Huehner-Schnitzel, tiefgekuehlt, 500 g, ab 2 Packungen je 5,99',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+feine\s+k(?:ue|u|.)che\s+cheeseburger/i, 'sparfeinekuchecheeseburger')
+      && /250\s*g/i.test(normalized)
+      && hasEnjoyPrice(1, 99), groceryCandidate({
+      title: 'SPAR Feine Kueche Cheeseburger',
+      brand: 'SPAR Feine Kueche',
+      price: 1.99,
+      referencePrice: matchesPriceToken(normalized, 2, 49) ? 2.49 : null,
+      quantityText: '250 g',
+      conditionsText: 'ab 2 Packungen je 1,99 laut Flugblatt',
+      rawText: 'SPAR Feine Kueche Cheeseburger, gekuehlt, 250 g, ab 2 Packungen je 1,99',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      comparisonSafe: false,
+    }));
+
+  addKnownCurrentCandidateIf(candidates, page,
+    hasEnjoyText(/spar\s+feine\s+k(?:ue|u|.)che\s+k(?:ae|a|.)rntner/i, 'sparfeinekuchekarntner')
+      && /300\s*g/i.test(normalized)
+      && hasEnjoyPrice(2, 49), groceryCandidate({
+      title: 'SPAR Feine Kueche Kaerntner Kasnudel',
+      brand: 'SPAR Feine Kueche',
+      price: 2.49,
+      referencePrice: matchesPriceToken(normalized, 2, 99) ? 2.99 : null,
+      quantityText: '300 g',
+      conditionsText: 'ab 2 Packungen je 2,49 laut Flugblatt',
+      rawText: 'SPAR Feine Kueche Kaerntner Kasnudel, gekuehlt, 300 g, ab 2 Packungen je 2,49',
+      categorySecondary: 'Fertiggerichte',
+      categoryKey: 'fertiggerichte',
+      comparisonSafe: false,
+    }));
+
+  return candidates;
+}
+
 function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerFormat } = {}) {
   const text = normalizePdfText(page.text || '');
   const normalized = normalizeForScan(text);
@@ -5182,6 +5493,7 @@ function extractSparPdfCandidates({
       ...extractKnownChocolateCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownBeerCandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetailerFormat, validity }),
+      ...extractKnownSparEnjoyKw26CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),
       ...extractKnownIntersparKw23CandidatesFromPage(page, { sourceRetailerFormat, validity }),

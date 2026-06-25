@@ -567,6 +567,7 @@ const RETAILER_DEFINITIONS = [
       entryPoints: ['https://www.spar.at/aktionen/steiermark'],
       fallbackViewerUrls: [
         'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+        'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
         'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
         'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
       ],

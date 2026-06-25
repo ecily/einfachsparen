@@ -4377,6 +4377,7 @@ function isAllowedSparFamilyMultiLinkCurrentLink(link = {}, source = {}) {
   if (link.sourceGuess && link.sourceGuess !== retailerFormat) return false;
   if (retailerFormat === 'spar') {
     return folderType === 'regular flyer'
+      || folderType === 'enjoy'
       || folderType === 'grocery/fresh'
       || folderType === 'fruit-vegetable';
   }

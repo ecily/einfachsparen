@@ -44,7 +44,7 @@ test('multi-link production scope is enabled only for SPAR and INTERSPAR Steierm
   }), 'spar-official-flyer-current'), false);
 });
 
-test('SPAR multi-link selection keeps regular flyers and vetted fresh links but excludes other medium or high risk folders', () => {
+test('SPAR multi-link selection keeps regular, enjoy and vetted fresh links but excludes other medium or high risk folders', () => {
   const source = currentSource({ sourceRetailerFormat: 'spar' });
   const links = [
     {
@@ -84,6 +84,7 @@ test('SPAR multi-link selection keeps regular flyers and vetted fresh links but 
   assert.deepEqual(selected.map((link) => link.url), [
     'https://flugblatt.spar.at/steiermark/spar/kw26',
     'https://flugblatt.spar.at/steiermark/spar/obst-gemuese',
+    'https://flugblatt.spar.at/steiermark/spar/enjoy',
   ]);
 });
 
@@ -101,6 +102,7 @@ test('SPAR current discovery merges code fallbacks with stale DB source policy f
 
   assert.deepEqual(merged, [
     'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
     'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
     'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
   ]);

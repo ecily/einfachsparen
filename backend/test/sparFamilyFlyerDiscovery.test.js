@@ -48,7 +48,7 @@ test('extracts official getPdf links from HTML including escaped and relative UR
     <script>
       window.asset = "https:\\/\\/flugblatt.interspar.at\\/sonderfolder\\/mein-zuhause-sommer26\\/getPdf.ashx";
     </script>
-    <a href="/steiermark/eurospar/kw22/ViewPdf.ashx">EUROSPAR</a>
+    <a href="/steiermark/eurospar/kw22/ViewPdf.ashx?token=transient-viewer-token">EUROSPAR</a>
   `;
 
   const links = extractSparFamilyPdfLinksFromHtml(html, {
@@ -61,6 +61,7 @@ test('extracts official getPdf links from HTML including escaped and relative UR
     'https://flugblatt.spar.at/steiermark/eurospar/kw22/getPdf.ashx',
     'https://flugblatt.interspar.at/sonderfolder/mein-zuhause-sommer26/getPdf.ashx',
   ]);
+  assert.equal(links.some((link) => /ViewPdf|transient-viewer-token/i.test(link.url)), false);
   assert.deepEqual(links.map((link) => link.discoveredFrom), ['fixture', 'fixture', 'fixture']);
 });
 
@@ -222,6 +223,41 @@ test('uses configured current PDF fallback when official entrypoint is blocked',
   assert.equal(result.pdfs[0].fetchStatus, 'ok');
   assert.equal(result.pdfs[0].pageCount, 2);
   assert.equal(result.pdfs[0].containsValidityTerms, true);
+});
+
+test('merges configured current PDF fallbacks with official entrypoint links', async () => {
+  const entrypointUrl = 'https://www.spar.at/aktionen/steiermark';
+  const discoveredPdfUrl = 'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx';
+  const fallbackPdfUrl = 'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx';
+  const httpClient = createHttpClient({
+    htmlByUrl: {
+      [entrypointUrl]: `<a href="${discoveredPdfUrl}">SPAR Flugblatt KW26</a>`,
+    },
+  });
+  const metadataCalls = [];
+
+  const result = await discoverSparFamilyFlyers({
+    entryPoints: [entrypointUrl],
+    fallbackViewerUrls: [fallbackPdfUrl],
+    httpClient,
+    pdfMetadataLoader: async (url) => {
+      metadataCalls.push(url);
+      return {
+        fetchStatus: 'ok',
+        httpStatus: 200,
+        pageCount: 2,
+        text: 'Angebote gueltig bis Dienstag, 30.6.2026',
+        error: '',
+      };
+    },
+    limits: { maxPdfMetadataLookups: 2 },
+  });
+
+  assert.deepEqual(httpClient.calls, [entrypointUrl]);
+  assert.deepEqual(result.pdfs.map((pdf) => pdf.url), [discoveredPdfUrl, fallbackPdfUrl]);
+  assert.deepEqual(metadataCalls, [discoveredPdfUrl, fallbackPdfUrl]);
+  assert.deepEqual(result.pdfs[1].discoveredFrom, ['configured-current-viewer-fallback']);
+  assert.equal(result.pdfs[1].folderType, 'grocery/fresh');
 });
 
 test('ignores stale configured current fallbacks without fetching them', async () => {
@@ -514,6 +550,7 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   const byKey = new Map(currentSources.map((source) => [deriveSourceKey(source), source]));
   assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
     'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
     'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
     'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
   ]);

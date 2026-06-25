@@ -1012,6 +1012,45 @@ test('generic SPAR PDF extraction still rejects unspecific merged non-fresh bloc
   assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk'));
 });
 
+test('generic SPAR PDF extraction rejects known dense public merge titles', () => {
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'interspar',
+    validity: fixture.validity,
+    pages: [
+      {
+        pageNumber: 9,
+        text: [
+          'Bio-Dinkel- Vollkornbrot Kaesekrainer Snack Buttertoast Kartoffel- weckerl',
+          '500 g',
+          '2,49',
+        ].join('\n'),
+      },
+      {
+        pageNumber: 10,
+        text: [
+          'Schweinsbauch- fleisch aus Oesterreich, mager, im Stueck, zum Braten oder Fuellen, in Bedienung Aktion! Bauernsulz',
+          'per kg',
+          '6,99',
+        ].join('\n'),
+      },
+      {
+        pageNumber: 15,
+        text: [
+          'Schuettdosen Aufbewahrungsdose, mit extra Verschluss. Zum perfekten Portionieren von Cerealien, Cornflakes, Mehl, Zucker, Reis etc. Hergestellt in Oesterreich.',
+          '1 Liter',
+          '2,99',
+        ].join('\n'),
+      },
+    ],
+  });
+  const accepted = candidates.filter((candidate) => !candidate.exclusionReason);
+
+  assert.equal(accepted.some((candidate) => /Kaesekrainer|Bauernsulz|Schuettdosen/i.test(candidate.title)), false);
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk' && /Kaesekrainer/i.test(candidate.rawText || '')));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk' && /Bauernsulz/i.test(candidate.rawText || '')));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-merge-risk' && /Schuettdosen/i.test(candidate.rawText || '')));
+});
+
 test('generic SPAR PDF extraction does not classify Blue Star WC offer as fresh radieschen', () => {
   const candidates = extractSparPdfCandidates({
     sourceRetailerFormat: 'spar',
@@ -2268,6 +2307,85 @@ test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', as
   assert.match(bioHendlFrSa.conditionsText, /Zusatzpreis/);
   assert.equal(lachsfilet.validFrom.toISOString(), '2026-06-11T22:00:00.000Z');
   assert.equal(lachsfilet.validTo.toISOString(), '2026-06-13T21:59:59.999Z');
+});
+
+test('extracts current SPAR enjoy KW26 offers from official PDF text', () => {
+  const validity = {
+    validFrom: new Date('2026-06-24T22:00:00.000Z'),
+    validTo: new Date('2026-06-30T21:59:59.999Z'),
+  };
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity,
+    pages: [
+      {
+        pageNumber: 1,
+        text: [
+          'Angebote gueltig ab Donnerstag, 25.6. bis Dienstag, 30.6.2026',
+          'SPAR enjoy Salate versch. Sorten, 220-250 g 3,49 statt 4,29',
+          'SPAR enjoy Sandwich versch. Sorten, gekuehlt, 160 g - 170 g 1,79 statt 2,29',
+          'SPAR enjoy Smoothie & Water Mango Tango oder Pink Dragon 0,33 Liter 1 Fl. 1,49 ab 2 Fl. je 0,99',
+        ].join(' '),
+      },
+      {
+        pageNumber: 2,
+        text: [
+          'SPAR enjoy by Neni Salate gekuehlt, taeglich frisch zubereitet, versch. Sorten, 200-225 g 1,99 statt 2,79',
+          'SPAR enjoy Wraps gekuehlt, taeglich frisch zubereitet, versch. Sorten, 180-200 g 1,99 statt 2,39',
+          'SPAR enjoy Laugenbaguette mit Thunfisch oder mit Cheddar gekuehlt, 180 g 2,29 statt 2,79',
+          'SPAR enjoy Nudelsalat mit Huehnerbruststreifen oder Nudel Thunfischsalat gekuehlt, 170 g 2,29 statt 2,79',
+        ].join(' '),
+      },
+      {
+        pageNumber: 3,
+        text: [
+          'SPAR enjoy Bubble Tea Waldbeeregeschmack vegan, 0,45 Liter 1 Be. 3,99 ab 2 Be. je 2,99',
+          'SPAR enjoy Dark Chocolate oder Chocolate Chip Cookie 60 g Aktion 1,29',
+        ].join(' '),
+      },
+      {
+        pageNumber: 4,
+        text: [
+          'SPAR Feine Kueche Kraeuter- oder Knoblauchbaguette gekuehlt, vegan, 175 g 1 Pkg. 1,19 ab 2 Pkg. je 0,79',
+          'SPAR Feine Kueche Fertiggerichte gekuehlt, versch. Sorten, 330-450 g 1 Pkg. 3,69 ab 2 Pkg. je 2,99',
+          'SPAR Feine Kueche Knoedel tiefgekuehlt, versch. Sorten, 400 g 1 Pkg. 3,29 ab 2 Pkg. je 2,29',
+          'SPAR Feine Kueche Mohnnudeln tiefgekuehlt, 500 g 1 Pkg. 2,49 ab 2 Pkg. je 1,99',
+          'SPAR Feine Kueche 4 Huehner-Schnitzel tiefgekuehlt, 500 g 1 Pkg. 6,79 ab 2 Pkg. je 5,99',
+          'SPAR Feine Kueche Cheeseburger gekuehlt, 250 g 1 Pkg. 2,49 ab 2 Pkg. je 1,99',
+          'SPAR Feine Kueche Kaerntner Kasnudel gekuehlt, 300 g 1 Pkg. 2,99 ab 2 Pkg. je 2,49',
+        ].join(' '),
+      },
+    ],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: { validity, candidates },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000778',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
+    pdfSha256: 'kw26-spar-enjoy-fixture',
+  });
+  const titles = offers.map((offer) => offer.title);
+
+  assert.ok(titles.includes('SPAR enjoy Salate'));
+  assert.ok(titles.includes('SPAR enjoy Sandwich'));
+  assert.ok(titles.includes('SPAR enjoy Smoothie & Water'));
+  assert.ok(titles.includes('SPAR enjoy by Neni Salate'));
+  assert.ok(titles.includes('SPAR enjoy Wraps'));
+  assert.ok(titles.includes('SPAR enjoy Laugenbaguette'));
+  assert.ok(titles.includes('SPAR enjoy Nudelsalat'));
+  assert.ok(titles.includes('SPAR enjoy Bubble Tea'));
+  assert.ok(titles.includes('SPAR enjoy Cookie'));
+  assert.ok(titles.includes('SPAR Feine Kueche Kraeuter- oder Knoblauchbaguette'));
+  assert.ok(titles.includes('SPAR Feine Kueche Fertiggerichte'));
+  assert.ok(titles.includes('SPAR Feine Kueche Knoedel'));
+  assert.ok(titles.includes('SPAR Feine Kueche Mohnnudeln'));
+  assert.ok(titles.includes('SPAR Feine Kueche 4 Huehner-Schnitzel'));
+  assert.ok(titles.includes('SPAR Feine Kueche Cheeseburger'));
+  assert.ok(titles.includes('SPAR Feine Kueche Kaerntner Kasnudel'));
+  assert.equal(offers.find((offer) => offer.title === 'SPAR enjoy Smoothie & Water').priceCurrent.amount, 0.99);
+  assert.equal(offers.find((offer) => offer.title === 'SPAR Feine Kueche 4 Huehner-Schnitzel').priceCurrent.amount, 5.99);
+  assert.equal(offers.every((offer) => offer.quality.comparisonSafe === false), true);
 });
 
 test('extracts SPAR KW25 current cover controls from official PDF text', () => {
