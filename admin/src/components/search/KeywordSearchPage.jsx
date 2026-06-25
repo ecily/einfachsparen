@@ -13,6 +13,7 @@ import {
 import { OfferCardConsumer } from './OfferCardConsumer'
 import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDisplayGroup } from '../../utils/retailers'
 import { getRetailerTheme } from '../../utils/retailerColors'
+import { hasLimitedCoverageRetailers, isLimitedCoverageRetailer } from '../../utils/retailerCoverage'
 
 const KEYWORD_SEARCH_LIMIT = 60
 const EXAMPLE_SEARCH_TERMS = ['Milch', 'Bier', 'Waschmittel', 'Zahnpasta', 'Kaffee']
@@ -344,6 +345,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
   const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
   const emptySearchSuggestions = useMemo(() => getEmptySearchSuggestions(submittedQuery), [submittedQuery])
+  const showLimitedCoverageNotice = marketFilterEnabled && hasLimitedCoverageRetailers(selectedRetailerKeys)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -667,6 +669,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             {availableRetailers.map((retailer, index, retailerList) => {
               const selected = selectedRetailerKeys.includes(retailer.key)
               const retailerTheme = getRetailerTheme(retailer.key || retailer.label)
+              const limitedCoverage = isLimitedCoverageRetailer(retailer.key)
               const nextRetailer = retailerList[index + 1]
               const showGroupSeparator = shouldSeparateRetailerGroups(retailer.key, nextRetailer?.key)
 
@@ -689,6 +692,9 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                   >
                     <span className="retailer-chip__dot" aria-hidden="true" />
                     <span className="retailer-chip__label">{retailer.label}</span>
+                    {limitedCoverage ? (
+                      <span className="retailer-chip__coverage">Beta</span>
+                    ) : null}
                   </button>
                   {showGroupSeparator ? <span className="retailer-chip-group-separator" aria-hidden="true" /> : null}
                 </Fragment>
@@ -699,6 +705,12 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                 Märkte zurücksetzen
               </button>
             ) : null}
+          </div>
+        ) : null}
+        {showLimitedCoverageNotice ? (
+          <div className="limited-coverage-notice" role="note">
+            <strong>Eingeschr&auml;nkte Beta-Abdeckung &middot; nur verifizierte Aktionen</strong>
+            <span>Wir zeigen f&uuml;r SPAR und INTERSPAR derzeit nur verifizierte offizielle Aktionen.</span>
           </div>
         ) : null}
       </section>

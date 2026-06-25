@@ -1,5 +1,6 @@
 import { Fragment, useMemo } from 'react'
 import { getRetailerTheme } from '../../utils/retailerColors'
+import { isLimitedCoverageRetailer } from '../../utils/retailerCoverage'
 import { shouldSeparateRetailerGroups, sortRetailersByDisplayGroup } from '../../utils/retailers'
 import { SectionCard } from '../layout/SectionCard'
 
@@ -39,6 +40,7 @@ export function RetailerSelectorBlock({
               {groupedRetailers.map((retailer, index, retailerList) => {
                 const selected = selectedRetailers.includes(retailer.retailerKey)
                 const retailerTheme = getRetailerTheme(retailer.retailerKey || retailer.retailerName)
+                const limitedCoverage = isLimitedCoverageRetailer(retailer.retailerKey)
                 const separatorKey = retailer.retailerKey || retailer.retailerName
                 const nextRetailer = retailerList[index + 1]
                 const showGroupSeparator = shouldSeparateRetailerGroups(
@@ -66,6 +68,9 @@ export function RetailerSelectorBlock({
                       <span className="retailer-chip__meta chip__meta">
                         {retailer.activeOffers > 0 ? `${retailer.activeOffers} Aktionen` : 'derzeit keine Aktionen'}
                       </span>
+                      {limitedCoverage ? (
+                        <span className="retailer-chip__coverage">Beta</span>
+                      ) : null}
                     </button>
                     {showGroupSeparator ? <span className="retailer-chip-group-separator" aria-hidden="true" /> : null}
                   </Fragment>

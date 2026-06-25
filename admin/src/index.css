@@ -1900,6 +1900,20 @@ a {
   opacity: 0.76;
 }
 
+.retailer-chip__coverage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.28rem;
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(255, 254, 250, 0.74);
+  border: 1px solid rgba(31, 90, 75, 0.14);
+  color: var(--kk-muted);
+  font-size: 0.72rem;
+  font-weight: 820;
+  line-height: 1;
+}
+
 .retailer-chip--active {
   background: color-mix(in srgb, var(--retailer-color, var(--kk-brand-primary)) 94%, #162118);
   color: var(--retailer-text-color, var(--kk-soft));
@@ -1910,6 +1924,12 @@ a {
 .retailer-chip--active .retailer-chip__dot {
   background: currentColor;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
+}
+
+.retailer-chip--active .retailer-chip__coverage {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: currentColor;
 }
 
 .chip--static {
@@ -2441,6 +2461,27 @@ a {
 
 .results-count-box span {
   color: var(--kk-muted);
+}
+
+.limited-coverage-notice {
+  display: grid;
+  gap: 0.24rem;
+  padding: 0.84rem 0.95rem;
+  border-radius: var(--kk-radius-md);
+  background: rgba(255, 254, 250, 0.92);
+  border: 1px solid rgba(31, 90, 75, 0.14);
+  box-shadow: inset 3px 0 0 rgba(31, 90, 75, 0.18);
+  color: var(--kk-muted);
+  line-height: 1.42;
+}
+
+.limited-coverage-notice strong {
+  color: var(--kk-value-text);
+  font-size: 0.92rem;
+}
+
+.limited-coverage-notice span {
+  font-size: 0.86rem;
 }
 
 .market-check-note {

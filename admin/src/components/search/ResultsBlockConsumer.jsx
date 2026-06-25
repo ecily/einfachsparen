@@ -1,5 +1,6 @@
 import { SectionCard } from '../layout/SectionCard'
 import { ResultsSection } from './ResultsSection'
+import { hasLimitedCoverageRetailers } from '../../utils/retailerCoverage'
 
 export function ResultsBlockConsumer({
   rankingLoading,
@@ -16,6 +17,7 @@ export function ResultsBlockConsumer({
 }) {
   const visibleOfferCount = safeOffers.length + actionOffers.length
   const totalCount = pagination?.totalCount || 0
+  const hasLimitedCoverage = hasLimitedCoverageRetailers(feedbackPageContext.activeRetailers || [])
 
   return (
     <SectionCard>
@@ -60,6 +62,15 @@ export function ResultsBlockConsumer({
                 {safeOffers.length} mit bekannter Ersparnis, {actionOffers.length} weitere aktuelle Aktionen.
               </span>
             </div>
+
+            {hasLimitedCoverage ? (
+              <div className="limited-coverage-notice" role="note">
+                <strong>Eingeschr&auml;nkte Beta-Abdeckung &middot; nur verifizierte Aktionen</strong>
+                <span>
+                  Wir zeigen f&uuml;r SPAR und INTERSPAR derzeit nur verifizierte offizielle Aktionen.
+                </span>
+              </div>
+            ) : null}
 
             <ResultsSection
               title="Angebote mit bekannter Ersparnis"
