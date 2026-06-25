@@ -11,6 +11,11 @@
   },
   {
     "discoveredFrom": "https://www.spar.at/aktionen/steiermark",
+    "label": "SPAR Asia KW26 Do., 25.06.26 - Di., 30.06.26 Zum Flugblatt",
+    "url": "https://flugblatt.spar.at/wien/spar/260625-3-asia-kw26/getPdf.ashx"
+  },
+  {
+    "discoveredFrom": "https://www.spar.at/aktionen/steiermark",
     "label": "SPAR Obst & Gemuese KW 26 Mo., 22.06.26 - Sa., 27.06.26 Zum Flugblatt",
     "url": "https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx"
   },
@@ -32,7 +37,7 @@
   {
     "discoveredFrom": "https://www.spar.at/aktionen/steiermark/eurospar",
     "label": "EUROSPAR Einleger KW 25 Do., 18.06.26 - Di., 30.06.26 Zum Flugblatt",
-    "url": "https://flugblatt.spar.at/steiermark/eurospar/260618-2-einleger-kw-25/getPdf.ashx"
+    "url": "https://flugblatt.spar.at/steiermark/eurospar/260618-2-eiinleger-kw-25/getPdf.ashx"
   },
   {
     "discoveredFrom": "https://www.interspar.at/aktionen/steiermark",

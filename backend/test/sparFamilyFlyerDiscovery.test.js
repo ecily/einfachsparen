@@ -8,6 +8,7 @@ const {
 } = require('../src/services/crawl/crawlSourceSelection');
 const {
   buildSparFamilyActionIndexMatrix,
+  buildFallbackViewerLinks,
   buildSparFamilyFlyerInventoryReport,
   classifySparFamilyActionIndexLink,
   classifySparFamilyFlyerUrl,
@@ -78,6 +79,38 @@ test('dedupes duplicate PDF links', () => {
   assert.equal(links[0].url, 'https://flugblatt.spar.at/steiermark/spar/kw22/getPdf.ashx');
 });
 
+test('extracts current official action-index PDF hrefs from HTML without live access', () => {
+  const html = `
+    <a href="https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx">SPAR Flugblatt KW 26</a>
+    <a href="https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx">SPAR enjoy KW 26</a>
+    <a href="https://flugblatt.spar.at/wien/spar/260625-3-asia-kw26/getPdf.ashx">SPAR Asia KW26</a>
+    <a href="https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx">SPAR Obst &amp; Gemuese KW 26</a>
+    <a href="https://flugblatt.spar.at/steiermark/eurospar/260618-1-flugblatt-kw-25/getPdf.ashx">EUROSPAR Flugblatt KW 25</a>
+    <a href="https://flugblatt.spar.at/steiermark/eurospar/260618-2-eiinleger-kw-25/getPdf.ashx">EUROSPAR Einleger KW 25</a>
+    <a href="https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx">INTERSPAR Online-Flugblatt Steiermark KW 26</a>
+    <a href="https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx">INTERSPAR Online-Flugblatt Steiermark KW 25</a>
+  `;
+
+  const links = extractSparFamilyPdfLinksFromHtml(html, {
+    baseUrl: 'https://www.spar.at/aktionen/steiermark',
+    discoveredFrom: 'fixture-official-action-index',
+    maxLinks: 20,
+    relevantOnly: false,
+  });
+
+  assert.deepEqual(links.map((link) => link.url), [
+    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/wien/spar/260625-3-asia-kw26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/eurospar/260618-1-flugblatt-kw-25/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/eurospar/260618-2-eiinleger-kw-25/getPdf.ashx',
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx',
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
+  ]);
+  assert.equal(links.every((link) => link.discoveredFrom === 'fixture-official-action-index'), true);
+});
+
 test('extracts and classifies official SPAR-family flyer viewer links', () => {
   const html = `
     <a href="https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/">SPAR KW24</a>
@@ -118,6 +151,9 @@ test('infers folder types from safe URL and text heuristics', () => {
   assert.equal(inferFolderType('https://flugblatt.spar.at/steiermark/spar/gutscheinheft/getPdf.ashx'), 'coupon booklet');
   assert.equal(inferFolderType('https://flugblatt.spar.at/steiermark/spar/frische/getPdf.ashx', 'Obst und Gemuese'), 'grocery/fresh');
   assert.equal(inferFolderType('https://flugblatt.spar.at/weinwelt/sommer26/getPdf.ashx'), 'wine');
+  assert.equal(inferFolderType('https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx'), 'enjoy');
+  assert.equal(inferFolderType('https://flugblatt.spar.at/wien/spar/260625-3-asia-kw26/getPdf.ashx'), 'asia');
+  assert.equal(inferFolderType('https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx'), 'grocery/fresh');
   assert.equal(inferFolderType('https://flugblatt.spar.at/steiermark/spar/kw22/getPdf.ashx'), 'regular flyer');
 });
 
@@ -214,12 +250,30 @@ test('ignores stale configured current fallbacks without fetching them', async (
 });
 
 test('only accepts current SPAR-family fallback URLs', () => {
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx'), true);
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx'), true);
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx'), true);
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx'), true);
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/'), true);
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx'), true);
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/getPdf.ashx'), false);
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw24/'), false);
   assert.equal(isCurrentFallbackViewerUrl('https://example.test/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx'), false);
+});
+
+test('builds configured current fallback links for KW26 before stale DB fallbacks', () => {
+  const links = buildFallbackViewerLinks([
+    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
+  ]);
+
+  assert.deepEqual(links.map((link) => link.url), [
+    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
+  ]);
+  assert.equal(links.every((link) => link.kind === 'pdf'), true);
 });
 
 test('enforces maxEntryPoints maxLinks and maxPdfMetadataLookups', async () => {
@@ -492,6 +546,8 @@ test('classifies official SPAR-family action index links into diagnostic matrix 
 
   assert.equal(byFolder.get('spar:main-flyer').risk, 'low');
   assert.equal(byFolder.get('spar:main-flyer').kaufklugSupport, 'supported-currently');
+  assert.equal(byFolder.get('spar:enjoy').risk, 'medium');
+  assert.equal(byFolder.get('spar:asia').risk, 'medium');
   assert.equal(byFolder.get('spar:fruit-vegetable').risk, 'medium');
   assert.equal(byFolder.get('spar:monatssparer').kaufklugSupport, 'partially-supported');
   assert.equal(byFolder.get('eurospar:main-flyer').risk, 'low');

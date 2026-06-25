@@ -73,8 +73,12 @@ const VALIDITY_TERMS = [
 ];
 
 const CURRENT_FALLBACK_VIEWER_PATTERNS = [
+  /kw[-_ ]?26\b/i,
   /kw[-_ ]?25\b/i,
+  /steiermark_kw26/i,
   /steiermark_kw25/i,
+  /260625/i,
+  /260622/i,
   /260618/i,
 ];
 
@@ -88,6 +92,7 @@ const STALE_CURRENT_FALLBACK_PATTERNS = [
 const ACTION_INDEX_FOLDER_TYPES = Object.freeze({
   MAIN_FLYER: 'main-flyer',
   ENJOY: 'enjoy',
+  ASIA: 'asia',
   FRUIT_VEGETABLE: 'fruit-vegetable',
   GRILLEN: 'grillen',
   MONATSSPARER: 'monatssparer',
@@ -109,6 +114,7 @@ const ACTION_INDEX_LOW_RISK_FOLDERS = new Set([
 
 const ACTION_INDEX_MEDIUM_RISK_FOLDERS = new Set([
   ACTION_INDEX_FOLDER_TYPES.ENJOY,
+  ACTION_INDEX_FOLDER_TYPES.ASIA,
   ACTION_INDEX_FOLDER_TYPES.FRUIT_VEGETABLE,
   ACTION_INDEX_FOLDER_TYPES.GRILLEN,
   ACTION_INDEX_FOLDER_TYPES.MONATSSPARER,
@@ -537,6 +543,18 @@ function inferFolderType(url, text = '') {
     return 'coupon booklet';
   }
 
+  if (/\benjoy\b/.test(normalized)) {
+    return 'enjoy';
+  }
+
+  if (/\basia\b/.test(normalized)) {
+    return 'asia';
+  }
+
+  if (/\bobst\b|\bgemuese\b|\bgemuse\b|\bfrische\b|\bfrisch\b|\blebensmittel\b/.test(normalized)) {
+    return 'grocery/fresh';
+  }
+
   if (
     ['spar', 'eurospar', 'interspar'].includes(classification.sourceGuess)
     && (/\bflugblatt\b|\bkw\s*\d+\b|steiermark[_ -]kw\d+/.test(normalizedPath))
@@ -546,10 +564,6 @@ function inferFolderType(url, text = '') {
 
   if (findMatchedTerms(normalized, NON_FOOD_TERMS).length > 0 || classification.sourceGuess === 'sonderfolder') {
     return 'household/non-food';
-  }
-
-  if (/\bobst\b|\bgemuese\b|\bgemuse\b|\bfrische\b|\bfrisch\b|\blebensmittel\b/.test(normalized)) {
-    return 'grocery/fresh';
   }
 
   if (/\bflugblatt\b|\bkw\s*\d+\b|steiermark[_ -]kw\d+/.test(normalizedPath)) {
@@ -575,6 +589,7 @@ function inferActionIndexFolderType(url = '', text = '') {
   if (/\bgrillen\b|\bgrill\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.GRILLEN;
   if (/\bobst\b|\bgemuese\b|\bgemuse\b|\bfrucht\b|\bfrische\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.FRUIT_VEGETABLE;
   if (/\benjoy\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.ENJOY;
+  if (/\basia\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.ASIA;
   if (/\bonline\s*flugblatt\b|\bonline-flugblatt\b|steiermark[_ -]kw\d+/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.ONLINE_FLYER;
   if (/\bflugblatt\b|\bkw\s*\d+\b/.test(normalized)) return ACTION_INDEX_FOLDER_TYPES.MAIN_FLYER;
 
@@ -681,6 +696,7 @@ function inferActionIndexSupport({ retailerFormat, folderType }) {
     retailerFormat === 'spar'
     && [
       ACTION_INDEX_FOLDER_TYPES.ENJOY,
+      ACTION_INDEX_FOLDER_TYPES.ASIA,
       ACTION_INDEX_FOLDER_TYPES.FRUIT_VEGETABLE,
       ACTION_INDEX_FOLDER_TYPES.GRILLEN,
       ACTION_INDEX_FOLDER_TYPES.MONATSSPARER,
