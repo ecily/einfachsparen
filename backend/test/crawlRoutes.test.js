@@ -6,6 +6,7 @@ const { requireAdminApiKey } = require('../src/middleware/adminAuth');
 const {
   createCrawlRouter,
   parseCrawlRunBody,
+  STARTUP_GRACE_BYPASS_REASON,
 } = require('../src/routes/crawl.routes');
 const { serializeCrawlRun } = require('../src/services/crawl/crawlRunService');
 
@@ -134,6 +135,9 @@ test('parseCrawlRunBody preserves compatible retailerKeys-only requests and sour
     dryRun: false,
     allowDisabled: false,
     sourceSelectionRequested: false,
+    allowStartupGraceBypass: false,
+    startupGraceBypassReason: '',
+    allowedSourceKeys: [],
   });
 
   assert.deepEqual(parseCrawlRunBody({
@@ -147,7 +151,73 @@ test('parseCrawlRunBody preserves compatible retailerKeys-only requests and sour
     dryRun: true,
     allowDisabled: false,
     sourceSelectionRequested: true,
+    allowStartupGraceBypass: false,
+    startupGraceBypassReason: '',
+    allowedSourceKeys: [],
   });
+});
+
+test('parseCrawlRunBody enables startup grace bypass only for the exact SPAR rescue source scope', () => {
+  const allowed = parseCrawlRunBody({
+    sourceKeys: [
+      'interspar-official-flyer-current',
+      'spar-official-flyer-current',
+    ],
+    dryRun: false,
+    allowStartupGraceBypass: true,
+  });
+
+  assert.equal(allowed.allowStartupGraceBypass, true);
+  assert.equal(allowed.startupGraceBypassReason, STARTUP_GRACE_BYPASS_REASON);
+  assert.deepEqual(allowed.allowedSourceKeys, [
+    'spar-official-flyer-current',
+    'interspar-official-flyer-current',
+  ]);
+
+  assert.equal(parseCrawlRunBody({
+    sourceKeys: ['spar-official-flyer-current'],
+    dryRun: false,
+    allowStartupGraceBypass: true,
+  }).allowStartupGraceBypass, false);
+
+  assert.equal(parseCrawlRunBody({
+    sourceKeys: [
+      'spar-official-flyer-current',
+      'interspar-official-flyer-current',
+      'spar-family-official-productworld',
+    ],
+    dryRun: false,
+    allowStartupGraceBypass: true,
+  }).allowStartupGraceBypass, false);
+
+  assert.equal(parseCrawlRunBody({
+    retailerKeys: ['spar'],
+    sourceKeys: [
+      'spar-official-flyer-current',
+      'interspar-official-flyer-current',
+    ],
+    dryRun: false,
+    allowStartupGraceBypass: true,
+  }).allowStartupGraceBypass, false);
+
+  assert.equal(parseCrawlRunBody({
+    sourceKeys: [
+      'spar-official-flyer-current',
+      'interspar-official-flyer-current',
+    ],
+    sourceIds: ['665000000000000000000010'],
+    dryRun: false,
+    allowStartupGraceBypass: true,
+  }).allowStartupGraceBypass, false);
+
+  assert.equal(parseCrawlRunBody({
+    sourceKeys: [
+      'spar-official-flyer-current',
+      'interspar-official-flyer-current',
+    ],
+    dryRun: true,
+    allowStartupGraceBypass: true,
+  }).allowStartupGraceBypass, false);
 });
 
 test('POST /api/crawl/run accepts an async full CrawlRun without waiting for crawl completion', async () => {
@@ -343,5 +413,29 @@ test('admin protection blocks crawl run and status endpoints before handlers are
   assert.equal([401, 503].includes(postResponse.statusCode), true);
   assert.equal([401, 503].includes(getResponse.statusCode), true);
   assert.equal([401, 503].includes(recoverResponse.statusCode), true);
+  assert.equal(called, false);
+});
+
+test('admin protection blocks startup grace bypass requests before handlers are called', async () => {
+  let called = false;
+  const service = buildService();
+  service.startCrawlRun = async () => {
+    called = true;
+    return { accepted: true, alreadyRunning: false, run: run() };
+  };
+  const app = buildTestApp(service, { adminProtected: true });
+
+  const response = await requestJson(app, {
+    body: {
+      sourceKeys: [
+        'spar-official-flyer-current',
+        'interspar-official-flyer-current',
+      ],
+      dryRun: false,
+      allowStartupGraceBypass: true,
+    },
+  });
+
+  assert.equal([401, 503].includes(response.statusCode), true);
   assert.equal(called, false);
 });

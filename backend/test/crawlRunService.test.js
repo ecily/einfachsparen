@@ -96,6 +96,96 @@ test('startup crawl guard can block production crawls for fifteen minutes', () =
   assert.equal(guard.graceMs, 900000);
 });
 
+test('startup crawl guard allows only the explicit SPAR rescue source scope during grace', () => {
+  const processStartedAt = new Date('2026-06-25T18:00:00.000Z');
+  const base = {
+    trigger: 'manual',
+    envConfig: {
+      NODE_ENV: 'production',
+      CRAWL_RUN_STARTUP_GRACE_SECONDS: 900,
+    },
+    processStartedAt,
+    now: new Date('2026-06-25T18:02:00.000Z'),
+  };
+  const allowedSourceKeys = [
+    'spar-official-flyer-current',
+    'interspar-official-flyer-current',
+  ];
+
+  const allowed = _private.getStartupCrawlStartGuard({
+    ...base,
+    options: {
+      sourceKeys: allowedSourceKeys,
+      dryRun: false,
+      allowStartupGraceBypass: true,
+    },
+  });
+
+  assert.equal(allowed.blocked, false);
+  assert.equal(allowed.reason, 'startup-grace-bypassed');
+  assert.equal(allowed.startupGraceBypassed, true);
+  assert.equal(allowed.startupGraceBypassReason, _private.STARTUP_GRACE_BYPASS_REASON);
+  assert.deepEqual(allowed.allowedSourceKeys, _private.STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS);
+
+  const blockedCases = [
+    { dryRun: false, allowStartupGraceBypass: true },
+    { retailerKeys: ['spar'], dryRun: false, allowStartupGraceBypass: true },
+    { sourceKeys: allowedSourceKeys, sourceIds: ['665000000000000000000010'], dryRun: false, allowStartupGraceBypass: true },
+    { sourceKeys: ['spar-official-flyer-current'], dryRun: false, allowStartupGraceBypass: true },
+    { sourceKeys: [...allowedSourceKeys, 'spar-family-official-productworld'], dryRun: false, allowStartupGraceBypass: true },
+  ];
+
+  for (const options of blockedCases) {
+    const guard = _private.getStartupCrawlStartGuard({
+      ...base,
+      options,
+    });
+
+    assert.equal(guard.blocked, true);
+    assert.equal(guard.reason, 'process-startup-grace');
+  }
+
+  assert.equal(_private.buildStartupGraceBypassDecision({
+    sourceKeys: allowedSourceKeys,
+    dryRun: true,
+    allowStartupGraceBypass: true,
+  }).allowed, false);
+});
+
+test('buildRunDocument records startup grace bypass metadata only for the allowed scope', () => {
+  const runId = new mongoose.Types.ObjectId('665000000000000000000011');
+  const run = _private.buildRunDocument({
+    runId,
+    trigger: 'manual',
+    region: 'Steiermark',
+    options: {
+      sourceKeys: [
+        'spar-official-flyer-current',
+        'interspar-official-flyer-current',
+      ],
+      dryRun: false,
+      allowStartupGraceBypass: true,
+    },
+  });
+
+  assert.equal(run.metadata.startupGraceBypassed, true);
+  assert.equal(run.metadata.startupGraceBypassReason, _private.STARTUP_GRACE_BYPASS_REASON);
+  assert.deepEqual(run.metadata.allowedSourceKeys, _private.STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS);
+
+  const blocked = _private.buildRunDocument({
+    runId: new mongoose.Types.ObjectId('665000000000000000000012'),
+    trigger: 'manual',
+    region: 'Steiermark',
+    options: {
+      sourceKeys: ['spar-official-flyer-current'],
+      dryRun: false,
+      allowStartupGraceBypass: true,
+    },
+  });
+
+  assert.equal(blocked.metadata.startupGraceBypassed, undefined);
+});
+
 test('buildRunSummary aggregates source, retailer, type, dedupe and filter metadata inputs compactly', () => {
   const result = {
     sourceCoverage: {

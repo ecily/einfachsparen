@@ -24,6 +24,11 @@ const MAX_SCHEDULED_REPLACEMENT_ATTEMPTS = 1;
 const SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS = 'replacementFailedExhausted';
 const PROCESS_STARTED_AT = new Date();
 const CURRENT_PROCESS_OWNER_PREFIX = `${os.hostname()}:${process.pid}:`;
+const STARTUP_GRACE_BYPASS_REASON = 'spar-rescue-scoped-sourcekeys';
+const STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS = Object.freeze([
+  'spar-official-flyer-current',
+  'interspar-official-flyer-current',
+]);
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN = /authorization|cookie|token|secret|password|api[-_]?key|set-cookie/i;
 const activeExecutionRunIds = new Map();
 const OFFER_PUBLISH_STATUS_BY_RUN_STATUS = {
@@ -51,6 +56,35 @@ function determineMode(options = {}) {
   )
     ? 'scoped'
     : 'full';
+}
+
+function buildStartupGraceBypassDecision(options = {}) {
+  const requested = options.allowStartupGraceBypass === true;
+  const sourceKeys = compactStrings(options.sourceKeys);
+  const retailerKeys = compactStrings(options.retailerKeys);
+  const sourceIds = compactStrings(options.sourceIds);
+  const allowedSet = new Set(STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS);
+  const sourceKeySet = new Set(sourceKeys);
+  const exactAllowedSourceKeys = (
+    sourceKeys.length === STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS.length
+    && STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS.every((sourceKey) => sourceKeySet.has(sourceKey))
+    && sourceKeys.every((sourceKey) => allowedSet.has(sourceKey))
+  );
+
+  const allowed = Boolean(
+    requested
+    && options.dryRun === false
+    && retailerKeys.length === 0
+    && sourceIds.length === 0
+    && exactAllowedSourceKeys
+  );
+
+  return {
+    requested,
+    allowed,
+    reason: STARTUP_GRACE_BYPASS_REASON,
+    allowedSourceKeys: [...STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS],
+  };
 }
 
 function asStringId(value) {
@@ -167,6 +201,21 @@ function getStartupCrawlStartGuard({
   }
 
   if (processAgeMs !== null && processAgeMs < graceMs) {
+    const bypassDecision = buildStartupGraceBypassDecision(options);
+
+    if (bypassDecision.allowed) {
+      return {
+        blocked: false,
+        processAgeMs,
+        graceMs,
+        reason: 'startup-grace-bypassed',
+        startupGraceBypassed: true,
+        startupGraceBypassReason: bypassDecision.reason,
+        allowedSourceKeys: bypassDecision.allowedSourceKeys,
+        trigger: String(trigger || ''),
+      };
+    }
+
     return {
       blocked: true,
       processAgeMs,
@@ -634,6 +683,9 @@ function serializeCrawlRun(run) {
     metadata: {
       progress: sanitizeDiagnosticValue(plain.metadata?.progress || null),
       scheduledReplacement: sanitizeDiagnosticValue(plain.metadata?.scheduledReplacement || null),
+      startupGraceBypassed: plain.metadata?.startupGraceBypassed === true,
+      startupGraceBypassReason: plain.metadata?.startupGraceBypassReason || '',
+      allowedSourceKeys: compactStrings(plain.metadata?.allowedSourceKeys || []),
     },
   };
 }
@@ -649,6 +701,7 @@ function buildRunDocument({ runId, trigger, region, options = {} }) {
   );
 
   const scheduledReplacement = options.scheduledReplacement || null;
+  const startupGraceBypassDecision = buildStartupGraceBypassDecision(options);
   const metadata = {};
 
   if (scheduledReplacement?.originalRunId) {
@@ -657,6 +710,12 @@ function buildRunDocument({ runId, trigger, region, options = {} }) {
       reason: compactErrorMessage(scheduledReplacement.reason || 'source-less-process-restart-recovery'),
       plannedAt: scheduledReplacement.plannedAt || new Date(),
     };
+  }
+
+  if (startupGraceBypassDecision.allowed) {
+    metadata.startupGraceBypassed = true;
+    metadata.startupGraceBypassReason = startupGraceBypassDecision.reason;
+    metadata.allowedSourceKeys = startupGraceBypassDecision.allowedSourceKeys;
   }
 
   return new CrawlRun({
@@ -2330,7 +2389,10 @@ module.exports = {
     MAX_SCHEDULED_REPLACEMENT_ATTEMPTS,
     PROCESS_STARTED_AT,
     SCHEDULED_REPLACEMENT_EXHAUSTED_STATUS,
+    STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS,
+    STARTUP_GRACE_BYPASS_REASON,
     addUtcDays,
+    buildStartupGraceBypassDecision,
     buildStartupCrawlStartError,
     buildReplacementAttemptWindow,
     buildScheduledReplacementExhaustedMarker,

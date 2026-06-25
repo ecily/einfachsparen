@@ -2,21 +2,49 @@ const express = require('express');
 const env = require('../config/env');
 const crawlRunService = require('../services/crawl/crawlRunService');
 
+const STARTUP_GRACE_BYPASS_REASON = 'spar-rescue-scoped-sourcekeys';
+const STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS = Object.freeze([
+  'spar-official-flyer-current',
+  'interspar-official-flyer-current',
+]);
+
 function arrayFromBody(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))];
 }
 
+function isAllowedStartupGraceBypassRequest(parsed, body = {}) {
+  if (body.allowStartupGraceBypass !== true || parsed.dryRun !== false) return false;
+  if (parsed.retailerKeys.length > 0 || parsed.sourceIds.length > 0) return false;
+
+  const allowedSet = new Set(STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS);
+  const sourceKeySet = new Set(parsed.sourceKeys);
+
+  return (
+    parsed.sourceKeys.length === STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS.length
+    && STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS.every((sourceKey) => sourceKeySet.has(sourceKey))
+    && parsed.sourceKeys.every((sourceKey) => allowedSet.has(sourceKey))
+  );
+}
+
 function parseCrawlRunBody(body = {}) {
   const sourceSelectionRequested = Object.prototype.hasOwnProperty.call(body, 'sourceKeys') ||
     Object.prototype.hasOwnProperty.call(body, 'sourceIds');
-  return {
+  const parsed = {
     retailerKeys: arrayFromBody(body.retailerKeys),
     sourceKeys: arrayFromBody(body.sourceKeys),
     sourceIds: arrayFromBody(body.sourceIds),
     dryRun: body.dryRun === true,
     allowDisabled: body.allowDisabled === true,
     sourceSelectionRequested,
+  };
+  const allowStartupGraceBypass = isAllowedStartupGraceBypassRequest(parsed, body);
+
+  return {
+    ...parsed,
+    allowStartupGraceBypass,
+    startupGraceBypassReason: allowStartupGraceBypass ? STARTUP_GRACE_BYPASS_REASON : '',
+    allowedSourceKeys: allowStartupGraceBypass ? [...STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS] : [],
   };
 }
 
@@ -49,6 +77,8 @@ function buildAcceptedResponse({ serviceResult, options, envConfig }) {
       mode: run.mode,
       requestedSourceKeys: run.requestedSourceKeys || options.sourceKeys,
       requestedSourceIds: run.requestedSourceIds || options.sourceIds,
+      startupGraceBypassed: run.metadata?.startupGraceBypassed === true,
+      startupGraceBypassReason: run.metadata?.startupGraceBypassReason || '',
     },
   };
 }
@@ -161,3 +191,6 @@ module.exports = router;
 module.exports.createCrawlRouter = createCrawlRouter;
 module.exports.parseCrawlRunBody = parseCrawlRunBody;
 module.exports.buildAcceptedResponse = buildAcceptedResponse;
+module.exports.isAllowedStartupGraceBypassRequest = isAllowedStartupGraceBypassRequest;
+module.exports.STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS = STARTUP_GRACE_BYPASS_ALLOWED_SOURCE_KEYS;
+module.exports.STARTUP_GRACE_BYPASS_REASON = STARTUP_GRACE_BYPASS_REASON;
