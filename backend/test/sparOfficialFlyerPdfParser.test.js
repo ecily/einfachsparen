@@ -2092,6 +2092,25 @@ test('generic SPAR PDF parser rejects legal and broad campaign title fragments',
   assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title' || candidate.exclusionReason === 'generic-unclear-product'));
 });
 
+test('generic SPAR PDF parser rejects page-number legal prefix titles before product anchors', () => {
+  const candidates = extractSparPdfCandidates({
+    pages: [{
+      pageNumber: 4,
+      text: [
+        '4 Nicht jeder Artikel in ganz Oesterreich erhaeltlich. Stattpreise sind unsere bisherigen Verkaufspreise in SPAR-Maerkten. Aperol',
+        '0,7 Liter',
+        '8,99',
+      ].join('\n'),
+    }],
+    sourceRetailerFormat: 'spar',
+    validity: fixture.validity,
+  });
+
+  assert.equal(candidates.some((candidate) => !candidate.exclusionReason && /^4 Nicht jeder Artikel/i.test(candidate.title)), false);
+  assert.ok(candidates.some((candidate) => !candidate.exclusionReason && candidate.title === 'Aperol'));
+  assert.ok(candidates.some((candidate) => candidate.exclusionReason === 'generic-fragment-title'));
+});
+
 test('generic SPAR PDF parser rejects standalone service-context fragments', () => {
   const candidates = extractSparPdfCandidates({
     pages: [{

@@ -525,6 +525,9 @@ function hasUnsafeGenericTitleStart(title = '') {
   if (/^(?:abgabe\s+nur|seite\s+(?:xx|\d+)|angebote?\s+g(?:ue|u)ltig|gueltig|gultig|in\s+selbstbedienung|nur\s*f(?:ue|u)r\s+kurze\s+zeit)\b/i.test(normalized)) {
     return true;
   }
+  if (/^\d{1,3}\s+nicht\s+jeder\s+artikel\b/i.test(normalized)) {
+    return true;
+  }
   if (/^-?\d{1,2}\s*%\s*-?\d{0,2}\s*%?\s*auf\s+alle\b/i.test(normalized)) {
     return true;
   }
