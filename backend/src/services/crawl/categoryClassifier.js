@@ -223,6 +223,16 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Suesswaren & Knabbereien',
   },
   {
+    patterns: [/\bfelix\s+(?:katzenfutter|katzennahrung)\b|\bpurina\s+felix\b|\bfelix\b\s*$/],
+    main: 'Tierbedarf',
+    sub: 'Katzenfutter',
+  },
+  {
+    patterns: [/\bfelix\s+(?:katzensnacks?|deli\s+moments)\b/],
+    main: 'Tierbedarf',
+    sub: 'Tiernahrung',
+  },
+  {
     patterns: [
       /\b(?:criv[it]?|parkside)?\s*(?:herren|damen|kinder|damen[-/\s]+herren)\b.*\b(?:arbeitshose|arbeitslatzhose|arbeitsbundhose|stretch\s+arbeitshose|laufshorts|laufshirt|laufschuhe|shorts|clogs|sneakersocken|boxershorts|socken)\b/,
       /\b(?:arbeitshose|arbeitslatzhose|arbeitsbundhose|stretch\s+arbeitshose|laufshorts|laufshirt|laufschuhe|shorts|clogs|sneakersocken|boxershorts|socken)\b.*\b(?:herren|damen|kinder|damen[-/\s]+herren)\b/,
