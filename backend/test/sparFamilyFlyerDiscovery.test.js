@@ -459,10 +459,13 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   assert.equal(currentSources.every((source) => !/^(?:[A-Z]:\\|file:|https?:\/\/(?:www\.)?aktionsfinder\.at|https?:\/\/(?:www\.)?marktguru\.at)/i.test(source.sourceUrl)), true);
   const byKey = new Map(currentSources.map((source) => [deriveSourceKey(source), source]));
   assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
+    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
     'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
   ]);
   assert.equal(byKey.get('spar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
   assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx',
     'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
   ]);
   assert.equal(byKey.get('interspar-official-flyer-current').crawlPolicy.maxPdfPages, 24);

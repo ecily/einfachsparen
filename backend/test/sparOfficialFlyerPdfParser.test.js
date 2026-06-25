@@ -1668,6 +1668,60 @@ test('accepts current SPAR KW23 fruit and vegetable official PDF text layer', ()
   assert.match(byTitle.get('S-BUDGET Spitzpaprika Rot').conditionsText, /SPAR-App-Gutschein/);
 });
 
+test('accepts current SPAR KW26 fruit and vegetable official PDF text layer without coupon fragments', () => {
+  const currentValidity = {
+    validFrom: new Date('2026-06-21T22:00:00.000Z'),
+    validTo: new Date('2026-06-27T21:59:59.999Z'),
+    validityText: 'Mo., 22.06.26 - Sa., 27.06.26',
+  };
+  const text = [
+    'Obst- und Gemueseangebote gueltig bis Sa., 27.6.2026',
+    'S-BUDGET Avocados genussreif Klasse 1, per Stueck Niedrigster 30-Tage-Preis 0,99 0,79 statt 1,19 Aktion!',
+    'suesse SPAR Marillen Klasse 1, per kg',
+    'suesse ZESPRI Kiwi gold Klasse 1, 4-Stueck-Tasse 2,49 statt 3,99 -37% (per Stueck 0,62)',
+    'suesser Apfel Pink Lady Klasse 1, per kg',
+    'Bio-Heurige Kartoffel aus Oesterreich, Klasse 1',
+    '2,49 statt 3,99 -37% (per Stueck 0,83)',
+    '2,99 statt 3,99 -25%',
+    'Nur mit SPAR-App-Gutschein: 1,49 Aktion! 1-kg-Netz',
+    'Nur mit SPAR-App-Gutschein: 1,99 -43% statt 3,49',
+  ].join('\n');
+  const candidates = extractSparPdfCandidates({
+    sourceRetailerFormat: 'spar',
+    validity: currentValidity,
+    pages: [{ pageNumber: 1, text }],
+  });
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: currentValidity,
+      candidates,
+    },
+    source: source('spar'),
+    crawlJobId: '000000000000000000000655',
+    region: 'Grossraum Graz',
+    pdfUrl: 'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
+  });
+  const byTitle = new Map(offers.map((offer) => [offer.title, offer]));
+
+  for (const title of [
+    'S-BUDGET Avocados genussreif',
+    'SPAR Marillen',
+    'Apfel Pink Lady',
+    'ZESPRI Kiwi Gold',
+  ]) {
+    assert.ok(byTitle.get(title), title);
+    assert.equal(byTitle.get(title).categoryKey, 'obst-gemuese', title);
+    assert.equal(byTitle.get(title).validTo.toISOString(), '2026-06-27T21:59:59.999Z');
+  }
+
+  assert.equal(byTitle.get('S-BUDGET Avocados genussreif').priceCurrent.amount, 0.79);
+  assert.equal(byTitle.get('SPAR Marillen').quantityText, '1 kg');
+  assert.equal(byTitle.get('Apfel Pink Lady').priceCurrent.amount, 2.99);
+  assert.match(byTitle.get('ZESPRI Kiwi Gold').conditionsText, /SPAR-App-Gutschein/);
+  assert.equal([...byTitle.keys()].some((title) => /^Nur mit SPAR-App/i.test(title)), false);
+  assert.equal(byTitle.has('S-BUDGET Spitzpaprika Rot'), false);
+});
+
 test('accepts selected INTERSPAR Weinwelt Bestseller text-layer offers', () => {
   const currentValidity = {
     validFrom: new Date('2026-05-17T22:00:00.000Z'),

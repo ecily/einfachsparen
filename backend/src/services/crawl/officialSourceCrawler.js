@@ -4341,7 +4341,11 @@ function isAllowedSparFamilyMultiLinkCurrentLink(link = {}, source = {}) {
 
   if (!['viewer', 'pdf'].includes(kind)) return false;
   if (link.sourceGuess && link.sourceGuess !== retailerFormat) return false;
-  if (retailerFormat === 'spar') return folderType === 'regular flyer';
+  if (retailerFormat === 'spar') {
+    return folderType === 'regular flyer'
+      || folderType === 'grocery/fresh'
+      || folderType === 'fruit-vegetable';
+  }
   if (retailerFormat === 'interspar') return folderType === 'regular flyer';
   return false;
 }

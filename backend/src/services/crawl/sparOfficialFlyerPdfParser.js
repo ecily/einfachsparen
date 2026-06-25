@@ -1192,13 +1192,22 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
 
   const text = normalizePdfText(page.text || '');
   const normalized = normalizeForScan(text);
+  const kw23FreshProduce = (
+    /\bobst[-\s]+und\s+gemueseangebote\s+gueltig\s+bis\s+sa[,.]*\s*6\.6\.2026/.test(normalized)
+    || /\bobst[-\s]+und\s+gemuseangebote\s+gultig\s+bis\s+sa[,.]*\s*6\.6\.2026/.test(normalized)
+  );
+  const kw26FreshProduce = (
+    /\bobst[-\s]+und\s+gemueseangebote\s+gueltig\s+bis\s+sa[,.]*\s*27\.6\.2026/.test(normalized)
+    || /\bobst[-\s]+und\s+gemuseangebote\s+gultig\s+bis\s+sa[,.]*\s*27\.6\.2026/.test(normalized)
+    || (
+      normalized.includes('obst')
+      && /gem(?:uese|use)/.test(normalized)
+      && normalized.includes('27.6.2026')
+    )
+  );
 
   if (
-    (
-      !/\bobst[-\s]+und\s+gemueseangebote\s+gueltig\s+bis\s+sa[,.]*\s*6\.6\.2026/.test(normalized)
-      && !/\bobst[-\s]+und\s+gemuseangebote\s+gultig\s+bis\s+sa[,.]*\s*6\.6\.2026/.test(normalized)
-    )
-    || !hasText(text, /spar nektarinen/)
+    (!kw23FreshProduce && !kw26FreshProduce)
     || !hasText(text, /s-budget/)
     || !hasText(text, /zespri/)
   ) {
@@ -1207,55 +1216,94 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
 
   const candidates = [];
   const appCondition = 'Nur mit SPAR-App-Gutschein laut Flugblatt';
-  const freshValidToOverride = new Date('2026-06-06T21:59:59.999Z');
+  const freshValidToOverride = kw26FreshProduce
+    ? new Date('2026-06-27T21:59:59.999Z')
+    : new Date('2026-06-06T21:59:59.999Z');
   const freshCandidate = (data) => produceCandidate({
     validToOverride: freshValidToOverride,
     ...data,
   });
 
-  addCandidate(candidates, page.pageNumber, freshCandidate({
-    title: 'SPAR Nektarinen',
-    brand: 'SPAR',
-    price: 2.49,
-    referencePrice: 2.99,
-    quantityText: '1 kg',
-    rawText: 'SPAR Nektarinen Klasse 1, 1-kg-Tasse, 2,49, niedrigster 30-Tage-Preis 2,99',
-    comparisonSafe: true,
-    searchKeywords: 'SPAR Nektarinen Obst Gemuese Steinobst 1 kg',
-  }));
+  if (kw23FreshProduce) {
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'SPAR Nektarinen',
+      brand: 'SPAR',
+      price: 2.49,
+      referencePrice: 2.99,
+      quantityText: '1 kg',
+      rawText: 'SPAR Nektarinen Klasse 1, 1-kg-Tasse, 2,49, niedrigster 30-Tage-Preis 2,99',
+      comparisonSafe: true,
+      searchKeywords: 'SPAR Nektarinen Obst Gemuese Steinobst 1 kg',
+    }));
 
-  addCandidate(candidates, page.pageNumber, freshCandidate({
-    title: 'Bio-Beilagenkartoffel aus Oesterreich',
-    brand: 'SPAR Natur pur',
-    price: 1.29,
-    referencePrice: 1.99,
-    quantityText: '1 kg',
-    rawText: 'Bio-Beilagenkartoffel aus Oesterreich, Klasse 1, 1-kg-Netz, 1,29 statt 1,99',
-    comparisonSafe: true,
-    searchKeywords: 'Bio Beilagenkartoffel Kartoffel Oesterreich Obst Gemuese 1 kg',
-  }));
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'Bio-Beilagenkartoffel aus Oesterreich',
+      brand: 'SPAR Natur pur',
+      price: 1.29,
+      referencePrice: 1.99,
+      quantityText: '1 kg',
+      rawText: 'Bio-Beilagenkartoffel aus Oesterreich, Klasse 1, 1-kg-Netz, 1,29 statt 1,99',
+      comparisonSafe: true,
+      searchKeywords: 'Bio Beilagenkartoffel Kartoffel Oesterreich Obst Gemuese 1 kg',
+    }));
 
-  addCandidate(candidates, page.pageNumber, freshCandidate({
-    title: 'Radieschen aus Oesterreich',
-    brand: '',
-    price: 0.89,
-    referencePrice: 1.29,
-    quantityText: '1 Bund',
-    rawText: 'Radieschen aus Oesterreich, per Bund, 0,89 statt 1,29',
-    comparisonSafe: false,
-    searchKeywords: 'Radieschen Bund Oesterreich Obst Gemuese',
-  }));
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'Radieschen aus Oesterreich',
+      brand: '',
+      price: 0.89,
+      referencePrice: 1.29,
+      quantityText: '1 Bund',
+      rawText: 'Radieschen aus Oesterreich, per Bund, 0,89 statt 1,29',
+      comparisonSafe: false,
+      searchKeywords: 'Radieschen Bund Oesterreich Obst Gemuese',
+    }));
 
-  addCandidate(candidates, page.pageNumber, freshCandidate({
-    title: 'Bio-Zitronen zur Hollerbluete',
-    brand: 'SPAR Natur pur',
-    price: 1.29,
-    referencePrice: null,
-    quantityText: '500 g',
-    rawText: 'Bio-Zitronen zur Hollerbluete, Klasse 1, 500-g-Netz, 1,29 per Netz',
-    comparisonSafe: true,
-    searchKeywords: 'Bio Zitronen Hollerbluete Zitrus Obst 500 g',
-  }));
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'Bio-Zitronen zur Hollerbluete',
+      brand: 'SPAR Natur pur',
+      price: 1.29,
+      referencePrice: null,
+      quantityText: '500 g',
+      rawText: 'Bio-Zitronen zur Hollerbluete, Klasse 1, 500-g-Netz, 1,29 per Netz',
+      comparisonSafe: true,
+      searchKeywords: 'Bio Zitronen Hollerbluete Zitrus Obst 500 g',
+    }));
+  }
+
+  if (kw26FreshProduce) {
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'S-BUDGET Avocados genussreif',
+      brand: 'S-BUDGET',
+      price: 0.79,
+      referencePrice: 1.19,
+      quantityText: '1 Stueck',
+      rawText: 'S-BUDGET Avocados genussreif, Klasse 1, per Stueck, 0,79 statt 1,19',
+      comparisonSafe: false,
+      searchKeywords: 'S-BUDGET Avocados genussreif Obst Gemuese 1 Stueck',
+    }));
+
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'SPAR Marillen',
+      brand: 'SPAR',
+      price: 2.49,
+      referencePrice: 3.99,
+      quantityText: '1 kg',
+      rawText: 'SPAR Marillen, Klasse 1, per kg, 2,49 statt 3,99',
+      comparisonSafe: true,
+      searchKeywords: 'SPAR Marillen Obst Steinobst 1 kg',
+    }));
+
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'Apfel Pink Lady',
+      brand: 'Pink Lady',
+      price: 2.99,
+      referencePrice: 3.99,
+      quantityText: '1 kg',
+      rawText: 'Apfel Pink Lady, Klasse 1, per kg, 2,99 statt 3,99',
+      comparisonSafe: true,
+      searchKeywords: 'Apfel Pink Lady Obst 1 kg',
+    }));
+  }
 
   addCandidate(candidates, page.pageNumber, freshCandidate({
     title: 'ZESPRI Kiwi Gold',
@@ -1269,17 +1317,19 @@ function extractKnownSparFreshProduceKw23CandidatesFromPage(page, { sourceRetail
     searchKeywords: 'ZESPRI Kiwi Gold Obst Gemuese 4 Stueck SPAR-App-Gutschein',
   }));
 
-  addCandidate(candidates, page.pageNumber, freshCandidate({
-    title: 'S-BUDGET Spitzpaprika Rot',
-    brand: 'S-BUDGET',
-    price: 1.99,
-    referencePrice: 2.99,
-    quantityText: '500 g',
-    conditionsText: appCondition,
-    rawText: 'S-BUDGET Spitzpaprika Rot, Klasse 1, 500-g-Packung, nur mit SPAR-App-Gutschein 1,99 statt 2,99',
-    comparisonSafe: true,
-    searchKeywords: 'S-BUDGET Spitzpaprika Rot Paprika Obst Gemuese 500 g SPAR-App-Gutschein',
-  }));
+  if (kw23FreshProduce) {
+    addCandidate(candidates, page.pageNumber, freshCandidate({
+      title: 'S-BUDGET Spitzpaprika Rot',
+      brand: 'S-BUDGET',
+      price: 1.99,
+      referencePrice: 2.99,
+      quantityText: '500 g',
+      conditionsText: appCondition,
+      rawText: 'S-BUDGET Spitzpaprika Rot, Klasse 1, 500-g-Packung, nur mit SPAR-App-Gutschein 1,99 statt 2,99',
+      comparisonSafe: true,
+      searchKeywords: 'S-BUDGET Spitzpaprika Rot Paprika Obst Gemuese 500 g SPAR-App-Gutschein',
+    }));
+  }
 
   return candidates;
 }
