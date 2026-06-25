@@ -41,6 +41,12 @@ test('multi-link production scope is enabled only for SPAR and INTERSPAR Steierm
   assert.equal(__private.isSparFamilyMultiLinkCurrentSource(currentSource({
     sourceRetailerFormat: 'spar',
     regionScope: 'Wien',
+    sourceUrl: 'https://www.spar.at/aktionen/wien',
+    crawlPolicy: {
+      currentDiscovery: true,
+      currentSnapshot: true,
+      entryPoints: ['https://www.spar.at/aktionen/wien'],
+    },
   }), 'spar-official-flyer-current'), false);
 });
 
@@ -118,6 +124,7 @@ test('current discovery merges code fallbacks for DB sources without sourceRetai
     },
   });
   delete sparSource.sourceRetailerFormat;
+  delete sparSource.regionScope;
   const intersparSource = currentSource({
     retailerKey: 'interspar',
     sourceUrl: 'https://www.interspar.at/aktionen/steiermark',
@@ -128,6 +135,7 @@ test('current discovery merges code fallbacks for DB sources without sourceRetai
     },
   });
   delete intersparSource.sourceRetailerFormat;
+  delete intersparSource.regionScope;
 
   assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current'), [
     'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',

@@ -4326,11 +4326,27 @@ function isSparFamilyFlyerDiscoverySource(source = {}) {
     || source.crawlPolicy?.currentDiscovery === true;
 }
 
+function hasSparFamilySteiermarkCurrentScope(source = {}) {
+  if (source.regionScope === 'Steiermark') return true;
+  const urls = [
+    source.sourceUrl,
+    ...(Array.isArray(source.crawlPolicy?.entryPoints) ? source.crawlPolicy.entryPoints : []),
+    ...(Array.isArray(source.crawlPolicy?.fallbackViewerUrls) ? source.crawlPolicy.fallbackViewerUrls : []),
+  ].map((url) => String(url || '').toLowerCase());
+
+  return urls.some((url) => (
+    url.includes('spar.at/aktionen/steiermark')
+    || url.includes('interspar.at/aktionen/steiermark')
+    || url.includes('flugblatt.spar.at/steiermark/')
+    || url.includes('flugblatt.interspar.at/steiermark/')
+  ));
+}
+
 function isSparFamilyMultiLinkCurrentSource(source = {}, sourceKey = '') {
   const effectiveSourceKey = sourceKey || `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
   const retailerFormat = source.sourceRetailerFormat || source.retailerKey || effectiveSourceKey.replace(/-official-flyer-current$/, '');
   return source.crawlPolicy?.currentDiscovery === true
-    && source.regionScope === 'Steiermark'
+    && hasSparFamilySteiermarkCurrentScope(source)
     && (
       (effectiveSourceKey === 'spar-official-flyer-current' && retailerFormat === 'spar')
       || (effectiveSourceKey === 'interspar-official-flyer-current' && retailerFormat === 'interspar')
