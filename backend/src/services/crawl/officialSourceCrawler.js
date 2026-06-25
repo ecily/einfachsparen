@@ -34,6 +34,7 @@ const {
   compactRejectionReasons,
 } = require('./crawlAudit');
 const { replaceOffersForSource } = require('./offerRefreshGuard');
+const { deriveSourceKey } = require('./crawlSourceSelection');
 const {
   PARSER_VERSION: PENNY_PDF_PARSER_VERSION,
   PENNY_PDF_SOURCE_KEY,
@@ -4327,19 +4328,21 @@ function isSparFamilyFlyerDiscoverySource(source = {}) {
 
 function isSparFamilyMultiLinkCurrentSource(source = {}, sourceKey = '') {
   const effectiveSourceKey = sourceKey || `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
+  const retailerFormat = source.sourceRetailerFormat || source.retailerKey || effectiveSourceKey.replace(/-official-flyer-current$/, '');
   return source.crawlPolicy?.currentDiscovery === true
     && source.regionScope === 'Steiermark'
     && (
-      (effectiveSourceKey === 'spar-official-flyer-current' && source.sourceRetailerFormat === 'spar')
-      || (effectiveSourceKey === 'interspar-official-flyer-current' && source.sourceRetailerFormat === 'interspar')
+      (effectiveSourceKey === 'spar-official-flyer-current' && retailerFormat === 'spar')
+      || (effectiveSourceKey === 'interspar-official-flyer-current' && retailerFormat === 'interspar')
     );
 }
 
 function fallbackViewerUrlsFromCodeDefinitions(source = {}, sourceKey = '') {
   const effectiveSourceKey = sourceKey || `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
+  const retailerFormat = source.sourceRetailerFormat || source.retailerKey || effectiveSourceKey.replace(/-official-flyer-current$/, '');
   const definition = RETAILER_DEFINITIONS.find((candidate) => (
     candidate.crawlPolicy?.currentDiscovery === true
-    && candidate.sourceRetailerFormat === source.sourceRetailerFormat
+    && candidate.sourceRetailerFormat === retailerFormat
     && `${candidate.sourceRetailerFormat || candidate.retailerKey || 'spar'}-official-flyer-current` === effectiveSourceKey
   ));
 
@@ -4821,7 +4824,7 @@ async function crawlSparOfficialViewerLink({
 }
 
 async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRunId = null, region }) {
-  const sourceKey = `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
+  const sourceKey = deriveSourceKey(source);
   const entryPoints = Array.isArray(source.crawlPolicy?.entryPoints) && source.crawlPolicy.entryPoints.length > 0
     ? source.crawlPolicy.entryPoints
     : [source.sourceUrl];

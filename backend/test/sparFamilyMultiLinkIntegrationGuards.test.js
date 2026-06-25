@@ -108,6 +108,39 @@ test('SPAR current discovery merges code fallbacks with stale DB source policy f
   ]);
 });
 
+test('current discovery merges code fallbacks for DB sources without sourceRetailerFormat', () => {
+  const sparSource = currentSource({
+    retailerKey: 'spar',
+    crawlPolicy: {
+      currentDiscovery: true,
+      currentSnapshot: true,
+      fallbackViewerUrls: [],
+    },
+  });
+  delete sparSource.sourceRetailerFormat;
+  const intersparSource = currentSource({
+    retailerKey: 'interspar',
+    sourceUrl: 'https://www.interspar.at/aktionen/steiermark',
+    crawlPolicy: {
+      currentDiscovery: true,
+      currentSnapshot: true,
+      fallbackViewerUrls: [],
+    },
+  });
+  delete intersparSource.sourceRetailerFormat;
+
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current'), [
+    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
+  ]);
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(intersparSource, 'interspar-official-flyer-current'), [
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx',
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
+  ]);
+});
+
 test('INTERSPAR multi-link selection keeps regular online flyer links and excludes wine or nonfood folders', () => {
   const source = currentSource({ sourceRetailerFormat: 'interspar' });
   const links = [
