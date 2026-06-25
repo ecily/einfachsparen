@@ -76,6 +76,7 @@ const {
 const {
   buildSparFamilyMultiLinkReplacementPlan,
 } = require('./sparFamilyMultiLinkReplacementPlan');
+const { RETAILER_DEFINITIONS } = require('../sources/sourceDefinitions');
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const logger = require('../../lib/logger');
@@ -4334,6 +4335,39 @@ function isSparFamilyMultiLinkCurrentSource(source = {}, sourceKey = '') {
     );
 }
 
+function fallbackViewerUrlsFromCodeDefinitions(source = {}, sourceKey = '') {
+  const effectiveSourceKey = sourceKey || `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
+  const definition = RETAILER_DEFINITIONS.find((candidate) => (
+    candidate.crawlPolicy?.currentDiscovery === true
+    && candidate.sourceRetailerFormat === source.sourceRetailerFormat
+    && `${candidate.sourceRetailerFormat || candidate.retailerKey || 'spar'}-official-flyer-current` === effectiveSourceKey
+  ));
+
+  return Array.isArray(definition?.crawlPolicy?.fallbackViewerUrls)
+    ? definition.crawlPolicy.fallbackViewerUrls
+    : [];
+}
+
+function mergeCurrentFallbackViewerUrls(source = {}, sourceKey = '') {
+  const fromSource = Array.isArray(source.crawlPolicy?.fallbackViewerUrls)
+    ? source.crawlPolicy.fallbackViewerUrls
+    : [];
+  const fromCode = isSparFamilyMultiLinkCurrentSource(source, sourceKey)
+    ? fallbackViewerUrlsFromCodeDefinitions(source, sourceKey)
+    : [];
+  const merged = [];
+  const seen = new Set();
+
+  for (const url of [...fromCode, ...fromSource]) {
+    const text = String(url || '').trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    merged.push(text);
+  }
+
+  return merged;
+}
+
 function isAllowedSparFamilyMultiLinkCurrentLink(link = {}, source = {}) {
   const retailerFormat = source.sourceRetailerFormat || source.retailerKey || '';
   const kind = link.kind || '';
@@ -4786,12 +4820,11 @@ async function crawlSparOfficialViewerLink({
 }
 
 async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRunId = null, region }) {
+  const sourceKey = `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
   const entryPoints = Array.isArray(source.crawlPolicy?.entryPoints) && source.crawlPolicy.entryPoints.length > 0
     ? source.crawlPolicy.entryPoints
     : [source.sourceUrl];
-  const fallbackViewerUrls = Array.isArray(source.crawlPolicy?.fallbackViewerUrls)
-    ? source.crawlPolicy.fallbackViewerUrls
-    : [];
+  const fallbackViewerUrls = mergeCurrentFallbackViewerUrls(source, sourceKey);
   const limits = {
     maxEntryPoints: Number(source.crawlPolicy?.maxEntryPoints || entryPoints.length || 1),
     maxLinks: Number(source.crawlPolicy?.maxLinks || 20),
@@ -4803,7 +4836,6 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRu
     fallbackViewerUrls,
     limits,
   });
-  const sourceKey = `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
   const discoveredLinks = discovery.pdfs || [];
   const checkedPages = discovery.checkedPages || [];
   const blockedPages = checkedPages.filter((page) => page.blockedLikely);
@@ -8655,6 +8687,7 @@ module.exports = {
     isRetiredBillaSteiermarkPublitasError,
     buildRetiredBillaPublitasSourceResult,
     isSparFamilyMultiLinkCurrentSource,
+    mergeCurrentFallbackViewerUrls,
     isAllowedSparFamilyMultiLinkCurrentLink,
     selectSparFamilyMultiLinkCurrentLinks,
     buildMultiLinkStopRejectionReasons,

@@ -87,6 +87,25 @@ test('SPAR multi-link selection keeps regular flyers and vetted fresh links but 
   ]);
 });
 
+test('SPAR current discovery merges code fallbacks with stale DB source policy fallbacks', () => {
+  const source = currentSource({
+    sourceRetailerFormat: 'spar',
+    crawlPolicy: {
+      currentDiscovery: true,
+      currentSnapshot: true,
+      fallbackViewerUrls: ['https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx'],
+    },
+  });
+
+  const merged = __private.mergeCurrentFallbackViewerUrls(source, 'spar-official-flyer-current');
+
+  assert.deepEqual(merged, [
+    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
+    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
+  ]);
+});
+
 test('INTERSPAR multi-link selection keeps regular online flyer links and excludes wine or nonfood folders', () => {
   const source = currentSource({ sourceRetailerFormat: 'interspar' });
   const links = [
