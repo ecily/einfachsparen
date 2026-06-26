@@ -289,6 +289,41 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Saucen, Oele & Gewuerze',
   },
   {
+    patterns: [/\b(santa\s+maria\b.*\b(?:dip|salsa)\b|\b(?:dip|salsa)\b.*\bsanta\s+maria\b|\bchunky\s+salsa\b|\btex\s*mex\s+style\b)/],
+    main: 'Lebensmittel',
+    sub: 'Saucen, Oele & Gewuerze',
+  },
+  {
+    patterns: [/\b(kichererbse|kichererbsen|glasnudel|glasnudeln)\b/],
+    main: 'Lebensmittel',
+    sub: 'Pasta, Reis & Konserven',
+  },
+  {
+    patterns: [/\b(spareribs|spare\s*ribs)\b/],
+    main: 'Lebensmittel',
+    sub: 'Fleisch, Wurst & Fisch',
+  },
+  {
+    patterns: [/\b(schokosauce|schoko\s*sauce|tiramisu)\b/],
+    main: 'Lebensmittel',
+    sub: 'Suesswaren & Knabbereien',
+  },
+  {
+    patterns: [/\b(lillet\b.*\bberry\b|\bberry\b.*\blillet\b)/],
+    main: 'Getraenke',
+    sub: 'Wein & Sekt',
+  },
+  {
+    patterns: [/\bmountain\s+dew\b/],
+    main: 'Getraenke',
+    sub: 'Softdrinks & Energy',
+  },
+  {
+    patterns: [/\bwaldquelle\b/],
+    main: 'Getraenke',
+    sub: 'Wasser',
+  },
+  {
     patterns: [/\b(body butter|koerperbutter|korperbutter|lippenbalsam|lippenpflege|lip butter|lippen butter)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Koerperpflege',

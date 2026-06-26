@@ -590,3 +590,26 @@ test('keeps Felix filled paprika human food even with polluted pet context', () 
   assert.equal(decision.secondaryCategory, 'Pasta, Reis & Konserven');
   assert.equal(decision.needsReview, false);
 });
+
+test('classifies BILLA Plus uncategorized feedback anchors into narrow categories', () => {
+  const cases = [
+    ['Santa Maria Santa Maria Dip Tex Mex Style', 'Lebensmittel', 'Saucen, Oele & Gewuerze'],
+    ['Santa Maria Santa Maria Chunky Salsa Medium', 'Lebensmittel', 'Saucen, Oele & Gewuerze'],
+    ['Billa immer gut BILLA Dampfgegarte Kichererbsen', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['Exotic Food Exotic Food Chinesische Glasnudeln', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['CLEVER Clever Spareribs', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['BILLA Immer gut BILLA Schokosauce', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['Shaker Erdbeer Tiramisu', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['Lillet Lillet Berry 3er', 'Getraenke', 'Wein & Sekt'],
+    ['Mountain Dew Mountain Dew', 'Getraenke', 'Softdrinks & Energy'],
+    ['Waldquelle Waldquelle Still', 'Getraenke', 'Wasser'],
+  ];
+
+  for (const [title, primaryCategory, secondaryCategory] of cases) {
+    const decision = determineCategoryDecision({ title });
+
+    assert.equal(decision.primaryCategory, primaryCategory, title);
+    assert.equal(decision.secondaryCategory, secondaryCategory, title);
+    assert.equal(decision.needsReview, false, title);
+  }
+});
