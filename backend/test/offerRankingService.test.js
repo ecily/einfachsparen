@@ -1606,11 +1606,35 @@ test('generic wine query rejects dm cosmetic color-name side hits', () => {
     subcategoryKey: 'wein-sekt',
     searchText: 'lipgloss mineral wear diamond plumper champagner kosmetik dm wein',
   });
+  const dmDeo = offer({
+    _id: 'dm-rose-deo',
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Antitranspirant Deospray Fresh Rose Touch, 150 ml',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    subcategoryKey: 'wein-sekt',
+    searchText: 'antitranspirant deospray fresh rose touch dm wein',
+  });
+  const dmWaschmittel = offer({
+    _id: 'dm-wild-rose-waschmittel',
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Universalwaschmittel Pulver Tiefenrein Wild Rose mit Silan, 90 Wl',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    subcategoryKey: 'wein-sekt',
+    searchText: 'universalwaschmittel pulver tiefenrein wild rose silan dm wein',
+  });
 
   assert.ok(scoreOfferAgainstQuery(realWine, 'wein') > 0);
   assert.equal(scoreOfferAgainstQuery(dmEyeshadow, 'wein'), 0);
   assert.equal(scoreOfferAgainstQuery(dmLipgloss, 'wein'), 0);
-  assert.deepEqual(applyQueryMatch([dmEyeshadow, realWine, dmLipgloss], 'wein').map((item) => item._id), [
+  assert.equal(scoreOfferAgainstQuery(dmDeo, 'wein'), 0);
+  assert.equal(scoreOfferAgainstQuery(dmWaschmittel, 'wein'), 0);
+  assert.deepEqual(applyQueryMatch([dmEyeshadow, realWine, dmLipgloss, dmDeo, dmWaschmittel], 'wein').map((item) => item._id), [
     'real-wine',
   ]);
 });
@@ -1629,6 +1653,99 @@ test('ranking response corrects stale dm cosmetic wine category', () => {
   assert.equal(ranked.categoryPrimary, 'Drogerie / Hygiene');
   assert.equal(ranked.categorySecondary, 'Kosmetik & Make-up');
   assert.equal(ranked.displayCategory, 'Kosmetik & Make-up');
+
+  const deo = buildRankedOffer(offer({
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Antitranspirant Deospray Fresh Rose Touch, 150 ml',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    subcategoryKey: 'wein-sekt',
+  }));
+  const detergent = buildRankedOffer(offer({
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Universalwaschmittel Pulver Tiefenrein Wild Rose mit Silan, 90 Wl',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wein & Sekt',
+    categoryKey: 'wein-sekt',
+    subcategoryKey: 'wein-sekt',
+  }));
+
+  assert.equal(deo.categoryPrimary, 'Drogerie / Hygiene');
+  assert.equal(deo.categorySecondary, 'Koerperpflege');
+  assert.equal(detergent.categoryPrimary, 'Haushalt');
+  assert.equal(detergent.categorySecondary, 'Waschmittel & Reiniger');
+});
+
+test('ranking response corrects billa plus official algolia uncategorized anchors only', () => {
+  const cases = [
+    ['Mountain Dew Mountain Dew', 'Getraenke', 'Softdrinks & Energy'],
+    ['Lillet Berry 0,75 Liter', 'Getraenke', 'Wein & Sekt'],
+    ['Clever Spareribs mariniert', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
+    ['Santa Maria Dip Salsa mild', 'Lebensmittel', 'Saucen, Oele & Gewuerze'],
+    ['Ja! Natuerlich Kichererbsen', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['Shan Shi Glasnudeln', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['Mautner Markhof Schokosauce', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+    ['Shaker Erdbeer Tiramisu', 'Lebensmittel', 'Suesswaren & Knabbereien'],
+  ];
+
+  for (const [title, categoryPrimary, categorySecondary] of cases) {
+    const ranked = buildRankedOffer(offer({
+      retailerKey: 'billa-plus',
+      retailerName: 'BILLA Plus',
+      sourceType: 'billa-official-algolia',
+      sourceTypes: ['billa-official-algolia'],
+      title,
+      categoryPrimary: 'Unkategorisiert',
+      categorySecondary: '',
+      categoryKey: 'unkategorisiert',
+      subcategoryKey: 'unkategorisiert',
+    }));
+
+    assert.equal(ranked.categoryPrimary, categoryPrimary, title);
+    assert.equal(ranked.categorySecondary, categorySecondary, title);
+    assert.equal(ranked.displayCategory, categorySecondary, title);
+  }
+
+  const waldquelle = buildRankedOffer(offer({
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    sourceType: 'billa-official-algolia',
+    sourceTypes: ['billa-official-algolia'],
+    title: 'Waldquelle Mineralwasser prickelnd',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Wasser',
+    categoryKey: 'wasser',
+    subcategoryKey: 'wasser',
+  }));
+  const spar = buildRankedOffer(offer({
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    sourceType: 'spar-official-pdf',
+    title: 'Mountain Dew Mountain Dew',
+    categoryPrimary: 'Unkategorisiert',
+    categorySecondary: '',
+    categoryKey: 'unkategorisiert',
+    subcategoryKey: 'unkategorisiert',
+  }));
+  const felixPaprika = buildRankedOffer(offer({
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    sourceType: 'billa-official-algolia',
+    title: 'Felix Gefuellte Paprika in Tomatensauce',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Pasta, Reis & Konserven',
+    categoryKey: 'pasta-reis-konserven',
+    subcategoryKey: 'pasta-reis-konserven',
+  }));
+
+  assert.equal(waldquelle.categoryPrimary, 'Getraenke');
+  assert.equal(waldquelle.categorySecondary, 'Wasser');
+  assert.equal(spar.categoryPrimary, 'Unkategorisiert');
+  assert.equal(felixPaprika.categoryPrimary, 'Lebensmittel');
+  assert.equal(felixPaprika.categorySecondary, 'Pasta, Reis & Konserven');
 });
 
 test('ranking response corrects stale active categories from remaining category feedback clusters', () => {
@@ -7273,7 +7390,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
