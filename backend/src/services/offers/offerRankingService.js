@@ -653,7 +653,10 @@ function buildCurrentAvailabilityMatch() {
 }
 
 function filterFreshActiveOffers(offers, now = new Date()) {
-  return offers.filter((offer) => isOfferFreshForActiveUse(offer, now));
+  return offers.filter((offer) => (
+    isOfferFreshForActiveUse(offer, now)
+    && isPublicResponseEligibleOffer(offer)
+  ));
 }
 
 function isUsefulCategory(category) {
@@ -4703,6 +4706,21 @@ function isBillaOfficialAlgoliaOffer(offer = {}, retailerKey = '') {
   return sourceSignals.some((value) => value.includes('billa-official-algolia'));
 }
 
+function isBillaOfficialFlyerPdfOffer(offer = {}, retailerKey = '') {
+  if (!['billa', 'billa-plus'].includes(retailerKey)) {
+    return false;
+  }
+
+  const sourceSignals = [
+    offer.sourceType,
+    ...(Array.isArray(offer.sourceTypes) ? offer.sourceTypes : []),
+    offer.rawFacts?.sourceType,
+    offer.rawFacts?.sourceKey,
+  ].filter(Boolean).map((value) => String(value).toLowerCase());
+
+  return sourceSignals.some((value) => value.includes('billa-official-flyer-pdf'));
+}
+
 function getBillaOfficialAlgoliaUncategorizedDecision(titleText) {
   const decision = (primaryCategory, secondaryCategory, slug) => ({
     primaryCategory,
@@ -4745,6 +4763,109 @@ function getBillaOfficialAlgoliaUncategorizedDecision(titleText) {
   }
 
   return null;
+}
+
+function getBillaOfficialFlyerPdfCategoryDecision({ titleText = '', contextText = '' } = {}) {
+  const fullText = `${titleText} ${normalizeTitleForMatch(contextText)}`;
+  const decision = (primaryCategory, secondaryCategory, slug) => ({
+    primaryCategory,
+    secondaryCategory,
+    categoryConfidence: 0.93,
+    subcategoryConfidence: 0.9,
+    slug,
+  });
+
+  if (/\bkeringer\b.*\bheideboden\b.*\bon\s+ice\b/.test(fullText)) {
+    return decision('Getraenke', 'Wein & Sekt', 'keringer-heideboden-on-ice');
+  }
+
+  if (/\bprovence\b.*\baop\b/.test(fullText) && /\b(rose|rosewein|wein|0\s*75|0 75|flasche)\b/.test(fullText)) {
+    return decision('Getraenke', 'Wein & Sekt', 'provence-aop-wine');
+  }
+
+  if (/\bsanlucar\b.*\bpflaumen\s+mix\b|\bpflaumen\s+mix\b/.test(fullText)) {
+    return decision('Lebensmittel', 'Obst & Gemuese', 'sanlucar-pflaumen-mix');
+  }
+
+  if (/\bkirschen\b/.test(fullText)) {
+    return decision('Lebensmittel', 'Obst & Gemuese', 'kirschen');
+  }
+
+  if (/\bsanlucar\b.*\bplattpfirsich\b|\bplattpfirsich\b/.test(fullText)) {
+    return decision('Lebensmittel', 'Obst & Gemuese', 'sanlucar-plattpfirsich');
+  }
+
+  if (/\bdrautaler\b.*\bscheiben\b/.test(fullText)) {
+    return decision('Lebensmittel', 'Kaese', 'drautaler-scheiben');
+  }
+
+  if (/\befko\b.*\bpikantes\b.*\bweisskraut\b/.test(fullText)) {
+    return decision('Lebensmittel', 'Pasta, Reis & Konserven', 'efko-pikantes-weisskraut');
+  }
+
+  return null;
+}
+
+function shouldApplyBillaOfficialFlyerPdfCategoryGuard({ currentPrimary = '', currentSecondary = '', decision = null } = {}) {
+  if (!decision) {
+    return false;
+  }
+
+  const decisionPrimary = normalizeSearchText(decision.primaryCategory || '');
+  const decisionSecondary = normalizeSearchText(decision.secondaryCategory || '');
+
+  return isPublicUncategorizedCategory(currentPrimary, currentSecondary)
+    || !currentPrimary
+    || currentPrimary === 'sonstiges'
+    || currentSecondary === 'sonstiges'
+    || currentPrimary !== decisionPrimary
+    || (!!decisionSecondary && currentSecondary !== decisionSecondary);
+}
+
+function isBillaOfficialFlyerPdfFragmentTitle(offer = {}) {
+  const titleText = normalizeTitleForMatch(offer.title || '');
+
+  if (!titleText) {
+    return true;
+  }
+
+  if (/^(geschnitten|burger\s+(?:bq|bbq)|bq|bbq)$/i.test(titleText)) {
+    return true;
+  }
+
+  const tokens = titleText.split(/\s+/).filter(Boolean);
+  const fragmentTokens = new Set([
+    'ab',
+    'aktion',
+    'app',
+    'bq',
+    'bbq',
+    'burger',
+    'gratis',
+    'gueltig',
+    'geschnitten',
+    'je',
+    'jeder',
+    'kg',
+    'mit',
+    'nur',
+    'oder',
+    'per',
+    'pro',
+    'statt',
+  ]);
+
+  return tokens.length > 0 && tokens.every((token) => fragmentTokens.has(token));
+}
+
+function isPublicResponseEligibleOffer(offer = {}) {
+  const retailerKey = String(offer?.retailerKey || '').toLowerCase();
+
+  if (!isBillaOfficialFlyerPdfOffer(offer, retailerKey)) {
+    return true;
+  }
+
+  return hasUsableOfferPrice(offer) && !isBillaOfficialFlyerPdfFragmentTitle(offer);
 }
 
 function getDmBipaWineCategoryGuardDecision({ titleText = '', contextText = '' } = {}) {
@@ -4821,6 +4942,25 @@ function withResponseCategoryGuardFields(offer = {}) {
         offer,
         billaDecision,
         `${retailerKey}-official-algolia-uncategorized-${billaDecision.slug}`
+      );
+    }
+  }
+
+  if (isBillaOfficialFlyerPdfOffer(offer, retailerKey)) {
+    const billaFlyerDecision = getBillaOfficialFlyerPdfCategoryDecision({
+      titleText,
+      contextText,
+    });
+
+    if (shouldApplyBillaOfficialFlyerPdfCategoryGuard({
+      currentPrimary,
+      currentSecondary,
+      decision: billaFlyerDecision,
+    })) {
+      return categoryGuardPayload(
+        offer,
+        billaFlyerDecision,
+        `${retailerKey}-official-flyer-pdf-category-${billaFlyerDecision.slug}`
       );
     }
   }

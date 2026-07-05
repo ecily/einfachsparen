@@ -201,9 +201,9 @@ function SearchLandingHero() {
               in{' '}
               <span className="hero-austria-accent__flag" aria-hidden="true" />
               <span className="hero-austria-accent">
-                Österreich, OLÉ
+                Österreich
               </span>
-              <span className="hero-austria-icons" aria-hidden="true"> ⚽🏆</span>
+              <span className="hero-austria-icons" aria-hidden="true" />
             </span>{' '}
             – schnell, kostenlos und ohne Anmeldung.
           </p>

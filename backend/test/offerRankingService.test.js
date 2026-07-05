@@ -1748,6 +1748,90 @@ test('ranking response corrects billa plus official algolia uncategorized anchor
   assert.equal(felixPaprika.categorySecondary, 'Pasta, Reis & Konserven');
 });
 
+test('ranking response corrects billa plus official flyer pdf anchors and drops fragments', () => {
+  const baseBillaFlyer = {
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    sourceType: 'billa-official-flyer-pdf',
+    sourceTypes: ['billa-official-flyer-pdf'],
+    rawFacts: { sourceType: 'billa-official-flyer-pdf' },
+    categoryPrimary: 'Unkategorisiert',
+    categorySecondary: '',
+    categoryKey: 'unkategorisiert',
+    subcategoryKey: 'unkategorisiert',
+    priceCurrent: { amount: 1.99, currency: 'EUR' },
+    quantityText: '1 Packung',
+    status: 'active',
+    isActiveNow: true,
+    validTo: '2099-12-31T23:59:59.999Z',
+  };
+  const cases = [
+    ['SanLucar Pflaumen-Mix', 'Lebensmittel', 'Obst & Gemuese'],
+    ['Kirschen', 'Lebensmittel', 'Obst & Gemuese'],
+    ['SanLucar Plattpfirsich', 'Lebensmittel', 'Obst & Gemuese'],
+    ['Drautaler Scheiben', 'Lebensmittel', 'Kaese'],
+    ['Keringer Heideboden On Ice', 'Getraenke', 'Wein & Sekt'],
+    ['Efko Pikantes Weisskraut Burger & BQ', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+  ];
+
+  for (const [title, categoryPrimary, categorySecondary] of cases) {
+    const ranked = buildRankedOffer(offer({
+      ...baseBillaFlyer,
+      title,
+    }));
+
+    assert.equal(ranked.categoryPrimary, categoryPrimary, title);
+    assert.equal(ranked.categorySecondary, categorySecondary, title);
+    assert.equal(ranked.displayCategory, categorySecondary, title);
+  }
+
+  const provence = buildRankedOffer(offer({
+    ...baseBillaFlyer,
+    title: 'Provence AOP',
+    description: 'Rosewein 0,75-l-Flasche',
+  }));
+  const vagueProvence = buildRankedOffer(offer({
+    ...baseBillaFlyer,
+    title: 'Provence AOP',
+  }));
+  const alreadyCorrect = buildRankedOffer(offer({
+    ...baseBillaFlyer,
+    title: 'Kirschen',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+    subcategoryKey: 'obst-gemuese',
+  }));
+  const spar = buildRankedOffer(offer({
+    ...baseBillaFlyer,
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    sourceType: 'spar-official-pdf',
+    sourceTypes: ['spar-official-pdf'],
+    rawFacts: { sourceType: 'spar-official-pdf' },
+    title: 'SanLucar Pflaumen-Mix',
+  }));
+  const visible = filterFreshActiveOffers([
+    offer({ ...baseBillaFlyer, _id: 'good', title: 'Kirschen' }),
+    offer({ ...baseBillaFlyer, _id: 'fragment', title: 'geschnitten' }),
+    offer({
+      ...baseBillaFlyer,
+      _id: 'no-price',
+      title: 'SanLucar Pflaumen-Mix',
+      priceCurrent: {},
+      normalizedUnitPrice: {},
+    }),
+  ], new Date('2026-07-05T12:00:00.000Z'));
+
+  assert.equal(provence.categoryPrimary, 'Getraenke');
+  assert.equal(provence.categorySecondary, 'Wein & Sekt');
+  assert.equal(vagueProvence.categoryPrimary, 'Unkategorisiert');
+  assert.equal(alreadyCorrect.categoryPrimary, 'Lebensmittel');
+  assert.equal(alreadyCorrect.categorySecondary, 'Obst & Gemuese');
+  assert.equal(spar.categoryPrimary, 'Unkategorisiert');
+  assert.deepEqual(visible.map((item) => item._id), ['good']);
+});
+
 test('ranking response corrects stale active categories from remaining category feedback clusters', () => {
   const cases = [
     {
