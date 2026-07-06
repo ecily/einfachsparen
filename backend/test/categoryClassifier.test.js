@@ -84,6 +84,7 @@ test('keeps hardened launch-quality examples in the intended categories', () => 
     ['Iglo Buttergemuese 400 g', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
     ['Schartner Bombe Orange 1,5 l', 'Getraenke', 'Softdrinks & Energy'],
     ['Gasteiner Mineralwasser prickelnd', 'Getraenke', 'Wasser'],
+    ['More ZERUP Lemon Iced Tea Getraenkesirup', 'Getraenke', 'Saefte & Sirupe'],
     ['La Gioiosa Spumante', 'Getraenke', 'Wein & Sekt'],
     ['Barilla Teigwaren Spaghetti 500 g', 'Lebensmittel', 'Pasta, Reis & Konserven'],
     ['Iglo Fischstaebchen', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],

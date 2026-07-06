@@ -218,6 +218,11 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Spirituosen',
   },
   {
+    patterns: [/\b(?:more\s+)?zerup\b|\bgetraenkesirup\b|\bgetrankesirup\b/],
+    main: 'Getraenke',
+    sub: 'Saefte & Sirupe',
+  },
+  {
     patterns: [/\bnic\s*nacs\b|\bnicnacs\b/],
     main: 'Lebensmittel',
     sub: 'Suesswaren & Knabbereien',
