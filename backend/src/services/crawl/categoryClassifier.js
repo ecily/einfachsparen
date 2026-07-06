@@ -223,6 +223,21 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Saefte & Sirupe',
   },
   {
+    patterns: [/\bswiffer\b|\bsilan\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
+  },
+  {
+    patterns: [/\bfa\s+men\b.*\b(?:3\s*in\s*1|koerper|korper)\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Koerperpflege',
+  },
+  {
+    patterns: [/\bbali\s+curls\b|\bcurl\s+volume\s+foam\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Haarpflege',
+  },
+  {
     patterns: [/\bnic\s*nacs\b|\bnicnacs\b/],
     main: 'Lebensmittel',
     sub: 'Suesswaren & Knabbereien',
