@@ -1772,6 +1772,8 @@ test('ranking response corrects billa plus official flyer pdf anchors and drops 
     ['Drautaler Scheiben', 'Lebensmittel', 'Kaese'],
     ['Keringer Heideboden On Ice', 'Getraenke', 'Wein & Sekt'],
     ['Efko Pikantes Weisskraut Burger & BQ', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['Pikantes Weisskraut Burger & BQ', 'Lebensmittel', 'Pasta, Reis & Konserven'],
+    ['Weisskraut Burger & BQ', 'Lebensmittel', 'Pasta, Reis & Konserven'],
   ];
 
   for (const [title, categoryPrimary, categorySecondary] of cases) {
@@ -1814,6 +1816,8 @@ test('ranking response corrects billa plus official flyer pdf anchors and drops 
   const visible = filterFreshActiveOffers([
     offer({ ...baseBillaFlyer, _id: 'good', title: 'Kirschen' }),
     offer({ ...baseBillaFlyer, _id: 'fragment', title: 'geschnitten' }),
+    offer({ ...baseBillaFlyer, _id: 'fragment-od', title: 'od. geschnitten' }),
+    offer({ ...baseBillaFlyer, _id: 'product-with-variant', title: 'Kaiserschnitzel vom STROHwohlschwein aus der Schale od. geschnitten' }),
     offer({
       ...baseBillaFlyer,
       _id: 'no-price',
@@ -1829,7 +1833,7 @@ test('ranking response corrects billa plus official flyer pdf anchors and drops 
   assert.equal(alreadyCorrect.categoryPrimary, 'Lebensmittel');
   assert.equal(alreadyCorrect.categorySecondary, 'Obst & Gemuese');
   assert.equal(spar.categoryPrimary, 'Unkategorisiert');
-  assert.deepEqual(visible.map((item) => item._id), ['good']);
+  assert.deepEqual(visible.map((item) => item._id), ['good', 'product-with-variant']);
 });
 
 test('ranking response corrects stale active categories from remaining category feedback clusters', () => {

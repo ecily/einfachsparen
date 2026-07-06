@@ -4803,6 +4803,10 @@ function getBillaOfficialFlyerPdfCategoryDecision({ titleText = '', contextText 
     return decision('Lebensmittel', 'Pasta, Reis & Konserven', 'efko-pikantes-weisskraut');
   }
 
+  if (/\bweisskraut\b.*\bburger\b.*\b(?:bq|bbq)\b/.test(fullText)) {
+    return decision('Lebensmittel', 'Pasta, Reis & Konserven', 'weisskraut-burger-bq');
+  }
+
   return null;
 }
 
@@ -4829,7 +4833,7 @@ function isBillaOfficialFlyerPdfFragmentTitle(offer = {}) {
     return true;
   }
 
-  if (/^(geschnitten|burger\s+(?:bq|bbq)|bq|bbq)$/i.test(titleText)) {
+  if (/^(geschnitten|(?:od|oder)\s+geschnitten|burger\s+(?:bq|bbq)|bq|bbq)$/i.test(titleText)) {
     return true;
   }
 
