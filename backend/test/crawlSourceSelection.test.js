@@ -241,6 +241,41 @@ test('source key derivation keeps BIPA expanded page 2 source separately selecta
   );
 });
 
+test('source key derivation recognizes Müller official online offers source', () => {
+  assert.equal(
+    deriveSourceKey({
+      retailerKey: 'mueller',
+      channel: 'official-site',
+      sourceType: 'mueller-official-online-offers',
+      sourceUrl: 'https://www.mueller.at/c/online-angebote/',
+    }),
+    'mueller-official-online-offers'
+  );
+});
+
+test('sourceKeys can select registered Müller online offers source exactly', async () => {
+  const registeredMuellerSource = RETAILER_DEFINITIONS.find((source) =>
+    source.sourceType === 'mueller-official-online-offers'
+  );
+
+  const selection = await resolveCrawlSourceSelection({
+    Source: fakeSourceModel([{
+      _id: '888888888888888888888888',
+      ...registeredMuellerSource,
+      enabled: registeredMuellerSource.enabled !== false,
+      active: true,
+    }]),
+    Offer: fakeOfferModel([{ _id: 'mueller', activeOfferCount: 0 }]),
+    sourceKeys: ['mueller-official-online-offers'],
+    sourceSelectionRequested: true,
+  });
+
+  assert.equal(selection.wouldRunCount, 1);
+  assert.equal(selection.matchedSources[0].sourceKey, 'mueller-official-online-offers');
+  assert.equal(selection.matchedSources[0].retailerKey, 'mueller');
+  assert.deepEqual(selection.effectiveRetailerKeys, ['mueller']);
+});
+
 test('sourceKeys select exactly the requested runnable sources without SPAR official', async () => {
   const selection = await resolveCrawlSourceSelection({
     Source: fakeSourceModel(),

@@ -103,6 +103,196 @@ function bipaMobifyHtml(hits, { bodyPrefix = '' } = {}) {
   `;
 }
 
+test('Müller official parser extracts online offer candidates from list JSON-LD and product tiles', () => {
+  const html = muellerListHtml({
+    products: [
+      {
+        name: 'SoftStar Toilettenpapier Das Zuverlässige 3-lagig 20x200 Blatt',
+        brand: 'SoftStar',
+        url: 'https://www.mueller.at/p/softstar-toilettenpapier-das-zuverlaessige-3-lagig-20x200-blatt-IPN2998372/',
+        image: 'https://static.prod.ecom.mueller.de/products/2200299837280/2200299837280-VS.jpg',
+        price: 7.05,
+        tileText: 'Müller Eigenmarke SoftStar Toilettenpapier Das Zuverlässige 3-lagig 20x200 Blatt7,05 € / 4000 Stk.0,18 € / 100 Stk.Online verfügbarIn die Filiale lieferbar',
+      },
+    ],
+  });
+
+  const offers = parseMuellerOffers(html);
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].retailerKey, 'mueller');
+  assert.equal(offers[0].title, 'SoftStar Toilettenpapier Das Zuverlässige 3-lagig 20x200 Blatt');
+  assert.equal(offers[0].brand, 'SoftStar');
+  assert.equal(offers[0].priceCurrent.amount, 7.05);
+  assert.equal(offers[0].quantityText, '4000 Stk.');
+  assert.equal(offers[0].rawFacts.infoText, '0,18 € / 100 Stk.');
+  assert.equal(offers[0].normalizedUnitPrice.amount, 0.18);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'Stk');
+  assert.equal(offers[0].imageUrl, 'https://static.prod.ecom.mueller.de/products/2200299837280/2200299837280-VS.jpg');
+  assert.equal(offers[0].sourceUrl, 'https://www.mueller.at/p/softstar-toilettenpapier-das-zuverlaessige-3-lagig-20x200-blatt-IPN2998372/');
+  assert.equal(offers[0].validTo, null);
+  assert.equal(offers[0].rawFacts.snapshotCurrent, true);
+  assert.equal(offers[0].rawFacts.sourceKey, 'mueller-official-online-offers');
+  assert.match(offers[0].conditionsText, /online/i);
+  assert.ok(!/Unkategorisiert/i.test(offers[0].categoryPrimary));
+});
+
+test('Müller official parser can use list JSON-LD without fetching product details', () => {
+  const html = muellerListHtml({
+    products: [
+      {
+        name: 'more Zerup Lemon Iced Tea Getränkesirup',
+        brand: 'more',
+        url: 'https://www.mueller.at/p/more-zerup-lemon-iced-tea-getraenkesirup-IPN3123456/',
+        image: 'https://static.prod.ecom.mueller.de/products/4261234567890/4261234567890_1.jpg',
+        price: 4.49,
+        tileText: '',
+      },
+    ],
+  }).replace(/<article[\s\S]*<\/article>/, '');
+
+  const offers = parseMuellerOffers(html);
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].sourceUrl, 'https://www.mueller.at/p/more-zerup-lemon-iced-tea-getraenkesirup-IPN3123456/');
+  assert.equal(offers[0].priceCurrent.amount, 4.49);
+  assert.equal(offers[0].validTo, null);
+  assert.equal(offers[0].rawFacts.freshnessTtlHours, 48);
+});
+
+test('Müller official parser rejects products without a current price', () => {
+  const html = muellerListHtml({
+    products: [
+      {
+        name: 'SoftStar Toilettenpapier ohne Preis',
+        brand: 'SoftStar',
+        url: 'https://www.mueller.at/p/softstar-toilettenpapier-ohne-preis-IPN2998372/',
+        image: 'https://static.prod.ecom.mueller.de/products/2200299837280/2200299837280-VS.jpg',
+        price: null,
+        tileText: 'SoftStar Toilettenpapier ohne Preis Online verfügbar',
+      },
+    ],
+  });
+
+  const offers = parseMuellerOffers(html);
+
+  assert.equal(offers.length, 0);
+});
+
+test('Müller official parser rejects products without a product URL anchor', () => {
+  const html = muellerListHtml({
+    products: [
+      {
+        name: 'SoftStar Küchentücher ohne Produktlink',
+        brand: 'SoftStar',
+        url: 'https://www.mueller.at/c/online-angebote/',
+        image: 'https://static.prod.ecom.mueller.de/_default_upload_bucket/2200269308482.jpg',
+        price: 5.99,
+        tileText: 'SoftStar Küchentücher ohne Produktlink5,99 € / 408 Stk.',
+      },
+    ],
+  });
+
+  const offers = parseMuellerOffers(html);
+
+  assert.equal(offers.length, 0);
+});
+
+test('Müller official parser normalizes relative product links and unwrapped Next image URLs', () => {
+  const html = muellerListHtml({
+    products: [
+      {
+        name: 'SOMAT Geschirrspültabs Classic Power',
+        brand: 'SOMAT',
+        href: '/p/somat-geschirrspueltabs-classic-power-PPN3122625/',
+        url: 'https://www.mueller.at/p/somat-geschirrspueltabs-classic-power-PPN3122625/',
+        image: 'https://images.prod.ecom.mueller.de/_next/image?url=https%3A%2F%2Fstatic.prod.ecom.mueller.de%2Fproducts%2F9000101830972%2F9000101830972_1.jpg&w=1200&q=75',
+        price: 9.45,
+        tileText: 'SOMAT Geschirrspültabs Classic Power9,45 € / 53 Stk.17,83 € / 100 Stk.In die Filiale lieferbar',
+      },
+    ],
+  });
+
+  const offers = parseMuellerOffers(html);
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].sourceUrl, 'https://www.mueller.at/p/somat-geschirrspueltabs-classic-power-PPN3122625/');
+  assert.equal(offers[0].imageUrl, 'https://static.prod.ecom.mueller.de/products/9000101830972/9000101830972_1.jpg');
+  assert.equal(offers[0].rawFacts.availabilityText, 'deliver-to-store');
+});
+
+test('Müller official dedupe keeps one offer per Müller product id', () => {
+  const offers = [
+    { title: 'SoftStar Toilettenpapier', sourceUrl: 'https://www.mueller.at/p/softstar-IPN2998372/', rawFacts: { muellerProductId: '2998372' } },
+    { title: 'SoftStar Toilettenpapier', sourceUrl: 'https://www.mueller.at/p/softstar-IPN2998372/?itemId=2998372', rawFacts: { muellerProductId: '2998372' } },
+  ];
+
+  const deduped = __private.dedupeMuellerOffers(offers);
+
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0], offers[0]);
+});
+
+test('Müller official parser treats true transport challenges as empty but ignores recaptcha config text', () => {
+  const normalHtml = muellerListHtml({
+    bodyPrefix: '<script>window.recaptchaEnabled=false;</script>',
+    products: [
+      {
+        name: 'SoftStar Küchentücher Das Kraftvolle 3-lagig 8x51 Stück',
+        brand: 'SoftStar',
+        url: 'https://www.mueller.at/p/softstar-kuechentuecher-das-kraftvolle-3-lagig-8x51-stueck-2693084/',
+        image: 'https://static.prod.ecom.mueller.de/_default_upload_bucket/2200269308482.jpg',
+        price: 5.99,
+        tileText: 'SoftStar Küchentücher Das Kraftvolle 3-lagig 8x51 Stück5,99 € / 408 Stk.1,47 € / 100 Stk.Online verfügbar',
+      },
+    ],
+  });
+  const diagnostics = {};
+
+  assert.equal(parseMuellerOffers(normalHtml, { diagnostics }).length, 1);
+  assert.equal(diagnostics.challengeLike, undefined);
+  assert.equal(__private.muellerHasChallengeLikeHtml('<html><title>Access denied</title></html>'), true);
+  assert.equal(parseMuellerOffers('<html><title>Access denied</title></html>', { diagnostics: {} }).length, 0);
+});
+
+test('Müller product detail parser reads JSON-LD Product and breadcrumbs', () => {
+  const html = `
+    <html><body>
+      <script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, item: { name: 'Startseite' } },
+      { '@type': 'ListItem', position: 2, item: { name: 'Drogerie' } },
+      { '@type': 'ListItem', position: 3, item: { name: 'Haushalt' } },
+    ],
+  })}</script>
+      <script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: 'SOMAT Geschirrspültabs Classic Power',
+    brand: { '@type': 'Brand', name: 'SOMAT' },
+    image: ['https://static.prod.ecom.mueller.de/products/9000101830972/9000101830972_1.jpg'],
+    offers: [{ '@type': 'Offer', price: 9.45, priceCurrency: 'EUR', availability: 'https://schema.org/InStock', url: 'https://www.mueller.at/p/somat-geschirrspueltabs-classic-power-PPN3122625/?itemId=3122625' }],
+  })}</script>
+    </body></html>
+  `;
+
+  const detail = __private.parseMuellerProductDetailFromHtml({
+    html,
+    pageUrl: 'https://www.mueller.at/p/somat-geschirrspueltabs-classic-power-PPN3122625/',
+  });
+
+  assert.equal(detail.hasJsonLdProduct, true);
+  assert.equal(detail.hasOffer, true);
+  assert.equal(detail.hasPrice, true);
+  assert.equal(detail.hasImage, true);
+  assert.equal(detail.title, 'SOMAT Geschirrspültabs Classic Power');
+  assert.equal(detail.brand, 'SOMAT');
+  assert.equal(detail.price, 9.45);
+  assert.deepEqual(detail.breadcrumbs, ['Startseite', 'Drogerie', 'Haushalt']);
+});
+
 test('BIPA official parser extracts current sale price, reference price and perfume offers from current product-card markup', () => {
   const html = `
     <html><body>
@@ -3071,6 +3261,82 @@ function normalizeBillaPdfFixture({
     crawlJobId: new Types.ObjectId(),
     region,
     pdfUrl: sourceDef.sourceUrl,
+  });
+}
+
+function muellerSource(overrides = {}) {
+  return source({
+    retailerKey: 'mueller',
+    retailerName: 'Müller',
+    channel: 'official-site',
+    sourceUrl: 'https://www.mueller.at/c/online-angebote/',
+    label: 'Müller Online-Angebote',
+    sourceType: 'mueller-official-online-offers',
+    crawlPolicy: {
+      currentSnapshot: true,
+      freshnessTtlHours: 48,
+      maxPages: 2,
+      ...overrides.crawlPolicy,
+    },
+    ...overrides,
+  });
+}
+
+function muellerListHtml({ products = [], bodyPrefix = '' } = {}) {
+  const itemList = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    url: 'https://www.mueller.at/c/online-angebote/',
+    numberOfItems: products.length,
+    itemListElement: products.map((product, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      item: {
+        '@type': 'Product',
+        name: product.name,
+        url: product.url,
+        image: [product.image],
+        brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
+        offers: product.price === null ? undefined : {
+          '@type': 'Offer',
+          priceCurrency: 'EUR',
+          price: product.price,
+          url: product.url,
+          availability: product.availability || 'https://schema.org/InStock',
+        },
+      },
+    })),
+  };
+  const tiles = products.map((product) => `
+    <article class="product-tile_component_product-tile__20XP8">
+      <a class="product-tile_component_product-tile__image-section__06pdW" href="${product.href || product.url}"></a>
+      <a href="${product.href || product.url}">${product.name}</a>
+      <img src="${product.image}" alt="${product.name}">
+      <span>${product.tileText || ''}</span>
+    </article>
+  `).join('');
+
+  return `
+    <html>
+      <head><title>Prospektangebote online bestellen | MÜLLER</title></head>
+      <body>
+        ${bodyPrefix}
+        <h1>Online-Angebote</h1>
+        <script type="application/ld+json">${JSON.stringify(itemList)}</script>
+        ${tiles}
+      </body>
+    </html>
+  `;
+}
+
+function parseMuellerOffers(html, overrides = {}) {
+  return __private.parseMuellerOnlineOffersFromHtml({
+    html,
+    source: muellerSource(overrides.source || {}),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    pageUrl: overrides.pageUrl || 'https://www.mueller.at/c/online-angebote/',
+    diagnostics: overrides.diagnostics,
   });
 }
 

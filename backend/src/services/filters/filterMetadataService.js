@@ -202,6 +202,7 @@ const RETAILER_ACTIVE_COVERAGE_TARGETS = {
   adeg: 35,
   dm: 35,
   bipa: 45,
+  mueller: 45,
 };
 
 function getRetailerCoverageTarget(retailerKey) {

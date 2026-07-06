@@ -214,6 +214,7 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
     assert.deepEqual(retailers.map((retailer) => retailer.retailerKey), ['spar', 'interspar']);
     assert.equal(isPublicRetailerEnabled('eurospar'), false);
     assert.equal(isPublicRetailerEnabled('spar'), true);
+    assert.equal(isPublicRetailerEnabled('mueller'), true);
   } finally {
     Retailer.find = originalFind;
   }

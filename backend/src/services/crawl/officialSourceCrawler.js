@@ -143,6 +143,10 @@ const BIPA_CATEGORY_ACTION_PAGES = [
   'https://www.bipa.at/c/parfum?limit=20&refine_0=c_pricebadges%3DAktion',
   'https://www.bipa.at/c/tier?limit=20&refine_0=c_pricebadges%3DAktion%7C1%2B1%20gratis%7Cab%202%20St%C3%BCck%20Aktion%7C2%2B1%20gratis',
 ];
+const MUELLER_OFFICIAL_SOURCE_TYPE = 'mueller-official-online-offers';
+const MUELLER_OFFICIAL_DEFAULT_MAX_PAGES = 2;
+const MUELLER_OFFICIAL_DEFAULT_MAX_OFFERS = 160;
+const MUELLER_OFFICIAL_DEFAULT_DELAY_MS = 750;
 
 function responseContentType(response = {}) {
   return response.headers?.['content-type'] || response.headers?.['Content-Type'] || '';
@@ -666,6 +670,479 @@ function buildUnitPriceFromLabel(label, currentPrice) {
     comparable: Boolean(amount && ['kg', 'l', 'Stk'].includes(comparableUnit || unit)),
     confidence: amount ? 0.9 : 0,
   };
+}
+
+function parseJsonLdScripts($) {
+  const items = [];
+
+  $('script[type="application/ld+json"]').each((index, element) => {
+    const raw = $(element).contents().text() || $(element).html() || '';
+
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        items.push(...parsed);
+      } else if (parsed) {
+        items.push(parsed);
+      }
+    } catch (error) {
+      // Ignore malformed third-party JSON-LD snippets.
+    }
+  });
+
+  return items;
+}
+
+function flattenJsonLdGraph(items = []) {
+  const flattened = [];
+  const stack = [...items];
+
+  while (stack.length > 0) {
+    const item = stack.shift();
+
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+
+    flattened.push(item);
+
+    if (Array.isArray(item['@graph'])) {
+      stack.push(...item['@graph']);
+    }
+  }
+
+  return flattened;
+}
+
+function jsonLdTypeMatches(item = {}, type) {
+  const value = item['@type'];
+  return Array.isArray(value)
+    ? value.some((entry) => String(entry || '').toLowerCase() === type)
+    : String(value || '').toLowerCase() === type;
+}
+
+function findJsonLdProducts($) {
+  return flattenJsonLdGraph(parseJsonLdScripts($))
+    .filter((item) => jsonLdTypeMatches(item, 'product'));
+}
+
+function findJsonLdItemListProducts($) {
+  return flattenJsonLdGraph(parseJsonLdScripts($))
+    .filter((item) => jsonLdTypeMatches(item, 'itemlist'))
+    .flatMap((list) => (Array.isArray(list.itemListElement) ? list.itemListElement : []))
+    .map((entry) => entry?.item || entry)
+    .filter((item) => item && typeof item === 'object' && (jsonLdTypeMatches(item, 'product') || item.name || item.url));
+}
+
+function firstArrayValue(value) {
+  if (Array.isArray(value)) {
+    return value.find(Boolean) || '';
+  }
+
+  return value || '';
+}
+
+function normalizeMuellerImageUrl(value, pageUrl) {
+  const imageUrl = normalizeImageUrl(firstArrayValue(value), pageUrl);
+
+  if (!imageUrl) {
+    return '';
+  }
+
+  try {
+    const parsed = new URL(imageUrl);
+    if (parsed.hostname === 'images.prod.ecom.mueller.de' && parsed.searchParams.has('url')) {
+      return normalizeImageUrl(parsed.searchParams.get('url'), pageUrl);
+    }
+  } catch (error) {
+    return imageUrl;
+  }
+
+  return imageUrl;
+}
+
+function normalizeMuellerProductUrl(value, pageUrl) {
+  const url = toAbsoluteUrl(value, pageUrl).split(/[?#]/)[0];
+  return /\/p\//i.test(url) ? url : '';
+}
+
+function extractMuellerProductId(productUrl = '') {
+  const match = String(productUrl || '').match(/(?:IPN|PPN)?(\d{5,})(?:\/|$)/i);
+  return match ? match[1] : '';
+}
+
+function muellerHasChallengeLikeHtml(html = '') {
+  const text = String(html || '').slice(0, 500000);
+  return /cloudflare|access denied|datadome|just a moment|cf-chl|bot detection|captcha required|h-captcha|g-recaptcha/i.test(text);
+}
+
+function extractMuellerTilePriceInfo(text = '', currentPriceHint = null) {
+  const normalizedText = sanitizeWhitespace(text);
+  const pairPattern = /(\d{1,3}(?:[.,]\d{2}))\s*(?:\u20ac|eur|euro)\s*\/\s*([0-9]+(?:[,.][0-9]+)?\s*(?:ml|l|g|kg|Stk\.?|Stueck|Stück|Blatt|Rollen|Wäschen|Waschgang|Waschgänge))(?=\d{1,3}(?:[.,]\d{2})\s*(?:\u20ac|eur|euro)\s*(?:\/|$)|Online|Nur|In die|$)/gi;
+  const pricePairs = [...normalizedText.matchAll(pairPattern)].map((match) => ({
+    amount: parseNumericAmount(match[1]),
+    unit: sanitizeWhitespace(match[2]),
+    originalText: sanitizeWhitespace(match[0]),
+  })).filter((item) => item.amount);
+  const currentPrice = Number(currentPriceHint || pricePairs[0]?.amount || 0) || null;
+  const packagePair = currentPrice
+    ? pricePairs.find((item) => Math.abs(item.amount - currentPrice) < 0.001) || pricePairs[0]
+    : pricePairs[0];
+  const basePair = pricePairs.find((item) => {
+    if (item === packagePair) return false;
+    return /^(1|10|100)\s/i.test(item.unit);
+  }) || pricePairs.find((item) => item !== packagePair) || null;
+  const standalonePrices = [];
+
+  for (const match of normalizedText.matchAll(/(\d{1,3}(?:[.,]\d{2}))\s*(?:\u20ac|eur|euro)(?!\s*\/)/gi)) {
+    const amount = parseNumericAmount(match[1]);
+    if (amount) {
+      standalonePrices.push({
+        amount,
+        originalText: sanitizeWhitespace(match[0]),
+      });
+    }
+  }
+
+  const referencePrice = standalonePrices
+    .map((item) => item.amount)
+    .find((amount) => currentPrice && amount > currentPrice + 0.001) || null;
+
+  return {
+    currentPrice,
+    priceText: packagePair?.originalText || (currentPrice ? `${currentPrice.toFixed(2)} EUR` : ''),
+    quantityText: packagePair?.unit || '',
+    basePriceText: basePair?.originalText || '',
+    referencePrice,
+    referencePriceText: referencePrice ? `${referencePrice.toFixed(2)} EUR` : '',
+  };
+}
+
+function muellerAvailabilityFromText(text = '') {
+  const normalized = sanitizeWhitespace(text);
+
+  if (/Online verf(?:ü|ue|Ã¼)gbar/i.test(normalized)) {
+    return 'online';
+  }
+
+  if (/Nur in Filiale lieferbar/i.test(normalized)) {
+    return 'store-only';
+  }
+
+  if (/In die Filiale lieferbar/i.test(normalized)) {
+    return 'deliver-to-store';
+  }
+
+  if (/LimitedAvailability|InStock|availability/i.test(normalized)) {
+    return 'available';
+  }
+
+  return '';
+}
+
+function muellerBreadcrumbsFromJsonLd($) {
+  return flattenJsonLdGraph(parseJsonLdScripts($))
+    .filter((item) => jsonLdTypeMatches(item, 'breadcrumblist'))
+    .flatMap((list) => (Array.isArray(list.itemListElement) ? list.itemListElement : []))
+    .map((entry) => sanitizeWhitespace(entry?.item?.name || entry?.name))
+    .filter(Boolean);
+}
+
+function muellerPageContext($) {
+  return sanitizeWhitespace([
+    $('h1').first().text(),
+    $('title').first().text(),
+    muellerBreadcrumbsFromJsonLd($).join(' '),
+  ].join(' '));
+}
+
+function buildMuellerOfficialOffer({
+  source,
+  crawlJobId,
+  region,
+  pageUrl,
+  product,
+  tileText = '',
+  pageContext = '',
+}) {
+  const offers = Array.isArray(product?.offers) ? product.offers : [product?.offers].filter(Boolean);
+  const firstOffer = offers[0] || {};
+  const productUrl = normalizeMuellerProductUrl(firstOffer.url || product.url, pageUrl);
+  const productId = extractMuellerProductId(productUrl);
+  const title = sanitizeWhitespace(product.name);
+  const brand = sanitizeWhitespace(product.brand?.name || product.brand || product.manufacturer?.name || product.manufacturer || '');
+  const currentPriceHint = parseNumericAmount(firstOffer.price);
+  const priceInfo = extractMuellerTilePriceInfo(tileText, currentPriceHint);
+  const currentPrice = currentPriceHint || priceInfo.currentPrice;
+  const quantityText = priceInfo.quantityText;
+  const normalizedUnitPrice = priceInfo.basePriceText
+    ? buildUnitPriceFromLabel(priceInfo.basePriceText, currentPrice)
+    : buildOfficialNormalizedUnitPrice({
+      priceAmount: currentPrice,
+      quantityText,
+    });
+  const contextText = sanitizeWhitespace([
+    brand,
+    quantityText,
+    priceInfo.basePriceText,
+    pageContext,
+    product.description,
+  ].filter(Boolean).join(' '));
+  const categoryPrimary = determineOfferCategory({
+    title,
+    contextText,
+  });
+  const validFrom = new Date();
+  const validTo = null;
+  const statusInfo = buildOfferStatus(validFrom, validTo, true);
+  const imageUrl = normalizeMuellerImageUrl(product.image, pageUrl);
+  const availabilityText = muellerAvailabilityFromText(`${tileText} ${firstOffer.availability || ''}`);
+  const issues = ['Gueltigkeitsende aus offizieller Quelle nicht eindeutig ableitbar'];
+
+  if (!title || !currentPrice || !productUrl || !productId) {
+    return null;
+  }
+
+  if (/unkategorisiert/i.test(categoryPrimary || '')) {
+    return null;
+  }
+
+  if (!normalizedUnitPrice.comparable) {
+    issues.push('Vergleichseinheit unsicher oder nicht ableitbar');
+  }
+
+  const overrideResult = applyManualCategoryOverridesToOfferSync({
+    crawlJobId,
+    sourceId: source._id,
+    retailerKey: source.retailerKey,
+    retailerName: source.retailerName,
+    region,
+    title,
+    brand,
+    categoryPrimary,
+    categorySecondary: determineOfferSubcategory({
+      primaryCategory: categoryPrimary,
+      fallbackLabel: categoryPrimary,
+      title,
+      contextText,
+    }),
+    comparisonSignature: normalizeTitleForMatch(`${brand} ${title}`).split(' ').slice(0, 8).join('-'),
+    comparisonQuantityKey: quantityText ? normalizeTitleForMatch(quantityText).replace(/[^a-z0-9]+/g, '-') : '',
+    comparisonCategoryKey: normalizeTitleForMatch(categoryPrimary).replace(/[^a-z0-9]+/g, '-'),
+    description: sanitizeWhitespace(product.description),
+    sourceUrl: productUrl,
+    imageUrl,
+    supportingSources: [
+      buildSourceEvidence({
+        source,
+        observedUrl: productUrl,
+        matchType: pageUrl === source.sourceUrl ? 'primary' : 'official-related',
+      }),
+    ],
+    validFrom,
+    validTo,
+    status: statusInfo.status,
+    isActiveNow: statusInfo.isActiveNow,
+    isActiveToday: statusInfo.isActiveToday,
+    benefitType: priceInfo.referencePrice && priceInfo.referencePrice > currentPrice ? 'price-cut' : 'unknown',
+    conditionsText: availabilityText ? `Müller Online-Angebot; ${availabilityText}` : 'Müller Online-Angebot',
+    customerProgramRequired: false,
+    availabilityScope: availabilityText || 'online/filialabhaengig',
+    priceCurrent: {
+      amount: currentPrice,
+      currency: 'EUR',
+      originalText: priceInfo.priceText || `${currentPrice.toFixed(2)} EUR`,
+    },
+    priceReference: {
+      amount: priceInfo.referencePrice && priceInfo.referencePrice > currentPrice ? priceInfo.referencePrice : null,
+      currency: 'EUR',
+      originalText: priceInfo.referencePrice && priceInfo.referencePrice > currentPrice ? priceInfo.referencePriceText : '',
+    },
+    quantityText,
+    normalizedUnitPrice,
+    quality: {
+      completenessScore: [currentPrice, title, categoryPrimary, quantityText, imageUrl, availabilityText].filter(Boolean).length / 6,
+      parsingConfidence: normalizedUnitPrice.comparable ? 0.9 : 0.78,
+      comparisonSafe: normalizedUnitPrice.comparable,
+      issues,
+    },
+    rawFacts: {
+      sourceType: MUELLER_OFFICIAL_SOURCE_TYPE,
+      sourceKey: 'mueller-official-online-offers',
+      sourcePageType: 'mueller-online-offers-list',
+      muellerProductId: productId,
+      gtin: sanitizeWhitespace(product.gtin),
+      sku: sanitizeWhitespace(product.sku),
+      validityText: 'Online-Snapshot; kein explizites Gueltigkeitsende',
+      infoText: priceInfo.basePriceText,
+      availabilityText,
+      availabilityScope: {
+        type: 'unknown',
+        country: 'AT',
+        label: 'Müller Online-Angebot; Online-/Filialverfuegbarkeit produktabhaengig',
+        sourceEvidence: pageUrl,
+      },
+      snapshotCurrent: true,
+      freshnessTtlHours: source?.crawlPolicy?.freshnessTtlHours || 48,
+      priceReferenceSource: priceInfo.referencePrice && priceInfo.referencePrice > currentPrice ? 'mueller-online-offers-list' : '',
+    },
+    adminReview: {
+      status: issues.length > 0 ? 'pending' : 'reviewed',
+      note: '',
+      feedbackDigest: '',
+    },
+    scope: buildInclusiveScopeDecision(),
+  });
+
+  return overrideResult.offer || null;
+}
+
+function muellerProductsByUrlFromJsonLd($, pageUrl) {
+  const productsByUrl = new Map();
+
+  for (const product of findJsonLdItemListProducts($)) {
+    const productUrl = normalizeMuellerProductUrl(product?.offers?.url || product.url, pageUrl);
+
+    if (productUrl && !productsByUrl.has(productUrl)) {
+      productsByUrl.set(productUrl, product);
+    }
+  }
+
+  return productsByUrl;
+}
+
+function parseMuellerOnlineOffersFromHtml({ html, source, crawlJobId, region, pageUrl, diagnostics = null }) {
+  if (muellerHasChallengeLikeHtml(html)) {
+    if (diagnostics) diagnostics.challengeLike = true;
+    return [];
+  }
+
+  const $ = cheerio.load(html);
+  const productsByUrl = muellerProductsByUrlFromJsonLd($, pageUrl || source.sourceUrl);
+  const pageContext = muellerPageContext($);
+  const offers = [];
+  const seen = new Set();
+
+  if (diagnostics) {
+    diagnostics.rawCards = (diagnostics.rawCards || 0) + productsByUrl.size;
+    diagnostics.skipReasons = diagnostics.skipReasons || {};
+  }
+
+  $('article[class*="product-tile"]').each((index, element) => {
+    const tile = $(element);
+    const href = tile.find('a[href*="/p/"]').first().attr('href');
+    const productUrl = normalizeMuellerProductUrl(href, pageUrl || source.sourceUrl);
+    const product = productsByUrl.get(productUrl);
+
+    if (!productUrl || !product) {
+      if (diagnostics) diagnostics.skipReasons['missing-jsonld-product'] = (diagnostics.skipReasons['missing-jsonld-product'] || 0) + 1;
+      return;
+    }
+
+    if (seen.has(productUrl)) {
+      if (diagnostics) diagnostics.skipReasons['duplicate-product-url'] = (diagnostics.skipReasons['duplicate-product-url'] || 0) + 1;
+      return;
+    }
+
+    seen.add(productUrl);
+
+    const offer = buildMuellerOfficialOffer({
+      source,
+      crawlJobId,
+      region,
+      pageUrl: pageUrl || source.sourceUrl,
+      product,
+      tileText: sanitizeWhitespace(tile.text()),
+      pageContext,
+    });
+
+    if (offer) {
+      offers.push(offer);
+    } else if (diagnostics) {
+      diagnostics.skipReasons['offer-normalization-failed'] = (diagnostics.skipReasons['offer-normalization-failed'] || 0) + 1;
+    }
+  });
+
+  if (offers.length === 0 && productsByUrl.size > 0) {
+    for (const product of productsByUrl.values()) {
+      const productUrl = normalizeMuellerProductUrl(product?.offers?.url || product.url, pageUrl || source.sourceUrl);
+
+      if (!productUrl || seen.has(productUrl)) {
+        continue;
+      }
+
+      seen.add(productUrl);
+
+      const offer = buildMuellerOfficialOffer({
+        source,
+        crawlJobId,
+        region,
+        pageUrl: pageUrl || source.sourceUrl,
+        product,
+        tileText: '',
+        pageContext,
+      });
+
+      if (offer) {
+        offers.push(offer);
+      } else if (diagnostics) {
+        diagnostics.skipReasons['jsonld-offer-normalization-failed'] = (diagnostics.skipReasons['jsonld-offer-normalization-failed'] || 0) + 1;
+      }
+    }
+  }
+
+  if (diagnostics) {
+    diagnostics.parsedOffers = (diagnostics.parsedOffers || 0) + offers.length;
+  }
+
+  return offers;
+}
+
+function parseMuellerProductDetailFromHtml({ html, pageUrl }) {
+  const $ = cheerio.load(html);
+  const product = findJsonLdProducts($)[0] || null;
+  const breadcrumbs = muellerBreadcrumbsFromJsonLd($);
+  const offer = Array.isArray(product?.offers) ? product.offers[0] : product?.offers;
+
+  return {
+    title: sanitizeWhitespace(product?.name),
+    brand: sanitizeWhitespace(product?.brand?.name || product?.brand || product?.manufacturer?.name || product?.manufacturer || ''),
+    productUrl: normalizeMuellerProductUrl(offer?.url || product?.url || pageUrl, pageUrl),
+    imageUrl: normalizeMuellerImageUrl(product?.image, pageUrl),
+    price: parseNumericAmount(offer?.price),
+    availability: sanitizeWhitespace(offer?.availability),
+    hasJsonLdProduct: Boolean(product),
+    hasOffer: Boolean(offer),
+    hasPrice: Boolean(parseNumericAmount(offer?.price)),
+    hasImage: Boolean(normalizeMuellerImageUrl(product?.image, pageUrl)),
+    breadcrumbs,
+  };
+}
+
+function dedupeMuellerOffers(offerDocuments = []) {
+  const seen = new Set();
+
+  return offerDocuments.filter((offer) => {
+    const productId = offer.rawFacts?.muellerProductId || extractMuellerProductId(offer.sourceUrl);
+    const key = productId
+      ? `mueller-product::${productId}`
+      : [
+        normalizeTitleForMatch(`${offer.brand || ''} ${offer.title || ''}`),
+        String(offer.priceCurrent?.amount ?? ''),
+        String(offer.quantityText || ''),
+      ].join('::');
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }
 
 function extractEuroPriceTexts(value) {
@@ -7359,6 +7836,188 @@ async function crawlDmOfficialSaleOffers({ source, crawlJobId, region, html, can
   };
 }
 
+function muellerPageUrl(baseUrl, pageNumber) {
+  if (pageNumber <= 1) {
+    return baseUrl;
+  }
+
+  const url = new URL(baseUrl);
+  url.searchParams.set('page', String(pageNumber));
+  return url.toString();
+}
+
+async function crawlMuellerOfficialOnlineOffers({ source, crawlJobId, region, html, canonicalUrl }) {
+  const maxPages = Math.max(1, Math.min(Number(source?.crawlPolicy?.maxPages || MUELLER_OFFICIAL_DEFAULT_MAX_PAGES), 8));
+  const maxOffers = Math.max(20, Math.min(Number(source?.crawlPolicy?.maxOffers || MUELLER_OFFICIAL_DEFAULT_MAX_OFFERS), 500));
+  const delayMs = Math.max(0, Math.min(Number(source?.crawlPolicy?.delayMs ?? MUELLER_OFFICIAL_DEFAULT_DELAY_MS), 5000));
+  const diagnostics = {
+    pages: [],
+    rawCards: 0,
+    parsedOffers: 0,
+    skipReasons: {},
+    stoppedReason: '',
+  };
+  const collectedOffers = [];
+  const seenPageHashes = new Set();
+  const seenProductUrls = new Set();
+
+  for (let pageNumber = 1; pageNumber <= maxPages && collectedOffers.length < maxOffers; pageNumber += 1) {
+    const requestedUrl = muellerPageUrl(source.sourceUrl, pageNumber);
+    let pageHtml = html;
+    let pageUrl = pageNumber === 1 ? (canonicalUrl || source.sourceUrl) : requestedUrl;
+    let httpStatus = pageNumber === 1 ? 200 : null;
+    let contentType = '';
+
+    if (pageNumber > 1) {
+      if (delayMs > 0) {
+        await delay(delayMs);
+      }
+
+      const fetched = await fetchSourceHtml(requestedUrl, source);
+      pageHtml = fetched.html;
+      pageUrl = fetched.canonicalUrl || requestedUrl;
+      httpStatus = fetched.response?.status || null;
+      contentType = responseContentType(fetched.response);
+    }
+
+    if (muellerHasChallengeLikeHtml(pageHtml)) {
+      diagnostics.stoppedReason = 'challenge-like-response';
+      diagnostics.pages.push({
+        pageNumber,
+        url: requestedUrl,
+        finalUrl: pageUrl,
+        httpStatus,
+        contentType,
+        rawCards: 0,
+        parsedOffers: 0,
+        challengeLike: true,
+      });
+      break;
+    }
+
+    const pageHash = createHash(String(pageHtml || '').slice(0, 500000));
+
+    if (seenPageHashes.has(pageHash)) {
+      diagnostics.stoppedReason = 'duplicate-page';
+      break;
+    }
+
+    seenPageHashes.add(pageHash);
+
+    const pageDiagnostics = {};
+    const pageOffers = parseMuellerOnlineOffersFromHtml({
+      html: pageHtml,
+      source,
+      crawlJobId,
+      region,
+      pageUrl,
+      diagnostics: pageDiagnostics,
+    });
+    const uniquePageOffers = [];
+
+    for (const offer of pageOffers) {
+      if (!offer.sourceUrl || seenProductUrls.has(offer.sourceUrl)) {
+        diagnostics.skipReasons['duplicate-product-url'] = (diagnostics.skipReasons['duplicate-product-url'] || 0) + 1;
+        continue;
+      }
+
+      seenProductUrls.add(offer.sourceUrl);
+      uniquePageOffers.push(offer);
+
+      if (collectedOffers.length + uniquePageOffers.length >= maxOffers) {
+        diagnostics.stoppedReason = 'max-offers';
+        break;
+      }
+    }
+
+    collectedOffers.push(...uniquePageOffers);
+    diagnostics.rawCards += pageDiagnostics.rawCards || 0;
+    diagnostics.parsedOffers += uniquePageOffers.length;
+    Object.entries(pageDiagnostics.skipReasons || {}).forEach(([reason, count]) => {
+      diagnostics.skipReasons[reason] = (diagnostics.skipReasons[reason] || 0) + count;
+    });
+    diagnostics.pages.push({
+      pageNumber,
+      url: requestedUrl,
+      finalUrl: pageUrl,
+      httpStatus,
+      contentType,
+      rawCards: pageDiagnostics.rawCards || 0,
+      parsedOffers: uniquePageOffers.length,
+      challengeLike: Boolean(pageDiagnostics.challengeLike),
+    });
+
+    if ((pageDiagnostics.rawCards || 0) === 0 || uniquePageOffers.length === 0) {
+      diagnostics.stoppedReason = (pageDiagnostics.rawCards || 0) === 0 ? 'empty-page' : 'no-parsed-offers';
+      break;
+    }
+  }
+
+  const enrichedOffers = collectedOffers
+    .map((offer) => enrichOffersForStorage([offer], {
+      source,
+      sourceType: MUELLER_OFFICIAL_SOURCE_TYPE,
+      parserVersion: PARSER_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+    })[0])
+    .filter(Boolean);
+  const offerDocuments = dedupeMuellerOffers(enrichedOffers);
+  const auditFilteredCount = Math.max(0, collectedOffers.length - enrichedOffers.length);
+  const dedupeDroppedCount = Math.max(0, enrichedOffers.length - offerDocuments.length);
+  const rejectionReasons = [
+    ...Object.entries(diagnostics.skipReasons).map(([reason, count]) => ({ reason, count })),
+    ...(auditFilteredCount > 0 ? [{ reason: 'audit-filtered', count: auditFilteredCount }] : []),
+    ...(dedupeDroppedCount > 0 ? [{ reason: 'dedupe-dropped', count: dedupeDroppedCount }] : []),
+  ];
+
+  const refreshResult = await replaceOffersForSource({
+    sourceId: source._id,
+    offerDocuments,
+  });
+
+  await createCompactRawDocument({
+    sourceId: source._id,
+    crawlJobId,
+    retailerKey: source.retailerKey,
+    region,
+    documentType: 'html',
+    sourceType: MUELLER_OFFICIAL_SOURCE_TYPE,
+    url: source.sourceUrl,
+    canonicalUrl: canonicalUrl || source.sourceUrl,
+    finalUrl: canonicalUrl || source.sourceUrl,
+    title: 'Müller Online-Angebote Snapshot',
+    contentHash: createHash(JSON.stringify(diagnostics.pages)),
+    contentSnippet: `Müller Online-Angebote: ${diagnostics.rawCards} Produktkarten, ${offerDocuments.length} gespeicherte Offers, Seiten=${diagnostics.pages.length}.`,
+    extractedPreview: offerDocuments.slice(0, 8).map((offer) => `${offer.title} (${offer.priceCurrent?.amount ?? '-'})`),
+    foundRawItems: diagnostics.rawCards,
+    parsedOffers: offerDocuments.length,
+    rejectedOffers: Math.max(0, diagnostics.rawCards - offerDocuments.length),
+    parserVersion: PARSER_VERSION,
+    rejectionReasons,
+    payload: {
+      sourceKey: 'mueller-official-online-offers',
+      pages: diagnostics.pages,
+      skipReasons: diagnostics.skipReasons,
+      stoppedReason: diagnostics.stoppedReason,
+      freshnessTtlHours: source?.crawlPolicy?.freshnessTtlHours || 48,
+      validToInvented: false,
+      prospektPdfIntegrated: false,
+    },
+  });
+
+  return {
+    offerDocuments,
+    rawDocuments: 1,
+    rawCandidateCount: diagnostics.rawCards,
+    rejectionReasons,
+    refreshResult,
+    diagnostics,
+    message: offerDocuments.length > 0
+      ? `Müller Online-Angebote stored ${offerDocuments.length} offers from ${diagnostics.rawCards} raw cards.`
+      : `Müller Online-Angebote produced no offers (${diagnostics.stoppedReason || 'no accepted candidates'}).`,
+  };
+}
+
 async function fetchNestedHtmlDocuments({ source, crawlJobId, region, links, limit = 4 }) {
   const baseHost = new URL(source.sourceUrl).host;
   const pageLinks = links
@@ -8465,6 +9124,25 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       );
       sourceMessage = dmOfficialResult.message || dmOfficialResult.diagnostics?.message || '';
     } else if (
+      source.retailerKey === 'mueller'
+      && /^mueller-official-online-offers$/i.test(source.sourceType || source.parserHint || '')
+    ) {
+      const muellerOfficialResult = await crawlMuellerOfficialOnlineOffers({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        html,
+        canonicalUrl,
+      });
+
+      offersStored += muellerOfficialResult.offerDocuments.length;
+      extraRawDocuments += muellerOfficialResult.rawDocuments;
+      rawCandidateCount += muellerOfficialResult.rawCandidateCount || 0;
+      allStoredOffers.push(...muellerOfficialResult.offerDocuments);
+      parserDetails.muellerOfficialOnlineOffers = muellerOfficialResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(muellerOfficialResult.rejectionReasons || []);
+      sourceMessage = muellerOfficialResult.message || '';
+    } else if (
       source.retailerKey === 'bipa'
       && (source.sourceUrl.includes('bipa.at/cp/') || /^bipa-official-/i.test(source.sourceType || ''))
     ) {
@@ -8697,6 +9375,11 @@ module.exports = {
     fetchDmSaleProductSearchPages,
     summarizeDmOfficialSaleMessage,
     diagnoseDmOfficialSaleSource,
+    MUELLER_OFFICIAL_SOURCE_TYPE,
+    parseMuellerOnlineOffersFromHtml,
+    parseMuellerProductDetailFromHtml,
+    dedupeMuellerOffers,
+    muellerHasChallengeLikeHtml,
     parseHoferOffersFromPage,
     dedupeHoferOffers,
     isHoferOfferPageUrl,

@@ -63,6 +63,8 @@ function deriveSourceKey(source = {}) {
   if (url.includes('penny.at')) return `penny-${source.channel || 'official'}-${source.sourceType || 'source'}`;
   if (url.includes('dm.at/services/kundenprogramme-services/immerguenstig')) return 'dm-official-immerguenstig';
   if (url.includes('dm.at')) return 'dm-official-site';
+  if (sourceType === 'mueller-official-online-offers' || url.includes('mueller.at/c/online-angebote')) return 'mueller-official-online-offers';
+  if (url.includes('mueller.at')) return 'mueller-official-site';
   if (sourceType === 'bipa-official-category-expanded') return 'bipa-official-category-expanded';
   if (sourceType === 'bipa-official-category-expanded-page2') return 'bipa-official-category-expanded-page2';
   if (url.includes('bipa.at/cp/onlineonly')) return 'bipa-official-onlineonly';

@@ -11,6 +11,7 @@ const RETAILER_LABELS = {
   hofer: 'HOFER',
   interspar: 'INTERSPAR',
   lidl: 'Lidl',
+  mueller: 'Müller',
   pagro: 'PAGRO',
   penny: 'PENNY',
   spar: 'SPAR',
@@ -26,6 +27,7 @@ const RETAILER_GROUPS = {
   hofer: 'discount',
   interspar: 'spar',
   lidl: 'discount',
+  mueller: 'drugstore',
   spar: 'spar',
 }
 
@@ -46,6 +48,7 @@ const RETAILER_ORDER = {
   lidl: 1,
   dm: 0,
   bipa: 1,
+  mueller: 2,
 }
 
 export function normalizeRetailerFormatKey(value) {

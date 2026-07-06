@@ -142,6 +142,7 @@ function SearchLandingHero() {
     [
       ['dm', 'dm'],
       ['bipa', 'BIPA'],
+      ['mueller', 'Müller'],
     ],
   ]
   const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung', 'Pfeilschnell']

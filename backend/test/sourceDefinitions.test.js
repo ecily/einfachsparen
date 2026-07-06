@@ -32,3 +32,17 @@ test('dead Aktionsfinder /pv fallback sources stay disabled until a replacement 
     assert.match(definition.notes, /Ersatzstruktur|replacement/i);
   }
 });
+
+test('Müller official online offers source is enabled with bounded pagination and no flyer integration', () => {
+  const definition = RETAILER_DEFINITIONS.find((source) => source.sourceType === 'mueller-official-online-offers');
+
+  assert.ok(definition);
+  assert.equal(definition.retailerKey, 'mueller');
+  assert.equal(definition.channel, 'official-site');
+  assert.equal(definition.sourceUrl, 'https://www.mueller.at/c/online-angebote/');
+  assert.equal(definition.enabled !== false, true);
+  assert.equal(definition.capabilities.parseFlyers, false);
+  assert.equal(definition.crawlPolicy.maxPages, 2);
+  assert.equal(definition.crawlPolicy.currentSnapshot, true);
+  assert.equal(definition.crawlPolicy.freshnessTtlHours, 48);
+});

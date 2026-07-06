@@ -9,6 +9,7 @@ const RETAILER_COLORS = {
   hofer: '#184a96',
   interspar: '#c91f32',
   lidl: '#f2bf00',
+  mueller: '#0b6fb3',
   pagro: '#7a177e',
   penny: '#d81920',
   spar: '#19944a',
