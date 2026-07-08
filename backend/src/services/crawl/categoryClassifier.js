@@ -228,6 +228,21 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Waschmittel & Reiniger',
   },
   {
+    patterns: [/\bblink\b.*\b(?:farb|schmutzfang)|\bschmutzfangtuecher\b|\bschmutzfangtucher\b|\bpersil\b/],
+    main: 'Haushalt',
+    sub: 'Waschmittel & Reiniger',
+  },
+  {
+    patterns: [/\bsyoss\b|\bpermanente\s+coloration\b|\bcoloration\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Haarpflege',
+  },
+  {
+    patterns: [/\bessie\b|\bgel\s+couture\b|\btopcoat\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Kosmetik & Make-up',
+  },
+  {
     patterns: [/\bfa\s+men\b.*\b(?:3\s*in\s*1|koerper|korper)\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Koerperpflege',
@@ -236,6 +251,26 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\bbali\s+curls\b|\bcurl\s+volume\s+foam\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Haarpflege',
+  },
+  {
+    patterns: [/\bmilupa\b|\bmilumil\b|\bfolgemilch\b/],
+    main: 'Baby / Kinder',
+    sub: 'Babybedarf',
+  },
+  {
+    patterns: [/\bhitschies\b|\bdrachenzungen\b/],
+    main: 'Lebensmittel',
+    sub: 'Suesswaren & Knabbereien',
+  },
+  {
+    patterns: [/\bschulranzen\b|\bschulranzen[-\s]?set\b|\beberhard\s+faber\b/],
+    main: 'Buero / Schule',
+    sub: 'Schule & Lernen',
+  },
+  {
+    patterns: [/\bfranzbranntwein\b|\barnika\b.*\bmenthol\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Gesundheit & Nahrungsergaenzung',
   },
   {
     patterns: [/\bnic\s*nacs\b|\bnicnacs\b/],
