@@ -2269,7 +2269,87 @@ test('ranked offer suppresses unsafe multibuy block reference savings in public 
   assert.notEqual(ranked.savingsAmount, 258.48);
 });
 
-test('ranked offer recalculates normal liter price without multibuy mechanics', () => {
+test('ranked offer hides public unit price for clear free-item multibuy mechanics', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'bipa-oral-b-zahnpasta-2plus1',
+    title: 'Oral-B Zahnpasta',
+    brand: 'Oral-B',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    priceCurrent: { amount: 4.79, currency: 'EUR' },
+    conditionsText: 'Gilt ab 3 Stueck; 2+1 Gratis',
+    minimumPurchaseQty: 3,
+    isMultiBuy: true,
+    effectiveDiscountType: 'multi-buy',
+    quantityText: '75 ml',
+    unitValue: 75,
+    unitType: 'ml',
+    totalComparableAmount: 0.075,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 63.87, unit: 'l', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+  }), 42.58, 63.87);
+
+  assert.equal(ranked.normalizedUnitPrice.amount, null);
+  assert.equal(ranked.normalizedUnitPrice.unit, '');
+  assert.equal(ranked.normalizedUnitPrice.comparable, false);
+  assert.equal(ranked.totalComparableAmount, 0.075);
+  assert.equal(ranked.minimumPurchaseQty, 3);
+});
+
+test('ranked offer keeps public unit price for same product without gratis mechanic', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'bipa-oral-b-zahnpasta-single',
+    title: 'Oral-B Zahnpasta',
+    brand: 'Oral-B',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    priceCurrent: { amount: 4.79, currency: 'EUR' },
+    conditionsText: 'Gilt ab 3 Stueck',
+    minimumPurchaseQty: 3,
+    isMultiBuy: false,
+    effectiveDiscountType: 'threshold',
+    quantityText: '75 ml',
+    unitValue: 75,
+    unitType: 'ml',
+    totalComparableAmount: 0.075,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 63.87, unit: 'l', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+  }), 63.87, 63.87);
+
+  assert.equal(ranked.normalizedUnitPrice.amount, 63.87);
+  assert.equal(ranked.normalizedUnitPrice.unit, 'l');
+  assert.equal(ranked.normalizedUnitPrice.comparable, true);
+});
+
+test('ranked offer keeps public piece unit price for threshold-only Sensodyne pack', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'bipa-sensodyne-3-stueck',
+    title: 'Sensodyne Zahnpasta 3 Stueck',
+    brand: 'Sensodyne',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    priceCurrent: { amount: 8.99, currency: 'EUR' },
+    conditionsText: 'Gilt ab 3 Stueck',
+    minimumPurchaseQty: 3,
+    isMultiBuy: false,
+    effectiveDiscountType: 'threshold',
+    quantityText: '3 Stueck',
+    unitValue: 3,
+    unitType: 'Stk',
+    totalComparableAmount: 3,
+    comparableUnit: 'Stk',
+    normalizedUnitPrice: { amount: 3, unit: 'Stk', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+  }), 3, 3);
+
+  assert.equal(ranked.normalizedUnitPrice.amount, 3);
+  assert.equal(ranked.normalizedUnitPrice.unit, 'Stk');
+  assert.equal(ranked.normalizedUnitPrice.comparable, true);
+});
+
+test('ranked offer recalculates quantity but hides public unit price for free-item mechanics', () => {
   const ranked = buildRankedOffer(offer({
     _id: 'goesser-naturradler-billa-plus-6plus6',
     title: 'Goesser Maerzen Naturradler od. Naturradler 0,0 6+6',
@@ -2299,8 +2379,9 @@ test('ranked offer recalculates normal liter price without multibuy mechanics', 
   assert.equal(ranked.quantityText, '0,5 l');
   assert.equal(ranked.totalComparableAmount, 0.5);
   assert.equal(ranked.comparableUnit, 'l');
-  assert.equal(ranked.normalizedUnitPrice.amount, 1.58);
-  assert.equal(ranked.normalizedUnitPrice.unit, 'l');
+  assert.equal(ranked.normalizedUnitPrice.amount, null);
+  assert.equal(ranked.normalizedUnitPrice.unit, '');
+  assert.equal(ranked.normalizedUnitPrice.comparable, false);
   assert.notEqual(ranked.normalizedUnitPrice.amount, 0.16);
   assert.notEqual(ranked.normalizedUnitPrice.amount, 0.19);
 });

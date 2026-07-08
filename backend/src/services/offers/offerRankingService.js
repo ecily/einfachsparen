@@ -4579,6 +4579,44 @@ function shouldRecalculatePublicUnitPrice(existingUnitPrice, expectedUnitPrice) 
   return Math.abs(existingUnitPrice - expectedUnitPrice) / expectedUnitPrice > 0.05;
 }
 
+function hasClearFreeItemPromotion(offer = {}) {
+  const rawText = [
+    offer.title,
+    offer.description,
+    offer.conditionsText,
+    offer.conditionLabel,
+    offer.benefitType,
+    offer.effectiveDiscountType,
+    offer.discountMechanic,
+    offer.discountType,
+    offer.rawFacts?.infoText,
+    offer.rawFacts?.conditionsText,
+    offer.rawFacts?.evidenceText,
+    offer.rawFacts?.sourceText,
+    ...(Array.isArray(offer.rawFacts?.tags) ? offer.rawFacts.tags : []),
+    ...(Array.isArray(offer.rawFacts?.loyaltyTags) ? offer.rawFacts.loyaltyTags : []),
+  ].filter(Boolean).join(' ');
+  const normalizedText = normalizeSearchText(rawText);
+
+  return (
+    /(?:^|[^\d])\d{1,2}\s*\+\s*\d{1,2}\s*(?:gratis|free)\b/i.test(rawText)
+    || /\bnimm\s+\d{1,2}\s+zahl\s+\d{1,2}\b/.test(normalizedText)
+    || /\b\d{1,2}\s+(?:fur|fuer)\s+\d{1,2}\b/.test(normalizedText)
+    || /\b\d{1,2}\s+zum\s+preis\s+von\s+\d{1,2}\b/.test(normalizedText)
+    || /\b(?:zweites|drittes|viertes|2tes|3tes|4tes)\s+(?:produkt\s+)?gratis\b/.test(normalizedText)
+  );
+}
+
+function shouldHidePublicUnitPriceForFreeItemPromotion(offer = {}) {
+  const retailerKey = String(offer.retailerKey || '').toLowerCase();
+
+  if (['spar', 'eurospar', 'interspar'].includes(retailerKey)) {
+    return false;
+  }
+
+  return hasClearFreeItemPromotion(offer);
+}
+
 const PUBLIC_QUANTITY_REVIEW_REASONS = new Set([
   UNIT_UNCLEAR_REASON,
   UNIT_CONFLICT_REASON,
@@ -5126,6 +5164,11 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
   const safelyComparable = isOfferSafelyComparable(offer);
   const publicQuantityFields = sanitizePublicOfferQuantityFields(offer, { safelyComparable });
   const publicConditionsText = getPublicConditionsText(offer, options);
+  const hidePublicUnitPriceForFreeItem = safelyComparable && shouldHidePublicUnitPriceForFreeItemPromotion({
+    ...offer,
+    conditionsText: publicConditionsText || offer?.conditionsText || '',
+  });
+  const publiclyComparable = safelyComparable && !hidePublicUnitPriceForFreeItem;
   const computedPromotion = computeOfferSavings({
     ...offer,
     conditionsText: publicConditionsText || offer?.conditionsText || '',
@@ -5155,13 +5198,13 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
     label: legacySavings.savingsAmount ? (computedPromotion?.savings?.label || '') : 'Aktionspreis',
   };
   const normalizedAmount = Number(offer?.normalizedUnitPrice?.amount ?? 0);
-  const priceGapPercent = safelyComparable && bestUnitPrice
+  const priceGapPercent = publiclyComparable && bestUnitPrice
     ? Number((((normalizedAmount - bestUnitPrice) / bestUnitPrice) * 100).toFixed(2))
     : 0;
-  const spread = safelyComparable && worstUnitPrice && bestUnitPrice && worstUnitPrice !== bestUnitPrice
+  const spread = publiclyComparable && worstUnitPrice && bestUnitPrice && worstUnitPrice !== bestUnitPrice
     ? (normalizedAmount - bestUnitPrice) / (worstUnitPrice - bestUnitPrice)
     : 0;
-  const publicNormalizedUnitPrice = safelyComparable
+  const publicNormalizedUnitPrice = publiclyComparable
     ? offer.normalizedUnitPrice
     : {
       amount: null,
