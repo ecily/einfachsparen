@@ -4567,6 +4567,18 @@ function buildPublicComparisonAmountKey(amount, unit) {
   return `${Number(numericAmount.toFixed(3))}-${unit}`;
 }
 
+function shouldRecalculatePublicUnitPrice(existingUnitPrice, expectedUnitPrice) {
+  if (!(expectedUnitPrice > 0)) {
+    return false;
+  }
+
+  if (!(existingUnitPrice > 0)) {
+    return true;
+  }
+
+  return Math.abs(existingUnitPrice - expectedUnitPrice) / expectedUnitPrice > 0.05;
+}
+
 const PUBLIC_QUANTITY_REVIEW_REASONS = new Set([
   UNIT_UNCLEAR_REASON,
   UNIT_CONFLICT_REASON,
@@ -4620,16 +4632,19 @@ function withResponseInferredQuantityFields(offer = {}) {
   const totalAmount = Number(next.totalComparableAmount);
   const comparableUnit = next.comparableUnit || inferred.comparableUnit || '';
   const existingUnitPrice = Number(next.normalizedUnitPrice?.amount);
+  const expectedUnitPrice = currentAmount > 0 && totalAmount > 0
+    ? roundPublicUnitPrice(currentAmount / totalAmount)
+    : null;
 
   if (
-    (preferInferredMeasure || !(existingUnitPrice > 0))
+    (preferInferredMeasure || shouldRecalculatePublicUnitPrice(existingUnitPrice, expectedUnitPrice))
     && currentAmount > 0
     && totalAmount > 0
     && ['kg', 'l', 'Stk'].includes(comparableUnit)
   ) {
     next.normalizedUnitPrice = {
       ...(next.normalizedUnitPrice || {}),
-      amount: roundPublicUnitPrice(currentAmount / totalAmount),
+      amount: expectedUnitPrice,
       unit: comparableUnit,
       comparable: true,
       confidence: Math.max(Number(next.normalizedUnitPrice?.confidence || 0), 0.78),

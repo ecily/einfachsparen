@@ -361,6 +361,18 @@ function buildInferredComparisonAmountKey(amount, unit) {
   return `${Number(numericAmount.toFixed(3))}-${unit}`;
 }
 
+function shouldRecalculateUnitPrice(existingUnitPrice, expectedUnitPrice) {
+  if (!(expectedUnitPrice > 0)) {
+    return false;
+  }
+
+  if (!(existingUnitPrice > 0)) {
+    return true;
+  }
+
+  return Math.abs(existingUnitPrice - expectedUnitPrice) / expectedUnitPrice > 0.05;
+}
+
 function withInferredQuantityFields(document = {}) {
   const inferred = inferMissingQuantityFields(document);
   const next = { ...document };
@@ -387,16 +399,19 @@ function withInferredQuantityFields(document = {}) {
   const totalAmount = Number(next.totalComparableAmount);
   const comparableUnit = next.comparableUnit || inferred.comparableUnit || '';
   const existingUnitPrice = Number(next.normalizedUnitPrice?.amount);
+  const expectedUnitPrice = currentAmount > 0 && totalAmount > 0
+    ? roundUnitPrice(currentAmount / totalAmount)
+    : null;
 
   if (
-    (preferInferredMeasure || !(existingUnitPrice > 0))
+    (preferInferredMeasure || shouldRecalculateUnitPrice(existingUnitPrice, expectedUnitPrice))
     && currentAmount > 0
     && totalAmount > 0
     && ['kg', 'l', 'Stk'].includes(comparableUnit)
   ) {
     next.normalizedUnitPrice = {
       ...(next.normalizedUnitPrice || {}),
-      amount: roundUnitPrice(currentAmount / totalAmount),
+      amount: expectedUnitPrice,
       unit: comparableUnit,
       comparable: true,
       confidence: Math.max(Number(next.normalizedUnitPrice?.confidence || 0), 0.78),

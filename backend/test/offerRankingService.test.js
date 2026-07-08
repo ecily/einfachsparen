@@ -2269,6 +2269,69 @@ test('ranked offer suppresses unsafe multibuy block reference savings in public 
   assert.notEqual(ranked.savingsAmount, 258.48);
 });
 
+test('ranked offer recalculates normal liter price without multibuy mechanics', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'goesser-naturradler-billa-plus-6plus6',
+    title: 'Goesser Maerzen Naturradler od. Naturradler 0,0 6+6',
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    sourceType: 'billa-official-flyer-pdf',
+    sourceTypes: ['billa-official-flyer-pdf'],
+    rawFacts: {
+      sourceType: 'billa-official-flyer-pdf',
+      sourceKey: 'billa-official-flyer-pdf',
+    },
+    priceCurrent: { amount: 0.79, currency: 'EUR' },
+    conditionsText: 'Gilt ab 12 Stueck; 6+6 gratis',
+    minimumPurchaseQty: 12,
+    isMultiBuy: true,
+    effectiveDiscountType: 'multi-buy',
+    quantityText: '0,5 l',
+    unitValue: 0.5,
+    unitType: 'l',
+    packCount: 1,
+    totalComparableAmount: 0.5,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 0.16, unit: 'l', comparable: true, confidence: 0.86 },
+    quality: { comparisonSafe: true },
+  }), 0.16, 1.99);
+
+  assert.equal(ranked.quantityText, '0,5 l');
+  assert.equal(ranked.totalComparableAmount, 0.5);
+  assert.equal(ranked.comparableUnit, 'l');
+  assert.equal(ranked.normalizedUnitPrice.amount, 1.58);
+  assert.equal(ranked.normalizedUnitPrice.unit, 'l');
+  assert.notEqual(ranked.normalizedUnitPrice.amount, 0.16);
+  assert.notEqual(ranked.normalizedUnitPrice.amount, 0.19);
+});
+
+test('ranked offer computes standard liter unit prices from explicit product quantities', () => {
+  const cases = [
+    ['penny-075', 0.33, '0,75 l', 0.75, 0.44],
+    ['half-liter', 0.79, '0,5 l', 0.5, 1.58],
+    ['large-bottle', 1.49, '1,5 l', 1.5, 0.99],
+    ['wine-ml', 2.99, '750 ml', 0.75, 3.99],
+    ['can-ml', 0.99, '330 ml', 0.33, 3],
+  ];
+
+  for (const [id, price, quantityText, expectedAmount, expectedUnitPrice] of cases) {
+    const ranked = buildRankedOffer(offer({
+      _id: id,
+      title: `Getraenk ${id}`,
+      priceCurrent: { amount: price, currency: 'EUR' },
+      quantityText,
+      totalComparableAmount: null,
+      comparableUnit: '',
+      normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+      quality: { comparisonSafe: false },
+    }), null, null);
+
+    assert.equal(ranked.totalComparableAmount, expectedAmount, id);
+    assert.equal(ranked.comparableUnit, 'l', id);
+    assert.equal(ranked.normalizedUnitPrice.amount, expectedUnitPrice, id);
+  }
+});
+
 test('ranked offer drops unsafe threshold block savings without clear gratis mechanic', () => {
   const ranked = buildRankedOffer(offer({
     _id: 'threshold-unsafe-block-reference',

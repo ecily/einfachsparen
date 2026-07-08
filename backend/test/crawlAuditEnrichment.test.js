@@ -512,6 +512,60 @@ test('infers safe quantity fields from common product text without treating LSF 
   assert.equal(lsf.quality.comparisonSafe, false);
 });
 
+test('keeps product liquid quantity separate from multibuy mechanics for unit prices', () => {
+  const goesser = enrichOfferForStorage(activeComparableOffer({
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    sourceType: 'billa-official-flyer-pdf',
+    title: 'Goesser Maerzen Naturradler od. Naturradler 0,0 6+6',
+    conditionsText: 'Gilt ab 12 Stueck; 6+6 gratis',
+    priceCurrent: { amount: 0.79, currency: 'EUR', originalText: '0.79 EUR' },
+    quantityText: '0,5 l',
+    unitValue: 0.5,
+    unitType: 'l',
+    packCount: 1,
+    totalComparableAmount: 0.5,
+    comparableUnit: 'l',
+    normalizedUnitPrice: { amount: 0.16, unit: 'l', comparable: true, confidence: 0.86 },
+  }));
+
+  assert.equal(goesser.quantityText, '0,5 l');
+  assert.equal(goesser.unitValue, 0.5);
+  assert.equal(goesser.packCount, 1);
+  assert.equal(goesser.totalComparableAmount, 0.5);
+  assert.equal(goesser.comparableUnit, 'l');
+  assert.equal(goesser.normalizedUnitPrice.amount, 1.58);
+  assert.notEqual(goesser.normalizedUnitPrice.amount, 0.16);
+  assert.notEqual(goesser.normalizedUnitPrice.amount, 0.19);
+});
+
+test('computes standard liter unit prices from decimal-comma and milliliter quantities', () => {
+  const cases = [
+    ['penny', 0.33, '0,75 l', 0.75, 0.44],
+    ['half-liter', 0.79, '0,5 l', 0.5, 1.58],
+    ['large-bottle', 1.49, '1,5 l', 1.5, 0.99],
+    ['wine-ml', 2.99, '750 ml', 0.75, 3.99],
+    ['can-ml', 0.99, '330 ml', 0.33, 3],
+  ];
+
+  for (const [id, price, quantityText, expectedAmount, expectedUnitPrice] of cases) {
+    const stored = enrichOfferForStorage(activeComparableOffer({
+      title: `Getraenk ${id}`,
+      priceCurrent: { amount: price, currency: 'EUR', originalText: `${price} EUR` },
+      quantityText,
+      unitValue: null,
+      unitType: '',
+      totalComparableAmount: null,
+      comparableUnit: '',
+      normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+    }));
+
+    assert.equal(stored.totalComparableAmount, expectedAmount, id);
+    assert.equal(stored.comparableUnit, 'l', id);
+    assert.equal(stored.normalizedUnitPrice.amount, expectedUnitPrice, id);
+  }
+});
+
 test('keeps condition text when offer is normalized for storage', () => {
   const stored = enrichOfferForStorage(activeComparableOffer({
     title: 'Limonade Aktion',
