@@ -378,7 +378,21 @@ function withInferredQuantityFields(document = {}) {
   const next = { ...document };
   const currentComparableUnit = normalizeComparableUnit(next.comparableUnit || next.normalizedUnitPrice?.unit);
   const inferredComparableUnit = normalizeComparableUnit(inferred.comparableUnit);
-  const preferInferredMeasure = ['kg', 'l'].includes(inferredComparableUnit) && (!currentComparableUnit || currentComparableUnit === 'Stk');
+  const inferredPackCount = Number(inferred.packCount || 0);
+  const currentTotalAmount = Number(next.totalComparableAmount || 0);
+  const inferredTotalAmount = Number(inferred.totalComparableAmount || 0);
+  const preferExplicitSingleMeasure = ['kg', 'l'].includes(inferredComparableUnit)
+    && currentComparableUnit === inferredComparableUnit
+    && inferredTotalAmount > 0
+    && currentTotalAmount > inferredTotalAmount
+    && inferredPackCount <= 1
+    && Math.abs(currentTotalAmount - inferredTotalAmount) / inferredTotalAmount > 0.05;
+  const preferInferredMeasure = ['kg', 'l'].includes(inferredComparableUnit)
+    && (
+      !currentComparableUnit
+      || currentComparableUnit === 'Stk'
+      || preferExplicitSingleMeasure
+    );
 
   for (const field of ['packCount', 'unitValue', 'unitType', 'totalComparableAmount', 'comparableUnit', 'packageType']) {
     if (

@@ -524,7 +524,7 @@ test('keeps product liquid quantity separate from multibuy mechanics for unit pr
     unitValue: 0.5,
     unitType: 'l',
     packCount: 1,
-    totalComparableAmount: 0.5,
+    totalComparableAmount: 5,
     comparableUnit: 'l',
     normalizedUnitPrice: { amount: 0.16, unit: 'l', comparable: true, confidence: 0.86 },
   }));

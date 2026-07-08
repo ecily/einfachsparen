@@ -4601,10 +4601,17 @@ function withResponseInferredQuantityFields(offer = {}) {
   const currentPackCount = Number(next.packCount || 0);
   const currentTotalAmount = Number(next.totalComparableAmount || 0);
   const inferredTotalAmount = Number(inferred.totalComparableAmount || 0);
+  const preferExplicitSingleMeasure = ['kg', 'l'].includes(inferredComparableUnit)
+    && currentComparableUnit === inferredComparableUnit
+    && inferredTotalAmount > 0
+    && currentTotalAmount > inferredTotalAmount
+    && inferredPackCount <= 1
+    && Math.abs(currentTotalAmount - inferredTotalAmount) / inferredTotalAmount > 0.05;
   const preferInferredMeasure = ['kg', 'l'].includes(inferredComparableUnit)
     && (
       !currentComparableUnit
       || currentComparableUnit === 'Stk'
+      || preferExplicitSingleMeasure
       || (
         inferredPackCount > 1
         && currentPackCount <= 1
