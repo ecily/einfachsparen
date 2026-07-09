@@ -156,6 +156,7 @@ export function SearchPage({
             onLoadMoreOffers={onLoadMoreOffers}
             shoppingListIds={shoppingListIds}
             categories={categories}
+            retailers={retailers}
             feedbackPageContext={{
               routeName: 'browse-offers',
               activeRetailers: appliedRetailers,

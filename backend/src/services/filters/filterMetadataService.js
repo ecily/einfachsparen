@@ -14,6 +14,7 @@ const FILTER_METADATA_BULK_BATCH_SIZE = 100;
 const FILTER_METADATA_QUERY_MAX_TIME_MS = 15000;
 const FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT = 5000;
 const PUBLIC_DISABLED_RETAILER_KEYS = new Set(['eurospar']);
+const HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS = 72;
 
 const FILTER_METADATA_OFFER_SELECT_FIELDS = [
   'retailerKey',
@@ -117,6 +118,68 @@ function normalizeRetailerKey({ retailerKey, retailerName }) {
 
 function isPublicRetailerEnabled(retailerKey) {
   return !PUBLIC_DISABLED_RETAILER_KEYS.has(String(retailerKey || '').trim().toLowerCase());
+}
+
+function formatAustrianShortDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return [
+    String(date.getDate()).padStart(2, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+  ].join('.');
+}
+
+function getMostRecentActiveSourceSeenAt(retailer = {}) {
+  return (retailer.offersBySource || [])
+    .filter((source) => Number(source?.activeOfferCount || 0) > 0)
+    .map((source) => source?.lastSeenAt)
+    .filter(Boolean)
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((left, right) => right.getTime() - left.getTime())[0] || null;
+}
+
+function buildRetailerFreshnessWarning(retailer = {}, now = new Date()) {
+  const retailerKey = String(retailer.retailerKey || '').trim().toLowerCase();
+
+  if (retailerKey !== 'hofer') {
+    return null;
+  }
+
+  const lastConfirmedAt = getMostRecentActiveSourceSeenAt(retailer);
+  const ageHours = lastConfirmedAt
+    ? (now.getTime() - lastConfirmedAt.getTime()) / (1000 * 60 * 60)
+    : Infinity;
+  const hasRepeatedErrors = (retailer.coverageGapReasons || []).some((reason) => /wiederholte crawl-fehler/i.test(String(reason || '')));
+  const staleEnough = !Number.isFinite(ageHours) || ageHours > HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS;
+
+  if (!staleEnough && !hasRepeatedErrors) {
+    return null;
+  }
+
+  const lastConfirmedDate = formatAustrianShortDate(lastConfirmedAt);
+
+  return {
+    active: true,
+    type: 'freshness',
+    severity: staleEnough ? 'warning' : 'info',
+    thresholdHours: HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS,
+    lastConfirmedAt: lastConfirmedAt ? lastConfirmedAt.toISOString() : null,
+    lastConfirmedDate,
+    message: lastConfirmedDate
+      ? `Aktualitaet eingeschraenkt - letzter bestaetigter Stand ${lastConfirmedDate}.`
+      : 'Aktualitaet eingeschraenkt.',
+  };
+}
+
+function withPublicFreshnessWarning(retailer = {}, now = new Date()) {
+  const freshnessWarning = buildRetailerFreshnessWarning(retailer, now);
+
+  return freshnessWarning
+    ? { ...retailer, freshnessWarning }
+    : retailer;
 }
 
 function normalizeCategoryKey(value, fallback = 'unkategorisiert') {
@@ -1084,13 +1147,15 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
 }
 
 async function getRetailerFilters() {
-  return Retailer.find({
+  const retailers = await Retailer.find({
     isActive: true,
     activeOfferCount: { $gt: 0 },
     retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] },
   })
     .sort({ coveragePriorityScore: -1, sortOrder: 1, retailerName: 1 })
     .lean();
+
+  return retailers.map((retailer) => withPublicFreshnessWarning(retailer));
 }
 
 async function getCategoryFilters({ retailerKeys = [] } = {}) {
@@ -1194,8 +1259,11 @@ module.exports = {
     FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT,
     FILTER_METADATA_OFFER_SELECT_FIELDS,
     FILTER_METADATA_QUERY_MAX_TIME_MS,
+    HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS,
     buildFilterMetadataOfferMatch,
+    buildRetailerFreshnessWarning,
     buildRetailerDocuments,
+    withPublicFreshnessWarning,
     isPublicRetailerEnabled,
     buildKeyFilter,
     buildStableKey,

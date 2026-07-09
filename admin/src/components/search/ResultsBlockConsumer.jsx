@@ -1,6 +1,6 @@
 import { SectionCard } from '../layout/SectionCard'
 import { ResultsSection } from './ResultsSection'
-import { hasLimitedCoverageRetailers } from '../../utils/retailerCoverage'
+import { getFreshnessWarningNotices, hasLimitedCoverageRetailers } from '../../utils/retailerCoverage'
 
 export function ResultsBlockConsumer({
   rankingLoading,
@@ -13,11 +13,13 @@ export function ResultsBlockConsumer({
   onLoadMoreOffers,
   shoppingListIds,
   categories = [],
+  retailers = [],
   feedbackPageContext = {},
 }) {
   const visibleOfferCount = safeOffers.length + actionOffers.length
   const totalCount = pagination?.totalCount || 0
   const hasLimitedCoverage = hasLimitedCoverageRetailers(feedbackPageContext.activeRetailers || [])
+  const freshnessNotices = getFreshnessWarningNotices(feedbackPageContext.activeRetailers || [], retailers)
 
   return (
     <SectionCard>
@@ -71,6 +73,13 @@ export function ResultsBlockConsumer({
                 </span>
               </div>
             ) : null}
+
+            {freshnessNotices.map((notice) => (
+              <div className="limited-coverage-notice limited-coverage-notice--freshness" role="note" key={notice.retailerKey}>
+                <strong>Aktualit&auml;t eingeschr&auml;nkt &middot; letzter best&auml;tigter Stand {notice.lastConfirmedDate}</strong>
+                <span>HOFER-Angebote bleiben sichtbar, bitte Preise und Verf&uuml;gbarkeit im Markt pr&uuml;fen.</span>
+              </div>
+            ))}
 
             <ResultsSection
               title="Angebote mit bekannter Ersparnis"

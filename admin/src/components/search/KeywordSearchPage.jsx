@@ -13,7 +13,12 @@ import {
 import { OfferCardConsumer } from './OfferCardConsumer'
 import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDisplayGroup } from '../../utils/retailers'
 import { getRetailerTheme } from '../../utils/retailerColors'
-import { hasLimitedCoverageRetailers, isLimitedCoverageRetailer } from '../../utils/retailerCoverage'
+import {
+  getFreshnessWarningNotices,
+  hasFreshnessWarning,
+  hasLimitedCoverageRetailers,
+  isLimitedCoverageRetailer,
+} from '../../utils/retailerCoverage'
 
 const KEYWORD_SEARCH_LIMIT = 60
 const EXAMPLE_SEARCH_TERMS = ['Milch', 'Bier', 'Waschmittel', 'Zahnpasta', 'Kaffee']
@@ -249,6 +254,7 @@ function buildAvailableRetailers(retailers) {
       const label = getRetailerLabel(retailer)
 
       return {
+        ...retailer,
         key,
         label: label || key,
         retailerKey: key,
@@ -346,6 +352,14 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
   const emptySearchSuggestions = useMemo(() => getEmptySearchSuggestions(submittedQuery), [submittedQuery])
   const showLimitedCoverageNotice = marketFilterEnabled && hasLimitedCoverageRetailers(selectedRetailerKeys)
+  const visibleRetailerKeys = useMemo(
+    () => [...new Set(visibleOfferItems.map((item) => item.retailerKey).filter(Boolean))],
+    [visibleOfferItems]
+  )
+  const freshnessNotices = useMemo(
+    () => getFreshnessWarningNotices(marketFilterEnabled ? selectedRetailerKeys : visibleRetailerKeys, availableRetailers),
+    [availableRetailers, marketFilterEnabled, selectedRetailerKeys, visibleRetailerKeys]
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -670,6 +684,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
               const selected = selectedRetailerKeys.includes(retailer.key)
               const retailerTheme = getRetailerTheme(retailer.key || retailer.label)
               const limitedCoverage = isLimitedCoverageRetailer(retailer.key)
+              const freshnessWarning = hasFreshnessWarning(retailer)
               const nextRetailer = retailerList[index + 1]
               const showGroupSeparator = shouldSeparateRetailerGroups(retailer.key, nextRetailer?.key)
 
@@ -695,6 +710,9 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                     {limitedCoverage ? (
                       <span className="retailer-chip__coverage">Beta</span>
                     ) : null}
+                    {freshnessWarning ? (
+                      <span className="retailer-chip__coverage">Aktualit&auml;t</span>
+                    ) : null}
                   </button>
                   {showGroupSeparator ? <span className="retailer-chip-group-separator" aria-hidden="true" /> : null}
                 </Fragment>
@@ -713,6 +731,12 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             <span>Wir zeigen f&uuml;r SPAR und INTERSPAR derzeit nur verifizierte offizielle Aktionen.</span>
           </div>
         ) : null}
+        {freshnessNotices.map((notice) => (
+          <div className="limited-coverage-notice limited-coverage-notice--freshness" role="note" key={notice.retailerKey}>
+            <strong>Aktualit&auml;t eingeschr&auml;nkt &middot; letzter best&auml;tigter Stand {notice.lastConfirmedDate}</strong>
+            <span>HOFER-Angebote bleiben sichtbar, bitte Preise und Verf&uuml;gbarkeit im Markt pr&uuml;fen.</span>
+          </div>
+        ))}
       </section>
 
       {showResultsPanel ? (

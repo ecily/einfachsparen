@@ -11,8 +11,11 @@ const {
   getRetailerFilters,
   _private: {
     FILTER_METADATA_OFFER_SELECT_FIELDS,
+    HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS,
     buildFilterMetadataOfferMatch,
+    buildRetailerFreshnessWarning,
     buildRetailerDocuments,
+    withPublicFreshnessWarning,
     isPublicRetailerEnabled,
     syncFilterMetadataCollection,
   },
@@ -218,6 +221,48 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
   } finally {
     Retailer.find = originalFind;
   }
+});
+
+test('HOFER public retailer metadata carries freshness warning after stale retained source data', () => {
+  const now = new Date('2026-07-09T13:15:00.000Z');
+  const retailer = withPublicFreshnessWarning({
+    retailerKey: 'hofer',
+    retailerName: 'Hofer',
+    activeOfferCount: 252,
+    offersBySource: [{
+      label: 'HOFER aktuelle Flugblaetter und Broschueren',
+      activeOfferCount: 252,
+      lastSeenAt: new Date('2026-07-06T04:42:34.406Z'),
+    }],
+    coverageGapReasons: ['wiederholte Crawl-Fehler'],
+  }, now);
+
+  assert.equal(HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS, 72);
+  assert.equal(retailer.freshnessWarning.active, true);
+  assert.equal(retailer.freshnessWarning.type, 'freshness');
+  assert.equal(retailer.freshnessWarning.lastConfirmedAt, '2026-07-06T04:42:34.406Z');
+  assert.equal(retailer.freshnessWarning.lastConfirmedDate, '06.07');
+  assert.match(retailer.freshnessWarning.message, /Aktualitaet eingeschraenkt/);
+});
+
+test('freshness warning stays scoped to HOFER and does not alter other retailers', () => {
+  const now = new Date('2026-07-09T13:15:00.000Z');
+
+  assert.equal(buildRetailerFreshnessWarning({
+    retailerKey: 'mueller',
+    retailerName: 'Mueller',
+    activeOfferCount: 120,
+    offersBySource: [{ activeOfferCount: 120, lastSeenAt: new Date('2026-07-06T04:42:34.406Z') }],
+    coverageGapReasons: ['wiederholte Crawl-Fehler'],
+  }, now), null);
+
+  assert.equal(buildRetailerFreshnessWarning({
+    retailerKey: 'hofer',
+    retailerName: 'Hofer',
+    activeOfferCount: 252,
+    offersBySource: [{ activeOfferCount: 252, lastSeenAt: new Date('2026-07-09T04:42:34.406Z') }],
+    coverageGapReasons: [],
+  }, now), null);
 });
 
 test('category facets ignore public-disabled retailer scopes', async () => {
