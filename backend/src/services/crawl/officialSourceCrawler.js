@@ -1231,6 +1231,64 @@ function isHoferOfferPageUrl(url) {
   return /\/de\/angebote\/(?:d\.\d{2}-\d{2}-\d{4}|angebote-im-ueberblick|aktionen|hofer-preiswochen|hofer-preis-dauerhaft-guenstiger|technik-und-haushalt|handys-und-router)\.html/i.test(value);
 }
 
+function isHoferOfficialFlyerSource(source = {}) {
+  return source.retailerKey === 'hofer' && source.channel === 'official-flyer';
+}
+
+function isAllowedHoferFallbackUrl(url) {
+  try {
+    const parsed = new URL(String(url || ''));
+    return parsed.protocol === 'https:'
+      && /(^|\.)hofer\.at$/i.test(parsed.hostname)
+      && isHoferOfferPageUrl(parsed.toString());
+  } catch (error) {
+    return false;
+  }
+}
+
+function buildHoferDatedOfferUrl(date = new Date()) {
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = String(date.getUTCFullYear());
+  return `https://www.hofer.at/de/angebote/d.${day}-${month}-${year}.html`;
+}
+
+function hoferHtmlLooksBlocked({ html = '', status = null, title = '' } = {}) {
+  const haystack = `${title || ''} ${html || ''}`;
+  return [401, 403, 407, 429, 451].includes(Number(status))
+    || /access denied|you don't have permission|captcha|cloudflare|datadome|bot detection|just a moment/i.test(haystack);
+}
+
+function hoferHtmlHasOfferSignals(html = '') {
+  const text = String(html || '');
+  const hasPrice = /(?:€|\u20ac)\s*\d|\d+[,.]\d{2}\s*(?:€|\u20ac|eur)|\(\s*(?:€|\u20ac)\s*\d/i.test(text);
+  const hasProductSignal = /\/de\/p\.|class=["'][^"']*product-title|at-product-price|gallery|is\/image\/aldi|scene7\.com\/is\/image\/aldi/i.test(text);
+  return hasPrice && hasProductSignal && !hoferHtmlLooksBlocked({ html: text });
+}
+
+function buildHoferFallbackLinks({ source = {}, now = new Date() } = {}) {
+  const configuredSeeds = Array.isArray(source?.crawlPolicy?.discoverySeedUrls) && source.crawlPolicy.discoverySeedUrls.length > 0
+    ? source.crawlPolicy.discoverySeedUrls
+    : HOFER_OFFICIAL_OFFER_PAGES;
+  const urls = [...configuredSeeds];
+
+  if (source?.crawlPolicy?.discoverDatedOfferPages !== false) {
+    urls.push(buildHoferDatedOfferUrl(now));
+  }
+
+  const seen = new Set();
+  return urls
+    .filter((url) => {
+      const normalized = sanitizeWhitespace(url);
+      if (!normalized || seen.has(normalized) || !isAllowedHoferFallbackUrl(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    })
+    .map((url) => ({ url, label: url, type: 'page', fallbackSeed: true }));
+}
+
 function hoferPageOfferContext(url) {
   const value = String(url || '');
 
@@ -8070,22 +8128,39 @@ async function fetchNestedHtmlDocuments({ source, crawlJobId, region, links, lim
   return rawDocuments;
 }
 
-async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
+async function crawlHoferOfficialPages({
+  source,
+  crawlJobId,
+  region,
+  links,
+  landingPageDiagnostic = null,
+  useFallbackSeedsOnly = false,
+}) {
   const hoferLinks = [];
   const seenHoferUrls = new Set();
   const configuredSeeds = Array.isArray(source?.crawlPolicy?.discoverySeedUrls) && source.crawlPolicy.discoverySeedUrls.length > 0
     ? source.crawlPolicy.discoverySeedUrls
     : HOFER_OFFICIAL_OFFER_PAGES;
+  const inputLinks = useFallbackSeedsOnly
+    ? buildHoferFallbackLinks({ source })
+    : [...(Array.isArray(links) ? links : []), ...configuredSeeds.map((url) => ({ url, label: url, type: 'page' }))];
 
-  [...(Array.isArray(links) ? links : []), ...configuredSeeds.map((url) => ({ url, label: url, type: 'page' }))].forEach((item) => {
+  inputLinks.forEach((item) => {
     const normalizedUrl = sanitizeWhitespace(item?.url);
 
     if (!normalizedUrl || seenHoferUrls.has(normalizedUrl)) {
       return;
     }
 
+    if (useFallbackSeedsOnly && !isAllowedHoferFallbackUrl(normalizedUrl)) {
+      return;
+    }
+
     seenHoferUrls.add(normalizedUrl);
-    hoferLinks.push(item);
+    hoferLinks.push({
+      ...item,
+      url: normalizedUrl,
+    });
   });
 
   const datedLinks = hoferLinks
@@ -8114,6 +8189,10 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
     parsedOffers: 0,
     skipReasons: {},
     pages: [],
+    landingPageBlocked: Boolean(landingPageDiagnostic),
+    fallbackSeedsUsed: Boolean(useFallbackSeedsOnly),
+    blockedLandingPage: landingPageDiagnostic,
+    skippedFallbackPages: [],
   };
 
   for (let index = 0; index < offerLinks.length; index += 1) {
@@ -8121,8 +8200,42 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
     const next = current.pageDate
       ? datedLinks.find((item) => item.pageDate && item.pageDate.getTime() > current.pageDate.getTime())
       : null;
-    const { html, canonicalUrl } = await fetchHtml(current.url);
+    let fetched;
+    try {
+      fetched = await fetchHtml(current.url);
+    } catch (error) {
+      if (!useFallbackSeedsOnly) {
+        throw error;
+      }
+
+      diagnostics.skippedFallbackPages.push({
+        url: current.url,
+        reason: 'fetch-failed',
+        diagnostic: error.diagnostic || buildFetchDiagnostic(current.url, error),
+      });
+      diagnostics.skipReasons['fallback-fetch-failed'] = (diagnostics.skipReasons['fallback-fetch-failed'] || 0) + 1;
+      continue;
+    }
+
+    const { html, canonicalUrl, response } = fetched;
     const title = sanitizeWhitespace(cheerio.load(html)('title').text()) || current.label;
+
+    if (useFallbackSeedsOnly && (
+      Number(response?.status || 0) !== 200
+      || hoferHtmlLooksBlocked({ html, status: response?.status, title })
+      || !hoferHtmlHasOfferSignals(html)
+    )) {
+      diagnostics.skippedFallbackPages.push({
+        url: current.url,
+        reason: hoferHtmlLooksBlocked({ html, status: response?.status, title })
+          ? 'blocked-or-challenge'
+          : 'missing-offer-signals',
+        status: response?.status ?? null,
+        title,
+      });
+      diagnostics.skipReasons['fallback-page-rejected'] = (diagnostics.skipReasons['fallback-page-rejected'] || 0) + 1;
+      continue;
+    }
 
     await createCompactRawDocument({
       sourceId: source._id,
@@ -8135,6 +8248,8 @@ async function crawlHoferOfficialPages({ source, crawlJobId, region, links }) {
       canonicalUrl,
       finalUrl: canonicalUrl,
       title,
+      httpStatus: response?.status ?? null,
+      contentType: response?.headers?.['content-type'] || '',
       contentHash: createHash(html),
       contentSnippet: sanitizeWhitespace(cheerio.load(html)('body').text()).slice(0, 500),
       extractedPreview: [],
@@ -8907,18 +9022,76 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       };
     }
 
-    const { response, html, canonicalUrl } = await fetchSourceHtml(source.sourceUrl, source, { signal });
+    let response = null;
+    let html = '';
+    let canonicalUrl = source.sourceUrl;
+    let links = [];
+    let httpLog = {};
+    let rootDocument = null;
+    let hoferLandingPageDiagnostic = null;
+    let useHoferFallbackSeedsOnly = false;
+
+    try {
+      const fetchedRoot = await fetchSourceHtml(source.sourceUrl, source, { signal });
+      response = fetchedRoot.response;
+      html = fetchedRoot.html;
+      canonicalUrl = fetchedRoot.canonicalUrl;
+    } catch (error) {
+      const diagnostic = error.diagnostic || buildFetchDiagnostic(source.sourceUrl, error);
+      if (!isHoferOfficialFlyerSource(source) || !hoferHtmlLooksBlocked({
+        html: diagnostic.bodyPreview || '',
+        status: diagnostic.httpStatus,
+        title: diagnostic.htmlTitle,
+      })) {
+        throw error;
+      }
+
+      hoferLandingPageDiagnostic = {
+        ...diagnostic,
+        landingPageBlocked: true,
+      };
+      useHoferFallbackSeedsOnly = true;
+      response = {
+        status: diagnostic.httpStatus ?? null,
+        headers: {
+          'content-type': diagnostic.contentType || '',
+        },
+        request: {
+          res: {
+            responseUrl: diagnostic.finalUrl || source.sourceUrl,
+          },
+        },
+      };
+      html = '';
+      canonicalUrl = diagnostic.finalUrl || source.sourceUrl;
+    }
+
     throwIfAborted(signal);
     await clearSourceRawDocuments();
-    const httpLog = buildHttpLogFromResponse(response, html);
-    const links = extractRelevantLinks({
-      html,
-      baseUrl: canonicalUrl,
-      retailerKey: source.retailerKey,
-    });
-    const pageTitle = sanitizeWhitespace(cheerio.load(html)('title').text()) || source.label;
 
-    const rootDocument = await createCompactRawDocument({
+    if (!useHoferFallbackSeedsOnly) {
+      httpLog = buildHttpLogFromResponse(response, html);
+      links = extractRelevantLinks({
+        html,
+        baseUrl: canonicalUrl,
+        retailerKey: source.retailerKey,
+      });
+    } else {
+      httpLog = {
+        status: hoferLandingPageDiagnostic.httpStatus ?? null,
+        contentType: hoferLandingPageDiagnostic.contentType || '',
+        finalUrl: hoferLandingPageDiagnostic.finalUrl || source.sourceUrl,
+        downloadBytes: Number(hoferLandingPageDiagnostic.downloadBytes || 0),
+        contentHash: createHash(hoferLandingPageDiagnostic.bodyPreview || ''),
+      };
+      links = [];
+    }
+
+    const pageTitle = useHoferFallbackSeedsOnly
+      ? (hoferLandingPageDiagnostic.htmlTitle || source.label)
+      : (sanitizeWhitespace(cheerio.load(html)('title').text()) || source.label);
+
+    rootDocument = await createCompactRawDocument({
       sourceId: source._id,
       crawlJobId: crawlJob._id,
       retailerKey: source.retailerKey,
@@ -8932,8 +9105,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       httpStatus: response.status,
       contentType: response.headers?.['content-type'] || '',
       downloadBytes: httpLog.downloadBytes,
-      contentHash: createHash(html),
-      contentSnippet: sanitizeWhitespace(cheerio.load(html)('body').text()).slice(0, 500),
+      contentHash: useHoferFallbackSeedsOnly ? createHash(hoferLandingPageDiagnostic.bodyPreview || '') : createHash(html),
+      contentSnippet: useHoferFallbackSeedsOnly
+        ? sanitizeWhitespace(hoferLandingPageDiagnostic.bodyPreview || '').slice(0, 500)
+        : sanitizeWhitespace(cheerio.load(html)('body').text()).slice(0, 500),
       extractedPreview: links.slice(0, 10).map((item) => `${item.type.toUpperCase()}: ${item.label}`),
       foundRawItems: links.length,
       parserVersion: PARSER_VERSION,
@@ -8941,6 +9116,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         linkCount: links.length,
         pageLinkCount: links.filter((item) => item.type === 'page').length,
         pdfLinkCount: links.filter((item) => item.type === 'pdf').length,
+        landingPageBlocked: useHoferFallbackSeedsOnly,
+        ...(hoferLandingPageDiagnostic ? { landingPageDiagnostic: hoferLandingPageDiagnostic } : {}),
       },
     });
 
@@ -8961,6 +9138,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         crawlJobId: crawlJob._id,
         region,
         links,
+        landingPageDiagnostic: hoferLandingPageDiagnostic,
+        useFallbackSeedsOnly: useHoferFallbackSeedsOnly,
       });
 
       offersStored += hoferResult.offerDocuments.length;
@@ -8969,6 +9148,9 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       allStoredOffers.push(...hoferResult.offerDocuments);
       parserDetails.hoferOfficial = hoferResult.diagnostics || {};
       extraRejectionReasons = extraRejectionReasons.concat(hoferResult.rejectionReasons || []);
+      if (useHoferFallbackSeedsOnly) {
+        warningMessages = warningMessages.concat('HOFER landing page was blocked; official configured seed pages were used as a bounded fallback.');
+      }
     } else if (source.retailerKey && /^billa(?:-plus)?$/.test(source.retailerKey) && source.channel === 'official-flyer') {
       const billaFlyerResult = await crawlBillaOfficialFlyers({
         source,
@@ -9207,6 +9389,11 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         rawDocumentId: rootDocument._id,
         extractedLinkCount: links.length,
         evidenceMatched,
+        ...(hoferLandingPageDiagnostic ? {
+          landingPageBlocked: true,
+          fallbackSeedsUsed: useHoferFallbackSeedsOnly,
+          blockedLandingPage: hoferLandingPageDiagnostic,
+        } : {}),
         ...parserDetails,
       },
     }));
@@ -9383,6 +9570,12 @@ module.exports = {
     parseHoferOffersFromPage,
     dedupeHoferOffers,
     isHoferOfferPageUrl,
+    isHoferOfficialFlyerSource,
+    isAllowedHoferFallbackUrl,
+    buildHoferDatedOfferUrl,
+    buildHoferFallbackLinks,
+    hoferHtmlLooksBlocked,
+    hoferHtmlHasOfferSignals,
     selectBillaFlyerPdfLinks,
     crawlBillaOfficialFlyers,
     isBillaSteiermarkPublitasSource,

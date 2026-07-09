@@ -1407,6 +1407,57 @@ test('HOFER official source only treats explicit offer pages as additional HTML 
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/sortiment/produktsortiment.html'), false);
 });
 
+test('HOFER fallback seed guard accepts only official HTTPS offer pages', () => {
+  assert.equal(__private.isAllowedHoferFallbackUrl('https://www.hofer.at/de/angebote/aktionen.html'), true);
+  assert.equal(__private.isAllowedHoferFallbackUrl('https://www.hofer.at/de/angebote/d.09-07-2026.html'), true);
+  assert.equal(__private.isAllowedHoferFallbackUrl('http://www.hofer.at/de/angebote/aktionen.html'), false);
+  assert.equal(__private.isAllowedHoferFallbackUrl('https://example.com/de/angebote/aktionen.html'), false);
+  assert.equal(__private.isAllowedHoferFallbackUrl('https://www.hofer.at/de/sortiment/produktsortiment.html'), false);
+});
+
+test('HOFER fallback links use configured seeds plus one current dated page without broad date crawling', () => {
+  const hoferSource = {
+    ...hoferOfficialSource(),
+    crawlPolicy: {
+      discoverySeedUrls: [
+        'https://www.hofer.at/de/angebote/aktionen.html',
+        'https://example.com/de/angebote/aktionen.html',
+        'http://www.hofer.at/de/angebote/hofer-preiswochen.html',
+        'https://www.hofer.at/de/angebote/aktionen.html',
+      ],
+      discoverDatedOfferPages: true,
+    },
+  };
+  const links = __private.buildHoferFallbackLinks({
+    source: hoferSource,
+    now: new Date(Date.UTC(2026, 6, 9, 12, 0, 0)),
+  });
+
+  assert.deepEqual(links.map((item) => item.url), [
+    'https://www.hofer.at/de/angebote/aktionen.html',
+    'https://www.hofer.at/de/angebote/d.09-07-2026.html',
+  ]);
+  assert.equal(links.every((item) => item.fallbackSeed === true), true);
+});
+
+test('HOFER fallback rejects blocked or signal-poor HTML and accepts priced product HTML', () => {
+  const pricedHtml = `
+    <html><head><title>HOFER Angebote</title></head><body>
+      <a href="/de/p.test-produkt.000000000000700001.html">
+        <h2 class="product-title">CUCINA Cantuccini</h2>
+        <span class="at-product-price_lbl">\u20ac 1,69</span>
+        <img src="https://s7g10.scene7.com/is/image/aldi/202605070007">
+      </a>
+    </body></html>
+  `;
+
+  assert.equal(__private.hoferHtmlHasOfferSignals(pricedHtml), true);
+  assert.equal(__private.hoferHtmlHasOfferSignals('<html><body>Newsletter ohne Preis</body></html>'), false);
+  assert.equal(__private.hoferHtmlHasOfferSignals('<html><title>Access Denied</title><body>You do not have permission</body></html>'), false);
+  assert.equal(__private.hoferHtmlLooksBlocked({ status: 403, title: 'Access Denied' }), true);
+  assert.equal(__private.hoferHtmlLooksBlocked({ html: 'captcha challenge' }), true);
+});
+
 test('HOFER official parser accepts offer overview product cards with product ids and conservative validity', () => {
   const offers = parseHoferFixture({
     pageUrl: 'https://www.hofer.at/de/angebote/angebote-im-ueberblick.html?productState=In+der+Filiale+erh%C3%A4ltlich',
