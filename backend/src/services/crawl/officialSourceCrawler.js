@@ -6129,6 +6129,35 @@ function parseBillaActionPriceWindowTeaser(fullText = '', { now = new Date() } =
     return null;
   }
 
+  const thresholdPattern = /\b(?:ab|bei)\s+(\d+)\s*(dosen|dose|flaschen|fl\.|pkg\.?|packungen|stueck|stk\.?)\s+je\s+(\d{1,3}[,.]\d{2})\b/gi;
+  const frSaLabel = text.match(/\b(FR\s*(?:&|und)\s*SA)\b/i);
+  const beforeFrSa = frSaLabel ? text.slice(0, frSaLabel.index) : '';
+  const afterFrSa = frSaLabel ? text.slice(frSaLabel.index + frSaLabel[0].length) : '';
+  const earlierThresholds = [...beforeFrSa.matchAll(thresholdPattern)];
+  thresholdPattern.lastIndex = 0;
+  const frSaThreshold = [...afterFrSa.matchAll(thresholdPattern)][0];
+  const earlierThreshold = earlierThresholds.at(-1);
+  const hasEarlierWeekdayWindow = /\bDO\b/i.test(beforeFrSa)
+    && /\bMO\b/i.test(beforeFrSa)
+    && /\bMI\b/i.test(beforeFrSa);
+  const thresholdPriceWindows = hasEarlierWeekdayWindow && earlierThreshold && frSaThreshold
+    ? [
+      {
+        label: 'DO, MO-MI',
+        weekdays: ['do', 'mo', 'di', 'mi'],
+        price: parseBillaTeaserPrice(earlierThreshold[3]),
+        thresholdQuantity: Number(earlierThreshold[1] || 0),
+        thresholdUnit: earlierThreshold[2] || '',
+      },
+      {
+        label: sanitizeWhitespace(frSaLabel[1]),
+        weekdays: ['fr', 'sa'],
+        price: parseBillaTeaserPrice(frSaThreshold[3]),
+        thresholdQuantity: Number(frSaThreshold[1] || 0),
+        thresholdUnit: frSaThreshold[2] || '',
+      },
+    ]
+    : [];
   const labelBeforePriceWindows = [...text.matchAll(
     /\b((?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch)(?:\s*(?:&|und|,|-|bis)\s*(?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch))*)\b[\s\S]{0,120}?(\d{1,3}[,.]\d{2})\s*(?:euro|eur|€)?/gi
   )].filter((match) => {
@@ -6139,12 +6168,17 @@ function parseBillaActionPriceWindowTeaser(fullText = '', { now = new Date() } =
     /(\d{1,3}[,.]\d{2})\s*(?:euro|eur|€)?\s+(?:am|von)?\s*((?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch)(?:\s*(?:&|und|,|-|bis)\s*(?:FR|SA|DO|MO|DI|MI|Freitag|Samstag|Donnerstag|Montag|Dienstag|Mittwoch))*)\b/gi
   )].map((match) => [match[0], match[2], match[1]]);
   const windowKeys = new Set();
-  const windows = [...labelBeforePriceWindows, ...priceBeforeLabelWindows]
-    .map((match) => ({
-      label: sanitizeWhitespace(match[1]),
-      weekdays: expandBillaWeekdayWindow(match[1]),
-      price: parseBillaTeaserPrice(match[2]),
-    }))
+  const candidateWindows = thresholdPriceWindows.length >= 2
+    ? thresholdPriceWindows
+    : [...labelBeforePriceWindows, ...priceBeforeLabelWindows];
+  const windows = candidateWindows
+    .map((match) => (Array.isArray(match)
+      ? {
+        label: sanitizeWhitespace(match[1]),
+        weekdays: expandBillaWeekdayWindow(match[1]),
+        price: parseBillaTeaserPrice(match[2]),
+      }
+      : match))
     .filter((window) => {
       if (window.weekdays.length === 0 || !(window.price > 0)) return false;
       const key = `${window.weekdays.join('-')}::${window.price}`;
@@ -6183,7 +6217,12 @@ function parseBillaActionPriceWindowTeaser(fullText = '', { now = new Date() } =
     quantityText,
     currentPrice: selected.price,
     referencePrice: reference?.price || null,
-    conditionsText: `Preisfenster ${selected.label}`,
+    conditionsText: sanitizeWhitespace([
+      selected.thresholdQuantity > 0
+        ? `ab ${selected.thresholdQuantity} ${normalizeBillaConditionUnit(selected.thresholdUnit)}`
+        : '',
+      `Preisfenster ${selected.label}`,
+    ].filter(Boolean).join('; ')),
     rawText: text,
     ...buildBillaPriceWindowValidity(selected.weekdays, now),
     priceWindow: {

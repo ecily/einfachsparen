@@ -4363,6 +4363,84 @@ test('BILLA action HTML parser selects DO/MO-MI price window outside Friday-Satu
   assert.equal(parsed.validTo.toISOString(), '2026-06-17T21:59:59.999Z');
 });
 
+test('BILLA action HTML parser selects the FR-SA threshold price from structured Gösser teaser text', () => {
+  const parsed = __private.parseBillaActionTeaserName(`
+    Gösser
+    Märzen od. Naturradler
+    die Sorten
+    0,33 Liter Einweg
+    (0,5 l 2.17/1.62/1.39/1.05)
+    DO, MO–MI
+    1 FL. € 1.43
+    AB 12 FL. JE 0,92
+    FR & SA
+    1 FL. € 1.07
+    AB 12 FL. JE 0,69
+  `, { now: new Date('2026-07-11T10:00:00+02:00') });
+
+  assert.equal(parsed.title, 'Gösser Märzen od. Naturradler die Sorten');
+  assert.equal(parsed.quantityText, '0.33 l');
+  assert.equal(parsed.currentPrice, 0.69);
+  assert.equal(parsed.referencePrice, 0.92);
+  assert.match(parsed.conditionsText, /ab 12 Flaschen/);
+  assert.match(parsed.conditionsText, /Preisfenster FR & SA/);
+  assert.deepEqual(parsed.priceWindow.selectedWeekdays, ['fr', 'sa']);
+  assert.equal(parsed.validFrom.toISOString(), '2026-07-09T22:00:00.000Z');
+  assert.equal(parsed.validTo.toISOString(), '2026-07-11T21:59:59.999Z');
+});
+
+test('BILLA action HTML parser keeps Gösser threshold windows scoped to BILLA and BILLA Plus markup', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-07-11T10:00:00+02:00') });
+
+  const result = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <div class="row">
+      <h3>Bis zu -25% auf Bier*</h3>
+      <div>Gültig von Freitag, 10.7. bis Samstag, 11.7.2026</div>
+    </div>
+    <article>
+      <div data-teaser-name="Gösser Märzen od. Naturradler die Sorten
+0,33 Liter Einweg
+DO, MO–MI 1 FL. € 1.43 AB 12 FL. JE 0,92
+FR & SA 1 FL. € 1.07 AB 12 FL. JE 0,69">
+        <img src="https://assets.example.test/goesser.jpg">
+      </div>
+    </article>
+  `);
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0].priceCurrent.amount, 0.69);
+  assert.equal(result.offers[0].priceReference.amount, 0.92);
+  assert.equal(result.offers[0].retailerKey, 'billa');
+  assert.equal(result.offers[0].rawFacts.scopeText, 'Gültig bei BILLA & BILLA PLUS');
+  assert.equal(result.offers[0].rawFacts.sourceType, 'billa-official-action-html');
+
+  const plusResult = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <h3>Bis zu -25% auf Bier*</h3>
+    <div data-teaser-name="Gösser Märzen od. Naturradler die Sorten
+0,33 Liter Einweg
+DO, MO–MI 1 FL. € 1.43 AB 12 FL. JE 0,92
+FR & SA 1 FL. € 1.07 AB 12 FL. JE 0,69"></div>
+  `, { retailerKey: 'billa-plus', retailerName: 'Billa Plus' });
+
+  assert.equal(plusResult.offers.length, 1);
+  assert.equal(plusResult.offers[0].retailerKey, 'billa-plus');
+  assert.equal(plusResult.offers[0].priceCurrent.amount, 0.69);
+});
+
+test('BILLA action HTML parser does not invent an offer from image-only product data', () => {
+  const result = parseBillaActionHtml(`
+    <h2>Gültig bei BILLA & BILLA PLUS</h2>
+    <h3>Bis zu -25% auf Bier*</h3>
+    <div>Gültig von Freitag, 10.7. bis Samstag, 11.7.2026</div>
+    <article><img src="https://assets.example.test/image-only-beer.jpg" alt=""></article>
+  `);
+
+  assert.equal(result.offers.length, 0);
+  assert.equal(result.diagnostics.rawTeasers, 0);
+});
+
 test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 condition', () => {
   const result = parseBillaActionHtml(`
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
