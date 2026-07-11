@@ -4465,10 +4465,25 @@ function filterExpiredDateBoundConditionFragments(conditionsText, { offer = {}, 
 }
 
 function getPublicConditionsText(offer, options = {}) {
-  return filterExpiredDateBoundConditionFragments(offer?.conditionsText || '', {
+  const filteredText = filterExpiredDateBoundConditionFragments(offer?.conditionsText || '', {
     offer,
     now: options.now || new Date(),
   });
+
+  const sourceKey = normalizeSearchText(
+    offer?.sourceType
+    || offer?.rawFacts?.sourceKey
+    || offer?.sourceKey
+  );
+
+  if (
+    sourceKey === 'mueller official online offers'
+    && /^m(?:u|ue|\u00fc)ller online-angebot(?:;\s*(?:online|available))?$/i.test(filteredText)
+  ) {
+    return 'Online-Angebot \u00b7 Verf\u00fcgbarkeit bei M\u00fcller pr\u00fcfen';
+  }
+
+  return filteredText;
 }
 
 function hasReliablePublicTitleRemainder(value = '') {

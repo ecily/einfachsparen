@@ -7805,6 +7805,32 @@ test('ranked offer response keeps safely comparable unit prices visible', () => 
   assert.equal(ranked.comparableUnit, 'kg');
 });
 
+test('ranked offer response explains availability for Müller online offers', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'mueller-online',
+    retailerKey: 'mueller',
+    retailerName: 'Müller',
+    sourceType: 'mueller-official-online-offers',
+    conditionsText: 'Müller Online-Angebot; online',
+    priceCurrent: { amount: 7.65, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 7.65, unit: 'Stk', comparable: false, confidence: 0.4 },
+  }), null, null);
+
+  assert.equal(ranked.conditionsText, 'Online-Angebot · Verfügbarkeit bei Müller prüfen');
+  assert.equal(ranked.validTo, undefined);
+});
+
+test('ranked offer response does not rewrite availability copy from other sources', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'other-online',
+    retailerKey: 'other',
+    sourceType: 'official-site',
+    conditionsText: 'Müller Online-Angebot; online',
+  }), null, null);
+
+  assert.equal(ranked.conditionsText, 'Müller Online-Angebot; online');
+});
+
 test('ranking quality adjustment stays behind query relevance', () => {
   const relevantWithoutImage = offer({
     title: 'Milka Schokolade Alpenmilch',
