@@ -80,6 +80,7 @@ const {
 const { RETAILER_DEFINITIONS } = require('../sources/sourceDefinitions');
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
+const { inferQuantityFieldsFromText } = require('./offerQualityGuards');
 const logger = require('../../lib/logger');
 
 const execFile = promisify(execFileCallback);
@@ -6314,10 +6315,19 @@ function normalizeBillaActionTeaserToOffer({ candidate, source, crawlJobId, regi
     contextText: `${candidate.sectionTitle} ${candidate.rawText}`,
     sourceCategory: candidate.sectionTitle,
   });
-  const normalizedUnitPrice = buildOfficialNormalizedUnitPrice({
-    priceAmount: candidate.currentPrice,
-    quantityText: candidate.quantityText,
-  });
+  const packageQuantity = inferQuantityFieldsFromText(candidate.rawText || '');
+  const normalizedUnitPrice = packageQuantity?.totalComparableAmount > 0
+    && ['kg', 'l', 'Stk'].includes(packageQuantity.comparableUnit)
+    ? {
+      amount: Number((candidate.currentPrice / packageQuantity.totalComparableAmount).toFixed(2)),
+      unit: packageQuantity.comparableUnit,
+      comparable: true,
+      confidence: 0.9,
+    }
+    : buildOfficialNormalizedUnitPrice({
+      priceAmount: candidate.currentPrice,
+      quantityText: candidate.quantityText,
+    });
   const statusInfo = buildOfferStatus(candidate.validFrom, candidate.validTo, Boolean(candidate.validFrom || candidate.validTo));
   const scopeDecision = buildInclusiveScopeDecision();
   const issues = [];
@@ -6381,6 +6391,12 @@ function normalizeBillaActionTeaserToOffer({ candidate, source, crawlJobId, regi
     priceReferenceSource: candidate.referencePrice ? 'prospect' : '',
     priceReferenceConfidence: candidate.referencePrice ? 0.95 : 0,
     quantityText: candidate.quantityText,
+    packCount: packageQuantity?.packCount ?? null,
+    unitValue: packageQuantity?.unitValue ?? null,
+    unitType: packageQuantity?.unitType || '',
+    totalComparableAmount: packageQuantity?.totalComparableAmount ?? null,
+    comparableUnit: packageQuantity?.comparableUnit || '',
+    packageType: packageQuantity?.packageType || '',
     normalizedUnitPrice,
     quality: {
       completenessScore: [candidate.currentPrice, title, categoryPrimary, candidate.validTo].filter(Boolean).length / 4,
@@ -6394,6 +6410,7 @@ function normalizeBillaActionTeaserToOffer({ candidate, source, crawlJobId, regi
       scopeText: candidate.scopeText,
       validityText: candidate.validityText,
       teaserName: candidate.rawText,
+      packageQuantityText: packageQuantity?.quantityText || '',
       conditionsText,
       priceWindow: candidate.priceWindow || null,
     },

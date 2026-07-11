@@ -179,6 +179,39 @@ function inferQuantityFieldsFromText(value = '') {
     return null;
   }
 
+  const measureMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l|liter|gramm|kilogramm|milliliter|zentiliter)\b/i);
+  const explicitPackMatches = [
+    ...text.matchAll(/\b(?:1\s*)?(kiste|tray|mehrpack|packung)\s*=\s*(\d+)\s*(flaschen|dosen|stueck|stk)\b/gi),
+    ...text.matchAll(/\b(\d+)er[-\s]?(traeger|trager|pack|mehrpack)\b/gi),
+    ...text.matchAll(/\b(\d+)\s*(flaschen|dosen)\b/gi),
+  ];
+
+  for (const packMatch of explicitPackMatches) {
+    const packCount = parsePositiveNumber(packMatch[2]) || parsePositiveNumber(packMatch[1]);
+    const prefix = text.slice(Math.max(0, packMatch.index - 16), packMatch.index);
+    const thresholdOnly = /(?:gilt\s+)?(?:ab|bei)\s*$/i.test(prefix);
+
+    if (!measureMatch || !packCount || packCount <= 1 || thresholdOnly) {
+      continue;
+    }
+
+    const amount = parsePositiveNumber(measureMatch[1]);
+    const unit = measureMatch[2];
+    const inferred = buildInferredQuantityFields({
+      packCount,
+      amount,
+      unit,
+      packageType: normalizeTitleForMatch(packMatch[1] || packMatch[2]),
+    });
+
+    if (inferred) {
+      return {
+        ...inferred,
+        quantityText: buildQuantityText({ amount, unit, packCount }),
+      };
+    }
+  }
+
   const multipackMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l|liter|gramm|kilogramm|milliliter|zentiliter)\b/i);
 
   if (multipackMatch) {
@@ -229,6 +262,10 @@ function inferQuantityFieldsFromText(value = '') {
   const pieceMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(stk|stueck|stuck|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?|kisten?|sack|saecke|sacke)\b/i);
 
   if (pieceMatch) {
+    if (/^(?:flaschen|dosen)$/i.test(pieceMatch[2])) {
+      return null;
+    }
+
     const amount = parsePositiveNumber(pieceMatch[1]);
     const inferred = buildInferredQuantityFields({
       amount,
@@ -252,6 +289,7 @@ function inferMissingQuantityFields(offer = {}) {
     offer.description,
     offer.rawFacts?.infoText,
     offer.rawFacts?.evidenceText,
+    offer.rawFacts?.teaserName,
   ];
   let fallback = null;
   let firstMeasure = null;

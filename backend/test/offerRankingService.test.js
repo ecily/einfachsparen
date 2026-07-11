@@ -7820,6 +7820,38 @@ test('ranked offer response explains availability for Müller online offers', ()
   assert.equal(ranked.validTo, undefined);
 });
 
+test('ranked offer response repairs stored Hirter crate total without using minimum purchase quantity', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'hirter-action-crate',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    sourceType: 'billa-official-action-html',
+    title: 'Hirter Privat Pils',
+    brand: 'Hirter',
+    quantityText: '0.5 l',
+    packCount: null,
+    unitValue: 0.5,
+    unitType: 'l',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'l',
+    priceCurrent: { amount: 16.8, currency: 'EUR' },
+    priceReference: { amount: 22.4, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 33.6, unit: 'l', comparable: true, confidence: 0.86 },
+    conditionsText: 'Gilt ab 2 Stueck; Preisfenster FR & SA',
+    rawFacts: {
+      sourceType: 'billa-official-action-html',
+      teaserName: 'Hirter Privat Pils 0,5 Liter, 1 Kiste = 20 Flaschen (0,5 l 1.12/0.84)',
+    },
+  }), 1.68, 1.68);
+
+  assert.equal(ranked.packCount, 20);
+  assert.equal(ranked.totalComparableAmount, 10);
+  assert.equal(ranked.normalizedUnitPrice.amount, 1.68);
+  assert.notEqual(ranked.normalizedUnitPrice.amount, 33.6);
+  assert.notEqual(ranked.normalizedUnitPrice.amount, 8.4);
+  assert.match(ranked.conditionsText, /Gilt ab 2 Stueck/);
+});
+
 test('ranked offer response does not rewrite availability copy from other sources', () => {
   const ranked = buildRankedOffer(offer({
     _id: 'other-online',

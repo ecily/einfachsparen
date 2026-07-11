@@ -392,6 +392,11 @@ function withInferredQuantityFields(document = {}) {
       !currentComparableUnit
       || currentComparableUnit === 'Stk'
       || preferExplicitSingleMeasure
+      || (
+        inferredPackCount > 1
+        && Number(next.packCount || 0) <= 1
+        && inferredTotalAmount > currentTotalAmount
+      )
     );
 
   for (const field of ['packCount', 'unitValue', 'unitType', 'totalComparableAmount', 'comparableUnit', 'packageType']) {

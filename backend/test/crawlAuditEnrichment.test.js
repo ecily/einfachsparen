@@ -8,8 +8,31 @@ const {
 } = require('../src/services/crawl/offerAuditEnrichment');
 const { SEARCH_TOKEN_VERSION } = require('../src/services/offers/searchTokens');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
+const { inferQuantityFieldsFromText } = require('../src/services/crawl/offerQualityGuards');
 
 const VALIDITY_INCOMPLETE_REASON = 'Gueltigkeitszeitraum unvollstaendig';
+
+test('explicit product packs produce total quantity but minimum purchase thresholds do not', () => {
+  const cases = [
+    ['1 Kiste = 20 Flaschen, 0,5 l', 20, 10],
+    ['20 Flaschen, 0,5 l', 20, 10],
+    ['6er-Traeger, 0,5 l', 6, 3],
+    ['6 x 0,33 l', 6, 1.98],
+    ['12 Dosen, 0,5 l', 12, 6],
+    ['24 x 0,33 l', 24, 7.92],
+  ];
+
+  for (const [text, packCount, totalComparableAmount] of cases) {
+    const inferred = inferQuantityFieldsFromText(text);
+    assert.equal(inferred.packCount, packCount, text);
+    assert.equal(inferred.totalComparableAmount, totalComparableAmount, text);
+  }
+
+  assert.equal(inferQuantityFieldsFromText('0,5 l Gilt ab 2 Stueck').totalComparableAmount, 0.5);
+  assert.equal(inferQuantityFieldsFromText('0,33 l ab 12 Flaschen').totalComparableAmount, 0.33);
+  assert.equal(inferQuantityFieldsFromText('20 Flaschen'), null);
+  assert.equal(inferQuantityFieldsFromText('0,5 l').totalComparableAmount, 0.5);
+});
 
 function activeComparableOffer(overrides = {}) {
   return {

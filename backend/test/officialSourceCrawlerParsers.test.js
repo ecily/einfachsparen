@@ -4389,6 +4389,28 @@ test('BILLA action HTML parser selects the FR-SA threshold price from structured
   assert.equal(parsed.validTo.toISOString(), '2026-07-11T21:59:59.999Z');
 });
 
+test('BILLA action HTML parser uses explicit Hirter crate size for unit price', () => {
+  const result = parseBillaActionHtml(`
+    <h2>Gueltig bei BILLA & BILLA PLUS</h2>
+    <h3>Bis zu -25% auf Bier*</h3>
+    <div data-teaser-name="Hirter
+Privat Pils
+0,5 Liter, auch im 6er-Traeger,
+1 Kiste = 20 Flaschen
+(0,5 l 1.12/0.84)
+DO, MO-MI 22,40
+FR & SA 16,80"></div>
+  `);
+
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0].quantityText, '0.5 l');
+  assert.equal(result.offers[0].packCount, 20);
+  assert.equal(result.offers[0].totalComparableAmount, 10);
+  assert.equal(result.offers[0].normalizedUnitPrice.amount, 1.68);
+  assert.equal(result.offers[0].priceReference.amount, 22.4);
+  assert.match(result.offers[0].conditionsText, /Preisfenster FR & SA/);
+});
+
 test('BILLA action HTML parser keeps Gösser threshold windows scoped to BILLA and BILLA Plus markup', (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-07-11T10:00:00+02:00') });
 
