@@ -7304,7 +7304,9 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
     skipReasons: {},
   };
 
-  for (const identifier of flyerIdentifiers.slice(0, 8)) {
+  // Keep the bounded probe wide enough for the current overview links plus
+  // the derived regional WUS sibling (NAT is currently the ninth candidate).
+  for (const identifier of flyerIdentifiers.slice(0, 12)) {
     let flyer = null;
 
     try {
