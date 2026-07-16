@@ -3182,6 +3182,17 @@ test('Lidl official campaign page seeds track current resource matrix URLs', () 
   assert.equal(__private.LIDL_OFFICIAL_CAMPAIGN_PAGES.includes('https://www.lidl.at/c/blumen-pflanzen/a10094558'), false);
 });
 
+test('Lidl flyer discovery adds the official WUS sibling for a current NAT flyer', () => {
+  const identifiers = __private.extractLidlFlyerIdentifiers(`
+    <a href="https://www.lidl.at/l/de/flugblatt/ab-donnerstag-16-7-flugblatt-nat/ar/0">National</a>
+  `);
+
+  assert.deepEqual(identifiers, [
+    'ab-donnerstag-16-7-flugblatt-nat',
+    'ab-donnerstag-16-7-flugblatt-wus',
+  ]);
+});
+
 test('Lidl official web offer seeds include only explicit Lidl homepage URLs', () => {
   const pages = __private.getLidlWebOfferPagesForCrawl({
     crawlPolicy: {

@@ -1570,6 +1570,16 @@ function extractLidlFlyerIdentifiers(html) {
     }
   });
 
+  // Lidl's current overview can expose only the national flyer while the
+  // regional WUS (West und Süd) flyer remains addressable through the same
+  // official flyer API and slug pattern. Probe that sibling defensively; the
+  // API fetch below skips it when Lidl does not publish one for a snapshot.
+  for (const identifier of [...identifiers]) {
+    if (/-nat$/i.test(identifier)) {
+      identifiers.add(identifier.replace(/-nat$/i, '-wus'));
+    }
+  }
+
   return [...identifiers];
 }
 
@@ -9645,6 +9655,7 @@ module.exports = {
     buildMultiLinkStopRejectionReasons,
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
+    extractLidlFlyerIdentifiers,
     parseLidlFlyerDate,
     normalizeLidlProductToOffer,
     LIDL_OFFICIAL_CAMPAIGN_PAGES,
