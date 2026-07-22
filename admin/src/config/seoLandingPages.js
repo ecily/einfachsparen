@@ -8,17 +8,15 @@ const baseRelatedLinks = [
   ['kaffee', 'Kaffee Angebote'],
   ['bier', 'Bier Angebote'],
   ['waschmittel', 'Waschmittel Angebote'],
-  ['kaese', 'K\u00e4se Angebote'],
 ]
 
 const retailerRelatedLinks = [
-  ['spar', 'SPAR Angebote'],
   ['billa', 'BILLA Angebote'],
-  ['hofer', 'HOFER Angebote'],
   ['lidl', 'Lidl Angebote'],
   ['dm', 'dm Angebote'],
   ['bipa', 'BIPA Angebote'],
   ['penny', 'PENNY Angebote'],
+  ['mueller', 'M\u00fcller Angebote'],
 ]
 
 function links(keys) {
@@ -66,12 +64,6 @@ export const seoLandingPages = [
         offset: 0,
       },
       {
-        retailers: 'hofer',
-        programRetailers: 'hofer',
-        limit: 8,
-        offset: 0,
-      },
-      {
         retailers: 'lidl',
         programRetailers: 'lidl',
         limit: 8,
@@ -81,12 +73,6 @@ export const seoLandingPages = [
         retailers: 'penny',
         programRetailers: 'penny',
         limit: 8,
-        offset: 0,
-      },
-      {
-        retailers: 'spar,interspar',
-        programRetailers: 'spar,interspar',
-        limit: 12,
         offset: 0,
       },
     ],
@@ -222,6 +208,24 @@ export const seoLandingPages = [
       offset: 0,
     },
     relatedLinks: links(['drogerie', 'dm', 'waschmittel', 'supermarkt']),
+  },
+  {
+    key: 'mueller',
+    path: '/angebote/mueller',
+    title: 'M\u00fcller Angebote aktuell finden | kaufklug',
+    description:
+      'Finde aktuelle Online-Angebote von M\u00fcller in \u00d6sterreich. kaufklug zeigt Preise, Produkte und Bedingungen als Orientierungshilfe.',
+    h1: 'M\u00fcller Angebote aktuell finden',
+    intro:
+      'Finde verifiziert aktuelle Online-Angebote von M\u00fcller. kaufklug zeigt Preise, Produkte und Bedingungen, soweit diese erkannt wurden.',
+    note: 'Online-Angebot \u00b7 Verf\u00fcgbarkeit bei M\u00fcller pr\u00fcfen',
+    robots: 'noindex,follow',
+    query: {
+      retailers: 'mueller',
+      limit: 24,
+      offset: 0,
+    },
+    relatedLinks: links(['drogerie', 'dm', 'bipa', 'waschmittel']),
   },
   {
     key: 'penny',

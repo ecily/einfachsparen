@@ -1186,14 +1186,14 @@ a {
 }
 
 .search-landing-hero__usp h1 {
-  order: 2;
+  order: 1;
   overflow-wrap: normal;
   text-wrap: balance;
   width: 100%;
 }
 
 .search-landing-hero__usp .subtitle {
-  order: 1;
+  order: 2;
   max-width: min(100%, 76rem);
   font-size: clamp(1rem, 1.28vw, 1.13rem);
   line-height: 1.32;

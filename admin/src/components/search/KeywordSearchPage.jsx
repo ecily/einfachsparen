@@ -20,10 +20,11 @@ import {
   hasFreshnessWarning,
   isLimitedCoverageRetailer,
 } from '../../utils/retailerCoverage'
+import { QUICK_SEARCH_TERMS } from '../../config/searchDiscovery'
 
 const KEYWORD_SEARCH_LIMIT = 60
-const EXAMPLE_SEARCH_TERMS = ['Milch', 'Bier', 'Waschmittel', 'Zahnpasta', 'Kaffee']
-const EMPTY_SEARCH_FALLBACK_TERMS = ['Milch', 'Bier', 'Kaffee', 'Waschmittel', 'Zahnpasta']
+const EXAMPLE_SEARCH_TERMS = QUICK_SEARCH_TERMS
+const EMPTY_SEARCH_FALLBACK_TERMS = QUICK_SEARCH_TERMS
 const EMPTY_SEARCH_SUGGESTION_MAP = [
   {
     pattern: /reininghaus|bier|märzen|maerzen|radler|gösser|goesser|puntigamer|stiegl|ottakringer/i,

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './index.css'
 import {
   fetchHealth,
@@ -36,7 +36,7 @@ import { areStringSetsEqual, flattenRankingOffers, getRankingPagination, mergePa
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 import { getSeoLandingPageByRouteId, SEO_LANDING_PAGE_PREFIX } from './config/seoLandingPages'
-import { getRetailerTheme } from './utils/retailerColors'
+import { QUICK_SEARCH_TERMS } from './config/searchDiscovery'
 
 const BETA_TEST_NOTICE =
   'Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.'
@@ -125,28 +125,6 @@ function BetaNoticeDisclosure({ onNavigate }) {
 }
 
 function SearchLandingHero() {
-  const heroRetailerGroups = [
-    [
-      ['billa', 'BILLA'],
-      ['billa-plus', 'BILLA Plus'],
-    ],
-    [
-      ['spar', 'SPAR'],
-      ['interspar', 'INTERSPAR'],
-    ],
-    [
-      ['hofer', 'HOFER'],
-      ['lidl', 'Lidl'],
-      ['penny', 'PENNY'],
-    ],
-    [
-      ['dm', 'dm'],
-      ['bipa', 'BIPA'],
-      ['mueller', 'Müller'],
-    ],
-  ]
-  const trustItems = ['Kostenlos', 'Direkt im Browser', 'Ohne Anmeldung', 'Pfeilschnell']
-
   return (
     <>
       <section
@@ -161,60 +139,19 @@ function SearchLandingHero() {
         }}
       >
         <div className="search-landing-hero__usp">
-          <div className="hero-market-strip" aria-label="Marktbeispiele">
-            {heroRetailerGroups.map((group, groupIndex) => (
-              <Fragment key={group.map(([key]) => key).join('-')}>
-                {groupIndex > 0 ? <span className="hero-market-separator" aria-hidden="true" /> : null}
-                {group.map(([key, label]) => {
-                  const theme = getRetailerTheme(key)
-
-                  return (
-                    <span
-                      key={key}
-                      className="hero-market-badge"
-                      style={{
-                        '--retailer-color': theme.color,
-                        '--retailer-text-color': theme.textColor,
-                        '--retailer-border-color': theme.borderColor,
-                        '--retailer-soft-color': theme.softColor,
-                      }}
-                    >
-                      {label}
-                    </span>
-                  )
-                })}
-              </Fragment>
-            ))}
-          </div>
           <h1
             style={{
-              fontSize: 'clamp(2.25rem, 6.2vw, 4.25rem)',
+              fontSize: 'clamp(1.75rem, 4.4vw, 2.8rem)',
               lineHeight: 1.05,
               margin: 0,
               maxWidth: '100%',
             }}
           >
-            Nicht blättern. Finden, was sich lohnt.
+            Aktuelle Angebote finden.
           </h1>
           <p className="subtitle">
-            Suche aktuelle Supermarkt- und Drogerie-Angebote{' '}
-            <span className="hero-austria-phrase">
-              in{' '}
-              <span className="hero-austria-accent__flag" aria-hidden="true" />
-              <span className="hero-austria-accent">
-                Österreich
-              </span>
-              <span className="hero-austria-icons" aria-hidden="true" />
-            </span>{' '}
-            – schnell, kostenlos und ohne Anmeldung.
+            kaufklug findet aktuelle Angebote aus Supermärkten und Drogerien – mit Preis, Menge, Bedingungen und Gültigkeit.
           </p>
-          <div className="hero-trust-row" aria-label="Nutzungshinweise">
-            {trustItems.map((item) => (
-              <span className={item === 'Pfeilschnell' ? 'hero-trust-row__item--speed' : ''} key={item}>
-                {item}
-              </span>
-            ))}
-          </div>
         </div>
       </section>
     </>
@@ -252,8 +189,6 @@ function HowItWorksSection() {
 }
 
 function DiscoverOffersSection() {
-  const terms = ['Milch', 'Bier', 'Waschmittel', 'Zahnpasta', 'Sonnencreme', 'Kaffee']
-
   return (
     <section className="panel home-info-section home-discovery-section" aria-labelledby="home-discovery-title">
       <div className="home-section-heading">
@@ -261,7 +196,7 @@ function DiscoverOffersSection() {
         <p>Starte mit einer Suche und prüfe Preise, Gültigkeit und Bedingungen.</p>
       </div>
       <div className="home-discovery-chips" aria-label="Beliebte Angebotssuchen">
-        {terms.map((term) => (
+        {QUICK_SEARCH_TERMS.map((term) => (
           <a href={`/suche?q=${encodeURIComponent(term)}`} key={term}>
             {term}
           </a>
