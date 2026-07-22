@@ -14,9 +14,10 @@ const MOBILE_WIDTH = 390
 const MOBILE_HEIGHT = 900
 const DESKTOP_WIDTH = 1280
 const DESKTOP_HEIGHT = 900
-const HERO_TEXT = 'Nicht blättern. Finden, was sich wirklich lohnt.'
-const TRUST_TEXT = 'Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.'
-const HERO_RETAILERS = ['BILLA', 'BILLA Plus', 'SPAR', 'EUROSPAR', 'INTERSPAR', 'HOFER', 'Lidl', 'dm', 'BIPA', 'PAGRO', 'PENNY']
+const HERO_TEXT = 'Flugblätter raus. Die besten Angebote rein.'
+const HERO_SUBLINE = 'kaufklug macht Supermarkt- und Drogerie-Angebote in Österreich verständlich: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos, ohne Anmeldung und von Menschen für Menschen.'
+const HERO_MARKETS = 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller'
+const SPAR_TRUST_TITLE = 'Warum SPAR derzeit fehlt'
 const FORBIDDEN_VISIBLE_COPY = [
   'bester Preis',
   'garantiert sparen',
@@ -465,17 +466,10 @@ function pageAuditExpression() {
       element.getAttribute('href'),
       element.getAttribute('src'),
     ].filter(Boolean).join(' '))).filter(Boolean)
-    const heroBadges = Array.from(document.querySelectorAll('.hero-market-strip .hero-market-badge')).map((element) => {
-      const rect = element.getBoundingClientRect()
-      return {
-        text: normalize(element.textContent),
-        visible: isVisible(element),
-        left: rect.left,
-        right: rect.right,
-        top: rect.top,
-        bottom: rect.bottom,
-      }
-    })
+    const heroMarketLine = document.querySelector('.search-landing-hero__markets')
+    const unitPriceLabels = Array.from(document.querySelectorAll('.user-card__unit-price-label'))
+      .filter(isVisible)
+      .map((element) => normalize(element.textContent))
     const browseRetailerButtons = Array.from(document.querySelectorAll('.browse-page .selection-block .retailer-chip')).map((element) => {
       const rect = element.getBoundingClientRect()
       return {
@@ -491,7 +485,8 @@ function pageAuditExpression() {
       bodyText: visibleText,
       h1Texts: Array.from(document.querySelectorAll('h1')).map((element) => normalize(element.innerText)),
       visibleSignals,
-      heroBadges,
+      heroMarketLine: isVisible(heroMarketLine) ? normalize(heroMarketLine.textContent) : '',
+      unitPriceLabels,
       browseRetailerButtons,
       scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
       viewportWidth: window.innerWidth,
@@ -564,21 +559,18 @@ async function runHomeCheck(cdp) {
   await navigate(cdp, makeUrl('/'))
   await waitForCondition(
     cdp,
-    `document.body.innerText.includes(${JSON.stringify(TRUST_TEXT)}) && Array.from(document.querySelectorAll('h1')).some((element) => element.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(HERO_TEXT)})`
+    `document.body.innerText.includes(${JSON.stringify(SPAR_TRUST_TITLE)}) && Array.from(document.querySelectorAll('h1')).some((element) => element.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(HERO_TEXT)})`
   )
 
   const audit = await auditCurrentPage(cdp, 'home')
   assert(audit.h1Texts.includes(HERO_TEXT), `home: hero headline must be exactly "${HERO_TEXT}"`, { h1Texts: audit.h1Texts })
-  assert(audit.bodyText.includes(TRUST_TEXT), `home: trust line must be visible: "${TRUST_TEXT}"`)
-
-  const badgeTexts = audit.heroBadges.filter((badge) => badge.visible).map((badge) => badge.text)
-  const missingRetailers = HERO_RETAILERS.filter((retailer) => !badgeTexts.includes(retailer))
-  assert(missingRetailers.length === 0, 'home: not all mobile hero retailers are visible', { badgeTexts, missingRetailers })
-
-  const horizontallyClipped = audit.heroBadges.filter(
-    (badge) => badge.visible && (badge.left < -1 || badge.right > audit.viewportWidth + 1)
-  )
-  assert(horizontallyClipped.length === 0, 'home: hero retailer badge is horizontally clipped', { horizontallyClipped })
+  assert(audit.bodyText.includes(HERO_SUBLINE), 'home: final hero subline must be visible')
+  assert(audit.heroMarketLine === HERO_MARKETS, 'home: final market line must be visible', {
+    actual: audit.heroMarketLine,
+    expected: HERO_MARKETS,
+  })
+  assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'home: subordinate SPAR trust notice must remain visible')
+  assert(!audit.bodyText.includes('Aktuelle Angebote finden.'), 'home: old hero headline must be absent')
   assertNoHorizontalOverflow(audit, 'home')
 }
 
@@ -593,6 +585,13 @@ async function runSearchCheck(cdp) {
   )
 
   const audit = await auditCurrentPage(cdp, 'search')
+  assert(audit.h1Texts.includes(HERO_TEXT), 'search: final hero headline must remain visible')
+  assert(!audit.unitPriceLabels.some((label) => /vergleichspreis/i.test(label)), 'search: old unit-price label found')
+  assert(
+    audit.unitPriceLabels.every((label) => ['PREIS PRO LITER', 'PREIS PRO KG', 'PREIS PRO STÜCK', 'PREIS PRO EINHEIT'].includes(label)),
+    'search: unexpected public unit-price label found',
+    { unitPriceLabels: audit.unitPriceLabels }
+  )
   const hasCards = audit.resultCardCount > 0
   const hasPlausibleResultCount = /\d+\s+(von\s+\d+\s+)?Angebote/.test(audit.resultsCountText)
   assert(hasCards || hasPlausibleResultCount, 'search: expected visible cards or a plausible result count', {
@@ -615,6 +614,8 @@ async function runBrowseCheck(cdp) {
   assert(/Stöbern|StÃ¶bern/.test(audit.bodyText), 'browse: intro must be visible')
   assert(/Märkte auswählen|MÃ¤rkte auswÃ¤hlen/.test(audit.bodyText), 'browse: market selector must be visible')
   assert(audit.browseRetailerButtons.length >= 2, 'browse: expected visible market buttons')
+  assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'browse: SPAR trust notice must remain visible')
+  assert(!audit.unitPriceLabels.some((label) => /vergleichspreis/i.test(label)), 'browse: old unit-price label found')
 
   const firstRowTop = audit.browseRetailerButtons[0]?.top
   const firstRowButtons = audit.browseRetailerButtons.filter((button) => Math.abs(button.top - firstRowTop) <= 4)

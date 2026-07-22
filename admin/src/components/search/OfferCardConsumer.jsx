@@ -1,9 +1,11 @@
 import { ProductImage } from '../layout/ProductImage'
 import {
   getDisplayConditionLabels,
+  getAvailableComparison,
   getOfferCategoryLabel,
   getReadableQuantityText,
   getSavingsValue,
+  getUnitPriceLabel,
   normalizeRetailerKey,
   shouldDisplayUnitPrice,
 } from '../../utils/offers'
@@ -247,12 +249,14 @@ export function OfferCardConsumer({
   const priceOptionalPromotion = isPriceOptionalPromotion(offer, currentPriceAmount)
   const promotionScopeLabel = getPromotionScopeLabel(offer)
   const unitPriceText = showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : ''
-  const comparison = offer?.comparisonAlternative?.available === true
-    ? offer.comparisonAlternative
-    : null
+  const unitPriceLabel = unitPriceText ? getUnitPriceLabel(offer) : ''
+  const comparison = getAvailableComparison(offer)
   const comparisonAlternative = comparison?.offer || null
   const comparisonUnitPriceText = comparisonAlternative
     ? formatUnitPrice(comparisonAlternative.normalizedUnitPrice)
+    : ''
+  const comparisonUnitPriceLabel = comparisonUnitPriceText
+    ? getUnitPriceLabel(comparisonAlternative)
     : ''
   const comparisonPriceAmount = getNumericAmount(comparisonAlternative?.priceCurrent)
   const comparisonPriceCurrency = getPriceCurrency(comparisonAlternative?.priceCurrent) || 'EUR'
@@ -324,8 +328,8 @@ export function OfferCardConsumer({
                 </span>
               ) : null}
               {unitPriceText ? (
-                <div className="user-card__unit-price-callout" aria-label={`Sicherer Vergleichspreis: ${unitPriceText}`}>
-                  <span className="user-card__unit-price-label">Vergleichspreis</span>
+                <div className="user-card__unit-price-callout" aria-label={`${unitPriceLabel}: ${unitPriceText}`}>
+                  <span className="user-card__unit-price-label">{unitPriceLabel}</span>
                   <span className="user-card__unit-price-value">{unitPriceText}</span>
                 </div>
               ) : null}
@@ -377,7 +381,7 @@ export function OfferCardConsumer({
               </div>
               <div className="user-card__comparison-price">
                 <strong>{formatPrice(comparisonPriceAmount, comparisonPriceCurrency)}</strong>
-                <span>{comparisonUnitPriceText}</span>
+                <span>{comparisonUnitPriceLabel} {comparisonUnitPriceText}</span>
               </div>
               <p>
                 {[comparisonAlternative.quantityText, comparisonAlternative.conditionsText, formatValidityLabel(comparisonAlternative)]

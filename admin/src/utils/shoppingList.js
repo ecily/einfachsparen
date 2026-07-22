@@ -364,7 +364,7 @@ export function getShoppingListRemainderHint(item, quantity) {
   const blockHint = `Nimm noch ${missingToNextBlock} ${unitLabel} dazu, damit der nächste Angebotsblock vollständig ist.`
 
   if (pricing.hasReferencePrice) {
-    return `${blockHint} Die übrige Menge rechnen wir vorsichtig zum Vergleichspreis.`
+    return `${blockHint} Die übrige Menge rechnen wir vorsichtig zum Referenzpreis.`
   }
 
   return `${blockHint} Bitte prüfe im Markt, ob die übrige Menge den Angebotspreis bekommt.`

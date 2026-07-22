@@ -670,7 +670,7 @@ export function OfferFeedbackPanel({ offer, categories = [], pageContext = {} })
           {reasons.includes('price_wrong') ? (
             <div className="offer-feedback__detail-block">
               {visiblePrice ? <p className="offer-feedback__current">Sichtbarer Preis: {visiblePrice}</p> : null}
-              {unitPrice ? <p className="offer-feedback__current">Vergleichspreis: {unitPrice}</p> : null}
+              {unitPrice ? <p className="offer-feedback__current">Preis pro Einheit: {unitPrice}</p> : null}
               <TextField
                 label="Welchen Preis hast du gesehen?"
                 value={details.price_wrong.seenPriceText}

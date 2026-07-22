@@ -147,11 +147,12 @@ function SearchLandingHero() {
               maxWidth: '100%',
             }}
           >
-            Aktuelle Angebote finden.
+            Flugblätter raus. Die besten Angebote rein.
           </h1>
           <p className="subtitle">
-            kaufklug findet aktuelle Angebote aus Supermärkten und Drogerien – mit Preis, Menge, Bedingungen und Gültigkeit.
+            kaufklug macht Supermarkt- und Drogerie-Angebote in Österreich verständlich: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos, ohne Anmeldung und von Menschen für Menschen.
           </p>
+          <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller</p>
         </div>
       </section>
     </>

@@ -289,7 +289,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
         </div>
 
         <p className="shopping-check__note">
-          Ersparnisse zählen wir nur mit Vergleichspreis. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine
+          Ersparnisse zählen wir nur mit belastbarem Referenzpreis. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. Keine
           Preisgarantie.
         </p>
       </section>

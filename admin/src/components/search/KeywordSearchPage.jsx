@@ -229,7 +229,7 @@ function buildSavingsOfferGroups(items) {
     const unit = item.comparableUnitPrice?.unit
     const unitKey = unit?.key || UNKNOWN_SAVINGS_UNIT_KEY
     const title =
-      unitKey === UNKNOWN_SAVINGS_UNIT_KEY ? 'Weitere belastbare Angebote' : `Vergleichspreis pro ${unit.label}`
+      unitKey === UNKNOWN_SAVINGS_UNIT_KEY ? 'Weitere belastbare Angebote' : `Preis pro ${unit.label}`
 
     if (!groupByKey.has(unitKey)) {
       const group = {

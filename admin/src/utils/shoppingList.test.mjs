@@ -64,7 +64,7 @@ test('shopping list pricing handles minimum blocks and conservative remainder wi
   assert.equal(pricingAtThree.remainderQuantity, 1)
   assert.equal(
     getShoppingListRemainderHint(item, 3),
-    'Nimm noch 1 Packung dazu, damit der nächste Angebotsblock vollständig ist. Die übrige Menge rechnen wir vorsichtig zum Vergleichspreis.'
+    'Nimm noch 1 Packung dazu, damit der nächste Angebotsblock vollständig ist. Die übrige Menge rechnen wir vorsichtig zum Referenzpreis.'
   )
 
   const pricingAtFour = getShoppingListItemPricing(item, 4)
@@ -89,7 +89,7 @@ test('shopping list pricing derives bundle savings from current and reference pr
   assert.equal(pricingAtThree.knownSavings, 29.8)
   assert.equal(
     getShoppingListRemainderHint(item, 3),
-    'Nimm noch 1 Kiste dazu, damit der nächste Angebotsblock vollständig ist. Die übrige Menge rechnen wir vorsichtig zum Vergleichspreis.'
+    'Nimm noch 1 Kiste dazu, damit der nächste Angebotsblock vollständig ist. Die übrige Menge rechnen wir vorsichtig zum Referenzpreis.'
   )
 
   const pricingAtFour = getShoppingListItemPricing(item, 4)

@@ -28,7 +28,25 @@ export function isOfferDirectlyComparable(offer) {
 }
 
 export function getOfferKindLabel(offer) {
-  return isOfferDirectlyComparable(offer) ? 'Mit Vergleichspreis' : 'Aktionspreis'
+  return isOfferDirectlyComparable(offer) ? 'Mit Preis pro Einheit' : 'Aktionspreis'
+}
+
+export function getUnitPriceLabel(offer) {
+  const unit = String(offer?.normalizedUnitPrice?.unit || offer?.comparableUnit || '')
+    .trim()
+    .toLocaleLowerCase('de-AT')
+
+  if (unit === 'l' || unit === 'liter') return 'PREIS PRO LITER'
+  if (unit === 'kg' || unit === 'kilogramm') return 'PREIS PRO KG'
+  if (unit === 'stk' || unit === 'stück' || unit === 'stueck') return 'PREIS PRO STÜCK'
+
+  return 'PREIS PRO EINHEIT'
+}
+
+export function getAvailableComparison(offer) {
+  return offer?.comparisonAlternative?.available === true
+    ? offer.comparisonAlternative
+    : null
 }
 
 export function getOfferStatusLabel(offer) {
@@ -40,13 +58,14 @@ export function getOfferStatusLabel(offer) {
 }
 
 export function shouldDisplayUnitPrice(offer) {
-  const amount = Number(offer?.normalizedUnitPrice?.amount)
+  const rawAmount = offer?.normalizedUnitPrice?.amount
+  const amount = Number(rawAmount)
   const unit = String(offer?.normalizedUnitPrice?.unit || offer?.comparableUnit || '')
   const packageType = String(offer?.packageType || '').toLowerCase()
   const packCount = Number(offer?.packCount || 0)
   const unitType = String(offer?.unitType || '')
 
-  if (!Number.isFinite(amount) || !unit) {
+  if (rawAmount === null || rawAmount === undefined || rawAmount === '' || !Number.isFinite(amount) || !unit) {
     return false
   }
 
