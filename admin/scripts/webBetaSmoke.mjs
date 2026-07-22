@@ -490,6 +490,10 @@ function pageAuditExpression() {
       hasTopDeal: Boolean(element.querySelector('.user-card__top-deal')),
       hasValidity: Boolean(element.querySelector('.user-card__meta-pill--validity')),
     }))
+    const resultCardRetailers = Array.from(document.querySelectorAll('.keyword-search-results .user-card'))
+      .filter(isVisible)
+      .map((element) => normalize(element.querySelector('.user-card__retailer-badge')?.textContent))
+      .filter(Boolean)
     const comparisonCards = Array.from(document.querySelectorAll('.user-card__comparison')).filter(isVisible).map((element) => ({
       type: normalize(element.getAttribute('data-comparison-type')),
       text: normalize(element.textContent),
@@ -534,6 +538,7 @@ function pageAuditExpression() {
       mainSearchVisible: isVisible(mainSearchInput),
       mainSearchAnimationName: mainSearchInput ? window.getComputedStyle(mainSearchInput).animationName : '',
       topDealCards,
+      resultCardRetailers,
       comparisonCards,
       browseRetailerButtons,
       scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
@@ -663,6 +668,57 @@ async function runSearchCheck(cdp) {
     'search: normal result list appears constrained to the Top Deals limit',
     { resultCardCount: audit.resultCardCount, resultsCountText: audit.resultsCountText }
   )
+  assert(audit.resultCardRetailers.some((retailer) => !/^Billa(?: Plus)?$/i.test(retailer)), 'search: unfiltered coffee results must not render as BILLA-family only', {
+    resultCardRetailers: audit.resultCardRetailers,
+  })
+}
+
+async function runMultiRetailerCoverageCheck(cdp) {
+  logStep('checking unfiltered retailer coverage for detergent search')
+  await configurePage(cdp, { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT, mobile: false })
+  await navigate(cdp, makeUrl('/suche?q=waschmittel'))
+  await waitForCondition(cdp, `document.querySelectorAll('.keyword-search-results .user-card').length > 0`, TIMEOUT_MS)
+
+  const audit = await auditCurrentPage(cdp, 'search-retailer-coverage')
+  const retailerNames = new Set(audit.resultCardRetailers.map((retailer) => retailer.toLocaleLowerCase('de-AT')))
+  assert(retailerNames.has('bipa'), 'search-retailer-coverage: BIPA must be visible without an explicit retailer filter', { resultCardRetailers: audit.resultCardRetailers })
+  assert(retailerNames.has('dm'), 'search-retailer-coverage: dm must be visible without an explicit retailer filter', { resultCardRetailers: audit.resultCardRetailers })
+  assert(retailerNames.has('müller'), 'search-retailer-coverage: Müller must be visible without an explicit retailer filter', { resultCardRetailers: audit.resultCardRetailers })
+  assert(retailerNames.size >= 4, 'search-retailer-coverage: expected multiple public retailers', { resultCardRetailers: audit.resultCardRetailers })
+  assertNoHorizontalOverflow(audit, 'search-retailer-coverage')
+
+  await evaluate(cdp, `document.querySelector('.keyword-search-toggle input')?.click()`)
+  await waitForCondition(cdp, `Boolean(document.querySelector('.keyword-search-market-filter'))`, TIMEOUT_MS)
+  await evaluate(cdp, `(() => {
+    const button = Array.from(document.querySelectorAll('.keyword-search-market-chip'))
+      .find((element) => element.getAttribute('aria-label')?.startsWith('Müller '))
+    button?.click()
+    return Boolean(button)
+  })()`)
+  await waitForCondition(cdp, `(() => {
+    const cards = Array.from(document.querySelectorAll('.keyword-search-results .user-card'))
+    return cards.length > 0 && cards.every((card) => card.querySelector('.user-card__retailer-badge')?.textContent.trim() === 'Müller')
+  })()`, TIMEOUT_MS)
+
+  const filteredAudit = await auditCurrentPage(cdp, 'search-retailer-filter')
+  assert(filteredAudit.resultCardRetailers.length > 0 && filteredAudit.resultCardRetailers.every((retailer) => retailer === 'Müller'), 'search-retailer-filter: explicit Müller filter must show Müller only', {
+    resultCardRetailers: filteredAudit.resultCardRetailers,
+  })
+
+  await evaluate(cdp, `(() => {
+    const button = Array.from(document.querySelectorAll('.keyword-search-market-filter button'))
+      .find((element) => element.textContent.includes('Märkte zurücksetzen'))
+    button?.click()
+    return Boolean(button)
+  })()`)
+  await waitForCondition(cdp, `(() => {
+    const retailers = new Set(Array.from(document.querySelectorAll('.keyword-search-results .user-card .user-card__retailer-badge')).map((element) => element.textContent.trim()))
+    return retailers.has('BIPA') && retailers.has('dm') && retailers.has('Müller')
+  })()`, TIMEOUT_MS)
+
+  const resetAudit = await auditCurrentPage(cdp, 'search-retailer-reset')
+  assert(!resetAudit.bodyText.includes('Märkte zurücksetzen'), 'search-retailer-reset: reset must disable the explicit market scope')
+  assertNoHorizontalOverflow(resetAudit, 'search-retailer-reset')
 }
 
 async function runBrowseCheck(cdp) {
@@ -679,9 +735,32 @@ async function runBrowseCheck(cdp) {
   assert(/Stöbern|StÃ¶bern/.test(audit.bodyText), 'browse: intro must be visible')
   assert(/Märkte auswählen|MÃ¤rkte auswÃ¤hlen/.test(audit.bodyText), 'browse: market selector must be visible')
   assert(audit.browseRetailerButtons.length >= 2, 'browse: expected visible market buttons')
+  const browseRetailerText = audit.browseRetailerButtons.map((button) => button.text).join(' | ')
+  for (const retailer of ['Billa', 'Billa Plus', 'Lidl', 'PENNY', 'dm', 'BIPA', 'Müller', 'INTERSPAR']) {
+    assert(audit.browseRetailerButtons.some((button) => new RegExp(`^${retailer}(?:\\d|\\s|$)`, 'i').test(button.text)), `browse: ${retailer} market button must be visible`, { browseRetailerText })
+  }
+  assert(!audit.browseRetailerButtons.some((button) => /^(?:SPAR|EUROSPAR|PAGRO|HOFER)(?:\d|\s|$)/i.test(button.text)), 'browse: unavailable public market button found', { browseRetailerText })
   assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'browse: SPAR trust notice must remain visible')
   assert(!audit.sparDetailsOpen && audit.sparDetailsSummary === 'Mehr erfahren', 'browse: SPAR details must start compact')
   assert(!audit.unitPriceLabels.some((label) => /vergleichspreis/i.test(label)), 'browse: old unit-price label found')
+
+  await evaluate(cdp, `(() => {
+    const button = Array.from(document.querySelectorAll('.browse-page .ghost-button'))
+      .find((element) => element.textContent.includes('Alle auswählen'))
+    button?.click()
+    return Boolean(button)
+  })()`)
+  await waitForCondition(cdp, `(() => {
+    const buttons = Array.from(document.querySelectorAll('.browse-page .selection-block .retailer-chip'))
+    return buttons.length >= 8 && buttons.every((button) => button.getAttribute('aria-pressed') === 'true')
+  })()`, TIMEOUT_MS)
+  await evaluate(cdp, `(() => {
+    const button = Array.from(document.querySelectorAll('.browse-page .ghost-button'))
+      .find((element) => element.textContent.includes('Geschäfte zurücksetzen'))
+    button?.click()
+    return Boolean(button)
+  })()`)
+  await waitForCondition(cdp, `Array.from(document.querySelectorAll('.browse-page .selection-block .retailer-chip')).every((button) => button.getAttribute('aria-pressed') === 'false')`, TIMEOUT_MS)
 
   const firstRowTop = audit.browseRetailerButtons[0]?.top
   const firstRowButtons = audit.browseRetailerButtons.filter((button) => Math.abs(button.top - firstRowTop) <= 4)
@@ -715,6 +794,9 @@ async function runComparisonMobileCheck(cdp) {
   assert(comparison.hasPrice && comparison.hasUnitPrice, 'comparison-mobile: price or unit price is missing', { comparison })
   assert(comparison.hasCondition && comparison.hasFacts, 'comparison-mobile: condition or offer facts are missing', { comparison })
   assert(/Gleiche Kategorie/.test(comparison.text), 'comparison-mobile: similarity reason is missing', { comparison })
+  assert(audit.resultCardRetailers.some((retailer) => /^PENNY$/i.test(retailer)), 'comparison-mobile: unfiltered beer results must include PENNY', {
+    resultCardRetailers: audit.resultCardRetailers,
+  })
   assertNoHorizontalOverflow(audit, 'comparison-mobile')
 }
 
@@ -795,6 +877,7 @@ async function main() {
     await runReducedMotionCheck(cdp)
     if (!HOME_ONLY) {
       await runSearchCheck(cdp)
+      await runMultiRetailerCoverageCheck(cdp)
       await runComparisonMobileCheck(cdp)
       await runBrowseCheck(cdp)
       await runTopDealsCheck(cdp)
