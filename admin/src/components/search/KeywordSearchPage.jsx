@@ -272,7 +272,14 @@ function buildAvailableRetailers(retailers) {
   return sortRetailersByDisplayGroup(availableRetailers)
 }
 
-export function KeywordSearchPage({ searchRequest, retailers = [], categories = [], shoppingListIds, onAddToShoppingList }) {
+export function KeywordSearchPage({
+  searchRequest,
+  retailers = [],
+  categories = [],
+  shoppingListIds,
+  onAddToShoppingList,
+  onNavigate,
+}) {
   const resultsHeadingRef = useRef(null)
   const searchInputRef = useRef(null)
   const requestIdRef = useRef(0)
@@ -601,6 +608,10 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
     <div className="keyword-search-page">
       <section className="panel keyword-search-hero">
         <form className="keyword-search-form" onSubmit={handleSubmit}>
+          <p className="search-entry-guidance">
+            Suche ein Produkt – oder starte mit den{' '}
+            <button type="button" onClick={() => onNavigate?.('top-deals')}>Top Deals</button>.
+          </p>
           <div className="keyword-search-form__row">
             <div
               className="keyword-search-form__input-wrap"

@@ -476,6 +476,8 @@ function pageAuditExpression() {
       .filter(isVisible)
       .map((element) => normalize(element.textContent))
     const topDealsNav = document.querySelector('[aria-label="Top Deals heute"]')
+    const searchEntryGuidance = document.querySelector('.search-entry-guidance')
+    const mainSearchInput = document.querySelector('.search-first-page .keyword-search-form input')
     const topDealCards = Array.from(document.querySelectorAll('.top-deals-results .user-card')).filter(isVisible).map((element) => ({
       text: normalize(element.textContent),
       retailer: normalize(element.querySelector('.user-card__retailer-badge')?.textContent),
@@ -503,6 +505,12 @@ function pageAuditExpression() {
       heroMarketLine: isVisible(heroMarketLine) ? normalize(heroMarketLine.textContent) : '',
       unitPriceLabels,
       topDealsNavVisible: isVisible(topDealsNav),
+      topDealsNavClass: normalize(topDealsNav?.className),
+      topDealsNavActive: Boolean(topDealsNav?.classList.contains('page-nav__button--active')),
+      topDealsAnimationName: topDealsNav ? window.getComputedStyle(topDealsNav).animationName : '',
+      searchEntryGuidance: isVisible(searchEntryGuidance) ? normalize(searchEntryGuidance.textContent) : '',
+      mainSearchVisible: isVisible(mainSearchInput),
+      mainSearchAnimationName: mainSearchInput ? window.getComputedStyle(mainSearchInput).animationName : '',
       topDealCards,
       browseRetailerButtons,
       scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
@@ -589,6 +597,11 @@ async function runHomeCheck(cdp) {
   assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'home: subordinate SPAR trust notice must remain visible')
   assert(!audit.bodyText.includes('Aktuelle Angebote finden.'), 'home: old hero headline must be absent')
   assert(audit.topDealsNavVisible, 'home: Top Deals header button must be visible')
+  assert(audit.topDealsNavClass.includes('page-nav__top-deals'), 'home: Top Deals must be a distinct secondary CTA')
+  assert(audit.mainSearchVisible, 'home: primary product search must be visible early')
+  assert(audit.searchEntryGuidance === 'Suche ein Produkt – oder starte mit den Top Deals.', 'home: search guidance must be visible', {
+    actual: audit.searchEntryGuidance,
+  })
   assertNoHorizontalOverflow(audit, 'home')
 }
 
@@ -616,6 +629,12 @@ async function runSearchCheck(cdp) {
     resultCardCount: audit.resultCardCount,
     resultsCountText: audit.resultsCountText,
   })
+  const resultCountNumbers = (audit.resultsCountText.match(/\d+/g) || []).map(Number)
+  assert(
+    audit.resultCardCount > 10 || resultCountNumbers.some((count) => count > 10),
+    'search: normal result list appears constrained to the Top Deals limit',
+    { resultCardCount: audit.resultCardCount, resultsCountText: audit.resultsCountText }
+  )
 }
 
 async function runBrowseCheck(cdp) {
@@ -656,6 +675,7 @@ async function runTopDealsCheck(cdp) {
 
   const audit = await auditCurrentPage(cdp, 'top-deals')
   assert(audit.topDealsNavVisible, 'top-deals: sticky header button must be visible')
+  assert(audit.topDealsNavActive, 'top-deals: sticky header CTA must expose its active state')
   assert(audit.h1Texts.includes('Top Deals heute'), 'top-deals: title must be visible')
   assert(audit.topDealCards.length <= 10, 'top-deals: at most ten cards are allowed')
 
@@ -666,6 +686,25 @@ async function runTopDealsCheck(cdp) {
     assert(card.hasValidity, 'top-deals: validity is missing', { card })
   }
   assertNoHorizontalOverflow(audit, 'top-deals')
+}
+
+async function runReducedMotionCheck(cdp) {
+  logStep('checking reduced-motion entry treatment')
+  await configurePage(cdp, { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT, mobile: false })
+  await cdp.command('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+  await navigate(cdp, makeUrl('/'))
+  await waitForCondition(cdp, `Boolean(document.querySelector('.search-entry-guidance'))`, TIMEOUT_MS)
+
+  const audit = await auditCurrentPage(cdp, 'reduced-motion')
+  assert(audit.topDealsAnimationName === 'none', 'reduced-motion: Top Deals animation must be disabled', {
+    animationName: audit.topDealsAnimationName,
+  })
+  assert(audit.mainSearchAnimationName === 'none', 'reduced-motion: search animation must be disabled', {
+    animationName: audit.mainSearchAnimationName,
+  })
+  await cdp.command('Emulation.setEmulatedMedia', { features: [] })
 }
 
 async function runShoppingListCheck(cdp) {
@@ -698,6 +737,7 @@ async function main() {
 
   try {
     await runHomeCheck(cdp)
+    await runReducedMotionCheck(cdp)
     if (!HOME_ONLY) {
       await runSearchCheck(cdp)
       await runBrowseCheck(cdp)

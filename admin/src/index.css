@@ -264,6 +264,32 @@ a {
   display: none;
 }
 
+.page-nav__button.page-nav__top-deals {
+  border-color: rgba(31, 90, 75, 0.28);
+  background: linear-gradient(135deg, rgba(236, 247, 241, 0.98), rgba(255, 252, 247, 0.96));
+  color: var(--kk-brand-primary-dark);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 8px 18px rgba(31, 90, 75, 0.11);
+  animation: top-deals-entry-glow 1.8s ease-out 1 both;
+}
+
+.page-nav__button.page-nav__top-deals:hover {
+  border-color: rgba(31, 90, 75, 0.42);
+  background: rgba(236, 247, 241, 0.98);
+  box-shadow: 0 10px 22px rgba(31, 90, 75, 0.15);
+}
+
+.page-nav__button.page-nav__top-deals.page-nav__button--active {
+  border-color: rgba(255, 252, 247, 0.62);
+  background: linear-gradient(135deg, var(--kk-brand-primary-dark), var(--kk-brand-primary));
+  color: var(--kk-soft);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 10px 24px rgba(31, 90, 75, 0.24);
+  animation: none;
+}
+
 .page-nav__admin {
   flex: 0 0 auto;
   margin-left: auto;
@@ -3669,6 +3695,12 @@ a {
 
 .search-results-heading:focus {
   outline: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 90, 75, 0.08);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .keyword-search-hero__copy {
@@ -3698,6 +3730,32 @@ a {
   display: grid;
   gap: 0.42rem;
   max-width: 100%;
+}
+
+.search-entry-guidance {
+  margin: 0;
+  color: var(--kk-muted);
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
+  font-weight: 720;
+  line-height: 1.4;
+}
+
+.search-entry-guidance button {
+  min-height: 1.8rem;
+  border: 0;
+  border-bottom: 1px solid rgba(31, 90, 75, 0.32);
+  background: transparent;
+  color: var(--kk-brand-primary-dark);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 0 0.08rem;
+}
+
+.search-entry-guidance button:hover,
+.search-entry-guidance button:focus-visible {
+  border-bottom-color: currentColor;
+  color: var(--kk-brand-primary);
 }
 
 .keyword-search-form__label {
@@ -3730,14 +3788,62 @@ a {
     0 8px 18px rgba(62, 51, 36, 0.055);
 }
 
+.search-first-page .keyword-search-form input {
+  border-color: rgba(31, 90, 75, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 12px 28px rgba(31, 90, 75, 0.13);
+  animation: search-entry-soft-glow 1.8s ease-out 1 both;
+}
+
 .keyword-search-form input::placeholder {
   color: rgba(72, 101, 129, 0.82);
   font-weight: 720;
 }
 
-.keyword-search-form input:focus {
+.search-first-page .keyword-search-form input:focus {
   border-color: rgba(31, 90, 75, 0.45);
-  box-shadow: 0 0 0 4px rgba(31, 90, 75, 0.1);
+  box-shadow:
+    0 0 0 4px rgba(31, 90, 75, 0.16),
+    0 14px 30px rgba(31, 90, 75, 0.14);
+}
+
+@keyframes search-entry-soft-glow {
+  0% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 0 0 0 rgba(31, 90, 75, 0.2),
+      0 12px 28px rgba(31, 90, 75, 0.13);
+  }
+
+  45% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 0 0 6px rgba(31, 90, 75, 0.09),
+      0 14px 32px rgba(31, 90, 75, 0.16);
+  }
+
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 12px 28px rgba(31, 90, 75, 0.13);
+  }
+}
+
+@keyframes top-deals-entry-glow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.84),
+      0 8px 18px rgba(31, 90, 75, 0.11);
+  }
+
+  45% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.84),
+      0 0 0 4px rgba(31, 90, 75, 0.08),
+      0 10px 24px rgba(31, 90, 75, 0.16);
+  }
 }
 
 .keyword-search-controls {
@@ -7215,6 +7321,11 @@ textarea:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .browse-loading-status__spinner {
+    animation: none !important;
+  }
+
+  .page-nav__button.page-nav__top-deals,
+  .search-first-page .keyword-search-form input {
     animation: none !important;
   }
 

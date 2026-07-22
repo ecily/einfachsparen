@@ -969,6 +969,7 @@ function App() {
             categories={categories}
             shoppingListIds={shoppingListIds}
             onAddToShoppingList={handleAddToShoppingList}
+            onNavigate={handleNavigate}
           />
           <BetaNoticeDisclosure onNavigate={handleNavigate} />
           <HowItWorksSection />

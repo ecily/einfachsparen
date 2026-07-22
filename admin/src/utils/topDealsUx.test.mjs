@@ -5,6 +5,8 @@ import test from 'node:test'
 const appSource = fs.readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const pageSource = fs.readFileSync(new URL('../components/search/TopDealsPage.jsx', import.meta.url), 'utf8')
 const cardSource = fs.readFileSync(new URL('../components/search/OfferCardConsumer.jsx', import.meta.url), 'utf8')
+const keywordSearchSource = fs.readFileSync(new URL('../components/search/KeywordSearchPage.jsx', import.meta.url), 'utf8')
+const cssSource = fs.readFileSync(new URL('../index.css', import.meta.url), 'utf8')
 const apiSource = fs.readFileSync(new URL('./apiBase.js', import.meta.url), 'utf8')
 const seoSource = fs.readFileSync(new URL('./seo.js', import.meta.url), 'utf8')
 
@@ -13,8 +15,23 @@ test('sticky header exposes the Top Deals route with compact mobile copy', () =>
   assert.match(appSource, /page-nav__top-deals-long">Top Deals heute/)
   assert.match(appSource, /page-nav__top-deals-short">Top Deals/)
   assert.match(appSource, /handleNavigate\('top-deals'\)/)
+  assert.match(appSource, /page-nav__top-deals\$\{activePage === 'top-deals' \? ' page-nav__button--active' : ''\}/)
+  assert.match(cssSource, /\.page-nav__button\.page-nav__top-deals \{/)
+  assert.match(cssSource, /\.page-nav__button\.page-nav__top-deals\.page-nav__button--active \{/)
   assert.match(seoSource, /pathname\.includes\('top-deals'\)/)
   assert.match(seoSource, /nextPage === 'top-deals'\) return '\/top-deals'/)
+})
+
+test('search and Top Deals are presented as distinct guided entries without limiting normal search', () => {
+  assert.match(keywordSearchSource, /placeholder="Was m&ouml;chtest du heute billiger kaufen"/)
+  assert.match(keywordSearchSource, /Suche ein Produkt – oder starte mit den/)
+  assert.match(keywordSearchSource, /onNavigate\?\.\('top-deals'\)/)
+  assert.match(keywordSearchSource, /const KEYWORD_SEARCH_LIMIT = 60/)
+  assert.match(keywordSearchSource, /pagination\.hasMore/)
+  assert.match(cssSource, /animation: search-entry-soft-glow 1\.8s ease-out 1 both/)
+  assert.match(cssSource, /animation: top-deals-entry-glow 1\.8s ease-out 1 both/)
+  assert.match(cssSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.page-nav__button\.page-nav__top-deals,[\s\S]*?animation: none !important/)
+  assert.doesNotMatch(cssSource, /(?:search-entry-soft-glow|top-deals-entry-glow)[^;]*infinite/)
 })
 
 test('Top Deals page uses the guarded backend endpoint and exact trust copy', () => {
