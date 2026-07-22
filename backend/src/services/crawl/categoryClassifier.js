@@ -233,7 +233,7 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Waschmittel & Reiniger',
   },
   {
-    patterns: [/\bblink\b.*\b(?:farb|schmutzfang)|\bblink\b.*\ballzwecktuecher\b|\bschmutzfangtuecher\b|\bschmutzfangtucher\b|\bpersil\b/],
+    patterns: [/\bblink\b.*\b(?:farb|schmutzfang)|\bblink\b.*\b(?:allzweckt(?:uecher|ucher)|allzweck\s+t(?:uecher|ucher)|reinigungst(?:uecher|ucher))\b|\bschmutzfangtuecher\b|\bschmutzfangtucher\b|\bpersil\b/],
     main: 'Haushalt',
     sub: 'Waschmittel & Reiniger',
   },

@@ -7829,22 +7829,45 @@ test('ranked offer response explains availability for Müller online offers', ()
   assert.equal(ranked.validTo, undefined);
 });
 
-test('Mueller Blink all-purpose wipes response category guard repairs stale food category', () => {
-  const ranked = buildRankedOffer(offer({
-    _id: 'mueller-blink-allzwecktuecher',
+test('Mueller Blink wipes response category guard repairs stale food category across normalized title variants', () => {
+  for (const [index, title] of [
+    'Blink Feuchte Allzwecktücher Orange Pfirsich',
+    'Blink Feuchte Allzwecktuecher Orange Pfirsich',
+    'Blink Feuchte Allzweck Tücher Orange Pfirsich',
+    'Blink Feuchte Allzweck-Tücher Orange Pfirsich',
+  ].entries()) {
+    const ranked = buildRankedOffer(offer({
+      _id: `mueller-blink-allzwecktuecher-${index}`,
+      retailerKey: 'mueller',
+      retailerName: 'Mueller',
+      sourceKey: 'mueller-official-online-offers',
+      sourceType: 'mueller-official-online-offers',
+      title,
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Obst & Gemuese',
+      categoryKey: 'obst-gemuese',
+      subcategoryKey: 'obst-gemuese',
+    }), null, null);
+
+    assert.equal(ranked.categoryPrimary, 'Haushalt', title);
+    assert.equal(ranked.categorySecondary, 'Waschmittel & Reiniger', title);
+  }
+
+  const blinkOnly = buildRankedOffer(offer({
+    _id: 'mueller-blink-only',
     retailerKey: 'mueller',
     retailerName: 'Mueller',
     sourceKey: 'mueller-official-online-offers',
     sourceType: 'mueller-official-online-offers',
-    title: 'Blink Feuchte Allzwecktuecher Orange Pfirsich',
-    categoryPrimary: 'Lebensmittel',
-    categorySecondary: 'Obst & Gemuese',
-    categoryKey: 'obst-gemuese',
-    subcategoryKey: 'obst-gemuese',
+    title: 'Blink Sommerduft',
+    categoryPrimary: 'Non-Food',
+    categorySecondary: 'Online-only / Sale',
+    categoryKey: 'online-only-sale',
+    subcategoryKey: 'online-only-sale',
   }), null, null);
 
-  assert.equal(ranked.categoryPrimary, 'Haushalt');
-  assert.equal(ranked.categorySecondary, 'Waschmittel & Reiniger');
+  assert.equal(blinkOnly.categoryPrimary, 'Non-Food');
+  assert.equal(blinkOnly.categorySecondary, 'Online-only / Sale');
 
   const otherRetailer = buildRankedOffer(offer({
     _id: 'billa-blink-allzwecktuecher',

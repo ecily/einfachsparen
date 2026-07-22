@@ -5094,7 +5094,7 @@ function withResponseCategoryGuardFields(offer = {}) {
   if (
     retailerKey === 'mueller'
     && String(offer.sourceKey || offer.sourceType || '').toLowerCase() === 'mueller-official-online-offers'
-    && /\bblink\b.*\ballzwecktuecher\b/.test(titleText)
+    && /\bblink\b.*\b(?:allzweckt(?:uecher|ucher)|allzweck\s+t(?:uecher|ucher)|reinigungst(?:uecher|ucher))\b/.test(titleText)
   ) {
     return applyGuard('mueller-blink-allzwecktuecher');
   }

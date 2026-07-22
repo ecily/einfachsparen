@@ -15,6 +15,10 @@ test('classifies common Austrian supermarket product names into concrete subcate
     ['Duschgel Sensitive 250 ml', 'Drogerie / Hygiene', 'Koerperpflege'],
     ['Allzweckreiniger Zitrone 1 l', 'Haushalt', 'Waschmittel & Reiniger'],
     ['Blink Feuchte Allzwecktuecher Orange Pfirsich', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Blink Feuchte Allzwecktücher Orange Pfirsich', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Blink Feuchte Allzweck Tücher Orange Pfirsich', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Blink Feuchte Allzweck-Tücher Orange Pfirsich', 'Haushalt', 'Waschmittel & Reiniger'],
+    ['Blink Feuchte Reinigungstücher Orange Pfirsich', 'Haushalt', 'Waschmittel & Reiniger'],
     ['Burgit Anti H\u00fchneraugen Stift', 'Drogerie / Hygiene', 'Gesundheit & Nahrungsergaenzung'],
   ];
 
