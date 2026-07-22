@@ -7829,6 +7829,22 @@ test('ranked offer response explains availability for Müller online offers', ()
   assert.equal(ranked.validTo, undefined);
 });
 
+test('ranked offer response normalizes Mueller store availability tokens', () => {
+  for (const availability of ['store-only', 'deliver-to-store']) {
+    const ranked = buildRankedOffer(offer({
+      _id: `mueller-online-${availability}`,
+      retailerKey: 'mueller',
+      retailerName: 'Mueller',
+      sourceType: 'mueller-official-online-offers',
+      conditionsText: `Mueller Online-Angebot; ${availability}`,
+      priceCurrent: { amount: 7.65, currency: 'EUR' },
+      normalizedUnitPrice: { amount: 7.65, unit: 'Stk', comparable: false, confidence: 0.4 },
+    }), null, null);
+
+    assert.equal(ranked.conditionsText, 'Online-Angebot \u00b7 Verf\u00fcgbarkeit bei M\u00fcller pr\u00fcfen');
+  }
+});
+
 test('Mueller Blink wipes response category guard repairs stale food category across normalized title variants', () => {
   for (const [index, title] of [
     'Blink Feuchte Allzwecktücher Orange Pfirsich',

@@ -4479,7 +4479,7 @@ function getPublicConditionsText(offer, options = {}) {
 
   if (
     sourceKey === 'mueller official online offers'
-    && /^m(?:u|ue|\u00fc)ller online-angebot(?:;\s*(?:online|available))?$/i.test(filteredText)
+    && /^m(?:u|ue|\u00fc)ller online-angebot(?:;\s*(?:online|available|store-only|deliver-to-store))?$/i.test(filteredText)
   ) {
     return 'Online-Angebot \u00b7 Verf\u00fcgbarkeit bei M\u00fcller pr\u00fcfen';
   }
