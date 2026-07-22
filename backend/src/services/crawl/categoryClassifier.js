@@ -148,6 +148,11 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
+    patterns: [/\bhuehneraugen\b/],
+    main: 'Drogerie / Hygiene',
+    sub: 'Gesundheit & Nahrungsergaenzung',
+  },
+  {
     patterns: [/\bkinder\s+(?:kinder\s+)?pingui\b|\bkinderpingui\b/],
     main: 'Lebensmittel',
     sub: 'Suesswaren & Knabbereien',
