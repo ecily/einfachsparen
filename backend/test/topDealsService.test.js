@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildCandidateDecision, buildTopDealsFromOffers } = require('../src/services/offers/topDealsService');
+const {
+  buildCandidateDecision,
+  buildTopDealsFromOffers,
+  compareTopDeals,
+} = require('../src/services/offers/topDealsService');
 
 const NOW = new Date('2026-07-22T12:00:00.000Z');
 
@@ -73,8 +77,8 @@ test('accepts a fresh official deal and derives a reference unit price from the 
   assert.equal(response.deals[0].topDeal.reason, 'Starke Ersparnis nach Preis pro Einheit');
 })
 
-test('sorts by percentage, then absolute savings, then image and limits to ten', () => {
-  const candidates = Array.from({ length: 12 }, (_, index) => offer({
+test('sorts by verified unit savings and caps the default response at twenty', () => {
+  const candidates = Array.from({ length: 25 }, (_, index) => offer({
     _id: `deal-${index}`,
     title: `Deal ${index}`,
     titleNormalized: `deal ${index}`,
@@ -84,13 +88,26 @@ test('sorts by percentage, then absolute savings, then image and limits to ten',
   }));
   const response = buildTopDealsFromOffers(candidates, { limit: 99, now: NOW });
 
-  assert.equal(response.limit, 10);
-  assert.equal(response.count, 10);
+  assert.equal(response.limit, 20);
+  assert.equal(response.count, 20);
   assert.equal(response.deals[0].id, 'deal-0');
   assert.ok(response.deals[0].topDeal.discountPercent >= response.deals[1].topDeal.discountPercent);
 })
 
-test('returns fewer than ten without unsafe filler offers and carries clear conditions', () => {
+test('keeps an explicit limit of ten and never returns more than requested', () => {
+  const candidates = Array.from({ length: 25 }, (_, index) => offer({
+    _id: `explicit-${index}`,
+    title: `Explicit Deal ${index}`,
+    titleNormalized: `explicit deal ${index}`,
+  }));
+  const response = buildTopDealsFromOffers(candidates, { limit: 10, now: NOW });
+
+  assert.equal(response.limit, 10);
+  assert.equal(response.count, 10);
+  assert.equal(response.deals.length, 10);
+})
+
+test('returns fewer than twenty without unsafe filler offers and carries clear conditions', () => {
   const conditioned = offer({
     _id: 'conditioned',
     hasConditions: true,
@@ -101,6 +118,87 @@ test('returns fewer than ten without unsafe filler offers and carries clear cond
 
   assert.equal(response.count, 1);
   assert.equal(response.deals[0].conditionsText, 'Nur mit Lidl Plus');
+})
+
+test('sorts equal percentage deals by absolute unit saving before current unit price', () => {
+  const lowerUnitSaving = offer({
+    _id: 'lower-unit-saving',
+    title: 'Lower unit saving',
+    titleNormalized: 'lower unit saving',
+    priceCurrent: { amount: 1, currency: 'EUR' },
+    priceReference: { amount: 2, currency: 'EUR' },
+  });
+  const higherUnitSaving = offer({
+    _id: 'higher-unit-saving',
+    title: 'Higher unit saving',
+    titleNormalized: 'higher unit saving',
+    priceCurrent: { amount: 5, currency: 'EUR' },
+    priceReference: { amount: 10, currency: 'EUR' },
+  });
+  const response = buildTopDealsFromOffers([lowerUnitSaving, higherUnitSaving], { now: NOW });
+
+  assert.equal(response.deals[0].id, 'higher-unit-saving');
+  assert.equal(response.deals[0].topDeal.unitPriceSavingsAmount, 5);
+  assert.equal(response.methodology.secondarySort, 'absolute-unit-price-savings');
+})
+
+test('sorts lower current unit price first after equal percent and unit saving', () => {
+  const lowerCurrent = {
+    retailerName: 'A',
+    title: 'Lower current',
+    topDeal: {
+      discountPercent: 50,
+      unitPriceSavingsAmount: 2,
+      currentUnitPrice: { amount: 3 },
+      savingsAmount: 1,
+    },
+  };
+  const higherCurrent = {
+    retailerName: 'B',
+    title: 'Higher current',
+    topDeal: {
+      discountPercent: 50,
+      unitPriceSavingsAmount: 2,
+      currentUnitPrice: { amount: 4 },
+      savingsAmount: 9,
+    },
+  };
+
+  assert.ok(compareTopDeals(lowerCurrent, higherCurrent) < 0);
+})
+
+test('applies allowlisted category and retailer filters after all safety guards', () => {
+  const coffee = offer({
+    _id: 'coffee',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    title: 'Kaffee Ganze Bohne',
+    titleNormalized: 'kaffee ganze bohne',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+  });
+  const toothpaste = offer({
+    _id: 'toothpaste',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    title: 'Zahnpasta Sensitive',
+    titleNormalized: 'zahnpasta sensitive',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Mund- & Zahnpflege',
+  });
+
+  const coffeeResponse = buildTopDealsFromOffers([coffee, toothpaste], { category: 'kaffee', now: NOW });
+  assert.deepEqual(coffeeResponse.deals.map((deal) => deal.id), ['coffee']);
+  assert.deepEqual(coffeeResponse.filters, { category: 'kaffee', retailer: '', invalid: false });
+
+  const bipaResponse = buildTopDealsFromOffers([coffee, toothpaste], { retailer: 'bipa', now: NOW });
+  assert.deepEqual(bipaResponse.deals.map((deal) => deal.id), ['toothpaste']);
+  assert.deepEqual(bipaResponse.filters, { category: '', retailer: 'bipa', invalid: false });
+
+  const emptyResponse = buildTopDealsFromOffers([coffee, toothpaste], { retailer: 'spar', now: NOW });
+  assert.equal(emptyResponse.count, 0);
+  assert.equal(emptyResponse.filters.invalid, true);
+  assert.equal(emptyResponse.totalGuardedCandidateCount, 2);
 })
 
 test('excludes missing reference, unsafe unit price, expired, risky retailers and missing prices', () => {
@@ -121,6 +219,7 @@ test('excludes missing reference, unsafe unit price, expired, risky retailers an
     offer({ _id: 'eurospar', retailerKey: 'eurospar', retailerName: 'EUROSPAR' }),
     offer({ _id: 'interspar', retailerKey: 'interspar', retailerName: 'INTERSPAR' }),
     offer({ _id: 'hofer', retailerKey: 'hofer', retailerName: 'HOFER' }),
+    offer({ _id: 'pagro', retailerKey: 'pagro', retailerName: 'PAGRO' }),
     offer({ _id: 'missing-price', priceCurrent: { amount: null, currency: 'EUR' } }),
   ];
   for (const unsafeOffer of unsafeOffers) {
@@ -129,7 +228,7 @@ test('excludes missing reference, unsafe unit price, expired, risky retailers an
   const response = buildTopDealsFromOffers(unsafeOffers, { now: NOW });
 
   assert.equal(response.count, 0);
-  assert.equal(response.excludedReasons['excluded-retailer'], 4);
+  assert.equal(response.excludedReasons['excluded-retailer'], 5);
   assert.ok(response.excludedReasons.expired >= 1);
   assert.ok(response.excludedReasons['unit-price-unsafe'] >= 1);
   assert.ok(response.excludedReasons['reference-price-unsafe'] >= 1);

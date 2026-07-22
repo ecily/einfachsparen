@@ -245,9 +245,14 @@ export async function fetchOfferRankingDirect(params = {}) {
   return fetchJson(`/offers/ranking${suffix}`)
 }
 
-export async function fetchTopDeals(limit = 10) {
-  const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 10)
-  return fetchJson(`/offers/top-deals?limit=${safeLimit}`)
+export async function fetchTopDeals(limit = 20, filters = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 20)
+  const searchParams = new URLSearchParams({ limit: String(safeLimit) })
+
+  if (filters?.category) searchParams.set('category', String(filters.category))
+  if (filters?.retailer) searchParams.set('retailer', String(filters.retailer))
+
+  return fetchJson(`/offers/top-deals?${searchParams.toString()}`)
 }
 
 export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0, resultSetToken = '', options = {}) {

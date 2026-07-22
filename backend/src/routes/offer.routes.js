@@ -81,7 +81,11 @@ router.get('/basket', basketRateLimit, validateBasketQuery, async (req, res, nex
 
 router.get('/top-deals', offersRateLimit, async (req, res, next) => {
   try {
-    const topDeals = await buildTopDeals({ limit: req.query.limit || 10 });
+    const topDeals = await buildTopDeals({
+      limit: req.query.limit,
+      category: req.query.category,
+      retailer: req.query.retailer,
+    });
     res.json(topDeals);
   } catch (error) {
     next(error);

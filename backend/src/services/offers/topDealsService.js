@@ -7,12 +7,24 @@ const {
 } = require('./offerRankingService');
 const { classifyOfferSourceQuality } = require('./sourceQuality');
 
-const DEFAULT_TOP_DEALS_LIMIT = 10;
-const MAX_TOP_DEALS_LIMIT = 10;
+const DEFAULT_TOP_DEALS_LIMIT = 20;
+const MAX_TOP_DEALS_LIMIT = 20;
 const TOP_DEALS_CANDIDATE_LIMIT = 2000;
 const TOP_DEALS_CACHE_TTL_MS = 2 * 60 * 1000;
 const ALLOWED_UNITS = new Set(['kg', 'l', 'Stk']);
 const EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar', 'hofer', 'pagro']);
+const ALLOWED_RETAILER_FILTERS = new Set(['billa', 'billa-plus', 'lidl', 'penny', 'dm', 'bipa', 'mueller']);
+const ALLOWED_CATEGORY_FILTERS = new Set([
+  'getraenke',
+  'drogerie',
+  'haushalt',
+  'kaffee',
+  'bier',
+  'waschmittel',
+  'zahnpasta',
+  'sonnencreme',
+  'toilettenpapier',
+]);
 let cachedTopDeals = null;
 
 function finitePositive(value) {
@@ -29,6 +41,56 @@ function normalizeLimit(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_TOP_DEALS_LIMIT;
   return Math.min(Math.trunc(parsed), MAX_TOP_DEALS_LIMIT);
+}
+
+function normalizeFilterText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ß/g, 'ss')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function normalizeTopDealsFilters({ category = '', retailer = '' } = {}) {
+  const requestedCategory = normalizeFilterText(category).replace(/\s+/g, '-');
+  const requestedRetailer = normalizeRetailerKey(retailer);
+  const categoryValid = !requestedCategory || ALLOWED_CATEGORY_FILTERS.has(requestedCategory);
+  const retailerValid = !requestedRetailer || ALLOWED_RETAILER_FILTERS.has(requestedRetailer);
+
+  return {
+    category: categoryValid ? requestedCategory : '',
+    retailer: retailerValid ? requestedRetailer : '',
+    invalid: !categoryValid || !retailerValid,
+  };
+}
+
+function matchesCategoryFilter(deal, category) {
+  if (!category) return true;
+  const primary = normalizeFilterText(deal?.categoryPrimary);
+  const secondary = normalizeFilterText(deal?.categorySecondary || deal?.displayCategory);
+  const title = normalizeFilterText([deal?.title, deal?.brand].filter(Boolean).join(' '));
+
+  if (category === 'getraenke') return primary === 'getraenke';
+  if (category === 'drogerie') return primary === 'drogerie hygiene';
+  if (category === 'haushalt') return primary === 'haushalt';
+  if (category === 'kaffee') return secondary === 'kaffee tee';
+  if (category === 'bier') return secondary === 'bier';
+  if (category === 'waschmittel') return /^waschmittel (?:reiniger|reinigung)$/.test(secondary);
+  if (category === 'zahnpasta') return secondary === 'mund zahnpflege' && /\bzahnpasta\b/.test(title);
+  if (category === 'sonnencreme') {
+    return secondary === 'koerperpflege' && /\b(?:sonnencreme|sonnenmilch|sonnenschutz)\b/.test(title);
+  }
+  if (category === 'toilettenpapier') return secondary === 'haushaltspapier' && /\btoilettenpapier\b/.test(title);
+  return false;
+}
+
+function matchesTopDealsFilters(deal, filters) {
+  if (filters.invalid) return false;
+  const retailerKey = normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '');
+  return (!filters.retailer || retailerKey === filters.retailer)
+    && matchesCategoryFilter(deal, filters.category);
 }
 
 function hasRiskyPublishState(offer) {
@@ -136,6 +198,7 @@ function buildCandidateDecision(rawOffer, now = new Date()) {
         reason: 'Starke Ersparnis nach Preis pro Einheit',
         discountPercent: round(discountPercent),
         savingsAmount: round(savingsAmount),
+        unitPriceSavingsAmount: round(referenceUnitPriceAmount - unitPrice),
         currentUnitPrice: {
           amount: round(unitPrice),
           unit,
@@ -152,6 +215,12 @@ function buildCandidateDecision(rawOffer, now = new Date()) {
 function compareTopDeals(left, right) {
   const percentDifference = Number(right?.topDeal?.discountPercent || 0) - Number(left?.topDeal?.discountPercent || 0);
   if (percentDifference !== 0) return percentDifference;
+
+  const unitSavingsDifference = Number(right?.topDeal?.unitPriceSavingsAmount || 0) - Number(left?.topDeal?.unitPriceSavingsAmount || 0);
+  if (unitSavingsDifference !== 0) return unitSavingsDifference;
+
+  const currentUnitPriceDifference = Number(left?.topDeal?.currentUnitPrice?.amount || 0) - Number(right?.topDeal?.currentUnitPrice?.amount || 0);
+  if (currentUnitPriceDifference !== 0) return currentUnitPriceDifference;
 
   const savingsDifference = Number(right?.topDeal?.savingsAmount || 0) - Number(left?.topDeal?.savingsAmount || 0);
   if (savingsDifference !== 0) return savingsDifference;
@@ -182,7 +251,12 @@ function getDealIdentity(deal) {
   ].join('|');
 }
 
-function buildTopDealsFromOffers(offers = [], { limit = DEFAULT_TOP_DEALS_LIMIT, now = new Date() } = {}) {
+function buildTopDealsFromOffers(offers = [], {
+  limit = DEFAULT_TOP_DEALS_LIMIT,
+  now = new Date(),
+  category = '',
+  retailer = '',
+} = {}) {
   const excludedReasons = {};
   const accepted = [];
 
@@ -195,35 +269,53 @@ function buildTopDealsFromOffers(offers = [], { limit = DEFAULT_TOP_DEALS_LIMIT,
     }
   }
 
-  const uniqueDeals = [];
+  const uniqueGuardedDeals = [];
   const seen = new Set();
   for (const deal of accepted.sort(compareTopDeals)) {
     const identity = getDealIdentity(deal);
     if (seen.has(identity)) continue;
     seen.add(identity);
-    uniqueDeals.push(deal);
+    uniqueGuardedDeals.push(deal);
   }
 
   const safeLimit = normalizeLimit(limit);
+  const filters = normalizeTopDealsFilters({ category, retailer });
+  const uniqueDeals = uniqueGuardedDeals.filter((deal) => matchesTopDealsFilters(deal, filters));
   return {
     generatedAt: now.toISOString(),
     count: Math.min(uniqueDeals.length, safeLimit),
     candidateCount: uniqueDeals.length,
+    totalGuardedCandidateCount: uniqueGuardedDeals.length,
+    filteredOutCount: uniqueGuardedDeals.length - uniqueDeals.length,
     limit: safeLimit,
+    filters: {
+      category: filters.category,
+      retailer: filters.retailer,
+      invalid: filters.invalid,
+    },
     deals: uniqueDeals.slice(0, safeLimit),
     excludedReasons,
     methodology: {
       primarySort: 'verified-unit-savings-percent',
+      secondarySort: 'absolute-unit-price-savings',
+      tertiarySort: 'lower-current-unit-price',
       referencePrice: 'direct-source-reference-only',
       fewerThanLimitAllowed: true,
     },
   };
 }
 
-async function buildTopDeals({ limit = DEFAULT_TOP_DEALS_LIMIT, now = new Date() } = {}) {
+async function buildTopDeals({
+  limit = DEFAULT_TOP_DEALS_LIMIT,
+  now = new Date(),
+  category = '',
+  retailer = '',
+} = {}) {
   const safeLimit = normalizeLimit(limit);
+  const filters = normalizeTopDealsFilters({ category, retailer });
+  const cacheKey = [safeLimit, filters.category, filters.retailer, filters.invalid].join('|');
   const nowMs = now.getTime();
-  if (cachedTopDeals && cachedTopDeals.expiresAt > nowMs && cachedTopDeals.limit === safeLimit) {
+  if (cachedTopDeals && cachedTopDeals.expiresAt > nowMs && cachedTopDeals.cacheKey === cacheKey) {
     return cachedTopDeals.response;
   }
 
@@ -240,10 +332,15 @@ async function buildTopDeals({ limit = DEFAULT_TOP_DEALS_LIMIT, now = new Date()
     .maxTimeMS(2500)
     .lean();
 
-  const response = buildTopDealsFromOffers(offers, { limit: safeLimit, now });
+  const response = buildTopDealsFromOffers(offers, {
+    limit: safeLimit,
+    now,
+    category,
+    retailer,
+  });
   cachedTopDeals = {
     expiresAt: nowMs + TOP_DEALS_CACHE_TTL_MS,
-    limit: safeLimit,
+    cacheKey,
     response,
   };
   return response;
@@ -259,5 +356,7 @@ module.exports = {
   buildTopDealsFromOffers,
   clearTopDealsCache,
   compareTopDeals,
+  matchesTopDealsFilters,
   normalizeLimit,
+  normalizeTopDealsFilters,
 };

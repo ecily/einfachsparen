@@ -490,6 +490,12 @@ function pageAuditExpression() {
       hasTopDeal: Boolean(element.querySelector('.user-card__top-deal')),
       hasValidity: Boolean(element.querySelector('.user-card__meta-pill--validity')),
     }))
+    const topDealsDiscovery = document.querySelector('.top-deals-discovery')
+    const topDealsDiscoveryLinks = Array.from(topDealsDiscovery?.querySelectorAll('a') || []).map((element) => ({
+      text: normalize(element.textContent),
+      href: normalize(element.getAttribute('href')),
+      visible: isVisible(element),
+    }))
     const resultCardRetailers = Array.from(document.querySelectorAll('.keyword-search-results .user-card'))
       .filter(isVisible)
       .map((element) => normalize(element.querySelector('.user-card__retailer-badge')?.textContent))
@@ -538,6 +544,9 @@ function pageAuditExpression() {
       mainSearchVisible: isVisible(mainSearchInput),
       mainSearchAnimationName: mainSearchInput ? window.getComputedStyle(mainSearchInput).animationName : '',
       topDealCards,
+      topDealsDiscoveryVisible: isVisible(topDealsDiscovery),
+      topDealsDiscoveryText: normalize(topDealsDiscovery?.textContent),
+      topDealsDiscoveryLinks,
       resultCardRetailers,
       comparisonCards,
       browseRetailerButtons,
@@ -814,10 +823,25 @@ async function runTopDealsCheck(cdp) {
   assert(audit.topDealsNavVisible, 'top-deals: sticky header button must be visible')
   assert(audit.topDealsNavActive, 'top-deals: sticky header CTA must expose its active state')
   assert(audit.h1Texts.includes('Top Deals heute'), 'top-deals: title must be visible')
-  assert(audit.topDealCards.length <= 10, 'top-deals: at most ten cards are allowed')
+  assert(audit.topDealCards.length <= 20, 'top-deals: at most twenty cards are allowed')
+  assert(audit.topDealsDiscoveryVisible, 'top-deals: category and retailer discovery must be visible')
+  assert(
+    audit.topDealsDiscoveryText.includes('Top Deals nach Kategorie und Markt')
+      && audit.topDealsDiscoveryText.includes('Finde die stärksten verifizierten Ersparnisse gezielt nach Bereich oder Händler.'),
+    'top-deals: discovery title or explanation is missing'
+  )
+  const discoveryHrefs = audit.topDealsDiscoveryLinks.filter((link) => link.visible).map((link) => link.href)
+  for (const href of ['/top-deals?category=getraenke', '/top-deals?category=kaffee', '/top-deals?retailer=billa', '/top-deals?retailer=mueller']) {
+    assert(discoveryHrefs.includes(href), 'top-deals: expected discovery link is missing', { href, discoveryHrefs })
+  }
+  assert(
+    discoveryHrefs.every((href) => !/[?&]retailer=(?:spar|eurospar|interspar|hofer|pagro)(?:&|$)/.test(href)),
+    'top-deals: excluded retailer must not be discoverable',
+    { discoveryHrefs }
+  )
 
   for (const card of audit.topDealCards) {
-    assert(!/^(SPAR|EUROSPAR|HOFER)$/i.test(card.retailer), 'top-deals: excluded retailer found', { card })
+    assert(!/^(SPAR|EUROSPAR|INTERSPAR|HOFER|PAGRO)$/i.test(card.retailer), 'top-deals: excluded retailer found', { card })
     assert(card.hasUnitPrice, 'top-deals: safe unit price is missing', { card })
     assert(card.hasTopDeal && /statt/.test(card.text), 'top-deals: reference unit price is missing', { card })
     assert(card.hasValidity, 'top-deals: validity is missing', { card })

@@ -3164,6 +3164,64 @@ a {
   font-size: 0.86rem;
 }
 
+.top-deals-hero__filter {
+  color: var(--kk-muted);
+  font-size: 0.86rem;
+}
+
+.top-deals-hero__filter a {
+  color: var(--kk-primary);
+  font-weight: 800;
+}
+
+.top-deals-discovery {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.top-deals-discovery h2,
+.top-deals-discovery p {
+  margin: 0;
+}
+
+.top-deals-discovery p {
+  margin-top: 0.35rem;
+  color: var(--kk-muted);
+}
+
+.top-deals-discovery__group {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.top-deals-discovery__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.top-deals-discovery__links a {
+  max-width: 100%;
+  padding: 0.48rem 0.7rem;
+  border: 1px solid var(--kk-border);
+  border-radius: 999px;
+  background: var(--kk-surface);
+  color: var(--kk-primary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.top-deals-discovery__links a:hover,
+.top-deals-discovery__links a[aria-current='page'] {
+  border-color: var(--kk-primary);
+  background: var(--kk-primary-soft);
+}
+
 .top-deals-empty {
   justify-items: start;
 }

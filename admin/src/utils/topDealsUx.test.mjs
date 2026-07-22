@@ -47,11 +47,32 @@ test('final search guidance and explanation copy stay user-facing and restrained
 })
 
 test('Top Deals page uses the guarded backend endpoint and exact trust copy', () => {
-  assert.match(apiSource, /fetchJson\(`\/offers\/top-deals\?limit=\$\{safeLimit\}`\)/)
+  assert.match(apiSource, /fetchTopDeals\(limit = 20, filters = \{\}\)/)
+  assert.match(apiSource, /Number\(limit\) \|\| 20, 1\), 20/)
+  assert.match(apiSource, /searchParams\.set\('category'/)
+  assert.match(apiSource, /searchParams\.set\('retailer'/)
+  assert.match(pageSource, /fetchTopDeals\(20, \{ category: activeCategory, retailer: activeRetailer \}\)/)
   assert.match(pageSource, /<h1 id="top-deals-title">Top Deals heute<\/h1>/)
   assert.match(pageSource, /Die stärksten verifizierten Ersparnisse nach Preis pro Einheit – Bedingungen inklusive\./)
   assert.match(pageSource, /Heute sind noch nicht genug verifizierte Vergleichswerte verfügbar\. Suche direkt nach deinem Produkt\./)
   assert.match(pageSource, /topDeal=\{deal\.topDeal\}/)
+})
+
+test('Top Deals expose only safety-allowlisted category and retailer filters', () => {
+  assert.match(pageSource, /Top Deals nach Kategorie und Markt/)
+  assert.match(pageSource, /Finde die stärksten verifizierten Ersparnisse gezielt nach Bereich oder Händler\./)
+
+  for (const slug of ['getraenke', 'drogerie', 'haushalt', 'kaffee', 'bier', 'waschmittel', 'zahnpasta', 'sonnencreme', 'toilettenpapier']) {
+    assert.match(pageSource, new RegExp(`\\['${slug}',`))
+  }
+  for (const retailer of ['billa', 'billa-plus', 'lidl', 'penny', 'dm', 'bipa', 'mueller']) {
+    assert.match(pageSource, new RegExp(`\\['${retailer}',`))
+  }
+  for (const excluded of ["['spar',", "['eurospar',", "['interspar',", "['hofer',", "['pagro',"]) {
+    assert.equal(pageSource.includes(excluded), false)
+  }
+  assert.match(pageSource, /href=\{`\/top-deals\?category=\$\{key\}`\}/)
+  assert.match(pageSource, /href=\{`\/top-deals\?retailer=\$\{key\}`\}/)
 })
 
 test('Top Deal cards retain price, unit price, reference unit price, savings, conditions and validity', () => {
