@@ -14,7 +14,7 @@ test('classifies common Austrian supermarket product names into concrete subcate
     ['Cappuccino Kapseln 16 Stueck', 'Getraenke', 'Kaffee & Tee'],
     ['Duschgel Sensitive 250 ml', 'Drogerie / Hygiene', 'Koerperpflege'],
     ['Allzweckreiniger Zitrone 1 l', 'Haushalt', 'Waschmittel & Reiniger'],
-    ['Burgit Anti Huehneraugen Stift', 'Drogerie / Hygiene', 'Gesundheit & Nahrungsergaenzung'],
+    ['Burgit Anti H\u00fchneraugen Stift', 'Drogerie / Hygiene', 'Gesundheit & Nahrungsergaenzung'],
   ];
 
   for (const [title, primaryCategory, secondaryCategory] of cases) {

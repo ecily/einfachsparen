@@ -148,7 +148,7 @@ const CATEGORY_TAXONOMY = [
 
 const HARD_CATEGORY_OVERRIDES = [
   {
-    patterns: [/\bhuehneraugen\b/],
+    patterns: [/\b(?:huehner|huhner)augen\b/],
     main: 'Drogerie / Hygiene',
     sub: 'Gesundheit & Nahrungsergaenzung',
   },
