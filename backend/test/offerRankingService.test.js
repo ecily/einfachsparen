@@ -7633,7 +7633,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v1-image-tiebreak-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v2-image-tiebreak-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
@@ -7984,7 +7984,7 @@ test('equally relevant and otherwise equal offers prefer the card with an image'
   assert.equal(compareOffersByRanking(withoutImage, withImage, { query: 'kaffee' }) > 0, true);
 });
 
-test('safe market comparison exposes only a cheaper official alternative for the same exact product and unit', () => {
+test('safe market comparison exposes a cheaper strongly matched product type with clear conditions', () => {
   const primary = offer({
     _id: 'primary-coffee',
     retailerKey: 'bipa',
@@ -8026,14 +8026,19 @@ test('safe market comparison exposes only a cheaper official alternative for the
     normalizedUnitPrice: { amount: 15.99, unit: 'kg', comparable: true, confidence: 0.9 },
     sourceType: 'dm-official-html',
     rawFacts: { sourceKey: 'dm-official-product-search' },
+    conditionsText: 'Nur mit dm App',
+    customerProgramRequired: true,
   });
 
   assert.equal(canOfferSafeMarketComparison(primary, alternative), true);
   assert.deepEqual(buildSafeMarketComparisonAlternative(primary, [primary, alternative]), {
     available: true,
-    reason: 'Gleiches Produkt bei einem anderen Händler mit niedrigerem sicherem Vergleichspreis',
-    similarityLabel: 'Gleicher Produkttyp: Kaffee & Tee',
-    primaryMetricLabel: 'Günstigerer Preis pro Kilogramm',
+    type: 'cheaper_alternative',
+    label: 'Günstiger pro kg',
+    reason: 'Gleiche Kategorie und niedrigerer Preis pro Einheit',
+    similarityLabel: 'Gleiche Kategorie: Kaffee & Tee',
+    unitPriceDeltaLabel: '15,99 €/kg statt 19,98 €/kg',
+    conditionNote: 'Bedingung: Nur mit dm App',
     offer: {
       id: 'alternative-coffee',
       retailerKey: 'dm',
@@ -8043,8 +8048,9 @@ test('safe market comparison exposes only a cheaper official alternative for the
       imageUrl: '',
       categoryPrimary: 'Getraenke',
       categorySecondary: 'Kaffee & Tee',
+      displayCategory: 'Kaffee & Tee',
       quantityText: '1 kg',
-      conditionsText: 'Aktion',
+      conditionsText: 'Nur mit dm App',
       validFrom: '2099-01-01T00:00:00.000Z',
       validTo: '2099-01-31T23:59:59.000Z',
       validityLabel: 'gueltig 2099-01-01 bis 2099-02-01',
@@ -8072,23 +8078,118 @@ test('safe market comparison exposes only a cheaper official alternative for the
   const alternativeResponse = response.rankedOffers.find((item) => item.id === 'alternative-coffee');
 
   assert.equal(primaryResponse.comparisonAlternative.offer.id, 'alternative-coffee');
-  assert.equal('comparisonAlternative' in alternativeResponse, false);
+  assert.equal(alternativeResponse.comparisonAlternative.type, 'similar_alternative');
+  assert.equal(alternativeResponse.comparisonAlternative.offer.id, 'primary-coffee');
 });
 
-test('safe market comparison fails closed for unsafe units, sources, mechanics, retailer families and identities', () => {
+test('safe market comparison exposes a nearby similar alternative without a savings claim', () => {
+  const primary = offer({
+    _id: 'primary-sunscreen',
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Sonnencreme Summer Scent LSF 50, 100 ml',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Koerperpflege',
+    quantityText: '100 ml',
+    totalComparableAmount: 0.1,
+    comparableUnit: 'l',
+    priceCurrent: { amount: 3.95, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 39.5, unit: 'l', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+    sourceType: 'dm-official-product-search',
+    rawFacts: { sourceKey: 'dm-official-product-search' },
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-success',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: '2099-01-01T00:00:00.000Z',
+    validTo: '2099-01-31T23:59:59.000Z',
+    conditionsText: 'Ausverkauf; nur solange der Vorrat reicht',
+    hasConditions: true,
+  });
+  const alternative = offer({
+    ...primary,
+    _id: 'similar-sunscreen',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    title: 'Sonnencreme Hydrating Protect LSF 30',
+    quantityText: '180 ml',
+    totalComparableAmount: 0.18,
+    priceCurrent: { amount: 10.49, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 58.3, unit: 'l', comparable: true, confidence: 0.9 },
+    sourceType: 'bipa-official-html',
+    rawFacts: { sourceKey: 'bipa-official-category' },
+    conditionsText: 'Aktion',
+  });
+
+  const comparison = buildSafeMarketComparisonAlternative(primary, [primary, alternative]);
+
+  assert.equal(comparison.type, 'similar_alternative');
+  assert.equal(comparison.label, 'Ähnliche Alternative');
+  assert.equal(comparison.reason, 'Gleiche Kategorie und ähnlicher Produkttyp');
+  assert.equal(comparison.unitPriceDeltaLabel, '');
+  assert.equal(comparison.conditionNote, 'Bedingung: Aktion');
+  assert.equal(comparison.offer.id, 'similar-sunscreen');
+});
+
+test('safe piece comparison is limited to meaningful matching pack units', () => {
+  const primary = offer({
+    _id: 'primary-paper',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    title: 'Toilettenpapier Simply Soft Kamille',
+    categoryPrimary: 'Haushalt',
+    categorySecondary: 'Haushaltspapier',
+    quantityText: '20 Rollen',
+    totalComparableAmount: 20,
+    comparableUnit: 'Stk',
+    priceCurrent: { amount: 6.8, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 0.34, unit: 'Stk', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+    sourceType: 'bipa-official-html',
+    rawFacts: { sourceKey: 'bipa-official-category' },
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-success',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: '2099-01-01T00:00:00.000Z',
+    validTo: '2099-01-31T23:59:59.000Z',
+    conditionsText: 'Aktion',
+    hasConditions: true,
+  });
+  const alternative = offer({
+    ...primary,
+    _id: 'alternative-paper',
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Toilettenpapier 3-lagig',
+    quantityText: '16 Rollen',
+    totalComparableAmount: 16,
+    priceCurrent: { amount: 4, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 0.25, unit: 'Stk', comparable: true, confidence: 0.9 },
+    sourceType: 'dm-official-product-search',
+    rawFacts: { sourceKey: 'dm-official-product-search' },
+  });
+
+  const comparison = buildSafeMarketComparisonAlternative(primary, [alternative]);
+
+  assert.equal(comparison.type, 'cheaper_alternative');
+  assert.equal(comparison.label, 'Günstiger pro Stück');
+});
+
+test('safe market comparison fails closed for unsafe units, sources, mechanics, categories and quantities', () => {
   const base = offer({
     _id: 'base',
     retailerKey: 'dm',
     retailerName: 'dm',
-    title: 'Produkt 1 kg',
-    categoryPrimary: 'Lebensmittel',
-    categorySecondary: 'Fruehstueck',
-    comparisonGroup: 'produkt::1-kg',
-    quantityText: '1 kg',
-    totalComparableAmount: 1,
-    comparableUnit: 'kg',
-    priceCurrent: { amount: 10, currency: 'EUR' },
-    normalizedUnitPrice: { amount: 10, unit: 'kg', comparable: true, confidence: 0.9 },
+    title: 'Zahnpasta Sensitive 75 ml',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Mund- & Zahnpflege',
+    quantityText: '75 ml',
+    totalComparableAmount: 0.075,
+    comparableUnit: 'l',
+    priceCurrent: { amount: 3, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 40, unit: 'l', comparable: true, confidence: 0.9 },
     quality: { comparisonSafe: true },
     sourceType: 'dm-official-html',
     sourceRunStatus: 'success',
@@ -8103,18 +8204,22 @@ test('safe market comparison fails closed for unsafe units, sources, mechanics, 
     customerProgramRequired: false,
     minimumPurchaseQty: 1,
   });
-  const primary = { ...base, _id: 'primary', retailerKey: 'bipa', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 12 } };
+  const primary = { ...base, _id: 'primary', retailerKey: 'bipa', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 50 } };
 
   const rejected = [
     { ...base, retailerKey: 'spar' },
+    { ...base, retailerKey: 'eurospar' },
+    { ...base, retailerKey: 'hofer' },
     { ...base, comparableUnit: 'Stk', normalizedUnitPrice: { amount: 9, unit: 'Stk', comparable: true, confidence: 0.9 } },
-    { ...base, totalComparableAmount: 0.0011, quantityText: '1.072 ml' },
+    { ...base, totalComparableAmount: 1, quantityText: '1 l' },
     { ...base, quality: { comparisonSafe: true, issues: ['Vergleichseinheit unsicher oder nicht ableitbar'] } },
     { ...base, sourceType: 'aktionsfinder-json' },
     { ...base, sourceRunStatus: 'failed' },
     { ...base, conditionsText: '2+1 Gratis', hasConditions: true, isMultiBuy: true },
-    { ...base, comparisonGroup: 'anderes-produkt::1-kg' },
+    { ...base, title: 'Mundspülung Sensitive 500 ml' },
     { ...base, categorySecondary: 'Andere Kategorie' },
+    { ...base, conditionsText: 'Bedingung im Angebotsbild pruefen', hasConditions: true },
+    { ...base, normalizedUnitPrice: { amount: 90, unit: 'l', comparable: true, confidence: 0.9 } },
     { ...base, status: 'expired', isActiveNow: false },
   ];
 
@@ -8122,8 +8227,8 @@ test('safe market comparison fails closed for unsafe units, sources, mechanics, 
     assert.equal(canOfferSafeMarketComparison(primary, candidate), false);
   }
 
-  const billa = { ...base, _id: 'billa', retailerKey: 'billa', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 12 } };
-  const billaPlus = { ...base, _id: 'billa-plus', retailerKey: 'billa-plus', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 9 } };
+  const billa = { ...base, _id: 'billa', retailerKey: 'billa', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 50 } };
+  const billaPlus = { ...base, _id: 'billa-plus', retailerKey: 'billa-plus', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 30 } };
   assert.equal(canOfferSafeMarketComparison(billa, billaPlus), false);
   assert.equal(buildSafeMarketComparisonAlternative(primary, rejected), null);
 });

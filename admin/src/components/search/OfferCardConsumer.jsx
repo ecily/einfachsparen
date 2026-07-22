@@ -267,6 +267,12 @@ export function OfferCardConsumer({
     : ''
   const comparisonPriceAmount = getNumericAmount(comparisonAlternative?.priceCurrent)
   const comparisonPriceCurrency = getPriceCurrency(comparisonAlternative?.priceCurrent) || 'EUR'
+  const comparisonIsCheaper = comparison?.type === 'cheaper_alternative'
+  const comparisonLabel = comparison?.label || comparison?.primaryMetricLabel || ''
+  const comparisonConditionNote = comparison?.conditionNote
+    || (comparisonAlternative?.conditionsText
+      ? `Bedingung: ${comparisonAlternative.conditionsText}`
+      : 'Bedingung: keine Mindestmenge')
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
   const brandLabel = getOfferBrandLabel(offer)
   const displayTitle = removeLeadingBrandToken(offer?.title, brandLabel)
@@ -382,11 +388,14 @@ export function OfferCardConsumer({
         </div>
 
         {comparisonAlternative ? (
-          <details className="user-card__comparison">
+          <details className="user-card__comparison" data-comparison-type={comparison.type}>
             <summary>Vergleichen</summary>
             <div className="user-card__comparison-content">
+              <strong className={`user-card__comparison-label${comparisonIsCheaper ? ' user-card__comparison-label--cheaper' : ''}`}>
+                {comparisonLabel}
+              </strong>
               <p className="user-card__comparison-reason">{comparison.reason}</p>
-              <p>{comparison.similarityLabel} · {comparison.primaryMetricLabel}</p>
+              <p>{comparison.similarityLabel}</p>
               <div className="user-card__comparison-heading">
                 <span className="user-card__retailer-badge">
                   {normalizeRetailerName(comparisonAlternative.retailerName)}
@@ -397,8 +406,18 @@ export function OfferCardConsumer({
                 <strong>{formatPrice(comparisonPriceAmount, comparisonPriceCurrency)}</strong>
                 <span>{comparisonUnitPriceLabel} {comparisonUnitPriceText}</span>
               </div>
-              <p>
-                {[comparisonAlternative.quantityText, comparisonAlternative.conditionsText, formatValidityLabel(comparisonAlternative)]
+              {comparisonIsCheaper && comparison.unitPriceDeltaLabel ? (
+                <p className="user-card__comparison-delta">{comparison.unitPriceDeltaLabel}</p>
+              ) : (
+                <p className="user-card__comparison-neutral">Ähnliche Alternative, nicht günstiger pro Einheit.</p>
+              )}
+              <p className="user-card__comparison-condition">{comparisonConditionNote}</p>
+              <p className="user-card__comparison-facts">
+                {[
+                  comparisonAlternative.quantityText,
+                  formatValidityLabel(comparisonAlternative),
+                  comparisonAlternative.displayCategory || comparisonAlternative.categorySecondary,
+                ]
                   .filter(Boolean)
                   .join(' · ')}
               </p>

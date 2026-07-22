@@ -3169,6 +3169,49 @@ a {
   font-weight: 760;
 }
 
+.user-card__comparison-label {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0.34rem 0.56rem;
+  border: 1px solid var(--kk-control-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--kk-primary);
+  font-size: 0.82rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.user-card__comparison-label--cheaper {
+  border-color: var(--kk-value-border);
+  background: var(--kk-value-bg);
+  color: var(--kk-value-text);
+}
+
+.user-card__comparison-delta {
+  color: var(--kk-value-text) !important;
+  font-weight: 850;
+}
+
+.user-card__comparison-neutral {
+  color: var(--kk-muted) !important;
+  font-weight: 760;
+}
+
+.user-card__comparison-condition {
+  padding: 0.46rem 0.58rem;
+  border: 1px solid var(--kk-condition-border-soft);
+  border-radius: 0.68rem;
+  background: var(--kk-condition-bg-soft);
+  color: var(--kk-condition-text-strong) !important;
+  font-weight: 820;
+  overflow-wrap: anywhere;
+}
+
+.user-card__comparison-facts {
+  overflow-wrap: anywhere;
+}
+
 .user-card__comparison-heading,
 .user-card__comparison-price {
   display: flex;

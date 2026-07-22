@@ -59,3 +59,15 @@ test('comparison interaction stays strictly guarded by available true', () => {
   assert.match(offerCardSource, /const comparison = getAvailableComparison\(offer\)/)
   assert.match(offerCardSource, /\{comparisonAlternative \? \([\s\S]*?<summary>Vergleichen<\/summary>/)
 })
+
+test('comparison accordion distinguishes cheaper and similar alternatives without false savings copy', () => {
+  assert.match(offerCardSource, /data-comparison-type=\{comparison\.type\}/)
+  assert.match(offerCardSource, /comparison\?\.type === 'cheaper_alternative'/)
+  assert.match(offerCardSource, /comparison\.unitPriceDeltaLabel/)
+  assert.match(offerCardSource, /user-card__comparison-condition/)
+  assert.match(offerCardSource, /Ähnliche Alternative, nicht günstiger pro Einheit\./)
+  assert.match(offerCardSource, /comparisonAlternative\.quantityText/)
+  assert.match(offerCardSource, /formatValidityLabel\(comparisonAlternative\)/)
+  assert.match(offerCardSource, /comparisonAlternative\.displayCategory \|\| comparisonAlternative\.categorySecondary/)
+  assert.match(offerCardSource, /Auf die Einkaufsliste/)
+})

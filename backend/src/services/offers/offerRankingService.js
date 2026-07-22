@@ -134,7 +134,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v1-image-tiebreak-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v2-image-tiebreak-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
@@ -5339,8 +5339,9 @@ function formatDateLabel(value) {
   return getViennaDateKey(date);
 }
 
-const SAFE_MARKET_COMPARISON_UNITS = new Set(['kg', 'l']);
-const SAFE_MARKET_COMPARISON_EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar']);
+const SAFE_MARKET_COMPARISON_UNITS = new Set(['kg', 'l', 'Stk']);
+const SAFE_MARKET_COMPARISON_EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar', 'hofer', 'pagro']);
+const MAX_SIMILAR_UNIT_PRICE_DIFFERENCE = 0.5;
 
 function getComparisonRetailerFamily(offer) {
   const retailerKey = normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || '');
@@ -5352,29 +5353,83 @@ function getComparisonRetailerFamily(offer) {
   return retailerKey;
 }
 
-function getComparisonProductIdentity(offer) {
-  const comparisonGroup = String(offer?.comparisonGroup || '').trim();
+function getStrongComparisonProductType(offer) {
+  const title = normalizeSearchText([offer?.title, offer?.brand].filter(Boolean).join(' '));
+  const category = normalizeSearchText(offer?.categorySecondary || '');
 
-  if (!comparisonGroup.includes('::')) {
-    return '';
+  if (category === 'bier' && /\b(bier|maerzen|pils(?:ner)?|helles|radler|gambrinus|puntigamer|schwechater|stella artois|budweiser|zwettler)\b/.test(title)) {
+    return 'beer';
   }
 
-  return comparisonGroup.slice(0, comparisonGroup.lastIndexOf('::')).trim().toLowerCase();
+  if (category === 'kaffee tee') {
+    if (/\b(kapseln?|capsules?)\b/.test(title)) return 'coffee-capsules';
+    if (/\b(pads?)\b/.test(title)) return 'coffee-pads';
+    if (/\b(instant|loeskaffee)\b/.test(title)) return 'coffee-instant';
+    if (/\b(gemahlen|filterkaffee)\b/.test(title)) return 'coffee-ground';
+    if (/\b(ganze bohne|ganze bohnen|bohnenkaffee|caffe crema|cafe crema)\b/.test(title)) return 'coffee-beans';
+  }
+
+  if (/^waschmittel (?:reiniger|reinigung)$/.test(category)) {
+    if (/\b(geschirrspueltabs?|spuelmaschinentabs?|somat|finish)\b/.test(title)) return 'dishwasher-tabs';
+    if (/\bweichspueler\b/.test(title)) return 'fabric-softener';
+    if (/\bspuelmittel\b/.test(title) && !/\b(geschirrspuel|spuelmaschine)\b/.test(title)) return 'dishwashing-liquid';
+    if (/\bglasreiniger\b/.test(title)) return 'glass-cleaner';
+    if (/\b(waschmittel|vollwaschmittel|colorwaschmittel|waschgel|waschpulver|waschcaps)\b/.test(title)) return 'laundry-detergent';
+  }
+
+  if (category === 'mund zahnpflege' && /\bzahnpasta\b/.test(title)) {
+    return /\b(junior|kinder|kids|baby)\b/.test(title) ? 'toothpaste-kids' : 'toothpaste';
+  }
+
+  if (category === 'koerperpflege' && /\b(sonnencreme|sonnenmilch|sonnenschutz)\b/.test(title)) {
+    if (/\b(baby|kids|kinder)\b/.test(title)) return 'sunscreen-kids';
+    if (/\b(gesicht|face|anti age)\b/.test(title)) return 'sunscreen-face';
+    return 'sunscreen-body';
+  }
+
+  if (category === 'haushaltspapier' && /\btoilettenpapier\b/.test(title)) {
+    return 'toilet-paper';
+  }
+
+  return '';
+}
+
+function hasPlausibleComparisonQuantity(offer, productType) {
+  const totalAmount = Number(offer?.totalComparableAmount);
+  const quantityText = normalizeSearchText(offer?.quantityText || '');
+
+  if (!(totalAmount > 0)) return false;
+  if (productType.startsWith('toothpaste')) return totalAmount <= 0.3;
+  if (productType.startsWith('sunscreen')) return totalAmount <= 0.5;
+  if (productType.startsWith('coffee-')) return totalAmount >= 0.05 && totalAmount <= 10;
+  if (productType === 'beer') return totalAmount >= 0.1 && totalAmount <= 50;
+  if (productType === 'toilet-paper') return totalAmount >= 2 && totalAmount <= 48 && /\brollen?\b/.test(quantityText);
+  if (productType === 'dishwasher-tabs') return totalAmount <= 200 && /\b(tabs?|tabletten|stueck|stk)\b/.test(quantityText);
+  return totalAmount <= 20;
+}
+
+function haveCompatibleComparisonCategory(primary, alternative) {
+  return normalizeSearchText(primary?.categoryPrimary || '') === normalizeSearchText(alternative?.categoryPrimary || '')
+    && normalizeSearchText(primary?.categorySecondary || '') === normalizeSearchText(alternative?.categorySecondary || '');
 }
 
 function hasClearComparisonConditions(offer) {
-  const conditionsText = String(offer?.conditionsText || '').trim();
+  const conditionsText = String(getPublicConditionsText(offer) || '').trim();
   const requiredQuantity = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1);
+  const conditionRelevant = Boolean(
+    offer?.customerProgramRequired
+    || offer?.isMultiBuy
+    || requiredQuantity > 1
+    || offer?.hasConditions
+  );
 
-  if (offer?.customerProgramRequired || offer?.isMultiBuy || requiredQuantity > 1) {
+  if (conditionRelevant && !conditionsText) {
     return false;
   }
 
-  if (offer?.hasConditions && !conditionsText) {
-    return false;
-  }
-
-  return !/(?:gratis|\b\d+\s*\+\s*\d+\b|bei\s+kauf\s+von|\bab\s+\d+|kundenkarte|j[öo]\s*karte|app\s*(?:preis|bonus)?|club|pickerl|mindesteinkauf)/i.test(conditionsText);
+  return !/(?:bedingung|details?|preis)\s+(?:im|laut)\s+angebotsbild\s+pruefen|unklar|nicht erkannt/i.test(
+    normalizeSearchText(conditionsText),
+  );
 }
 
 function hasAcceptedComparisonSource(offer) {
@@ -5390,7 +5445,7 @@ function hasAcceptedComparisonSource(offer) {
   return sourceQuality.hasOfficialEvidence
     && !isAggregatorSourceQuality(sourceQuality)
     && !/(?:aggregator|aktionsfinder|marketguru|wogibtswas|ocr|bbox)/i.test(sourceText)
-    && (!sourceRunStatus || sourceRunStatus === 'success')
+    && sourceRunStatus === 'success'
     && !/(?:fail|error|reject|stale|retain|suppress|disable)/i.test(publishStatus);
 }
 
@@ -5406,6 +5461,7 @@ function isSafeMarketComparisonCandidate(offer) {
     ...(Array.isArray(offer?.reviewReasons) ? offer.reviewReasons : []),
     ...(Array.isArray(offer?.quality?.issues) ? offer.quality.issues : []),
   ].join(' ');
+  const productType = getStrongComparisonProductType(offer);
 
   return Boolean(
     retailerKey
@@ -5422,23 +5478,25 @@ function isSafeMarketComparisonCandidate(offer) {
     && String(offer?.quantityText || '').trim()
     && String(offer?.categoryPrimary || '').trim()
     && String(offer?.categorySecondary || '').trim()
-    && getComparisonProductIdentity(offer)
-    && !/(?:vergleichseinheit|menge|quantity|unit).*(?:unsicher|unklar|unvollstaendig|conflict|mismatch|artifact)/i.test(comparisonRiskText)
+    && productType
+    && hasPlausibleComparisonQuantity(offer, productType)
+    && !shouldHidePublicUnitPriceForFreeItemPromotion(offer)
+    && !/(?:vergleichseinheit|menge|quantity|unit).*(?:unsicher|unklar|unvollstaendig|conflict|mismatch|artifact)|fragment/i.test(comparisonRiskText)
     && offer?.status === 'active'
     && offer?.isActiveNow === true
-    && hasSafeValidityWindow(offer)
+    && filterFreshActiveOffers([offer]).length === 1
     && hasClearComparisonConditions(offer)
     && hasAcceptedComparisonSource(offer)
   );
 }
 
-function canOfferSafeMarketComparison(primary, alternative) {
+function getSafeMarketComparisonMatch(primary, alternative) {
   if (!isSafeMarketComparisonCandidate(primary) || !isSafeMarketComparisonCandidate(alternative)) {
-    return false;
+    return null;
   }
 
   if (String(primary?._id || primary?.id || '') === String(alternative?._id || alternative?.id || '')) {
-    return false;
+    return null;
   }
 
   const primaryRetailer = getComparisonRetailerFamily(primary);
@@ -5447,31 +5505,69 @@ function canOfferSafeMarketComparison(primary, alternative) {
   const alternativeUnit = normalizeComparableUnit(alternative?.normalizedUnitPrice?.unit || alternative?.comparableUnit);
   const primaryUnitPrice = Number(primary?.normalizedUnitPrice?.amount);
   const alternativeUnitPrice = Number(alternative?.normalizedUnitPrice?.amount);
+  const primaryType = getStrongComparisonProductType(primary);
+  const alternativeType = getStrongComparisonProductType(alternative);
 
-  return Boolean(
-    primaryRetailer
-    && alternativeRetailer
-    && primaryRetailer !== alternativeRetailer
-    && getComparisonProductIdentity(primary) === getComparisonProductIdentity(alternative)
-    && String(primary?.categoryPrimary) === String(alternative?.categoryPrimary)
-    && String(primary?.categorySecondary) === String(alternative?.categorySecondary)
-    && primaryUnit === alternativeUnit
-    && alternativeUnitPrice < primaryUnitPrice
-  );
+  if (
+    !primaryRetailer
+    || !alternativeRetailer
+    || primaryRetailer === alternativeRetailer
+    || primaryType !== alternativeType
+    || !haveCompatibleComparisonCategory(primary, alternative)
+    || primaryUnit !== alternativeUnit
+  ) {
+    return null;
+  }
+
+  if (alternativeUnitPrice < primaryUnitPrice) {
+    return { type: 'cheaper_alternative', productType: primaryType };
+  }
+
+  const relativeDifference = Math.abs(alternativeUnitPrice - primaryUnitPrice) / primaryUnitPrice;
+  return relativeDifference <= MAX_SIMILAR_UNIT_PRICE_DIFFERENCE
+    ? { type: 'similar_alternative', productType: primaryType }
+    : null;
+}
+
+function canOfferSafeMarketComparison(primary, alternative) {
+  return Boolean(getSafeMarketComparisonMatch(primary, alternative));
+}
+
+function formatComparisonUnitPrice(amount, unit) {
+  const numericAmount = Number(amount);
+  if (!(numericAmount > 0)) return '';
+  return `${numericAmount.toFixed(2).replace('.', ',')} €/${unit}`;
+}
+
+function getCheaperComparisonLabel(unit) {
+  if (unit === 'l') return 'Günstiger pro Liter';
+  if (unit === 'kg') return 'Günstiger pro kg';
+  return 'Günstiger pro Stück';
 }
 
 function buildSafeMarketComparisonAlternative(primary, candidates = []) {
-  const alternative = candidates
-    .filter((candidate) => canOfferSafeMarketComparison(primary, candidate))
+  const matches = candidates
+    .map((candidate) => ({ candidate, match: getSafeMarketComparisonMatch(primary, candidate) }))
+    .filter((item) => item.match)
     .sort((left, right) => {
-      const unitPriceDifference = Number(left?.normalizedUnitPrice?.amount) - Number(right?.normalizedUnitPrice?.amount);
-
-      if (unitPriceDifference !== 0) {
-        return unitPriceDifference;
+      if (left.match.type !== right.match.type) {
+        return left.match.type === 'cheaper_alternative' ? -1 : 1;
       }
 
-      return compareOffersByRanking(left, right);
-    })[0];
+      if (left.match.type === 'cheaper_alternative') {
+        const unitPriceDifference = Number(left.candidate?.normalizedUnitPrice?.amount) - Number(right.candidate?.normalizedUnitPrice?.amount);
+        if (unitPriceDifference !== 0) return unitPriceDifference;
+      } else {
+        const primaryAmount = Number(primary?.normalizedUnitPrice?.amount);
+        const leftDifference = Math.abs(Number(left.candidate?.normalizedUnitPrice?.amount) - primaryAmount);
+        const rightDifference = Math.abs(Number(right.candidate?.normalizedUnitPrice?.amount) - primaryAmount);
+        if (leftDifference !== rightDifference) return leftDifference - rightDifference;
+      }
+
+      return compareOffersByRanking(left.candidate, right.candidate);
+    });
+  const selected = matches[0];
+  const alternative = selected?.candidate;
 
   if (!alternative) {
     return null;
@@ -5479,14 +5575,24 @@ function buildSafeMarketComparisonAlternative(primary, candidates = []) {
 
   const publicAlternative = buildRankedOffer(alternative, null, null);
   const comparisonUnit = normalizeComparableUnit(publicAlternative?.normalizedUnitPrice?.unit);
+  const comparisonType = selected.match.type;
+  const isCheaper = comparisonType === 'cheaper_alternative';
+  const unitPriceDeltaLabel = isCheaper
+    ? `${formatComparisonUnitPrice(publicAlternative.normalizedUnitPrice.amount, comparisonUnit)} statt ${formatComparisonUnitPrice(primary.normalizedUnitPrice.amount, comparisonUnit)}`
+    : '';
 
   return {
     available: true,
-    reason: 'Gleiches Produkt bei einem anderen Händler mit niedrigerem sicherem Vergleichspreis',
-    similarityLabel: `Gleicher Produkttyp: ${publicAlternative.categorySecondary}`,
-    primaryMetricLabel: comparisonUnit === 'l'
-      ? 'Günstigerer Preis pro Liter'
-      : 'Günstigerer Preis pro Kilogramm',
+    type: comparisonType,
+    label: isCheaper ? getCheaperComparisonLabel(comparisonUnit) : 'Ähnliche Alternative',
+    reason: isCheaper
+      ? 'Gleiche Kategorie und niedrigerer Preis pro Einheit'
+      : 'Gleiche Kategorie und ähnlicher Produkttyp',
+    similarityLabel: `Gleiche Kategorie: ${publicAlternative.categorySecondary}`,
+    unitPriceDeltaLabel,
+    conditionNote: publicAlternative.conditionsText
+      ? `Bedingung: ${publicAlternative.conditionsText}`
+      : 'Bedingung: keine Mindestmenge',
     offer: {
       id: publicAlternative.id,
       retailerKey: publicAlternative.retailerKey,
@@ -5496,6 +5602,7 @@ function buildSafeMarketComparisonAlternative(primary, candidates = []) {
       imageUrl: publicAlternative.imageUrl || '',
       categoryPrimary: publicAlternative.categoryPrimary,
       categorySecondary: publicAlternative.categorySecondary,
+      displayCategory: publicAlternative.displayCategory,
       quantityText: publicAlternative.quantityText,
       conditionsText: publicAlternative.conditionsText,
       validFrom: publicAlternative.validFrom,

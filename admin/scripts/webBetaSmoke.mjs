@@ -487,6 +487,18 @@ function pageAuditExpression() {
       hasTopDeal: Boolean(element.querySelector('.user-card__top-deal')),
       hasValidity: Boolean(element.querySelector('.user-card__meta-pill--validity')),
     }))
+    const comparisonCards = Array.from(document.querySelectorAll('.user-card__comparison')).filter(isVisible).map((element) => ({
+      type: normalize(element.getAttribute('data-comparison-type')),
+      text: normalize(element.textContent),
+      open: Boolean(element.open),
+      retailer: normalize(element.querySelector('.user-card__retailer-badge')?.textContent),
+      hasLabel: Boolean(element.querySelector('.user-card__comparison-label')),
+      hasReason: Boolean(element.querySelector('.user-card__comparison-reason')),
+      hasPrice: Boolean(element.querySelector('.user-card__comparison-price strong')),
+      hasUnitPrice: Boolean(element.querySelector('.user-card__comparison-price span')),
+      hasCondition: Boolean(element.querySelector('.user-card__comparison-condition')),
+      hasFacts: Boolean(element.querySelector('.user-card__comparison-facts')),
+    }))
     const browseRetailerButtons = Array.from(document.querySelectorAll('.browse-page .selection-block .retailer-chip')).map((element) => {
       const rect = element.getBoundingClientRect()
       return {
@@ -512,6 +524,7 @@ function pageAuditExpression() {
       mainSearchVisible: isVisible(mainSearchInput),
       mainSearchAnimationName: mainSearchInput ? window.getComputedStyle(mainSearchInput).animationName : '',
       topDealCards,
+      comparisonCards,
       browseRetailerButtons,
       scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
       viewportWidth: window.innerWidth,
@@ -663,6 +676,32 @@ async function runBrowseCheck(cdp) {
   assertNoHorizontalOverflow(audit, 'browse')
 }
 
+async function runComparisonMobileCheck(cdp) {
+  logStep('checking comparison accordion on mobile viewport')
+  await configurePage(cdp, { width: MOBILE_WIDTH, height: MOBILE_HEIGHT, mobile: true })
+  await navigate(cdp, makeUrl('/suche?q=bier'))
+  await waitForCondition(cdp, `document.querySelectorAll('.user-card__comparison').length > 0`, TIMEOUT_MS)
+  await evaluate(cdp, `(() => {
+    const comparison = document.querySelector('.user-card__comparison')
+    if (!comparison) return false
+    comparison.open = true
+    comparison.scrollIntoView({ block: 'center' })
+    return true
+  })()`)
+  await delay(250)
+
+  const audit = await auditCurrentPage(cdp, 'comparison-mobile')
+  const comparison = audit.comparisonCards.find((item) => item.open)
+  assert(comparison, 'comparison-mobile: expected an open comparison accordion')
+  assert(['cheaper_alternative', 'similar_alternative'].includes(comparison.type), 'comparison-mobile: unknown comparison type', { comparison })
+  assert(!/^(SPAR|EUROSPAR|INTERSPAR|HOFER|PAGRO)$/i.test(comparison.retailer), 'comparison-mobile: excluded retailer found', { comparison })
+  assert(comparison.hasLabel && comparison.hasReason, 'comparison-mobile: label or reason is missing', { comparison })
+  assert(comparison.hasPrice && comparison.hasUnitPrice, 'comparison-mobile: price or unit price is missing', { comparison })
+  assert(comparison.hasCondition && comparison.hasFacts, 'comparison-mobile: condition or offer facts are missing', { comparison })
+  assert(/Gleiche Kategorie/.test(comparison.text), 'comparison-mobile: similarity reason is missing', { comparison })
+  assertNoHorizontalOverflow(audit, 'comparison-mobile')
+}
+
 async function runTopDealsCheck(cdp) {
   logStep('checking /top-deals on mobile viewport')
   await configurePage(cdp, { width: MOBILE_WIDTH, height: MOBILE_HEIGHT, mobile: true })
@@ -740,6 +779,7 @@ async function main() {
     await runReducedMotionCheck(cdp)
     if (!HOME_ONLY) {
       await runSearchCheck(cdp)
+      await runComparisonMobileCheck(cdp)
       await runBrowseCheck(cdp)
       await runTopDealsCheck(cdp)
       await runShoppingListCheck(cdp)
