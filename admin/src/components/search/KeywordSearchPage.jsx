@@ -15,8 +15,8 @@ import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDispla
 import { getRetailerTheme } from '../../utils/retailerColors'
 import {
   getFreshnessWarningNotices,
+  getPublicTrustWarningNotices,
   hasFreshnessWarning,
-  hasLimitedCoverageRetailers,
   isLimitedCoverageRetailer,
 } from '../../utils/retailerCoverage'
 
@@ -351,13 +351,16 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
   const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
   const emptySearchSuggestions = useMemo(() => getEmptySearchSuggestions(submittedQuery), [submittedQuery])
-  const showLimitedCoverageNotice = marketFilterEnabled && hasLimitedCoverageRetailers(selectedRetailerKeys)
   const visibleRetailerKeys = useMemo(
     () => [...new Set(visibleOfferItems.map((item) => item.retailerKey).filter(Boolean))],
     [visibleOfferItems]
   )
   const freshnessNotices = useMemo(
     () => getFreshnessWarningNotices(marketFilterEnabled ? selectedRetailerKeys : visibleRetailerKeys, availableRetailers),
+    [availableRetailers, marketFilterEnabled, selectedRetailerKeys, visibleRetailerKeys]
+  )
+  const publicTrustNotices = useMemo(
+    () => getPublicTrustWarningNotices(marketFilterEnabled ? selectedRetailerKeys : visibleRetailerKeys, availableRetailers),
     [availableRetailers, marketFilterEnabled, selectedRetailerKeys, visibleRetailerKeys]
   )
 
@@ -683,7 +686,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             {availableRetailers.map((retailer, index, retailerList) => {
               const selected = selectedRetailerKeys.includes(retailer.key)
               const retailerTheme = getRetailerTheme(retailer.key || retailer.label)
-              const limitedCoverage = isLimitedCoverageRetailer(retailer.key)
+              const limitedCoverage = isLimitedCoverageRetailer(retailer)
               const freshnessWarning = hasFreshnessWarning(retailer)
               const nextRetailer = retailerList[index + 1]
               const showGroupSeparator = shouldSeparateRetailerGroups(retailer.key, nextRetailer?.key)
@@ -708,7 +711,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                     <span className="retailer-chip__dot" aria-hidden="true" />
                     <span className="retailer-chip__label">{retailer.label}</span>
                     {limitedCoverage ? (
-                      <span className="retailer-chip__coverage">Beta</span>
+                      <span className="retailer-chip__coverage">Eingeschr&auml;nkt</span>
                     ) : null}
                     {freshnessWarning ? (
                       <span className="retailer-chip__coverage">Aktualit&auml;t</span>
@@ -725,12 +728,12 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             ) : null}
           </div>
         ) : null}
-        {showLimitedCoverageNotice ? (
-          <div className="limited-coverage-notice" role="note">
-            <strong>Eingeschr&auml;nkte Beta-Abdeckung &middot; nur verifizierte Aktionen</strong>
-            <span>Wir zeigen f&uuml;r SPAR und INTERSPAR derzeit nur verifizierte offizielle Aktionen.</span>
+        {publicTrustNotices.map((notice) => (
+          <div className="limited-coverage-notice" role="note" key={notice.retailerKey}>
+            <strong>Abdeckung eingeschr&auml;nkt</strong>
+            <span>{notice.message}</span>
           </div>
-        ) : null}
+        ))}
         {freshnessNotices.map((notice) => (
           <div className="limited-coverage-notice limited-coverage-notice--freshness" role="note" key={notice.retailerKey}>
             <strong>Aktualit&auml;t eingeschr&auml;nkt &middot; letzter best&auml;tigter Stand {notice.lastConfirmedDate}</strong>

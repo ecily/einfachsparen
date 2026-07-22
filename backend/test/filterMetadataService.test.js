@@ -6,16 +6,23 @@ const test = require('node:test');
 const Category = require('../src/models/Category');
 const Retailer = require('../src/models/Retailer');
 const RetailerCategoryStat = require('../src/models/RetailerCategoryStat');
+const Source = require('../src/models/Source');
 const {
   getCategoryFilters,
   getRetailerFilters,
   _private: {
     FILTER_METADATA_OFFER_SELECT_FIELDS,
     HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS,
+    INTERSPAR_LIMITED_COVERAGE_MESSAGE,
+    SPAR_FAMILY_CURRENT_DISCOVERY_MAX_AGE_HOURS,
     buildFilterMetadataOfferMatch,
+    buildCurrentDiscoverySourceLookup,
     buildRetailerFreshnessWarning,
     buildRetailerDocuments,
+    isFreshSuccessfulCurrentDiscovery,
+    shouldExposePublicRetailer,
     withPublicFreshnessWarning,
+    withPublicRetailerTrustMetadata,
     isPublicRetailerEnabled,
     syncFilterMetadataCollection,
   },
@@ -192,6 +199,7 @@ test('category filter response shape stays compatible', async () => {
 
 test('public retailer facets hide temporarily disabled retailers', async () => {
   const originalFind = Retailer.find;
+  const originalSourceFind = Source.find;
   const documents = [
     { retailerKey: 'spar', retailerName: 'SPAR', activeOfferCount: 12, isActive: true },
     { retailerKey: 'eurospar', retailerName: 'EUROSPAR', activeOfferCount: 8, isActive: true },
@@ -212,15 +220,118 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
     };
   };
 
+  Source.find = (filter) => {
+    assert.deepEqual(filter.retailerKey?.$in, ['spar', 'interspar']);
+    assert.equal(filter.parserHint, 'spar-family-flyer-discovery');
+    assert.equal(filter['crawlPolicy.currentDiscovery'], true);
+
+    return {
+      select() {
+        return {
+          async lean() {
+            return [
+              {
+                retailerKey: 'spar',
+                enabled: true,
+                active: true,
+                parserHint: 'spar-family-flyer-discovery',
+                crawlPolicy: { currentDiscovery: true },
+                latestStatus: 'partial',
+                latestRunAt: new Date(),
+              },
+              {
+                retailerKey: 'interspar',
+                enabled: true,
+                active: true,
+                parserHint: 'spar-family-flyer-discovery',
+                crawlPolicy: { currentDiscovery: true },
+                latestStatus: 'partial',
+                latestRunAt: new Date(),
+              },
+            ];
+          },
+        };
+      },
+    };
+  };
+
   try {
     const retailers = await getRetailerFilters();
-    assert.deepEqual(retailers.map((retailer) => retailer.retailerKey), ['spar', 'interspar']);
+    assert.deepEqual(retailers.map((retailer) => retailer.retailerKey), ['interspar']);
+    assert.equal(retailers[0].limitedCoverage, true);
+    assert.equal(retailers[0].currentFlyerUnavailable, true);
+    assert.equal(retailers[0].officialDigitalSourceUnavailable, true);
+    assert.equal(retailers[0].publicTrustWarning.message, INTERSPAR_LIMITED_COVERAGE_MESSAGE);
     assert.equal(isPublicRetailerEnabled('eurospar'), false);
     assert.equal(isPublicRetailerEnabled('spar'), true);
     assert.equal(isPublicRetailerEnabled('mueller'), true);
   } finally {
     Retailer.find = originalFind;
+    Source.find = originalSourceFind;
   }
+});
+
+test('SPAR-family public trust gate requires a fresh successful current discovery source', () => {
+  const now = new Date('2026-07-22T12:00:00.000Z');
+  const freshSuccess = {
+    retailerKey: 'spar',
+    enabled: true,
+    active: true,
+    parserHint: 'spar-family-flyer-discovery',
+    crawlPolicy: { currentDiscovery: true },
+    latestStatus: 'success',
+    latestRunAt: new Date('2026-07-22T10:00:00.000Z'),
+  };
+  const staleSuccess = {
+    ...freshSuccess,
+    latestRunAt: new Date('2026-07-18T10:00:00.000Z'),
+  };
+  const partial = {
+    ...freshSuccess,
+    latestStatus: 'partial',
+  };
+
+  assert.equal(SPAR_FAMILY_CURRENT_DISCOVERY_MAX_AGE_HOURS, 72);
+  assert.equal(isFreshSuccessfulCurrentDiscovery(freshSuccess, now), true);
+  assert.equal(isFreshSuccessfulCurrentDiscovery(staleSuccess, now), false);
+  assert.equal(isFreshSuccessfulCurrentDiscovery(partial, now), false);
+  assert.equal(isFreshSuccessfulCurrentDiscovery(undefined, now), false);
+
+  const sourceLookup = buildCurrentDiscoverySourceLookup([partial]);
+  assert.equal(shouldExposePublicRetailer({ retailerKey: 'spar' }, sourceLookup, now), false);
+  assert.equal(shouldExposePublicRetailer({ retailerKey: 'interspar' }, sourceLookup, now), true);
+  assert.equal(shouldExposePublicRetailer({ retailerKey: 'mueller' }, sourceLookup, now), true);
+});
+
+test('INTERSPAR trust warning is defensive, scoped and removed after fresh main-flyer discovery', () => {
+  const now = new Date('2026-07-22T12:00:00.000Z');
+  const partialLookup = buildCurrentDiscoverySourceLookup([{
+    retailerKey: 'interspar',
+    enabled: true,
+    active: true,
+    parserHint: 'spar-family-flyer-discovery',
+    crawlPolicy: { currentDiscovery: true },
+    latestStatus: 'partial',
+    latestRunAt: new Date('2026-07-22T10:00:00.000Z'),
+  }]);
+  const limited = withPublicRetailerTrustMetadata({
+    retailerKey: 'interspar',
+    retailerName: 'INTERSPAR',
+    coverageStatus: 'watch',
+  }, partialLookup, now);
+
+  assert.equal(limited.coverageStatus, 'gap');
+  assert.equal(limited.publicTrustWarning.scope, 'special-offers-only');
+  assert.equal(limited.publicTrustWarning.message, INTERSPAR_LIMITED_COVERAGE_MESSAGE);
+  assert.doesNotMatch(limited.publicTrustWarning.message, /403|TLS|blocked|verweigert|absichtlich|illegal/i);
+
+  const successfulLookup = buildCurrentDiscoverySourceLookup([{
+    ...partialLookup.get('interspar'),
+    latestStatus: 'success',
+  }]);
+  const restored = withPublicRetailerTrustMetadata({ retailerKey: 'interspar' }, successfulLookup, now);
+  assert.equal(restored.publicTrustWarning, undefined);
+  assert.deepEqual(withPublicRetailerTrustMetadata({ retailerKey: 'mueller' }, partialLookup, now), { retailerKey: 'mueller' });
 });
 
 test('HOFER public retailer metadata carries freshness warning after stale retained source data', () => {

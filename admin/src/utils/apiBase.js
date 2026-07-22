@@ -206,6 +206,12 @@ export async function fetchFilterRetailers() {
       activeOffers: Number(item.activeOffers || item.activeOfferCount || item.offerCount || 0),
       isActive: item.isActive !== false,
       sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index,
+      coverageStatus: item.coverageStatus || '',
+      limitedCoverage: item.limitedCoverage === true,
+      currentFlyerUnavailable: item.currentFlyerUnavailable === true,
+      officialDigitalSourceUnavailable: item.officialDigitalSourceUnavailable === true,
+      publicTrustWarning: item.publicTrustWarning || null,
+      freshnessWarning: item.freshnessWarning || null,
     }))
 
   return publicRetailers

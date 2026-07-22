@@ -1,6 +1,6 @@
 import { SectionCard } from '../layout/SectionCard'
 import { ResultsSection } from './ResultsSection'
-import { getFreshnessWarningNotices, hasLimitedCoverageRetailers } from '../../utils/retailerCoverage'
+import { getFreshnessWarningNotices, getPublicTrustWarningNotices } from '../../utils/retailerCoverage'
 
 export function ResultsBlockConsumer({
   rankingLoading,
@@ -18,7 +18,7 @@ export function ResultsBlockConsumer({
 }) {
   const visibleOfferCount = safeOffers.length + actionOffers.length
   const totalCount = pagination?.totalCount || 0
-  const hasLimitedCoverage = hasLimitedCoverageRetailers(feedbackPageContext.activeRetailers || [])
+  const publicTrustNotices = getPublicTrustWarningNotices(feedbackPageContext.activeRetailers || [], retailers)
   const freshnessNotices = getFreshnessWarningNotices(feedbackPageContext.activeRetailers || [], retailers)
 
   return (
@@ -65,14 +65,12 @@ export function ResultsBlockConsumer({
               </span>
             </div>
 
-            {hasLimitedCoverage ? (
-              <div className="limited-coverage-notice" role="note">
-                <strong>Eingeschr&auml;nkte Beta-Abdeckung &middot; nur verifizierte Aktionen</strong>
-                <span>
-                  Wir zeigen f&uuml;r SPAR und INTERSPAR derzeit nur verifizierte offizielle Aktionen.
-                </span>
+            {publicTrustNotices.map((notice) => (
+              <div className="limited-coverage-notice" role="note" key={notice.retailerKey}>
+                <strong>Abdeckung eingeschr&auml;nkt</strong>
+                <span>{notice.message}</span>
               </div>
-            ) : null}
+            ))}
 
             {freshnessNotices.map((notice) => (
               <div className="limited-coverage-notice limited-coverage-notice--freshness" role="note" key={notice.retailerKey}>

@@ -15,6 +15,8 @@ const FILTER_METADATA_QUERY_MAX_TIME_MS = 15000;
 const FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT = 5000;
 const PUBLIC_DISABLED_RETAILER_KEYS = new Set(['eurospar']);
 const HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS = 72;
+const SPAR_FAMILY_CURRENT_DISCOVERY_MAX_AGE_HOURS = 72;
+const INTERSPAR_LIMITED_COVERAGE_MESSAGE = 'INTERSPAR derzeit eingeschränkt: Aktuelle Spezialangebote können sichtbar sein; das aktuelle Hauptflugblatt ist derzeit nicht zuverlässig automatisiert verfügbar.';
 
 const FILTER_METADATA_OFFER_SELECT_FIELDS = [
   'retailerKey',
@@ -180,6 +182,65 @@ function withPublicFreshnessWarning(retailer = {}, now = new Date()) {
   return freshnessWarning
     ? { ...retailer, freshnessWarning }
     : retailer;
+}
+
+function isFreshSuccessfulCurrentDiscovery(source = {}, now = new Date()) {
+  const latestRunAt = source.latestRunAt ? new Date(source.latestRunAt) : null;
+  const ageHours = latestRunAt && !Number.isNaN(latestRunAt.getTime())
+    ? (now.getTime() - latestRunAt.getTime()) / (1000 * 60 * 60)
+    : Infinity;
+
+  return source.enabled !== false
+    && source.active !== false
+    && source.parserHint === 'spar-family-flyer-discovery'
+    && source.crawlPolicy?.currentDiscovery === true
+    && source.latestStatus === 'success'
+    && ageHours >= 0
+    && ageHours <= SPAR_FAMILY_CURRENT_DISCOVERY_MAX_AGE_HOURS;
+}
+
+function buildCurrentDiscoverySourceLookup(sources = []) {
+  return new Map((sources || []).map((source) => [
+    String(source.retailerKey || '').trim().toLowerCase(),
+    source,
+  ]));
+}
+
+function shouldExposePublicRetailer(retailer = {}, currentDiscoverySources = new Map(), now = new Date()) {
+  const retailerKey = String(retailer.retailerKey || '').trim().toLowerCase();
+
+  if (retailerKey !== 'spar') {
+    return true;
+  }
+
+  return isFreshSuccessfulCurrentDiscovery(currentDiscoverySources.get(retailerKey), now);
+}
+
+function withPublicRetailerTrustMetadata(retailer = {}, currentDiscoverySources = new Map(), now = new Date()) {
+  const publicRetailer = withPublicFreshnessWarning(retailer, now);
+  const retailerKey = String(retailer.retailerKey || '').trim().toLowerCase();
+
+  if (
+    retailerKey !== 'interspar'
+    || isFreshSuccessfulCurrentDiscovery(currentDiscoverySources.get(retailerKey), now)
+  ) {
+    return publicRetailer;
+  }
+
+  return {
+    ...publicRetailer,
+    coverageStatus: 'gap',
+    limitedCoverage: true,
+    currentFlyerUnavailable: true,
+    officialDigitalSourceUnavailable: true,
+    publicTrustWarning: {
+      active: true,
+      type: 'coverage',
+      severity: 'warning',
+      scope: 'special-offers-only',
+      message: INTERSPAR_LIMITED_COVERAGE_MESSAGE,
+    },
+  };
 }
 
 function normalizeCategoryKey(value, fallback = 'unkategorisiert') {
@@ -1147,15 +1208,28 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
 }
 
 async function getRetailerFilters() {
-  const retailers = await Retailer.find({
-    isActive: true,
-    activeOfferCount: { $gt: 0 },
-    retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] },
-  })
-    .sort({ coveragePriorityScore: -1, sortOrder: 1, retailerName: 1 })
-    .lean();
+  const [retailers, currentDiscoverySources] = await Promise.all([
+    Retailer.find({
+      isActive: true,
+      activeOfferCount: { $gt: 0 },
+      retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] },
+    })
+      .sort({ coveragePriorityScore: -1, sortOrder: 1, retailerName: 1 })
+      .lean(),
+    Source.find({
+      retailerKey: { $in: ['spar', 'interspar'] },
+      parserHint: 'spar-family-flyer-discovery',
+      'crawlPolicy.currentDiscovery': true,
+    })
+      .select('retailerKey enabled active parserHint crawlPolicy latestStatus latestRunAt')
+      .lean(),
+  ]);
+  const sourceLookup = buildCurrentDiscoverySourceLookup(currentDiscoverySources);
+  const now = new Date();
 
-  return retailers.map((retailer) => withPublicFreshnessWarning(retailer));
+  return retailers
+    .filter((retailer) => shouldExposePublicRetailer(retailer, sourceLookup, now))
+    .map((retailer) => withPublicRetailerTrustMetadata(retailer, sourceLookup, now));
 }
 
 async function getCategoryFilters({ retailerKeys = [] } = {}) {
@@ -1260,10 +1334,16 @@ module.exports = {
     FILTER_METADATA_OFFER_SELECT_FIELDS,
     FILTER_METADATA_QUERY_MAX_TIME_MS,
     HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS,
+    INTERSPAR_LIMITED_COVERAGE_MESSAGE,
+    SPAR_FAMILY_CURRENT_DISCOVERY_MAX_AGE_HOURS,
     buildFilterMetadataOfferMatch,
+    buildCurrentDiscoverySourceLookup,
     buildRetailerFreshnessWarning,
     buildRetailerDocuments,
+    isFreshSuccessfulCurrentDiscovery,
+    shouldExposePublicRetailer,
     withPublicFreshnessWarning,
+    withPublicRetailerTrustMetadata,
     isPublicRetailerEnabled,
     buildKeyFilter,
     buildStableKey,

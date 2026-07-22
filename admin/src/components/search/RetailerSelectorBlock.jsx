@@ -40,7 +40,7 @@ export function RetailerSelectorBlock({
               {groupedRetailers.map((retailer, index, retailerList) => {
                 const selected = selectedRetailers.includes(retailer.retailerKey)
                 const retailerTheme = getRetailerTheme(retailer.retailerKey || retailer.retailerName)
-                const limitedCoverage = isLimitedCoverageRetailer(retailer.retailerKey)
+                const limitedCoverage = isLimitedCoverageRetailer(retailer)
                 const freshnessWarning = hasFreshnessWarning(retailer)
                 const separatorKey = retailer.retailerKey || retailer.retailerName
                 const nextRetailer = retailerList[index + 1]
@@ -70,7 +70,7 @@ export function RetailerSelectorBlock({
                         {retailer.activeOffers > 0 ? `${retailer.activeOffers} Aktionen` : 'derzeit keine Aktionen'}
                       </span>
                       {limitedCoverage ? (
-                        <span className="retailer-chip__coverage">Beta</span>
+                        <span className="retailer-chip__coverage">Eingeschr&auml;nkt</span>
                       ) : null}
                       {freshnessWarning ? (
                         <span className="retailer-chip__coverage">Aktualit&auml;t</span>
