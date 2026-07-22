@@ -1848,6 +1848,15 @@ test('ranking response corrects stale active categories from remaining category 
       guard: 'bipa-grooming-device',
     },
     {
+      title: 'Burgit Anti H\u00fchneraugen Stift',
+      retailerKey: 'bipa',
+      categoryPrimary: 'Lebensmittel',
+      categorySecondary: 'Fleisch, Wurst & Fisch',
+      expectedPrimary: 'Drogerie / Hygiene',
+      expectedSecondary: 'Gesundheit & Nahrungsergaenzung',
+      guard: 'bipa-corn-remover',
+    },
+    {
       title: 'Hof Cat Hof Cat Bio Fisch',
       retailerKey: 'billa-plus',
       categoryPrimary: 'Lebensmittel',

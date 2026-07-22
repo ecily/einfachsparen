@@ -5086,6 +5086,13 @@ function withResponseCategoryGuardFields(offer = {}) {
 
   if (
     retailerKey === 'bipa'
+    && /\b(?:huehner|huhner)augen\b/.test(titleText)
+  ) {
+    return applyGuard('bipa-corn-remover');
+  }
+
+  if (
+    retailerKey === 'bipa'
     && currentPrimary === 'baby kinder'
     && currentSecondary === 'babybedarf'
     && decision.primaryCategory === 'Drogerie / Hygiene'
