@@ -247,6 +247,15 @@ export function OfferCardConsumer({
   const priceOptionalPromotion = isPriceOptionalPromotion(offer, currentPriceAmount)
   const promotionScopeLabel = getPromotionScopeLabel(offer)
   const unitPriceText = showUnitPrice ? formatUnitPrice(offer?.normalizedUnitPrice) : ''
+  const comparison = offer?.comparisonAlternative?.available === true
+    ? offer.comparisonAlternative
+    : null
+  const comparisonAlternative = comparison?.offer || null
+  const comparisonUnitPriceText = comparisonAlternative
+    ? formatUnitPrice(comparisonAlternative.normalizedUnitPrice)
+    : ''
+  const comparisonPriceAmount = getNumericAmount(comparisonAlternative?.priceCurrent)
+  const comparisonPriceCurrency = getPriceCurrency(comparisonAlternative?.priceCurrent) || 'EUR'
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
   const brandLabel = getOfferBrandLabel(offer)
   const displayTitle = removeLeadingBrandToken(offer?.title, brandLabel)
@@ -314,7 +323,12 @@ export function OfferCardConsumer({
                   {referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}
                 </span>
               ) : null}
-              {unitPriceText ? <span className="user-card__unit-price-badge">{unitPriceText}</span> : null}
+              {unitPriceText ? (
+                <div className="user-card__unit-price-callout" aria-label={`Sicherer Vergleichspreis: ${unitPriceText}`}>
+                  <span className="user-card__unit-price-label">Vergleichspreis</span>
+                  <span className="user-card__unit-price-value">{unitPriceText}</span>
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -348,6 +362,31 @@ export function OfferCardConsumer({
           {validity ? <span className="user-card__meta-pill user-card__meta-pill--validity">{validity}</span> : null}
           {category ? <span className="user-card__meta-pill user-card__meta-pill--category">{category}</span> : null}
         </div>
+
+        {comparisonAlternative ? (
+          <details className="user-card__comparison">
+            <summary>Vergleichen</summary>
+            <div className="user-card__comparison-content">
+              <p className="user-card__comparison-reason">{comparison.reason}</p>
+              <p>{comparison.similarityLabel} · {comparison.primaryMetricLabel}</p>
+              <div className="user-card__comparison-heading">
+                <span className="user-card__retailer-badge">
+                  {normalizeRetailerName(comparisonAlternative.retailerName)}
+                </span>
+                <strong>{comparisonAlternative.title}</strong>
+              </div>
+              <div className="user-card__comparison-price">
+                <strong>{formatPrice(comparisonPriceAmount, comparisonPriceCurrency)}</strong>
+                <span>{comparisonUnitPriceText}</span>
+              </div>
+              <p>
+                {[comparisonAlternative.quantityText, comparisonAlternative.conditionsText, formatValidityLabel(comparisonAlternative)]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+          </details>
+        ) : null}
 
         {hasActions ? (
           <div className="user-card__actions">

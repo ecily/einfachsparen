@@ -2988,20 +2988,92 @@ a {
   line-height: 1.25;
 }
 
-.user-card__unit-price-badge {
-  display: inline-flex !important;
+.user-card__unit-price-callout {
+  display: inline-grid;
+  grid-template-columns: auto auto;
   align-items: center;
+  gap: 0.24rem 0.5rem;
   width: fit-content;
   max-width: 100%;
-  min-height: 1.78rem;
-  padding: 0.32rem 0.58rem;
-  border-radius: 0.72rem;
+  min-height: 2.2rem;
+  padding: 0.4rem 0.68rem;
+  border-radius: 0.78rem;
   background: var(--kk-green-4);
-  border: 1px solid var(--kk-value-border);
+  border: 2px solid var(--kk-value-border);
   color: var(--kk-value-text) !important;
-  font-size: 0.9rem;
-  font-weight: 880 !important;
   line-height: 1.25;
+}
+
+.user-card__unit-price-label {
+  color: var(--kk-condition-text) !important;
+  font-size: 0.72rem;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.user-card__unit-price-value {
+  color: var(--kk-value-text) !important;
+  font-size: 1rem;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+}
+
+.user-card__comparison {
+  border: 1px solid var(--kk-border);
+  border-radius: 0.82rem;
+  background: rgba(247, 250, 247, 0.92);
+  overflow: hidden;
+}
+
+.user-card__comparison summary {
+  padding: 0.62rem 0.75rem;
+  color: var(--kk-brand-primary);
+  font-size: 0.86rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.user-card__comparison-content {
+  display: grid;
+  gap: 0.48rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.user-card__comparison-content p {
+  margin: 0;
+  color: var(--kk-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.user-card__comparison-reason {
+  color: var(--kk-condition-text) !important;
+  font-weight: 760;
+}
+
+.user-card__comparison-heading,
+.user-card__comparison-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+
+.user-card__comparison-heading > strong {
+  font-size: 0.94rem;
+  line-height: 1.3;
+}
+
+.user-card__comparison-price > strong {
+  color: var(--kk-value-text);
+  font-size: 1.15rem;
+}
+
+.user-card__comparison-price > span {
+  color: var(--kk-value-text);
+  font-size: 0.88rem;
+  font-weight: 850;
 }
 
 .minimum-quantity-badge {
@@ -5493,7 +5565,6 @@ textarea:focus {
 }
 
 .user-card__action-price-badge,
-.user-card__unit-price-badge,
 .user-card__facts span,
 .shopping-list-item__fact,
 .shopping-list-item__fact--date {
@@ -7314,7 +7385,7 @@ textarea:focus {
     line-height: 1;
   }
 
-  .user-card__unit-price-badge,
+  .user-card__unit-price-callout,
   .user-card__action-price-badge,
   .user-card__savings-chip {
     min-height: 1.42rem;

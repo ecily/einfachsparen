@@ -134,7 +134,7 @@ const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
-const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1`;
+const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v1-image-tiebreak-v1`;
 const RANKING_CANDIDATE_CAP = 1000;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
@@ -5339,6 +5339,185 @@ function formatDateLabel(value) {
   return getViennaDateKey(date);
 }
 
+const SAFE_MARKET_COMPARISON_UNITS = new Set(['kg', 'l']);
+const SAFE_MARKET_COMPARISON_EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar']);
+
+function getComparisonRetailerFamily(offer) {
+  const retailerKey = normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || '');
+
+  if (['billa', 'billa-plus'].includes(retailerKey)) {
+    return 'billa-family';
+  }
+
+  return retailerKey;
+}
+
+function getComparisonProductIdentity(offer) {
+  const comparisonGroup = String(offer?.comparisonGroup || '').trim();
+
+  if (!comparisonGroup.includes('::')) {
+    return '';
+  }
+
+  return comparisonGroup.slice(0, comparisonGroup.lastIndexOf('::')).trim().toLowerCase();
+}
+
+function hasClearComparisonConditions(offer) {
+  const conditionsText = String(offer?.conditionsText || '').trim();
+  const requiredQuantity = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1);
+
+  if (offer?.customerProgramRequired || offer?.isMultiBuy || requiredQuantity > 1) {
+    return false;
+  }
+
+  if (offer?.hasConditions && !conditionsText) {
+    return false;
+  }
+
+  return !/(?:gratis|\b\d+\s*\+\s*\d+\b|bei\s+kauf\s+von|\bab\s+\d+|kundenkarte|j[öo]\s*karte|app\s*(?:preis|bonus)?|club|pickerl|mindesteinkauf)/i.test(conditionsText);
+}
+
+function hasAcceptedComparisonSource(offer) {
+  const sourceQuality = classifyOfferSourceQuality(offer);
+  const sourceText = [
+    getOfferSourceType(offer),
+    offer?.rawFacts?.sourceKey,
+    ...(Array.isArray(offer?.sourceTypes) ? offer.sourceTypes : []),
+  ].filter(Boolean).join(' ');
+  const sourceRunStatus = String(offer?.sourceRunStatus || '').trim().toLowerCase();
+  const publishStatus = String(offer?.publishStatus || '').trim().toLowerCase();
+
+  return sourceQuality.hasOfficialEvidence
+    && !isAggregatorSourceQuality(sourceQuality)
+    && !/(?:aggregator|aktionsfinder|marketguru|wogibtswas|ocr|bbox)/i.test(sourceText)
+    && (!sourceRunStatus || sourceRunStatus === 'success')
+    && !/(?:fail|error|reject|stale|retain|suppress|disable)/i.test(publishStatus);
+}
+
+function isSafeMarketComparisonCandidate(offer) {
+  const retailerKey = normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || '');
+  const comparableUnit = normalizeComparableUnit(
+    offer?.comparableUnit || offer?.normalizedUnitPrice?.unit,
+  );
+  const normalizedAmount = Number(offer?.normalizedUnitPrice?.amount);
+  const currentPrice = Number(offer?.priceCurrent?.amount);
+  const totalComparableAmount = Number(offer?.totalComparableAmount);
+  const comparisonRiskText = [
+    ...(Array.isArray(offer?.reviewReasons) ? offer.reviewReasons : []),
+    ...(Array.isArray(offer?.quality?.issues) ? offer.quality.issues : []),
+  ].join(' ');
+
+  return Boolean(
+    retailerKey
+    && !SAFE_MARKET_COMPARISON_EXCLUDED_RETAILERS.has(retailerKey)
+    && SAFE_MARKET_COMPARISON_UNITS.has(comparableUnit)
+    && isOfferSafelyComparable(offer)
+    && Number(offer?.normalizedUnitPrice?.confidence || 0) >= 0.75
+    && Number.isFinite(normalizedAmount)
+    && normalizedAmount > 0
+    && Number.isFinite(currentPrice)
+    && currentPrice > 0
+    && Number.isFinite(totalComparableAmount)
+    && totalComparableAmount >= 0.01
+    && String(offer?.quantityText || '').trim()
+    && String(offer?.categoryPrimary || '').trim()
+    && String(offer?.categorySecondary || '').trim()
+    && getComparisonProductIdentity(offer)
+    && !/(?:vergleichseinheit|menge|quantity|unit).*(?:unsicher|unklar|unvollstaendig|conflict|mismatch|artifact)/i.test(comparisonRiskText)
+    && offer?.status === 'active'
+    && offer?.isActiveNow === true
+    && hasSafeValidityWindow(offer)
+    && hasClearComparisonConditions(offer)
+    && hasAcceptedComparisonSource(offer)
+  );
+}
+
+function canOfferSafeMarketComparison(primary, alternative) {
+  if (!isSafeMarketComparisonCandidate(primary) || !isSafeMarketComparisonCandidate(alternative)) {
+    return false;
+  }
+
+  if (String(primary?._id || primary?.id || '') === String(alternative?._id || alternative?.id || '')) {
+    return false;
+  }
+
+  const primaryRetailer = getComparisonRetailerFamily(primary);
+  const alternativeRetailer = getComparisonRetailerFamily(alternative);
+  const primaryUnit = normalizeComparableUnit(primary?.normalizedUnitPrice?.unit || primary?.comparableUnit);
+  const alternativeUnit = normalizeComparableUnit(alternative?.normalizedUnitPrice?.unit || alternative?.comparableUnit);
+  const primaryUnitPrice = Number(primary?.normalizedUnitPrice?.amount);
+  const alternativeUnitPrice = Number(alternative?.normalizedUnitPrice?.amount);
+
+  return Boolean(
+    primaryRetailer
+    && alternativeRetailer
+    && primaryRetailer !== alternativeRetailer
+    && getComparisonProductIdentity(primary) === getComparisonProductIdentity(alternative)
+    && String(primary?.categoryPrimary) === String(alternative?.categoryPrimary)
+    && String(primary?.categorySecondary) === String(alternative?.categorySecondary)
+    && primaryUnit === alternativeUnit
+    && alternativeUnitPrice < primaryUnitPrice
+  );
+}
+
+function buildSafeMarketComparisonAlternative(primary, candidates = []) {
+  const alternative = candidates
+    .filter((candidate) => canOfferSafeMarketComparison(primary, candidate))
+    .sort((left, right) => {
+      const unitPriceDifference = Number(left?.normalizedUnitPrice?.amount) - Number(right?.normalizedUnitPrice?.amount);
+
+      if (unitPriceDifference !== 0) {
+        return unitPriceDifference;
+      }
+
+      return compareOffersByRanking(left, right);
+    })[0];
+
+  if (!alternative) {
+    return null;
+  }
+
+  const publicAlternative = buildRankedOffer(alternative, null, null);
+  const comparisonUnit = normalizeComparableUnit(publicAlternative?.normalizedUnitPrice?.unit);
+
+  return {
+    available: true,
+    reason: 'Gleiches Produkt bei einem anderen Händler mit niedrigerem sicherem Vergleichspreis',
+    similarityLabel: `Gleicher Produkttyp: ${publicAlternative.categorySecondary}`,
+    primaryMetricLabel: comparisonUnit === 'l'
+      ? 'Günstigerer Preis pro Liter'
+      : 'Günstigerer Preis pro Kilogramm',
+    offer: {
+      id: publicAlternative.id,
+      retailerKey: publicAlternative.retailerKey,
+      retailerName: publicAlternative.retailerName,
+      title: publicAlternative.title,
+      brand: publicAlternative.brand || '',
+      imageUrl: publicAlternative.imageUrl || '',
+      categoryPrimary: publicAlternative.categoryPrimary,
+      categorySecondary: publicAlternative.categorySecondary,
+      quantityText: publicAlternative.quantityText,
+      conditionsText: publicAlternative.conditionsText,
+      validFrom: publicAlternative.validFrom,
+      validTo: publicAlternative.validTo,
+      validityLabel: publicAlternative.validityLabel,
+      priceCurrent: publicAlternative.priceCurrent,
+      normalizedUnitPrice: publicAlternative.normalizedUnitPrice,
+      sourceType: publicAlternative.sourceType,
+      sourceKey: publicAlternative.sourceKey,
+    },
+  };
+}
+
+function buildRankedOffersWithSafeComparisons(offers, comparisonCandidates, bestUnitPrice, worstUnitPrice) {
+  return offers.map((offer) => {
+    const rankedOffer = buildRankedOffer(offer, bestUnitPrice, worstUnitPrice);
+    const comparisonAlternative = buildSafeMarketComparisonAlternative(offer, comparisonCandidates);
+
+    return comparisonAlternative ? { ...rankedOffer, comparisonAlternative } : rankedOffer;
+  });
+}
+
 function buildValidityLabel(offer) {
   if (!offer?.validTo || isExpiredValidToCompensatedByFreshCrawl(offer)) {
     return 'Aktuell gefunden - bitte im Markt pruefen.';
@@ -7454,6 +7633,13 @@ function compareOffersByRanking(left, right, { query = '' } = {}) {
     return rightConsumerScore - leftConsumerScore;
   }
 
+  const leftHasImage = Number(Boolean(left?.imageUrl));
+  const rightHasImage = Number(Boolean(right?.imageUrl));
+
+  if (leftHasImage !== rightHasImage) {
+    return rightHasImage - leftHasImage;
+  }
+
   const priceComparison = compareSafeUnitPrice(left, right);
 
   if (priceComparison !== 0) {
@@ -8264,7 +8450,12 @@ async function buildRankingResponseFromStoredResultCache({
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
   const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
   const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
-  const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
+  const rankedOffers = buildRankedOffersWithSafeComparisons(
+    offers,
+    freshVisibleOffers,
+    bestUnitPrice,
+    worstUnitPrice,
+  );
   const summaryBasis = cacheEntry?.summaryBasis || {};
   const response = {
     generatedAt: new Date().toISOString(),
@@ -8720,7 +8911,12 @@ function buildRankingResponseFromBase({
   const safelyComparableOffers = offers.filter(isOfferSafelyComparable);
   const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
   const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
-  const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
+  const rankedOffers = buildRankedOffersWithSafeComparisons(
+    offers,
+    visibleOffers,
+    bestUnitPrice,
+    worstUnitPrice,
+  );
   const categoryDocuments = Array.isArray(base?.categoryDocuments) ? base.categoryDocuments : [];
   const retailerOptions = Array.isArray(base?.retailerOptions) ? base.retailerOptions : [];
 
@@ -9176,6 +9372,13 @@ async function buildOfferRanking({
         return rightConsumerScore - leftConsumerScore;
       }
 
+      const leftHasImage = Number(Boolean(left?.imageUrl));
+      const rightHasImage = Number(Boolean(right?.imageUrl));
+
+      if (leftHasImage !== rightHasImage) {
+        return rightHasImage - leftHasImage;
+      }
+
       const priceComparison = compareSafeUnitPrice(left, right);
 
       if (priceComparison !== 0) {
@@ -9247,7 +9450,12 @@ async function buildOfferRanking({
   const bestUnitPrice = safelyComparableOffers[0]?.normalizedUnitPrice?.amount || null;
   const worstUnitPrice = safelyComparableOffers[safelyComparableOffers.length - 1]?.normalizedUnitPrice?.amount || null;
   const rankedOfferMappingStartedAt = nowMs();
-  const rankedOffers = offers.map((offer) => buildRankedOffer(offer, bestUnitPrice, worstUnitPrice));
+  const rankedOffers = buildRankedOffersWithSafeComparisons(
+    offers,
+    visibleDedupeResult.offers,
+    bestUnitPrice,
+    worstUnitPrice,
+  );
   timings.rankedOfferMappingMs = nowMs() - rankedOfferMappingStartedAt;
 
   const responseAssemblyStartedAt = nowMs();
@@ -9457,6 +9665,8 @@ module.exports = {
   buildOfferRanking,
   buildBasketSuggestions,
   buildRankedOffer,
+  buildSafeMarketComparisonAlternative,
+  canOfferSafeMarketComparison,
   clearRankingResponseCache,
   getRankingResponseCacheSize,
   scoreOfferAgainstQuery,

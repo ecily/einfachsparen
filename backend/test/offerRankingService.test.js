@@ -11,12 +11,14 @@ const {
   buildSparOfficialProductSupplementalCandidateMatch,
   buildRetailerScopeMatch,
   buildRankedOffer,
+  buildSafeMarketComparisonAlternative,
   buildValidityLabel,
   buildGroupedRankings,
   buildKnownCategoryLabelMap,
   buildRankingBaseCacheKey,
   calculateOfferTermCoverage,
   compareOffersByRanking,
+  canOfferSafeMarketComparison,
   createResultSetToken,
   dedupeFinalResponseOffers,
   dedupeQueryOffers,
@@ -7631,7 +7633,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1',
+    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v1-image-tiebreak-v1',
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
@@ -7964,6 +7966,166 @@ test('ranking quality adjustment stays behind query relevance', () => {
   });
 
   assert.equal(compareOffersByRanking(relevantWithoutImage, irrelevantWithImage, { query: 'milka schokolade' }) < 0, true);
+});
+
+test('equally relevant and otherwise equal offers prefer the card with an image', () => {
+  const withoutImage = offer({
+    title: 'Caffe Crema Ganze Bohne',
+    searchText: 'caffe crema ganze bohne',
+    imageUrl: '',
+    normalizedUnitPrice: { amount: 15.99, unit: 'kg', comparable: false },
+  });
+  const withImage = offer({
+    ...withoutImage,
+    imageUrl: 'https://example.test/caffe-crema.jpg',
+  });
+
+  assert.equal(compareOffersByRanking(withImage, withoutImage, { query: 'kaffee' }) < 0, true);
+  assert.equal(compareOffersByRanking(withoutImage, withImage, { query: 'kaffee' }) > 0, true);
+});
+
+test('safe market comparison exposes only a cheaper official alternative for the same exact product and unit', () => {
+  const primary = offer({
+    _id: 'primary-coffee',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    title: 'Beispiel Caffe Crema 500 g',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Kaffee & Tee',
+    comparisonGroup: 'beispiel-caffe-crema::0.5-kg',
+    quantityText: '500 g',
+    totalComparableAmount: 0.5,
+    comparableUnit: 'kg',
+    priceCurrent: { amount: 9.99, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 19.98, unit: 'kg', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+    sourceType: 'bipa-official-html',
+    rawFacts: { sourceKey: 'bipa-official-category' },
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-partial',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: '2099-01-01T00:00:00.000Z',
+    validTo: '2099-01-31T23:59:59.000Z',
+    conditionsText: 'Aktion',
+    hasConditions: true,
+    isMultiBuy: false,
+    customerProgramRequired: false,
+    minimumPurchaseQty: 1,
+  });
+  const alternative = offer({
+    ...primary,
+    _id: 'alternative-coffee',
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Beispiel Caffe Crema 1 kg',
+    comparisonGroup: 'beispiel-caffe-crema::1-kg',
+    quantityText: '1 kg',
+    totalComparableAmount: 1,
+    priceCurrent: { amount: 15.99, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 15.99, unit: 'kg', comparable: true, confidence: 0.9 },
+    sourceType: 'dm-official-html',
+    rawFacts: { sourceKey: 'dm-official-product-search' },
+  });
+
+  assert.equal(canOfferSafeMarketComparison(primary, alternative), true);
+  assert.deepEqual(buildSafeMarketComparisonAlternative(primary, [primary, alternative]), {
+    available: true,
+    reason: 'Gleiches Produkt bei einem anderen Händler mit niedrigerem sicherem Vergleichspreis',
+    similarityLabel: 'Gleicher Produkttyp: Kaffee & Tee',
+    primaryMetricLabel: 'Günstigerer Preis pro Kilogramm',
+    offer: {
+      id: 'alternative-coffee',
+      retailerKey: 'dm',
+      retailerName: 'dm',
+      title: 'Beispiel Caffe Crema 1 kg',
+      brand: '',
+      imageUrl: '',
+      categoryPrimary: 'Getraenke',
+      categorySecondary: 'Kaffee & Tee',
+      quantityText: '1 kg',
+      conditionsText: 'Aktion',
+      validFrom: '2099-01-01T00:00:00.000Z',
+      validTo: '2099-01-31T23:59:59.000Z',
+      validityLabel: 'gueltig 2099-01-01 bis 2099-02-01',
+      priceCurrent: { amount: 15.99, currency: 'EUR' },
+      normalizedUnitPrice: { amount: 15.99, unit: 'kg', comparable: true, confidence: 0.9 },
+      sourceType: 'dm-official-html',
+      sourceKey: 'dm-official-product-search',
+    },
+  });
+
+  const response = buildRankingResponseFromBase({
+    base: {
+      visibleOffers: [primary, alternative],
+      resultCount: 2,
+      candidateCount: 2,
+      candidateLimit: 100,
+      units: ['kg'],
+      categoryDocuments: [],
+      retailerOptions: [],
+    },
+    query: 'kaffee',
+    showAllMatching: true,
+  });
+  const primaryResponse = response.rankedOffers.find((item) => item.id === 'primary-coffee');
+  const alternativeResponse = response.rankedOffers.find((item) => item.id === 'alternative-coffee');
+
+  assert.equal(primaryResponse.comparisonAlternative.offer.id, 'alternative-coffee');
+  assert.equal('comparisonAlternative' in alternativeResponse, false);
+});
+
+test('safe market comparison fails closed for unsafe units, sources, mechanics, retailer families and identities', () => {
+  const base = offer({
+    _id: 'base',
+    retailerKey: 'dm',
+    retailerName: 'dm',
+    title: 'Produkt 1 kg',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Fruehstueck',
+    comparisonGroup: 'produkt::1-kg',
+    quantityText: '1 kg',
+    totalComparableAmount: 1,
+    comparableUnit: 'kg',
+    priceCurrent: { amount: 10, currency: 'EUR' },
+    normalizedUnitPrice: { amount: 10, unit: 'kg', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true },
+    sourceType: 'dm-official-html',
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-success',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: '2099-01-01T00:00:00.000Z',
+    validTo: '2099-01-31T23:59:59.000Z',
+    conditionsText: '',
+    hasConditions: false,
+    isMultiBuy: false,
+    customerProgramRequired: false,
+    minimumPurchaseQty: 1,
+  });
+  const primary = { ...base, _id: 'primary', retailerKey: 'bipa', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 12 } };
+
+  const rejected = [
+    { ...base, retailerKey: 'spar' },
+    { ...base, comparableUnit: 'Stk', normalizedUnitPrice: { amount: 9, unit: 'Stk', comparable: true, confidence: 0.9 } },
+    { ...base, totalComparableAmount: 0.0011, quantityText: '1.072 ml' },
+    { ...base, quality: { comparisonSafe: true, issues: ['Vergleichseinheit unsicher oder nicht ableitbar'] } },
+    { ...base, sourceType: 'aktionsfinder-json' },
+    { ...base, sourceRunStatus: 'failed' },
+    { ...base, conditionsText: '2+1 Gratis', hasConditions: true, isMultiBuy: true },
+    { ...base, comparisonGroup: 'anderes-produkt::1-kg' },
+    { ...base, categorySecondary: 'Andere Kategorie' },
+    { ...base, status: 'expired', isActiveNow: false },
+  ];
+
+  for (const candidate of rejected) {
+    assert.equal(canOfferSafeMarketComparison(primary, candidate), false);
+  }
+
+  const billa = { ...base, _id: 'billa', retailerKey: 'billa', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 12 } };
+  const billaPlus = { ...base, _id: 'billa-plus', retailerKey: 'billa-plus', normalizedUnitPrice: { ...base.normalizedUnitPrice, amount: 9 } };
+  assert.equal(canOfferSafeMarketComparison(billa, billaPlus), false);
+  assert.equal(buildSafeMarketComparisonAlternative(primary, rejected), null);
 });
 
 test('ranking quality adjustment weakly prefers equally relevant official complete card', () => {
