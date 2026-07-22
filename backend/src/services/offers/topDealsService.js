@@ -51,6 +51,18 @@ function hasClearPriceConditions(offer) {
   return !conditionRelevant || Boolean(String(offer?.conditionsText || '').trim());
 }
 
+function hasKnownCategoryMismatch(offer) {
+  const retailerKey = normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || '');
+  const sourceType = String(offer?.sourceType || '').toLowerCase();
+  const title = String(offer?.title || '').toLowerCase();
+  const displayCategory = String(offer?.displayCategory || '').toLowerCase();
+
+  return ['billa', 'billa-plus'].includes(retailerKey)
+    && sourceType === 'billa-official-algolia'
+    && /\blindt\b.*\blindor\b.*\bkugeln\b/.test(title)
+    && displayCategory === 'milchprodukte';
+}
+
 function buildCandidateDecision(rawOffer, now = new Date()) {
   const retailerKey = normalizeRetailerKey(rawOffer?.retailerKey || rawOffer?.retailerName || '');
   if (EXCLUDED_RETAILERS.has(retailerKey)) return { accepted: false, reason: 'excluded-retailer' };
@@ -78,6 +90,7 @@ function buildCandidateDecision(rawOffer, now = new Date()) {
     return { accepted: false, reason: 'unit-price-unsafe' };
   }
   if (hasUnclearQuantityRisk(rawOffer)) return { accepted: false, reason: 'quantity-risk' };
+  if (hasKnownCategoryMismatch(offer)) return { accepted: false, reason: 'category-implausible' };
   if (!offer?.displayCategory || /unkategorisiert/i.test(offer.displayCategory)) {
     return { accepted: false, reason: 'category-missing' };
   }

@@ -148,6 +148,36 @@ test('excludes free-item promotions because the public unit price guard hides th
   assert.equal(response.excludedReasons['unit-price-unsafe'], 1);
 })
 
+test('excludes the proven BILLA Lindor milk-category mismatch without changing adjacent sweets', () => {
+  const wrongCategory = offer({
+    _id: 'lindor-milk-category',
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    sourceType: 'billa-official-algolia',
+    sourceTypes: ['billa-official-algolia'],
+    title: 'Lindt Lindt Lindor Kugeln Milch',
+    titleNormalized: 'lindt lindt lindor kugeln milch',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Milchprodukte',
+  });
+  const correctCategory = offer({
+    _id: 'lindor-sweets-category',
+    retailerKey: 'billa-plus',
+    retailerName: 'BILLA Plus',
+    sourceType: 'billa-official-algolia',
+    sourceTypes: ['billa-official-algolia'],
+    title: 'Lindt Lindt Lindor Kugeln Dark',
+    titleNormalized: 'lindt lindt lindor kugeln dark',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Suesswaren & Knabbereien',
+  });
+  const response = buildTopDealsFromOffers([wrongCategory, correctCategory], { now: NOW });
+
+  assert.equal(response.count, 1);
+  assert.equal(response.deals[0].id, 'lindor-sweets-category');
+  assert.equal(response.excludedReasons['category-implausible'], 1);
+})
+
 test('image is used only as a tie-breaker', () => {
   const withoutImage = offer({ _id: 'without-image', title: 'Deal A', titleNormalized: 'deal a', imageUrl: '' });
   const withImage = offer({ _id: 'with-image', title: 'Deal B', titleNormalized: 'deal b' });
