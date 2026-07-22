@@ -153,7 +153,7 @@ function SearchLandingHero() {
           <p className="subtitle">
             kaufklug macht Supermarkt- und Drogerie-Angebote in Österreich verständlich: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos, ohne Anmeldung und von Menschen für Menschen.
           </p>
-          <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller</p>
+          <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt</p>
         </div>
       </section>
     </>

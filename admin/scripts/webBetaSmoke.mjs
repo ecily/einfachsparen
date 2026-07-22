@@ -17,7 +17,7 @@ const DESKTOP_WIDTH = 1280
 const DESKTOP_HEIGHT = 900
 const HERO_TEXT = 'Flugblätter raus. Die besten Angebote rein.'
 const HERO_SUBLINE = 'kaufklug macht Supermarkt- und Drogerie-Angebote in Österreich verständlich: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos, ohne Anmeldung und von Menschen für Menschen.'
-const HERO_MARKETS = 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller'
+const HERO_MARKETS = 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt'
 const SPAR_TRUST_TITLE = 'Warum SPAR derzeit fehlt'
 const FORBIDDEN_VISIBLE_COPY = [
   'bester Preis',

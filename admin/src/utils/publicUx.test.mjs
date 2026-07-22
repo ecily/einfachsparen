@@ -20,7 +20,11 @@ test('public hero uses the final positioning and market line', () => {
   assert.match(appSource, /kostenlos/)
   assert.match(appSource, /ohne Anmeldung/)
   assert.match(appSource, /von Menschen für Menschen/)
-  assert.match(appSource, /BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller/)
+  const marketLine = appSource.match(/<p className="search-landing-hero__markets">([^<]+)<\/p>/)?.[1]
+
+  assert.equal(marketLine, 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt')
+  assert.match(marketLine, /INTERSPAR eingeschränkt/)
+  assert.doesNotMatch(marketLine, /(?:^| · )(?:SPAR|EUROSPAR|PAGRO|HOFER)(?: · |$)/)
   assert.doesNotMatch(appSource, /Aktuelle Angebote finden\./)
 })
 
