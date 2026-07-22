@@ -3,7 +3,7 @@ import { seoFooterLinkGroups } from '../../config/seoLandingPages'
 export function SeoFooterLinks() {
   return (
     <nav className="seo-footer-links" aria-label="Angebotsseiten">
-      <h2>Angebote schneller finden</h2>
+      <h2>Direkt zu beliebten Angeboten</h2>
       <div className="seo-footer-links__groups">
         {seoFooterLinkGroups.map((group) => (
           <div className="seo-footer-links__group" key={group.title}>

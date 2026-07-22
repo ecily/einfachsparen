@@ -24,7 +24,9 @@ test('sticky header exposes the Top Deals route with compact mobile copy', () =>
 
 test('search and Top Deals are presented as distinct guided entries without limiting normal search', () => {
   assert.match(keywordSearchSource, /placeholder="Was m&ouml;chtest du heute billiger kaufen"/)
-  assert.match(keywordSearchSource, /Suche ein Produkt – oder starte mit den/)
+  assert.match(keywordSearchSource, /Suche ein Produkt – oder starte mit den Top Deals\./)
+  assert.match(keywordSearchSource, /href="\/top-deals"/)
+  assert.match(keywordSearchSource, /Top Deals heute ansehen/)
   assert.match(keywordSearchSource, /onNavigate\?\.\('top-deals'\)/)
   assert.match(keywordSearchSource, /const KEYWORD_SEARCH_LIMIT = 60/)
   assert.match(keywordSearchSource, /pagination\.hasMore/)
@@ -32,6 +34,11 @@ test('search and Top Deals are presented as distinct guided entries without limi
   assert.match(cssSource, /animation: top-deals-entry-glow 1\.8s ease-out 1 both/)
   assert.match(cssSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.page-nav__button\.page-nav__top-deals,[\s\S]*?animation: none !important/)
   assert.doesNotMatch(cssSource, /(?:search-entry-soft-glow|top-deals-entry-glow)[^;]*infinite/)
+})
+
+test('final search guidance and explanation copy stay user-facing and restrained', () => {
+  assert.match(appSource, /\['Vergleichen', 'Preis pro Einheit, Bedingungen und passende Alternativen prüfen\.'\]/)
+  assert.doesNotMatch(appSource, /immer günstiger/i)
 })
 
 test('Top Deals page uses the guarded backend endpoint and exact trust copy', () => {

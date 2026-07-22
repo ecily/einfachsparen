@@ -163,7 +163,7 @@ function SearchLandingHero() {
 function HowItWorksSection() {
   const steps = [
     ['Suchen', 'Produkt oder Marke eingeben.'],
-    ['Vergleichen', 'Preis, Gültigkeit und Bedingungen prüfen.'],
+    ['Vergleichen', 'Preis pro Einheit, Bedingungen und passende Alternativen prüfen.'],
     ['Merken', 'Angebote auf die Einkaufsliste setzen.'],
     ['Einkaufen', 'Im Markt prüfen und clever einkaufen.'],
   ]

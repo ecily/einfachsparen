@@ -3,21 +3,31 @@ import fs from 'node:fs'
 import test from 'node:test'
 
 import {
-  SPAR_TRUST_CONCLUSION,
-  SPAR_TRUST_INTRO,
+  SPAR_TRUST_DETAIL,
+  SPAR_TRUST_SUMMARY,
   SPAR_TRUST_TITLE,
   shouldShowSparTrustNotice,
 } from './sparTrustNotice.js'
 
-const publicCopy = [SPAR_TRUST_TITLE, SPAR_TRUST_INTRO, SPAR_TRUST_CONCLUSION].join(' ')
+const publicCopy = [SPAR_TRUST_TITLE, SPAR_TRUST_SUMMARY, SPAR_TRUST_DETAIL].join(' ')
 
 test('SPAR trust copy is critical, factual and legally defensive', () => {
   assert.equal(SPAR_TRUST_TITLE, 'Warum SPAR derzeit fehlt')
-  assert.match(publicCopy, /offiziellen, legal erreichbaren Quellen/)
+  assert.equal(SPAR_TRUST_SUMMARY, 'kaufklug zeigt nur verifiziert aktuelle Angebote aus offiziellen, legal erreichbaren Quellen. SPAR ist derzeit nur eingeschränkt verfügbar.')
   assert.match(publicCopy, /SPAR/)
   assert.match(publicCopy, /nicht zuverlässig möglich/)
   assert.match(publicCopy, /lieber weniger Angebote als falsche oder alte Preise/)
   assert.doesNotMatch(publicCopy, /verweigert|blockiert|absichtlich|illegal|boykottiert|403|TLS|Transport|blocked/i)
+})
+
+test('SPAR trust notice keeps the explanation in an accessible compact disclosure', () => {
+  const noticeSource = fs.readFileSync(new URL('../components/search/SparTrustNotice.jsx', import.meta.url), 'utf8')
+
+  assert.match(noticeSource, /<strong>\{SPAR_TRUST_TITLE\}<\/strong>/)
+  assert.match(noticeSource, /<span>\{SPAR_TRUST_SUMMARY\}<\/span>/)
+  assert.match(noticeSource, /<details className="limited-coverage-notice__details">/)
+  assert.match(noticeSource, /<summary>Mehr erfahren<\/summary>/)
+  assert.match(noticeSource, /<p>\{SPAR_TRUST_DETAIL\}<\/p>/)
 })
 
 test('SPAR trust notice is shown only while SPAR is absent from public retailers', () => {

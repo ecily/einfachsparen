@@ -477,6 +477,9 @@ function pageAuditExpression() {
       .map((element) => normalize(element.textContent))
     const topDealsNav = document.querySelector('[aria-label="Top Deals heute"]')
     const searchEntryGuidance = document.querySelector('.search-entry-guidance')
+    const searchTopDealsEntry = searchEntryGuidance?.querySelector('a[href="/top-deals"]')
+    const sparNotice = document.querySelector('.limited-coverage-notice--spar')
+    const sparDetails = sparNotice?.querySelector('.limited-coverage-notice__details')
     const mainSearchInput = document.querySelector('.search-first-page .keyword-search-form input')
     const topDealCards = Array.from(document.querySelectorAll('.top-deals-results .user-card')).filter(isVisible).map((element) => ({
       text: normalize(element.textContent),
@@ -521,6 +524,13 @@ function pageAuditExpression() {
       topDealsNavActive: Boolean(topDealsNav?.classList.contains('page-nav__button--active')),
       topDealsAnimationName: topDealsNav ? window.getComputedStyle(topDealsNav).animationName : '',
       searchEntryGuidance: isVisible(searchEntryGuidance) ? normalize(searchEntryGuidance.textContent) : '',
+      searchTopDealsEntryVisible: isVisible(searchTopDealsEntry),
+      searchTopDealsEntryText: normalize(searchTopDealsEntry?.textContent),
+      searchTopDealsEntryHref: normalize(searchTopDealsEntry?.getAttribute('href')),
+      sparNoticeVisible: isVisible(sparNotice),
+      sparNoticeText: normalize(sparNotice?.textContent),
+      sparDetailsOpen: Boolean(sparDetails?.open),
+      sparDetailsSummary: normalize(sparDetails?.querySelector('summary')?.textContent),
       mainSearchVisible: isVisible(mainSearchInput),
       mainSearchAnimationName: mainSearchInput ? window.getComputedStyle(mainSearchInput).animationName : '',
       topDealCards,
@@ -607,14 +617,19 @@ async function runHomeCheck(cdp) {
     actual: audit.heroMarketLine,
     expected: HERO_MARKETS,
   })
-  assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'home: subordinate SPAR trust notice must remain visible')
+  assert(audit.sparNoticeVisible && audit.sparNoticeText.includes(SPAR_TRUST_TITLE), 'home: compact SPAR trust notice must remain visible')
+  assert(!audit.sparDetailsOpen && audit.sparDetailsSummary === 'Mehr erfahren', 'home: SPAR details must start compact and remain accessible')
   assert(!audit.bodyText.includes('Aktuelle Angebote finden.'), 'home: old hero headline must be absent')
   assert(audit.topDealsNavVisible, 'home: Top Deals header button must be visible')
   assert(audit.topDealsNavClass.includes('page-nav__top-deals'), 'home: Top Deals must be a distinct secondary CTA')
   assert(audit.mainSearchVisible, 'home: primary product search must be visible early')
-  assert(audit.searchEntryGuidance === 'Suche ein Produkt – oder starte mit den Top Deals.', 'home: search guidance must be visible', {
+  assert(audit.searchEntryGuidance === 'Suche ein Produkt – oder starte mit den Top Deals. Top Deals heute ansehen', 'home: search guidance must be visible', {
     actual: audit.searchEntryGuidance,
   })
+  assert(audit.searchTopDealsEntryVisible && audit.searchTopDealsEntryText === 'Top Deals heute ansehen' && audit.searchTopDealsEntryHref === '/top-deals', 'home: secondary Top Deals entry must be usable beside the main search')
+  assert(audit.bodyText.includes('Direkt zu beliebten Angeboten'), 'home: popular-offer navigation heading must be visible')
+  assert(!audit.bodyText.includes('Angebote schneller finden'), 'home: old technical offer-navigation heading must be absent')
+  assert(audit.bodyText.includes('Preis pro Einheit, Bedingungen und passende Alternativen prüfen.'), 'home: comparison step must explain safe alternatives')
   assertNoHorizontalOverflow(audit, 'home')
 }
 
@@ -665,6 +680,7 @@ async function runBrowseCheck(cdp) {
   assert(/Märkte auswählen|MÃ¤rkte auswÃ¤hlen/.test(audit.bodyText), 'browse: market selector must be visible')
   assert(audit.browseRetailerButtons.length >= 2, 'browse: expected visible market buttons')
   assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'browse: SPAR trust notice must remain visible')
+  assert(!audit.sparDetailsOpen && audit.sparDetailsSummary === 'Mehr erfahren', 'browse: SPAR details must start compact')
   assert(!audit.unitPriceLabels.some((label) => /vergleichspreis/i.test(label)), 'browse: old unit-price label found')
 
   const firstRowTop = audit.browseRetailerButtons[0]?.top

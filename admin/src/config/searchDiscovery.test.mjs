@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import test from 'node:test'
 
 import { QUICK_SEARCH_TERMS } from './searchDiscovery.js'
 import { getSeoLandingPageByKey, seoFooterLinkGroups } from './seoLandingPages.js'
+
+const seoFooterSource = fs.readFileSync(new URL('../components/layout/SeoFooterLinks.jsx', import.meta.url), 'utf8')
 
 test('quick searches contain only the validated public terms', () => {
   assert.deepEqual(QUICK_SEARCH_TERMS, [
@@ -32,6 +35,11 @@ test('faster-offer links omit weak categories and unavailable retailers', () => 
   assert.equal(retailerLabels.includes('PAGRO Angebote'), false)
   assert.equal(retailerLabels.includes('HOFER Angebote'), false)
   assert.equal(retailerLabels.includes('Müller Angebote'), true)
+})
+
+test('popular-offer navigation uses the final user-facing heading', () => {
+  assert.match(seoFooterSource, /<h2>Direkt zu beliebten Angeboten<\/h2>/)
+  assert.doesNotMatch(seoFooterSource, /Angebote schneller finden/)
 })
 
 test('Müller button has a dedicated official-online landing target', () => {

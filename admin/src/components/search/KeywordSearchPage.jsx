@@ -608,10 +608,19 @@ export function KeywordSearchPage({
     <div className="keyword-search-page">
       <section className="panel keyword-search-hero">
         <form className="keyword-search-form" onSubmit={handleSubmit}>
-          <p className="search-entry-guidance">
-            Suche ein Produkt – oder starte mit den{' '}
-            <button type="button" onClick={() => onNavigate?.('top-deals')}>Top Deals</button>.
-          </p>
+          <div className="search-entry-guidance">
+            <span>Suche ein Produkt – oder starte mit den Top Deals.</span>
+            {' '}
+            <a
+              href="/top-deals"
+              onClick={(event) => {
+                event.preventDefault()
+                onNavigate?.('top-deals')
+              }}
+            >
+              Top Deals heute ansehen
+            </a>
+          </div>
           <div className="keyword-search-form__row">
             <div
               className="keyword-search-form__input-wrap"
