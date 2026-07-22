@@ -7,6 +7,7 @@ import { RetailerSelectorBlock } from './RetailerSelectorBlock'
 import { CategorySelectorBlock } from './CategorySelectorBlock'
 import { ActionBlock } from './ActionBlock'
 import { ResultsBlockConsumer } from './ResultsBlockConsumer'
+import { SparTrustNotice } from './SparTrustNotice'
 
 export function SearchPage({
   retailers,
@@ -110,6 +111,8 @@ export function SearchPage({
           <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
         </div>
       </section>
+
+      <SparTrustNotice retailers={retailers} />
 
       <RetailerSelectorBlock
         retailers={retailers}

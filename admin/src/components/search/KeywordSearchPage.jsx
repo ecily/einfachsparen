@@ -11,6 +11,7 @@ import {
   shouldDisplayUnitPrice,
 } from '../../utils/offers'
 import { OfferCardConsumer } from './OfferCardConsumer'
+import { SparTrustNotice } from './SparTrustNotice'
 import { formatRetailerName, shouldSeparateRetailerGroups, sortRetailersByDisplayGroup } from '../../utils/retailers'
 import { getRetailerTheme } from '../../utils/retailerColors'
 import {
@@ -609,7 +610,7 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
                 ref={searchInputRef}
                 type="search"
                 value={queryInput}
-                placeholder="Produkt oder Marke finden."
+                placeholder="Was m&ouml;chtest du heute billiger kaufen"
                 aria-label="Suchbegriff für Angebote"
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}
@@ -657,6 +658,8 @@ export function KeywordSearchPage({ searchRequest, retailers = [], categories = 
             ))}
           </div>
         </form>
+
+        <SparTrustNotice retailers={availableRetailers} />
 
         <div className="keyword-search-controls">
           <div className="keyword-search-filter-intro">
