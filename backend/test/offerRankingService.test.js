@@ -7829,6 +7829,40 @@ test('ranked offer response explains availability for Müller online offers', ()
   assert.equal(ranked.validTo, undefined);
 });
 
+test('Mueller Blink all-purpose wipes response category guard repairs stale food category', () => {
+  const ranked = buildRankedOffer(offer({
+    _id: 'mueller-blink-allzwecktuecher',
+    retailerKey: 'mueller',
+    retailerName: 'Mueller',
+    sourceKey: 'mueller-official-online-offers',
+    sourceType: 'mueller-official-online-offers',
+    title: 'Blink Feuchte Allzwecktuecher Orange Pfirsich',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+    subcategoryKey: 'obst-gemuese',
+  }), null, null);
+
+  assert.equal(ranked.categoryPrimary, 'Haushalt');
+  assert.equal(ranked.categorySecondary, 'Waschmittel & Reiniger');
+
+  const otherRetailer = buildRankedOffer(offer({
+    _id: 'billa-blink-allzwecktuecher',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    sourceKey: 'billa-official-algolia',
+    sourceType: 'billa-official-algolia',
+    title: 'Blink Feuchte Allzwecktuecher Orange Pfirsich',
+    categoryPrimary: 'Lebensmittel',
+    categorySecondary: 'Obst & Gemuese',
+    categoryKey: 'obst-gemuese',
+    subcategoryKey: 'obst-gemuese',
+  }), null, null);
+
+  assert.equal(otherRetailer.categoryPrimary, 'Lebensmittel');
+  assert.equal(otherRetailer.categorySecondary, 'Obst & Gemuese');
+});
+
 test('ranked offer response repairs stored Hirter crate total without using minimum purchase quantity', () => {
   const ranked = buildRankedOffer(offer({
     _id: 'hirter-action-crate',

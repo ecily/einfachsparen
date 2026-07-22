@@ -5092,6 +5092,14 @@ function withResponseCategoryGuardFields(offer = {}) {
   }
 
   if (
+    retailerKey === 'mueller'
+    && String(offer.sourceKey || offer.sourceType || '').toLowerCase() === 'mueller-official-online-offers'
+    && /\bblink\b.*\ballzwecktuecher\b/.test(titleText)
+  ) {
+    return applyGuard('mueller-blink-allzwecktuecher');
+  }
+
+  if (
     retailerKey === 'bipa'
     && currentPrimary === 'baby kinder'
     && currentSecondary === 'babybedarf'
