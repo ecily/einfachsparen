@@ -426,7 +426,11 @@ async function evaluate(cdp, expression) {
   })
 
   if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text || 'Runtime.evaluate failed')
+    throw new Error(
+      result.exceptionDetails.exception?.description
+      || result.exceptionDetails.text
+      || 'Runtime.evaluate failed'
+    )
   }
 
   return result.result?.value
@@ -473,10 +477,11 @@ function pageAuditExpression() {
       .map((element) => normalize(element.textContent))
     const topDealsNav = document.querySelector('[aria-label="Top Deals heute"]')
     const topDealCards = Array.from(document.querySelectorAll('.top-deals-results .user-card')).filter(isVisible).map((element) => ({
-      text: normalize(element.innerText),
+      text: normalize(element.textContent),
       retailer: normalize(element.querySelector('.user-card__retailer-badge')?.textContent),
       hasImage: Boolean(element.querySelector('.product-image img')),
-      hasUnitPrice: Boolean(element.querySelector('.user-card__unit-price-callout')),
+      hasUnitPrice: Boolean(element.querySelector('.user-card__unit-price-callout'))
+        || /\\/\\s*(?:kg|l|Stk)\\b/.test(normalize(element.querySelector('.user-card__top-deal')?.textContent)),
       hasTopDeal: Boolean(element.querySelector('.user-card__top-deal')),
       hasValidity: Boolean(element.querySelector('.user-card__meta-pill--validity')),
     }))
