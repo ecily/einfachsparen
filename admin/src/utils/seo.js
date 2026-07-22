@@ -63,6 +63,11 @@ export function getPageMeta(activePage) {
       description: BASE_DESCRIPTION,
       path: '/suche',
     },
+    'top-deals': {
+      title: 'Top Deals heute | kaufklug.at',
+      description: 'Die stärksten verifizierten Ersparnisse nach Preis pro Einheit – Bedingungen inklusive.',
+      path: '/top-deals',
+    },
     'shopping-list': {
       title: SEO_TITLE,
       description:
@@ -291,6 +296,7 @@ export function getInitialPageFromPathname(pathname) {
   if (pathname.includes('feedback')) return 'feedback'
   if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
   if (pathname.includes('stoebern') || pathname.includes('stobern')) return 'search'
+  if (pathname.includes('top-deals')) return 'top-deals'
   if (pathname.includes('suche')) return 'product-search'
   if (pathname.includes('einkaufsliste') || pathname.includes('shopping')) return 'shopping-list'
 
@@ -309,6 +315,7 @@ export function getPathForPage(nextPage) {
   if (nextPage === 'diagnostics') return '/ecily_web'
   if (nextPage === 'product-search') return '/suche'
   if (nextPage === 'search') return '/stoebern'
+  if (nextPage === 'top-deals') return '/top-deals'
   if (nextPage === 'shopping-list') return '/einkaufsliste'
   if (nextPage === 'impressum') return '/impressum'
   if (nextPage === 'privacy') return '/datenschutz'

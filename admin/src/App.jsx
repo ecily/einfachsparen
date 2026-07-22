@@ -10,6 +10,7 @@ import { SeoFooterLinks } from './components/layout/SeoFooterLinks'
 import { StickyBottomLine } from './components/layout/StickyBottomLine'
 import { SearchPage } from './components/search/SearchPage'
 import { KeywordSearchPage } from './components/search/KeywordSearchPage'
+import { TopDealsPage } from './components/search/TopDealsPage'
 import { SeoOfferLandingPage } from './components/search/SeoOfferLandingPage'
 import { ShoppingListPage } from './components/shopping/ShoppingListPage'
 import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
@@ -889,6 +890,16 @@ function App() {
             Liste
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
           </button>
+
+          <button
+            className={`page-nav__button page-nav__top-deals${activePage === 'top-deals' ? ' page-nav__button--active' : ''}`}
+            onClick={() => handleNavigate('top-deals')}
+            aria-current={activePage === 'top-deals' ? 'page' : undefined}
+            aria-label="Top Deals heute"
+          >
+            <span className="page-nav__top-deals-long">Top Deals heute</span>
+            <span className="page-nav__top-deals-short">Top Deals</span>
+          </button>
         </div>
 
         <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
@@ -913,6 +924,12 @@ function App() {
           shareId={sharedListId}
           onNavigate={handleNavigate}
           onAdoptItems={handleAdoptSharedShoppingList}
+        />
+      ) : activePage === 'top-deals' ? (
+        <TopDealsPage
+          shoppingListIds={shoppingListIds}
+          onAddToShoppingList={handleAddToShoppingList}
+          onNavigate={handleNavigate}
         />
       ) : activePage === 'search' ? (
         <div className="browse-page">

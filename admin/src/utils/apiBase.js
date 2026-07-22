@@ -245,6 +245,11 @@ export async function fetchOfferRankingDirect(params = {}) {
   return fetchJson(`/offers/ranking${suffix}`)
 }
 
+export async function fetchTopDeals(limit = 10) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 10)
+  return fetchJson(`/offers/top-deals?limit=${safeLimit}`)
+}
+
 export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0, resultSetToken = '', options = {}) {
   const searchParams = new URLSearchParams()
   searchParams.set('q', String(query || '').trim())

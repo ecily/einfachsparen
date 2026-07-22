@@ -9,6 +9,7 @@ import path from 'node:path'
 const DEFAULT_BASE_URL = 'http://127.0.0.1:4173'
 const BASE_URL = String(process.env.KAUFKLUG_SMOKE_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, '')
 const SMOKE_API_BASE_URL = String(process.env.KAUFKLUG_SMOKE_API_BASE_URL || '').replace(/\/+$/, '')
+const HOME_ONLY = process.env.KAUFKLUG_SMOKE_HOME_ONLY === 'true'
 const TIMEOUT_MS = Number(process.env.KAUFKLUG_SMOKE_TIMEOUT_MS || 30000)
 const MOBILE_WIDTH = 390
 const MOBILE_HEIGHT = 900
@@ -470,6 +471,15 @@ function pageAuditExpression() {
     const unitPriceLabels = Array.from(document.querySelectorAll('.user-card__unit-price-label'))
       .filter(isVisible)
       .map((element) => normalize(element.textContent))
+    const topDealsNav = document.querySelector('[aria-label="Top Deals heute"]')
+    const topDealCards = Array.from(document.querySelectorAll('.top-deals-results .user-card')).filter(isVisible).map((element) => ({
+      text: normalize(element.innerText),
+      retailer: normalize(element.querySelector('.user-card__retailer-badge')?.textContent),
+      hasImage: Boolean(element.querySelector('.product-image img')),
+      hasUnitPrice: Boolean(element.querySelector('.user-card__unit-price-callout')),
+      hasTopDeal: Boolean(element.querySelector('.user-card__top-deal')),
+      hasValidity: Boolean(element.querySelector('.user-card__meta-pill--validity')),
+    }))
     const browseRetailerButtons = Array.from(document.querySelectorAll('.browse-page .selection-block .retailer-chip')).map((element) => {
       const rect = element.getBoundingClientRect()
       return {
@@ -487,6 +497,8 @@ function pageAuditExpression() {
       visibleSignals,
       heroMarketLine: isVisible(heroMarketLine) ? normalize(heroMarketLine.textContent) : '',
       unitPriceLabels,
+      topDealsNavVisible: isVisible(topDealsNav),
+      topDealCards,
       browseRetailerButtons,
       scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
       viewportWidth: window.innerWidth,
@@ -571,6 +583,7 @@ async function runHomeCheck(cdp) {
   })
   assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'home: subordinate SPAR trust notice must remain visible')
   assert(!audit.bodyText.includes('Aktuelle Angebote finden.'), 'home: old hero headline must be absent')
+  assert(audit.topDealsNavVisible, 'home: Top Deals header button must be visible')
   assertNoHorizontalOverflow(audit, 'home')
 }
 
@@ -626,6 +639,30 @@ async function runBrowseCheck(cdp) {
   assertNoHorizontalOverflow(audit, 'browse')
 }
 
+async function runTopDealsCheck(cdp) {
+  logStep('checking /top-deals on mobile viewport')
+  await configurePage(cdp, { width: MOBILE_WIDTH, height: MOBILE_HEIGHT, mobile: true })
+  await navigate(cdp, makeUrl('/top-deals'))
+  await waitForCondition(
+    cdp,
+    `Array.from(document.querySelectorAll('h1')).some((element) => element.innerText.trim() === 'Top Deals heute') && (document.querySelectorAll('.top-deals-results .user-card').length > 0 || document.body.innerText.includes('Heute sind noch nicht genug verifizierte Vergleichswerte verfügbar') || document.body.innerText.includes('Die Top Deals konnten gerade nicht geladen werden'))`,
+    TIMEOUT_MS
+  )
+
+  const audit = await auditCurrentPage(cdp, 'top-deals')
+  assert(audit.topDealsNavVisible, 'top-deals: sticky header button must be visible')
+  assert(audit.h1Texts.includes('Top Deals heute'), 'top-deals: title must be visible')
+  assert(audit.topDealCards.length <= 10, 'top-deals: at most ten cards are allowed')
+
+  for (const card of audit.topDealCards) {
+    assert(!/^(SPAR|EUROSPAR|HOFER)$/i.test(card.retailer), 'top-deals: excluded retailer found', { card })
+    assert(card.hasUnitPrice, 'top-deals: safe unit price is missing', { card })
+    assert(card.hasTopDeal && /statt/.test(card.text), 'top-deals: reference unit price is missing', { card })
+    assert(card.hasValidity, 'top-deals: validity is missing', { card })
+  }
+  assertNoHorizontalOverflow(audit, 'top-deals')
+}
+
 async function runShoppingListCheck(cdp) {
   logStep('checking /einkaufsliste on desktop viewport')
   await configurePage(cdp, { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT, mobile: false })
@@ -656,9 +693,12 @@ async function main() {
 
   try {
     await runHomeCheck(cdp)
-    await runSearchCheck(cdp)
-    await runBrowseCheck(cdp)
-    await runShoppingListCheck(cdp)
+    if (!HOME_ONLY) {
+      await runSearchCheck(cdp)
+      await runBrowseCheck(cdp)
+      await runTopDealsCheck(cdp)
+      await runShoppingListCheck(cdp)
+    }
 
     const relevantRuntimeErrors = runtimeErrors.filter((message) => {
       return !/favicon|manifest/i.test(String(message || ''))

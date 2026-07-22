@@ -9662,6 +9662,7 @@ async function buildOfferRanking({
 }
 
 module.exports = {
+  OFFER_RANKING_FIELDS,
   buildOfferRanking,
   buildBasketSuggestions,
   buildRankedOffer,

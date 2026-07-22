@@ -5,6 +5,7 @@ const Offer = require('../models/Offer');
 const { offersRateLimit, basketRateLimit, imageProxyRateLimit } = require('../middleware/rateLimits');
 const { validateBasketQuery, validateRankingQuery } = require('../middleware/validators');
 const { buildOfferRanking, buildBasketSuggestions } = require('../services/offers/offerRankingService');
+const { buildTopDeals } = require('../services/offers/topDealsService');
 const { buildImageRequestHeaders, normalizeImageUrl } = require('../services/images/imageUrl');
 const { isOfferFreshForActiveUse } = require('../services/offers/offerFreshness');
 
@@ -73,6 +74,15 @@ router.get('/basket', basketRateLimit, validateBasketQuery, async (req, res, nex
     });
 
     res.json(suggestions);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/top-deals', offersRateLimit, async (req, res, next) => {
+  try {
+    const topDeals = await buildTopDeals({ limit: req.query.limit || 10 });
+    res.json(topDeals);
   } catch (error) {
     next(error);
   }

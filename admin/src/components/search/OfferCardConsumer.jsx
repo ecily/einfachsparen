@@ -220,6 +220,7 @@ function getVisibleConditionInfo(rawConditions) {
 
 export function OfferCardConsumer({
   offer,
+  topDeal = null,
   onAddToShoppingList,
   isInShoppingList = false,
   showShoppingListAction = true,
@@ -258,6 +259,12 @@ export function OfferCardConsumer({
   const comparisonUnitPriceLabel = comparisonUnitPriceText
     ? getUnitPriceLabel(comparisonAlternative)
     : ''
+  const topDealCurrentUnitPriceText = topDeal?.currentUnitPrice
+    ? formatUnitPrice(topDeal.currentUnitPrice)
+    : ''
+  const topDealReferenceUnitPriceText = topDeal?.referenceUnitPrice
+    ? formatUnitPrice(topDeal.referenceUnitPrice)
+    : ''
   const comparisonPriceAmount = getNumericAmount(comparisonAlternative?.priceCurrent)
   const comparisonPriceCurrency = getPriceCurrency(comparisonAlternative?.priceCurrent) || 'EUR'
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
@@ -284,6 +291,13 @@ export function OfferCardConsumer({
       <ProductImage offerId={offer.id} src={offer.imageUrl} alt={offer.title} offer={offer} />
 
       <div className="user-card__content">
+        {topDeal ? (
+          <div className="user-card__top-deal" aria-label={`Top Deal: ${topDeal.discountPercent} Prozent Ersparnis`}>
+            <strong>-{topDeal.discountPercent} %</strong>
+            <span>{topDealCurrentUnitPriceText} statt {topDealReferenceUnitPriceText}</span>
+            <small>{topDeal.reason}</small>
+          </div>
+        ) : null}
         <div className="user-card__top">
           <div>
             <div className="user-card__eyebrow">
