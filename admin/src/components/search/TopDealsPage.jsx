@@ -28,12 +28,9 @@ const RETAILER_FILTERS = [
 
 function readActiveFilters() {
   const searchParams = new URLSearchParams(window.location.search)
-  const category = searchParams.get('category') || ''
-  const retailer = searchParams.get('retailer') || ''
-
   return {
-    category: CATEGORY_FILTERS.some(([key]) => key === category) ? category : '',
-    retailer: RETAILER_FILTERS.some(([key]) => key === retailer) ? retailer : '',
+    category: searchParams.get('category') || '',
+    retailer: searchParams.get('retailer') || '',
   }
 }
 

@@ -73,6 +73,10 @@ test('Top Deals expose only positive-count safety-allowlisted category and retai
   }
   assert.match(pageSource, /payload\?\.availableFilters\?\.categories/)
   assert.match(pageSource, /payload\?\.availableFilters\?\.retailers/)
+  assert.match(pageSource, /category: searchParams\.get\('category'\) \|\| ''/)
+  assert.match(pageSource, /retailer: searchParams\.get\('retailer'\) \|\| ''/)
+  assert.doesNotMatch(pageSource, /CATEGORY_FILTERS\.some\(\(\[key\]\) => key === category\)/)
+  assert.doesNotMatch(pageSource, /RETAILER_FILTERS\.some\(\(\[key\]\) => key === retailer\)/)
   assert.match(pageSource, /CATEGORY_FILTERS\.filter\(\(\[key\]\) => availableCategoryCounts\.get\(key\) > 0\)/)
   assert.match(pageSource, /RETAILER_FILTERS\.filter\(\(\[key\]\) => availableRetailerCounts\.get\(key\) > 0\)/)
   assert.match(pageSource, /availableCategoryFilters\.length > 0 \|\| availableRetailerFilters\.length > 0/)

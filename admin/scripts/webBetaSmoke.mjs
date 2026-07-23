@@ -857,6 +857,22 @@ async function runTopDealsCheck(cdp) {
     assert(card.hasValidity, 'top-deals: validity is missing', { card })
   }
   assertNoHorizontalOverflow(audit, 'top-deals')
+
+  await navigate(cdp, makeUrl('/top-deals?retailer=spar'))
+  await waitForCondition(
+    cdp,
+    `document.body.innerText.includes('Noch keine sicheren Top Deals') || document.body.innerText.includes('Die Top Deals konnten gerade nicht geladen werden')`,
+    TIMEOUT_MS
+  )
+  const excludedFilterAudit = await auditCurrentPage(cdp, 'top-deals-excluded-filter')
+  assert(excludedFilterAudit.topDealCards.length === 0, 'top-deals: excluded direct filter must not fall back to global deals', {
+    topDealCards: excludedFilterAudit.topDealCards,
+  })
+  assert(
+    excludedFilterAudit.bodyText.includes('Noch keine sicheren Top Deals'),
+    'top-deals: excluded direct filter must show the honest empty state'
+  )
+  assertNoHorizontalOverflow(excludedFilterAudit, 'top-deals-excluded-filter')
 }
 
 async function runReducedMotionCheck(cdp) {
