@@ -9,11 +9,20 @@ const { classifyOfferSourceQuality } = require('./sourceQuality');
 
 const DEFAULT_TOP_DEALS_LIMIT = 20;
 const MAX_TOP_DEALS_LIMIT = 20;
-const TOP_DEALS_CANDIDATE_LIMIT = 2000;
+const TOP_DEALS_CANDIDATE_LIMIT = 5000;
 const TOP_DEALS_CACHE_TTL_MS = 2 * 60 * 1000;
 const ALLOWED_UNITS = new Set(['kg', 'l', 'Stk']);
 const EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar', 'hofer', 'pagro']);
-const ALLOWED_RETAILER_FILTERS = new Set(['billa', 'billa-plus', 'lidl', 'penny', 'dm', 'bipa', 'mueller']);
+const ALLOWED_RETAILER_FILTERS = new Set([
+  'billa',
+  'billa-plus',
+  'lidl',
+  'penny',
+  'dm',
+  'bipa',
+  'mueller',
+  'interspar',
+]);
 const ALLOWED_CATEGORY_FILTERS = new Set([
   'getraenke',
   'drogerie',
@@ -93,20 +102,34 @@ function matchesTopDealsFilters(deal, filters) {
     && matchesCategoryFilter(deal, filters.category);
 }
 
-function buildAvailableFilters(deals = []) {
+function buildAvailableFilters(strictDeals = [], fallbackDeals = []) {
   const categories = [];
   const retailers = [];
 
   for (const key of ALLOWED_CATEGORY_FILTERS) {
-    const count = deals.filter((deal) => matchesCategoryFilter(deal, key)).length;
+    const count = strictDeals.filter((deal) => matchesCategoryFilter(deal, key)).length;
     if (count > 0) categories.push({ key, count });
   }
 
   for (const key of ALLOWED_RETAILER_FILTERS) {
-    const count = deals.filter((deal) => (
+    const strictCount = strictDeals.filter((deal) => (
       normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '') === key
     )).length;
-    if (count > 0) retailers.push({ key, count });
+    const safeFallbackCount = fallbackDeals.filter((deal) => (
+      normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '') === key
+    )).length;
+    const fallbackCount = strictCount > 0 ? 0 : safeFallbackCount;
+    const totalShownCount = strictCount > 0 ? strictCount : fallbackCount;
+    if (totalShownCount > 0) {
+      retailers.push({
+        key,
+        count: totalShownCount,
+        strictCount,
+        fallbackCount,
+        totalShownCount,
+        mode: strictCount > 0 ? 'strict' : 'retailer_discount_fallback',
+      });
+    }
   }
 
   return { categories, retailers };
@@ -142,6 +165,152 @@ function hasKnownCategoryMismatch(offer) {
     && sourceType === 'billa-official-algolia'
     && /\blindt\b.*\blindor\b.*\bkugeln\b/.test(title)
     && displayCategory === 'milchprodukte';
+}
+
+function hasFallbackFragmentRisk(rawOffer, offer) {
+  const title = String(offer?.title || '').trim();
+  const reviewText = Array.isArray(rawOffer?.reviewReasons) ? rawOffer.reviewReasons.join(' ') : '';
+  return rawOffer?.needsReview === true
+    || title.length < 3
+    || /fragment|product-unclear|title-missing|nonsense/i.test(reviewText)
+    || /^(?:gratis|aktion|angebot|-?\s*\d+\s*%)$/i.test(title);
+}
+
+function getFallbackSavingsEvidence(rawOffer, offer) {
+  const price = finitePositive(offer?.priceCurrent?.amount);
+  if (!price) return null;
+
+  const referencePrice = finitePositive(offer?.referencePrice?.amount);
+  const referenceConfidence = Number(offer?.referencePrice?.confidence || 0);
+  const currentCurrency = String(offer?.priceCurrent?.currency || 'EUR');
+  const referenceCurrency = String(rawOffer?.priceReference?.currency || currentCurrency);
+  if (
+    referencePrice
+    && referencePrice > price
+    && offer?.referencePrice?.type === 'direct_source_reference_price'
+    && offer?.referencePrice?.allowsSavings === true
+    && offer?.referencePrice?.isApproximate !== true
+    && referenceConfidence >= 0.8
+    && currentCurrency === referenceCurrency
+  ) {
+    const discountPercent = ((referencePrice - price) / referencePrice) * 100;
+    if (discountPercent > 0 && discountPercent < 100) {
+      return {
+        discountPercent: round(discountPercent),
+        savingsAmount: round(referencePrice - price),
+        evidence: 'direct_source_reference_price',
+      };
+    }
+  }
+
+  const explicitDiscountPercent = finitePositive(
+    rawOffer?.discountPercent
+    ?? rawOffer?.rawFacts?.discountPercentage
+    ?? rawOffer?.rawFacts?.discountPercent
+  );
+  const savingsConfidence = Number(rawOffer?.savingsConfidence || 0);
+  if (
+    explicitDiscountPercent
+    && explicitDiscountPercent < 100
+    && savingsConfidence >= 0.8
+    && !finitePositive(rawOffer?.discountUpToPercent)
+    && rawOffer?.rawFacts?.discountAppliesToProduct !== false
+    && !/category|campaign/i.test(String(rawOffer?.rawFacts?.discountLevel || ''))
+  ) {
+    return {
+      discountPercent: round(explicitDiscountPercent),
+      savingsAmount: null,
+      evidence: 'explicit_official_discount_percent',
+    };
+  }
+
+  return null;
+}
+
+function buildRetailerFallbackDecision(rawOffer, now = new Date()) {
+  const retailerKey = normalizeRetailerKey(rawOffer?.retailerKey || rawOffer?.retailerName || '');
+  if (!ALLOWED_RETAILER_FILTERS.has(retailerKey)) {
+    return { accepted: false, reason: 'fallback-retailer-not-allowed' };
+  }
+  const validTo = rawOffer?.validTo ? new Date(rawOffer.validTo) : null;
+  if (validTo && !Number.isNaN(validTo.getTime()) && validTo.getTime() < now.getTime()) {
+    return { accepted: false, reason: 'fallback-expired' };
+  }
+  if (!filterFreshActiveOffers([rawOffer], now).length) {
+    return { accepted: false, reason: 'fallback-not-fresh-public' };
+  }
+  if (String(rawOffer?.sourceRunStatus || '') !== 'success') {
+    return { accepted: false, reason: 'fallback-source-run-not-success' };
+  }
+  if (hasRiskyPublishState(rawOffer)) {
+    return { accepted: false, reason: 'fallback-retained-or-stale' };
+  }
+
+  const sourceQuality = classifyOfferSourceQuality(rawOffer, now);
+  if (!sourceQuality.hasOfficialEvidence || sourceQuality.sourceTrustLevel !== 'high' || sourceQuality.isLowConfidenceAggregator) {
+    return { accepted: false, reason: 'fallback-source-not-trusted' };
+  }
+
+  const offer = buildRankedOffer(rawOffer, null, null);
+  if (String(offer?.offerType || '') !== 'product') {
+    return { accepted: false, reason: 'fallback-not-product' };
+  }
+  if (!finitePositive(offer?.priceCurrent?.amount)) {
+    return { accepted: false, reason: 'fallback-price-missing' };
+  }
+  if (hasFallbackFragmentRisk(rawOffer, offer)) {
+    return { accepted: false, reason: 'fallback-fragment-risk' };
+  }
+  if (hasKnownCategoryMismatch(offer)) {
+    return { accepted: false, reason: 'fallback-category-implausible' };
+  }
+  if (!offer?.displayCategory || /unkategorisiert/i.test(offer.displayCategory)) {
+    return { accepted: false, reason: 'fallback-category-missing' };
+  }
+  if (!hasClearPriceConditions(offer)) {
+    return { accepted: false, reason: 'fallback-condition-missing' };
+  }
+
+  const savingsEvidence = getFallbackSavingsEvidence(rawOffer, offer);
+  if (!savingsEvidence) {
+    return { accepted: false, reason: 'fallback-savings-unsafe' };
+  }
+
+  const topDeal = {
+    mode: 'retailer_discount_fallback',
+    reason: 'Top Deals nach Markt: höchste verifizierte Ersparnisse dieses Marktes',
+    discountPercent: savingsEvidence.discountPercent,
+    savingsAmount: savingsEvidence.savingsAmount,
+    evidence: savingsEvidence.evidence,
+  };
+  const unitPrice = finitePositive(offer?.normalizedUnitPrice?.amount);
+  const unit = String(offer?.normalizedUnitPrice?.unit || '');
+  const totalComparableAmount = finitePositive(offer?.totalComparableAmount);
+  if (
+    unitPrice
+    && offer?.normalizedUnitPrice?.comparable === true
+    && ALLOWED_UNITS.has(unit)
+    && totalComparableAmount
+    && !hasUnclearQuantityRisk(rawOffer)
+  ) {
+    topDeal.currentUnitPrice = { amount: round(unitPrice), unit };
+    if (savingsEvidence.evidence === 'direct_source_reference_price') {
+      const price = finitePositive(offer?.priceCurrent?.amount);
+      const referencePrice = finitePositive(offer?.referencePrice?.amount);
+      topDeal.referenceUnitPrice = {
+        amount: round(unitPrice * (referencePrice / price)),
+        unit,
+      };
+    }
+  }
+
+  return {
+    accepted: true,
+    deal: {
+      ...offer,
+      topDeal,
+    },
+  };
 }
 
 function buildCandidateDecision(rawOffer, now = new Date()) {
@@ -256,6 +425,25 @@ function compareTopDeals(left, right) {
   );
 }
 
+function compareRetailerFallbackDeals(left, right) {
+  const percentDifference = Number(right?.topDeal?.discountPercent || 0) - Number(left?.topDeal?.discountPercent || 0);
+  if (percentDifference !== 0) return percentDifference;
+
+  const savingsDifference = Number(right?.topDeal?.savingsAmount || 0) - Number(left?.topDeal?.savingsAmount || 0);
+  if (savingsDifference !== 0) return savingsDifference;
+
+  const imageDifference = Number(Boolean(right?.imageUrl)) - Number(Boolean(left?.imageUrl));
+  if (imageDifference !== 0) return imageDifference;
+
+  const priceDifference = Number(left?.priceCurrent?.amount || 0) - Number(right?.priceCurrent?.amount || 0);
+  if (priceDifference !== 0) return priceDifference;
+
+  return `${left?.retailerName || ''}-${left?.title || ''}`.localeCompare(
+    `${right?.retailerName || ''}-${right?.title || ''}`,
+    'de'
+  );
+}
+
 function getDealIdentity(deal) {
   const retailerKey = normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '');
   const retailerFamily = ['billa', 'billa-plus'].includes(retailerKey) ? 'billa-family' : retailerKey;
@@ -277,6 +465,7 @@ function buildTopDealsFromOffers(offers = [], {
   retailer = '',
 } = {}) {
   const excludedReasons = {};
+  const fallbackExcludedReasons = {};
   const accepted = [];
 
   for (const offer of offers) {
@@ -297,17 +486,60 @@ function buildTopDealsFromOffers(offers = [], {
     uniqueGuardedDeals.push(deal);
   }
 
+  const strictRetailerKeys = new Set(uniqueGuardedDeals.map((deal) => (
+    normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '')
+  )));
+  const fallbackAccepted = [];
+  for (const offer of offers) {
+    const retailerKey = normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || '');
+    if (strictRetailerKeys.has(retailerKey)) continue;
+
+    const fallbackDecision = buildRetailerFallbackDecision(offer, now);
+    if (fallbackDecision.accepted) {
+      fallbackAccepted.push(fallbackDecision.deal);
+    } else {
+      fallbackExcludedReasons[fallbackDecision.reason] = Number(
+        fallbackExcludedReasons[fallbackDecision.reason] || 0
+      ) + 1;
+    }
+  }
+
+  const uniqueFallbackDeals = [];
+  const fallbackSeen = new Set();
+  for (const deal of fallbackAccepted.sort(compareRetailerFallbackDeals)) {
+    const identity = getDealIdentity(deal);
+    if (fallbackSeen.has(identity)) continue;
+    fallbackSeen.add(identity);
+    uniqueFallbackDeals.push(deal);
+  }
+
   const safeLimit = normalizeLimit(limit);
   const filters = normalizeTopDealsFilters({ category, retailer });
-  const availableFilters = buildAvailableFilters(uniqueGuardedDeals);
-  const uniqueDeals = uniqueGuardedDeals.filter((deal) => matchesTopDealsFilters(deal, filters));
+  const availableFilters = buildAvailableFilters(uniqueGuardedDeals, uniqueFallbackDeals);
+  const strictDeals = uniqueGuardedDeals.filter((deal) => matchesTopDealsFilters(deal, filters));
+  const retailerFallbackDeals = filters.retailer && !filters.category && strictDeals.length === 0
+    ? uniqueFallbackDeals.filter((deal) => (
+      normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '') === filters.retailer
+    ))
+    : [];
+  const useRetailerFallback = !filters.invalid && retailerFallbackDeals.length > 0;
+  const uniqueDeals = useRetailerFallback ? retailerFallbackDeals : strictDeals;
+  const mode = useRetailerFallback ? 'retailer_discount_fallback' : 'strict';
+  const selectedPoolCount = useRetailerFallback ? uniqueFallbackDeals.length : uniqueGuardedDeals.length;
   return {
     generatedAt: now.toISOString(),
     count: Math.min(uniqueDeals.length, safeLimit),
     candidateCount: uniqueDeals.length,
     totalGuardedCandidateCount: uniqueGuardedDeals.length,
-    filteredOutCount: uniqueGuardedDeals.length - uniqueDeals.length,
+    totalFallbackCandidateCount: uniqueFallbackDeals.length,
+    filteredOutCount: Math.max(0, selectedPoolCount - uniqueDeals.length),
     limit: safeLimit,
+    mode,
+    reason: useRetailerFallback
+      ? 'Top Deals nach Markt: höchste verifizierte Ersparnisse dieses Marktes'
+      : 'Starke Ersparnis nach Preis pro Einheit',
+    strictCandidateCount: strictDeals.length,
+    fallbackCandidateCount: retailerFallbackDeals.length,
     filters: {
       category: filters.category,
       retailer: filters.retailer,
@@ -316,11 +548,14 @@ function buildTopDealsFromOffers(offers = [], {
     availableFilters,
     deals: uniqueDeals.slice(0, safeLimit),
     excludedReasons,
+    fallbackExcludedReasons,
     methodology: {
-      primarySort: 'verified-unit-savings-percent',
-      secondarySort: 'absolute-unit-price-savings',
-      tertiarySort: 'lower-current-unit-price',
-      referencePrice: 'direct-source-reference-only',
+      primarySort: useRetailerFallback ? 'verified-discount-percent' : 'verified-unit-savings-percent',
+      secondarySort: useRetailerFallback ? 'absolute-pack-savings' : 'absolute-unit-price-savings',
+      tertiarySort: useRetailerFallback ? 'image-then-lower-current-price' : 'lower-current-unit-price',
+      referencePrice: useRetailerFallback
+        ? 'direct-source-reference-or-explicit-high-confidence-product-percent'
+        : 'direct-source-reference-only',
       fewerThanLimitAllowed: true,
     },
   };
@@ -343,12 +578,16 @@ async function buildTopDeals({
   const offers = await Offer.find({
     status: 'active',
     isActiveNow: true,
+    retailerKey: { $in: [...ALLOWED_RETAILER_FILTERS] },
     'priceCurrent.amount': { $gt: 0 },
-    'priceReference.amount': { $gt: 0 },
-    'normalizedUnitPrice.amount': { $gt: 0 },
-    'normalizedUnitPrice.comparable': true,
+    $or: [
+      { 'priceReference.amount': { $gt: 0 } },
+      { discountPercent: { $gt: 0 } },
+      { 'rawFacts.discountPercentage': { $gt: 0 } },
+      { 'rawFacts.discountPercent': { $gt: 0 } },
+    ],
   })
-    .select(OFFER_RANKING_FIELDS)
+    .select(`${OFFER_RANKING_FIELDS} needsReview`)
     .limit(TOP_DEALS_CANDIDATE_LIMIT)
     .maxTimeMS(2500)
     .lean();
@@ -374,10 +613,12 @@ function clearTopDealsCache() {
 module.exports = {
   buildAvailableFilters,
   buildCandidateDecision,
+  buildRetailerFallbackDecision,
   buildTopDeals,
   buildTopDealsFromOffers,
   clearTopDealsCache,
   compareTopDeals,
+  compareRetailerFallbackDeals,
   matchesTopDealsFilters,
   normalizeLimit,
   normalizeTopDealsFilters,

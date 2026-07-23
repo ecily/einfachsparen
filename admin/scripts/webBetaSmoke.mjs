@@ -484,7 +484,10 @@ function pageAuditExpression() {
     const topDealCards = Array.from(document.querySelectorAll('.top-deals-results .user-card')).filter(isVisible).map((element) => ({
       text: normalize(element.textContent),
       retailer: normalize(element.querySelector('.user-card__retailer-badge')?.textContent),
+      retailerKey: normalize(element.getAttribute('data-retailer-key')),
       hasImage: Boolean(element.querySelector('.product-image img')),
+      mode: normalize(element.querySelector('.user-card__top-deal')?.getAttribute('data-top-deal-mode')),
+      hasPrice: Boolean(element.querySelector('.user-card__price strong')),
       hasUnitPrice: Boolean(element.querySelector('.user-card__unit-price-callout'))
         || /\\/\\s*(?:kg|l|Stk)\\b/.test(normalize(element.querySelector('.user-card__top-deal')?.textContent)),
       hasTopDeal: Boolean(element.querySelector('.user-card__top-deal')),
@@ -495,6 +498,7 @@ function pageAuditExpression() {
       text: normalize(element.textContent),
       href: normalize(element.getAttribute('href')),
       availableCount: Number(element.getAttribute('data-available-count') || 0),
+      mode: normalize(element.getAttribute('data-filter-mode')),
       visible: isVisible(element),
     }))
     const resultCardRetailers = Array.from(document.querySelectorAll('.keyword-search-results .user-card'))
@@ -845,16 +849,25 @@ async function runTopDealsCheck(cdp) {
     { visibleDiscoveryLinks }
   )
   assert(
-    discoveryHrefs.every((href) => !/[?&]retailer=(?:spar|eurospar|interspar|hofer|pagro)(?:&|$)/.test(href)),
+    visibleDiscoveryLinks
+      .filter((link) => /[?&]retailer=/.test(link.href))
+      .every((link) => ['strict', 'retailer_discount_fallback'].includes(link.mode)),
+    'top-deals: retailer discovery link has no supported mode',
+    { visibleDiscoveryLinks }
+  )
+  assert(
+    discoveryHrefs.every((href) => !/[?&]retailer=(?:spar|eurospar|hofer|pagro)(?:&|$)/.test(href)),
     'top-deals: excluded retailer must not be discoverable',
     { discoveryHrefs }
   )
 
   for (const card of audit.topDealCards) {
     assert(!/^(SPAR|EUROSPAR|INTERSPAR|HOFER|PAGRO)$/i.test(card.retailer), 'top-deals: excluded retailer found', { card })
+    assert(card.mode === 'strict', 'top-deals: global list must remain strict', { card })
     assert(card.hasUnitPrice, 'top-deals: safe unit price is missing', { card })
     assert(card.hasTopDeal && /statt/.test(card.text), 'top-deals: reference unit price is missing', { card })
     assert(card.hasValidity, 'top-deals: validity is missing', { card })
+    assert(card.hasPrice, 'top-deals: current price is missing', { card })
   }
   assertNoHorizontalOverflow(audit, 'top-deals')
 

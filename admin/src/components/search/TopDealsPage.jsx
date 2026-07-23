@@ -24,6 +24,7 @@ const RETAILER_FILTERS = [
   ['dm', 'dm'],
   ['bipa', 'BIPA'],
   ['mueller', 'Müller'],
+  ['interspar', 'INTERSPAR'],
 ]
 
 function readActiveFilters() {
@@ -71,23 +72,35 @@ export function TopDealsPage({ shoppingListIds, onAddToShoppingList, onNavigate 
       ? payload.availableFilters.categories.map(({ key, count }) => [key, Number(count)])
       : []
   )
-  const availableRetailerCounts = new Map(
+  const availableRetailerMetadata = new Map(
     Array.isArray(payload?.availableFilters?.retailers)
-      ? payload.availableFilters.retailers.map(({ key, count }) => [key, Number(count)])
+      ? payload.availableFilters.retailers.map((filter) => [filter.key, filter])
       : []
+  )
+  const availableRetailerCounts = new Map(
+    [...availableRetailerMetadata].map(([key, filter]) => [key, Number(filter.totalShownCount || filter.count)])
   )
   const availableCategoryFilters = CATEGORY_FILTERS.filter(([key]) => availableCategoryCounts.get(key) > 0)
   const availableRetailerFilters = RETAILER_FILTERS.filter(([key]) => availableRetailerCounts.get(key) > 0)
   const activeFilterLabel = CATEGORY_FILTERS.concat(RETAILER_FILTERS)
     .find(([key]) => key === (activeCategory || activeRetailer))?.[1]
+  const isRetailerFallback = payload?.mode === 'retailer_discount_fallback'
 
   return (
     <section className="top-deals-page" aria-labelledby="top-deals-title">
       <header className="panel top-deals-hero">
         <p className="eyebrow">Heute verifiziert</p>
         <h1 id="top-deals-title">Top Deals heute</h1>
-        <p className="subtitle">Die stärksten verifizierten Ersparnisse nach Preis pro Einheit – Bedingungen inklusive.</p>
-        <p className="top-deals-hero__trust">Nur mit belastbarem Einheitspreis und direktem Referenzpreis derselben Packung.</p>
+        <p className="subtitle">
+          {isRetailerFallback
+            ? 'Top Deals für diesen Markt – gereiht nach verifizierter prozentueller Ersparnis.'
+            : 'Die stärksten verifizierten Ersparnisse nach Preis pro Einheit – Bedingungen inklusive.'}
+        </p>
+        <p className="top-deals-hero__trust">
+          {isRetailerFallback
+            ? 'Wo verfügbar, zeigen wir zusätzlich den Preis pro Einheit.'
+            : 'Nur mit belastbarem Einheitspreis und direktem Referenzpreis derselben Packung.'}
+        </p>
         {activeFilterLabel ? (
           <p className="top-deals-hero__filter">
             Gefiltert nach <strong>{activeFilterLabel}</strong> · <a href="/top-deals">Alle Top Deals</a>
@@ -156,6 +169,7 @@ export function TopDealsPage({ shoppingListIds, onAddToShoppingList, onNavigate 
                     href={`/top-deals?retailer=${key}`}
                     aria-current={activeRetailer === key ? 'page' : undefined}
                     data-available-count={availableRetailerCounts.get(key)}
+                    data-filter-mode={availableRetailerMetadata.get(key)?.mode || 'strict'}
                   >
                     {label}
                   </a>

@@ -286,6 +286,7 @@ export function OfferCardConsumer({
   return (
     <article
       className={cardClassName}
+      data-retailer-key={offer.retailerKey || ''}
       style={{
         '--retailer-color': retailerTheme.color,
         '--retailer-text-color': retailerTheme.textColor,
@@ -298,9 +299,15 @@ export function OfferCardConsumer({
 
       <div className="user-card__content">
         {topDeal ? (
-          <div className="user-card__top-deal" aria-label={`Top Deal: ${topDeal.discountPercent} Prozent Ersparnis`}>
+          <div
+            className="user-card__top-deal"
+            aria-label={`Top Deal: ${topDeal.discountPercent} Prozent Ersparnis`}
+            data-top-deal-mode={topDeal.mode || 'strict'}
+          >
             <strong>-{topDeal.discountPercent} %</strong>
-            <span>{topDealCurrentUnitPriceText} statt {topDealReferenceUnitPriceText}</span>
+            {topDealCurrentUnitPriceText && topDealReferenceUnitPriceText ? (
+              <span>{topDealCurrentUnitPriceText} statt {topDealReferenceUnitPriceText}</span>
+            ) : null}
             <small>{topDeal.reason}</small>
           </div>
         ) : null}

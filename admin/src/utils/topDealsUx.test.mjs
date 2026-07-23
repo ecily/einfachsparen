@@ -65,10 +65,10 @@ test('Top Deals expose only positive-count safety-allowlisted category and retai
   for (const slug of ['getraenke', 'drogerie', 'haushalt', 'kaffee', 'bier', 'waschmittel', 'zahnpasta', 'sonnencreme', 'toilettenpapier']) {
     assert.match(pageSource, new RegExp(`\\['${slug}',`))
   }
-  for (const retailer of ['billa', 'billa-plus', 'lidl', 'penny', 'dm', 'bipa', 'mueller']) {
+  for (const retailer of ['billa', 'billa-plus', 'lidl', 'penny', 'dm', 'bipa', 'mueller', 'interspar']) {
     assert.match(pageSource, new RegExp(`\\['${retailer}',`))
   }
-  for (const excluded of ["['spar',", "['eurospar',", "['interspar',", "['hofer',", "['pagro',"]) {
+  for (const excluded of ["['spar',", "['eurospar',", "['hofer',", "['pagro',"]) {
     assert.equal(pageSource.includes(excluded), false)
   }
   assert.match(pageSource, /payload\?\.availableFilters\?\.categories/)
@@ -80,8 +80,12 @@ test('Top Deals expose only positive-count safety-allowlisted category and retai
   assert.match(pageSource, /CATEGORY_FILTERS\.filter\(\(\[key\]\) => availableCategoryCounts\.get\(key\) > 0\)/)
   assert.match(pageSource, /RETAILER_FILTERS\.filter\(\(\[key\]\) => availableRetailerCounts\.get\(key\) > 0\)/)
   assert.match(pageSource, /availableCategoryFilters\.length > 0 \|\| availableRetailerFilters\.length > 0/)
+  assert.match(pageSource, /payload\?\.mode === 'retailer_discount_fallback'/)
+  assert.match(pageSource, /Top Deals für diesen Markt – gereiht nach verifizierter prozentueller Ersparnis\./)
+  assert.match(pageSource, /Wo verfügbar, zeigen wir zusätzlich den Preis pro Einheit\./)
   assert.match(pageSource, /data-available-count=\{availableCategoryCounts\.get\(key\)\}/)
   assert.match(pageSource, /data-available-count=\{availableRetailerCounts\.get\(key\)\}/)
+  assert.match(pageSource, /data-filter-mode=\{availableRetailerMetadata\.get\(key\)\?\.mode \|\| 'strict'\}/)
   assert.match(pageSource, /href=\{`\/top-deals\?category=\$\{key\}`\}/)
   assert.match(pageSource, /href=\{`\/top-deals\?retailer=\$\{key\}`\}/)
 })
@@ -89,6 +93,9 @@ test('Top Deals expose only positive-count safety-allowlisted category and retai
 test('Top Deal cards retain price, unit price, reference unit price, savings, conditions and validity', () => {
   assert.match(cardSource, /topDeal\.currentUnitPrice/)
   assert.match(cardSource, /topDeal\.referenceUnitPrice/)
+  assert.match(cardSource, /data-top-deal-mode=\{topDeal\.mode \|\| 'strict'\}/)
+  assert.match(cardSource, /topDealCurrentUnitPriceText && topDealReferenceUnitPriceText/)
+  assert.match(cardSource, /data-retailer-key=\{offer\.retailerKey \|\| ''\}/)
   assert.match(cardSource, /-\{topDeal\.discountPercent\} %/)
   assert.match(cardSource, /statt \{topDealReferenceUnitPriceText\}/)
   assert.match(cardSource, /shortConditions\.length > 0 \|\| detailedConditions\.length > 0/)
