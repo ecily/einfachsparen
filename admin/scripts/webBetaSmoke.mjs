@@ -494,6 +494,7 @@ function pageAuditExpression() {
     const topDealsDiscoveryLinks = Array.from(topDealsDiscovery?.querySelectorAll('a') || []).map((element) => ({
       text: normalize(element.textContent),
       href: normalize(element.getAttribute('href')),
+      availableCount: Number(element.getAttribute('data-available-count') || 0),
       visible: isVisible(element),
     }))
     const resultCardRetailers = Array.from(document.querySelectorAll('.keyword-search-results .user-card'))
@@ -830,10 +831,19 @@ async function runTopDealsCheck(cdp) {
       && audit.topDealsDiscoveryText.includes('Finde die stärksten verifizierten Ersparnisse gezielt nach Bereich oder Händler.'),
     'top-deals: discovery title or explanation is missing'
   )
-  const discoveryHrefs = audit.topDealsDiscoveryLinks.filter((link) => link.visible).map((link) => link.href)
-  for (const href of ['/top-deals?category=getraenke', '/top-deals?category=kaffee', '/top-deals?retailer=billa', '/top-deals?retailer=mueller']) {
-    assert(discoveryHrefs.includes(href), 'top-deals: expected discovery link is missing', { href, discoveryHrefs })
-  }
+  const visibleDiscoveryLinks = audit.topDealsDiscoveryLinks.filter((link) => link.visible)
+  const discoveryHrefs = visibleDiscoveryLinks.map((link) => link.href)
+  assert(visibleDiscoveryLinks.some((link) => /[?&]category=/.test(link.href)), 'top-deals: no available category link is visible', {
+    visibleDiscoveryLinks,
+  })
+  assert(visibleDiscoveryLinks.some((link) => /[?&]retailer=/.test(link.href)), 'top-deals: no available retailer link is visible', {
+    visibleDiscoveryLinks,
+  })
+  assert(
+    visibleDiscoveryLinks.every((link) => link.availableCount > 0),
+    'top-deals: visible discovery link has no safe available deal',
+    { visibleDiscoveryLinks }
+  )
   assert(
     discoveryHrefs.every((href) => !/[?&]retailer=(?:spar|eurospar|interspar|hofer|pagro)(?:&|$)/.test(href)),
     'top-deals: excluded retailer must not be discoverable',

@@ -190,6 +190,16 @@ test('applies allowlisted category and retailer filters after all safety guards'
   const coffeeResponse = buildTopDealsFromOffers([coffee, toothpaste], { category: 'kaffee', now: NOW });
   assert.deepEqual(coffeeResponse.deals.map((deal) => deal.id), ['coffee']);
   assert.deepEqual(coffeeResponse.filters, { category: 'kaffee', retailer: '', invalid: false });
+  assert.deepEqual(coffeeResponse.availableFilters.retailers, [
+    { key: 'billa', count: 1 },
+    { key: 'bipa', count: 1 },
+  ]);
+  assert.deepEqual(coffeeResponse.availableFilters.categories, [
+    { key: 'getraenke', count: 1 },
+    { key: 'drogerie', count: 1 },
+    { key: 'kaffee', count: 1 },
+    { key: 'zahnpasta', count: 1 },
+  ]);
 
   const bipaResponse = buildTopDealsFromOffers([coffee, toothpaste], { retailer: 'bipa', now: NOW });
   assert.deepEqual(bipaResponse.deals.map((deal) => deal.id), ['toothpaste']);
@@ -199,6 +209,40 @@ test('applies allowlisted category and retailer filters after all safety guards'
   assert.equal(emptyResponse.count, 0);
   assert.equal(emptyResponse.filters.invalid, true);
   assert.equal(emptyResponse.totalGuardedCandidateCount, 2);
+})
+
+test('available filters include only positive counts from guarded deduplicated deals', () => {
+  const safeBillaBeer = offer({
+    _id: 'safe-billa-beer',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    title: 'Sicheres Bier',
+    titleNormalized: 'sicheres bier',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+  });
+  const unsafeBipaToothpaste = offer({
+    _id: 'unsafe-bipa-toothpaste',
+    retailerKey: 'bipa',
+    retailerName: 'BIPA',
+    title: 'Zahnpasta ohne Referenz',
+    titleNormalized: 'zahnpasta ohne referenz',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Mund- & Zahnpflege',
+    priceReference: { amount: null, currency: 'EUR' },
+    hasReferencePrice: false,
+  });
+
+  const response = buildTopDealsFromOffers([safeBillaBeer, unsafeBipaToothpaste], { now: NOW });
+
+  assert.deepEqual(response.availableFilters.retailers, [{ key: 'billa', count: 1 }]);
+  assert.deepEqual(response.availableFilters.categories, [
+    { key: 'getraenke', count: 1 },
+    { key: 'bier', count: 1 },
+  ]);
+  assert.equal(response.availableFilters.retailers.some(({ key }) => key === 'bipa'), false);
+  assert.equal(response.availableFilters.categories.some(({ key }) => key === 'zahnpasta'), false);
+  assert.equal(response.excludedReasons['reference-price-unsafe'], 1);
 })
 
 test('excludes missing reference, unsafe unit price, expired, risky retailers and missing prices', () => {

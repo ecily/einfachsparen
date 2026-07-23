@@ -69,6 +69,18 @@ export function TopDealsPage({ shoppingListIds, onAddToShoppingList, onNavigate 
   }, [activeCategory, activeRetailer])
 
   const deals = Array.isArray(payload?.deals) ? payload.deals : []
+  const availableCategoryCounts = new Map(
+    Array.isArray(payload?.availableFilters?.categories)
+      ? payload.availableFilters.categories.map(({ key, count }) => [key, Number(count)])
+      : []
+  )
+  const availableRetailerCounts = new Map(
+    Array.isArray(payload?.availableFilters?.retailers)
+      ? payload.availableFilters.retailers.map(({ key, count }) => [key, Number(count)])
+      : []
+  )
+  const availableCategoryFilters = CATEGORY_FILTERS.filter(([key]) => availableCategoryCounts.get(key) > 0)
+  const availableRetailerFilters = RETAILER_FILTERS.filter(([key]) => availableRetailerCounts.get(key) > 0)
   const activeFilterLabel = CATEGORY_FILTERS.concat(RETAILER_FILTERS)
     .find(([key]) => key === (activeCategory || activeRetailer))?.[1]
 
@@ -114,28 +126,48 @@ export function TopDealsPage({ shoppingListIds, onAddToShoppingList, onNavigate 
         </div>
       ) : null}
 
-      <section className="panel top-deals-discovery" aria-labelledby="top-deals-discovery-title">
-        <div>
-          <h2 id="top-deals-discovery-title">Top Deals nach Kategorie und Markt</h2>
-          <p>Finde die stärksten verifizierten Ersparnisse gezielt nach Bereich oder Händler.</p>
-        </div>
-        <nav aria-label="Top Deals nach Kategorie" className="top-deals-discovery__group">
-          <strong>Kategorien</strong>
-          <div className="top-deals-discovery__links">
-            {CATEGORY_FILTERS.map(([key, label]) => (
-              <a key={key} href={`/top-deals?category=${key}`} aria-current={activeCategory === key ? 'page' : undefined}>{label}</a>
-            ))}
+      {!loading && !error && (availableCategoryFilters.length > 0 || availableRetailerFilters.length > 0) ? (
+        <section className="panel top-deals-discovery" aria-labelledby="top-deals-discovery-title">
+          <div>
+            <h2 id="top-deals-discovery-title">Top Deals nach Kategorie und Markt</h2>
+            <p>Finde die stärksten verifizierten Ersparnisse gezielt nach Bereich oder Händler.</p>
           </div>
-        </nav>
-        <nav aria-label="Top Deals nach Markt" className="top-deals-discovery__group">
-          <strong>Märkte</strong>
-          <div className="top-deals-discovery__links">
-            {RETAILER_FILTERS.map(([key, label]) => (
-              <a key={key} href={`/top-deals?retailer=${key}`} aria-current={activeRetailer === key ? 'page' : undefined}>{label}</a>
-            ))}
-          </div>
-        </nav>
-      </section>
+          {availableCategoryFilters.length > 0 ? (
+            <nav aria-label="Top Deals nach Kategorie" className="top-deals-discovery__group">
+              <strong>Kategorien</strong>
+              <div className="top-deals-discovery__links">
+                {availableCategoryFilters.map(([key, label]) => (
+                  <a
+                    key={key}
+                    href={`/top-deals?category=${key}`}
+                    aria-current={activeCategory === key ? 'page' : undefined}
+                    data-available-count={availableCategoryCounts.get(key)}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </nav>
+          ) : null}
+          {availableRetailerFilters.length > 0 ? (
+            <nav aria-label="Top Deals nach Markt" className="top-deals-discovery__group">
+              <strong>Märkte</strong>
+              <div className="top-deals-discovery__links">
+                {availableRetailerFilters.map(([key, label]) => (
+                  <a
+                    key={key}
+                    href={`/top-deals?retailer=${key}`}
+                    aria-current={activeRetailer === key ? 'page' : undefined}
+                    data-available-count={availableRetailerCounts.get(key)}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </nav>
+          ) : null}
+        </section>
+      ) : null}
     </section>
   )
 }

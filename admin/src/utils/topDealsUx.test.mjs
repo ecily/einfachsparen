@@ -58,7 +58,7 @@ test('Top Deals page uses the guarded backend endpoint and exact trust copy', ()
   assert.match(pageSource, /topDeal=\{deal\.topDeal\}/)
 })
 
-test('Top Deals expose only safety-allowlisted category and retailer filters', () => {
+test('Top Deals expose only positive-count safety-allowlisted category and retailer filters', () => {
   assert.match(pageSource, /Top Deals nach Kategorie und Markt/)
   assert.match(pageSource, /Finde die stärksten verifizierten Ersparnisse gezielt nach Bereich oder Händler\./)
 
@@ -71,6 +71,13 @@ test('Top Deals expose only safety-allowlisted category and retailer filters', (
   for (const excluded of ["['spar',", "['eurospar',", "['interspar',", "['hofer',", "['pagro',"]) {
     assert.equal(pageSource.includes(excluded), false)
   }
+  assert.match(pageSource, /payload\?\.availableFilters\?\.categories/)
+  assert.match(pageSource, /payload\?\.availableFilters\?\.retailers/)
+  assert.match(pageSource, /CATEGORY_FILTERS\.filter\(\(\[key\]\) => availableCategoryCounts\.get\(key\) > 0\)/)
+  assert.match(pageSource, /RETAILER_FILTERS\.filter\(\(\[key\]\) => availableRetailerCounts\.get\(key\) > 0\)/)
+  assert.match(pageSource, /availableCategoryFilters\.length > 0 \|\| availableRetailerFilters\.length > 0/)
+  assert.match(pageSource, /data-available-count=\{availableCategoryCounts\.get\(key\)\}/)
+  assert.match(pageSource, /data-available-count=\{availableRetailerCounts\.get\(key\)\}/)
   assert.match(pageSource, /href=\{`\/top-deals\?category=\$\{key\}`\}/)
   assert.match(pageSource, /href=\{`\/top-deals\?retailer=\$\{key\}`\}/)
 })

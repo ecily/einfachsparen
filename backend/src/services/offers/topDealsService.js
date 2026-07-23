@@ -93,6 +93,25 @@ function matchesTopDealsFilters(deal, filters) {
     && matchesCategoryFilter(deal, filters.category);
 }
 
+function buildAvailableFilters(deals = []) {
+  const categories = [];
+  const retailers = [];
+
+  for (const key of ALLOWED_CATEGORY_FILTERS) {
+    const count = deals.filter((deal) => matchesCategoryFilter(deal, key)).length;
+    if (count > 0) categories.push({ key, count });
+  }
+
+  for (const key of ALLOWED_RETAILER_FILTERS) {
+    const count = deals.filter((deal) => (
+      normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '') === key
+    )).length;
+    if (count > 0) retailers.push({ key, count });
+  }
+
+  return { categories, retailers };
+}
+
 function hasRiskyPublishState(offer) {
   return /retained|stale|failed|error|inactive/i.test(String(offer?.publishStatus || ''));
 }
@@ -280,6 +299,7 @@ function buildTopDealsFromOffers(offers = [], {
 
   const safeLimit = normalizeLimit(limit);
   const filters = normalizeTopDealsFilters({ category, retailer });
+  const availableFilters = buildAvailableFilters(uniqueGuardedDeals);
   const uniqueDeals = uniqueGuardedDeals.filter((deal) => matchesTopDealsFilters(deal, filters));
   return {
     generatedAt: now.toISOString(),
@@ -293,6 +313,7 @@ function buildTopDealsFromOffers(offers = [], {
       retailer: filters.retailer,
       invalid: filters.invalid,
     },
+    availableFilters,
     deals: uniqueDeals.slice(0, safeLimit),
     excludedReasons,
     methodology: {
@@ -351,6 +372,7 @@ function clearTopDealsCache() {
 }
 
 module.exports = {
+  buildAvailableFilters,
   buildCandidateDecision,
   buildTopDeals,
   buildTopDealsFromOffers,
