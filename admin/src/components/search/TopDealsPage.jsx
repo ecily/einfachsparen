@@ -108,7 +108,17 @@ export function TopDealsPage({ shoppingListIds, onAddToShoppingList, onNavigate 
         ) : null}
       </header>
 
-      {loading ? <div className="panel status">Top Deals werden geprüft …</div> : null}
+      {loading ? (
+        <section className="top-deals-loading" aria-busy="true" aria-live="polite">
+          <div className="panel status top-deals-loading__status">
+            <span className="top-deals-loading__label">Top Deals werden geprüft</span>
+          </div>
+          <div className="skeleton-grid top-deals-loading__skeletons" aria-hidden="true">
+            {[0, 1, 2].map((index) => <div key={index} className="skeleton-card top-deals-skeleton-card" />)}
+          </div>
+        </section>
+      ) : null}
+
       {error ? <div className="panel status status--error" role="alert">{error}</div> : null}
 
       {!loading && !error && deals.length === 0 ? (

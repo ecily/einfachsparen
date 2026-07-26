@@ -318,6 +318,39 @@ test('retailer filter falls back to verified pack savings when strict unit-price
   }]);
 })
 
+test('BILLA and Lidl fallback keep safe official discounts despite unrelated review flags', () => {
+  for (const [retailerKey, retailerName, sourceType] of [
+    ['billa', 'BILLA', 'billa-official-algolia'],
+    ['lidl', 'Lidl', 'lidl-official-flyer-api'],
+  ]) {
+    const fallback = offer({
+      _id: `${retailerKey}-reviewed-fallback`,
+      retailerKey,
+      retailerName,
+      sourceType,
+      sourceTypes: [sourceType, 'official-site'],
+      sourceUrl: `https://example.test/${retailerKey}`,
+      normalizedUnitPrice: { amount: null, unit: '', comparable: false, confidence: 0 },
+      totalComparableAmount: null,
+      comparableUnit: '',
+      unitType: '',
+      quantityText: '',
+      needsReview: true,
+      reviewReasons: ['Gueltigkeitszeitraum unvollstaendig'],
+      conditionsText: '',
+      hasConditions: false,
+    });
+
+    const response = buildTopDealsFromOffers([fallback], { retailer: retailerKey, now: NOW });
+
+    assert.equal(response.mode, 'retailer_discount_fallback');
+    assert.equal(response.count, 1);
+    assert.equal(response.fallbackCandidateCount, 1);
+    assert.equal(response.deals[0].retailerKey, retailerKey);
+    assert.equal(response.deals[0].topDeal.discountPercent, 50);
+  }
+})
+
 test('retailer discount fallback sorts by percent and rejects unsafe price, validity and savings evidence', () => {
   const fallbackOffer = (overrides = {}) => offer({
     retailerKey: 'dm',

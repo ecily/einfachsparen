@@ -170,8 +170,7 @@ function hasKnownCategoryMismatch(offer) {
 function hasFallbackFragmentRisk(rawOffer, offer) {
   const title = String(offer?.title || '').trim();
   const reviewText = Array.isArray(rawOffer?.reviewReasons) ? rawOffer.reviewReasons.join(' ') : '';
-  return rawOffer?.needsReview === true
-    || title.length < 3
+  return title.length < 3
     || /fragment|product-unclear|title-missing|nonsense/i.test(reviewText)
     || /^(?:gratis|aktion|angebot|-?\s*\d+\s*%)$/i.test(title);
 }

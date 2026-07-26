@@ -3139,6 +3139,59 @@ a {
   max-width: 100%;
 }
 
+.top-deals-loading {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.top-deals-loading__status {
+  margin: 0;
+}
+
+.top-deals-loading__label {
+  display: inline-flex;
+  align-items: baseline;
+  min-height: 1.4em;
+  font-weight: 780;
+}
+
+.top-deals-loading__label::after {
+  content: '…';
+  display: inline-block;
+  width: 1.15em;
+  overflow: hidden;
+  animation: top-deals-loading-dots 1.35s steps(4, end) infinite;
+}
+
+.top-deals-loading__skeletons {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.top-deals-skeleton-card {
+  min-height: 15rem;
+}
+
+@keyframes top-deals-loading-dots {
+  0%,
+  24% {
+    width: 0;
+  }
+
+  48% {
+    width: 0.38em;
+  }
+
+  72% {
+    width: 0.77em;
+  }
+
+  100% {
+    width: 1.15em;
+  }
+}
+
 .top-deals-hero {
   display: grid;
   gap: 0.45rem;
@@ -7356,6 +7409,16 @@ textarea:focus {
 }
 
 @media (max-width: 760px) {
+  .top-deals-loading__skeletons {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .top-deals-skeleton-card {
+    min-height: 9.5rem;
+  }
+}
+
+@media (max-width: 760px) {
   .shopping-check {
     grid-template-columns: 1fr;
     gap: 0.72rem;
@@ -7461,6 +7524,11 @@ textarea:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .browse-loading-status__spinner {
+    animation: none !important;
+  }
+
+  .top-deals-loading__label::after,
+  .top-deals-skeleton-card {
     animation: none !important;
   }
 

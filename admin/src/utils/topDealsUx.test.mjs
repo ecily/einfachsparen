@@ -58,6 +58,18 @@ test('Top Deals page uses the guarded backend endpoint and exact trust copy', ()
   assert.match(pageSource, /topDeal=\{deal\.topDeal\}/)
 })
 
+test('Top Deals loading state is calm, accessible, responsive and reduced-motion aware', () => {
+  assert.match(pageSource, /top-deals-loading/)
+  assert.match(pageSource, /aria-busy="true"/)
+  assert.match(pageSource, /top-deals-loading__label/)
+  assert.match(pageSource, /top-deals-skeleton-card/)
+  assert.match(cssSource, /top-deals-loading__label::after/)
+  assert.match(cssSource, /top-deals-loading-dots/)
+  assert.match(cssSource, /top-deals-skeleton-card\s*\{[\s\S]*?min-height/)
+  assert.match(cssSource, /top-deals-loading__label::after,[\s\S]*?top-deals-skeleton-card[\s\S]*?animation: none !important/)
+  assert.match(cssSource, /top-deals-loading__skeletons\s*\{[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/)
+})
+
 test('Top Deals expose only positive-count safety-allowlisted category and retailer filters', () => {
   assert.match(pageSource, /Top Deals nach Kategorie und Markt/)
   assert.match(pageSource, /Finde die stärksten verifizierten Ersparnisse gezielt nach Bereich oder Händler\./)
