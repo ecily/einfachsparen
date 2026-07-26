@@ -9,7 +9,7 @@ const { classifyOfferSourceQuality } = require('./sourceQuality');
 
 const DEFAULT_TOP_DEALS_LIMIT = 20;
 const MAX_TOP_DEALS_LIMIT = 20;
-const TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT = 1000;
+const TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT = 2500;
 const TOP_DEALS_CACHE_TTL_MS = 2 * 60 * 1000;
 const ALLOWED_UNITS = new Set(['kg', 'l', 'Stk']);
 const EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar', 'hofer', 'pagro']);
