@@ -9,7 +9,7 @@ const { classifyOfferSourceQuality } = require('./sourceQuality');
 
 const DEFAULT_TOP_DEALS_LIMIT = 20;
 const MAX_TOP_DEALS_LIMIT = 20;
-const TOP_DEALS_CANDIDATE_LIMIT = 5000;
+const TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT = 1000;
 const TOP_DEALS_CACHE_TTL_MS = 2 * 60 * 1000;
 const ALLOWED_UNITS = new Set(['kg', 'l', 'Stk']);
 const EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar', 'hofer', 'pagro']);
@@ -574,10 +574,9 @@ async function buildTopDeals({
     return cachedTopDeals.response;
   }
 
-  const offers = await Offer.find({
+  const baseQuery = {
     status: 'active',
     isActiveNow: true,
-    retailerKey: { $in: [...ALLOWED_RETAILER_FILTERS] },
     'priceCurrent.amount': { $gt: 0 },
     $or: [
       { 'priceReference.amount': { $gt: 0 } },
@@ -585,11 +584,18 @@ async function buildTopDeals({
       { 'rawFacts.discountPercentage': { $gt: 0 } },
       { 'rawFacts.discountPercent': { $gt: 0 } },
     ],
-  })
-    .select(`${OFFER_RANKING_FIELDS} needsReview`)
-    .limit(TOP_DEALS_CANDIDATE_LIMIT)
-    .maxTimeMS(2500)
-    .lean();
+  };
+  const retailerOfferLists = await Promise.all(
+    [...ALLOWED_RETAILER_FILTERS].map((retailerKey) => Offer.find({
+      ...baseQuery,
+      retailerKey,
+    })
+      .select(`${OFFER_RANKING_FIELDS} needsReview`)
+      .limit(TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT)
+      .maxTimeMS(2500)
+      .lean())
+  );
+  const offers = retailerOfferLists.flat();
 
   const response = buildTopDealsFromOffers(offers, {
     limit: safeLimit,
