@@ -272,6 +272,21 @@ function serializeCrawlRun(run) {
       offersStored: numberFrom(source.offersStored),
       parsedOffers: numberFrom(source.parsedOffers),
       foundRawItems: numberFrom(source.foundRawItems),
+      rejectedOffers: numberFrom(source.rejectedOffers),
+      rejectionReasons: Array.isArray(source.rejectionReasons)
+        ? source.rejectionReasons.slice(0, 12).map((item) => ({
+          reason: sanitizeAnalysisText(item.reason || '', 100),
+          count: numberFrom(item.count),
+        }))
+        : [],
+      rejectedByReason: Object.fromEntries(
+        Object.entries(source.rejectedByReason || {})
+          .slice(0, 12)
+          .map(([key, value]) => [sanitizeAnalysisText(key, 100), numberFrom(value)])
+      ),
+      skipped: source.skipped === true,
+      skippedReason: sanitizeAnalysisText(source.skippedReason || '', 140),
+      retainedPreviousData: source.diagnostic?.retainedPreviousData === true,
       error: truncate(source.error || source.message || ''),
       failureStage: source.failureStage || '',
       httpStatus: source.httpStatus ?? null,
@@ -1662,20 +1677,96 @@ function buildFeedbackBetaSummary(feedbackSummary = {}) {
   };
 }
 
-function buildSourceExtractionSummary(latestEssence = []) {
-  const summary = {};
-  const knownKeys = ['billa-plus', 'billa', 'hofer', 'bipa', 'pagro', 'dm', 'penny', 'lidl', 'interspar', 'eurospar', 'spar'];
+function classifySourceExtraction(source = {}) {
+  const reasonKeys = [
+    ...Object.keys(source.rejectedByReason || {}),
+    ...(source.rejectionReasons || []).map((item) => item.reason),
+  ].map((item) => String(item || '').toLowerCase());
+  const text = [
+    source.status,
+    source.failureStage,
+    source.error,
+    source.skippedReason,
+    ...reasonKeys,
+  ].join(' ').toLowerCase();
 
-  for (const key of knownKeys) {
-    summary[key] = 'not_available';
+  if (source.retainedPreviousData) return 'retained-previous-data';
+  if (source.skipped && /policy|bounded|scope|not executed/.test(text)) return 'policy-bounded/skipped';
+  if (/transport|http-\d+|blocked|access denied/.test(text)) return 'transport-blocked';
+  if (source.foundRawItems > 0 && source.offersStored === 0 && reasonKeys.includes('official-source-zero-stored')) {
+    return 'official-source-zero-stored';
+  }
+  if (source.foundRawItems > 0 && source.offersStored === 0) return 'zero-stored';
+  if (source.foundRawItems === 0 && source.status !== 'success') return 'zero-raw';
+  if (/parse|product-unclear|quantity-missing|price-missing|category/.test(text)) return 'parser-rejected';
+  if (/dedupe|duplicate|covered/.test(text)) return 'duplicate/covered-by-other-official-source';
+  return source.status === 'success' ? 'success' : 'unknown';
+}
+
+function buildSourceExtractionSummary({ latestScheduledFullCrawl = null, latestJobs = [], latestEssence = [] } = {}) {
+  const sources = Array.isArray(latestScheduledFullCrawl?.sources)
+    ? latestScheduledFullCrawl.sources
+    : [];
+
+  if (sources.length === 0) {
+    const fallback = {};
+    for (const item of latestEssence || []) {
+      const key = item.retailerKey || 'unknown';
+      fallback[key] = sanitizeAnalysisText(item.essence || 'not_available', 280) || 'not_available';
+    }
+    return Object.keys(fallback).length > 0 ? fallback : { status: 'not_available' };
   }
 
-  for (const item of latestEssence || []) {
-    const key = item.retailerKey || 'unknown';
-    summary[key] = sanitizeAnalysisText(item.essence || 'not_available', 280) || 'not_available';
-  }
+  const sourceRows = sources.map((source) => ({
+    sourceKey: source.sourceKey || 'unknown',
+    retailer: source.retailerName || source.retailerKey || 'unknown',
+    retailerKey: source.retailerKey || 'unknown',
+    status: source.status || 'unknown',
+    rawCount: numberFrom(source.foundRawItems),
+    parsedCount: numberFrom(source.parsedOffers),
+    storedCount: numberFrom(source.offersStored),
+    rejectedCount: numberFrom(source.rejectedOffers),
+    publishChangedCount: null,
+    retainedPreviousData: source.retainedPreviousData === true,
+    reasonCode: classifySourceExtraction(source),
+    rejectionReasons: source.rejectionReasons || [],
+    warningClass: source.failureStage || source.skippedReason || source.error || '',
+  }));
+  const problemRows = sourceRows
+    .filter((row) => row.reasonCode !== 'success')
+    .sort((left, right) => (right.rejectedCount - left.rejectedCount) || (right.rawCount - left.rawCount))
+    .slice(0, 10);
+  const byRetailer = Object.values(sourceRows.reduce((map, row) => {
+    const current = map[row.retailerKey] || {
+      retailerKey: row.retailerKey,
+      retailer: row.retailer,
+      sourceCount: 0,
+      rawCount: 0,
+      parsedCount: 0,
+      storedCount: 0,
+      rejectedCount: 0,
+      partialSources: 0,
+    };
+    current.sourceCount += 1;
+    current.rawCount += row.rawCount;
+    current.parsedCount += row.parsedCount;
+    current.storedCount += row.storedCount;
+    current.rejectedCount += row.rejectedCount;
+    if (row.status === 'partial') current.partialSources += 1;
+    map[row.retailerKey] = current;
+    return map;
+  }, {}));
 
-  return summary;
+  return {
+    available: true,
+    runId: latestScheduledFullCrawl.id || 'unknown',
+    generatedFrom: 'crawl-run-source-results',
+    sourceCount: sourceRows.length,
+    topProblems: problemRows,
+    sources: sourceRows,
+    byRetailer,
+    latestJobsAvailable: Array.isArray(latestJobs) && latestJobs.length > 0,
+  };
 }
 
 function buildFeedbackProcessingInstruction(feedbackSummary = {}) {
@@ -1723,6 +1814,7 @@ function buildAnalysisEssence({
   actionableIssues,
   dataCompletenessWarnings,
   feedbackSummary,
+  latestJobs,
   latestEssence,
 } = {}) {
   const latestSourceSummary = summarizeCrawlSources(latestScheduledFullCrawl);
@@ -1801,7 +1893,11 @@ function buildAnalysisEssence({
     actionableIssues: enrichActionableIssues(actionableIssues),
     feedbackBetaTest: feedbackBetaSummary,
     feedbackProcessingInstruction,
-    sourceExtractionSummary: buildSourceExtractionSummary(latestEssence),
+    sourceExtractionSummary: buildSourceExtractionSummary({
+      latestScheduledFullCrawl,
+      latestJobs,
+      latestEssence,
+    }),
     safety: {
       excludesSensitiveFields: true,
       snippetsMaxCharacters: ANALYSIS_FEEDBACK_SNIPPET_LIMIT,
@@ -2034,8 +2130,39 @@ function renderAnalysisEssenceText(essence = {}) {
   lines.push(`  purpose: ${quoteYaml(instruction.purpose)}`);
   lines.push('');
   lines.push('source_extraction_summary:');
-  for (const [key, value] of Object.entries(essence.sourceExtractionSummary || {})) {
-    lines.push(`  ${key}: ${quoteYaml(value)}`);
+  const sourceExtractionSummary = essence.sourceExtractionSummary || {};
+  if (sourceExtractionSummary.available) {
+    lines.push(`  runId: ${quoteYaml(sourceExtractionSummary.runId)}`);
+    lines.push(`  generatedFrom: ${quoteYaml(sourceExtractionSummary.generatedFrom)}`);
+    lines.push(`  sourceCount: ${scalarYaml(sourceExtractionSummary.sourceCount)}`);
+    lines.push('  topProblems:');
+    for (const row of sourceExtractionSummary.topProblems || []) {
+      lines.push(`    - sourceKey: ${quoteYaml(row.sourceKey)}`);
+      lines.push(`      retailer: ${quoteYaml(row.retailer)}`);
+      lines.push(`      status: ${quoteYaml(row.status)}`);
+      lines.push(`      rawCount: ${scalarYaml(row.rawCount)}`);
+      lines.push(`      storedCount: ${scalarYaml(row.storedCount)}`);
+      lines.push(`      rejectedCount: ${scalarYaml(row.rejectedCount)}`);
+      lines.push(`      reasonCode: ${quoteYaml(row.reasonCode)}`);
+    }
+    if (!(sourceExtractionSummary.topProblems || []).length) lines.push('    - none');
+    lines.push('  sources:');
+    for (const row of sourceExtractionSummary.sources || []) {
+      lines.push(`    - sourceKey: ${quoteYaml(row.sourceKey)}`);
+      lines.push(`      retailer: ${quoteYaml(row.retailer)}`);
+      lines.push(`      status: ${quoteYaml(row.status)}`);
+      lines.push(`      rawCount: ${scalarYaml(row.rawCount)}`);
+      lines.push(`      parsedCount: ${scalarYaml(row.parsedCount)}`);
+      lines.push(`      storedCount: ${scalarYaml(row.storedCount)}`);
+      lines.push(`      rejectedCount: ${scalarYaml(row.rejectedCount)}`);
+      lines.push(`      retainedPreviousData: ${scalarYaml(row.retainedPreviousData)}`);
+      lines.push(`      reasonCode: ${quoteYaml(row.reasonCode)}`);
+      if (row.warningClass) lines.push(`      warningClass: ${quoteYaml(row.warningClass)}`);
+    }
+  } else {
+    for (const [key, value] of Object.entries(sourceExtractionSummary)) {
+      lines.push(`  ${key}: ${quoteYaml(value)}`);
+    }
   }
   lines.push('');
   lines.push('safety:');
@@ -2585,6 +2712,7 @@ async function buildDashboardSnapshot() {
     actionableIssues,
     dataCompletenessWarnings,
     feedbackSummary,
+    latestJobs,
     latestEssence,
   });
 
@@ -2658,6 +2786,8 @@ module.exports = {
     buildPublishStatusSummaryFromRows,
     buildQualityKpis,
     buildTrendSeries,
+    buildSourceExtractionSummary,
+    classifySourceExtraction,
     renderAnalysisEssenceText,
     hasConditionEvidence,
     hasSafeValidity,

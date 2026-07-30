@@ -7158,6 +7158,25 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
         region,
         pdfUrl: target.observedUrl || canonicalUrl || target.pdfUrl,
       });
+      const storedCandidateIds = new Set(
+        normalizedOffers
+          .map((offer) => offer?.rawFacts?.candidateId)
+          .filter(Boolean)
+      );
+      const candidateDiagnostics = pdfReference.candidates.map((candidate) => ({
+        id: String(candidate.id || '').slice(0, 80),
+        page: Number(candidate.page) || null,
+        title: sanitizeWhitespace(candidate.title || '').replace(/https?:\/\/\S+/gi, '[url]').slice(0, 140),
+        titleNormalized: sanitizeWhitespace(candidate.titleNormalized || '').slice(0, 140),
+        price: Number.isFinite(candidate.price) ? candidate.price : null,
+        quantityText: sanitizeWhitespace(candidate.quantityText || '').slice(0, 100),
+        conditionsText: sanitizeWhitespace(candidate.conditionsText || '').slice(0, 140),
+        validityFrom: pdfReference.validity?.validFrom ? pdfReference.validity.validFrom.toISOString() : null,
+        validityTo: pdfReference.validity?.validTo ? pdfReference.validity.validTo.toISOString() : null,
+        exclusionReason: candidate.exclusionReason || '',
+        parsedProduct: Boolean(candidate.title && candidate.price > 0 && !candidate.exclusionReason),
+        stored: storedCandidateIds.has(candidate.id),
+      }));
       const rejectionReasons = summarizeRejections(pdfReference.candidates);
       const rawDocument = await createCompactRawDocument({
         sourceId: source._id,
@@ -7201,6 +7220,7 @@ async function crawlPennyOfficialFlyers({ source, crawlJobId, region, html, link
             detectedDates: pdfReference.validity.detectedDates,
           },
           pageCandidateCounts: pdfReference.pages,
+          candidateDiagnostics,
         },
       });
 

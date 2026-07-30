@@ -1,5 +1,12 @@
 # kaufklug.at Kontext
 
+## PENNY-Flyer-Diagnose und Essence-Partial-Erklaerbarkeit am 2026-07-30
+
+- Der Read-only Donnerstag-Audit bestaetigte PENNY public aktuell ueber die offizielle Webquelle; der scheduled Full Run `6a6ad4ece93d94ef3a8ba3ef` hatte beim offiziellen PENNY-Flyer 11 Rohkandidaten, 0 gespeicherte Offers und `official-source-zero-stored`. Wegen Atlas-IP-Allowlist waren die individuellen RawDocument-Kandidaten lokal nicht direkt aus Mongo lesbar; es wurde keine spekulative Parserlockerung und kein Crawl ausgefuehrt.
+- Der PENNY-Flyer-Crawler speichert kuenftig pro PDF kompakte, URL-freie Candidate-Diagnostik mit gekuerztem Titel, Preis, Menge, Bedingung, globaler Validity, Ausschlussgrund, `parsedProduct` und `stored`. Das dient der naechsten sicheren Entscheidung und uebernimmt keine unsicheren Offers.
+- Die Dashboard-Essence nutzt fuer `source_extraction_summary` nun die vorhandenen scheduled CrawlRun-Source-Resultate statt pauschal `not_available`: SourceKey, Markt, Status, raw/parsed/stored/rejected, Retained-Flag, sichere Reason-Klasse und Top-10-Problemquellen. Sensitive URLs/Secrets werden nicht exportiert.
+- Keine DB-Mutation, kein Full-/Scoped-Crawl, kein Reindex/Repair, kein SPAR-/HOFER-/INTERSPAR-Fix. Top-Deals-Loading-UX war bereits animiert, layout-reserviert und reduced-motion-aware.
+
 ## Top-Deals Markt-Fallback und Loading-UX am 2026-07-26
 
 - Der marktbezogene `retailer_discount_fallback` bleibt streng auf frische, public-faehige Angebote mit plausiblerem aktuellem Preis, belastbarem direktem Referenzpreis oder hochkonfidentem produktspezifischem Rabattprozent, plausibler Kategorie und sichtbaren preisrelevanten Bedingungen begrenzt. Die bisherige pauschale Ablehnung jedes `needsReview=true` Angebots wurde entfernt; konkrete Fragment-, Nonsense- und Produktunklarheitsgruende bleiben ausgeschlossen. Damit koennen sichere BILLA-/Lidl-Kandidaten trotz fachfremder Review-Hinweise wie unvollstaendiger Geltigkeitsdarstellung in den Markt-Fallback gelangen. Keine unsicheren Fueller, keine Aggregator-Daten und keine Offer-/DB-Mutation.

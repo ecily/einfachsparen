@@ -922,3 +922,43 @@ test('dashboard analysis essence uses unknown fallbacks and excludes sensitive t
     assert.equal(analysisEssenceText.includes(token), false, `contains forbidden token ${token}`);
   }
 });
+
+test('dashboard essence explains partial source results from the crawl run', () => {
+  const summary = _private.buildSourceExtractionSummary({
+    latestScheduledFullCrawl: {
+      id: 'run-1',
+      sources: [
+        {
+          sourceKey: 'penny-official-flyer',
+          retailerKey: 'penny',
+          retailerName: 'PENNY',
+          status: 'partial',
+          foundRawItems: 11,
+          parsedOffers: 0,
+          offersStored: 0,
+          rejectedOffers: 11,
+          rejectionReasons: [{ reason: 'official-source-zero-stored', count: 11 }],
+        },
+        {
+          sourceKey: 'lidl-official-flyer',
+          retailerKey: 'lidl',
+          retailerName: 'Lidl',
+          status: 'success',
+          foundRawItems: 10,
+          parsedOffers: 8,
+          offersStored: 8,
+          rejectedOffers: 2,
+        },
+      ],
+    },
+    latestJobs: [{ retailerKey: 'penny' }],
+  });
+
+  assert.equal(summary.available, true);
+  assert.equal(summary.runId, 'run-1');
+  assert.equal(summary.sources[0].rawCount, 11);
+  assert.equal(summary.sources[0].storedCount, 0);
+  assert.equal(summary.sources[0].reasonCode, 'official-source-zero-stored');
+  assert.equal(summary.topProblems[0].sourceKey, 'penny-official-flyer');
+  assert.equal(JSON.stringify(summary).includes('https://'), false);
+});
