@@ -1,5 +1,22 @@
 # kaufklug.at Kontext
 
+## Action Oesterreich finaler Source-Ausschluss am 2026-08-01
+
+- Produktionsnah direkt aus der laufenden kaufklug-Backend-Komponente auf DigitalOcean/Linux verifiziert: DNS und regulaere TLS-Pruefung funktionierten; `robots.txt` antwortete mit HTTP/2 200 und `text/plain`. Die offizielle Wochenangebotsliste antwortete dagegen mit HTTP/2 403, `text/html`, 5446 Byte, `server: cloudflare` und `cf-mitigated: challenge`; die CSP und der Body belegten eine Cloudflare-Challenge statt Angebotsinhalt.
+- Direkte Backend-Integration ist damit No-Go. Browser-Erreichbarkeit ersetzt den Produktionsbefund nicht. Keine TLS-, Cookie-, Session-, Captcha-, Fingerprinting- oder Challenge-Umgehung; keine `/p/`-Produktdetailseite, private API oder Aggregatorquelle verwenden.
+- Action wird nicht als Source registriert, nicht produktiv, nicht public und nicht fuer Top Deals vorbereitet. Die nicht registrierte Parser-/Normalisierungs-Simulation, ihre abgeleitete Text-Fixture ohne Raw-Evidence und die zugehoerigen Tests wurden entfernt, damit sie nicht als integrationsnahe Perspektive missverstanden werden.
+- Action aus der aktuellen Kandidatenpriorisierung entfernen und nicht weiterverfolgen, solange sich die offizielle Zugangsmoeglichkeit aus der kaufklug-Produktionsumgebung nicht fundamental aendert. Der allgemeine Challenge-Hard-Stop bleibt in der bestehenden haendlerneutralen Transportdiagnostik erhalten.
+
+## Offizielle Haendlerquellen-Erweiterungsaudit am 2026-07-31
+
+- Read-only Quellen-/Architektur-Audit ohne Integration, Crawl, DB-/Offer-Mutation, Reindex/Repair, Deploy oder Push. Bewertet wurden offizielle oesterreichische Listen-, Aktions- und Prospektquellen; Aggregatoren bleiben hoechstens Orientierung und keine produktive OfferTruth.
+- Die fruehere Browser-/Source-Rangfolge ist durch den produktionsnahen Action-403-Befund ueberholt; Action ist entfernt. Verbleibende Preflight-Reihenfolge: MediaMarkt, NORMA, Moebelix, JYSK, OBI. Kein Kandidat wird ohne DO/Linux-HTTP-200 samt echtem Raw-Angebotsinhalt fuer einen tiefen Audit gewaehlt.
+- Browserseitig bleiben MediaMarkt und NORMA source-seitig besonders aussichtsreich; Browser-Evidence ist nur URL-/Content-Orientierung und keine Transportfreigabe. Der naechste Schritt ist ausschliesslich ein enger read-only DO/Linux-Preflight dieser fuenf offiziellen Listen-/Aktionsseiten, noch ohne Fixture oder Parser.
+- MediaMarkt ist der zweite technische Kandidat: Kampagnenseiten liefern Kampagnen-Gueltigkeit, Produktlinks, Preise/UVP, Bilder und Verfuegbarkeit. Guards muessen Marketplace/refurbished, myMediaMarkt-/Bundle-Bedingungen und nur kampagnenweit statt produktspezifisch belegte Gueltigkeit fail-closed behandeln; keine gesperrten GraphQL-/Partnerpfade.
+- NORMA ist fachlich/source-seitig stark (offizielle datierte HTML-Angebotslisten plus PDF), hat aber fuer den Start Steiermark/Graz geringe regionale Relevanz. JYSK hat sehr klare Produkt-/30-Tage-Preis-Evidence, aber kein explizites `validTo` auf der Aktionsliste und darf daher nur als kurzer Snapshot gelten. OBI/Moebelhaendler brauchen zusaetzlich Markt-, Mitgliedschafts-, Gutschein- und Kampagnen-Scope-Guards.
+- Architekturfit: Das bestehende Offer-Modell traegt Preise, Referenzpreis, Menge/Einheit, Bedingungen, Kundenprogramm, Region, Validity, Source-/Image-Evidence und Reviewstatus bereits. Noetig waeren je Kandidat eine neue SourceDefinition, ein eigener offizieller HTML-Parser, Retailer-/Filtermetadaten, Taxonomieerweiterungen fuer Elektronik/Baumarkt/Moebel und strikte Publish-/Freshness-Guards; keine generische breite Parserlockerung.
+- Lokal existiert kein autorisierter DO-/SSH-/Admin-Diagnosezugang; der vorhandene produktive Transportmatrix-Endpunkt ist zu Recht API-Key-geschuetzt und enthaelt die neuen Kandidaten nicht. Wenn der Preflight nicht direkt aus der bestaetigten DO-Konsole ausgefuehrt wurde, bleibt die Rangfolge transportseitig offen und es beginnt keine Parserarbeit.
+
 ## PENNY-Flyer-Diagnose und Essence-Partial-Erklaerbarkeit am 2026-07-30
 
 - Der Read-only Donnerstag-Audit bestaetigte PENNY public aktuell ueber die offizielle Webquelle; der scheduled Full Run `6a6ad4ece93d94ef3a8ba3ef` hatte beim offiziellen PENNY-Flyer 11 Rohkandidaten, 0 gespeicherte Offers und `official-source-zero-stored`. Wegen Atlas-IP-Allowlist waren die individuellen RawDocument-Kandidaten lokal nicht direkt aus Mongo lesbar; es wurde keine spekulative Parserlockerung und kein Crawl ausgefuehrt.
