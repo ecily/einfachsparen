@@ -1,5 +1,14 @@
 # kaufklug.at Kontext
 
+## ZGONC-Oesterreich-Deep-Dive am 2026-08-01
+
+- Entscheidung **Gelb-Gruen**: ZGONC ist der bisher staerkste erste Non-Food-Kandidat. Offizielle Browser-Evidence zeigt aktuelle August-Aktionskarten bis 29.08.2026 sowie Produktseiten mit Marke, Modell, Artikelnummer, EAN, technischen Spezifikationen, Sets, Lieferumfang, Preis, Bild und Online-/Filialbezug. Das historische offizielle Juli-PDF besitzt einen Textlayer; die direkte aktuelle August-PDF-URL ist noch nicht belastbar bewiesen.
+- Es gibt weiterhin keinen autorisierten DO-/Linux-Zugriff. Robots, regulärer DO-Transport, HTTP-200-Raw-HTML/-PDF, Reproduzierbarkeit, strukturierte Rohdaten und Bild-Asset-Join sind deshalb unbestaetigt. Startseite und Produktdetailseite widersprechen sich beim Zauberschlauch 30 m mit 19,99 versus 24,99 Euro; bei solchen Konflikten bleibt alles fail-closed.
+- Das bestehende Offer-Modell traegt Source, Preis, Referenzpreis, Bedingungen, Validity, Freshness, Kategorien, Mengen, Evidence und Review gut, braucht fuer einen spaeteren Pilot aber eine minimale globale Product-Identity-Erweiterung und ein optionales Non-Food-Subschema fuer Artikel-/Modellnummer, GTIN, Specs, Varianten, Setbestandteile, Lieferumfang und beobachtete Channel-Availability. Noch keine Modell- oder Source-Aenderung.
+- Suche muss Identitaetsfelder und typisierte technische Specs getrennt von Verkaufsmengen behandeln. Die bestehende Lebensmittel-/Drogerie-Taxonomie und Vergleichslogik duerfen nicht global gelockert werden. Maschinen und Sets erhalten keinen UnitPrice; exakte Vergleiche brauchen identische GTIN/Modell/Variante und Lieferumfang. ZGONC bleibt public und aus Top Deals ausgeschlossen.
+- UX-/Marketingpotenzial ist hoch: kontrollierter Schritt von Lebensmitteln/Drogerie zu `Werkzeug & Technik`, mit starkem ecily-Showcase fuer Product Identity, technische Suche und Evidence-basierte Datenqualitaet. Noch kein Haendlerfilter, keine Markt-/SEO-Seite, keine Marketingaenderung und keine Integration.
+- Exakt naechster Schritt ist Stufe 0: wenige unverdeckte Requests aus der bestaetigten DO-Konsole fuer Robots, Start-/Aktionsseite und aktuellen PDF-Einstieg; nur bei erlaubtem HTTP 200 mit echtem Raw-Content genau ein aktuelles PDF plus Reproduzierungsabruf und zeitgestempelte Klaerung des Preiswiderspruchs. Detailbericht: `docs/ZGONC_INTEGRATION_AUDIT_2026-08-01.md`.
+
 ## Action Oesterreich finaler Source-Ausschluss am 2026-08-01
 
 - Produktionsnah direkt aus der laufenden kaufklug-Backend-Komponente auf DigitalOcean/Linux verifiziert: DNS und regulaere TLS-Pruefung funktionierten; `robots.txt` antwortete mit HTTP/2 200 und `text/plain`. Die offizielle Wochenangebotsliste antwortete dagegen mit HTTP/2 403, `text/html`, 5446 Byte, `server: cloudflare` und `cf-mitigated: challenge`; die CSP und der Body belegten eine Cloudflare-Challenge statt Angebotsinhalt.
