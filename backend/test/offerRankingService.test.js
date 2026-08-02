@@ -117,6 +117,7 @@ test('normalizes umlauts and tokenizes search text for query matching', () => {
   assert.equal(normalizeSearchText('\u00c3\u00b6l'), 'oel');
   assert.equal(normalizeSearchText('Haar\ufffdl'), 'haaroel');
   assert.equal(normalizeSearchText('Haar\u00c3\u00b6l'), 'haaroel');
+  assert.equal(normalizeSearchText('Proven\u00e7ale'), normalizeSearchText('Provencale'));
 });
 
 test('parses ranking category names containing commas as a single category', () => {
@@ -7536,6 +7537,84 @@ test('validity label includes concrete date when validTo is present', () => {
     }),
     'gueltig 2026-06-11 bis 2026-06-17'
   );
+});
+
+test('BILLA Delamaris variants stay separate when a duplicated brand token inflates title overlap', () => {
+  const base = {
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    brand: 'Delamaris',
+    sourceType: 'billa-official-algolia',
+    priceCurrent: { amount: 1.69 },
+    priceReference: { amount: 2.49 },
+    quantityText: '125 g',
+    unitValue: 125,
+    unitType: 'g',
+    totalComparableAmount: 0.125,
+    comparableUnit: 'kg',
+    normalizedUnitPrice: { amount: 13.52, unit: 'kg', comparable: true },
+    conditionsText: 'ab 2 Dosen',
+    hasConditions: true,
+    minimumPurchaseQty: 2,
+    validFrom: new Date('2026-08-02T04:39:16Z'),
+    validTo: null,
+  };
+  const variants = [
+    offer({
+      ...base,
+      _id: 'delamaris-picnic',
+      title: 'Delamaris Delamaris Makrelen Picnic',
+      imageUrl: 'https://example.test/picnic.jpg',
+    }),
+    offer({
+      ...base,
+      _id: 'delamaris-pikant',
+      title: 'Delamaris Delamaris Makrelensalat Pikant',
+      imageUrl: 'https://example.test/pikant.jpg',
+    }),
+    offer({
+      ...base,
+      _id: 'delamaris-provencale',
+      title: 'Delamaris Delamaris Makrelensalat Proven\u00e7ale',
+      imageUrl: '',
+    }),
+  ];
+
+  const finalResult = dedupeFinalResponseOffers(variants, 'Delamaris');
+  const visibleResult = dedupeVisibleCardResponseOffers(finalResult, 'Delamaris');
+
+  assert.deepEqual(
+    new Set(visibleResult.offers.map((item) => item._id)),
+    new Set(['delamaris-picnic', 'delamaris-pikant', 'delamaris-provencale'])
+  );
+  assert.equal(visibleResult.offers.find((item) => item._id === 'delamaris-provencale').imageUrl, '');
+  assert.ok(visibleResult.offers.every((item) => item.conditionsText === 'ab 2 Dosen'));
+  assert.ok(visibleResult.offers.every((item) => item.validTo === null));
+});
+
+test('visible card dedupe still collapses an actual duplicate with repeated title tokens', () => {
+  const base = offer({
+    title: 'Delamaris Delamaris Makrelensalat Proven\u00e7ale',
+    brand: 'Delamaris',
+    retailerKey: 'billa',
+    priceCurrent: { amount: 1.69 },
+    quantityText: '125 g',
+    unitValue: 125,
+    unitType: 'g',
+    totalComparableAmount: 0.125,
+    comparableUnit: 'kg',
+    conditionsText: 'ab 2 Dosen',
+    minimumPurchaseQty: 2,
+    validFrom: new Date('2026-08-02T04:39:16Z'),
+    validTo: null,
+  });
+
+  const result = dedupeVisibleCardResponseOffers([
+    { ...base, _id: 'provencale-a' },
+    { ...base, _id: 'provencale-b' },
+  ], 'Provencale');
+
+  assert.equal(result.offers.length, 1);
 });
 
 test('paginates visible ranking offers by limit and offset without overlap', () => {

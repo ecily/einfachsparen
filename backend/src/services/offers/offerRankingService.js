@@ -6282,7 +6282,7 @@ function sameConservativeTitleIdentity(left, right) {
 
   const leftSet = new Set(leftTokens);
   const rightSet = new Set(rightTokens);
-  const shared = leftTokens.filter((token) => rightSet.has(token)).length;
+  const shared = [...leftSet].filter((token) => rightSet.has(token)).length;
   const smaller = Math.min(leftSet.size, rightSet.size);
   const larger = Math.max(leftSet.size, rightSet.size);
 
@@ -7202,10 +7202,11 @@ function hasVeryStrongVisibleCardTitleIdentity(left, right) {
     return false;
   }
 
+  const leftSet = new Set(leftTokens);
   const rightSet = new Set(rightTokens);
-  const shared = leftTokens.filter((token) => rightSet.has(token)).length;
-  const smaller = Math.min(new Set(leftTokens).size, new Set(rightTokens).size);
-  const larger = Math.max(new Set(leftTokens).size, new Set(rightTokens).size);
+  const shared = [...leftSet].filter((token) => rightSet.has(token)).length;
+  const smaller = Math.min(leftSet.size, rightSet.size);
+  const larger = Math.max(leftSet.size, rightSet.size);
 
   return shared >= 3 && shared / smaller >= 0.9 && shared / larger >= 0.8;
 }

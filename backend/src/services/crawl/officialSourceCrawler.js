@@ -6496,10 +6496,26 @@ function extractBillaActionTeasersFromHtml({ html, source, crawlJobId, region, p
   };
 }
 
+function buildBillaPromotionTitle(hit = {}) {
+  const brand = sanitizeWhitespace(hit?.brand?.name || '');
+  const name = sanitizeWhitespace(hit?.name || '');
+
+  if (!brand || !name) {
+    return name || brand;
+  }
+
+  const normalizedBrand = normalizeTitleForMatch(brand);
+  const normalizedName = normalizeTitleForMatch(name);
+
+  return normalizedName === normalizedBrand || normalizedName.startsWith(`${normalizedBrand} `)
+    ? name
+    : sanitizeWhitespace(`${brand} ${name}`);
+}
+
 function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, observedUrl }) {
   const { currentPrice, referencePrice } = buildBillaPrice(hit);
   const normalizedUnitPrice = buildBillaNormalizedUnitPrice(hit, currentPrice);
-  const title = sanitizeWhitespace(`${hit?.brand?.name || ''} ${hit?.name || ''}`) || sanitizeWhitespace(hit?.name || '');
+  const title = buildBillaPromotionTitle(hit);
   const categoryPrimary = determineOfferCategory({
     title,
     contextText: hit?.category || '',
@@ -9687,6 +9703,8 @@ module.exports = {
     getLidlCampaignPagesForCrawl,
     isLidlCampaignPageUrl,
     parseBillaActionTeaserName,
+    buildBillaPromotionTitle,
+    normalizeBillaPromotionToOffer,
     extractBillaActionTeasersFromHtml,
     normalizeImageUrl,
     sourceCoverageFields,

@@ -4343,6 +4343,66 @@ test('BILLA Steiermark Publitas retirement only accepts explicit not-found 404',
   }), false);
 });
 
+test('BILLA Algolia title builder does not duplicate an embedded brand and preserves variants', () => {
+  assert.equal(
+    __private.buildBillaPromotionTitle({
+      brand: { name: 'Delamaris' },
+      name: 'Delamaris Makrelensalat Proven\u00e7ale',
+    }),
+    'Delamaris Makrelensalat Proven\u00e7ale'
+  );
+  assert.equal(
+    __private.buildBillaPromotionTitle({
+      brand: { name: 'Delamaris' },
+      name: 'Makrelensalat Pikant',
+    }),
+    'Delamaris Makrelensalat Pikant'
+  );
+});
+
+test('BILLA Algolia normalizer preserves Proven\u00e7ale source identity price condition quantity and image', () => {
+  const normalized = __private.normalizeBillaPromotionToOffer({
+    hit: {
+      objectID: 'd091d30f-5986-40ee-85ed-50fda0d399dd',
+      sku: '00-385014',
+      name: 'Delamaris Makrelensalat Proven\u00e7ale',
+      brand: { name: 'Delamaris' },
+      category: 'Fischkonserven',
+      amount: '125',
+      volumeLabelShort: 'g',
+      packageLabel: 'Dose',
+      images: ['https://example.test/00-385014.jpg'],
+      price: {
+        regular: { value: 169, promotionText: 'ab 2 Dosen', tags: [] },
+        crossed: 249,
+      },
+    },
+    source: {
+      _id: '000000000000000000000001',
+      retailerKey: 'billa',
+      retailerName: 'BILLA',
+      channel: 'official-site',
+      sourceUrl: 'https://www.billa.at/unsere-aktionen/aktionen',
+    },
+    crawlJobId: '000000000000000000000002',
+    region: 'Steiermark',
+    observedUrl: 'https://www.billa.at/unsere-aktionen/aktionen',
+  });
+
+  assert.equal(normalized.title, 'Delamaris Makrelensalat Proven\u00e7ale');
+  assert.equal(normalized.brand, 'Delamaris');
+  assert.equal(normalized.quantityText, '125 g');
+  assert.equal(normalized.priceCurrent.amount, 1.69);
+  assert.equal(normalized.priceReference.amount, 2.49);
+  assert.equal(normalized.normalizedUnitPrice.amount, 13.52);
+  assert.equal(normalized.normalizedUnitPrice.unit, 'kg');
+  assert.equal(normalized.conditionsText, 'ab 2 Dosen');
+  assert.equal(normalized.validTo, null);
+  assert.equal(normalized.imageUrl, 'https://example.test/00-385014.jpg');
+  assert.equal(normalized.rawFacts.objectID, 'd091d30f-5986-40ee-85ed-50fda0d399dd');
+  assert.equal(normalized.rawFacts.sku, '00-385014');
+});
+
 test('BILLA action HTML parser selects FR-SA price window for Dallmayr on Friday', () => {
   const parsed = __private.parseBillaActionTeaserName(`
     Dallmayr Prodomo Kaffee in verschiedenen Sorten, 500 Gramm Packung.
