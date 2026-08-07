@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const QUERY_MAX_TIME_MS = 1500;
+const { getScheduledHealthPolicy } = require('../sources/sourceHealthPolicy');
 
 function compactStrings(values = []) {
   if (!Array.isArray(values)) return [];
@@ -96,9 +97,10 @@ function sourceIsRunnable(source = {}, { allowDisabled = false } = {}) {
 }
 
 function summarizeSource(source = {}) {
+  const sourceKey = deriveSourceKey(source);
   return {
     sourceId: sourceIdString(source),
-    sourceKey: deriveSourceKey(source),
+    sourceKey,
     retailerKey: source.retailerKey || '',
     retailerName: source.retailerName || '',
     channel: source.channel || '',
@@ -112,6 +114,7 @@ function summarizeSource(source = {}) {
     latestStatus: source.latestStatus || '',
     disabledReason: source.disabledReason || '',
     notes: source.notes || '',
+    scheduledHealthPolicy: getScheduledHealthPolicy({ ...source, sourceKey }),
   };
 }
 

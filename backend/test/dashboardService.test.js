@@ -714,6 +714,63 @@ test('dashboard actionable issues include beta feedback signals only when data s
   assert.ok(issues.some((issue) => /SPAR/i.test(issue.title)));
 });
 
+test('dashboard keeps optional source problems visible without making source health yellow', () => {
+  const diagnosis = _private.buildSourceFailureDiagnosis({
+    status: 'success',
+    sources: [
+      {
+        sourceKey: 'spar-official-flyer-current',
+        retailerKey: 'spar',
+        status: 'partial',
+        failureStage: 'transport-blocked',
+        scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'optional' },
+      },
+    ],
+  });
+
+  assert.equal(diagnosis.level, 'green');
+  assert.equal(diagnosis.requiredProblemSourcesCount, 0);
+  assert.equal(diagnosis.optionalProblemSourcesCount, 1);
+  assert.equal(diagnosis.optionalProblemSources[0].sourceKey, 'spar-official-flyer-current');
+});
+
+test('PAGRO and excluded non-public retailers do not create actionable coverage issues', () => {
+  const issues = _private.buildActionableIssues({
+    latestCrawl: { status: 'success' },
+    lockStatus: { isBlocked: false },
+    publishStatusSummary: { openCount: 0 },
+    retailerMatrix: [
+      { retailerKey: 'pagro', retailerName: 'PAGRO', warningStatus: 'red', activeOffers: 0, officialCoverageRate: 0, validityConfidenceRate: 0, imageCoverageRate: 0 },
+      { retailerKey: 'spar', retailerName: 'SPAR', warningStatus: 'yellow', activeOffers: 0, officialCoverageRate: 0, validityConfidenceRate: 0, imageCoverageRate: 0 },
+      { retailerKey: 'billa', retailerName: 'BILLA', warningStatus: 'yellow', activeOffers: 0, officialCoverageRate: 0, validityConfidenceRate: 0, imageCoverageRate: 0 },
+    ],
+    offerSummary: {},
+    feedbackSummary: {},
+  });
+
+  assert.equal(issues.some((issue) => /PAGRO|SPAR.*Coverage/i.test(issue.title)), false);
+  assert.equal(issues.some((issue) => /BILLA.*Coverage/i.test(issue.title)), true);
+});
+
+test('source extraction summary distinguishes optional transport and zero-raw from health-critical failures', () => {
+  assert.equal(_private.classifySourceExtraction({
+    status: 'partial',
+    failureStage: 'transport-blocked',
+    scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'optional' },
+  }), 'unavailable-nonblocking');
+  assert.equal(_private.classifySourceExtraction({
+    status: 'partial',
+    foundRawItems: 0,
+    scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'optional' },
+  }), 'zero-raw-nonblocking');
+  assert.equal(_private.classifySourceExtraction({
+    status: 'skipped',
+    skipped: true,
+    skippedReason: 'full-crawl-scoped-only-source',
+    scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'policy-bounded' },
+  }), 'policy-bounded/skipped');
+});
+
 test('dashboard analysis essence text contains required sections and feedback instruction', () => {
   const { analysisEssence, analysisEssenceText } = _private.buildAnalysisEssencePayload({
     generatedAt: '2026-06-01T12:00:00.000Z',

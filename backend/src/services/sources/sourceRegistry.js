@@ -1,5 +1,7 @@
 const Source = require('../../models/Source');
 const { RETAILER_DEFINITIONS } = require('./sourceDefinitions');
+const { deriveSourceKey } = require('../crawl/crawlSourceSelection');
+const { getScheduledHealthPolicy } = require('./sourceHealthPolicy');
 
 function inferSourceType(definition) {
   if (definition.sourceType) {
@@ -101,6 +103,10 @@ async function ensureSourceRegistry() {
             timeoutMs: 30000,
             respectRobotsTxt: true,
             ...(definition.crawlPolicy || {}),
+            scheduledHealthPolicy: getScheduledHealthPolicy({
+              ...definition,
+              sourceKey: deriveSourceKey(definition),
+            }),
           },
           parserHint: definition.parserHint || inferSourceType(definition),
           parserVersion: definition.parserVersion || '',

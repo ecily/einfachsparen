@@ -434,6 +434,7 @@ function normalizeSourceResult(source = {}) {
     contentType: String(source.contentType || diagnostic.contentType || ''),
     finalUrl: String(source.finalUrl || diagnostic.finalUrl || ''),
     diagnostic,
+    scheduledHealthPolicy: source.scheduledHealthPolicy || diagnostic.scheduledHealthPolicy || null,
   };
 }
 
@@ -446,6 +447,14 @@ function isPolicyBoundedSource(source = {}) {
     || diagnostic.notExecutedByPolicy === true
     || diagnostic.policyBounded === true
   );
+}
+
+function isScheduledHealthRequiredSource(source = {}) {
+  const policy = source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy || {};
+  if (!Object.keys(policy).length) return true;
+  return policy.requiredForScheduledHealth === true
+    && policy.healthCriticality !== 'policy-bounded'
+    && policy.healthCriticality !== 'excluded';
 }
 
 function incrementRetailerSummary(map, retailerKey) {
@@ -572,6 +581,12 @@ function buildRunSummary(crawlResult = {}) {
   const successfulSourcesCount = sources.filter((source) => source.status === 'success').length;
   const skippedResultSourcesCount = sources.filter((source) => source.status === 'skipped').length;
   const policyBoundedSourcesCount = sources.filter(isPolicyBoundedSource).length;
+  const requiredSourcesMatchedCount = matchedSources.filter(isScheduledHealthRequiredSource).length;
+  const requiredFailedSourcesCount = sources.filter((source) => isScheduledHealthRequiredSource(source) && source.status === 'failed').length;
+  const requiredPartialSourcesCount = sources.filter((source) => isScheduledHealthRequiredSource(source) && source.status === 'partial').length;
+  const optionalProblemSourcesCount = sources.filter((source) => !isScheduledHealthRequiredSource(source)
+    && !isPolicyBoundedSource(source)
+    && ['failed', 'partial'].includes(source.status)).length;
   const filterMetadata = crawlResult.filterMetadata || {};
   const rejectedByReasonTotal = sources.reduce((acc, source) => addReasonCounts(acc, source.rejectedByReason), {});
   const sourceFlags = sources.reduce((acc, source) => {
@@ -593,6 +608,11 @@ function buildRunSummary(crawlResult = {}) {
       skippedSourcesCount: skippedSources.length + skippedResultSourcesCount,
       policyBoundedSourcesCount,
       notExecutedByPolicySourcesCount: policyBoundedSourcesCount,
+      requiredSourcesCount: numberFrom(sourceCoverage.requiredForScheduledHealthSources, requiredSourcesMatchedCount),
+      requiredSourcesMatchedCount,
+      requiredFailedSourcesCount,
+      requiredPartialSourcesCount,
+      optionalProblemSourcesCount,
       disabledSourcesCount: disabledSources.length || numberFrom(sourceCoverage.disabledSourcesCount),
       unknownSourceKeys: crawlResult.unknownSourceKeys || [],
       unknownSourceIds: crawlResult.unknownSourceIds || [],
@@ -628,6 +648,18 @@ function buildRunSummary(crawlResult = {}) {
 function determineFinalStatus({ crawlResult = {}, summary = {}, mode = 'full', dryRun = false } = {}) {
   const filterMetadata = crawlResult.filterMetadata || {};
   const matchedSourcesCount = numberFrom(summary.matchedSourcesCount);
+  const requiredFailedSourcesCount = Object.prototype.hasOwnProperty.call(summary, 'requiredFailedSourcesCount')
+    ? numberFrom(summary.requiredFailedSourcesCount)
+    : numberFrom(summary.failedSourcesCount);
+  const requiredPartialSourcesCount = Object.prototype.hasOwnProperty.call(summary, 'requiredPartialSourcesCount')
+    ? numberFrom(summary.requiredPartialSourcesCount)
+    : numberFrom(summary.partialSourcesCount);
+  const requiredSourcesCount = Object.prototype.hasOwnProperty.call(summary, 'requiredSourcesCount')
+    ? numberFrom(summary.requiredSourcesCount)
+    : numberFrom(summary.activeEligibleSources);
+  const requiredSourcesMatchedCount = Object.prototype.hasOwnProperty.call(summary, 'requiredSourcesMatchedCount')
+    ? numberFrom(summary.requiredSourcesMatchedCount)
+    : matchedSourcesCount;
 
   if (matchedSourcesCount === 0) {
     return dryRun ? 'skipped' : 'skipped';
@@ -637,11 +669,13 @@ function determineFinalStatus({ crawlResult = {}, summary = {}, mode = 'full', d
     return 'failed';
   }
 
-  if (numberFrom(summary.failedSourcesCount) > 0 || numberFrom(summary.partialSourcesCount) > 0) {
+  if (requiredFailedSourcesCount > 0 || requiredPartialSourcesCount > 0) {
     return 'partial';
   }
 
-  if (mode === 'full' && numberFrom(summary.activeEligibleSources) > 0 && matchedSourcesCount < numberFrom(summary.activeEligibleSources)) {
+  if (mode === 'full'
+    && requiredSourcesCount > 0
+    && requiredSourcesMatchedCount < requiredSourcesCount) {
     return 'partial';
   }
 

@@ -411,10 +411,16 @@ function buildSourceFailureDiagnosis(run) {
   }
 
   const failedSources = (run?.sources || []).filter((source) => source.status === 'failed');
+  const partialSources = (run?.sources || []).filter((source) => source.status === 'partial');
   const policyBoundedSources = (run?.sources || []).filter(isPolicyBoundedDashboardSource);
+  const requiredProblems = [...failedSources, ...partialSources].filter((source) => {
+    const policy = source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy;
+    return !policy || policy.requiredForScheduledHealth === true;
+  });
+  const optionalProblems = [...failedSources, ...partialSources].filter((source) => !requiredProblems.includes(source));
   const groups = new Map();
 
-  for (const source of failedSources) {
+  for (const source of requiredProblems) {
     const errorType = detectSourceErrorType(source);
     const sourceType = source.sourceType || source.channel || 'unknown';
     const key = `${sourceType}:${errorType}`;
@@ -440,16 +446,28 @@ function buildSourceFailureDiagnosis(run) {
     .reduce((sum, group) => sum + group.count, 0);
 
   return {
-    level: failedSources.length > 0 ? 'yellow' : 'green',
+    level: requiredProblems.length > 0 ? 'yellow' : 'green',
     failedSourcesCount: failedSources.length,
+    partialSourcesCount: partialSources.length,
+    requiredProblemSourcesCount: requiredProblems.length,
+    optionalProblemSourcesCount: optionalProblems.length,
     p0ReliabilityCount: 0,
     p1SourceCoverageCount,
     policyBoundedSourcesCount: policyBoundedSources.length,
     notExecutedByPolicySourcesCount: policyBoundedSources.length,
-    reason: failedSources.length > 0
-      ? `${failedSources.length} failed source(s) are classified separately from crawl finalization/lock reliability; ${policyBoundedSources.length} source(s) were not executed by policy.`
-      : 'No failed sources in the reference crawl.',
+    reason: requiredProblems.length > 0
+      ? `${requiredProblems.length} health-critical source problem(s) are classified separately from crawl finalization/lock reliability; ${optionalProblems.length} optional problem(s) remain diagnostic and ${policyBoundedSources.length} source(s) were not executed by policy.`
+      : optionalProblems.length > 0
+        ? `No health-critical source failures in the reference crawl; ${optionalProblems.length} optional problem(s) remain visible diagnostically.`
+        : 'No failed sources in the reference crawl.',
     groups: [...groups.values()],
+    optionalProblemSources: optionalProblems.map((source) => ({
+      sourceKey: source.sourceKey || 'unknown',
+      retailerKey: source.retailerKey || '',
+      status: source.status,
+      reason: source.error || source.message || source.failureStage || 'unavailable-nonblocking',
+      healthCriticality: source.scheduledHealthPolicy?.healthCriticality || 'optional',
+    })),
     policyBoundedGroups: policyBoundedSources.length > 0
       ? [
         {
@@ -1276,7 +1294,10 @@ function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, 
     });
   }
 
-  for (const retailer of (retailerMatrix || []).filter((item) => item.warningStatus !== 'green').slice(0, 6)) {
+  for (const retailer of (retailerMatrix || [])
+    .filter((item) => item.warningStatus !== 'green')
+    .filter((item) => !['pagro', 'eurospar', 'hofer', 'interspar', 'spar'].includes(String(item.retailerKey || '').toLowerCase()))
+    .slice(0, 6)) {
     const detailParts = [];
     if (retailer.activeOffers < 10) detailParts.push('kritisch wenige aktive Angebote');
     if (retailer.officialCoverageRate < 0.35) detailParts.push('wenig offizielle Evidenz');
@@ -1689,15 +1710,18 @@ function classifySourceExtraction(source = {}) {
     source.skippedReason,
     ...reasonKeys,
   ].join(' ').toLowerCase();
+  const policy = source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy || {};
+  const nonBlocking = policy.requiredForScheduledHealth === false && policy.healthCriticality !== 'policy-bounded';
 
+  if (policy.healthCriticality === 'excluded') return 'excluded/non-blocking';
   if (source.retainedPreviousData) return 'retained-previous-data';
   if (source.skipped && /policy|bounded|scope|not executed/.test(text)) return 'policy-bounded/skipped';
-  if (/transport|http-\d+|blocked|access denied/.test(text)) return 'transport-blocked';
+  if (/transport|http-\d+|blocked|access denied/.test(text)) return nonBlocking ? 'unavailable-nonblocking' : 'transport-blocked';
   if (source.foundRawItems > 0 && source.offersStored === 0 && reasonKeys.includes('official-source-zero-stored')) {
     return 'official-source-zero-stored';
   }
   if (source.foundRawItems > 0 && source.offersStored === 0) return 'zero-stored';
-  if (source.foundRawItems === 0 && source.status !== 'success') return 'zero-raw';
+  if (source.foundRawItems === 0 && source.status !== 'success') return nonBlocking ? 'zero-raw-nonblocking' : 'zero-raw';
   if (/parse|product-unclear|quantity-missing|price-missing|category/.test(text)) return 'parser-rejected';
   if (/dedupe|duplicate|covered/.test(text)) return 'duplicate/covered-by-other-official-source';
   return source.status === 'success' ? 'success' : 'unknown';
@@ -1731,6 +1755,8 @@ function buildSourceExtractionSummary({ latestScheduledFullCrawl = null, latestJ
     reasonCode: classifySourceExtraction(source),
     rejectionReasons: source.rejectionReasons || [],
     warningClass: source.failureStage || source.skippedReason || source.error || '',
+    healthCriticality: (source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy)?.healthCriticality || 'required',
+    requiredForScheduledHealth: (source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy)?.requiredForScheduledHealth !== false,
   }));
   const problemRows = sourceRows
     .filter((row) => row.reasonCode !== 'success')

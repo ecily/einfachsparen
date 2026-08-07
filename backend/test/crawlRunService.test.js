@@ -437,6 +437,37 @@ test('determineFinalStatus treats retired BILLA Publitas skipped sources as non-
   );
 });
 
+test('optional source transport-blocked does not degrade scheduled health', () => {
+  const result = {
+    sourceCoverage: { activeEligibleSources: 2, requiredForScheduledHealthSources: 1 },
+    matchedSources: [
+      { sourceKey: 'billa-official-site', sourceId: 'billa', scheduledHealthPolicy: { requiredForScheduledHealth: true, healthCriticality: 'required' } },
+      { sourceKey: 'spar-official-flyer-current', sourceId: 'spar', scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'optional' } },
+    ],
+    sources: [
+      { sourceKey: 'billa-official-site', sourceId: 'billa', status: 'success', scheduledHealthPolicy: { requiredForScheduledHealth: true, healthCriticality: 'required' } },
+      { sourceKey: 'spar-official-flyer-current', sourceId: 'spar', status: 'partial', failureStage: 'transport-blocked', scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'optional' } },
+    ],
+    filterMetadata: { ok: true },
+  };
+  const summary = _private.buildRunSummary(result);
+  assert.equal(summary.summary.requiredPartialSourcesCount, 0);
+  assert.equal(summary.summary.optionalProblemSourcesCount, 1);
+  assert.equal(_private.determineFinalStatus({ crawlResult: result, summary: summary.summary, mode: 'full' }), 'success');
+});
+
+test('required public zero-raw/partial source degrades scheduled health', () => {
+  const result = {
+    sourceCoverage: { activeEligibleSources: 1, requiredForScheduledHealthSources: 1 },
+    matchedSources: [{ sourceKey: 'billa-official-site', sourceId: 'billa', scheduledHealthPolicy: { requiredForScheduledHealth: true, healthCriticality: 'required' } }],
+    sources: [{ sourceKey: 'billa-official-site', sourceId: 'billa', status: 'partial', foundRawItems: 0, offersStored: 0, failureStage: 'zero-raw', scheduledHealthPolicy: { requiredForScheduledHealth: true, healthCriticality: 'required' } }],
+    filterMetadata: { ok: true },
+  };
+  const summary = _private.buildRunSummary(result);
+  assert.equal(summary.summary.requiredPartialSourcesCount, 1);
+  assert.equal(_private.determineFinalStatus({ crawlResult: result, summary: summary.summary, mode: 'full' }), 'partial');
+});
+
 test('buildRunSummary exposes parser coverage rejection taxonomy and alert flags', () => {
   const summary = _private.buildRunSummary({
     matchedSources: [

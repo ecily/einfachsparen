@@ -15,6 +15,7 @@ const {
   resolveCrawlSourceSelection,
   summarizeSource,
 } = require('./crawlSourceSelection');
+const { getScheduledHealthPolicy } = require('../sources/sourceHealthPolicy');
 const logger = require('../../lib/logger');
 
 const DEFAULT_SOURCE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -367,6 +368,10 @@ async function crawlAllSources({
     dryRun,
     sourceSelectionRequested,
   });
+
+  sourceCoverage.requiredForScheduledHealthSources = selection.sources
+    .filter((source) => getScheduledHealthPolicy(source).requiredForScheduledHealth === true)
+    .length;
 
   if (dryRun) {
     return {
