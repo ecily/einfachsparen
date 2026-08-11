@@ -236,6 +236,12 @@
 
 ## Naechste klare Aufgaben
 
+## SEO-P0-Audit am 2026-08-11
+
+- Live-Read-only-Audit fand bei allen Nicht-Root-SPA-URLs initial dieselbe HTML-Shell mit Root-Canonical; unbekannte `/angebote/<slug>` antworteten mit HTTP 200. Details und URL-Matrix stehen in `docs/KAUFKLUG_SEO_AUDIT_2026-08-11.md`.
+- Der Admin-Production-Build erzeugt nun route-spezifisches statisches HTML mit sichtbarem H1/Intro, Meta-Daten, Canonical und Breadcrumb-JSON-LD. Indexierbare Landingpages verwenden trailing-slash-Canonicals; `/top-deals/` ist in der Sitemap.
+- Lokale SEO-Prüfungen: Admin-Lint grün, Frontend-Tests 36/36 grün, Build grün, 17 Sitemap-URLs mit Self-Canonical und `index,follow` validiert. DO-Live-Smoke und Search-Console-Validierung stehen nach Deploy aus.
+
 - Read-only Matrix fuer PENNY Seite 19 Tages-/Fensterpreise gegen PENNY-Web/kaufklug vervollstaendigen.
 - Naechste Restaufgabe: Nach Deploy des 15-Minuten-Startup-Guards Health/DB/Lock/Publish und stabilen BuildTime-/Prozessstart-Verlauf abwarten; erst danach einen neuen eng scoped PENNY-Crawl freigeben.
 - Naechste Datenqualitaetsaufgabe aus Live-Smoke: gezielt eine Klasse waehlen, z. B. Quantity-Display oder Condition-Normalisierung; keine breiten manuellen Markt-Smokes wiederholen.

@@ -178,7 +178,7 @@ export function updateSeoMetadata(activePage) {
   const isHomePath = currentPathname === '/'
   const isUnknownSeoOfferPath = /^\/angebote\/[^/]+$/.test(currentPathname)
     && !getSeoLandingPageByPath(currentPathname)
-  const canonicalPath = isHomePath ? '/' : meta.path
+  const canonicalPath = isHomePath ? '/' : `${meta.path.replace(/\/+$/, '')}/`
   const canonicalUrl = `${SITE_URL}${canonicalPath}`
   const isInternalPage = activePage === 'diagnostics'
   const isSharedListPage = activePage === 'shared-shopping-list'
@@ -310,12 +310,12 @@ export function getSharedListIdFromPathname(pathname) {
 
 export function getPathForPage(nextPage) {
   const seoLandingPage = getSeoLandingPageByRouteId(nextPage)
-  if (seoLandingPage) return seoLandingPage.path
+  if (seoLandingPage) return `${seoLandingPage.path.replace(/\/+$/, '')}/`
 
   if (nextPage === 'diagnostics') return '/ecily_web'
   if (nextPage === 'product-search') return '/suche'
   if (nextPage === 'search') return '/stoebern'
-  if (nextPage === 'top-deals') return '/top-deals'
+  if (nextPage === 'top-deals') return '/top-deals/'
   if (nextPage === 'shopping-list') return '/einkaufsliste'
   if (nextPage === 'impressum') return '/impressum'
   if (nextPage === 'privacy') return '/datenschutz'

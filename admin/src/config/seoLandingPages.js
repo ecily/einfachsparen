@@ -26,7 +26,7 @@ function links(keys) {
     .map((key) => ({
       key,
       label: lookup.get(key),
-      path: `/angebote/${key}`,
+      path: `/angebote/${key}/`,
     }))
     .filter((item) => item.label)
 }
@@ -356,7 +356,7 @@ export const seoFooterLinkGroups = [
     links: baseRelatedLinks.map(([key, label]) => ({
       key,
       label,
-      path: `/angebote/${key}`,
+      path: `/angebote/${key}/`,
     })),
   },
   {

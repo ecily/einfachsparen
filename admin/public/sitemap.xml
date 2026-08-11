@@ -5,63 +5,67 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote</loc>
+    <loc>https://www.kaufklug.at/top-deals/</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/supermarkt</loc>
+    <loc>https://www.kaufklug.at/angebote/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.kaufklug.at/angebote/supermarkt/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/drogerie</loc>
+    <loc>https://www.kaufklug.at/angebote/drogerie/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/billa</loc>
+    <loc>https://www.kaufklug.at/angebote/billa/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/hofer</loc>
+    <loc>https://www.kaufklug.at/angebote/hofer/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/lidl</loc>
+    <loc>https://www.kaufklug.at/angebote/lidl/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/dm</loc>
+    <loc>https://www.kaufklug.at/angebote/dm/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/bipa</loc>
+    <loc>https://www.kaufklug.at/angebote/bipa/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/penny</loc>
+    <loc>https://www.kaufklug.at/angebote/penny/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/waschmittel</loc>
+    <loc>https://www.kaufklug.at/angebote/waschmittel/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/angebote/butter</loc>
+    <loc>https://www.kaufklug.at/angebote/butter/</loc>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/impressum</loc>
+    <loc>https://www.kaufklug.at/impressum/</loc>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/datenschutz</loc>
+    <loc>https://www.kaufklug.at/datenschutz/</loc>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/nutzungshinweise</loc>
+    <loc>https://www.kaufklug.at/nutzungshinweise/</loc>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://www.kaufklug.at/cookies</loc>
+    <loc>https://www.kaufklug.at/cookies/</loc>
     <priority>0.3</priority>
   </url>
 </urlset>

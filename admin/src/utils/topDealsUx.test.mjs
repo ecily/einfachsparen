@@ -19,7 +19,7 @@ test('sticky header exposes the Top Deals route with compact mobile copy', () =>
   assert.match(cssSource, /\.page-nav__button\.page-nav__top-deals \{/)
   assert.match(cssSource, /\.page-nav__button\.page-nav__top-deals\.page-nav__button--active \{/)
   assert.match(seoSource, /pathname\.includes\('top-deals'\)/)
-  assert.match(seoSource, /nextPage === 'top-deals'\) return '\/top-deals'/)
+  assert.match(seoSource, /nextPage === 'top-deals'\) return '\/top-deals\/'/)
 })
 
 test('search and Top Deals are presented as distinct guided entries without limiting normal search', () => {
