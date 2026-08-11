@@ -175,6 +175,32 @@ export function getStaticSeoPages() {
   ].filter((page, index, pages) => pages.findIndex((candidate) => candidate.path === page.path) === index)
 }
 
+export function buildCatchallDocument(template) {
+  const scriptSrc = (template.match(/<script type="module" crossorigin src="([^"]+)"/i) || [])[1] || ''
+  const styleHref = (template.match(/<link rel="stylesheet" crossorigin href="([^"]+)"/i) || [])[1] || ''
+
+  return `<!doctype html>
+<html lang="de-AT">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seite nicht gefunden | kaufklug.at</title>
+    <meta name="robots" content="noindex,nofollow" />
+    ${styleHref ? `<link rel="stylesheet" crossorigin href="${styleHref}" />` : ''}
+  </head>
+  <body>
+    <main>
+      <h1>Seite nicht gefunden</h1>
+      <p>Diese kaufklug.at-Seite ist nicht verfügbar.</p>
+      <p><a href="/">Zur Startseite</a></p>
+    </main>
+    <div id="root"></div>
+    ${scriptSrc ? `<script type="module" crossorigin src="${scriptSrc}"></script>` : ''}
+  </body>
+</html>
+`
+}
+
 async function main() {
   const template = await readFile(join(distDir, 'index.html'), 'utf8')
 
@@ -184,6 +210,8 @@ async function main() {
     await mkdir(dirname(outputPath), { recursive: true })
     await writeFile(outputPath, buildSeoStaticDocument(template, page), 'utf8')
   }
+
+  await writeFile(join(distDir, 'catchall.html'), buildCatchallDocument(template), 'utf8')
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

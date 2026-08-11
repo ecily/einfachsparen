@@ -23,9 +23,10 @@ HTTP/HTTPS and robots were otherwise reachable. `robots.txt` references the site
 - BreadcrumbList JSON-LD is emitted per generated route; existing WebSite/WebApplication JSON-LD remains in the template.
 - Public SEO links and canonical policy use one trailing-slash convention for indexable landing pages.
 - `/top-deals/` was added to the sitemap.
-- `404.html` is provided with `noindex,follow` for hosts that honor a static error document.
+- `404.html` is provided with `noindex,nofollow` for hosts that honor a static error document.
+- `catchall.html` is generated as a noindex/nofollow, no-canonical fallback that can still boot the SPA for dynamic shared-list URLs.
 - Known utility SPA routes (`/stoebern`, `/suche`, `/einkaufsliste`, `/liste`, `/feedback`, `/ecily_web`) receive initial noindex HTML and are not sitemap candidates.
-- Unknown `/angebote/<slug>` remains client-side `noindex,follow`; a final HTTP-404 verification is still required after deployment because the current DO static catchall is provider-controlled.
+- Unknown `/angebote/<slug>` is fail-closed by `catchall.html`; DO Static Site configuration must set `catchall_document` to `catchall.html`. A true HTTP 404 remains preferable, but would require a separate dynamic-route hosting decision.
 
 ## Indexability policy
 
@@ -48,4 +49,6 @@ SPAR, Müller and thin product/category pages remain governed by their existing 
 
 ## Remaining live verification
 
-After the normal deployment, verify with raw HTTP (without JavaScript): homepage, `/top-deals/`, all sitemap URLs, robots, sitemap and an unknown `/angebote/<slug>`. Confirm that the DO static catchall no longer serves root HTML for known routes and that unknown routes are HTTP 404 or otherwise explicitly noindex. Then inspect five to ten canonical URLs in Search Console and validate only the corrected problem classes.
+The repository now generates `catchall.html`. In the DigitalOcean Static Site settings, set **Catchall document** to `catchall.html` and redeploy the static component. This is the only remaining deployment setting needed for the noindex fallback. A true HTTP 404 would require switching the catchall to `404.html`, which would break dynamic shared-list SPA routes; therefore `catchall.html` is the safe current contract.
+
+After that static redeploy, verify with raw HTTP (without JavaScript): homepage, `/top-deals/`, all sitemap URLs, robots, sitemap, every utility route and unknown `/angebote/<slug>`. Confirm that unknown routes expose `noindex,nofollow`, no canonical and no root content signal. Then inspect five to ten canonical URLs in Search Console and validate only the corrected problem classes.

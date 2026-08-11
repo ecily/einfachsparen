@@ -145,6 +145,12 @@ export function setOrCreateLink(rel, href) {
   element.setAttribute('href', href)
 }
 
+export function removeLink(rel) {
+  if (typeof document === 'undefined') return
+
+  document.head.querySelector(`link[rel="${rel}"]`)?.remove()
+}
+
 export function setOrCreateJsonLd(id, data) {
   if (typeof document === 'undefined') return
 
@@ -204,7 +210,11 @@ export function updateSeoMetadata(activePage) {
   setOrCreateMeta('name', 'twitter:title', meta.title)
   setOrCreateMeta('name', 'twitter:description', meta.description)
 
-  setOrCreateLink('canonical', canonicalUrl)
+  if (isUnknownSeoOfferPath) {
+    removeLink('canonical')
+  } else {
+    setOrCreateLink('canonical', canonicalUrl)
+  }
 
   setOrCreateJsonLd('kaufklug-jsonld-website', {
     '@context': 'https://schema.org',
