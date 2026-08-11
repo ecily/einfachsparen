@@ -49,6 +49,6 @@ SPAR, Müller and thin product/category pages remain governed by their existing 
 
 ## Remaining live verification
 
-The repository now generates `catchall.html`. In the DigitalOcean Static Site settings, set **Catchall document** to `catchall.html` and redeploy the static component. This is the only remaining deployment setting needed for the noindex fallback. A true HTTP 404 would require switching the catchall to `404.html`, which would break dynamic shared-list SPA routes; therefore `catchall.html` is the safe current contract.
+The repository now generates `catchall.html`, and the live DigitalOcean Static Site uses `catchall_document=catchall.html`. Unknown URLs therefore return the catchall document with HTTP 200, `noindex,nofollow`, no Canonical and a clear 404 UI. A true HTTP 404 would require switching the catchall to `404.html`, which would break dynamic shared-list SPA routes; therefore `catchall.html` is the safe current contract.
 
-After that static redeploy, verify with raw HTTP (without JavaScript): homepage, `/top-deals/`, all sitemap URLs, robots, sitemap, every utility route and unknown `/angebote/<slug>`. Confirm that unknown routes expose `noindex,nofollow`, no canonical and no root content signal. Then inspect five to ten canonical URLs in Search Console and validate only the corrected problem classes.
+The final live smoke verified homepage, Top Deals, BILLA, Lidl, all utility routes, three unknown paths, robots and sitemap. Unknown paths have no redirect, no Root-Canonical and no indexable SEO metadata. A true HTTP 404 remains a future hosting decision; the current public contract is fail-closed Variant B.
