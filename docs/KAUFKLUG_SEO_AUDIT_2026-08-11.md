@@ -24,6 +24,7 @@ HTTP/HTTPS and robots were otherwise reachable. `robots.txt` references the site
 - Public SEO links and canonical policy use one trailing-slash convention for indexable landing pages.
 - `/top-deals/` was added to the sitemap.
 - `404.html` is provided with `noindex,follow` for hosts that honor a static error document.
+- Known utility SPA routes (`/stoebern`, `/suche`, `/einkaufsliste`, `/liste`, `/feedback`, `/ecily_web`) receive initial noindex HTML and are not sitemap candidates.
 - Unknown `/angebote/<slug>` remains client-side `noindex,follow`; a final HTTP-404 verification is still required after deployment because the current DO static catchall is provider-controlled.
 
 ## Indexability policy
