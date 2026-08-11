@@ -734,6 +734,28 @@ test('dashboard keeps optional source problems visible without making source hea
   assert.equal(diagnosis.optionalProblemSources[0].sourceKey, 'spar-official-flyer-current');
 });
 
+test('dashboard crawl serialization preserves optional scheduled health policy', () => {
+  const serialized = _private.serializeCrawlRun({
+    _id: 'run-optional-source',
+    status: 'success',
+    result: {
+      sources: [{
+        sourceKey: 'spar-official-flyer-current',
+        retailerKey: 'spar',
+        status: 'partial',
+        failureStage: 'transport-blocked',
+        scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'optional' },
+      }],
+    },
+  });
+
+  assert.equal(serialized.sources[0].scheduledHealthPolicy.requiredForScheduledHealth, false);
+  const diagnosis = _private.buildSourceFailureDiagnosis(serialized);
+  assert.equal(diagnosis.level, 'green');
+  assert.equal(diagnosis.requiredProblemSourcesCount, 0);
+  assert.equal(diagnosis.optionalProblemSourcesCount, 1);
+});
+
 test('PAGRO and excluded non-public retailers do not create actionable coverage issues', () => {
   const issues = _private.buildActionableIssues({
     latestCrawl: { status: 'success' },
