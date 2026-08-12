@@ -7814,9 +7814,10 @@ textarea:focus {
   .price-check-page__hero,
   .price-check-page__comparison,
   .price-check-page__offer {
-    width: 100%;
+    width: calc(100vw - 1rem);
     min-width: 0;
-    max-width: 100%;
+    max-width: calc(100vw - 1rem);
+    overflow-x: clip;
   }
 
   .price-check-page__hero h1 {
