@@ -1,5 +1,12 @@
 # kaufklug.at Kontext
 
+## Public-Validity-Startup-Emergency am 2026-08-12
+
+- Commit `97479c7a` enthielt versehentlich eine Image-Evidence-Dashboard-Abhaengigkeit auf `backend/src/diagnostics/imageEvidenceDiagnostics.js`, obwohl das Modul nicht committed war. Dadurch crashte der Backend-Startup mit `MODULE_NOT_FOUND` ueber `dashboardService`.
+- Emergency-Fix `c7b30072` entfernte ausschliesslich die versehentlich mitcommitteten Image-Evidence-Dashboard-Bloecke aus `dashboardService.js`; Public-Validity-Guard, KPIs und Aggregationen blieben erhalten. Ein dauerhafter `backend/test/appLoadSmoke.test.js` deckt die produktive App-/Dashboard-Require-Kette ab.
+- `c7b30072` ist nach `origin/main` gepusht und live angekommen. Read-only `/api/health` bestaetigte HTTP 200, Mongo connected, `features.publicValidity=public-validity-v1` und BuildTime `2026-08-12T05:37:24.508Z`; der produktive Commit-SHA bleibt wie bisher `unknown`.
+- Begrenzter Live-Smoke fuer BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, Mueller, Suche, Browse/Kategorie, Top Deals und Comparison-Payloads war HTTP-200/ohne abgelaufene oder zukuenftige Treffer in den geprueften Samples. Kein Crawl und keine DB-/Offer-/Feedback-Mutation.
+
 ## Daily-Crawl-Health-Fix am 2026-08-07
 
 - Root Cause des chronischen `partial`: `determineFinalStatus()` degradierte bisher bei jedem Source-Ergebnis mit `status=partial`, unabhängig davon, ob die Source für das aktuelle öffentliche Produkt verpflichtend ist. `transport-blocked` und `zero-raw` wurden dadurch auch bei SPAR/INTERSPAR/HOFER als Daily-Health-Problem behandelt. Die bisherige Neutralisierung galt nur für policy-bounded `skipped`-Sources.
