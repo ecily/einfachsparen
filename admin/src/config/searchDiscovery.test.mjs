@@ -24,11 +24,18 @@ test('faster-offer links omit weak categories and unavailable retailers', () => 
   const retailerLabels = seoFooterLinkGroups.find((group) => group.title === 'Märkte').links.map((link) => link.label)
 
   assert.deepEqual(categoryLabels, [
+    'Alle Angebote',
     'Supermarkt Angebote',
     'Drogerie Angebote',
     'Kaffee Angebote',
     'Bier Angebote',
+    'Softdrinks Angebote',
     'Waschmittel Angebote',
+    'Schokolade Angebote',
+    'Windeln Angebote',
+    'Duschgel Angebote',
+    'Nudeln Angebote',
+    'Chips Angebote',
   ])
   assert.equal(retailerLabels.includes('SPAR Angebote'), false)
   assert.equal(retailerLabels.includes('EUROSPAR Angebote'), false)

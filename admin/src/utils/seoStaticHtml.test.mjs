@@ -59,7 +59,7 @@ test('coffee landing page is indexable and complete in initial HTML', () => {
   }
 })
 
-test('coffee is linked from relevant indexable static pages and sitemap has 20 safe URLs', async () => {
+test('coffee is linked from relevant indexable static pages and sitemap has 25 safe URLs', async () => {
   for (const path of ['/', '/angebote', '/angebote/supermarkt', '/angebote/billa', '/angebote/penny']) {
     const page = getStaticSeoPages().find((candidate) => candidate.path === path)
     const html = buildSeoStaticDocument(template, page)
@@ -68,13 +68,39 @@ test('coffee is linked from relevant indexable static pages and sitemap has 20 s
 
   const sitemap = await readFile(resolve('admin/public/sitemap.xml'), 'utf8')
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1])
-  assert.equal(urls.length, 20)
+  assert.equal(urls.length, 25)
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/kaffee/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/bier/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/softdrinks/'))
+  for (const slug of ['schokolade', 'windeln', 'duschgel', 'nudeln', 'chips']) {
+    assert.ok(urls.includes(`https://www.kaufklug.at/angebote/${slug}/`))
+  }
   assert.equal(urls.some((url) => /\/angebote\/(?:cola|energy-drinks)\//i.test(url)), false)
   assert.equal(urls.some((url) => /(?:suche|stoebern|einkaufsliste|pagro)/i.test(url)), false)
   assert.equal(sitemap.includes('noindex'), false)
+})
+
+test('wave-one category landing pages are indexable and complete in initial HTML', () => {
+  const expected = {
+    schokolade: ['Schokolade Angebote aktuell vergleichen', 'Preis pro kg'],
+    windeln: ['Windeln Angebote aktuell vergleichen', 'Preis pro Stück'],
+    duschgel: ['Duschgel Angebote aktuell vergleichen', 'Literpreise'],
+    nudeln: ['Nudeln Angebote aktuell vergleichen', 'Preis pro kg'],
+    chips: ['Chips Angebote aktuell vergleichen', 'Preis pro kg'],
+  }
+
+  for (const [slug, [h1, introSignal]] of Object.entries(expected)) {
+    const page = getStaticSeoPages().find((candidate) => candidate.path === `/angebote/${slug}`)
+    const html = buildSeoStaticDocument(template, page)
+
+    assert.equal(page.robots, 'index,follow')
+    assert.match(html, new RegExp(`<title>${h1.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\| kaufklug\\.at</title>`))
+    assert.match(html, /<meta name="robots" content="index,follow" \/>/)
+    assert.match(html, new RegExp(`canonical" href="https://www\\.kaufklug\\.at/angebote/${slug}/"`))
+    assert.match(html, new RegExp(`<h1>${h1}</h1>`))
+    assert.ok(html.includes(introSignal), `missing intro signal for ${slug}`)
+    assert.ok(html.includes('<a href="/angebote/">'))
+  }
 })
 
 test('beer landing page is indexable and complete in initial HTML', () => {

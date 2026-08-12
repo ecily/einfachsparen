@@ -33,6 +33,26 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://www.kaufklug.at/angebote/schokolade/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.kaufklug.at/angebote/windeln/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.kaufklug.at/angebote/duschgel/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.kaufklug.at/angebote/nudeln/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.kaufklug.at/angebote/chips/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://www.kaufklug.at/angebote/billa/</loc>
     <priority>0.7</priority>
   </url>

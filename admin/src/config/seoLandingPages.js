@@ -10,6 +10,11 @@ const baseRelatedLinks = [
   ['bier', 'Bier Angebote'],
   ['softdrinks', 'Softdrinks Angebote'],
   ['waschmittel', 'Waschmittel Angebote'],
+  ['schokolade', 'Schokolade Angebote'],
+  ['windeln', 'Windeln Angebote'],
+  ['duschgel', 'Duschgel Angebote'],
+  ['nudeln', 'Nudeln Angebote'],
+  ['chips', 'Chips Angebote'],
 ]
 
 const retailerRelatedLinks = [
@@ -47,7 +52,7 @@ export const seoLandingPages = [
     query: {
       limit: 24,
     },
-    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'bier', 'softdrinks', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
+    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'windeln', 'duschgel', 'nudeln', 'chips', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
   },
   {
     key: 'supermarkt',
@@ -84,7 +89,7 @@ export const seoLandingPages = [
       limit: 12,
       offset: 0,
     },
-    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'bier', 'softdrinks', 'kaese']),
+    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips', 'kaese']),
   },
   {
     key: 'drogerie',
@@ -100,7 +105,7 @@ export const seoLandingPages = [
       retailers: 'dm,bipa',
       limit: 24,
     },
-    relatedLinks: links(['dm', 'bipa', 'waschmittel', 'supermarkt', 'angebote']),
+    relatedLinks: links(['dm', 'bipa', 'waschmittel', 'windeln', 'duschgel', 'supermarkt', 'angebote']),
   },
   {
     key: 'spar',
@@ -297,6 +302,71 @@ export const seoLandingPages = [
       offset: 0,
     },
     relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'lidl', 'bier']),
+  },
+  {
+    key: 'schokolade',
+    path: '/angebote/schokolade',
+    title: 'Schokolade Angebote aktuell vergleichen | kaufklug.at',
+    description:
+      'Aktuelle Schokolade-Angebote verschiedener Händler vergleichen. Preise, Packungsgrößen und Preis pro kg transparent auf kaufklug.at.',
+    h1: 'Schokolade Angebote aktuell vergleichen',
+    intro:
+      'Vergleiche aktuelle Schokolade-Angebote mehrerer Händler, von Tafeln und Packungen bis zu Multipacks. Beachte unterschiedliche Gewichte, den Preis pro kg und Mengenbedingungen.',
+    robots: 'index,follow',
+    query: { q: 'schokolade', limit: 60, offset: 0 },
+    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'lidl', 'nudeln', 'chips']),
+  },
+  {
+    key: 'windeln',
+    path: '/angebote/windeln',
+    title: 'Windeln Angebote aktuell vergleichen | kaufklug.at',
+    description:
+      'Aktuelle Windel-Angebote mehrerer Händler vergleichen. Packungsgrößen, Größenangaben und Preis pro Stück transparent auf kaufklug.at.',
+    h1: 'Windeln Angebote aktuell vergleichen',
+    intro:
+      'Vergleiche Windel-Angebote verschiedener Händler nach Größe, Packungsumfang und Preis pro Stück. Auch Multipacks und Aktionsbedingungen bleiben sichtbar.',
+    robots: 'index,follow',
+    query: { q: 'windeln', limit: 60, offset: 0 },
+    relatedLinks: links(['angebote', 'drogerie', 'dm', 'bipa', 'duschgel', 'waschmittel']),
+  },
+  {
+    key: 'duschgel',
+    path: '/angebote/duschgel',
+    title: 'Duschgel Angebote aktuell vergleichen | kaufklug.at',
+    description:
+      'Aktuelle Duschgel-Angebote verschiedener Händler vergleichen. Preise, Größen und Literpreise transparent auf kaufklug.at.',
+    h1: 'Duschgel Angebote aktuell vergleichen',
+    intro:
+      'Vergleiche Duschgel-Angebote mehrerer Händler und beachte unterschiedliche Flaschengrößen, Literpreise sowie Mengen- und Kundenkartenbedingungen.',
+    robots: 'index,follow',
+    query: { q: 'duschgel', limit: 60, offset: 0 },
+    relatedLinks: links(['angebote', 'drogerie', 'dm', 'bipa', 'windeln', 'waschmittel']),
+  },
+  {
+    key: 'nudeln',
+    path: '/angebote/nudeln',
+    title: 'Nudeln Angebote aktuell vergleichen | kaufklug.at',
+    description:
+      'Aktuelle Nudel-Angebote verschiedener Händler vergleichen. Packungsgrößen und Preis pro kg transparent auf kaufklug.at.',
+    h1: 'Nudeln Angebote aktuell vergleichen',
+    intro:
+      'Vergleiche Pasta- und Nudel-Angebote mehrerer Händler, von Spaghetti und Penne bis zu weiteren Teigwaren. Packungsgrößen, Preis pro kg und Bedingungen bleiben im Blick.',
+    robots: 'index,follow',
+    query: { q: 'nudeln', limit: 60, offset: 0 },
+    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'lidl', 'schokolade', 'chips']),
+  },
+  {
+    key: 'chips',
+    path: '/angebote/chips',
+    title: 'Chips Angebote aktuell vergleichen | kaufklug.at',
+    description:
+      'Aktuelle Chips-Angebote verschiedener Händler vergleichen. Preise, Packungsgrößen und Preis pro kg transparent auf kaufklug.at.',
+    h1: 'Chips Angebote aktuell vergleichen',
+    intro:
+      'Vergleiche Chips-Angebote mehrerer Händler nach Packungsgröße, Multipack und Preis pro kg. Aktionsbedingungen werden soweit sicher erkannt angezeigt.',
+    robots: 'index,follow',
+    query: { q: 'chips', limit: 60, offset: 0 },
+    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'lidl', 'schokolade', 'nudeln']),
   },
   {
     key: 'waschmittel',
