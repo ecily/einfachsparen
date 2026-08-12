@@ -7776,6 +7776,13 @@ textarea:focus {
 }
 
 @media (max-width: 760px) {
+  #root {
+    width: 100vw;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
   .shell,
   .panel,
   .user-results,
@@ -7786,8 +7793,8 @@ textarea:focus {
   }
 
   .shell {
-    width: calc(100vw - 1rem) !important;
-    max-width: calc(100vw - 1rem) !important;
+    width: 100% !important;
+    max-width: 100% !important;
     overflow-x: clip;
   }
 
