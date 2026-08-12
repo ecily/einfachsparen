@@ -10,9 +10,9 @@ test('static SEO documents expose route-specific metadata and visible content', 
   const page = getStaticSeoPages().find((candidate) => candidate.path === '/angebote/billa')
   const html = buildSeoStaticDocument(template, page)
 
-  assert.match(html, /<title>BILLA Angebote aktuell finden \| kaufklug<\/title>/)
+  assert.match(html, /<title>BILLA Angebote aktuell vergleichen \| kaufklug\.at<\/title>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/angebote\/billa/)
-  assert.match(html, /<h1>BILLA Angebote aktuell finden<\/h1>/)
+  assert.match(html, /<h1>BILLA Angebote aktuell vergleichen<\/h1>/)
   assert.match(html, /application\/ld\+json/)
 })
 
@@ -40,6 +40,64 @@ test('indexable landing pages render related links without utility or noindex ta
   for (const html of [retailerHtml, categoryHtml]) {
     assert.doesNotMatch(html, /href="\/(?:suche|stoebern|einkaufsliste)\//)
     assert.doesNotMatch(html, /href="\/angebote\/(?:spar|kaese|mueller)\//)
+  }
+})
+
+test('high-impression landing pages expose comparison metadata and relevant links', () => {
+  const expected = {
+    lidl: {
+      title: 'Lidl Angebote aktuell vergleichen | kaufklug.at',
+      h1: 'Lidl Angebote aktuell vergleichen',
+      signal: 'Preis pro kg, Liter oder Stück',
+      links: ['/angebote/bier/', '/angebote/kaffee/', '/angebote/schokolade/', '/angebote/nudeln/', '/angebote/chips/'],
+    },
+    billa: {
+      title: 'BILLA Angebote aktuell vergleichen | kaufklug.at',
+      h1: 'BILLA Angebote aktuell vergleichen',
+      signal: 'Preis pro kg, Liter oder Stück',
+      links: ['/angebote/bier/', '/angebote/kaffee/', '/angebote/schokolade/', '/angebote/nudeln/', '/angebote/chips/'],
+    },
+    supermarkt: {
+      title: 'Supermarkt Angebote aktuell vergleichen | kaufklug.at',
+      h1: 'Supermarkt Angebote aktuell vergleichen',
+      signal: 'Preis pro kg, Liter oder Stück',
+      links: ['/angebote/bier/', '/angebote/kaffee/', '/angebote/schokolade/', '/angebote/nudeln/', '/angebote/chips/'],
+    },
+    waschmittel: {
+      title: 'Waschmittel Angebote vergleichen: Preise & Packungsgrößen | kaufklug.at',
+      h1: 'Waschmittel Angebote vergleichen: Preise & Packungsgrößen',
+      signal: 'Preis pro sicher vorhandener Einheit',
+      links: ['/angebote/drogerie/', '/angebote/bipa/', '/angebote/dm/', '/angebote/windeln/', '/angebote/duschgel/'],
+    },
+    bipa: {
+      title: 'BIPA Angebote aktuell vergleichen | kaufklug.at',
+      h1: 'BIPA Angebote aktuell vergleichen',
+      signal: 'Liter- oder Stückpreis',
+      links: ['/angebote/waschmittel/', '/angebote/windeln/', '/angebote/duschgel/'],
+    },
+    drogerie: {
+      title: 'Drogerie Angebote aktuell vergleichen | kaufklug.at',
+      h1: 'Drogerie Angebote aktuell vergleichen',
+      signal: 'Literpreise, Stückpreise',
+      links: ['/angebote/waschmittel/', '/angebote/windeln/', '/angebote/duschgel/'],
+    },
+  }
+
+  for (const [key, contract] of Object.entries(expected)) {
+    const page = getStaticSeoPages().find((candidate) => candidate.path === `/angebote/${key}`)
+    const html = buildSeoStaticDocument(template, page)
+
+    assert.equal(page.robots, 'index,follow')
+    assert.equal(page.title, contract.title)
+    const escapedTitle = contract.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replaceAll('&', '&amp;')
+    assert.match(html, new RegExp(`<title>${escapedTitle}</title>`))
+    assert.match(html, /<meta name="description" content="[^"]+" \/>/)
+    const escapedH1 = contract.h1.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replaceAll('&', '&amp;')
+    assert.match(html, new RegExp(`<h1>${escapedH1}</h1>`))
+    assert.ok(html.includes(contract.signal), `missing comparison USP for ${key}`)
+    for (const path of contract.links) {
+      assert.ok(html.includes(`<a href="${path}">`), `missing related link ${path} for ${key}`)
+    }
   }
 })
 

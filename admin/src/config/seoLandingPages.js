@@ -57,11 +57,11 @@ export const seoLandingPages = [
   {
     key: 'supermarkt',
     path: '/angebote/supermarkt',
-    title: 'Supermarkt Angebote \u00d6sterreich aktuell finden | kaufklug',
+    title: 'Supermarkt Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Suche aktuelle Supermarkt-Angebote in \u00d6sterreich und finde schneller, was sich gerade lohnt. Preise und Bedingungen bitte im Markt pr\u00fcfen.',
-    h1: 'Supermarkt Angebote in \u00d6sterreich finden',
-    intro: 'Suche aktuelle Angebote von Superm\u00e4rkten in \u00d6sterreich und finde schneller, was sich gerade lohnt.',
+      'Aktuelle Supermarkt-Angebote vergleichen. Preise, Packungsgr\u00f6\u00dfen und Preis pro kg, Liter oder St\u00fcck transparent auf kaufklug.at.',
+    h1: 'Supermarkt Angebote aktuell vergleichen',
+    intro: 'Vergleiche aktuelle Angebote mehrerer Superm\u00e4rkte direkt nach Preis, Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Preis pro Einheit.',
     robots: 'index,follow',
     queries: [
       {
@@ -89,17 +89,17 @@ export const seoLandingPages = [
       limit: 12,
       offset: 0,
     },
-    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips', 'kaese']),
+    relatedLinks: links(['billa', 'lidl', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips']),
   },
   {
     key: 'drogerie',
     path: '/angebote/drogerie',
-    title: 'Drogerie Angebote aktuell finden | kaufklug',
+    title: 'Drogerie Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Finde aktuelle Drogerie-Angebote in \u00d6sterreich, etwa von dm und BIPA. kaufklug zeigt Aktionen und Bedingungen als Orientierungshilfe.',
-    h1: 'Drogerie Angebote aktuell finden',
+      'Aktuelle Drogerie-Angebote vergleichen. Packungsgr\u00f6\u00dfen, Literpreise, St\u00fcckpreise und Bedingungen von dm und BIPA transparent auf kaufklug.at.',
+    h1: 'Drogerie Angebote aktuell vergleichen',
     intro:
-      'Finde aktuelle Angebote aus Drogerie und Hygiene in \u00d6sterreich. kaufklug zeigt Aktionen, Preise und Bedingungen, soweit diese erkannt wurden.',
+      'Vergleiche aktuelle Drogerie-Angebote von dm und BIPA nach Preis, Packungsgr\u00f6\u00dfe, Liter- oder St\u00fcckpreis und Bedingungen, soweit sicher vorhanden.',
     robots: 'index,follow',
     query: {
       retailers: 'dm,bipa',
@@ -129,12 +129,12 @@ export const seoLandingPages = [
   {
     key: 'billa',
     path: '/angebote/billa',
-    title: 'BILLA Angebote aktuell finden | kaufklug',
+    title: 'BILLA Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Finde aktuelle BILLA Angebote in \u00d6sterreich. kaufklug zeigt Preise, Aktionen und Bedingungen, soweit diese erkannt wurden.',
-    h1: 'BILLA Angebote aktuell finden',
+      'Aktuelle BILLA-Angebote vergleichen. Preise, Packungsgr\u00f6\u00dfen, Bedingungen und Preis pro kg, Liter oder St\u00fcck transparent auf kaufklug.at.',
+    h1: 'BILLA Angebote aktuell vergleichen',
     intro:
-      'Finde aktuelle Angebote von BILLA und BILLA Plus in \u00d6sterreich. kaufklug zeigt Preise, Aktionen und Bedingungen, soweit diese erkannt wurden.',
+      'Vergleiche aktuelle Angebote von BILLA und BILLA Plus mit Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Preis pro Einheit.',
     robots: 'index,follow',
     query: {
       retailers: 'billa,billa-plus',
@@ -142,7 +142,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaffee', 'bier', 'softdrinks', 'kaese']),
+    relatedLinks: links(['supermarkt', 'lidl', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips']),
   },
   {
     key: 'hofer',
@@ -165,12 +165,12 @@ export const seoLandingPages = [
   {
     key: 'lidl',
     path: '/angebote/lidl',
-    title: 'Lidl Angebote aktuell finden | kaufklug',
+    title: 'Lidl Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Finde aktuelle Lidl Angebote in \u00d6sterreich. kaufklug zeigt Aktionen, Preise und Bedingungen, soweit diese erkannt wurden.',
-    h1: 'Lidl Angebote aktuell finden',
+      'Aktuelle Lidl-Angebote vergleichen. Preise, Packungsgr\u00f6\u00dfen und Preis pro kg, Liter oder St\u00fcck transparent auf kaufklug.at.',
+    h1: 'Lidl Angebote aktuell vergleichen',
     intro:
-      'Finde aktuelle Lidl Angebote in \u00d6sterreich. kaufklug hilft dir, Aktionen, Preise und Bedingungen schneller zu \u00fcberblicken.',
+      'Vergleiche aktuelle Lidl-Angebote mit Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Preis pro Einheit, statt nur einzelne Aktionen zu sammeln.',
     robots: 'index,follow',
     query: {
       retailers: 'lidl',
@@ -178,7 +178,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'hofer', 'billa', 'penny', 'waschmittel', 'kaffee', 'softdrinks']),
+    relatedLinks: links(['supermarkt', 'billa', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips']),
   },
   {
     key: 'dm',
@@ -201,12 +201,12 @@ export const seoLandingPages = [
   {
     key: 'bipa',
     path: '/angebote/bipa',
-    title: 'BIPA Angebote aktuell finden | kaufklug',
+    title: 'BIPA Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Finde aktuelle BIPA Angebote in \u00d6sterreich. kaufklug zeigt Drogerie-Aktionen, Preise und Bedingungen als Orientierungshilfe.',
-    h1: 'BIPA Angebote aktuell finden',
+      'Aktuelle BIPA-Angebote vergleichen. Preise, Packungsgr\u00f6\u00dfen, Liter- oder St\u00fcckpreise und Bedingungen transparent auf kaufklug.at.',
+    h1: 'BIPA Angebote aktuell vergleichen',
     intro:
-      'Finde aktuelle Angebote von BIPA in \u00d6sterreich. kaufklug zeigt Drogerie-Aktionen, Preise und Bedingungen, soweit diese erkannt wurden.',
+      'Vergleiche aktuelle BIPA-Angebote mit Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Liter- oder St\u00fcckpreis.',
     robots: 'index,follow',
     query: {
       retailers: 'bipa',
@@ -214,7 +214,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['drogerie', 'dm', 'waschmittel', 'supermarkt']),
+    relatedLinks: links(['drogerie', 'dm', 'waschmittel', 'windeln', 'duschgel']),
   },
   {
     key: 'mueller',
@@ -371,19 +371,19 @@ export const seoLandingPages = [
   {
     key: 'waschmittel',
     path: '/angebote/waschmittel',
-    title: 'Waschmittel Angebote aktuell finden | kaufklug',
+    title: 'Waschmittel Angebote vergleichen: Preise & Packungsgr\u00f6\u00dfen | kaufklug.at',
     description:
-      'Finde aktuelle Waschmittel-Angebote in \u00d6sterreich. kaufklug zeigt Preise, Aktionen, Bedingungen und G\u00fcltigkeit als Orientierungshilfe.',
-    h1: 'Waschmittel Angebote aktuell finden',
+      'Aktuelle Waschmittel-Angebote vergleichen. Packungsgr\u00f6\u00dfen, Mengenaktionen und Preis pro Einheit transparent auf kaufklug.at.',
+    h1: 'Waschmittel Angebote vergleichen: Preise & Packungsgr\u00f6\u00dfen',
     intro:
-      'Finde aktuelle Waschmittel-Angebote in \u00d6sterreich. kaufklug zeigt Preise, Aktionen, Bedingungen und G\u00fcltigkeit, soweit diese erkannt wurden.',
+      'Vergleiche aktuelle Waschmittel-Angebote nach Packungsgr\u00f6\u00dfe, Preis pro sicher vorhandener Einheit und Mengenaktionen. Ein Preis pro Waschladung wird nicht pauschal behauptet.',
     robots: 'index,follow',
     query: {
       q: 'waschmittel',
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['drogerie', 'dm', 'bipa', 'supermarkt']),
+    relatedLinks: links(['drogerie', 'dm', 'bipa', 'windeln', 'duschgel']),
   },
   {
     key: 'kaese',
