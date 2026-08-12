@@ -15,6 +15,20 @@ const staticPages = [
     description: 'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Preise, Aktionen, Bedingungen und Einkaufsliste übersichtlich vergleichen.',
     robots: 'index,follow',
     h1: 'Aktuelle Angebote finden und beim Einkauf sparen',
+    relatedLinks: [
+      { label: 'Top Deals heute', path: '/top-deals/' },
+      { label: 'Alle Angebote', path: '/angebote/' },
+      { label: 'Supermarkt Angebote', path: '/angebote/supermarkt/' },
+      { label: 'Drogerie Angebote', path: '/angebote/drogerie/' },
+      { label: 'BILLA Angebote', path: '/angebote/billa/' },
+      { label: 'Lidl Angebote', path: '/angebote/lidl/' },
+      { label: 'BIPA Angebote', path: '/angebote/bipa/' },
+      { label: 'dm Angebote', path: '/angebote/dm/' },
+      { label: 'PENNY Angebote', path: '/angebote/penny/' },
+      { label: 'Waschmittel Angebote', path: '/angebote/waschmittel/' },
+      { label: 'Butter Angebote', path: '/angebote/butter/' },
+      { label: 'HOFER Angebote', path: '/angebote/hofer/' },
+    ],
     intro: 'Vergleiche aktuelle Angebote von Supermärkten und Drogerien in Österreich und prüfe Preis, Bedingungen und Gültigkeit vor dem Einkauf.',
   },
   {
@@ -143,10 +157,28 @@ function buildBreadcrumbJsonLd(page) {
   })
 }
 
+function getIndexablePaths() {
+  return new Set(
+    getStaticSeoPages()
+      .filter((page) => page.robots === 'index,follow')
+      .map((page) => canonicalPath(page.path)),
+  )
+}
+
+function buildRelatedLinks(page) {
+  const indexablePaths = getIndexablePaths()
+  const links = (page.relatedLinks || []).filter((link) => indexablePaths.has(canonicalPath(link.path)))
+  if (!links.length) return ''
+
+  return `<nav class="seo-static-links" aria-label="Weitere Angebote"><h2>Weitere Angebote</h2><ul>${links
+    .map((link) => `<li><a href="${escapeHtml(canonicalPath(link.path))}">${escapeHtml(link.label)}</a></li>`)
+    .join('')}</ul></nav>`
+}
+
 export function buildSeoStaticDocument(template, page) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
-  const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p></main>`
+  const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
   const updated = template
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta name="description" content="${escapeHtml(page.description)}" />\n`)
@@ -171,6 +203,7 @@ export function getStaticSeoPages() {
       robots: page.robots || 'index,follow',
       h1: page.h1,
       intro: page.intro,
+      relatedLinks: page.relatedLinks || [],
     })),
   ].filter((page, index, pages) => pages.findIndex((candidate) => candidate.path === page.path) === index)
 }

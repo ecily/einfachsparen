@@ -3,6 +3,7 @@ export const SEO_LANDING_PAGE_PREFIX = 'seo-offers:'
 export const SEO_TRUST_COPY = 'Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.'
 
 const baseRelatedLinks = [
+  ['angebote', 'Alle Angebote'],
   ['supermarkt', 'Supermarkt Angebote'],
   ['drogerie', 'Drogerie Angebote'],
   ['kaffee', 'Kaffee Angebote'],
@@ -26,7 +27,7 @@ function links(keys) {
     .map((key) => ({
       key,
       label: lookup.get(key),
-      path: `/angebote/${key}/`,
+      path: key === 'angebote' ? '/angebote/' : `/angebote/${key}/`,
     }))
     .filter((item) => item.label)
 }

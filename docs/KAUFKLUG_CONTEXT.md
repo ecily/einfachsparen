@@ -1,5 +1,12 @@
 # kaufklug.at Kontext
 
+## SEO-P1-Static-Links am 2026-08-12
+
+- Der Static-SEO-Generator rendert jetzt sichtbare, echte interne `<a href>`-Links in der initialen HTML-Antwort der Startseite und indexierbaren Landingpages. Homepage-Ziele umfassen Top Deals, Angebote, relevante Kategorien sowie BILLA, Lidl, BIPA, dm, PENNY, Waschmittel, Butter und HOFER.
+- Related Links werden nur noch übernommen, wenn das Ziel selbst `index,follow` ist. Utility-, noindex- und nicht öffentliche Landingpages werden damit nicht als SEO-Linknetz ausgegeben. PAGRO bleibt vollständig ausgeschlossen; Sitemap bleibt bei 17 URLs.
+- Verifiziert: Static-App-Build, ESLint und sechs SEO-/Catchall-Tests grün; Sitemap weiterhin ohne Noindex-, Utility- oder PAGRO-Einträge. Die Änderung betrifft ausschließlich Static-SEO-HTML, Related-Link-Pfadbildung und Tests.
+- Der bevorzugte Host bleibt ein externer Infrastrukturpunkt: Im Repo existiert keine DigitalOcean-/Cloudflare-Redirect-Konfiguration. Für `kaufklug.at` muss in der bestehenden Plattform der permanente Redirect auf `https://www.kaufklug.at` mit erhaltenem Pfad/Query und möglichst einem Hop gesetzt werden. Keine Anwendungscatchall-Änderung.
+
 ## Public-Validity-Startup-Emergency am 2026-08-12
 
 - Commit `97479c7a` enthielt versehentlich eine Image-Evidence-Dashboard-Abhaengigkeit auf `backend/src/diagnostics/imageEvidenceDiagnostics.js`, obwohl das Modul nicht committed war. Dadurch crashte der Backend-Startup mit `MODULE_NOT_FOUND` ueber `dashboardService`.
