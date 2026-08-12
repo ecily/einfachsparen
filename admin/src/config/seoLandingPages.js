@@ -46,7 +46,7 @@ export const seoLandingPages = [
     query: {
       limit: 24,
     },
-    relatedLinks: links(['supermarkt', 'drogerie', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
+    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
   },
   {
     key: 'supermarkt',
@@ -83,7 +83,7 @@ export const seoLandingPages = [
       limit: 12,
       offset: 0,
     },
-    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaese']),
+    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'kaese']),
   },
   {
     key: 'drogerie',
@@ -136,7 +136,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaese']),
+    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaffee', 'kaese']),
   },
   {
     key: 'hofer',
@@ -244,24 +244,24 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaese']),
+    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'kaese']),
   },
   {
     key: 'kaffee',
     path: '/angebote/kaffee',
-    title: 'Kaffee Angebote aktuell finden | kaufklug',
+    title: 'Kaffee Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Finde aktuelle Kaffee-Angebote von Superm\u00e4rkten in \u00d6sterreich. kaufklug zeigt Preise, Packungsgr\u00f6\u00dfen, Aktionen und G\u00fcltigkeit.',
-    h1: 'Kaffee Angebote aktuell finden',
+      'Aktuelle Kaffee-Angebote von mehreren H\u00e4ndlern vergleichen. Preise, Packungsgr\u00f6\u00dfen und Preis pro kg oder St\u00fcck transparent auf kaufklug.at.',
+    h1: 'Kaffee Angebote aktuell vergleichen',
     intro:
-      'Finde aktuelle Kaffee-Angebote von Superm\u00e4rkten in \u00d6sterreich. kaufklug zeigt Preise, Packungsgr\u00f6\u00dfen, Aktionen und G\u00fcltigkeit, soweit diese erkannt wurden.',
-    robots: 'noindex,follow',
+      'Vergleiche aktuelle Kaffee-Angebote mehrerer H\u00e4ndler und beachte dabei Packungsgr\u00f6\u00dfen und Mengenbedingungen. Preis pro kg, St\u00fcck oder Kapsel wird angezeigt, soweit sicher vorhanden; ein Bestpreisversprechen gibt es nicht.',
+    robots: 'index,follow',
     query: {
       q: 'kaffee',
-      limit: 24,
+      limit: 60,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'spar', 'kaese']),
+    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'bipa']),
   },
   {
     key: 'bier',
