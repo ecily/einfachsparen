@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## Softdrinks-SEO-Landingpage am 2026-08-12
+
+- Softdrinks ist die dritte neue datengetriebene indexierbare SEO-Landingpage: `/angebote/softdrinks/`. Evidence: 53 aktuelle Public-Offers, 5 Händler, 100% official, 98% Bilder und 98% Unit/Comparison; Cola bleibt Unterintent, eine separate Cola-Seite wird nicht angelegt.
+- Commit `212b5b33` aktiviert die bestehende Landingpage-Architektur mit `index,follow`, Self-Canonical, sichtbarem Initial-HTML, Literpreis-/Gebinde-Intent, bestehender Public-Offer-Abfrage und Sitemap mit 20 URLs. Search Console bleibt wegen des Tageskontingents offen; die reguläre Entdeckung erfolgt über Sitemap und interne Links.
+- Nächster Wave-1-Kandidat: Schokolade. PAGRO, Utility-Routen und öffentliche Ranking-/Validity-/Crawler-Logik wurden nicht verändert.
+
 ## Bier-SEO-Landingpage am 2026-08-12
 
 - Bier ist nach Kaffee die zweite neue datengetriebene indexierbare SEO-Landingpage: `/angebote/bier/`. Read-only Evidence: 62 aktuelle Public-Offers auf BILLA (29), BILLA Plus (29) und PENNY (4), 62/62 official und Public-Gate-konform, 58/62 Bilder, 62/62 unit-vergleichbar, 20 Conditions, 16 Marken und ca. 34 Produktgruppen.
