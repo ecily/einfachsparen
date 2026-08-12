@@ -7785,6 +7785,12 @@ textarea:focus {
     min-width: 0;
   }
 
+  .shell {
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    overflow-x: clip;
+  }
+
   .page-nav__button,
   .page-nav__beta {
     min-width: 0;
