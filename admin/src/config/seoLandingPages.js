@@ -46,7 +46,7 @@ export const seoLandingPages = [
     query: {
       limit: 24,
     },
-    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
+    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'bier', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
   },
   {
     key: 'supermarkt',
@@ -83,7 +83,7 @@ export const seoLandingPages = [
       limit: 12,
       offset: 0,
     },
-    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'kaese']),
+    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'bier', 'kaese']),
   },
   {
     key: 'drogerie',
@@ -136,7 +136,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaffee', 'kaese']),
+    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaffee', 'bier', 'kaese']),
   },
   {
     key: 'hofer',
@@ -244,7 +244,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'kaese']),
+    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'bier', 'kaese']),
   },
   {
     key: 'kaffee',
@@ -266,19 +266,19 @@ export const seoLandingPages = [
   {
     key: 'bier',
     path: '/angebote/bier',
-    title: 'Bier Angebote aktuell finden | kaufklug',
+    title: 'Bier Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Finde aktuelle Bier-Angebote in \u00d6sterreich. kaufklug zeigt Preise, Packungsgr\u00f6\u00dfen, Aktionen und G\u00fcltigkeit als Orientierungshilfe.',
-    h1: 'Bier Angebote aktuell finden',
+      'Aktuelle Bier-Angebote von mehreren H\u00e4ndlern vergleichen. Preise, Packungsgr\u00f6\u00dfen und Literpreise transparent auf kaufklug.at.',
+    h1: 'Bier Angebote aktuell vergleichen',
     intro:
-      'Finde aktuelle Bier-Angebote in \u00d6sterreich. kaufklug zeigt Preise, Packungsgr\u00f6\u00dfen, Aktionen und G\u00fcltigkeit, soweit diese erkannt wurden.',
-    robots: 'noindex,follow',
+      'Vergleiche aktuelle Bier-Angebote mehrerer H\u00e4ndler und beachte Dosen, Flaschen, Multipacks, Kisten und Mengenbedingungen. Der Literpreis wird angezeigt, soweit sicher vorhanden; ein Bestpreisversprechen gibt es nicht.',
+    robots: 'index,follow',
     query: {
       q: 'bier',
-      limit: 24,
+      limit: 60,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'spar']),
+    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'kaffee']),
   },
   {
     key: 'waschmittel',

@@ -39,7 +39,7 @@ test('indexable landing pages render related links without utility or noindex ta
   assert.ok(categoryHtml.includes('<a href="/angebote/dm/">'))
   for (const html of [retailerHtml, categoryHtml]) {
     assert.doesNotMatch(html, /href="\/(?:suche|stoebern|einkaufsliste)\//)
-    assert.doesNotMatch(html, /href="\/angebote\/(?:spar|bier|kaese|mueller)\//)
+    assert.doesNotMatch(html, /href="\/angebote\/(?:spar|kaese|mueller)\//)
   }
 })
 
@@ -59,7 +59,7 @@ test('coffee landing page is indexable and complete in initial HTML', () => {
   }
 })
 
-test('coffee is linked from relevant indexable static pages and sitemap has 18 safe URLs', async () => {
+test('coffee is linked from relevant indexable static pages and sitemap has 19 safe URLs', async () => {
   for (const path of ['/', '/angebote', '/angebote/supermarkt', '/angebote/billa', '/angebote/penny']) {
     const page = getStaticSeoPages().find((candidate) => candidate.path === path)
     const html = buildSeoStaticDocument(template, page)
@@ -68,10 +68,37 @@ test('coffee is linked from relevant indexable static pages and sitemap has 18 s
 
   const sitemap = await readFile(resolve('admin/public/sitemap.xml'), 'utf8')
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1])
-  assert.equal(urls.length, 18)
+  assert.equal(urls.length, 19)
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/kaffee/'))
+  assert.ok(urls.includes('https://www.kaufklug.at/angebote/bier/'))
   assert.equal(urls.some((url) => /(?:suche|stoebern|einkaufsliste|pagro)/i.test(url)), false)
   assert.equal(sitemap.includes('noindex'), false)
+})
+
+test('beer landing page is indexable and complete in initial HTML', () => {
+  const page = getStaticSeoPages().find((candidate) => candidate.path === '/angebote/bier')
+  const html = buildSeoStaticDocument(template, page)
+
+  assert.equal(page.robots, 'index,follow')
+  assert.match(html, /<title>Bier Angebote aktuell vergleichen \| kaufklug\.at<\/title>/)
+  assert.match(html, /<meta name="description" content="Aktuelle Bier-Angebote von mehreren H\u00e4ndlern vergleichen\./)
+  assert.match(html, /<meta name="robots" content="index,follow" \/>/)
+  assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/angebote\/bier\/"/)
+  assert.match(html, /<h1>Bier Angebote aktuell vergleichen<\/h1>/)
+  assert.match(html, /Dosen, Flaschen, Multipacks, Kisten und Mengenbedingungen/)
+  for (const path of ['/angebote/', '/angebote/supermarkt/', '/angebote/billa/', '/angebote/penny/', '/angebote/kaffee/']) {
+    assert.ok(html.includes(`<a href="${path}">`), `missing beer landing link ${path}`)
+  }
+})
+
+test('beer is linked from relevant indexable static pages without noindex targets', () => {
+  for (const path of ['/', '/angebote', '/angebote/supermarkt', '/angebote/billa', '/angebote/penny']) {
+    const page = getStaticSeoPages().find((candidate) => candidate.path === path)
+    const html = buildSeoStaticDocument(template, page)
+    assert.ok(html.includes('<a href="/angebote/bier/">'), `missing beer link from ${path}`)
+    assert.doesNotMatch(html, /href="\/(?:suche|stoebern|einkaufsliste)\//)
+    assert.doesNotMatch(html, /href="\/angebote\/(?:spar|mueller|kaese)\//)
+  }
 })
 
 test('unknown routes are not emitted as SEO pages', () => {
