@@ -7974,8 +7974,17 @@ body,
   width: 100%;
   max-width: 100%;
   overflow-wrap: anywhere !important;
+  text-wrap: wrap !important;
   white-space: normal !important;
   word-break: break-word !important;
+}
+
+.search-landing-hero__usp,
+.seo-offer-hero,
+.seo-offer-page {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .comparison-fact-card strong {
