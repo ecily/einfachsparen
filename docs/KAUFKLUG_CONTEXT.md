@@ -4,6 +4,8 @@
 
 - Softdrinks ist die dritte neue datengetriebene indexierbare SEO-Landingpage: `/angebote/softdrinks/`. Evidence: 53 aktuelle Public-Offers, 5 Händler, 100% official, 98% Bilder und 98% Unit/Comparison; Cola bleibt Unterintent, eine separate Cola-Seite wird nicht angelegt.
 - Commit `212b5b33` aktiviert die bestehende Landingpage-Architektur mit `index,follow`, Self-Canonical, sichtbarem Initial-HTML, Literpreis-/Gebinde-Intent, bestehender Public-Offer-Abfrage und Sitemap mit 20 URLs. Search Console bleibt wegen des Tageskontingents offen; die reguläre Entdeckung erfolgt über Sitemap und interne Links.
+- Live-Smoke nach dem Static-App-Deploy: HTTP 200, korrekter Title/H1/Intro, `index,follow`, Self-Canonical auf `https://www.kaufklug.at/angebote/softdrinks/`, fünf relevante statische Händler-/Kategorie-Links, Sitemap HTTP 200 mit 20 URLs sowie ohne Cola-, Energy-Drinks-, Utility-, PAGRO- oder SPAR-Einträge. Der bestehende Ranking-Read-Path liefert 53/53 Offers, `hasMore=false`, 53 eindeutige IDs, fünf Händler, 52 Bilder, 52 vergleichbare Units und 44 Conditions; eine zweite Seite war nicht erforderlich.
+- Der Intent-Smoke fand 25 Energy-Signale in den 53 Live-Titeln und keine Mineralwasser-Signale. Das ist eine bestehende Softdrinks-&-Energy-Klassifikation im Public-Read-Path; sie wurde in diesem Auftrag nicht durch eine Ã„nderung an Ranking-/Suchlogik verändert und bleibt als fachlicher Follow-up-Befund offen.
 - Nächster Wave-1-Kandidat: Schokolade. PAGRO, Utility-Routen und öffentliche Ranking-/Validity-/Crawler-Logik wurden nicht verändert.
 
 ## Bier-SEO-Landingpage am 2026-08-12
