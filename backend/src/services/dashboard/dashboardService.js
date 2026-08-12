@@ -13,14 +13,6 @@ const { buildSafeBuildInfo } = require('../buildInfo');
 const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
 const { buildAnalyticsSummary } = require('../analytics/analyticsService');
 const { classifyOfferSourceQuality } = require('../offers/sourceQuality');
-const {
-  LEGACY_OR_UNCLASSIFIED,
-  MISSING_OR_NONE,
-  buildFeedbackImageIssueSummaryFromDocuments,
-  buildImageEvidenceDiagnosticsFromAggregateResult,
-  buildImageEvidenceDiagnosticsFromOffers,
-  emptyImageEvidenceDiagnostics,
-} = require('../diagnostics/imageEvidenceDiagnostics');
 const logger = require('../../lib/logger');
 
 const COMPARISON_SNAPSHOT_TIMEOUT_MS = 3000;
@@ -797,7 +789,6 @@ function buildOfferDiagnostics(activeOffers = []) {
     sourceTypeSummary: [...sourceTypeMap.entries()]
       .map(([sourceType, count]) => ({ sourceType, count }))
       .sort((left, right) => right.count - left.count || left.sourceType.localeCompare(right.sourceType)),
-    imageEvidenceSummary: buildImageEvidenceDiagnosticsFromOffers(activeOffers),
     publishStatusSummary: {
       totalActiveOffers: totals.activeOffers,
       finalCount: totals.activeOffers - openPublishCount,
@@ -842,10 +833,6 @@ function buildUnavailableOfferDiagnostics(message = 'Offer diagnostics unavailab
     },
     retailerMatrix: [],
     sourceTypeSummary: [],
-    imageEvidenceSummary: emptyImageEvidenceDiagnostics({
-      unavailable: true,
-      message,
-    }),
     publishStatusSummary: {
       totalActiveOffers: null,
       finalCount: null,
@@ -920,7 +907,6 @@ function buildOfferDiagnosticsFromAggregateResult(result = {}) {
     sourceTypeSummary: (result.sourceTypeSummary || [])
       .map((row) => ({ sourceType: row.sourceType || 'unknown', count: numberFrom(row.count) }))
       .sort((left, right) => right.count - left.count || left.sourceType.localeCompare(right.sourceType)),
-    imageEvidenceSummary: buildImageEvidenceDiagnosticsFromAggregateResult(result),
     publishStatusSummary: buildPublishStatusSummaryFromRows(result.publishStatusSummary || []),
   };
 }
@@ -1195,7 +1181,6 @@ function buildFeedbackSummaryFromDocuments(documents = [], {
     feedbackByOffer,
     dailyFeedbackTrend,
     latestFeedback,
-    imageIssueSummary: buildFeedbackImageIssueSummaryFromDocuments(documents),
     feedbackDataWarnings,
     source: 'OfferFeedback',
     generatedAt: nowDate.toISOString(),
@@ -2491,13 +2476,6 @@ function buildActiveOfferFeatureStages() {
             { $gt: [{ $strLenCP: { $ifNull: ['$rawFacts.imageUrl', ''] } }, 0] },
           ],
         },
-        imageEvidencePresent: {
-          $gt: [{ $strLenCP: { $ifNull: ['$imageEvidence.kind', ''] } }, 0],
-        },
-        imageEvidenceKindStored: { $ifNull: ['$imageEvidence.kind', ''] },
-        imageEvidenceDecision: { $ifNull: ['$imageEvidence.decision', '' ] },
-        imageEvidenceSourceTypeStored: { $ifNull: ['$imageEvidence.sourceType', ''] },
-        imageEvidenceRejectedReasons: { $ifNull: ['$imageEvidence.rejectedReasons', []] },
       },
     },
     {
@@ -2527,32 +2505,6 @@ function buildActiveOfferFeatureStages() {
           $and: [
             '$aggregator',
             { $not: ['$safeValidity'] },
-          ],
-        },
-        imageEvidenceKind: {
-          $cond: [
-            '$imageEvidencePresent',
-            { $ifNull: ['$imageEvidenceKindStored', 'none'] },
-            {
-              $cond: [
-                '$imageUrlPresent',
-                LEGACY_OR_UNCLASSIFIED,
-                MISSING_OR_NONE,
-              ],
-            },
-          ],
-        },
-        imageEvidenceSourceType: {
-          $cond: [
-            '$imageEvidencePresent',
-            { $ifNull: ['$imageEvidenceSourceTypeStored', 'unknown'] },
-            {
-              $cond: [
-                '$imageUrlPresent',
-                LEGACY_OR_UNCLASSIFIED,
-                'none',
-              ],
-            },
           ],
         },
       },
@@ -2655,164 +2607,6 @@ async function buildActiveOfferDashboardDiagnostics(activeOfferMatch) {
           { $group: { _id: '$sourceType', count: { $sum: 1 } } },
           { $project: { _id: 0, sourceType: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
           { $sort: { count: -1, sourceType: 1 } },
-          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
-        ],
-        imageEvidenceSummary: [
-          {
-            $group: {
-              _id: null,
-              activeOffers: { $sum: 1 },
-              offersWithImageUrl: { $sum: { $cond: ['$imageUrlPresent', 1, 0] } },
-              offersWithoutImageUrl: { $sum: { $cond: ['$imageUrlPresent', 0, 1] } },
-              offersWithImageEvidence: { $sum: { $cond: ['$imageEvidencePresent', 1, 0] } },
-              offersWithImageUrlButNoEvidence: {
-                $sum: {
-                  $cond: [
-                    { $and: ['$imageUrlPresent', { $not: ['$imageEvidencePresent'] }] },
-                    1,
-                    0,
-                  ],
-                },
-              },
-              offersWithEvidenceAccepted: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'accepted'] }, 1, 0] } },
-              offersWithEvidenceRejected: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'rejected'] }, 1, 0] } },
-              offersWithEvidenceUnavailable: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'unavailable'] }, 1, 0] } },
-              offersWithEvidenceReviewOnly: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'review_only'] }, 1, 0] } },
-              liveSafeEvidenceOffers: {
-                $sum: {
-                  $cond: [
-                    {
-                      $and: [
-                        { $eq: ['$imageEvidenceKind', 'official_product'] },
-                        { $eq: ['$imageEvidenceDecision', 'accepted'] },
-                      ],
-                    },
-                    1,
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-          { $project: { _id: 0 } },
-        ],
-        imageEvidenceByKind: [
-          { $group: { _id: '$imageEvidenceKind', count: { $sum: 1 } } },
-          { $project: { _id: 0, kind: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
-          { $sort: { count: -1, kind: 1 } },
-          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
-        ],
-        imageEvidenceBySourceType: [
-          { $group: { _id: '$imageEvidenceSourceType', count: { $sum: 1 } } },
-          { $project: { _id: 0, sourceType: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
-          { $sort: { count: -1, sourceType: 1 } },
-          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
-        ],
-        imageEvidenceRetailerBreakdown: [
-          {
-            $group: {
-              _id: '$retailerKey',
-              retailerKey: { $first: '$retailerKey' },
-              retailerName: { $first: '$retailerName' },
-              count: { $sum: 1 },
-              activeOffers: { $sum: 1 },
-              offersWithImageUrl: { $sum: { $cond: ['$imageUrlPresent', 1, 0] } },
-              offersWithoutImageUrl: { $sum: { $cond: ['$imageUrlPresent', 0, 1] } },
-              offersWithImageEvidence: { $sum: { $cond: ['$imageEvidencePresent', 1, 0] } },
-              offersWithImageUrlButNoEvidence: {
-                $sum: {
-                  $cond: [
-                    { $and: ['$imageUrlPresent', { $not: ['$imageEvidencePresent'] }] },
-                    1,
-                    0,
-                  ],
-                },
-              },
-              liveSafeEvidenceOffers: {
-                $sum: {
-                  $cond: [
-                    {
-                      $and: [
-                        { $eq: ['$imageEvidenceKind', 'official_product'] },
-                        { $eq: ['$imageEvidenceDecision', 'accepted'] },
-                      ],
-                    },
-                    1,
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-          { $project: { _id: 0 } },
-          { $sort: { count: -1, retailerKey: 1 } },
-          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
-        ],
-        imageEvidenceSourceBreakdown: [
-          {
-            $group: {
-              _id: { retailerKey: '$retailerKey', sourceType: '$sourceType' },
-              retailerKey: { $first: '$retailerKey' },
-              retailerName: { $first: '$retailerName' },
-              sourceType: { $first: '$sourceType' },
-              sourceKey: { $first: '$sourceType' },
-              count: { $sum: 1 },
-              activeOffers: { $sum: 1 },
-              offersWithImageUrl: { $sum: { $cond: ['$imageUrlPresent', 1, 0] } },
-              offersWithoutImageUrl: { $sum: { $cond: ['$imageUrlPresent', 0, 1] } },
-              offersWithImageEvidence: { $sum: { $cond: ['$imageEvidencePresent', 1, 0] } },
-              offersWithImageUrlButNoEvidence: {
-                $sum: {
-                  $cond: [
-                    { $and: ['$imageUrlPresent', { $not: ['$imageEvidencePresent'] }] },
-                    1,
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-          { $project: { _id: 0 } },
-          { $sort: { count: -1, retailerKey: 1, sourceType: 1 } },
-          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
-        ],
-        imageEvidenceRejectedReasons: [
-          { $unwind: '$imageEvidenceRejectedReasons' },
-          { $group: { _id: '$imageEvidenceRejectedReasons', count: { $sum: 1 } } },
-          { $project: { _id: 0, reason: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
-          { $sort: { count: -1, reason: 1 } },
-          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
-        ],
-        imageMissingRetailerSources: [
-          { $match: { imageUrlPresent: false } },
-          {
-            $group: {
-              _id: { retailerKey: '$retailerKey', sourceType: '$sourceType' },
-              retailerKey: { $first: '$retailerKey' },
-              retailerName: { $first: '$retailerName' },
-              sourceType: { $first: '$sourceType' },
-              sourceKey: { $first: '$sourceType' },
-              count: { $sum: 1 },
-            },
-          },
-          { $project: { _id: 0 } },
-          { $sort: { count: -1, retailerKey: 1, sourceType: 1 } },
-          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
-        ],
-        legacyImageUrlRetailerSources: [
-          { $match: { imageUrlPresent: true, imageEvidencePresent: false } },
-          {
-            $group: {
-              _id: { retailerKey: '$retailerKey', sourceType: '$sourceType' },
-              retailerKey: { $first: '$retailerKey' },
-              retailerName: { $first: '$retailerName' },
-              sourceType: { $first: '$sourceType' },
-              sourceKey: { $first: '$sourceType' },
-              count: { $sum: 1 },
-            },
-          },
-          { $project: { _id: 0 } },
-          { $sort: { count: -1, retailerKey: 1, sourceType: 1 } },
           { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
         ],
         publishStatusSummary: [
@@ -2957,7 +2751,6 @@ async function buildDashboardSnapshot() {
     offerSummary,
     retailerMatrix,
     sourceTypeSummary,
-    imageEvidenceSummary,
     publishStatusSummary,
   } = activeOfferDiagnostics || buildUnavailableOfferDiagnostics('Active offer diagnostics unavailable.');
   const qualityKpis = buildQualityKpis(offerSummary);
@@ -3067,7 +2860,6 @@ async function buildDashboardSnapshot() {
     offerSummary,
     retailerMatrix,
     sourceTypeSummary,
-    imageEvidenceSummary,
     qualityKpis,
     trendSeries,
     analyticsSummary,
@@ -3089,7 +2881,6 @@ async function buildDashboardSnapshot() {
       queryMaxTimeMs: DASHBOARD_QUERY_MAX_TIME_MS,
       comparisonSnapshotTimeoutMs: COMPARISON_SNAPSHOT_TIMEOUT_MS,
       heavyOfferDiagnosticsEnabled: HEAVY_OFFER_DIAGNOSTICS_ENABLED,
-      imageEvidenceDiagnosticsEnabled: true,
       partial: dashboardWarnings.length > 0,
       warnings: dashboardWarnings,
     },
