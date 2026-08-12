@@ -255,6 +255,7 @@ export const seoLandingPages = [
   {
     key: 'kaffee',
     path: '/angebote/kaffee',
+    comparisonKey: 'kaffee',
     title: 'Kaffee Angebote aktuell vergleichen | kaufklug.at',
     description:
       'Aktuelle Kaffee-Angebote von mehreren H\u00e4ndlern vergleichen. Preise, Packungsgr\u00f6\u00dfen und Preis pro kg oder St\u00fcck transparent auf kaufklug.at.',
@@ -272,6 +273,7 @@ export const seoLandingPages = [
   {
     key: 'bier',
     path: '/angebote/bier',
+    comparisonKey: 'bier',
     title: 'Bier Angebote aktuell vergleichen | kaufklug.at',
     description:
       'Aktuelle Bier-Angebote von mehreren H\u00e4ndlern vergleichen. Preise, Packungsgr\u00f6\u00dfen und Literpreise transparent auf kaufklug.at.',
@@ -371,6 +373,7 @@ export const seoLandingPages = [
   {
     key: 'waschmittel',
     path: '/angebote/waschmittel',
+    comparisonKey: 'waschmittel',
     title: 'Waschmittel Angebote vergleichen: Preise & Packungsgr\u00f6\u00dfen | kaufklug.at',
     description:
       'Aktuelle Waschmittel-Angebote vergleichen. Packungsgr\u00f6\u00dfen, Mengenaktionen und Preis pro Einheit transparent auf kaufklug.at.',

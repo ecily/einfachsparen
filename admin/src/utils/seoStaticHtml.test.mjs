@@ -213,6 +213,24 @@ test('softdrinks is linked from relevant indexable static pages without cola or 
   }
 })
 
+test('comparison summary is visible in initial HTML only when supplied', () => {
+  const page = getStaticSeoPages().find((candidate) => candidate.path === '/angebote/bier')
+  const html = buildSeoStaticDocument(template, {
+    ...page,
+    comparisonSummary: {
+      facts: ['23 aktuelle Angebote', '3 HÃ¤ndler', '23 mit Literpreis vergleichbar'],
+      note: 'Literpreise werden nur innerhalb kompatibler Einheiten verglichen.',
+      dataStand: '2026-08-12T09:44:22.113Z',
+    },
+  })
+
+  assert.match(html, /<section class="seo-static-comparison"/)
+  assert.match(html, /Aktueller Vergleich/)
+  assert.match(html, /23 aktuelle Angebote/)
+  assert.match(html, /Stand:/)
+  assert.doesNotMatch(html, /undefined|NaN/)
+})
+
 test('unknown routes are not emitted as SEO pages', () => {
   assert.equal(getStaticSeoPages().some((page) => page.path === '/angebote/does-not-exist'), false)
 })

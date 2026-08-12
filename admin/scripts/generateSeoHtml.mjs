@@ -1,12 +1,22 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
 import { dirname, join } from 'node:path'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { seoLandingPages } from '../src/config/seoLandingPages.js'
+import { buildSeoComparisonSummary } from '../src/utils/seoComparisonSummary.js'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const adminDir = dirname(scriptDir)
 const distDir = join(adminDir, 'dist')
 const siteUrl = 'https://www.kaufklug.at'
+const comparisonApiBaseUrl = String(process.env.SEO_PUBLIC_API_BASE_URL || 'https://www.kaufklug.at/api').replace(/\/+$/, '')
+const comparisonQueries = new Map([
+  ['bier', 'bier'],
+  ['kaffee', 'kaffee'],
+  ['waschmittel', 'waschmittel'],
+])
+const execFileAsync = promisify(execFile)
 
 const staticPages = [
   {
@@ -183,10 +193,24 @@ function buildRelatedLinks(page) {
     .join('')}</ul></nav>`
 }
 
+function buildComparisonSummaryHtml(summary) {
+  if (!summary?.facts?.length) return ''
+
+  const dataStand = new Intl.DateTimeFormat('de-AT', {
+    dateStyle: 'medium',
+    timeZone: 'Europe/Vienna',
+  }).format(new Date(summary.dataStand))
+
+  return `<section class="seo-static-comparison" aria-labelledby="seo-static-comparison-title"><h2 id="seo-static-comparison-title">Aktueller Vergleich</h2><ul>${summary.facts
+    .map((fact) => `<li>${escapeHtml(fact)}</li>`)
+    .join('')}</ul><p>${escapeHtml(summary.note)}</p><p>Stand: ${escapeHtml(dataStand)}</p></section>`
+}
+
 export function buildSeoStaticDocument(template, page) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
+  const staticContentWithComparison = staticContent.replace('</main>', `${buildComparisonSummaryHtml(page.comparisonSummary)}</main>`)
   const updated = template
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta name="description" content="${escapeHtml(page.description)}" />\n`)
@@ -195,7 +219,7 @@ export function buildSeoStaticDocument(template, page) {
     .replace(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:title" content="${escapeHtml(page.title)}" />\n`)
     .replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:description" content="${escapeHtml(page.description)}" />\n`)
     .replace(/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:url" content="${canonical}" />\n`)
-    .replace(/<div id="root"><\/div>/i, `<div id="root">${staticContent}</div>`)
+    .replace(/<div id="root"><\/div>/i, `<div id="root">${staticContentWithComparison}</div>`)
     .replace(/<\/head>/i, `<script type="application/ld+json" id="kaufklug-static-breadcrumb">${buildBreadcrumbJsonLd(page)}</script>\n  </head>`)
 
   return updated
@@ -211,9 +235,104 @@ export function getStaticSeoPages() {
       robots: page.robots || 'index,follow',
       h1: page.h1,
       intro: page.intro,
+      comparisonKey: page.comparisonKey || '',
+      comparisonSummary: page.comparisonSummary || null,
       relatedLinks: page.relatedLinks || [],
     })),
   ].filter((page, index, pages) => pages.findIndex((candidate) => candidate.path === page.path) === index)
+}
+
+async function fetchComparisonRanking(query, offset, resultSetToken = '') {
+  const url = new URL(`${comparisonApiBaseUrl}/offers/ranking`)
+  url.searchParams.set('q', query)
+  url.searchParams.set('limit', '60')
+  url.searchParams.set('offset', String(offset))
+  if (resultSetToken) url.searchParams.set('resultSetToken', resultSetToken)
+
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(30000) })
+    if (!response.ok) throw new Error(`comparison API HTTP ${response.status}`)
+    return response.json()
+  } catch (fetchError) {
+    try {
+      const curlArgs = [
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--max-time',
+        '30',
+        url.href,
+      ]
+      if (process.platform === 'win32') curlArgs.splice(5, 0, '--ssl-no-revoke')
+      const { stdout } = await execFileAsync(process.platform === 'win32' ? 'curl.exe' : 'curl', curlArgs, {
+        maxBuffer: 16 * 1024 * 1024,
+      })
+      return JSON.parse(stdout)
+    } catch {
+      throw fetchError
+    }
+  }
+}
+
+async function fetchComparisonSummary(pageKey) {
+  const query = comparisonQueries.get(pageKey)
+  if (!query) return null
+
+  const offers = []
+  const seenIds = new Set()
+  let offset = 0
+  let resultSetToken = ''
+  let totalCount = null
+  let generatedAt = ''
+
+  for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+    const payload = await fetchComparisonRanking(query, offset, resultSetToken)
+    const pageOffers = Array.isArray(payload?.rankedOffers) ? payload.rankedOffers : []
+    const pageSummary = payload?.summary || {}
+    const pageTotalCount = Number(pageSummary.totalCount)
+
+    if (!Number.isInteger(pageTotalCount) || pageTotalCount <= 0 || !pageOffers.every((offer) => offer?.id)) {
+      return null
+    }
+
+    if (totalCount === null) totalCount = pageTotalCount
+    if (totalCount !== pageTotalCount) return null
+    if (!generatedAt) generatedAt = payload.generatedAt || ''
+
+    for (const offer of pageOffers) {
+      if (!seenIds.has(offer.id)) {
+        seenIds.add(offer.id)
+        offers.push(offer)
+      }
+    }
+
+    if (!pageSummary.hasMore) break
+
+    const nextOffset = Number(pageSummary.nextOffset)
+    const nextToken = String(pageSummary.resultSetToken || resultSetToken || '')
+    if (!Number.isInteger(nextOffset) || nextOffset <= offset || !nextToken) return null
+    offset = nextOffset
+    resultSetToken = nextToken
+  }
+
+  return buildSeoComparisonSummary({ pageKey, offers, totalCount, generatedAt })
+}
+
+async function buildComparisonSummaries() {
+  const summaries = new Map()
+  await Promise.all(
+    [...comparisonQueries.keys()].map(async (pageKey) => {
+      try {
+        const summary = await fetchComparisonSummary(pageKey)
+        if (summary) summaries.set(pageKey, summary)
+        else console.warn(`[seo] comparison summary omitted for ${pageKey}`)
+      } catch {
+        // Fail closed: volatile comparison content is omitted when the Public API is unavailable.
+        console.warn(`[seo] comparison summary unavailable for ${pageKey}`)
+      }
+    }),
+  )
+  return summaries
 }
 
 export function buildCatchallDocument(template) {
@@ -244,12 +363,16 @@ export function buildCatchallDocument(template) {
 
 async function main() {
   const template = await readFile(join(distDir, 'index.html'), 'utf8')
+  const comparisonSummaries = await buildComparisonSummaries()
 
   for (const page of getStaticSeoPages()) {
+    const pageWithSummary = comparisonSummaries.has(page.comparisonKey)
+      ? { ...page, comparisonSummary: comparisonSummaries.get(page.comparisonKey) }
+      : page
     const routePath = normalizePath(page.path)
     const outputPath = routePath === '/' ? join(distDir, 'index.html') : join(distDir, ...routePath.slice(1).split('/'), 'index.html')
     await mkdir(dirname(outputPath), { recursive: true })
-    await writeFile(outputPath, buildSeoStaticDocument(template, page), 'utf8')
+    await writeFile(outputPath, buildSeoStaticDocument(template, pageWithSummary), 'utf8')
   }
 
   await writeFile(join(distDir, 'catchall.html'), buildCatchallDocument(template), 'utf8')
