@@ -1,5 +1,13 @@
 # kaufklug.at Kontext
 
+## Softdrinks-/Energy-Drinks-Klassifikation am 2026-08-12
+
+- Enger zentraler Classifier-Fix in Commit `b2f75810`: `Getraenke > Softdrinks & Energy` ist fuer neue Klassifikationen in `Softdrinks` (`softdrinks`) und `Energy Drinks` (`energy-drinks`) getrennt. PAGRO wurde nicht in die Auswertung aufgenommen; eine Energy-SEO-Seite wurde nicht angelegt.
+- Offer-genaue Such-/Klassifikationsguards verhindern, dass Energy-Signale automatisch Softdrinks oder Nicht-Getraenke wie Duschgel, Koerperpflege und Tiernahrung werden. Die Aenderung nutzt keinen Source-Level- oder neuesten-Job-Beweis fuer bestehende Offers; bereits gespeicherte Offers werden erst durch den normalen kontrollierten Refresh-/Dedupe-Pfad reklassifiziert.
+- Relevante Tests: CategoryClassifier 35/35, Ranking-/Suchregressionen im gemeinsamen Lauf 325/325, SPAR-Official-Flyer-Parser 66/66. Der breite Gesamtlauf blieb wegen bestehender scope-fremder Dashboard-, PENNY-, HOFER-, BILLA- und Source-Definition-Fixturefehlern bei 1241/1261 bestanden; diese Dateien wurden nicht veraendert.
+- Push nach `origin/main` ist erfolgt. Der vorhandene externe DigitalOcean-Auto-Deploy ist in diesem Lauf nicht als angekommen nachweisbar: `/api/health` meldete nach dem Push weiterhin `build.commitShort=unknown`, und der Live-Read-Path zeigte noch 53 alte `Softdrinks & Energy`-Offers inklusive 25 Energy-Signalen und 2 BIPA-Nicht-Getraenke. Kein Crawl, keine Reindex-/Repair-Aktion und keine Offer-/DB-Mutation wurde gestartet.
+- Naechster sicherer Schritt: bestehenden DO-Auto-Deploy fuer `b2f75810` bestaetigen, danach nur den kontrollierten Reclassify-/Refresh-Mechanismus fuer betroffene Sources freigeben und Softdrinks/Energy read-only erneut smoken. Public Validity, Global Dedupe, Bilder, Units und Bedingungen bleiben unveraendert.
+
 ## Softdrinks-SEO-Landingpage am 2026-08-12
 
 - Softdrinks ist die dritte neue datengetriebene indexierbare SEO-Landingpage: `/angebote/softdrinks/`. Evidence: 53 aktuelle Public-Offers, 5 Händler, 100% official, 98% Bilder und 98% Unit/Comparison; Cola bleibt Unterintent, eine separate Cola-Seite wird nicht angelegt.
