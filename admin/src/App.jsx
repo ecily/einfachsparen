@@ -6,6 +6,7 @@ import {
 } from './api'
 import { SHOPPING_LIST_STORAGE_KEY } from './config/constants'
 import { CookieStorageNotice } from './components/layout/CookieStorageNotice'
+import { PriceCheckPage } from './components/search/PriceCheckPage'
 import { SeoFooterLinks } from './components/layout/SeoFooterLinks'
 import { StickyBottomLine } from './components/layout/StickyBottomLine'
 import { SearchPage } from './components/search/SearchPage'
@@ -154,6 +155,11 @@ function SearchLandingHero() {
             kaufklug macht Supermarkt- und Drogerie-Angebote in Österreich verständlich: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos, ohne Anmeldung und von Menschen für Menschen.
           </p>
           <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt</p>
+          <div className="hero-compare-facts" aria-label="Vergleichsmerkmale">
+            <span><strong>Preis pro Einheit</strong><small>kg, Liter oder Stück</small></span>
+            <span><strong>Packungsgrößen</strong><small>auch Multipacks</small></span>
+            <span><strong>Bedingungen</strong><small>sichtbar beim Angebot</small></span>
+          </div>
         </div>
       </section>
     </>
@@ -316,6 +322,16 @@ function App() {
   const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
   const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
   const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState([])
+
+  useEffect(() => {
+    function handlePopState() {
+      setActivePage(getInitialPageFromPathname(window.location.pathname.toLowerCase()))
+      setSharedListId(getSharedListIdFromPathname(window.location.pathname))
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   const shoppingListIds = useMemo(
     () => new Set(shoppingListItems.map((item) => item.id)),
@@ -976,6 +992,8 @@ function App() {
           <DiscoverOffersSection />
           <TrustAndFaqSection />
         </div>
+      ) : activePage === 'pricecheck:bier-literpreis-vergleich' ? (
+        <PriceCheckPage />
       ) : activeSeoLandingPage ? (
         <SeoOfferLandingPage
           page={activeSeoLandingPage}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchOfferRankingDirect } from '../../utils/apiBase'
 import { flattenRankingOffers, getOfferStableId, getRankingPagination, mergePaginatedRankingResults } from '../../utils/offers'
 import { SEO_TRUST_COPY } from '../../config/seoLandingPages'
+import { buildSeoComparisonSummary } from '../../utils/seoComparisonSummary.js'
 import { OfferCardConsumer } from './OfferCardConsumer'
 
 const MIN_USEFUL_OFFER_COUNT = 1
@@ -50,6 +51,14 @@ export function SeoOfferLandingPage({ page, categories = [], shoppingListIds, on
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const offers = useMemo(() => flattenRankingOffers(ranking), [ranking])
+  const comparisonSummary = useMemo(() => page.comparisonKey
+    ? buildSeoComparisonSummary({
+      pageKey: page.comparisonKey,
+      offers,
+      totalCount: Number(ranking?.summary?.totalCount || offers.length),
+      generatedAt: ranking?.generatedAt || new Date().toISOString(),
+    })
+    : null, [offers, page.comparisonKey, ranking?.generatedAt, ranking?.summary?.totalCount])
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
   const showFallback = !loading && (!offers.length || offers.length < MIN_USEFUL_OFFER_COUNT || error)
 
@@ -130,6 +139,25 @@ export function SeoOfferLandingPage({ page, categories = [], shoppingListIds, on
         {page.note ? <p className="seo-offer-page__note">{page.note}</p> : null}
         <p className="market-check-note">{SEO_TRUST_COPY}</p>
       </section>
+
+      {comparisonSummary?.facts?.length ? (
+        <section className="panel seo-comparison-card" aria-labelledby="seo-comparison-card-title">
+          <div className="seo-comparison-card__heading">
+            <div>
+              <p className="eyebrow">Vergleichs-Fakten</p>
+              <h2 id="seo-comparison-card-title">Preise sinnvoll vergleichen</h2>
+            </div>
+            <p>{comparisonSummary.note}</p>
+          </div>
+          <div className="seo-comparison-card__facts">
+            {comparisonSummary.facts.map((fact) => {
+              const [value, ...labelParts] = fact.split(' ')
+              return <div className="seo-comparison-card__fact" key={fact}><strong>{value}</strong><span>{labelParts.join(' ') || fact}</span></div>
+            })}
+          </div>
+          <p className="seo-comparison-card__stand">Stand: {new Intl.DateTimeFormat('de-AT', { dateStyle: 'medium', timeZone: 'Europe/Vienna' }).format(new Date(comparisonSummary.dataStand))}</p>
+        </section>
+      ) : null}
 
       <section className="panel seo-offer-results" aria-busy={loading || loadingMore ? 'true' : 'false'}>
         <div className="panel__header">

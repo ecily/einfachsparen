@@ -1,4 +1,6 @@
 export const SEO_LANDING_PAGE_PREFIX = 'seo-offers:'
+export const PRICE_CHECK_PATH = '/preischeck/bier-literpreis-vergleich'
+export const PRICE_CHECK_ROUTE_ID = 'pricecheck:bier-literpreis-vergleich'
 
 export const SEO_TRUST_COPY = 'Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.'
 

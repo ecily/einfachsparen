@@ -351,7 +351,7 @@ export function OfferCardConsumer({
               </div>
               {referenceInfo.amount ? (
                 <span className="user-card__reference-price">
-                  {referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}
+                  <span className="user-card__reference-label">Referenzpreis:</span> {referenceInfo.labelPrefix} {formatPrice(referenceInfo.amount, currentPriceCurrency)}
                 </span>
               ) : null}
               {unitPriceText ? (
@@ -365,7 +365,7 @@ export function OfferCardConsumer({
 
           {shortConditions.length > 0 || detailedConditions.length > 0 ? (
             <div className="user-card__conditions" aria-label={`Wichtige Angebotsbedingungen: ${fullConditionText}`}>
-              <span className="user-card__conditions-label" aria-hidden="true">Bedingung</span>
+              <span className="user-card__conditions-label" aria-hidden="true">Kaufbedingung</span>
               {shortConditions.map((condition) => (
                 <span
                   className={`user-card__condition-chip ${isQuantityCondition(condition) ? 'user-card__condition-chip--quantity' : ''}`}

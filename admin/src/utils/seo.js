@@ -1,9 +1,11 @@
-import { CONTACT_EMAIL, SITE_URL } from '../config/constants'
+import { CONTACT_EMAIL, SITE_URL } from '../config/constants.js'
 import {
+  PRICE_CHECK_PATH,
+  PRICE_CHECK_ROUTE_ID,
   getSeoLandingPageByPath,
   getSeoLandingPageByRouteId,
   getSeoLandingPageRouteId,
-} from '../config/seoLandingPages'
+} from '../config/seoLandingPages.js'
 
 const FAQ_ITEMS = [
   {
@@ -52,6 +54,12 @@ export function getPageMeta(activePage) {
   }
 
   const pages = {
+    [PRICE_CHECK_ROUTE_ID]: {
+      title: 'Bier Literpreis vergleichen: 0,5-l-Dosen bei BILLA und PENNY',
+      description: 'Konkreten Literpreis-Vergleich von 0,5-l-Dosenbier bei BILLA und PENNY mit sichtbaren Bedingungen und Public-Gültigkeit prüfen.',
+      path: PRICE_CHECK_PATH,
+      robots: 'index,follow',
+    },
     search: {
       title: SEO_TITLE,
       description:
@@ -293,6 +301,9 @@ export function updateSeoMetadata(activePage) {
 }
 
 export function getInitialPageFromPathname(pathname) {
+  const normalizedPath = String(pathname || '').toLowerCase().replace(/\/+$/, '') || '/'
+  if (normalizedPath === PRICE_CHECK_PATH) return PRICE_CHECK_ROUTE_ID
+
   const seoLandingPage = getSeoLandingPageByPath(pathname)
   if (seoLandingPage) return getSeoLandingPageRouteId(seoLandingPage.key)
 
@@ -319,6 +330,8 @@ export function getSharedListIdFromPathname(pathname) {
 }
 
 export function getPathForPage(nextPage) {
+  if (nextPage === PRICE_CHECK_ROUTE_ID) return `${PRICE_CHECK_PATH}/`
+
   const seoLandingPage = getSeoLandingPageByRouteId(nextPage)
   if (seoLandingPage) return `${seoLandingPage.path.replace(/\/+$/, '')}/`
 

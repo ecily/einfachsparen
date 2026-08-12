@@ -27,6 +27,7 @@ export function CookieStorageNotice({ onNavigate }) {
   return (
     <div
       role="region"
+      className="cookie-storage-notice"
       aria-label="Cookie- und Speicherhinweis"
       style={{
         position: 'fixed',
@@ -38,7 +39,7 @@ export function CookieStorageNotice({ onNavigate }) {
         margin: '0 auto',
       }}
     >
-      <div className="panel" style={{ padding: '1rem' }}>
+      <div className="panel cookie-storage-notice__panel" style={{ padding: '1rem' }}>
         <div className="panel__header" style={{ marginBottom: '0.75rem' }}>
           <h2 style={{ fontSize: '1rem', margin: 0 }}>Cookie- und Speicherhinweis</h2>
           <p style={{ margin: 0 }}>

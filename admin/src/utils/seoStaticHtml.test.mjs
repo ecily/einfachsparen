@@ -155,6 +155,7 @@ test('published pricecheck renders evidence and exact values in initial HTML', (
   }
   const html = buildSeoStaticDocument(template, { ...page, robots: 'index,follow', priceCheckCandidate: candidate }, [page, { ...page, robots: 'index,follow', priceCheckCandidate: candidate }])
   assert.match(html, /seo-static-price-check/)
+  assert.match(html, /kaufklug-price-check-data/)
   assert.match(html, /BILLA: 1,44 €\/l/)
   assert.match(html, /PENNY: 1,58 €\/l/)
   assert.match(html, /bei 12 Dosen/)
@@ -251,7 +252,7 @@ test('comparison summary is visible in initial HTML only when supplied', () => {
 
   assert.match(html, /<section class="seo-static-comparison"/)
   assert.match(html, /Aktueller Vergleich/)
-  assert.match(html, /23 aktuelle Angebote/)
+  assert.match(html, /<strong>23<\/strong><span>aktuelle Angebote<\/span>/)
   assert.match(html, /Stand:/)
   assert.doesNotMatch(html, /undefined|NaN/)
 })

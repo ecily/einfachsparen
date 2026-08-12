@@ -7,6 +7,7 @@ import {
   getUnitPriceLabel,
   shouldDisplayUnitPrice,
 } from './offers.js'
+import { getInitialPageFromPathname, getPageMeta, getPathForPage } from './seo.js'
 
 const appSource = fs.readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const offerCardSource = fs.readFileSync(new URL('../components/search/OfferCardConsumer.jsx', import.meta.url), 'utf8')
@@ -26,6 +27,20 @@ test('public hero uses the final positioning and market line', () => {
   assert.match(marketLine, /INTERSPAR eingeschränkt/)
   assert.doesNotMatch(marketLine, /(?:^| · )(?:SPAR|EUROSPAR|PAGRO|HOFER)(?: · |$)/)
   assert.doesNotMatch(appSource, /Aktuelle Angebote finden\./)
+})
+
+test('pricecheck route stays on the pricecheck page after direct navigation and metadata updates', () => {
+  assert.equal(getInitialPageFromPathname('/preischeck/bier-literpreis-vergleich/'), 'pricecheck:bier-literpreis-vergleich')
+  assert.equal(getPathForPage('pricecheck:bier-literpreis-vergleich'), '/preischeck/bier-literpreis-vergleich/')
+  assert.equal(getPageMeta('pricecheck:bier-literpreis-vergleich').robots, 'index,follow')
+  assert.match(fs.readFileSync(new URL('../components/search/PriceCheckPage.jsx', import.meta.url), 'utf8'), /kaufklug-price-check-data/)
+})
+
+test('comparison USP facts and card labels stay visible and semantically distinct', () => {
+  assert.match(appSource, /hero-compare-facts/)
+  assert.match(offerCardSource, /user-card__reference-label.*Referenzpreis/)
+  assert.match(offerCardSource, />Kaufbedingung<\/span>/)
+  assert.match(fs.readFileSync(new URL('../components/search/SeoOfferLandingPage.jsx', import.meta.url), 'utf8'), /seo-comparison-card/)
 })
 
 test('unit-price labels describe the actual unit', () => {

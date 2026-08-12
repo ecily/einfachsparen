@@ -220,9 +220,9 @@ function buildComparisonSummaryHtml(summary) {
     timeZone: 'Europe/Vienna',
   }).format(new Date(summary.dataStand))
 
-  return `<section class="seo-static-comparison" aria-labelledby="seo-static-comparison-title"><h2 id="seo-static-comparison-title">Aktueller Vergleich</h2><ul>${summary.facts
-    .map((fact) => `<li>${escapeHtml(fact)}</li>`)
-    .join('')}</ul><p>${escapeHtml(summary.note)}</p><p>Stand: ${escapeHtml(dataStand)}</p></section>`
+  return `<section class="seo-static-comparison" aria-labelledby="seo-static-comparison-title"><div class="seo-static-comparison__heading"><div><p class="eyebrow">Vergleichs-Fakten</p><h2 id="seo-static-comparison-title">Aktueller Vergleich</h2></div><p>${escapeHtml(summary.note)}</p></div><div class="seo-static-comparison__facts">${summary.facts
+    .map((fact) => `<div class="seo-static-comparison__fact"><strong>${escapeHtml(fact.split(' ')[0] || '')}</strong><span>${escapeHtml(fact.split(' ').slice(1).join(' ') || fact)}</span></div>`)
+    .join('')}</div><p>Stand: ${escapeHtml(dataStand)}</p></section>`
 }
 
 function formatPrice(value) {
@@ -240,11 +240,17 @@ function buildPriceCheckHtml(candidate) {
   return `<section class="seo-static-price-check" aria-labelledby="seo-static-price-check-title"><h2 id="seo-static-price-check-title">Kurzfazit</h2><p>Bei den aktuell geprüften 0,5-l-Dosen liegt der Literpreis bei ${escapeHtml(facts)}.</p><p>${escapeHtml(candidate.explanation)}</p><h2>Vergleich</h2><table><thead><tr><th>Händler</th><th>Produkt</th><th>Packungspreis</th><th>Menge</th><th>Literpreis</th><th>Bedingung</th></tr></thead><tbody>${rows}</tbody></table><h2>Warum der Packungspreis täuschen kann</h2><p>Der Packungspreis von ${escapeHtml(candidate.involvedOffers.map((offer) => `${offer.retailerName} ${formatPrice(offer.price)} €`).join(' und '))} ist wegen unterschiedlicher Angebotspreise nicht direkt aussagekräftig. Der Literpreis macht die Menge vergleichbar; die Bedingungen bleiben dabei ausdrücklich sichtbar.</p><h2>So vergleicht kaufklug</h2><p>Für diesen Preischeck werden nur aktive Public Offers mit offizieller Quelle, erfolgreichem Crawl-Run, kompatibler 0,5-l-Menge, sicherem Literpreis und expliziter Bedingung verwendet.</p><p>Stand: ${escapeHtml(formatDate(candidate.dataStand))}</p></section>`
 }
 
+function buildPriceCheckDataScript(candidate) {
+  if (!isPublishablePriceCheckCandidate(candidate)) return ''
+  const json = JSON.stringify(candidate).replaceAll('<', '\\u003c')
+  return `<script type="application/json" id="kaufklug-price-check-data">${json}</script>`
+}
+
 export function buildSeoStaticDocument(template, page, pages) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
-  const staticContentWithPriceCheck = staticContent.replace('</main>', `${buildPriceCheckHtml(page.priceCheckCandidate)}</main>`)
+  const staticContentWithPriceCheck = staticContent.replace('</main>', `${buildPriceCheckHtml(page.priceCheckCandidate)}${buildPriceCheckDataScript(page.priceCheckCandidate)}</main>`)
   const staticContentWithComparison = staticContentWithPriceCheck.replace('</main>', `${buildComparisonSummaryHtml(page.comparisonSummary)}</main>`)
   const updated = template
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`)
