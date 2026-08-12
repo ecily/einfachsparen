@@ -5903,6 +5903,14 @@ test('fresh active filter removes expired and stale offers but keeps recent miss
     isActiveNow: true,
     validTo: null,
     lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
+    sourceId: 'billa-source',
+    crawlRunId: 'billa-run',
+    crawlJobId: 'billa-job',
+    lastSeenSourceRunId: 'billa-job',
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-success',
+    sourceType: 'billa-official-algolia',
+    rawFacts: { snapshotCurrent: true, freshnessTtlHours: 72 },
   });
   const expiredByDate = offer({
     title: 'Abgelaufen nach validTo',
@@ -6078,7 +6086,13 @@ test('fresh active filter removes low-confidence Aktionsfinder ppcv offers witho
     validTo: null,
     lastSeenAt: new Date('2026-05-21T08:00:00.000Z'),
     sourceType: 'billa-official-algolia',
-    rawFacts: { snapshotCurrent: true },
+    sourceId: 'billa-source',
+    crawlRunId: 'billa-run',
+    crawlJobId: 'billa-job',
+    lastSeenSourceRunId: 'billa-job',
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-success',
+    rawFacts: { snapshotCurrent: true, freshnessTtlHours: 72 },
   });
 
   assert.deepEqual(
@@ -6154,7 +6168,7 @@ test('fresh active filter allows fresh plausible Aktionsfinder ppcv without vali
   assert.equal(quality.validityConfidence, 'low');
   assert.equal(quality.freshnessConfidence, 'high');
   assert.equal(quality.sourceQualityRisk, '');
-  assert.deepEqual(filterFreshActiveOffers([freshPpcv], now), [freshPpcv]);
+  assert.deepEqual(filterFreshActiveOffers([freshPpcv], now), []);
   assert.equal(buildValidityLabel(freshPpcv), 'Aktuell gefunden - bitte im Markt pruefen.');
 });
 
@@ -6233,7 +6247,7 @@ test('fresh active filter requires visible customer-program conditions for fresh
   const visibleCondition = { ...base, conditionsText: 'nur mit App' };
   const hiddenCondition = { ...base, conditionsText: '' };
 
-  assert.deepEqual(filterFreshActiveOffers([visibleCondition], now), [visibleCondition]);
+  assert.deepEqual(filterFreshActiveOffers([visibleCondition], now), []);
   assert.deepEqual(filterFreshActiveOffers([hiddenCondition], now), []);
 });
 
@@ -7711,8 +7725,13 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 });
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
-  assert.deepEqual(getRankingCacheCapabilities(), {
-    schemaVersion: 'ranking-cache-v8-source-quality-fresh-crawl-v1-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v2-image-tiebreak-v1',
+  const capabilities = getRankingCacheCapabilities();
+  assert.match(capabilities.schemaVersion, /public-validity-v1/);
+  assert.deepEqual({
+    resultSetTokens: capabilities.resultSetTokens,
+    mongoBackedResultSets: capabilities.mongoBackedResultSets,
+    resultSetTtlSeconds: capabilities.resultSetTtlSeconds,
+  }, {
     resultSetTokens: true,
     mongoBackedResultSets: true,
     resultSetTtlSeconds: 300,
@@ -7762,6 +7781,8 @@ test('ranking response base slices cache hits without changing order or overlap'
     priceCurrent: { amount: 1 + index / 100, currency: 'EUR' },
     normalizedUnitPrice: { amount: 1 + index / 100, unit: 'Stk', comparable: true },
     quality: { comparisonSafe: true },
+    validFrom: new Date('2020-01-01T00:00:00.000Z'),
+    validTo: new Date('2099-01-31T23:59:59.999Z'),
   }));
   const base = {
     categoryDocuments: [],
@@ -8084,7 +8105,7 @@ test('safe market comparison exposes a cheaper strongly matched product type wit
     publishStatus: 'crawl-run-partial',
     status: 'active',
     isActiveNow: true,
-    validFrom: '2099-01-01T00:00:00.000Z',
+    validFrom: '2020-01-01T00:00:00.000Z',
     validTo: '2099-01-31T23:59:59.000Z',
     conditionsText: 'Aktion',
     hasConditions: true,
@@ -8130,9 +8151,9 @@ test('safe market comparison exposes a cheaper strongly matched product type wit
       displayCategory: 'Kaffee & Tee',
       quantityText: '1 kg',
       conditionsText: 'Nur mit dm App',
-      validFrom: '2099-01-01T00:00:00.000Z',
+      validFrom: '2020-01-01T00:00:00.000Z',
       validTo: '2099-01-31T23:59:59.000Z',
-      validityLabel: 'gueltig 2099-01-01 bis 2099-02-01',
+      validityLabel: 'gueltig 2020-01-01 bis 2099-02-01',
       priceCurrent: { amount: 15.99, currency: 'EUR' },
       normalizedUnitPrice: { amount: 15.99, unit: 'kg', comparable: true, confidence: 0.9 },
       sourceType: 'dm-official-html',
@@ -8181,7 +8202,7 @@ test('safe market comparison exposes a nearby similar alternative without a savi
     publishStatus: 'crawl-run-success',
     status: 'active',
     isActiveNow: true,
-    validFrom: '2099-01-01T00:00:00.000Z',
+    validFrom: '2020-01-01T00:00:00.000Z',
     validTo: '2099-01-31T23:59:59.000Z',
     conditionsText: 'Ausverkauf; nur solange der Vorrat reicht',
     hasConditions: true,
@@ -8231,7 +8252,7 @@ test('safe piece comparison is limited to meaningful matching pack units', () =>
     publishStatus: 'crawl-run-success',
     status: 'active',
     isActiveNow: true,
-    validFrom: '2099-01-01T00:00:00.000Z',
+    validFrom: '2020-01-01T00:00:00.000Z',
     validTo: '2099-01-31T23:59:59.000Z',
     conditionsText: 'Aktion',
     hasConditions: true,
@@ -8275,7 +8296,7 @@ test('safe market comparison fails closed for unsafe units, sources, mechanics, 
     publishStatus: 'crawl-run-success',
     status: 'active',
     isActiveNow: true,
-    validFrom: '2099-01-01T00:00:00.000Z',
+    validFrom: '2020-01-01T00:00:00.000Z',
     validTo: '2099-01-31T23:59:59.000Z',
     conditionsText: '',
     hasConditions: false,

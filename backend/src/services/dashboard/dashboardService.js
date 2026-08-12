@@ -13,6 +13,14 @@ const { buildSafeBuildInfo } = require('../buildInfo');
 const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
 const { buildAnalyticsSummary } = require('../analytics/analyticsService');
 const { classifyOfferSourceQuality } = require('../offers/sourceQuality');
+const {
+  LEGACY_OR_UNCLASSIFIED,
+  MISSING_OR_NONE,
+  buildFeedbackImageIssueSummaryFromDocuments,
+  buildImageEvidenceDiagnosticsFromAggregateResult,
+  buildImageEvidenceDiagnosticsFromOffers,
+  emptyImageEvidenceDiagnostics,
+} = require('../diagnostics/imageEvidenceDiagnostics');
 const logger = require('../../lib/logger');
 
 const COMPARISON_SNAPSHOT_TIMEOUT_MS = 3000;
@@ -666,6 +674,14 @@ function createOfferCounters(retailerKey = '', retailerName = '') {
     comparisonSafeOffers: 0,
     imageOffers: 0,
     aggregatorRiskOffers: 0,
+    publicValidityEligibleOffers: 0,
+    publicSnapshotConfirmedCount: 0,
+    publicRetainedCount: 0,
+    publicWithoutValidToCount: 0,
+    publicExpiredCount: 0,
+    publicFutureCount: 0,
+    publicStaleCount: 0,
+    publicUnknownValidityCount: 0,
   };
 }
 
@@ -678,6 +694,8 @@ function withOfferRates(item) {
     comparisonSafetyRate: rate(item.comparisonSafeOffers, item.activeOffers),
     imageCoverageRate: rate(item.imageOffers, item.activeOffers),
     aggregatorRiskRate: rate(item.aggregatorRiskOffers, item.activeOffers),
+    publicValidityRate: rate(item.publicValidityEligibleOffers, item.activeOffers),
+    validityEvidenceRate: rate(item.safeValidityOffers, item.activeOffers),
   };
 }
 
@@ -701,6 +719,7 @@ function addRetailerWarningStatus(row) {
 }
 
 function buildOfferDiagnostics(activeOffers = []) {
+  const { isPublicValidityEligible } = require('../offers/publicValidity');
   const totals = createOfferCounters();
   const retailerMap = new Map();
   const sourceTypeMap = new Map();
@@ -724,6 +743,7 @@ function buildOfferDiagnostics(activeOffers = []) {
     const comparisonSafe = isComparisonSafe(offer);
     const imagePresent = hasImage(offer);
     const aggregatorRisk = Boolean(aggregator && (!safeValidity || sourceQuality.isLowConfidenceAggregator));
+    const publicValidity = isPublicValidityEligible(offer);
 
     for (const target of [totals, retailer]) {
       target.activeOffers += 1;
@@ -735,6 +755,14 @@ function buildOfferDiagnostics(activeOffers = []) {
       if (comparisonSafe) target.comparisonSafeOffers += 1;
       if (imagePresent) target.imageOffers += 1;
       if (aggregatorRisk) target.aggregatorRiskOffers += 1;
+      if (publicValidity.eligible) target.publicValidityEligibleOffers += 1;
+      if (publicValidity.validityClass === 'snapshot-confirmed') target.publicSnapshotConfirmedCount += 1;
+      if (publicValidity.validityClass === 'retained') target.publicRetainedCount += 1;
+      if (publicValidity.validityClass === 'snapshot-confirmed' || publicValidity.validityClass === 'retained') target.publicWithoutValidToCount += 1;
+      if (publicValidity.validityClass === 'expired') target.publicExpiredCount += 1;
+      if (publicValidity.validityClass === 'future') target.publicFutureCount += 1;
+      if (/ttl-expired|grace-expired/.test(publicValidity.reasonCode)) target.publicStaleCount += 1;
+      if (publicValidity.validityClass === 'unknown') target.publicUnknownValidityCount += 1;
     }
 
     incrementCount(sourceTypeMap, sourceType);
@@ -769,6 +797,7 @@ function buildOfferDiagnostics(activeOffers = []) {
     sourceTypeSummary: [...sourceTypeMap.entries()]
       .map(([sourceType, count]) => ({ sourceType, count }))
       .sort((left, right) => right.count - left.count || left.sourceType.localeCompare(right.sourceType)),
+    imageEvidenceSummary: buildImageEvidenceDiagnosticsFromOffers(activeOffers),
     publishStatusSummary: {
       totalActiveOffers: totals.activeOffers,
       finalCount: totals.activeOffers - openPublishCount,
@@ -794,6 +823,14 @@ function buildUnavailableOfferDiagnostics(message = 'Offer diagnostics unavailab
       comparisonSafeOffers: null,
       imageOffers: null,
       aggregatorRiskOffers: null,
+      publicValidityEligibleOffers: null,
+      publicSnapshotConfirmedCount: null,
+      publicRetainedCount: null,
+      publicWithoutValidToCount: null,
+      publicExpiredCount: null,
+      publicFutureCount: null,
+      publicStaleCount: null,
+      publicUnknownValidityCount: null,
       officialCoverageRate: null,
       validityConfidenceRate: null,
       conditionDetectionRate: null,
@@ -805,6 +842,10 @@ function buildUnavailableOfferDiagnostics(message = 'Offer diagnostics unavailab
     },
     retailerMatrix: [],
     sourceTypeSummary: [],
+    imageEvidenceSummary: emptyImageEvidenceDiagnostics({
+      unavailable: true,
+      message,
+    }),
     publishStatusSummary: {
       totalActiveOffers: null,
       finalCount: null,
@@ -831,11 +872,24 @@ function normalizeAggregateCounterRow(row = {}) {
     comparisonSafeOffers: numberFrom(row.comparisonSafeOffers),
     imageOffers: numberFrom(row.imageOffers),
     aggregatorRiskOffers: numberFrom(row.aggregatorRiskOffers),
+    publicValidityEligibleOffers: numberFrom(row.publicValidityEligibleOffers),
+    publicSnapshotConfirmedCount: numberFrom(row.publicSnapshotConfirmedCount),
+    publicRetainedCount: numberFrom(row.publicRetainedCount),
+    publicWithoutValidToCount: numberFrom(row.publicWithoutValidToCount),
+    publicExpiredCount: numberFrom(row.publicExpiredCount),
+    publicFutureCount: numberFrom(row.publicFutureCount),
+    publicStaleCount: numberFrom(row.publicStaleCount),
+    publicUnknownValidityCount: numberFrom(row.publicUnknownValidityCount),
   };
 }
 
 function buildOfferDiagnosticsFromAggregateResult(result = {}) {
   const summaryRow = normalizeAggregateCounterRow((result.summary || [])[0] || {});
+  const publicValidityRow = (result.publicValiditySummary || [])[0] || {};
+  summaryRow.publicValidityEligibleOffers = numberFrom(publicValidityRow.publicValidityEligibleOffers);
+  summaryRow.publicSnapshotConfirmedCount = numberFrom(publicValidityRow.publicSnapshotConfirmedCount);
+  summaryRow.publicRetainedCount = numberFrom(publicValidityRow.publicRetainedCount);
+  summaryRow.publicWithoutValidToCount = numberFrom(publicValidityRow.publicWithoutValidToCount);
   const retailerMatrix = (result.retailerMatrix || [])
     .map((row) => addRetailerWarningStatus(withOfferRates(normalizeAggregateCounterRow(row))))
     .sort((left, right) => {
@@ -844,6 +898,18 @@ function buildOfferDiagnosticsFromAggregateResult(result = {}) {
       }
       return right.activeOffers - left.activeOffers;
     });
+  const publicByRetailer = new Map((result.publicValidityByRetailer || []).map((row) => [
+    String(row.retailerKey || row._id || ''),
+    row,
+  ]));
+  for (const row of retailerMatrix) {
+    const publicRow = publicByRetailer.get(String(row.retailerKey || '')) || {};
+    row.publicValidityEligibleOffers = numberFrom(publicRow.publicValidityEligibleOffers);
+    row.publicSnapshotConfirmedCount = numberFrom(publicRow.publicSnapshotConfirmedCount);
+    row.publicRetainedCount = numberFrom(publicRow.publicRetainedCount);
+    row.publicWithoutValidToCount = numberFrom(publicRow.publicWithoutValidToCount);
+    row.publicValidityRate = rate(row.publicValidityEligibleOffers, row.activeOffers);
+  }
 
   return {
     offerSummary: withOfferRates({
@@ -854,6 +920,7 @@ function buildOfferDiagnosticsFromAggregateResult(result = {}) {
     sourceTypeSummary: (result.sourceTypeSummary || [])
       .map((row) => ({ sourceType: row.sourceType || 'unknown', count: numberFrom(row.count) }))
       .sort((left, right) => right.count - left.count || left.sourceType.localeCompare(right.sourceType)),
+    imageEvidenceSummary: buildImageEvidenceDiagnosticsFromAggregateResult(result),
     publishStatusSummary: buildPublishStatusSummaryFromRows(result.publishStatusSummary || []),
   };
 }
@@ -1128,6 +1195,7 @@ function buildFeedbackSummaryFromDocuments(documents = [], {
     feedbackByOffer,
     dailyFeedbackTrend,
     latestFeedback,
+    imageIssueSummary: buildFeedbackImageIssueSummaryFromDocuments(documents),
     feedbackDataWarnings,
     source: 'OfferFeedback',
     generatedAt: nowDate.toISOString(),
@@ -2417,6 +2485,19 @@ function buildActiveOfferFeatureStages() {
             { $gt: [{ $strLenCP: { $ifNull: ['$rawFacts.imageUrl', ''] } }, 0] },
           ],
         },
+        imageUrlPresent: {
+          $or: [
+            { $gt: [{ $strLenCP: { $ifNull: ['$imageUrl', ''] } }, 0] },
+            { $gt: [{ $strLenCP: { $ifNull: ['$rawFacts.imageUrl', ''] } }, 0] },
+          ],
+        },
+        imageEvidencePresent: {
+          $gt: [{ $strLenCP: { $ifNull: ['$imageEvidence.kind', ''] } }, 0],
+        },
+        imageEvidenceKindStored: { $ifNull: ['$imageEvidence.kind', ''] },
+        imageEvidenceDecision: { $ifNull: ['$imageEvidence.decision', '' ] },
+        imageEvidenceSourceTypeStored: { $ifNull: ['$imageEvidence.sourceType', ''] },
+        imageEvidenceRejectedReasons: { $ifNull: ['$imageEvidence.rejectedReasons', []] },
       },
     },
     {
@@ -2448,6 +2529,32 @@ function buildActiveOfferFeatureStages() {
             { $not: ['$safeValidity'] },
           ],
         },
+        imageEvidenceKind: {
+          $cond: [
+            '$imageEvidencePresent',
+            { $ifNull: ['$imageEvidenceKindStored', 'none'] },
+            {
+              $cond: [
+                '$imageUrlPresent',
+                LEGACY_OR_UNCLASSIFIED,
+                MISSING_OR_NONE,
+              ],
+            },
+          ],
+        },
+        imageEvidenceSourceType: {
+          $cond: [
+            '$imageEvidencePresent',
+            { $ifNull: ['$imageEvidenceSourceTypeStored', 'unknown'] },
+            {
+              $cond: [
+                '$imageUrlPresent',
+                LEGACY_OR_UNCLASSIFIED,
+                'none',
+              ],
+            },
+          ],
+        },
       },
     },
   ];
@@ -2473,6 +2580,8 @@ function buildCounterGroupStage(idExpression = null) {
 }
 
 async function buildActiveOfferDashboardDiagnostics(activeOfferMatch) {
+  const { buildPublicValidityMongoMatch } = require('../offers/publicValidity');
+  const now = new Date();
   const [result = {}] = await Offer.aggregate([
     { $match: activeOfferMatch },
     ...buildActiveOfferFeatureStages(),
@@ -2480,6 +2589,45 @@ async function buildActiveOfferDashboardDiagnostics(activeOfferMatch) {
       $facet: {
         summary: [
           buildCounterGroupStage(null),
+          { $project: { _id: 0 } },
+        ],
+        publicValiditySummary: [
+          { $match: buildPublicValidityMongoMatch(now) },
+          {
+            $group: {
+              _id: null,
+              publicValidityEligibleOffers: { $sum: 1 },
+              publicSnapshotConfirmedCount: {
+                $sum: { $cond: [{ $and: [{ $eq: ['$validTo', null] }, { $eq: ['$rawFacts.snapshotCurrent', true] }] }, 1, 0] },
+              },
+              publicRetainedCount: {
+                $sum: { $cond: [{ $or: [{ $eq: ['$rawFacts.retainedPreviousData', true] }, { $eq: ['$rawFacts.retained', true] }] }, 1, 0] },
+              },
+              publicWithoutValidToCount: {
+                $sum: { $cond: [{ $eq: ['$validTo', null] }, 1, 0] },
+              },
+            },
+          },
+          { $project: { _id: 0 } },
+        ],
+        publicValidityByRetailer: [
+          { $match: buildPublicValidityMongoMatch(now) },
+          {
+            $group: {
+              _id: '$retailerKey',
+              retailerKey: { $first: '$retailerKey' },
+              publicValidityEligibleOffers: { $sum: 1 },
+              publicSnapshotConfirmedCount: {
+                $sum: { $cond: [{ $and: [{ $eq: ['$validTo', null] }, { $eq: ['$rawFacts.snapshotCurrent', true] }] }, 1, 0] },
+              },
+              publicRetainedCount: {
+                $sum: { $cond: [{ $or: [{ $eq: ['$rawFacts.retainedPreviousData', true] }, { $eq: ['$rawFacts.retained', true] }] }, 1, 0] },
+              },
+              publicWithoutValidToCount: {
+                $sum: { $cond: [{ $eq: ['$validTo', null] }, 1, 0] },
+              },
+            },
+          },
           { $project: { _id: 0 } },
         ],
         retailerMatrix: [
@@ -2507,6 +2655,164 @@ async function buildActiveOfferDashboardDiagnostics(activeOfferMatch) {
           { $group: { _id: '$sourceType', count: { $sum: 1 } } },
           { $project: { _id: 0, sourceType: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
           { $sort: { count: -1, sourceType: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        imageEvidenceSummary: [
+          {
+            $group: {
+              _id: null,
+              activeOffers: { $sum: 1 },
+              offersWithImageUrl: { $sum: { $cond: ['$imageUrlPresent', 1, 0] } },
+              offersWithoutImageUrl: { $sum: { $cond: ['$imageUrlPresent', 0, 1] } },
+              offersWithImageEvidence: { $sum: { $cond: ['$imageEvidencePresent', 1, 0] } },
+              offersWithImageUrlButNoEvidence: {
+                $sum: {
+                  $cond: [
+                    { $and: ['$imageUrlPresent', { $not: ['$imageEvidencePresent'] }] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+              offersWithEvidenceAccepted: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'accepted'] }, 1, 0] } },
+              offersWithEvidenceRejected: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'rejected'] }, 1, 0] } },
+              offersWithEvidenceUnavailable: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'unavailable'] }, 1, 0] } },
+              offersWithEvidenceReviewOnly: { $sum: { $cond: [{ $eq: ['$imageEvidenceDecision', 'review_only'] }, 1, 0] } },
+              liveSafeEvidenceOffers: {
+                $sum: {
+                  $cond: [
+                    {
+                      $and: [
+                        { $eq: ['$imageEvidenceKind', 'official_product'] },
+                        { $eq: ['$imageEvidenceDecision', 'accepted'] },
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+          { $project: { _id: 0 } },
+        ],
+        imageEvidenceByKind: [
+          { $group: { _id: '$imageEvidenceKind', count: { $sum: 1 } } },
+          { $project: { _id: 0, kind: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
+          { $sort: { count: -1, kind: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        imageEvidenceBySourceType: [
+          { $group: { _id: '$imageEvidenceSourceType', count: { $sum: 1 } } },
+          { $project: { _id: 0, sourceType: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
+          { $sort: { count: -1, sourceType: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        imageEvidenceRetailerBreakdown: [
+          {
+            $group: {
+              _id: '$retailerKey',
+              retailerKey: { $first: '$retailerKey' },
+              retailerName: { $first: '$retailerName' },
+              count: { $sum: 1 },
+              activeOffers: { $sum: 1 },
+              offersWithImageUrl: { $sum: { $cond: ['$imageUrlPresent', 1, 0] } },
+              offersWithoutImageUrl: { $sum: { $cond: ['$imageUrlPresent', 0, 1] } },
+              offersWithImageEvidence: { $sum: { $cond: ['$imageEvidencePresent', 1, 0] } },
+              offersWithImageUrlButNoEvidence: {
+                $sum: {
+                  $cond: [
+                    { $and: ['$imageUrlPresent', { $not: ['$imageEvidencePresent'] }] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+              liveSafeEvidenceOffers: {
+                $sum: {
+                  $cond: [
+                    {
+                      $and: [
+                        { $eq: ['$imageEvidenceKind', 'official_product'] },
+                        { $eq: ['$imageEvidenceDecision', 'accepted'] },
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+          { $project: { _id: 0 } },
+          { $sort: { count: -1, retailerKey: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        imageEvidenceSourceBreakdown: [
+          {
+            $group: {
+              _id: { retailerKey: '$retailerKey', sourceType: '$sourceType' },
+              retailerKey: { $first: '$retailerKey' },
+              retailerName: { $first: '$retailerName' },
+              sourceType: { $first: '$sourceType' },
+              sourceKey: { $first: '$sourceType' },
+              count: { $sum: 1 },
+              activeOffers: { $sum: 1 },
+              offersWithImageUrl: { $sum: { $cond: ['$imageUrlPresent', 1, 0] } },
+              offersWithoutImageUrl: { $sum: { $cond: ['$imageUrlPresent', 0, 1] } },
+              offersWithImageEvidence: { $sum: { $cond: ['$imageEvidencePresent', 1, 0] } },
+              offersWithImageUrlButNoEvidence: {
+                $sum: {
+                  $cond: [
+                    { $and: ['$imageUrlPresent', { $not: ['$imageEvidencePresent'] }] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+          { $project: { _id: 0 } },
+          { $sort: { count: -1, retailerKey: 1, sourceType: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        imageEvidenceRejectedReasons: [
+          { $unwind: '$imageEvidenceRejectedReasons' },
+          { $group: { _id: '$imageEvidenceRejectedReasons', count: { $sum: 1 } } },
+          { $project: { _id: 0, reason: { $ifNull: ['$_id', 'unknown'] }, count: 1 } },
+          { $sort: { count: -1, reason: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        imageMissingRetailerSources: [
+          { $match: { imageUrlPresent: false } },
+          {
+            $group: {
+              _id: { retailerKey: '$retailerKey', sourceType: '$sourceType' },
+              retailerKey: { $first: '$retailerKey' },
+              retailerName: { $first: '$retailerName' },
+              sourceType: { $first: '$sourceType' },
+              sourceKey: { $first: '$sourceType' },
+              count: { $sum: 1 },
+            },
+          },
+          { $project: { _id: 0 } },
+          { $sort: { count: -1, retailerKey: 1, sourceType: 1 } },
+          { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
+        ],
+        legacyImageUrlRetailerSources: [
+          { $match: { imageUrlPresent: true, imageEvidencePresent: false } },
+          {
+            $group: {
+              _id: { retailerKey: '$retailerKey', sourceType: '$sourceType' },
+              retailerKey: { $first: '$retailerKey' },
+              retailerName: { $first: '$retailerName' },
+              sourceType: { $first: '$sourceType' },
+              sourceKey: { $first: '$sourceType' },
+              count: { $sum: 1 },
+            },
+          },
+          { $project: { _id: 0 } },
+          { $sort: { count: -1, retailerKey: 1, sourceType: 1 } },
           { $limit: DASHBOARD_AGGREGATE_RESULT_LIMIT },
         ],
         publishStatusSummary: [
@@ -2651,6 +2957,7 @@ async function buildDashboardSnapshot() {
     offerSummary,
     retailerMatrix,
     sourceTypeSummary,
+    imageEvidenceSummary,
     publishStatusSummary,
   } = activeOfferDiagnostics || buildUnavailableOfferDiagnostics('Active offer diagnostics unavailable.');
   const qualityKpis = buildQualityKpis(offerSummary);
@@ -2760,6 +3067,7 @@ async function buildDashboardSnapshot() {
     offerSummary,
     retailerMatrix,
     sourceTypeSummary,
+    imageEvidenceSummary,
     qualityKpis,
     trendSeries,
     analyticsSummary,
@@ -2781,6 +3089,7 @@ async function buildDashboardSnapshot() {
       queryMaxTimeMs: DASHBOARD_QUERY_MAX_TIME_MS,
       comparisonSnapshotTimeoutMs: COMPARISON_SNAPSHOT_TIMEOUT_MS,
       heavyOfferDiagnosticsEnabled: HEAVY_OFFER_DIAGNOSTICS_ENABLED,
+      imageEvidenceDiagnosticsEnabled: true,
       partial: dashboardWarnings.length > 0,
       warnings: dashboardWarnings,
     },

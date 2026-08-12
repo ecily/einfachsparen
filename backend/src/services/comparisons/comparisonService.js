@@ -1,4 +1,5 @@
 const Offer = require('../../models/Offer');
+const { buildPublicValidityMongoMatch } = require('../offers/publicValidity');
 
 function buildOfferCard(offer, bestUnitPrice) {
   const priceGap = bestUnitPrice
@@ -274,7 +275,18 @@ async function buildComparisonSnapshot() {
   const categoryBaseExpression = buildCategoryBaseExpression();
   const [snapshot] = await Offer.aggregate([
     {
-      $match: buildCurrentAvailabilityMatch(now),
+      $match: {
+        ...buildCurrentAvailabilityMatch(now),
+        $and: [buildPublicValidityMongoMatch(now)],
+      },
+    },
+    {
+      $match: {
+        $or: [
+          { validFrom: null },
+          { validFrom: { $lte: now } },
+        ],
+      },
     },
     {
       $project: {

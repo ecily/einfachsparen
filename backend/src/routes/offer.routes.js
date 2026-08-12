@@ -100,6 +100,7 @@ router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
 
     const offer = await Offer.findById(req.params.offerId, {
       imageUrl: 1,
+      sourceId: 1,
       title: 1,
       retailerName: 1,
       sourceUrl: 1,
@@ -110,6 +111,7 @@ router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
       status: 1,
       isActiveNow: 1,
       validTo: 1,
+      validFrom: 1,
       lastSeenAt: 1,
       updatedAt: 1,
       createdAt: 1,

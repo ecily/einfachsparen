@@ -14,6 +14,7 @@ const PUBLIC_STALE_OR_RETAINED_PUBLISH_STATUSES = new Set([
   'legacy',
 ]);
 const PUBLIC_CURRENT_SOURCE_RUN_STATUSES = new Set(['success', 'partial', 'current', 'verified']);
+const { isPublicValidityEligible } = require('./publicValidity');
 
 function isValidDate(value) {
   if (!value) return false;
@@ -257,6 +258,8 @@ function isStaleRetainedAggregatorWithoutPublicFreshness(offer = {}, sourceQuali
 }
 
 function isOfferFreshForActiveUse(offer = {}, now = new Date()) {
+  if (!isPublicValidityEligible(offer, now).eligible) return false;
+
   // Local require avoids a module cycle: sourceQuality uses the date-range parser from this file.
   const { classifyOfferSourceQuality } = require('./sourceQuality');
 
@@ -299,6 +302,7 @@ module.exports = {
   hasVisibleCustomerProgramCondition,
   isExpiredValidToCompensatedByFreshCrawl,
   isOfferFreshForActiveUse,
+  isPublicValidityEligible,
   isStaleRetainedAggregatorWithoutPublicFreshness,
   isSnapshotTooOld,
   parseAktionsfinderDateRange,

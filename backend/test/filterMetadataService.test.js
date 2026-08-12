@@ -427,7 +427,7 @@ test('category facets ignore public-disabled retailer scopes', async () => {
   }
 });
 
-test('retailer filter counts include fresh plausible Aktionsfinder offers without validTo', () => {
+test('retailer filter excludes Aktionsfinder snapshots without explicit validity or approved official lineage', () => {
   const now = new Date('2026-05-22T12:00:00.000Z');
   const freshAktionsfinderOffer = {
     retailerKey: 'spar',
@@ -476,8 +476,8 @@ test('retailer filter counts include fresh plausible Aktionsfinder offers withou
   const eurospar = retailers.find((retailer) => retailer.retailerKey === 'eurospar');
 
   assert.equal(spar.totalOffers, 2);
-  assert.equal(spar.activeOfferCount, 1);
-  assert.equal(spar.activeOffers, 1);
+  assert.equal(spar.activeOfferCount, 0);
+  assert.equal(spar.activeOffers, 0);
   assert.equal(eurospar.totalOffers, 1);
   assert.equal(eurospar.activeOfferCount, 0);
   assert.equal(eurospar.activeOffers, 0);
