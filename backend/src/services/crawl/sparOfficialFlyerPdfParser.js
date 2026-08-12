@@ -3428,8 +3428,8 @@ function extractKnownSparFamilyKw23RecoveryCandidatesFromPage(page, { sourceReta
       rawText: 'Pepsi oder Pepsi Zero, 1,5 Liter, ab 6 Fl. je 0,99, 6er-Tray 5,94',
       comparisonSafe: true,
       categoryPrimary: 'Getraenke',
-      categorySecondary: 'Softdrinks',
-      categoryKey: 'softdrinks',
+      categorySecondary: 'Softdrinks & Energy',
+      categoryKey: 'softdrinks-energy',
       searchKeywords: 'Pepsi Pepsi Zero Cola 1.5 l EUROSPAR',
     }));
   }

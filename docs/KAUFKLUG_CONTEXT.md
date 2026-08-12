@@ -1,5 +1,13 @@
 # kaufklug.at Kontext
 
+## Narrowed Softdrinks-/Energy-Taxonomie am 2026-08-12
+
+- Scope-Audit umgesetzt: Der Fix besteht kumulativ nur noch aus dem zentralen Classifier-/Taxonomiepfad und seinen Tests. Die SPAR-Pepsi-Recovery-Anpassung, der Energy-Intent-Search-Guard und das Mountain-Dew-Legacy-Mapping wurden aus dem Softdrinks-/Energy-Fix zurueckgenommen; bestehendes SPAR-Verhalten, globale Suche, Dedupe und Pagination bleiben unangetastet.
+- Verbleibender Kern: getrennte Kategorien `Softdrinks`/`softdrinks` und `Energy Drinks`/`energy-drinks`, zentrale Beverage-Subtype-Erkennung, generische Nicht-Getraenke-Konfliktlogik und die zugehoerigen CategoryClassifier-Regressionen.
+- Narrowed-Testblock: 390/390 bestanden fuer CategoryClassifier, OfferRanking-Regression und SPAR-Parser. Gesamtlauf: 1241 bestanden, 19 bekannte PRE-EXISTING-Fehler in Dashboard-, HOFER-, PENNY-, BILLA- und Source-Definition-Fixtures; keine neue Fehlergruppe durch das Narrowing.
+- Der Narrowing-Commit ist nach `origin/main` zu pushen; vor dem Backend-Deploy sind die bestehenden Offers weiterhin nicht reklassifiziert. Softdrinks-Live-Daten koennen deshalb noch die alte `softdrinks-energy`-Kategorie und Energy-Ueberlappungen enthalten. Kein Crawl, Refresh, Reclassification, Repair oder DB-Update.
+- Nach dem Deploy sind nur Health und Runtime sowie Softdrinks-, Bier-, Kaffee- und normale Search-API-Erreichbarkeit zu pruefen. Der naechste separate Task muss den kleinsten kontrollierten Refresh-/Reclassification-Weg freigeben.
+
 ## Softdrinks-/Energy-Drinks-Klassifikation am 2026-08-12
 
 - Enger zentraler Classifier-Fix in Commit `b2f75810`: `Getraenke > Softdrinks & Energy` ist fuer neue Klassifikationen in `Softdrinks` (`softdrinks`) und `Energy Drinks` (`energy-drinks`) getrennt. PAGRO wurde nicht in die Auswertung aufgenommen; eine Energy-SEO-Seite wurde nicht angelegt.
