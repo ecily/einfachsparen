@@ -1,5 +1,12 @@
 # kaufklug.at Kontext
 
+## Softdrinks-Bestand: Reclassification-Gate am 2026-08-12
+
+- Read-only-Live-Basis vor Reclassification: Der offset-sichere Public-Read `q=softdrinks&limit=60&offset=1` lieferte 52 sichtbare Offers aus BILLA, BILLA Plus, BIPA, Lidl und PENNY; alle trugen weiterhin `Softdrinks & Energy`/`softdrinks-energy`, mit 52 Bildern, 52 Units und 43 Conditions. Die zuvor dokumentierte Offset-0-Basis lag bei 53 Offers; die Differenz ist kein Reclassification-Nachherwert.
+- Im Repo existiert kein targeted Offer-Reclassification-Mechanismus. `catalogDeduper.reclassifyWeakCategory()` läuft nur intern für Dedupe-Gruppen und verändert zusätzlich Dedupe-/Merge-Felder; `staleOfferRepair` deaktiviert Offers und ist für Kategorie-Reclassification fachlich ungeeignet. Kein vorhandener sicherer Pfad wurde zweckentfremdet.
+- Die kontrollierte Mutation wurde deshalb nicht gestartet: lokal gibt es keine autorisierte DO-/Mongo-Konsole, `doctl` ist nicht verfügbar und keine versionierte DO-App-Spec oder Reclassify-Route existiert. Kein Full Crawl, kein Source Refresh, keine Reclassification, kein Repair, kein Reindex und keine DB-Mutation.
+- Nächster freizugebender Schritt ist ein expliziter, produktionsnah autorisierter Runner, der ausschließlich Offers mit `categoryKey=softdrinks-energy` selektiert und nur die classifier-abgeleiteten Kategorie-/Search-Felder schreibt; Preise, Validity, Images, Conditions, Retailer, Lineage, Public-Status und Dedupe dürfen unverändert bleiben. Bis dahin bleibt Softdrinks `NOT READY` für saubere SEO-Freigabe; keine Energy-SEO-Seite bauen.
+
 ## Narrowed Softdrinks-/Energy-Taxonomie am 2026-08-12
 
 - Scope-Audit umgesetzt: Der Fix besteht kumulativ nur noch aus dem zentralen Classifier-/Taxonomiepfad und seinen Tests. Die SPAR-Pepsi-Recovery-Anpassung, der Energy-Intent-Search-Guard und das Mountain-Dew-Legacy-Mapping wurden aus dem Softdrinks-/Energy-Fix zurueckgenommen; bestehendes SPAR-Verhalten, globale Suche, Dedupe und Pagination bleiben unangetastet.
