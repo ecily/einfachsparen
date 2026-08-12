@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## Kaffee-SEO-Landingpage am 2026-08-12
+
+- Kaffee ist die erste neue datengetriebene indexierbare SEO-Landingpage: `/angebote/kaffee/`. Read-only Public-Evidence: 77 aktuelle Offers, 5 Public-Händler, 77/77 official, 68/77 Bilder und 76/77 sicher unit-vergleichbar. Kaffeegetränke bleiben fachlich enthalten und werden nicht als ausschließlich klassischer Röstkaffee beschrieben.
+- Commit `9f5f2916` aktiviert die bestehende Landingpage-Architektur mit `index,follow`, self-canonical auf `https://www.kaufklug.at/angebote/kaffee/`, sichtbarem Initial-HTML, Coffee-Intent-Metadaten, bestehender Public-Offer-Abfrage mit Pagination und begrenzter interner Verlinkung von Homepage, Angebote, Supermarkt sowie relevanten Händlerseiten. Sitemap steht jetzt bei 18 URLs; Bier bleibt wegen der Coverage-Diskrepanz 23 vs. 62 im HOLD.
+- Tests, Build und ESLint waren vor dem Push grün; Search Console wurde noch nicht verwendet. Der bestehende Static-App-Deploy folgt über `main`; nach Live-Smoke ist der nächste Schritt der Search-Console-Indexierungsantrag für Kaffee, danach die read-only Erklärung der Bier-Coverage-Diskrepanz.
+
 ## SEO-P1-Static-Links am 2026-08-12
 
 - Der Static-SEO-Generator rendert jetzt sichtbare, echte interne `<a href>`-Links in der initialen HTML-Antwort der Startseite und indexierbaren Landingpages. Homepage-Ziele umfassen Top Deals, Angebote, relevante Kategorien sowie BILLA, Lidl, BIPA, dm, PENNY, Waschmittel, Butter und HOFER.
