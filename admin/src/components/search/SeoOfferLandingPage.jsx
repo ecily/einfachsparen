@@ -152,7 +152,7 @@ export function SeoOfferLandingPage({ page, categories = [], shoppingListIds, on
           <div className="seo-comparison-card__facts">
             {comparisonSummary.facts.map((fact) => {
               const [value, ...labelParts] = fact.split(' ')
-              return <div className="seo-comparison-card__fact" key={fact}><strong>{value}</strong><span>{labelParts.join(' ') || fact}</span></div>
+              return <div className="comparison-fact-card seo-comparison-card__fact" key={fact}><strong>{value}</strong><span>{labelParts.join(' ') || fact}</span></div>
             })}
           </div>
           <p className="seo-comparison-card__stand">Stand: {new Intl.DateTimeFormat('de-AT', { dateStyle: 'medium', timeZone: 'Europe/Vienna' }).format(new Date(comparisonSummary.dataStand))}</p>

@@ -43,10 +43,7 @@ export function CookieStorageNotice({ onNavigate }) {
         <div className="panel__header" style={{ marginBottom: '0.75rem' }}>
           <h2 style={{ fontSize: '1rem', margin: 0 }}>Cookie- und Speicherhinweis</h2>
           <p style={{ margin: 0 }}>
-            kaufklug.at verwendet derzeit keine Marketing-Cookies. Für die Einkaufsliste, diesen Hinweis und eine
-            pseudonyme Nutzungsmessung speichern wir technische Daten lokal auf deinem Gerät. So können wir zählen, wie
-            oft die Seite genutzt, gesucht oder die Test-App heruntergeladen wird, ohne Namen, E-Mail-Adressen oder
-            genaue Standortdaten zu speichern.
+            Keine Marketing-Cookies. Technische Daten für Einkaufsliste, Hinweis und pseudonyme Nutzungsmessung bleiben lokal auf deinem Gerät. Keine Namen, E-Mail-Adressen oder genauen Standortdaten.
           </p>
         </div>
 

@@ -7927,6 +7927,236 @@ textarea:focus {
   }
 }
 
+/* System-wide mobile-first containment and comparison hierarchy. */
+html,
+body,
+#root {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.shell,
+.panel,
+.seo-offer-page,
+.seo-offer-hero,
+.seo-offer-results,
+.user-results,
+.user-card,
+.user-card__content,
+.price-check-page,
+.price-check-page > *,
+.keyword-search-page,
+.keyword-search-hero,
+.keyword-search-form,
+.comparison-fact-card {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.comparison-fact-card {
+  display: grid;
+  gap: 0.16rem;
+  align-content: start;
+  padding: 0.72rem;
+  border: 1px solid var(--kk-border);
+  border-radius: var(--kk-radius-sm);
+  background: var(--kk-surface);
+  overflow-wrap: anywhere;
+}
+
+.comparison-fact-card strong {
+  color: var(--kk-primary);
+  font-size: clamp(1.18rem, 2.2vw, 1.55rem);
+  line-height: 1;
+}
+
+.comparison-fact-card span {
+  color: var(--kk-muted);
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.search-first-page > .search-landing-hero {
+  margin-bottom: 0.45rem !important;
+}
+
+.search-first-page > .keyword-search-page {
+  margin-top: 0;
+}
+
+.search-first-page .keyword-search-form__label {
+  color: var(--kk-primary);
+  font-size: 0.86rem;
+}
+
+.search-first-page .keyword-search-form__row {
+  gap: 0.42rem;
+}
+
+.user-card__unit-price-callout {
+  border-width: 1px 1px 1px 3px;
+  background: var(--kk-value-bg);
+}
+
+.user-card__unit-price-label {
+  color: var(--kk-primary) !important;
+}
+
+.user-card__unit-price-value {
+  font-size: clamp(1.05rem, 2.2vw, 1.24rem);
+}
+
+.user-card__conditions {
+  border-radius: var(--kk-radius-sm);
+}
+
+.cookie-storage-notice__panel {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .shell {
+    width: min(calc(100vw - 1rem), 1240px);
+    max-width: calc(100vw - 1rem);
+  }
+
+  .page-nav,
+  .page-nav__main,
+  .page-nav__admin {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .shell {
+    width: calc(100vw - 0.8rem) !important;
+    max-width: calc(100vw - 0.8rem) !important;
+  }
+
+  .search-landing-hero {
+    padding: 0.72rem !important;
+  }
+
+  .search-landing-hero__usp h1 {
+    font-size: clamp(1.58rem, 8.4vw, 2.15rem) !important;
+    line-height: 1.06;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .search-landing-hero__usp .subtitle {
+    font-size: 0.92rem;
+    line-height: 1.3;
+  }
+
+  .user-card {
+    grid-template-columns: minmax(58px, 72px) minmax(0, 1fr) !important;
+    gap: 0.58rem !important;
+    padding: 0.62rem !important;
+  }
+
+  .user-card h3 {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .user-card__price strong {
+    font-size: 1.42rem;
+  }
+
+  .user-card__unit-price-callout {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .user-card__conditions-label {
+    flex-basis: auto;
+  }
+
+  .price-check-page,
+  .price-check-page > *,
+  .price-check-page__hero,
+  .price-check-page__comparison,
+  .price-check-page__offer,
+  .price-check-page__offers,
+  .price-check-page__metrics {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .price-check-page h1,
+  .price-check-page h2,
+  .price-check-page p,
+  .price-check-page strong,
+  .price-check-page__offer-top,
+  .price-check-page__condition {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .price-check-page__hero h1 {
+    font-size: clamp(1.42rem, 7.7vw, 1.88rem) !important;
+    white-space: normal !important;
+  }
+
+  .price-check-page__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .price-check-page__metrics .price-check-page__unit {
+    grid-column: 1 / -1;
+  }
+
+  .seo-offer-hero {
+    gap: 0.5rem;
+  }
+
+  .seo-offer-hero .subtitle {
+    font-size: 0.94rem;
+    line-height: 1.34;
+  }
+
+  .seo-comparison-card,
+  .seo-static-comparison {
+    gap: 0.65rem;
+    padding: 0.82rem;
+  }
+
+  .seo-comparison-card__facts,
+  .seo-static-comparison__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.42rem;
+  }
+
+  .comparison-fact-card {
+    padding: 0.56rem;
+  }
+
+  .comparison-fact-card strong {
+    font-size: 1.08rem;
+  }
+
+  .comparison-fact-card span {
+    font-size: 0.72rem;
+  }
+
+  .cookie-storage-notice__panel {
+    max-height: min(32vh, 15rem);
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 760px) {
   .top-deals-loading__skeletons {
     grid-template-columns: minmax(0, 1fr);
