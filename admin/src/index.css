@@ -8703,8 +8703,8 @@ body,
   .search-landing-hero__usp h1,
   .seo-offer-hero h1,
   .price-check-page h1 {
-    width: 100% !important;
-    max-width: 100% !important;
+    width: calc(100vw - 2rem) !important;
+    max-width: calc(100vw - 2rem) !important;
     min-width: 0 !important;
     font-size: clamp(1.28rem, 7vw, 1.82rem) !important;
     line-height: 1.08 !important;
@@ -8712,5 +8712,14 @@ body,
     white-space: normal !important;
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
+  }
+
+  .user-card {
+    grid-template-columns: minmax(58px, 64px) minmax(0, 1fr) !important;
+  }
+
+  .user-card__content {
+    width: calc(100vw - 6.5rem) !important;
+    max-width: calc(100vw - 6.5rem) !important;
   }
 }
