@@ -117,7 +117,7 @@ test('coffee landing page is indexable and complete in initial HTML', () => {
   }
 })
 
-test('coffee is linked from relevant indexable static pages and sitemap has 25 safe URLs', async () => {
+test('coffee is linked from relevant indexable static pages and sitemap has 26 safe URLs', async () => {
   for (const path of ['/', '/angebote', '/angebote/supermarkt', '/angebote/billa', '/angebote/penny']) {
     const page = getStaticSeoPages().find((candidate) => candidate.path === path)
     const html = buildSeoStaticDocument(template, page)
@@ -126,7 +126,8 @@ test('coffee is linked from relevant indexable static pages and sitemap has 25 s
 
   const sitemap = await readFile(resolve('admin/public/sitemap.xml'), 'utf8')
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1])
-  assert.equal(urls.length, 25)
+  assert.equal(urls.length, 26)
+  assert.ok(urls.includes('https://www.kaufklug.at/preischeck/bier-literpreis-vergleich/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/kaffee/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/bier/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/softdrinks/'))
@@ -136,6 +137,30 @@ test('coffee is linked from relevant indexable static pages and sitemap has 25 s
   assert.equal(urls.some((url) => /\/angebote\/(?:cola|energy-drinks)\//i.test(url)), false)
   assert.equal(urls.some((url) => /(?:suche|stoebern|einkaufsliste|pagro)/i.test(url)), false)
   assert.equal(sitemap.includes('noindex'), false)
+})
+
+test('published pricecheck renders evidence and exact values in initial HTML', () => {
+  const page = getStaticSeoPages().find((candidate) => candidate.path === '/preischeck/bier-literpreis-vergleich')
+  const candidate = {
+    publishable: true,
+    confidence: 'high',
+    dataStand: '2026-08-12T10:00:00.000Z',
+    explanation: 'Nur aktive, offiziell belegte Angebote.',
+    involvedRetailers: ['billa', 'penny'],
+    involvedOffers: [
+      { retailerName: 'BILLA', title: 'Helles Lager', price: 0.72, quantityText: '0,5 l', unitPrice: 1.44, conditions: 'bei 12 Dosen' },
+      { retailerName: 'PENNY', title: 'Märzen', price: 0.79, quantityText: '0,5 l', unitPrice: 1.58, conditions: 'ab 24 Dosen' },
+    ],
+    evidence: [{ sourceRunStatus: 'success', publishStatus: 'crawl-run-success' }, { sourceRunStatus: 'success', publishStatus: 'crawl-run-success' }],
+  }
+  const html = buildSeoStaticDocument(template, { ...page, robots: 'index,follow', priceCheckCandidate: candidate }, [page, { ...page, robots: 'index,follow', priceCheckCandidate: candidate }])
+  assert.match(html, /seo-static-price-check/)
+  assert.match(html, /BILLA: 1,44 €\/l/)
+  assert.match(html, /PENNY: 1,58 €\/l/)
+  assert.match(html, /bei 12 Dosen/)
+  assert.match(html, /ab 24 Dosen/)
+  assert.match(html, /meta name="robots" content="index,follow"/)
+  assert.doesNotMatch(html, /Bestpreis|billigstes|garantiert|undefined|NaN/)
 })
 
 test('wave-one category landing pages are indexable and complete in initial HTML', () => {

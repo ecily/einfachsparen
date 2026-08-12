@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { seoLandingPages } from '../src/config/seoLandingPages.js'
 import { buildSeoComparisonSummary } from '../src/utils/seoComparisonSummary.js'
+import { deriveBeerPriceCheckCandidate, isPublishablePriceCheckCandidate } from '../src/utils/priceCheckCandidate.js'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const adminDir = dirname(scriptDir)
@@ -32,6 +33,7 @@ const staticPages = [
       { label: 'Drogerie Angebote', path: '/angebote/drogerie/' },
       { label: 'Kaffee Angebote', path: '/angebote/kaffee/' },
       { label: 'Bier Angebote', path: '/angebote/bier/' },
+      { label: 'Bier Literpreis-Preischeck', path: '/preischeck/bier-literpreis-vergleich' },
       { label: 'Softdrinks Angebote', path: '/angebote/softdrinks/' },
       { label: 'Schokolade Angebote', path: '/angebote/schokolade/' },
       { label: 'Windeln Angebote', path: '/angebote/windeln/' },
@@ -48,6 +50,21 @@ const staticPages = [
       { label: 'HOFER Angebote', path: '/angebote/hofer/' },
     ],
     intro: 'Vergleiche aktuelle Angebote von Supermärkten und Drogerien in Österreich und prüfe Preis, Bedingungen und Gültigkeit vor dem Einkauf.',
+  },
+  {
+    path: '/preischeck/bier-literpreis-vergleich',
+    priceCheckKey: 'bier',
+    title: 'Bier Literpreis vergleichen: 0,5-l-Dosen bei BILLA und PENNY',
+    description: 'Konkreten Literpreis-Vergleich von 0,5-l-Dosenbier bei BILLA und PENNY mit sichtbaren Bedingungen und Public-Gültigkeit prüfen.',
+    robots: 'noindex,follow',
+    h1: 'Bier Literpreis vergleichen: 0,5-l-Dosen bei BILLA und PENNY',
+    intro: 'Ein datenbasierter Preischeck für eine klar abgegrenzte 0,5-l-Dosenbier-Produktgruppe. Packungspreis, Literpreis, Menge und Bedingungen bleiben getrennt sichtbar.',
+    relatedLinks: [
+      { label: 'Bier Angebote', path: '/angebote/bier/' },
+      { label: 'BILLA Angebote', path: '/angebote/billa/' },
+      { label: 'PENNY Angebote', path: '/angebote/penny/' },
+      { label: 'Alle Angebote', path: '/angebote/' },
+    ],
   },
   {
     path: '/top-deals',
@@ -139,6 +156,8 @@ const staticPages = [
   },
 ]
 
+let renderPages = null
+
 function escapeHtml(value = '') {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -175,16 +194,16 @@ function buildBreadcrumbJsonLd(page) {
   })
 }
 
-function getIndexablePaths() {
+function getIndexablePaths(pages = renderPages || getStaticSeoPages()) {
   return new Set(
-    getStaticSeoPages()
+    pages
       .filter((page) => page.robots === 'index,follow')
       .map((page) => canonicalPath(page.path)),
   )
 }
 
-function buildRelatedLinks(page) {
-  const indexablePaths = getIndexablePaths()
+function buildRelatedLinks(page, pages) {
+  const indexablePaths = getIndexablePaths(pages)
   const links = (page.relatedLinks || []).filter((link) => indexablePaths.has(canonicalPath(link.path)))
   if (!links.length) return ''
 
@@ -206,11 +225,27 @@ function buildComparisonSummaryHtml(summary) {
     .join('')}</ul><p>${escapeHtml(summary.note)}</p><p>Stand: ${escapeHtml(dataStand)}</p></section>`
 }
 
-export function buildSeoStaticDocument(template, page) {
+function formatPrice(value) {
+  return new Intl.NumberFormat('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value))
+}
+
+function formatDate(value) {
+  return new Intl.DateTimeFormat('de-AT', { dateStyle: 'medium', timeZone: 'Europe/Vienna' }).format(new Date(value))
+}
+
+function buildPriceCheckHtml(candidate) {
+  if (!isPublishablePriceCheckCandidate(candidate)) return ''
+  const rows = candidate.involvedOffers.map((offer) => `<tr><th scope="row">${escapeHtml(offer.retailerName)}</th><td>${escapeHtml(offer.title)}</td><td>${escapeHtml(formatPrice(offer.price))} €</td><td>${escapeHtml(offer.quantityText)}</td><td>${escapeHtml(formatPrice(offer.unitPrice))} €/l</td><td>${escapeHtml(offer.conditions)}</td></tr>`).join('')
+  const facts = candidate.involvedOffers.map((offer) => `${offer.retailerName}: ${formatPrice(offer.unitPrice)} €/l`).join(' und ')
+  return `<section class="seo-static-price-check" aria-labelledby="seo-static-price-check-title"><h2 id="seo-static-price-check-title">Kurzfazit</h2><p>Bei den aktuell geprüften 0,5-l-Dosen liegt der Literpreis bei ${escapeHtml(facts)}.</p><p>${escapeHtml(candidate.explanation)}</p><h2>Vergleich</h2><table><thead><tr><th>Händler</th><th>Produkt</th><th>Packungspreis</th><th>Menge</th><th>Literpreis</th><th>Bedingung</th></tr></thead><tbody>${rows}</tbody></table><h2>Warum der Packungspreis täuschen kann</h2><p>Der Packungspreis von ${escapeHtml(candidate.involvedOffers.map((offer) => `${offer.retailerName} ${formatPrice(offer.price)} €`).join(' und '))} ist wegen unterschiedlicher Angebotspreise nicht direkt aussagekräftig. Der Literpreis macht die Menge vergleichbar; die Bedingungen bleiben dabei ausdrücklich sichtbar.</p><h2>So vergleicht kaufklug</h2><p>Für diesen Preischeck werden nur aktive Public Offers mit offizieller Quelle, erfolgreichem Crawl-Run, kompatibler 0,5-l-Menge, sicherem Literpreis und expliziter Bedingung verwendet.</p><p>Stand: ${escapeHtml(formatDate(candidate.dataStand))}</p></section>`
+}
+
+export function buildSeoStaticDocument(template, page, pages) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
-  const staticContentWithComparison = staticContent.replace('</main>', `${buildComparisonSummaryHtml(page.comparisonSummary)}</main>`)
+  const staticContentWithPriceCheck = staticContent.replace('</main>', `${buildPriceCheckHtml(page.priceCheckCandidate)}</main>`)
+  const staticContentWithComparison = staticContentWithPriceCheck.replace('</main>', `${buildComparisonSummaryHtml(page.comparisonSummary)}</main>`)
   const updated = template
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta name="description" content="${escapeHtml(page.description)}" />\n`)
@@ -237,6 +272,8 @@ export function getStaticSeoPages() {
       intro: page.intro,
       comparisonKey: page.comparisonKey || '',
       comparisonSummary: page.comparisonSummary || null,
+      priceCheckKey: page.priceCheckKey || '',
+      priceCheckCandidate: page.priceCheckCandidate || null,
       relatedLinks: page.relatedLinks || [],
     })),
   ].filter((page, index, pages) => pages.findIndex((candidate) => candidate.path === page.path) === index)
@@ -318,6 +355,33 @@ async function fetchComparisonSummary(pageKey) {
   return buildSeoComparisonSummary({ pageKey, offers, totalCount, generatedAt })
 }
 
+async function fetchComparisonOffers(pageKey) {
+  const query = comparisonQueries.get(pageKey)
+  if (!query) return null
+  const offers = []
+  const seenIds = new Set()
+  let offset = 0
+  let resultSetToken = ''
+  let totalCount = null
+  for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+    const payload = await fetchComparisonRanking(query, offset, resultSetToken)
+    const pageOffers = Array.isArray(payload?.rankedOffers) ? payload.rankedOffers : []
+    const summary = payload?.summary || {}
+    const count = Number(summary.totalCount)
+    if (!Number.isInteger(count) || count <= 0 || !pageOffers.every((offer) => offer?.id)) return null
+    if (totalCount === null) totalCount = count
+    if (totalCount !== count) return null
+    for (const offer of pageOffers) if (!seenIds.has(offer.id)) { seenIds.add(offer.id); offers.push(offer) }
+    if (!summary.hasMore) return offers
+    const nextOffset = Number(summary.nextOffset)
+    const nextToken = String(summary.resultSetToken || resultSetToken || '')
+    if (!Number.isInteger(nextOffset) || nextOffset <= offset || !nextToken) return null
+    offset = nextOffset
+    resultSetToken = nextToken
+  }
+  return null
+}
+
 async function buildComparisonSummaries() {
   const summaries = new Map()
   await Promise.all(
@@ -333,6 +397,22 @@ async function buildComparisonSummaries() {
     }),
   )
   return summaries
+}
+
+async function buildPriceCheckCandidate() {
+  try {
+    const offers = await fetchComparisonOffers('bier')
+    return deriveBeerPriceCheckCandidate(offers || [])
+  } catch {
+    console.warn('[seo] pricecheck candidate unavailable')
+    return null
+  }
+}
+
+async function syncRenderedSitemap(candidate) {
+  const source = await readFile(join(adminDir, 'public', 'sitemap.xml'), 'utf8')
+  const block = /\s*<url>\s*<loc>https:\/\/www\.kaufklug\.at\/preischeck\/bier-literpreis-vergleich\/<\/loc>[\s\S]*?<\/url>/i
+  await writeFile(join(distDir, 'sitemap.xml'), candidate ? source : source.replace(block, ''), 'utf8')
 }
 
 export function buildCatchallDocument(template) {
@@ -364,18 +444,23 @@ export function buildCatchallDocument(template) {
 async function main() {
   const template = await readFile(join(distDir, 'index.html'), 'utf8')
   const comparisonSummaries = await buildComparisonSummaries()
+  const priceCheckCandidate = await buildPriceCheckCandidate()
+  renderPages = getStaticSeoPages().map((page) => page.priceCheckKey === 'bier'
+    ? { ...page, robots: priceCheckCandidate ? 'index,follow' : 'noindex,follow', priceCheckCandidate }
+    : page)
 
-  for (const page of getStaticSeoPages()) {
+  for (const page of renderPages) {
     const pageWithSummary = comparisonSummaries.has(page.comparisonKey)
       ? { ...page, comparisonSummary: comparisonSummaries.get(page.comparisonKey) }
       : page
     const routePath = normalizePath(page.path)
     const outputPath = routePath === '/' ? join(distDir, 'index.html') : join(distDir, ...routePath.slice(1).split('/'), 'index.html')
     await mkdir(dirname(outputPath), { recursive: true })
-    await writeFile(outputPath, buildSeoStaticDocument(template, pageWithSummary), 'utf8')
+    await writeFile(outputPath, buildSeoStaticDocument(template, pageWithSummary, renderPages), 'utf8')
   }
 
   await writeFile(join(distDir, 'catchall.html'), buildCatchallDocument(template), 'utf8')
+  await syncRenderedSitemap(priceCheckCandidate)
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

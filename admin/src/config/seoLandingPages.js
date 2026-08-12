@@ -286,7 +286,7 @@ export const seoLandingPages = [
       limit: 60,
       offset: 0,
     },
-    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'kaffee']),
+    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'kaffee']).concat([{ label: 'Bier Literpreis-Preischeck', path: '/preischeck/bier-literpreis-vergleich' }]),
   },
   {
     key: 'softdrinks',
