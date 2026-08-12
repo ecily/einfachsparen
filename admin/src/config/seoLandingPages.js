@@ -8,6 +8,7 @@ const baseRelatedLinks = [
   ['drogerie', 'Drogerie Angebote'],
   ['kaffee', 'Kaffee Angebote'],
   ['bier', 'Bier Angebote'],
+  ['softdrinks', 'Softdrinks Angebote'],
   ['waschmittel', 'Waschmittel Angebote'],
 ]
 
@@ -46,7 +47,7 @@ export const seoLandingPages = [
     query: {
       limit: 24,
     },
-    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'bier', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
+    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'bier', 'softdrinks', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
   },
   {
     key: 'supermarkt',
@@ -83,7 +84,7 @@ export const seoLandingPages = [
       limit: 12,
       offset: 0,
     },
-    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'bier', 'kaese']),
+    relatedLinks: links(['billa', 'hofer', 'lidl', 'spar', 'penny', 'kaffee', 'bier', 'softdrinks', 'kaese']),
   },
   {
     key: 'drogerie',
@@ -136,7 +137,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaffee', 'bier', 'kaese']),
+    relatedLinks: links(['supermarkt', 'hofer', 'lidl', 'penny', 'kaffee', 'bier', 'softdrinks', 'kaese']),
   },
   {
     key: 'hofer',
@@ -172,7 +173,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'hofer', 'billa', 'penny', 'waschmittel', 'kaffee']),
+    relatedLinks: links(['supermarkt', 'hofer', 'billa', 'penny', 'waschmittel', 'kaffee', 'softdrinks']),
   },
   {
     key: 'dm',
@@ -244,7 +245,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'bier', 'kaese']),
+    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'bier', 'softdrinks', 'kaese']),
   },
   {
     key: 'kaffee',
@@ -279,6 +280,23 @@ export const seoLandingPages = [
       offset: 0,
     },
     relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'kaffee']),
+  },
+  {
+    key: 'softdrinks',
+    path: '/angebote/softdrinks',
+    title: 'Softdrinks Angebote aktuell vergleichen | kaufklug.at',
+    description:
+      'Aktuelle Softdrink-Angebote mehrerer H\u00e4ndler vergleichen. Literpreise, Flaschen, Dosen und Multipacks transparent auf kaufklug.at.',
+    h1: 'Softdrinks Angebote aktuell vergleichen',
+    intro:
+      'Vergleiche aktuelle Softdrink-Angebote mehrerer H\u00e4ndler, darunter Cola und andere Limonaden. Beachte Dosen, Flaschen, Multipacks, Literpreise sowie Mengen- und Aktionsbedingungen.',
+    robots: 'index,follow',
+    query: {
+      q: 'softdrinks',
+      limit: 60,
+      offset: 0,
+    },
+    relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'lidl', 'bier']),
   },
   {
     key: 'waschmittel',

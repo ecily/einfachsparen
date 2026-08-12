@@ -22,6 +22,7 @@ const staticPages = [
       { label: 'Drogerie Angebote', path: '/angebote/drogerie/' },
       { label: 'Kaffee Angebote', path: '/angebote/kaffee/' },
       { label: 'Bier Angebote', path: '/angebote/bier/' },
+      { label: 'Softdrinks Angebote', path: '/angebote/softdrinks/' },
       { label: 'BILLA Angebote', path: '/angebote/billa/' },
       { label: 'Lidl Angebote', path: '/angebote/lidl/' },
       { label: 'BIPA Angebote', path: '/angebote/bipa/' },
