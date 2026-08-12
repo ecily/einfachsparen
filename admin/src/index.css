@@ -5780,6 +5780,14 @@ textarea:focus {
   color: var(--kk-primary);
 }
 
+.mobile-only-break {
+  display: none;
+}
+
+.price-check-page__hero h1 > span {
+  display: inline;
+}
+
 .hero-headline-accent {
   color: var(--kk-primary-soft);
 }
@@ -8686,6 +8694,14 @@ body,
 }
 
 @media (max-width: 600px) {
+  .mobile-only-break {
+    display: block;
+  }
+
+  .price-check-page__hero h1 > span {
+    display: block;
+  }
+
   .shell {
     width: calc(100vw - 1rem) !important;
     max-width: calc(100vw - 1rem) !important;

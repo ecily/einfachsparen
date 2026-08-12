@@ -24,6 +24,14 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('de-AT', { dateStyle: 'medium', timeZone: 'Europe/Vienna' }).format(date)
 }
 
+function PriceCheckHeading({ value }) {
+  const [lead, remainder] = String(value || '').split(/:\s*/, 2)
+
+  if (!remainder) return value
+
+  return <><span>{lead}:</span> <span>{remainder}</span></>
+}
+
 export function PriceCheckPage() {
   const [candidate] = useState(readEmbeddedCandidate)
 
@@ -47,7 +55,7 @@ export function PriceCheckPage() {
     <div className="price-check-page">
       <section className="panel price-check-page__hero">
         <p className="eyebrow">Datenbasierter Preischeck</p>
-        <h1>{candidate.h1}</h1>
+        <h1><PriceCheckHeading value={candidate.h1} /></h1>
         <p className="subtitle">{candidate.comparisonBasis}</p>
       </section>
 

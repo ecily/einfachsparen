@@ -149,9 +149,9 @@ function SearchLandingHero() {
               maxWidth: '100%',
             }}
           >
-            Flugblätter raus. Die besten Angebote rein.
+            Flugblätter raus.<br className="mobile-only-break" /> Die besten Angebote rein.
           </h1>
-          {/* Supermarkt- und Drogerie-Angebote in Österreich bleiben als Produktkontext erhalten; ehrlich, kostenlos und von Menschen für Menschen. */}
+          {/* Flugblätter raus. Die besten Angebote rein. Supermarkt- und Drogerie-Angebote in Österreich bleiben als Produktkontext erhalten; ehrlich, kostenlos und von Menschen für Menschen. */}
           <p className="subtitle">
             Aktuelle Angebote vergleichen: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos und ohne Anmeldung.
           </p>
