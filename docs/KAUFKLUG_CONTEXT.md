@@ -4,7 +4,7 @@
 
 - Der Static-SEO-Generator rendert jetzt sichtbare, echte interne `<a href>`-Links in der initialen HTML-Antwort der Startseite und indexierbaren Landingpages. Homepage-Ziele umfassen Top Deals, Angebote, relevante Kategorien sowie BILLA, Lidl, BIPA, dm, PENNY, Waschmittel, Butter und HOFER.
 - Related Links werden nur noch übernommen, wenn das Ziel selbst `index,follow` ist. Utility-, noindex- und nicht öffentliche Landingpages werden damit nicht als SEO-Linknetz ausgegeben. PAGRO bleibt vollständig ausgeschlossen; Sitemap bleibt bei 17 URLs.
-- Verifiziert: Static-App-Build, ESLint und sechs SEO-/Catchall-Tests grün; Sitemap weiterhin ohne Noindex-, Utility- oder PAGRO-Einträge. Die Änderung betrifft ausschließlich Static-SEO-HTML, Related-Link-Pfadbildung und Tests.
+- Verifiziert: Static-App-Build, ESLint und sechs SEO-/Catchall-Tests grün; Sitemap weiterhin ohne Noindex-, Utility- oder PAGRO-Einträge. Commit `69e04bed` ist gepusht und live: Homepage sowie BILLA-, Lidl-, Waschmittel- und Top-Deals-HTML liefern HTTP 200 mit den erwarteten initialen Links und `www`-Canonicals. Die Änderung betrifft ausschließlich Static-SEO-HTML, Related-Link-Pfadbildung und Tests.
 - Der bevorzugte Host bleibt ein externer Infrastrukturpunkt: Im Repo existiert keine DigitalOcean-/Cloudflare-Redirect-Konfiguration. Für `kaufklug.at` muss in der bestehenden Plattform der permanente Redirect auf `https://www.kaufklug.at` mit erhaltenem Pfad/Query und möglichst einem Hop gesetzt werden. Keine Anwendungscatchall-Änderung.
 
 ## Public-Validity-Startup-Emergency am 2026-08-12
