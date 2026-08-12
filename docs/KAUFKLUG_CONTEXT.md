@@ -1,5 +1,13 @@
 # kaufklug.at Kontext
 
+## Wave-1-SEO-Batch am 2026-08-12
+
+- Commit `098bc181` bringt die fuenf freigegebenen indexierbaren Landingpages live: `/angebote/schokolade/`, `/angebote/windeln/`, `/angebote/duschgel/`, `/angebote/nudeln/` und `/angebote/chips/`. Die bestehende Static-SEO-Architektur, Public-Ranking-Abfrage, Structured Data, interne Links und trailing-slash Canonicals wurden wiederverwendet; keine Backend-, Ranking-, Validity-, Dedupe- oder Datenlogik wurde veraendert.
+- Live-Smoke nach dem bestehenden Static-App-Deploy: alle fuenf Seiten HTTP 200, `index,follow`, eigener Title/H1, Self-Canonical und initiale crawlbare Links. Public-API read-only (offset 1): Schokolade 70 total/60 sichtbar, 4 Haendler, 60 Bilder/60 Units; Windeln 79/60, 3 Haendler, 52 Bilder/60 Units; Duschgel 43/42, 4 Haendler, 42 Bilder/42 Units; Nudeln 29/28, 4 Haendler, 27 Bilder/28 Units; Chips 27/26, 3 Haendler, 26 Bilder/26 Units. Die Intent-Smokes fanden keine offensichtlichen False-Positive-Gruppen.
+- Pagination bleibt aktiv: Schokolade und Windeln melden `hasMore=true` bei 60 sichtbaren Treffern; Duschgel, Nudeln und Chips sind vollstaendig im sichtbaren Resultset. Regression read-only: Bier 62, Kaffee 77, Waschmittel 197; normale Kaffee-Haendlerauswahl BILLA 34, alle HTTP 200.
+- Sitemap wurde von 20 auf exakt 25 URLs erweitert und enthaelt alle fuenf neuen Seiten sowie Kaffee, Bier und Softdrinks; keine Energy-Drinks-, Cola-, Utility-, PAGRO- oder SPAR-SEO-URL. Search Console wurde nicht verwendet; das Tageslimit bleibt offen. Softdrinks/Energy bleibt unveraendert ausserhalb dieses Tasks: Softdrinks ist technisch live, fachlich wegen alter `softdrinks-energy`-Offers weiterhin `NOT READY`, Energy bleibt `HOLD`.
+- Tests/Build vor Push: Static-SEO-Testbestand 47/47, gezielter SEO-Lauf 16/16, ESLint gruen, Production-Build gruen, `git diff --check` gruen. Naechster Schritt ist gebuendelte High-Impression-CTR-/Content-Optimierung fuer Lidl, BILLA, Supermarkt, Waschmittel, BIPA und Drogerie.
+
 ## Softdrinks-Bestand: Reclassification-Gate am 2026-08-12
 
 - Read-only-Live-Basis vor Reclassification: Der offset-sichere Public-Read `q=softdrinks&limit=60&offset=1` lieferte 52 sichtbare Offers aus BILLA, BILLA Plus, BIPA, Lidl und PENNY; alle trugen weiterhin `Softdrinks & Energy`/`softdrinks-energy`, mit 52 Bildern, 52 Units und 43 Conditions. Die zuvor dokumentierte Offset-0-Basis lag bei 53 Offers; die Differenz ist kein Reclassification-Nachherwert.
