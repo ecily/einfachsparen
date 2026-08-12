@@ -8684,3 +8684,33 @@ body,
     border-radius: 1rem;
   }
 }
+
+@media (max-width: 600px) {
+  .shell {
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+  }
+
+  .search-landing-hero__usp,
+  .seo-offer-page,
+  .seo-offer-hero,
+  .price-check-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .search-landing-hero__usp h1,
+  .seo-offer-hero h1,
+  .price-check-page h1 {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    font-size: clamp(1.28rem, 7vw, 1.82rem) !important;
+    line-height: 1.08 !important;
+    text-wrap: wrap !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+}
