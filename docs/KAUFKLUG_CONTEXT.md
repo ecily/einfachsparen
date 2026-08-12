@@ -1,5 +1,12 @@
 # kaufklug.at Kontext
 
+## PriceCheck Engine v1 am 2026-08-12
+
+- Commit `c17d0c1c` fuehrt einen fail-closed High-Confidence-PriceCheck fuer eine konkrete 0,5-l-Dosenbier-Gruppe ein. Der Kandidat nutzt nur aktive Public Offers mit offizieller Quelle, erfolgreichem Crawl-Run, expliziter Menge, kompatiblem Literpreis, `comparisonSafe=true` und sichtbarer Bedingung; PAGRO, Preisbereiche und Bestpreis-Aussagen bleiben ausgeschlossen.
+- Geplanter Indexpfad: `/preischeck/bier-literpreis-vergleich/`. Lokaler Public-API-Build fand BILLA und PENNY als belastbar vergleichbare Haendler; der aktuell gerenderte Stand zeigt 1,44 EUR/l bei BILLA und 1,58 EUR/l bei PENNY mit getrennten Bedingungen. Die Seite wird bei fehlender Evidenz automatisch `noindex,follow` und aus der ausgelieferten Sitemap entfernt.
+- Tests: PriceCheck-/SEO-Lauf 17/17, ESLint gruen, Production-Build gruen, Sitemap lokal exakt 26 URLs und initiales HTML ohne `Bestpreis`, `undefined` oder `NaN`. Push nach `origin/main` erfolgt. Der externe Static-App-Deploy war beim Abschluss noch nicht nachweisbar: Route und Sitemap lieferten weiterhin die vorherigen 25 URLs/SPA-Shell; kein manueller Deploy und keine Search-Console-Aktion.
+- Naechster Schritt: bestehenden Static-App-Auto-Deploy abwarten/bestaetigen und danach nur den Live-Smoke fuer Preischeck, Sitemap und bestehende Bier/Kaffee/Waschmittel-Seiten wiederholen. Keine weitere PriceCheck-Engine-Arbeit ohne neue Evidenz.
+
 ## Wave-1-SEO-Batch am 2026-08-12
 
 - Commit `098bc181` bringt die fuenf freigegebenen indexierbaren Landingpages live: `/angebote/schokolade/`, `/angebote/windeln/`, `/angebote/duschgel/`, `/angebote/nudeln/` und `/angebote/chips/`. Die bestehende Static-SEO-Architektur, Public-Ranking-Abfrage, Structured Data, interne Links und trailing-slash Canonicals wurden wiederverwendet; keine Backend-, Ranking-, Validity-, Dedupe- oder Datenlogik wurde veraendert.
