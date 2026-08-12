@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## Bier-SEO-Landingpage am 2026-08-12
+
+- Bier ist nach Kaffee die zweite neue datengetriebene indexierbare SEO-Landingpage: `/angebote/bier/`. Read-only Evidence: 62 aktuelle Public-Offers auf BILLA (29), BILLA Plus (29) und PENNY (4), 62/62 official und Public-Gate-konform, 58/62 Bilder, 62/62 unit-vergleichbar, 20 Conditions, 16 Marken und ca. 34 Produktgruppen.
+- Die frühere 23-vs.-62-Diskrepanz ist kein Coverage-Bug: Der unvollständige Low-Level-Aufruf ohne Offset nutzt Candidate-Limit 200; das Frontend sendet `offset=0` und erreicht den vollständigen Pagination-Pfad. Low-Level-Contract-Footgun bleibt ausdrücklich unangetastet.
+- Commit `6e88e27f` aktiviert `/angebote/bier/` mit `index,follow`, Self-Canonical, sichtbarem Initial-HTML, Literpreis-/Gebinde-Intent und begrenzter interner Verlinkung von Homepage, Angebote, Supermarkt, BILLA, PENNY und Kaffee. Sitemap steht jetzt bei 19 URLs. Live-Smoke: HTTP 200, korrekte Metadaten, Seite 1 = 60, `hasMore=true`, Seite 2 = 2, 62 eindeutige Offers aus 3 Händlern, 58 Bilder, 62 vergleichbare Units, 20 Conditions und 0 Kategorie-False-Positives. Nächster Schritt: Search-Console-Indexierungsantrag für Bier; keine Search Console durch Codex.
+
 ## Kaffee-SEO-Landingpage am 2026-08-12
 
 - Kaffee ist die erste neue datengetriebene indexierbare SEO-Landingpage: `/angebote/kaffee/`. Read-only Public-Evidence: 77 aktuelle Offers, 5 Public-Händler, 77/77 official, 68/77 Bilder und 76/77 sicher unit-vergleichbar. Kaffeegetränke bleiben fachlich enthalten und werden nicht als ausschließlich klassischer Röstkaffee beschrieben.
