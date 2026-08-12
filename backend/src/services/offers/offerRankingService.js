@@ -714,6 +714,14 @@ function tokenizeSearchText(value) {
   return normalizeSearchText(value).split(/\s+/).filter(Boolean);
 }
 
+const ENERGY_INTENT_TOKEN_PATTERN = /\benergy\s*drinks?\b|\benergydrinks?\b|\bred bull\b|\bnocco\b|\b(?:energy|isotonic)\s+drink\b/;
+const NON_BEVERAGE_ENERGY_CONFLICT_PATTERN = /\b(?:duschgel|dusch|shampoo|haarpflege|deo|deodorant|koerperpflege|korperpflege|kosmetik|make[- ]?up|creme|lotion|bodylotion|seife|katzenfutter|hundefutter|tierfutter|tiernahrung|haustierfutter|katze|katzen|hund|hunde|futter|nassfutter|trockenfutter)\b/;
+
+function isEnergyIntentQuery(queryTokens = []) {
+  return queryTokens.includes('energy') || queryTokens.includes('energydrink') || queryTokens.includes('energydrinks') ||
+    (queryTokens.includes('drink') && queryTokens.includes('energy'));
+}
+
 const SPAR_RETAILER_QUERY_PREFIXES = new Map([
   ['spar', ['spar']],
   ['eurospar', ['eurospar']],
@@ -3571,6 +3579,25 @@ function scoreOfferAgainstQuery(offer, query) {
   ].join(' '));
   const comparisonTokens = tokenizeSearchText(offer.comparisonGroup);
   const aggregateTokens = tokenizeSearchText(offer.searchText);
+  const energyIntentQuery = isEnergyIntentQuery(queryTokens);
+  if (energyIntentQuery) {
+    const energyEvidence = ENERGY_INTENT_TOKEN_PATTERN.test(normalizeSearchText([
+      offer.title,
+      offer.brand,
+      offer.categorySecondary,
+      offer.subcategoryKey,
+      offer.comparisonGroup,
+      offer.searchText,
+    ].join(' ')));
+    const nonBeverageConflict = NON_BEVERAGE_ENERGY_CONFLICT_PATTERN.test(normalizeSearchText([
+      offer.title,
+      offer.categoryPrimary,
+      offer.categorySecondary,
+      offer.searchText,
+    ].join(' ')));
+
+    if (!energyEvidence || nonBeverageConflict) return 0;
+  }
   const productTokens = titleTokens.concat(comparisonTokens);
   const hasTeebutterProduct = hasAnyTokenMatch(productTokens, ['teebutter'], { exact: true, suffix: true });
   const hasCoffeeOrTeaProduct = hasAnyTokenMatch(productTokens, COFFEE_TEA_PRODUCT_TERMS, { exact: true, suffix: true }) ||
@@ -4817,7 +4844,7 @@ function getBillaOfficialAlgoliaUncategorizedDecision(titleText) {
   });
 
   if (/\bmountain\s+dew\b/.test(titleText)) {
-    return decision('Getraenke', 'Softdrinks & Energy', 'mountain-dew');
+    return decision('Getraenke', 'Softdrinks', 'mountain-dew');
   }
 
   if (/\blillet\b/.test(titleText) && /\bberry\b/.test(titleText)) {

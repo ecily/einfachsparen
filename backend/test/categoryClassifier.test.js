@@ -100,7 +100,7 @@ test('keeps hardened launch-quality examples in the intended categories', () => 
     ['Ja! Natuerlich Joghurt 500 g', 'Lebensmittel', 'Milchprodukte'],
     ['Goesser Bier 0,5 l', 'Getraenke', 'Bier'],
     ['Iglo Buttergemuese 400 g', 'Lebensmittel', 'Tiefkuehl- & Fertigprodukte'],
-    ['Schartner Bombe Orange 1,5 l', 'Getraenke', 'Softdrinks & Energy'],
+    ['Schartner Bombe Orange 1,5 l', 'Getraenke', 'Softdrinks'],
     ['Gasteiner Mineralwasser prickelnd', 'Getraenke', 'Wasser'],
     ['More ZERUP Lemon Iced Tea Getraenkesirup', 'Getraenke', 'Saefte & Sirupe'],
     ['La Gioiosa Spumante', 'Getraenke', 'Wein & Sekt'],
@@ -218,8 +218,8 @@ test('keeps beta feedback category false positives in their product categories',
     ['Goesser Naturradler alkoholfrei 0,33-Liter-Flasche', 'Getraenke', 'Bier'],
     ['Stiegl Goldbraeu 20er-Kiste', 'Getraenke', 'Bier'],
     ['Puntigamer Maerzen 24er-Tray', 'Getraenke', 'Bier'],
-    ['Nocco BCAA Drink 0,33-Liter-Dose', 'Getraenke', 'Softdrinks & Energy'],
-    ['S-BUDGET Energy Drink 0,25 Liter 24er-Tray', 'Getraenke', 'Softdrinks & Energy'],
+    ['Nocco BCAA Drink 0,33-Liter-Dose', 'Getraenke', 'Energy Drinks'],
+    ['S-BUDGET Energy Drink 0,25 Liter 24er-Tray', 'Getraenke', 'Energy Drinks'],
     ['Lorenz Nic Nacs versch. Sorten 110 g', 'Lebensmittel', 'Suesswaren & Knabbereien'],
     ['Aperol 0,7 Liter', 'Getraenke', 'Spirituosen'],
   ];
@@ -620,7 +620,7 @@ test('classifies BILLA Plus uncategorized feedback anchors into narrow categorie
     ['BILLA Immer gut BILLA Schokosauce', 'Lebensmittel', 'Suesswaren & Knabbereien'],
     ['Shaker Erdbeer Tiramisu', 'Lebensmittel', 'Suesswaren & Knabbereien'],
     ['Lillet Lillet Berry 3er', 'Getraenke', 'Wein & Sekt'],
-    ['Mountain Dew Mountain Dew', 'Getraenke', 'Softdrinks & Energy'],
+    ['Mountain Dew Mountain Dew', 'Getraenke', 'Softdrinks'],
     ['Waldquelle Waldquelle Still', 'Getraenke', 'Wasser'],
   ];
 
@@ -630,5 +630,47 @@ test('classifies BILLA Plus uncategorized feedback anchors into narrow categorie
     assert.equal(decision.primaryCategory, primaryCategory, title);
     assert.equal(decision.secondaryCategory, secondaryCategory, title);
     assert.equal(decision.needsReview, false, title);
+  }
+});
+
+test('separates softdrinks and energy drinks without shared classification', () => {
+  const cases = [
+    ['Coca-Cola Original 2 Liter', 'Softdrinks'],
+    ['Orangenlimonade 1,5 Liter', 'Softdrinks'],
+    ['Zitronenlimonade 1,5 Liter', 'Softdrinks'],
+    ['S-BUDGET Energy Drink 0,25 Liter', 'Energy Drinks'],
+    ['Red Bull Energy Drink 250 ml', 'Energy Drinks'],
+  ];
+
+  for (const [title, expectedSecondary] of cases) {
+    const decision = determineCategoryDecision({ title });
+    assert.equal(decision.primaryCategory, 'Getraenke', title);
+    assert.equal(decision.secondaryCategory, expectedSecondary, title);
+  }
+
+  assert.notEqual(
+    determineCategoryDecision({ title: 'Coca-Cola Original 2 Liter' }).secondaryCategory,
+    'Energy Drinks',
+  );
+  assert.notEqual(
+    determineCategoryDecision({ title: 'Red Bull Energy Drink 250 ml' }).secondaryCategory,
+    'Softdrinks',
+  );
+});
+
+test('keeps energy wording in strong non-beverage products out of drinks', () => {
+  const cases = [
+    ['Duschgel Sport Energy Boost', 'Drogerie / Hygiene'],
+    ['Hydra Energy Extreme Sport Duschgel', 'Drogerie / Hygiene'],
+    ['Pflege Energy Bodylotion', 'Drogerie / Hygiene'],
+    ['Katzenfutter Energy Huhn', 'Tierbedarf'],
+  ];
+
+  for (const [title, expectedPrimary] of cases) {
+    const decision = determineCategoryDecision({ title });
+    assert.equal(decision.primaryCategory, expectedPrimary, title);
+    assert.notEqual(decision.primaryCategory, 'Getraenke', title);
+    assert.notEqual(decision.secondaryCategory, 'Softdrinks', title);
+    assert.notEqual(decision.secondaryCategory, 'Energy Drinks', title);
   }
 });

@@ -23,7 +23,8 @@ const CATEGORY_TAXONOMY = [
     patterns: [/(getrank|getraenk|trinken|durst|pfandflasche|mehrweg|einweg)/],
     subcategories: [
       { label: 'Wasser', patterns: [/(wasser|mineralwasser|sprudel)/] },
-      { label: 'Softdrinks & Energy', patterns: [/\b(cola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink)\b/] },
+      { label: 'Softdrinks', patterns: [/\b(cola|kola|limonade|limo|softdrink|isodrink|fanta|sprite|mezzo|almdudler|tonic|bitter lemon)\b/] },
+      { label: 'Energy Drinks', patterns: [/\benergy\s*drinks?\b|\benergydrinks?\b|\bred bull\b|\bnocco\b|\b(?:energy|isotonic)\s+drink\b/] },
       { label: 'Saefte & Sirupe', patterns: [/\b(saft|nektar|sirup|smoothie|orangensaft|apfelsaft|multivitamin)\b/] },
       { label: 'Bier', patterns: [/\b(bier|pils|weizen|radler|lager|helles|maerzen|marzen|flaschenbier|dosenbier|ottakringer|puntigamer|hirter|schwechater|wieselburger|goesser|gosser|stiegl|zipfer|zwettler|kozel)\b/] },
       { label: 'Wein & Sekt', patterns: [/\b(wein|rotwein|weisswein|rosewein|rose|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|gruener veltliner|veltliner|hugo)\b/] },
@@ -376,7 +377,7 @@ const HARD_CATEGORY_OVERRIDES = [
   {
     patterns: [/\bmountain\s+dew\b/],
     main: 'Getraenke',
-    sub: 'Softdrinks & Energy',
+    sub: 'Softdrinks',
   },
   {
     patterns: [/\bwaldquelle\b/],
@@ -462,6 +463,11 @@ const HARD_CATEGORY_OVERRIDES = [
     patterns: [/\b(klumpstreu|katzenstreu|ultra klumpstreu)\b/],
     main: 'Tierbedarf',
     sub: 'Katzenstreu & Pflege',
+  },
+  {
+    patterns: [/\bkatzenfutter\b|\bkatzennahrung\b|\bhundefutter\b|\btiernahrung\b|\btierfutter\b/],
+    main: 'Tierbedarf',
+    sub: 'Tiernahrung',
   },
   {
     patterns: [/\b(eau de parfum|eau de toilette|parfum|fragrance|fragrances|duft)\b/],
@@ -553,9 +559,14 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Kaffee & Tee',
   },
   {
-    patterns: [/\b(schartner bombe|cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|isodrink|isostar|powerade|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
+    patterns: [/\b(schartner bombe|cola|kola|limonade|limo|softdrink|eistee|isodrink|isostar|powerade|fanta|sprite|mezzo|almdudler|tonic|bitter lemon|superzero)\b/],
     main: 'Getraenke',
-    sub: 'Softdrinks & Energy',
+    sub: 'Softdrinks',
+  },
+  {
+    patterns: [/\benergy\s*drinks?\b|\benergydrinks?\b|\bred bull\b|\bnocco\b|\b(?:energy|isotonic)\s+drink\b/],
+    main: 'Getraenke',
+    sub: 'Energy Drinks',
   },
   {
     patterns: [/\b(la gioiosa|spumante|rotwein|weisswein|rosewein|wein|sekt|prosecco|champagner|frizzante|zweigelt|chardonnay|traminer|riesling|welschriesling|veltliner|hugo|gluhwein|gluehwein|cuvee)\b/],
@@ -633,9 +644,14 @@ const HARD_CATEGORY_OVERRIDES = [
     sub: 'Wasser',
   },
   {
-    patterns: [/\b(cola|kola|limonade|limo|softdrink|energy|energydrink|eistee|fanta|sprite|mezzo|almdudler|red bull|tonic|bitter lemon|drink|superzero)\b/],
+    patterns: [/\b(cola|kola|limonade|limo|softdrink|eistee|fanta|sprite|mezzo|almdudler|tonic|bitter lemon|superzero)\b/],
     main: 'Getraenke',
-    sub: 'Softdrinks & Energy',
+    sub: 'Softdrinks',
+  },
+  {
+    patterns: [/\benergy\s*drinks?\b|\benergydrinks?\b|\bred bull\b|\bnocco\b|\b(?:energy|isotonic)\s+drink\b/],
+    main: 'Getraenke',
+    sub: 'Energy Drinks',
   },
   {
     patterns: [/\b(eis|eiscreme|cremissimo|eskimo|ben jerry|ben & jerry|cornetto)\b/],
@@ -833,8 +849,31 @@ function getFallbackSubcategoryLabel(mainCategory) {
   return findTaxonomyCategory(mainCategory) ? 'Sonstiges' : '';
 }
 
-function findBestSubcategoryMatch({ texts = [], mainCategory = '' }) {
-  const candidateCategories = mainCategory ? [findTaxonomyCategory(mainCategory)].filter(Boolean) : CATEGORY_TAXONOMY;
+const NON_BEVERAGE_CONFLICT_PATTERN = /\b(?:duschgel|dusch|shampoo|haarpflege|deo|deodorant|koerperpflege|korperpflege|kosmetik|make[- ]?up|creme|lotion|bodylotion|seife|katzenfutter|hundefutter|tierfutter|tiernahrung|haustierfutter|katze|katzen|hund|hunde|futter|nassfutter|trockenfutter)\b/;
+
+function hasStrongNonBeverageConflict(texts = []) {
+  return NON_BEVERAGE_CONFLICT_PATTERN.test(normalizeTitleForMatch(texts.join(' ')));
+}
+
+function detectBeverageSubtypeOverride(texts = []) {
+  const haystack = normalizeTitleForMatch(texts.join(' '));
+
+  if (/\benergy\s*drinks?\b|\benergydrinks?\b|\bred bull\b|\bnocco\b|\b(?:energy|isotonic)\s+drink\b/.test(haystack)) {
+    return { primaryCategory: 'Getraenke', secondaryCategory: 'Energy Drinks', confidence: 0.98 };
+  }
+
+  if (/\b(cola|kola|limonade|limo|orangenlimonade|zitronenlimonade|softdrink|isodrink|fanta|sprite|mezzo|almdudler|tonic|bitter lemon|schartner bombe|superzero)\b/.test(haystack)) {
+    return { primaryCategory: 'Getraenke', secondaryCategory: 'Softdrinks', confidence: 0.96 };
+  }
+
+  return null;
+}
+
+function findBestSubcategoryMatch({ texts = [], mainCategory = '', excludeMainCategories = [] }) {
+  const excluded = new Set(excludeMainCategories.map((category) => getNormalizedLabel(category)));
+  const candidateCategories = mainCategory
+    ? [findTaxonomyCategory(mainCategory)].filter(Boolean)
+    : CATEGORY_TAXONOMY.filter((category) => !excluded.has(getNormalizedLabel(category.main)));
   let bestMatch = null;
   let bestScore = 0;
 
@@ -876,18 +915,25 @@ function detectHardCategoryOverride({ title = '', contextText = '', sourceCatego
 }
 
 function classifyOfferCategory({ title = '', contextText = '', sourceCategory = '', productGroups = [] }) {
+  const texts = getTexts({ title, contextText, sourceCategory, productGroups });
+  if (!hasStrongNonBeverageConflict(texts)) {
+    const beverageOverride = detectBeverageSubtypeOverride(texts);
+    if (beverageOverride) return beverageOverride;
+  }
+
   const hardOverride = detectHardCategoryOverride({ title, contextText, sourceCategory, productGroups });
 
   if (hardOverride) {
     return hardOverride;
   }
 
-  const texts = getTexts({ title, contextText, sourceCategory, productGroups });
+  const nonBeverageConflict = hasStrongNonBeverageConflict(texts);
   let bestMain = null;
   let bestMainScore = 0;
-  const bestSub = findBestSubcategoryMatch({ texts });
+  const excludedMainCategories = nonBeverageConflict ? ['Getraenke'] : [];
+  const bestSub = findBestSubcategoryMatch({ texts, excludeMainCategories: excludedMainCategories });
 
-  for (const category of CATEGORY_TAXONOMY) {
+  for (const category of CATEGORY_TAXONOMY.filter((candidate) => !excludedMainCategories.includes(candidate.main))) {
     const mainScore = scoreRule(texts, category);
 
     if (mainScore > bestMainScore) {
@@ -925,7 +971,10 @@ function determineOfferCategory({ title = '', contextText = '', sourceCategory =
 
 function determineOfferSubcategory({ primaryCategory = '', sourceCategory = '', fallbackLabel = '', title = '', contextText = '', productGroups = [] }) {
   const classified = classifyOfferCategory({ title, contextText, sourceCategory, productGroups });
-  const primary = sanitizeWhitespace(primaryCategory || classified.primaryCategory);
+  const texts = getTexts({ title, contextText, sourceCategory, productGroups });
+  const primary = hasStrongNonBeverageConflict(texts)
+    ? sanitizeWhitespace(classified.primaryCategory)
+    : sanitizeWhitespace(primaryCategory || classified.primaryCategory);
   const candidateTexts = [
     sanitizeWhitespace(sourceCategory),
     sanitizeWhitespace(fallbackLabel),
@@ -940,7 +989,7 @@ function determineOfferSubcategory({ primaryCategory = '', sourceCategory = '', 
   }
 
   const inferredMatch = findBestSubcategoryMatch({
-    texts: getTexts({ title, contextText, sourceCategory, productGroups }),
+    texts,
     mainCategory: primary,
   });
 

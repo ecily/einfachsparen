@@ -1684,7 +1684,7 @@ test('ranking response corrects stale dm cosmetic wine category', () => {
 
 test('ranking response corrects billa plus official algolia uncategorized anchors only', () => {
   const cases = [
-    ['Mountain Dew Mountain Dew', 'Getraenke', 'Softdrinks & Energy'],
+    ['Mountain Dew Mountain Dew', 'Getraenke', 'Softdrinks'],
     ['Lillet Berry 0,75 Liter', 'Getraenke', 'Wein & Sekt'],
     ['Clever Spareribs mariniert', 'Lebensmittel', 'Fleisch, Wurst & Fisch'],
     ['Santa Maria Dip Salsa mild', 'Lebensmittel', 'Saucen, Oele & Gewuerze'],
@@ -1749,6 +1749,42 @@ test('ranking response corrects billa plus official algolia uncategorized anchor
   assert.equal(spar.categoryPrimary, 'Unkategorisiert');
   assert.equal(felixPaprika.categoryPrimary, 'Lebensmittel');
   assert.equal(felixPaprika.categorySecondary, 'Pasta, Reis & Konserven');
+});
+
+test('search regression keeps softdrinks and energy intent separated', () => {
+  const softdrink = offer({
+    _id: 'softdrink',
+    title: 'Coca-Cola Original 2 Liter',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Softdrinks',
+    categoryKey: 'softdrinks',
+    subcategoryKey: 'softdrinks',
+    searchText: 'Coca-Cola Original Softdrinks Cola',
+  });
+  const energy = offer({
+    _id: 'energy',
+    title: 'Red Bull Energy Drink 250 ml',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Energy Drinks',
+    categoryKey: 'energy-drinks',
+    subcategoryKey: 'energy-drinks',
+    searchText: 'Red Bull Energy Drink',
+  });
+  const lemonade = offer({
+    _id: 'lemonade',
+    title: 'Zitronenlimonade 1,5 Liter',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Softdrinks',
+    categoryKey: 'softdrinks',
+    subcategoryKey: 'softdrinks',
+    searchText: 'Zitronenlimonade Limonade Softdrinks',
+  });
+
+  assert.deepEqual(applyQueryMatch([softdrink, energy, lemonade], 'softdrinks').map((item) => item._id), ['softdrink', 'lemonade']);
+  assert.deepEqual(applyQueryMatch([softdrink, energy, lemonade], 'cola').map((item) => item._id), ['softdrink']);
+  assert.deepEqual(applyQueryMatch([softdrink, energy, lemonade], 'limonade').map((item) => item._id), ['lemonade']);
+  assert.deepEqual(applyQueryMatch([softdrink, energy, lemonade], 'energy drink').map((item) => item._id), ['energy']);
+  assert.deepEqual(applyQueryMatch([softdrink, energy, lemonade], 'energy').map((item) => item._id), ['energy']);
 });
 
 test('ranking response corrects billa plus official flyer pdf anchors and drops fragments', () => {
