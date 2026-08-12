@@ -43,7 +43,7 @@ export function CookieStorageNotice({ onNavigate }) {
         <div className="panel__header" style={{ marginBottom: '0.75rem' }}>
           <h2 style={{ fontSize: '1rem', margin: 0 }}>Cookie- und Speicherhinweis</h2>
           <p style={{ margin: 0 }}>
-            Keine Marketing-Cookies. Technische Daten für Einkaufsliste, Hinweis und pseudonyme Nutzungsmessung bleiben lokal auf deinem Gerät. Keine Namen, E-Mail-Adressen oder genauen Standortdaten.
+            Keine Marketing-Cookies. Technische Daten bleiben lokal auf deinem Gerät; keine Namen, E-Mail-Adressen oder genauen Standortdaten.
           </p>
         </div>
 

@@ -7965,6 +7965,19 @@ body,
   overflow-wrap: anywhere;
 }
 
+.search-landing-hero__usp h1,
+.seo-offer-hero h1,
+.price-check-page h1,
+.price-check-page h2 {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+
 .comparison-fact-card strong {
   color: var(--kk-primary);
   font-size: clamp(1.18rem, 2.2vw, 1.55rem);
