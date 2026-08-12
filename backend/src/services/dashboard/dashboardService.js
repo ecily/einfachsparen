@@ -13,6 +13,7 @@ const { buildSafeBuildInfo } = require('../buildInfo');
 const { buildComparisonSnapshot } = require('../comparisons/comparisonService');
 const { buildAnalyticsSummary } = require('../analytics/analyticsService');
 const { classifyOfferSourceQuality } = require('../offers/sourceQuality');
+const { buildOperatorIntelligence } = require('../operator/operatorIntelligenceService');
 const logger = require('../../lib/logger');
 
 const COMPARISON_SNAPSHOT_TIMEOUT_MS = 3000;
@@ -2819,6 +2820,14 @@ async function buildDashboardSnapshot() {
     latestScheduledFullCrawl ? '' : 'Kein scheduled/full CrawlRun gefunden; Ampel nutzt den neuesten CrawlRun als Fallback.',
   ].filter(Boolean);
   const generatedAt = new Date().toISOString();
+  const operatorIntelligence = buildOperatorIntelligence({
+    generatedAt,
+    latestScheduledFullCrawl,
+    activeCrawlRun,
+    lockStatus,
+    publishStatusSummary,
+    feedbackSummary,
+  });
   const buildInfo = buildSafeBuildInfo();
   const {
     analysisEssence,
@@ -2869,6 +2878,7 @@ async function buildDashboardSnapshot() {
     totalTrafficLast24h: analyticsSummary?.totalTrafficLast24h ?? analyticsSummary?.traffic?.last24h?.total ?? 0,
     trafficDailyHistory: analyticsSummary?.trafficDailyHistory || analyticsSummary?.traffic?.dailyHistory || [],
     feedbackSummary,
+    operatorIntelligence,
     actionableIssues,
     dataCompletenessWarnings,
     qualitySummary,
@@ -2914,6 +2924,7 @@ module.exports = {
     buildQualityKpis,
     buildTrendSeries,
     buildSourceExtractionSummary,
+    buildOperatorIntelligence,
     classifySourceExtraction,
     serializeCrawlRun,
     renderAnalysisEssenceText,

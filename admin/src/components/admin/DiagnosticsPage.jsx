@@ -376,6 +376,74 @@ function FeedbackPanel({ feedback }) {
   )
 }
 
+const OPERATOR_PRIORITY_LABELS = {
+  high: 'Hoch',
+  medium: 'Mittel',
+  low: 'Niedrig',
+}
+
+function OperatorIntelligencePanel({ intelligence }) {
+  if (!intelligence) {
+    return (
+      <section className="panel operator-intelligence-panel">
+        <div className="panel__header">
+          <p className="eyebrow">Operator Intelligence</p>
+          <h2>Was du jetzt tun solltest</h2>
+          <p>Keine Empfehlung erzeugt: Operator-Daten sind in diesem Snapshot nicht verfügbar.</p>
+        </div>
+      </section>
+    )
+  }
+
+  const actions = Array.isArray(intelligence.actions) ? intelligence.actions : []
+
+  return (
+    <section className="panel operator-intelligence-panel" aria-labelledby="operator-intelligence-title">
+      <div className="panel__header">
+        <p className="eyebrow">Operator Intelligence · read-only</p>
+        <h2 id="operator-intelligence-title">Was du jetzt tun solltest</h2>
+        <p>kaufklug priorisiert hier nur Aufgaben, bei denen menschliche Entscheidung oder Kontrolle aktuell echten Mehrwert bringt.</p>
+      </div>
+
+      {actions.length === 0 ? (
+        <p className="operator-intelligence-empty">Aktuell ist kein menschlicher Eingriff erforderlich.</p>
+      ) : (
+        <div className="operator-action-list">
+          {actions.slice(0, 5).map((action, index) => (
+            <article className={`operator-action operator-action--${action.priority || 'low'}`} key={`${action.title}-${index}`}>
+              <div className="operator-action__topline">
+                <StatusPill value={action.priority}>{OPERATOR_PRIORITY_LABELS[action.priority] || action.priority || 'Unbekannt'}</StatusPill>
+                <strong>{action.title}</strong>
+                <span className="operator-action__confidence">Confidence: {action.confidence || 'unbekannt'}</span>
+              </div>
+              <div className="operator-action__body">
+                <p><strong>Warum menschlich?</strong> {action.reason}</p>
+                <p><strong>Was tun?</strong> {action.recommendedAction}</p>
+                <p><strong>Erwarteter Impact:</strong> {action.expectedImpact} <span className="operator-action__area">{action.impactArea}</span></p>
+              </div>
+              {action.evidence?.length ? (
+                <div className="operator-action__evidence">
+                  <strong>Evidence</strong>
+                  {action.evidence.map((item, evidenceIndex) => <span key={`${item.source}-${evidenceIndex}`}>{item.source}: {item.detail}</span>)}
+                </div>
+              ) : null}
+              {action.globalLearning ? (
+                <details className="operator-action__learning">
+                  <summary>Global Feedback Learning</summary>
+                  <p>Root Cause: {action.globalLearning.rootCause?.status || 'unbekannt'}</p>
+                  <p>Pattern Scope: {action.globalLearning.patternScope?.status || 'unbekannt'}</p>
+                  <p>Ähnliche Fälle: {action.globalLearning.similarCases?.status === 'not_computed' ? 'nicht berechnet' : action.globalLearning.similarCases?.count ?? 'unbekannt'}</p>
+                  <p>Globaler Fix: {action.globalLearning.globalFixCandidate?.status || 'unbekannt'} · Regression: {action.globalLearning.regressionCoverage?.status || 'unbekannt'}</p>
+                </details>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function DiagnosticsPage({
   health,
   snapshot,
@@ -416,6 +484,7 @@ export function DiagnosticsPage({
   const dataWarnings = snapshot?.dataCompletenessWarnings || []
   const hasAdminApiKey = adminApiKeyInput.trim().length > 0
   const analysisEssenceText = snapshot?.analysisEssenceText || ''
+  const operatorIntelligence = snapshot?.operatorIntelligence || null
   const [analysisCopyState, setAnalysisCopyState] = useState('idle')
 
   function handleSaveAdminApiKey() {
@@ -508,6 +577,8 @@ export function DiagnosticsPage({
       </SectionCard>
 
       {error ? <p className="status status--error">{error}</p> : null}
+
+      <OperatorIntelligencePanel intelligence={operatorIntelligence} />
 
       <section className="metrics">
         <MetricCard label="Ampel" value={executive.label || STATUS_LABELS[executive.level]} note={executive.reason} status={executive.level} />
