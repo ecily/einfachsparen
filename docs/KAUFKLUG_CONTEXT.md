@@ -1,5 +1,15 @@
 # kaufklug.at Kontext
 
+## HOFER-/Müller-Coverage-P0 am 2026-08-13
+
+- Die heutige UX-Arbeit war keine Ursache für den HOFER-/Müller-Coverage-Verlust: Die Commits `6cf21553`, `2e981244`, `d0f5ba4e` und `e3c6dc51` ändern weder Retailer-Allow-/Deny-Listen noch Filter-, Ranking-, Public-Validity-, TTL- oder Source-Definitionen.
+- Der lokale read-only Retailer-Diagnoselauf konnte wegen fehlender Atlas-Allowlist der lokalen IP nicht gegen Mongo verbinden. Es wurden dabei keine Collections mutiert und keine Secrets ausgegeben.
+- Ein DO-Dry-Run für exakt `hofer` und `mueller` bestätigte zwei aktive Source-Definitionen. Der produktive, ausschließlich auf diese beiden Händler begrenzte Crawl lief als Run `6a7dbaa02feb2821c1a0f915` erfolgreich durch.
+- HOFER: Source `hofer-official-flyer`, HTTP 403 / `content-type=text/html` auf der offiziellen Angebotsseite; 0 Raw, 0 Parsed, 0 Stored, Status `partial`, sieben `fallback-fetch-failed`. Ursache ist aktuell belastbar `SOURCE TRANSPORT FAILURE` mit externer Cloudflare-/403-Evidence, nicht UI- oder Public-Validity-Code.
+- Müller: Source `mueller-official-online-offers`, HTTP 200; 145 Raw, 120 Parsed/Stored, 25 Parser-Rejects, 120 Bilder, 9 fehlende Mengen, Status `success`, aktuelle Offers mit `publishStatus=crawl-run-success` und `sourceRunStatus=success`. Search liefert Müller aktiv, z. B. Shampoo 5 und Toilettenpapier 1 Offer. Der anschließende vorhandene Filter-Rebuild lief erfolgreich, zeigt Müller aber weiterhin nicht im Public-Händlerfilter; Kategoriefilter für Müller ist ebenfalls leer. Das ist ein offener `METADATA REGRESSION`-/Filter-Sync-Befund, keine Freigabe für eine manuelle DB-Korrektur.
+- Der Run meldete für HOFER optionales Problem, für Müller erfolgreiche Required-Source und insgesamt 120 gespeicherte Offers. Kein Full Crawl, keine anderen Händler, kein PAGRO/SPAR/ZGONC, keine Handkorrektur und kein Public-Validity-Bypass.
+- P0 bleibt offen/rot: Müller hat aktive Public Offers, ist aber noch nicht vollständig im Filter/Browse-Vertrag; HOFER hat weiterhin 0 aktive Public Offers wegen aktuellem externem Transportblock. Kein Wechsel zur User Journey und kein grüner Abschluss, bevor beide Händler Public Offers, Filter und Search/Browse vollständig erfüllen.
+
 ## PriceCheck Engine v1 am 2026-08-12
 
 - Commit `c17d0c1c` fuehrt einen fail-closed High-Confidence-PriceCheck fuer eine konkrete 0,5-l-Dosenbier-Gruppe ein. Der Kandidat nutzt nur aktive Public Offers mit offizieller Quelle, erfolgreichem Crawl-Run, expliziter Menge, kompatiblem Literpreis, `comparisonSafe=true` und sichtbarer Bedingung; PAGRO, Preisbereiche und Bestpreis-Aussagen bleiben ausgeschlossen.
