@@ -8431,7 +8431,7 @@ async function crawlHoferPublitasPdf({ source, crawlJobId, region }) {
     try {
       const page = publicationUrl === catalogRoot ? root : await fetchHtml(publicationUrl);
       const $ = cheerio.load(page.html);
-      const text = sanitizeWhitespace($('body').text());
+      const text = sanitizeWhitespace(page.html);
       const pdfMatch = page.html.match(/https:\/\/view\.publitas\.com\/[^"'\s/]+\/[^"'\s/]+\/pdfs\/[a-f0-9-]+\.pdf/i);
       if (!pdfMatch) continue;
       const range = text.match(/(?:g(?:ü|u)ltig|gültig)\s+ab\s+\w+\.?\s+(\d{1,2})\.(\d{1,2})\.?\s+bis\s+\w+\.?\s+(\d{1,2})\.(\d{1,2})\.?/i);
