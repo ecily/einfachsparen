@@ -2,6 +2,8 @@
 
 ## HOFER-/Müller-Coverage-P0 am 2026-08-13
 
+- Coverage-Folgefix am 2026-08-13: `publicValidity` akzeptiert bei offizieller, offer-genauer `crawlJobId`-/`crawlRunId`-Lineage auch fehlendes `rawFacts.snapshotCurrent`; reine Source-Nähe bleibt fail-closed. Der Offer-Writer übernimmt nun die konkrete `source._id`, wenn der Parser kein `sourceId` liefert. Commits `a27626d9` und `3ba711b5` sind gepusht; gezielte Tests 58/58 grün. Der aktuelle DO-Deploy meldet `/api/health` HTTP 200, Mongo connected, BuildTime `2026-08-13T13:03:27.999Z`. Der erforderliche gezielte Müller-Re-Crawl wurde vom bestehenden Startup-Schutz mit 688 Sekunden Restzeit abgewiesen und daher nicht umgangen. Live bleibt der Filter-Facet-Stand vor dem Re-Crawl ohne Müller, während offer-genaue Suche bereits 5 Müller-Shampoo-Angebote liefert. HOFER-Alternative `katalog.hofer.at`/offizielles Publitas-PDF ist erreichbar und als nächster Integrationskandidat identifiziert; die aktuelle www.hofer.at-Quelle bleibt 403. P0 daher weiterhin rot; kein DB-Handpatch und kein verbotener Transport-Bypass.
+
 - Die heutige UX-Arbeit war keine Ursache für den HOFER-/Müller-Coverage-Verlust: Die Commits `6cf21553`, `2e981244`, `d0f5ba4e` und `e3c6dc51` ändern weder Retailer-Allow-/Deny-Listen noch Filter-, Ranking-, Public-Validity-, TTL- oder Source-Definitionen.
 - Der lokale read-only Retailer-Diagnoselauf konnte wegen fehlender Atlas-Allowlist der lokalen IP nicht gegen Mongo verbinden. Es wurden dabei keine Collections mutiert und keine Secrets ausgegeben.
 - Ein DO-Dry-Run für exakt `hofer` und `mueller` bestätigte zwei aktive Source-Definitionen. Der produktive, ausschließlich auf diese beiden Händler begrenzte Crawl lief als Run `6a7dbaa02feb2821c1a0f915` erfolgreich durch.
