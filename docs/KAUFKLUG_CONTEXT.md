@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## DigitalOcean-Static-Deploy-Diagnose am 2026-08-13
+
+- Frontend-Trigger `a9499c14` ergÃ¤nzt nur einen kommentarbasierten Static-Deploy-Marker in `admin/src/App.jsx`; keine sichtbare oder fachliche Logik wurde geÃ¤ndert. Lokal sind der Landingpage-Retailer-Text und `Womit willst du heute sparen?` im Production-Build enthalten; ESLint, 62 Admin-Tests, Build und `git diff --check` sind grÃ¼n.
+- Nach dem Push wurde der Live-`Last-Modified` zwar aktualisiert, aber die Homepage lieferte weiterhin exakt die alten Assets `index-B3TSo1FC.css`/`index-B24CZz_3.js` und die alte HÃ¤ndlerliste. CDN-Cache allein erklÃ¤rt den Befund damit nicht. Im Repo existieren keine DO-App-Spec, kein `app.yaml`, keine GitHub-Action und keine verifizierbare Static-Site-Konfiguration. Branch-/Root-/Output-Mismatch oder ein externer manueller Artifact-Deploy bleiben ohne DO-Dashboardzugriff nicht unterscheidbar.
+- Erforderlicher Operator-Schritt: In der DO Static Site Repository `ecily/einfachsparen`, Branch `main`, Root `/` bzw. alternativ Root `admin` konsistent prÃ¼fen; Build muss `npm run build --prefix admin` (Root `/`) bzw. `npm run build` (Root `admin`) ausfÃ¼hren und als Output `admin/dist` bzw. `dist` derselben Root verwenden. Danach Deploy-Log und ausgelieferte JS-Hash-/Landing-Copy prÃ¼fen. Keine DB-, Crawl-, Parser- oder Public-Validity-Arbeit.
+
 ## Landingpage-/USP-Deep-Audit am 2026-08-13
 
 - Der lokale HEAD `ef93ca67` enthÃ¤lt den gepushten Landingpage-Retailer-Fix aus `694e8aa4`: BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, MÃ¼ller sowie HOFER/INTERSPAR eingeschrÃ¤nkt. Der neue Suchfeld-Placeholder und die bestehende Beta-/Trust-Kommunikation sind lokal vorhanden; Admin-Lint, Production-Build, relevante UI-Tests und `git diff --check` waren grÃ¼n.
