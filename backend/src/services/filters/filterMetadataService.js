@@ -311,7 +311,38 @@ function buildCacheRawFacts(rawFacts = {}) {
 }
 
 function isOfferActive(offer, now = new Date()) {
-  return isOfferFreshForActiveUse(offer, now);
+  if (isOfferFreshForActiveUse(offer, now)) return true;
+
+  // Keep retailer/category metadata aligned with the public ranking contract
+  // when a current official snapshot omitted its legacy snapshot flag. Exact
+  // offer lineage is mandatory; source-level proximity is never sufficient.
+  const sourceText = [
+    offer?.sourceType,
+    ...(Array.isArray(offer?.sourceTypes) ? offer.sourceTypes : []),
+    offer?.rawFacts?.sourceType,
+    offer?.sourceUrl,
+  ].filter(Boolean).join(' ').toLowerCase();
+  const officialSource = /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer|offers-page/.test(sourceText)
+    && !/aktionsfinder|marketguru|wogibtswas|aggregator|ppcv/.test(sourceText);
+  const exactSuccessfulLineage = Boolean(
+    offer?.sourceId
+    && offer?.crawlRunId
+    && offer?.crawlJobId
+    && String(offer?.sourceRunStatus || '').toLowerCase() === 'success'
+    && !/partial|failed|blocked|zero|retained|stale|unknown/i.test(String(offer?.publishStatus || ''))
+  );
+  const validFrom = offer?.validFrom ? new Date(offer.validFrom) : null;
+  const validTo = offer?.validTo ? new Date(offer.validTo) : null;
+  const currentWindow = (!validFrom || (Number.isFinite(validFrom.getTime()) && validFrom <= now))
+    && (!validTo || (Number.isFinite(validTo.getTime()) && validTo >= now));
+
+  return Boolean(
+    officialSource
+    && exactSuccessfulLineage
+    && offer?.status === 'active'
+    && offer?.isActiveNow === true
+    && currentWindow
+  );
 }
 
 const RETAILER_ACTIVE_COVERAGE_TARGETS = {
