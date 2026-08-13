@@ -7973,6 +7973,18 @@ body,
   overflow-wrap: anywhere;
 }
 
+.seo-static-shell,
+.seo-static-shell * {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.seo-static-shell {
+  width: 100%;
+}
+
 .search-landing-hero__usp h1,
 .seo-offer-hero h1,
 .price-check-page h1,
@@ -8780,5 +8792,16 @@ body,
   .user-card__actions {
     width: 100%;
     min-width: 0;
+  }
+
+  .user-card__actions {
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-content: stretch;
+  }
+
+  .user-card__actions > *,
+  .user-card__price-row > * {
+    min-width: 0;
+    max-width: 100%;
   }
 }
