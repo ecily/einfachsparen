@@ -86,6 +86,8 @@ const FILTER_METADATA_OFFER_SELECT_FIELDS = [
   'evidenceUrls',
   'publishStatus',
   'sourceRunStatus',
+  'crawlRunId',
+  'crawlJobId',
   'needsReview',
   'reviewReasons',
   'crawlJobId',

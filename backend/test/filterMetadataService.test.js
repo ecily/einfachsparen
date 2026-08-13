@@ -517,6 +517,7 @@ test('public-enabled retailer with current offer-specific official lineage appea
 
 test('filter metadata offer select keeps crawl freshness fields aligned with ranking visibility', () => {
   for (const field of [
+    'crawlRunId',
     'crawlJobId',
     'lastSeenAt',
     'lastSeenRunId',
