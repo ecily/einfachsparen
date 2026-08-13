@@ -110,8 +110,9 @@ const RETAILER_DEFINITIONS = [
     retailerKey: 'hofer',
     retailerName: 'Hofer',
     channel: 'official-flyer',
-    label: 'HOFER aktuelle Flugblaetter und Broschueren',
-    sourceUrl: 'https://www.hofer.at/de/angebote/aktuelle-flugblaetter-und-broschuren.html',
+    label: 'HOFER offizielles Publitas-Flugblatt',
+    sourceUrl: 'https://katalog.hofer.at/',
+    parserHint: 'hofer-publitas-pdf',
     crawlPolicy: {
       discoverySeedUrls: [
         'https://www.hofer.at/de/angebote/angebote-im-ueberblick.html?productState=In+der+Filiale+erh%C3%A4ltlich',
@@ -124,7 +125,7 @@ const RETAILER_DEFINITIONS = [
       discoverDatedOfferPages: true,
     },
     capabilities: { discoverOffers: true, parseOfferPages: false, parseFlyers: true },
-    notes: 'Offizielle HOFER-Flugblattseite als zusaetzliche Primaerquelle. Angebots-, Preiswochen-, Dauerpreis-, Technik-/Haushalt- und Handy-/Router-Seiten sind Discovery-Seeds; Datumsseiten muessen dynamisch entdeckt werden und werden nicht statisch hardcodiert.',
+    notes: 'Offizieller, oeffentlich erreichbarer HOFER-Katalog/Publlitas-PDF-Pfad. Die alte www.hofer.at-HTML-Quelle war 403 und wird nicht mehr als Transportpfad verwendet; aktuelle Publikation wird bounded aus dem Katalogkontext ermittelt.',
   },
   {
     retailerKey: 'hofer',

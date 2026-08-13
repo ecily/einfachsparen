@@ -62,6 +62,11 @@ const {
   summarizeRejections: summarizeBillaPdfRejections,
 } = require('./billaOfficialFlyerPdfParser');
 const {
+  PARSER_VERSION: HOFER_PDF_PARSER_VERSION,
+  SOURCE_TYPE: HOFER_PDF_SOURCE_TYPE,
+  extractHoferPublitasPdf,
+} = require('./hoferPublitasPdfParser');
+const {
   PARSER_VERSION: CATEGORY_PROMOTION_PARSER_VERSION,
   SOURCE_TYPE: CATEGORY_PROMOTION_SOURCE_TYPE,
   extractAndNormalizeOfficialCategoryPromotions,
@@ -8404,6 +8409,88 @@ async function crawlHoferOfficialPages({
   };
 }
 
+async function crawlHoferPublitasPdf({ source, crawlJobId, region }) {
+  const catalogRoot = source.sourceUrl;
+  const root = await fetchHtml(catalogRoot);
+  const rootText = sanitizeWhitespace(cheerio.load(root.html)('body').text());
+  const publicationMatch = root.html.match(/flipbook_kw(\d+)_([0-9]{2})_preview/i);
+  const candidates = [];
+  if (publicationMatch) {
+    const week = Number(publicationMatch[1]);
+    const year = publicationMatch[2];
+    for (let offset = 0; offset <= 3; offset += 1) {
+      const candidateWeek = String(week - offset).padStart(2, '0');
+      candidates.push(`https://katalog.hofer.at/flipbook_kw${candidateWeek}_${year}_preview`);
+    }
+  } else {
+    candidates.push(catalogRoot);
+  }
+
+  let selected = null;
+  for (const publicationUrl of candidates) {
+    try {
+      const page = publicationUrl === catalogRoot ? root : await fetchHtml(publicationUrl);
+      const $ = cheerio.load(page.html);
+      const text = sanitizeWhitespace($('body').text());
+      const pdfMatch = page.html.match(/https:\/\/view\.publitas\.com\/[^"'\s]+\/pdfs\/[a-f0-9-]+\.pdf/i);
+      if (!pdfMatch) continue;
+      const range = text.match(/(?:g(?:ü|u)ltig|gültig)\s+ab\s+\w+\.?\s+(\d{1,2})\.(\d{1,2})\.?\s+bis\s+\w+\.?\s+(\d{1,2})\.(\d{1,2})\.?/i);
+      if (range) {
+        const now = new Date();
+        const yearNumber = now.getUTCFullYear();
+        const from = new Date(Date.UTC(yearNumber, Number(range[2]) - 1, Number(range[1]), 0));
+        const to = new Date(Date.UTC(yearNumber, Number(range[4]) - 1, Number(range[3]), 23, 59, 59));
+        if (from <= now && to >= now) {
+          selected = { url: publicationUrl, html: page.html, text, pdfUrl: pdfMatch[0] };
+          break;
+        }
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+  if (!selected) throw new Error('HOFER Publitas: no current official publication with PDF found.');
+
+  const pdf = await fetchBinary(selected.pdfUrl, 'application/pdf', { maxContentLength: 60 * 1024 * 1024 });
+  await createCompactRawDocument({
+    sourceId: source._id,
+    crawlJobId,
+    retailerKey: source.retailerKey,
+    region,
+    documentType: 'pdf',
+    sourceType: HOFER_PDF_SOURCE_TYPE,
+    url: selected.pdfUrl,
+    canonicalUrl: selected.url,
+    finalUrl: selected.pdfUrl,
+    title: 'HOFER aktuelles offizielles Publitas-Flugblatt',
+    httpStatus: 200,
+    contentType: 'application/pdf',
+    downloadBytes: pdf.buffer.length,
+    contentHash: createHash(pdf.buffer),
+    contentSnippet: selected.text.slice(0, 500),
+    extractedPreview: [selected.url, selected.pdfUrl],
+    foundRawItems: 1,
+    parserVersion: HOFER_PDF_PARSER_VERSION,
+    payload: { catalogUrl: selected.url, pdfUrl: selected.pdfUrl },
+  });
+  const parsed = await extractHoferPublitasPdf({ pdfBuffer: pdf.buffer, source, crawlJobId, region, pdfUrl: selected.pdfUrl, catalogText: selected.text });
+  const offerDocuments = enrichOffersForStorage(parsed.candidates, {
+    source,
+    sourceType: HOFER_PDF_SOURCE_TYPE,
+    parserVersion: HOFER_PDF_PARSER_VERSION,
+    normalizationVersion: NORMALIZATION_VERSION,
+  });
+  const refreshResult = await replaceOffersForSource({ sourceId: source._id, offerDocuments });
+  return {
+    offerDocuments,
+    rawDocumentCount: 1,
+    rawCandidateCount: parsed.candidates.length,
+    diagnostics: { sourceUrl: selected.url, pdfUrl: selected.pdfUrl, pages: parsed.pages, textLength: parsed.textLength, validity: parsed.validity },
+    rejectionReasons: [],
+    refreshResult,
+  };
+}
+
 function isSparProductworldSource(source = {}) {
   return (
     source.parserHint === 'official-productworld-bff'
@@ -9236,7 +9323,20 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
     let extraRejectionReasons = [];
     let forcePartialStatus = false;
 
-    if (source.retailerKey === 'hofer' && source.channel === 'official-flyer') {
+    if (source.retailerKey === 'hofer' && source.parserHint === 'hofer-publitas-pdf') {
+      const hoferResult = await crawlHoferPublitasPdf({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+      });
+
+      offersStored += hoferResult.offerDocuments.length;
+      extraRawDocuments += hoferResult.rawDocumentCount;
+      rawCandidateCount += hoferResult.rawCandidateCount || 0;
+      allStoredOffers.push(...hoferResult.offerDocuments);
+      parserDetails.hoferPublitasPdf = hoferResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(hoferResult.rejectionReasons || []);
+    } else if (source.retailerKey === 'hofer' && source.channel === 'official-flyer') {
       const hoferResult = await crawlHoferOfficialPages({
         source,
         crawlJobId: crawlJob._id,
