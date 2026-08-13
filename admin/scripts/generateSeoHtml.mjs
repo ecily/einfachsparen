@@ -20,6 +20,8 @@ const comparisonQueries = new Map([
 const execFileAsync = promisify(execFile)
 const CRITICAL_CSS = `html,body{margin:0;min-width:320px;min-height:100%;background:#f7f9fb;color:#1e2933;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}*,*:before,*:after{box-sizing:border-box}body{line-height:1.5}#root{width:100%;min-width:0}.shell{width:min(1240px,calc(100vw - 2rem));margin:0 auto;padding:2rem 0 3.5rem}.seo-static-shell{width:min(100%,760px);margin:0 auto;padding:1.25rem}.seo-static-shell h1,.seo-static-shell h2,.seo-static-shell p{max-width:100%;overflow-wrap:anywhere;white-space:normal}.seo-static-shell h1{margin:.35rem 0 .75rem;font-family:Manrope,Inter,ui-sans-serif,system-ui,sans-serif;font-size:clamp(1.8rem,5vw,3.2rem);line-height:1.08}.seo-static-shell p{color:#5f6e7c}.seo-static-links,.seo-static-comparison,.seo-static-price-check{max-width:100%;margin-top:1rem;padding:1rem;border:1px solid #d9e1e8;border-radius:1rem;background:#fff}.seo-static-links ul{display:flex;flex-wrap:wrap;gap:.45rem;margin:0;padding:0;list-style:none}.seo-static-links a{display:inline-flex;max-width:100%;padding:.42rem .68rem;border:1px solid #d9e1e8;border-radius:999px;overflow-wrap:anywhere}@media (max-width:600px){.shell{width:calc(100vw - 1rem);padding-top:.55rem}.seo-static-shell{padding:.78rem}.seo-static-shell h1{font-size:clamp(1.55rem,8vw,2.15rem)}}`
 
+const CRITICAL_STATIC_NAV_CSS = `.page-nav{display:flex;align-items:center;gap:.75rem;width:100%;max-width:100%;margin-bottom:1.35rem;padding:.44rem;border:1px solid #d9e1e8;border-radius:1.25rem;background:#fffefaeb}.page-nav__logo{display:grid;place-items:center;flex:0 0 auto;width:2.76rem;height:2.76rem;padding:.12rem;border:1px solid #d9e1e8;border-radius:.85rem;background:#fff}.page-nav__logo img{display:block;width:100%;height:100%;object-fit:contain}.page-nav__beta{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-height:2.25rem;padding:.45rem .72rem;border:1px solid #d9e1e8;border-radius:999px;background:#fff;color:#243447;font-weight:900}.page-nav__main{display:flex;gap:.35rem;min-width:0}.page-nav__button{display:inline-flex;align-items:center;justify-content:center;min-height:2.25rem;padding:.72rem 1.05rem;border:1px solid transparent;border-radius:999px;background:transparent;color:#5f6e7c;font-weight:750;text-decoration:none}.seo-static-shell{width:100%;min-width:0}.seo-static-main{max-width:100%;padding:1.25rem;border:1px solid #d9e1e8;border-radius:1.45rem;background:#fffefa}@media (max-width:600px){.page-nav{gap:.25rem;margin-bottom:.7rem;padding:.3rem}.page-nav__logo{width:2.28rem;height:2.28rem;padding:.06rem}.page-nav__beta{min-height:2.08rem;padding:.46rem .14rem;font-size:.7rem}.page-nav__main{flex:1;gap:.1rem}.page-nav__button{min-width:0;min-height:2.08rem;padding:.46rem .16rem;font-size:.72rem}.seo-static-main{padding:.78rem}}`
+
 const staticPages = [
   {
     path: '/',
@@ -251,7 +253,11 @@ export function buildSeoStaticDocument(template, page, pages) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
-  const staticContentWithPriceCheck = staticContent.replace('</main>', `${buildPriceCheckHtml(page.priceCheckCandidate)}${buildPriceCheckDataScript(page.priceCheckCandidate)}</main>`)
+  const staticNavigation = '<nav class="page-nav seo-static-nav" aria-label="Seiten"><span class="page-nav__logo" aria-hidden="true"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></span><span class="page-nav__beta">Beta</span><div class="page-nav__main"><span class="page-nav__button">Suche</span><span class="page-nav__button">Stöbern</span><span class="page-nav__button">Liste</span></div></nav>'
+  const staticShellContent = staticContent
+    .replace('<main class="seo-static-shell">', `<main class="shell seo-static-shell">${staticNavigation}<section class="seo-static-main">`)
+    .replace('</main>', '</section></main>')
+  const staticContentWithPriceCheck = staticShellContent.replace('</section>', `${buildPriceCheckHtml(page.priceCheckCandidate)}${buildPriceCheckDataScript(page.priceCheckCandidate)}</section>`)
   const staticContentWithComparison = staticContentWithPriceCheck.replace('</main>', `${buildComparisonSummaryHtml(page.comparisonSummary)}</main>`)
   const updated = template
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`)
@@ -262,7 +268,7 @@ export function buildSeoStaticDocument(template, page, pages) {
     .replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:description" content="${escapeHtml(page.description)}" />\n`)
     .replace(/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:url" content="${canonical}" />\n`)
     .replace(/<div id="root"><\/div>/i, `<div id="root">${staticContentWithComparison}</div>`)
-    .replace(/<link rel="stylesheet" crossorigin href="[^"]+">/i, `<style id="kaufklug-critical-css">${CRITICAL_CSS}</style>\n    $&`)
+    .replace(/<link rel="stylesheet" crossorigin href="[^"]+">/i, `<style id="kaufklug-critical-css">${CRITICAL_CSS}${CRITICAL_STATIC_NAV_CSS}</style>\n    $&`)
     .replace(/<\/head>/i, `<script type="application/ld+json" id="kaufklug-static-breadcrumb">${buildBreadcrumbJsonLd(page)}</script>\n  </head>`)
 
   return updated
