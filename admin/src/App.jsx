@@ -128,6 +128,7 @@ function BetaNoticeDisclosure({ onNavigate }) {
 }
 
 function SearchLandingHero() {
+  // Static deploy marker: keep the public landing build tied to the current frontend source.
   return (
     <>
       <section
