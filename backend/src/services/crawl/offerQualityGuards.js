@@ -4,6 +4,7 @@ const { extractPromotionRequirement, isSunProtectionPlusContext } = require('../
 const CLEAR_COMPARABLE_UNITS = new Set(['kg', 'l', 'Stk']);
 const UNIT_UNCLEAR_REASON = 'Vergleichseinheit unklar';
 const UNIT_CONFLICT_REASON = 'Vergleichseinheit widerspruechlich';
+const PACKAGE_CONTENT_NOT_COMPARABLE_REASON = 'Packungsinhalt nicht als Vergleichseinheit belastbar';
 const QUANTITY_INCOMPLETE_REASON = 'Menge unvollstaendig';
 const PACKAGE_SIZE_UNCLEAR_REASON = 'Packungsgroesse unklar';
 
@@ -259,7 +260,7 @@ function inferQuantityFieldsFromText(value = '') {
     };
   }
 
-  const pieceMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(stk|stueck|stuck|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?|kisten?|sack|saecke|sacke)\b/i);
+  const pieceMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(stk|stueck|stuck|stück|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?|kisten?|sack|saecke|sacke)\b/i);
 
   if (pieceMatch) {
     if (/^(?:flaschen|dosen)$/i.test(pieceMatch[2])) {
@@ -355,6 +356,18 @@ function hasMultipackSignal(offer) {
   );
 }
 
+function hasNonDivisiblePiecePackSignal(offer = {}) {
+  const text = normalizeTitleForMatch([
+    offer.title,
+    offer.description,
+    offer.quantityText,
+    offer.rawFacts?.infoText,
+    offer.rawFacts?.packageQuantityText,
+  ].filter(Boolean).join(' '));
+
+  return /\b(?:wc[- ]?steine?|toilettensteine?|duftsteine?|kombipack(?:ung)?|mehrteilig(?:e|er|es)?|garnitur|set)\b/.test(text);
+}
+
 function hasReliableQuantityBasis(offer, comparableUnit) {
   const totalComparableAmount = parsePositiveNumber(offer?.totalComparableAmount);
 
@@ -411,6 +424,10 @@ function assessComparableSafety(offer = {}) {
 
   if (looksLikePackPrice) {
     amount = Number((currentPrice / explicitPieceBasis).toFixed(2));
+  }
+
+  if (resolvedUnit === 'Stk' && explicitPieceBasis > 1 && hasNonDivisiblePiecePackSignal(offer)) {
+    reasons.add(PACKAGE_CONTENT_NOT_COMPARABLE_REASON);
   }
 
   const safe = reasons.size === 0 && normalizedUnitPrice.comparable === true;
@@ -718,6 +735,7 @@ function sanitizePublicOfferQuantityFields(offer = {}, { safelyComparable = isOf
 module.exports = {
   UNIT_UNCLEAR_REASON,
   UNIT_CONFLICT_REASON,
+  PACKAGE_CONTENT_NOT_COMPARABLE_REASON,
   QUANTITY_INCOMPLETE_REASON,
   PACKAGE_SIZE_UNCLEAR_REASON,
   assessComparableSafety,

@@ -46,6 +46,20 @@ test('single-piece offers and already reconciled count prices remain unchanged',
   assert.equal(reconciled.normalizedUnitPrice.amount, 0.16);
 });
 
+test('non-divisible set-like package content is not published as a comparison unit', () => {
+  const result = assessComparableSafety({
+    title: 'Selbst Aktiv WC-Steine Eukalyptus',
+    priceCurrent: { amount: 5.49 },
+    quantityText: '3 Stück',
+    comparableUnit: 'Stk',
+    normalizedUnitPrice: { amount: 5.49, unit: 'Stk', comparable: true, confidence: 0.9 },
+  });
+
+  assert.equal(result.safe, false);
+  assert.equal(result.normalizedUnitPrice.comparable, false);
+  assert.match(result.reviewReasons.join(' '), /Packungsinhalt/);
+});
+
 test('explicit product packs produce total quantity but minimum purchase thresholds do not', () => {
   const cases = [
     ['1 Kiste = 20 Flaschen, 0,5 l', 20, 10],

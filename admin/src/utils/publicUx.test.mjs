@@ -137,6 +137,10 @@ test('unit-price information remains hidden when the safe display guard rejects 
     packCount: 4,
     packageType: 'pack',
   }), false)
+  assert.equal(shouldDisplayUnitPrice({
+    normalizedUnitPrice: { amount: 1.83, unit: 'Stk', comparable: false },
+    quality: { comparisonSafe: false },
+  }), false)
   assert.match(offerCardSource, /\{unitPriceText \? \([\s\S]*?<div className="user-card__unit-price-callout"/)
   assert.doesNotMatch(offerCardSource, /<(button|details)[^>]*className="user-card__unit-price-callout"/)
 })

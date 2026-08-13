@@ -69,6 +69,10 @@ export function shouldDisplayUnitPrice(offer) {
     return false
   }
 
+  if (offer?.normalizedUnitPrice?.comparable !== true || offer?.quality?.comparisonSafe !== true) {
+    return false
+  }
+
   if (unit === 'Stk' && packCount > 1 && (packageType === 'pack' || packageType === 'box' || packageType === 'blister' || unitType === 'Stk')) {
     return false
   }
