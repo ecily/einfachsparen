@@ -70,12 +70,25 @@ function buildPublicValidityMongoMatch(now = new Date()) {
     crawlJobId: { $exists: true, $ne: null },
     sourceId: { $exists: true, $ne: null },
     lastSeenAt: { $exists: true, $ne: null },
-    $and: [{
-      $or: [
-        { sourceType: /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer/i },
-        { sourceTypes: /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer/i },
-      ],
-    }],
+    $and: [
+      {
+        $or: [
+          { 'rawFacts.snapshotCurrent': true },
+          {
+            sourceRunStatus: 'success',
+            crawlJobId: { $exists: true, $ne: null },
+            sourceId: { $exists: true, $ne: null },
+            lastSeenAt: { $exists: true, $ne: null },
+          },
+        ],
+      },
+      {
+        $or: [
+          { sourceType: /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer/i },
+          { sourceTypes: /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer/i },
+        ],
+      },
+    ],
   };
   const ttlClauses = Object.entries(SOURCE_TTL_HOURS).map(([retailerKey, hours]) => ({
     retailerKey,
@@ -157,7 +170,10 @@ function normalizeSourceText(offer = {}) {
 }
 
 function isOfficialSnapshotSource(offer = {}) {
-  if (offer.rawFacts?.snapshotCurrent !== true) return false;
+  const hasExplicitSnapshot = offer.rawFacts?.snapshotCurrent === true;
+  const hasCurrentOfferLineage = hasOfferSpecificConfirmation(offer);
+
+  if (!hasExplicitSnapshot && !hasCurrentOfferLineage) return false;
   const sourceText = normalizeSourceText(offer);
   if (/aktionsfinder|marketguru|wogibtswas|aggregator|ppcv/.test(sourceText)) return false;
   return /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer|offers-page/.test(sourceText);

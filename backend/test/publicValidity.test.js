@@ -54,6 +54,33 @@ test('snapshot confirmation is offer-specific and eligible inside its TTL', () =
   assert.equal(decision.evidenceType, 'official-snapshot-lineage');
 });
 
+test('official current offer lineage is a valid snapshot even when snapshotCurrent flag is absent', () => {
+  const decision = isPublicValidityEligible({
+    ...snapshotOffer({
+      retailerKey: 'mueller',
+      sourceType: 'mueller-official-online-offers',
+      rawFacts: { freshnessTtlHours: 48 },
+    }),
+  }, NOW);
+
+  assert.equal(decision.eligible, true);
+  assert.equal(decision.validityClass, 'snapshot-confirmed');
+  assert.equal(decision.sourceTtlHours, 48);
+});
+
+test('official source proximity without offer-specific lineage remains fail closed', () => {
+  const decision = isPublicValidityEligible({
+    retailerKey: 'mueller',
+    sourceType: 'mueller-official-online-offers',
+    sourceRunStatus: 'success',
+    sourceId: 'source-1',
+    lastSeenAt: new Date('2026-01-15T00:00:00.000Z'),
+    rawFacts: { freshnessTtlHours: 48 },
+  }, NOW);
+
+  assert.equal(decision.reasonCode, 'source-not-approved-snapshot');
+});
+
 test('configured official snapshot retailers use their conservative source TTLs', () => {
   for (const [retailerKey, sourceType, ttl] of [
     ['billa-plus', 'billa-plus-official-algolia', 72],

@@ -483,6 +483,38 @@ test('retailer filter excludes Aktionsfinder snapshots without explicit validity
   assert.equal(eurospar.activeOffers, 0);
 });
 
+test('public-enabled retailer with current offer-specific official lineage appears in retailer and category metadata', () => {
+  const now = new Date('2026-01-15T12:00:00.000Z');
+  const muellerOffer = {
+    retailerKey: 'mueller',
+    retailerName: 'Müller',
+    sourceId: 'mueller-source',
+    sourceType: 'mueller-official-online-offers',
+    sourceUrl: 'https://www.mueller.at/p/example/',
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-success',
+    crawlRunId: 'mueller-run',
+    crawlJobId: 'mueller-job',
+    lastSeenAt: new Date('2026-01-15T10:00:00.000Z'),
+    status: 'active',
+    isActiveNow: true,
+    validTo: null,
+    title: 'Müller Shampoo',
+    categoryPrimary: 'Drogerie / Hygiene',
+    categorySecondary: 'Haarpflege',
+    priceCurrent: { amount: 2.99, currency: 'EUR' },
+    quantityText: '250 ml',
+    quality: { parsingConfidence: 0.9, comparisonSafe: true },
+    rawFacts: { freshnessTtlHours: 48 },
+  };
+
+  const retailers = buildRetailerDocuments([], [muellerOffer], now, [], []);
+  const mueller = retailers.find((retailer) => retailer.retailerKey === 'mueller');
+
+  assert.equal(mueller.activeOfferCount, 1);
+  assert.equal(mueller.isActive, true);
+});
+
 test('filter metadata offer select keeps crawl freshness fields aligned with ranking visibility', () => {
   for (const field of [
     'crawlJobId',
