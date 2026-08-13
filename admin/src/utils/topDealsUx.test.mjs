@@ -23,7 +23,7 @@ test('sticky header exposes the Top Deals route with compact mobile copy', () =>
 })
 
 test('search and Top Deals are presented as distinct guided entries without limiting normal search', () => {
-  assert.match(keywordSearchSource, /placeholder="Was m&ouml;chtest du heute billiger kaufen"/)
+  assert.match(keywordSearchSource, /placeholder="Womit willst du heute sparen\?"/)
   assert.match(keywordSearchSource, /Suche ein Produkt – oder starte mit den Top Deals\./)
   assert.match(keywordSearchSource, /href="\/top-deals"/)
   assert.match(keywordSearchSource, /Top Deals heute ansehen/)

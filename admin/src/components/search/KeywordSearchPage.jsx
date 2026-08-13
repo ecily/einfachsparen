@@ -631,7 +631,7 @@ export function KeywordSearchPage({
                 ref={searchInputRef}
                 type="search"
                 value={queryInput}
-                placeholder="Was m&ouml;chtest du heute billiger kaufen"
+                placeholder="Womit willst du heute sparen?"
                 aria-label="Suchbegriff für Angebote"
                 onChange={(event) => setQueryInput(event.target.value)}
                 style={{ width: '100%', paddingRight: queryInput ? '2.75rem' : undefined }}

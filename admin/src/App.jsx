@@ -939,7 +939,7 @@ function App() {
           <input
             type="search"
             value={navSearchQuery}
-            placeholder="Was m&ouml;chtest du heute billiger kaufen"
+            placeholder="Womit willst du heute sparen?"
             aria-label="Produkt oder Marke suchen"
             onChange={(event) => setNavSearchQuery(event.target.value)}
           />

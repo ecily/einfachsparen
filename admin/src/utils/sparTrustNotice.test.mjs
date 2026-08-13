@@ -38,12 +38,12 @@ test('SPAR trust notice is shown only while SPAR is absent from public retailers
   assert.equal(shouldShowSparTrustNotice([{ retailerName: 'SPAR' }]), false)
 })
 
-test('all public product-search placeholders use the new copy', () => {
+test('all public product-search placeholders use the concise saving copy', () => {
   const appSource = fs.readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
   const keywordSearchSource = fs.readFileSync(new URL('../components/search/KeywordSearchPage.jsx', import.meta.url), 'utf8')
   const combinedSource = `${appSource}\n${keywordSearchSource}`
 
-  assert.equal((combinedSource.match(/Was m&ouml;chtest du heute billiger kaufen/g) || []).length, 2)
+  assert.equal((combinedSource.match(/Womit willst du heute sparen\?/g) || []).length, 2)
   assert.doesNotMatch(combinedSource, /Produkt oder Marke finden\./)
 })
 
