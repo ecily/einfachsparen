@@ -310,6 +310,8 @@
 
 ## Naechste klare Aufgaben
 
+- FOUC-Root-Cause-Nachweis am 2026-08-13: `admin/src/main.jsx` verwendet weiterhin `createRoot(#root)`, daher wird die statische HTML-Struktur nicht hydriert, sondern beim React-Mount ersetzt. Der Static-SEO-Generator wurde innerhalb des bestehenden read-only SEO-Scopes auf die React-Erststruktur fÃ¼r SEO-Landingpages ausgerichtet: `.shell`, `.page-nav`, `.seo-offer-page`, `.seo-offer-hero` und ein identischer Loading-/Results-Rahmen. Keine Preischeck-Datenlogik, API-, Backend-, DB-, Crawl-, Ranking- oder SEO-URL-Logik wurde geÃ¤ndert. Lokale Admin-Tests 60/60, ESLint und Production-Build grÃ¼n; Deploy/echter Reload-First-Paint-Smoke stehen noch aus.
+
 ## SEO-P0-Audit am 2026-08-11
 
 - Live-Read-only-Audit fand bei allen Nicht-Root-SPA-URLs initial dieselbe HTML-Shell mit Root-Canonical; unbekannte `/angebote/<slug>` antworteten mit HTTP 200. Details und URL-Matrix stehen in `docs/KAUFKLUG_SEO_AUDIT_2026-08-11.md`.

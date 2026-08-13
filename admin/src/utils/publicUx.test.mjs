@@ -70,7 +70,9 @@ test('static HTML prioritizes the local stylesheet before module hydration', () 
   assert.match(rendered, /seo-static-shell/)
   assert.ok(rendered.indexOf('kaufklug-critical-css') < rendered.indexOf('app.css'))
   assert.ok(rendered.indexOf('kaufklug-critical-css') < rendered.indexOf('app.js'))
-  assert.match(rendered, /<div id="root"><main class="shell seo-static-shell"><nav class="page-nav seo-static-nav"[^>]*>/)
+  assert.match(rendered, /<div id="root"><main class="shell"><nav class="page-nav seo-static-nav"[^>]*>/)
+  assert.match(rendered, /seo-offer-page/)
+  assert.match(rendered, /seo-offer-results/)
 })
 
 test('pricecheck transport retries and fails after the bounded budget', async () => {

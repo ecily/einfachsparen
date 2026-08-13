@@ -255,10 +255,11 @@ export function buildSeoStaticDocument(template, page, pages) {
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
   const staticNavigation = '<nav class="page-nav seo-static-nav" aria-label="Seiten"><span class="page-nav__logo" aria-hidden="true"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></span><span class="page-nav__beta">Beta</span><div class="page-nav__main"><span class="page-nav__button">Suche</span><span class="page-nav__button">Stöbern</span><span class="page-nav__button">Liste</span></div></nav>'
   const staticShellContent = staticContent
-    .replace('<main class="seo-static-shell">', `<main class="shell seo-static-shell">${staticNavigation}<section class="seo-static-main">`)
-    .replace('</main>', '</section></main>')
+    .replace('<main class="seo-static-shell">', `<main class="shell">${staticNavigation}<div class="seo-offer-page"><section class="panel seo-offer-hero">`)
+    .replace('<p>Aktuelle Angebote werden', '<p class="market-check-note">Aktuelle Angebote werden')
+    .replace('</main>', '</section><section class="panel seo-offer-results" aria-busy="true"><div class="panel__header"><h2>Aktuelle Treffer</h2><p>Angebote werden aus den aktuell erkannten Daten geladen.</p></div><div class="browse-loading-status" role="status" aria-live="polite"><span class="browse-loading-status__spinner" aria-hidden="true"></span><span>Angebote werden geladen &hellip;</span></div></section></div></main>')
   const staticContentWithPriceCheck = staticShellContent.replace('</section>', `${buildPriceCheckHtml(page.priceCheckCandidate)}${buildPriceCheckDataScript(page.priceCheckCandidate)}</section>`)
-  const staticContentWithComparison = staticContentWithPriceCheck.replace('</main>', `${buildComparisonSummaryHtml(page.comparisonSummary)}</main>`)
+  const staticContentWithComparison = staticContentWithPriceCheck.replace('<section class="panel seo-offer-results"', `${buildComparisonSummaryHtml(page.comparisonSummary)}<section class="panel seo-offer-results"`)
   const updated = template
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta name="description" content="${escapeHtml(page.description)}" />\n`)
