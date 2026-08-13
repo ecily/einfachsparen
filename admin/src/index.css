@@ -9071,4 +9071,19 @@ body,
   .search-first-page .home-steps-section,
   .search-first-page .faq-section { display: none; }
   .user-card { grid-template-columns: minmax(72px, 84px) minmax(0, 1fr) !important; }
+  .search-first-page .search-landing-hero__usp h1,
+  .search-first-page .search-landing-hero__usp .subtitle,
+  .search-first-page .search-landing-hero__markets {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .user-card__unit-price-callout { width: 100%; max-width: 100%; }
+}
+
+@media (max-width: 360px) {
+  .search-first-page .search-landing-hero__usp h1 {
+    font-size: 1.52rem !important;
+    letter-spacing: -0.035em;
+  }
 }
