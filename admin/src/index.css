@@ -9155,6 +9155,8 @@ body,
 
   .shell,
   .panel,
+  .seo-static-shell,
+  .seo-static-main,
   .seo-offer-page,
   .seo-offer-page > *,
   .seo-offer-hero,
@@ -9184,6 +9186,19 @@ body,
   .user-card h3,
   .user-card__condition-text,
   .comparison-fact-card span {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word;
+  }
+
+  .seo-static-shell h1,
+  .seo-static-shell h2,
+  .seo-static-shell p,
+  .seo-static-main h1,
+  .seo-static-main h2,
+  .seo-static-main p {
+    width: 100% !important;
+    max-width: 100% !important;
     white-space: normal !important;
     overflow-wrap: anywhere !important;
     word-break: break-word;
@@ -9223,6 +9238,16 @@ body,
     border-color: transparent;
     background: rgba(238, 247, 242, 0.62);
     box-shadow: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .page-nav__main {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .page-nav__main .page-nav__button:nth-child(2) {
+    display: none;
   }
 }
 
