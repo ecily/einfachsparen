@@ -1,5 +1,13 @@
 # kaufklug.at Kontext
 
+## Full Web-/SEO-Audit am 2026-08-13
+
+- Live-React-Smoke bestaetigt auf `/`: die aktuelle Hero-Kommunikation ist sichtbar: BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, Mueller sowie HOFER/INTERSPAR eingeschraenkt; `Womit willst du heute sparen?`, Beta- und SPAR-Trust-Hinweis sind vorhanden. Die initiale Static-HTML-Huelle war bis Commit `b3520de0` noch alte Copy; der Generator liefert nun vor JavaScript dieselbe aktuelle USP-/Haendlerkommunikation. Static-Deploy kam mit neuer `Last-Modified` an; JS/CSS-Hashes blieben unveraendert, weil keine Bundle-Logik geaendert wurde.
+- Read-only Live-Matrix: Homepage, Top Deals, Bier, Kaffee, Softdrinks, BILLA, HOFER, Mueller, Suche und Stoebern antworten HTTP 200; indexierbare Seiten haben Self-Canonical/`index,follow`, Utility-/Mueller-/SPAR-Seiten bleiben noindex. Unbekannte Routen bleiben fail-closed `noindex,nofollow` ohne Canonical. Sitemap live: 25 URLs; Preischeck bleibt wegen fail-closed Evidence bewusst ausserhalb.
+- Live-Performance-Messung: initiales HTML ca. 9-11 KB; Filter-Endpunkte ca. 115-158 ms; Such-Ranking fuer Bier/Kaffee/Deo/Schokolade ca. 247-651 ms; Top-Deals-Endpoint ca. 3,9 s bei rund 69 KB. Top Deals hat damit den klarsten offenen Performancehebel; kein riskanter Backend-Umbau in diesem Audit.
+- Mobile- und Desktop-Screenshot-Smoke auf 320/390/1440 px zeigt keine offensichtliche horizontale Ueberbreite; der Home-Browser-Smoke mit 390 px und Reduced-Motion ist gruen. Der vollstaendige Web-Smoke stoppt an der Datenabdeckung: `waschmittel` liefert aktuell BIPA/Mueller/PENNY, aber keine dm-Karte; dies ist kein sicherer UI-Fix und bleibt als Daten-/Query-Coverage-Risiko offen.
+- Commit `43116cb6` aktualisiert nur den Web-Smoke-Vertrag auf die aktuelle Hero-/Haendlerkommunikation und macht Below-the-fold-Home-Checks robuster; kein Produktivdaten-, Crawl-, SPAR-, PAGRO- oder ZGONC-Eingriff. Public Validity und Trust-Guards bleiben unveraendert.
+
 ## DigitalOcean-Static-Deploy-Diagnose am 2026-08-13
 
 - Frontend-Trigger `a9499c14` ergÃ¤nzt nur einen kommentarbasierten Static-Deploy-Marker in `admin/src/App.jsx`; keine sichtbare oder fachliche Logik wurde geÃ¤ndert. Lokal sind der Landingpage-Retailer-Text und `Womit willst du heute sparen?` im Production-Build enthalten; ESLint, 62 Admin-Tests, Build und `git diff --check` sind grÃ¼n.
