@@ -48,8 +48,8 @@ Admin-Keys genutzt und keine Production-Daten mutiert.
 - Hero enthaelt exakt `Angebote finden. Einfach sparen.`
 - Trust-Hinweis ist sichtbar: `Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.`
 - Android-Testdownload-/QR-Hinweise sind nicht sichtbar.
-- Mobile Viewport mit ca. 390 px zeigt alle Hero-Haendler:
-  BILLA, BILLA Plus, SPAR, EUROSPAR, INTERSPAR, HOFER, Lidl, dm, BIPA, PAGRO, PENNY.
+- Mobile Viewport mit ca. 390 px zeigt die aktuelle Hero-Haendlerkommunikation:
+  BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, Mueller sowie HOFER und INTERSPAR eingeschraenkt.
 - Mobile Startseite und Stoebern haben keinen offensichtlichen horizontalen Overflow.
 - `/suche?q=kaffee` ist erreichbar und zeigt Karten oder einen plausiblen Ergebniszaehler.
 - `/stoebern` ist erreichbar, zeigt Intro und Markt-Auswahl.

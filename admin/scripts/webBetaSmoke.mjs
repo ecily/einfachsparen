@@ -16,8 +16,8 @@ const MOBILE_HEIGHT = 900
 const DESKTOP_WIDTH = 1280
 const DESKTOP_HEIGHT = 900
 const HERO_TEXT = 'Flugblätter raus. Die besten Angebote rein.'
-const HERO_SUBLINE = 'kaufklug macht Supermarkt- und Drogerie-Angebote in Österreich verständlich: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos, ohne Anmeldung und von Menschen für Menschen.'
-const HERO_MARKETS = 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt'
+const HERO_SUBLINE = 'Preise wirklich vergleichbar – pro kg, Liter oder Stück.'
+const HERO_MARKETS = 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · HOFER eingeschränkt · INTERSPAR eingeschränkt'
 const SPAR_TRUST_TITLE = 'Warum SPAR derzeit fehlt'
 const FORBIDDEN_VISIBLE_COPY = [
   'bester Preis',
@@ -563,6 +563,7 @@ function pageAuditExpression() {
       resultCardCount: document.querySelectorAll('.user-card, .offer-card, .shopping-list-item').length,
       resultsCountText: normalize(document.querySelector('.results-count-box, .keyword-search-results .panel__header p')?.innerText),
       shoppingSummaryVisible: Boolean(Array.from(document.querySelectorAll('.shopping-check, .shopping-list-hero')).find(isVisible)),
+      homeContentText: normalize(Array.from(document.querySelectorAll('.home-steps-section, .home-discovery-section, .seo-footer-links')).map((element) => element.textContent).join(' ')),
     }
   })()`
 }
@@ -646,9 +647,9 @@ async function runHomeCheck(cdp) {
     actual: audit.searchEntryGuidance,
   })
   assert(audit.searchTopDealsEntryVisible && audit.searchTopDealsEntryText === 'Top Deals heute ansehen' && audit.searchTopDealsEntryHref === '/top-deals', 'home: secondary Top Deals entry must be usable beside the main search')
-  assert(audit.bodyText.includes('Direkt zu beliebten Angeboten'), 'home: popular-offer navigation heading must be visible')
+  assert(audit.homeContentText.includes('Direkt zu beliebten Angeboten'), 'home: popular-offer navigation heading must be visible')
   assert(!audit.bodyText.includes('Angebote schneller finden'), 'home: old technical offer-navigation heading must be absent')
-  assert(audit.bodyText.includes('Preis pro Einheit, Bedingungen und passende Alternativen prüfen.'), 'home: comparison step must explain safe alternatives')
+  assert(/Preis pro Einheit, Bedingungen und passende Alternativen/.test(audit.homeContentText), 'home: comparison step must explain safe alternatives')
   assertNoHorizontalOverflow(audit, 'home')
 }
 
