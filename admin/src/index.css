@@ -9083,7 +9083,9 @@ body,
 
 @media (max-width: 360px) {
   .search-first-page .search-landing-hero__usp h1 {
-    font-size: 1.52rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: 1.3rem !important;
     letter-spacing: -0.035em;
   }
 }
