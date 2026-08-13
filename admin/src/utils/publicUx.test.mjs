@@ -71,6 +71,17 @@ test('static HTML prioritizes the local stylesheet before module hydration', () 
   assert.match(rendered, /seo-offer-results/)
 })
 
+test('mobile UX contract keeps cookie notice and public content fluid', () => {
+  const css = fs.readFileSync(new URL('../index.css', import.meta.url), 'utf8')
+  const cookieSource = fs.readFileSync(new URL('../components/layout/CookieStorageNotice.jsx', import.meta.url), 'utf8')
+
+  assert.match(css, /cookie-storage-notice__panel.*padding: 0\.52rem 0\.58rem/s)
+  assert.match(css, /page-nav__main.*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/s)
+  assert.match(css, /user-card__unit-price-callout.*width: 100%/s)
+  assert.match(css, /seo-comparison-card__fact.*border-color: transparent/s)
+  assert.match(cookieSource, /COOKIE_NOTICE_STORAGE_KEY/)
+})
+
 test('pricecheck transport retries and fails after the bounded budget', async () => {
   let attempts = 0
   await assert.rejects(

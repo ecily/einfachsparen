@@ -9081,6 +9081,151 @@ body,
   .user-card__unit-price-callout { width: 100%; max-width: 100%; }
 }
 
+/* Final mobile contract: every public component must fit the viewport without hiding its content. */
+@media (max-width: 600px) {
+  .page-nav {
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-template-columns: 2rem 2.2rem minmax(0, 1fr) !important;
+    overflow: visible;
+  }
+
+  .page-nav__main {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    overflow: visible;
+  }
+
+  .page-nav__button,
+  .page-nav__beta {
+    min-width: 0 !important;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+
+  .page-nav__button {
+    font-size: clamp(0.56rem, 2.4vw, 0.66rem) !important;
+    padding-inline: 0.02rem !important;
+  }
+
+  .page-nav__top-deals-short {
+    display: inline !important;
+  }
+
+  .cookie-storage-notice {
+    left: 0.35rem !important;
+    right: 0.35rem !important;
+    bottom: 3.05rem !important;
+    max-width: none !important;
+  }
+
+  .cookie-storage-notice__panel {
+    padding: 0.52rem 0.58rem !important;
+    border-radius: 0.82rem;
+  }
+
+  .cookie-storage-notice__panel .panel__header {
+    margin-bottom: 0.28rem !important;
+  }
+
+  .cookie-storage-notice__panel .panel__header h2 {
+    font-size: 0.82rem !important;
+    line-height: 1.15;
+  }
+
+  .cookie-storage-notice__panel .panel__header p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.7rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .cookie-storage-notice__panel .quick-action-row {
+    gap: 0.3rem;
+  }
+
+  .cookie-storage-notice__panel .quick-action-row > * {
+    min-height: 2rem;
+    padding: 0.28rem 0.45rem !important;
+    font-size: 0.72rem;
+  }
+
+  .shell,
+  .panel,
+  .seo-offer-page,
+  .seo-offer-page > *,
+  .seo-offer-hero,
+  .seo-offer-results,
+  .seo-comparison-card,
+  .seo-comparison-card > *,
+  .seo-comparison-card__facts,
+  .seo-comparison-card__fact,
+  .user-card,
+  .user-card > *,
+  .user-card__content,
+  .user-card__content > *,
+  .user-card__decision,
+  .user-card__price,
+  .user-card__conditions,
+  .comparison-fact-card {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-wrap: anywhere;
+  }
+
+  .seo-offer-hero h1,
+  .seo-offer-hero .subtitle,
+  .seo-offer-hero p,
+  .search-landing-hero__usp h1,
+  .search-landing-hero__usp .subtitle,
+  .user-card h3,
+  .user-card__condition-text,
+  .comparison-fact-card span {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word;
+  }
+
+  .user-card {
+    grid-template-columns: minmax(64px, 76px) minmax(0, 1fr) !important;
+  }
+
+  .user-card__unit-price-callout {
+    display: grid;
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .user-card__unit-price-value {
+    min-width: 0;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .seo-comparison-card__facts,
+  .seo-static-comparison__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .seo-comparison-card,
+  .seo-static-comparison {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .seo-comparison-card__fact,
+  .comparison-fact-card {
+    border-color: transparent;
+    background: rgba(238, 247, 242, 0.62);
+    box-shadow: none;
+  }
+}
+
 @media (max-width: 360px) {
   .search-first-page .search-landing-hero__usp h1 {
     width: 100% !important;
