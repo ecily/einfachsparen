@@ -8743,6 +8743,7 @@ body,
   }
 
   .user-card {
+    width: 100% !important;
     grid-template-columns: minmax(52px, 22%) minmax(0, 1fr) !important;
     gap: 0.56rem !important;
     padding: 0.62rem !important;
@@ -8803,5 +8804,26 @@ body,
   .user-card__price-row > * {
     min-width: 0;
     max-width: 100%;
+  }
+
+  .user-results {
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .seo-static-shell h1,
+  .seo-static-shell p,
+  .seo-static-shell h2 {
+    width: 100%;
+    white-space: normal;
+    text-wrap: wrap;
+  }
+
+  .user-card__actions .shopping-list-button,
+  .user-card__actions .offer-feedback__cta {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
