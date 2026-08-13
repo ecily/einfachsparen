@@ -266,6 +266,15 @@ export function buildSeoStaticDocument(template, page, pages) {
   return updated
 }
 
+export function prioritizeStylesheetBeforeModuleScript(template) {
+  const moduleScript = template.match(/<script type="module" crossorigin src="[^"]+"><\/script>/i)?.[0]
+  const stylesheet = template.match(/<link rel="stylesheet" crossorigin href="[^"]+">/i)?.[0]
+
+  if (!moduleScript || !stylesheet || template.indexOf(stylesheet) < template.indexOf(moduleScript)) return template
+
+  return template.replace(`${moduleScript}\n    ${stylesheet}`, `${stylesheet}\n    ${moduleScript}`)
+}
+
 export function getStaticSeoPages() {
   return [
     ...staticPages,
@@ -448,7 +457,7 @@ export function buildCatchallDocument(template) {
 }
 
 async function main() {
-  const template = await readFile(join(distDir, 'index.html'), 'utf8')
+  const template = prioritizeStylesheetBeforeModuleScript(await readFile(join(distDir, 'index.html'), 'utf8'))
   const comparisonSummaries = await buildComparisonSummaries()
   const priceCheckCandidate = await buildPriceCheckCandidate()
   renderPages = getStaticSeoPages().map((page) => page.priceCheckKey === 'bier'

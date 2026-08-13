@@ -8731,11 +8731,54 @@ body,
   }
 
   .user-card {
-    grid-template-columns: minmax(58px, 64px) minmax(0, 1fr) !important;
+    grid-template-columns: minmax(52px, 22%) minmax(0, 1fr) !important;
+    gap: 0.56rem !important;
+    padding: 0.62rem !important;
   }
 
   .user-card__content {
-    width: calc(100vw - 6.5rem) !important;
-    max-width: calc(100vw - 6.5rem) !important;
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .product-image {
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: 4 / 3;
+  }
+
+  .user-card h3 {
+    display: block !important;
+    max-width: 100%;
+    overflow: visible !important;
+    -webkit-line-clamp: unset !important;
+    font-size: 0.94rem !important;
+    line-height: 1.18 !important;
+  }
+
+  .user-card__price strong {
+    max-width: 100%;
+    font-size: 1.34rem !important;
+    white-space: normal;
+  }
+
+  .user-card__unit-price-callout {
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    min-width: 0;
+    padding: 0.24rem 0.42rem;
+  }
+
+  .user-card__unit-price-value {
+    font-size: 0.9rem !important;
+    white-space: nowrap !important;
+  }
+
+  .user-card__conditions,
+  .user-card__facts,
+  .user-card__actions {
+    width: 100%;
+    min-width: 0;
   }
 }

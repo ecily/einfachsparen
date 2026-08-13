@@ -8,6 +8,7 @@ import {
   shouldDisplayUnitPrice,
 } from './offers.js'
 import { getInitialPageFromPathname, getPageMeta, getPathForPage } from './seo.js'
+import { prioritizeStylesheetBeforeModuleScript } from '../../scripts/generateSeoHtml.mjs'
 
 const appSource = fs.readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const offerCardSource = fs.readFileSync(new URL('../components/search/OfferCardConsumer.jsx', import.meta.url), 'utf8')
@@ -41,6 +42,21 @@ test('comparison USP facts and card labels stay visible and semantically distinc
   assert.match(offerCardSource, /user-card__reference-label.*Referenzpreis/)
   assert.match(offerCardSource, />Kaufbedingung<\/span>/)
   assert.match(fs.readFileSync(new URL('../components/search/SeoOfferLandingPage.jsx', import.meta.url), 'utf8'), /seo-comparison-card/)
+})
+
+test('static HTML prioritizes the local stylesheet before module hydration', () => {
+  const template = '<head><script type="module" crossorigin src="/assets/app.js"></script>\n    <link rel="stylesheet" crossorigin href="/assets/app.css"></head>'
+  const prioritized = prioritizeStylesheetBeforeModuleScript(template)
+
+  assert.ok(prioritized.indexOf('app.css') < prioritized.indexOf('app.js'))
+})
+
+test('mobile offer cards keep content fluid and do not clamp product names', () => {
+  const cssSource = fs.readFileSync(new URL('../index.css', import.meta.url), 'utf8')
+
+  assert.match(cssSource, /\.user-card__content\s*\{[\s\S]*?width:\s*auto\s*!important;/)
+  assert.match(cssSource, /\.user-card h3\s*\{[\s\S]*?-webkit-line-clamp:\s*unset\s*!important;/)
+  assert.match(cssSource, /\.product-image\s*\{[\s\S]*?aspect-ratio:\s*4 \/ 3;/)
 })
 
 test('unit-price labels describe the actual unit', () => {
