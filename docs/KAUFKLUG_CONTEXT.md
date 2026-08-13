@@ -310,6 +310,8 @@
 
 ## Naechste klare Aufgaben
 
+- Mobile-First UX Core Polish am 2026-08-13: Public UI wurde ohne Daten-, Search-, Ranking-, Routing-, SEO-, FOUC- oder Backend-Logik zu verÃ¤ndern auf Search-first/Top-Deals-second verdichtet. Homepage-Search ist visuell dominant, Top Deals folgt direkt, Quick Searches bleiben kompakt; Offer Cards gewichten Produkt, Preis pro Einheit, Bedingungen und GÃ¼ltigkeit ruhiger und kompakter; Comparison Facts nutzen ein engeres globales Muster. Lokale Tests 65/65, ESLint, Production-Build und `git diff --check` grÃ¼n. Deploy/Live-Smoke stehen noch aus.
+
 - FOUC-Root-Cause-Nachweis am 2026-08-13: `admin/src/main.jsx` verwendet weiterhin `createRoot(#root)`, daher wird die statische HTML-Struktur nicht hydriert, sondern beim React-Mount ersetzt. Der Static-SEO-Generator wurde innerhalb des bestehenden read-only SEO-Scopes auf die React-Erststruktur fÃ¼r SEO-Landingpages ausgerichtet: `.shell`, `.page-nav`, `.seo-offer-page`, `.seo-offer-hero` und ein identischer Loading-/Results-Rahmen. Keine Preischeck-Datenlogik, API-, Backend-, DB-, Crawl-, Ranking- oder SEO-URL-Logik wurde geÃ¤ndert. Lokale Admin-Tests 60/60, ESLint und Production-Build grÃ¼n; Deploy/echter Reload-First-Paint-Smoke stehen noch aus.
 
 ## SEO-P0-Audit am 2026-08-11

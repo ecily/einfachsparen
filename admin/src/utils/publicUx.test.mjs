@@ -21,12 +21,8 @@ const offerUtilsSource = fs.readFileSync(new URL('./offers.js', import.meta.url)
 
 test('public hero uses the final positioning and market line', () => {
   assert.match(appSource, /Flugblätter raus\. Die besten Angebote rein\./)
-  assert.match(appSource, /Supermarkt- und Drogerie-Angebote in Österreich/)
-  assert.match(appSource, /Preis pro Einheit/)
-  assert.match(appSource, /ehrlich/)
-  assert.match(appSource, /kostenlos/)
-  assert.match(appSource, /ohne Anmeldung/)
-  assert.match(appSource, /von Menschen für Menschen/)
+  assert.match(appSource, /Preise wirklich vergleichbar/)
+  assert.match(appSource, /pro kg, Liter oder Stück/)
   const marketLine = appSource.match(/<p className="search-landing-hero__markets">([^<]+)<\/p>/)?.[1]
 
   assert.equal(marketLine, 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt')

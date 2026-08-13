@@ -152,9 +152,7 @@ function SearchLandingHero() {
             Flugblätter raus.<br className="mobile-only-break" /> Die besten Angebote rein.
           </h1>
           {/* Flugblätter raus. Die besten Angebote rein. Supermarkt- und Drogerie-Angebote in Österreich bleiben als Produktkontext erhalten; ehrlich, kostenlos und von Menschen für Menschen. */}
-          <p className="subtitle">
-            Aktuelle Angebote vergleichen: Preis, Preis pro Einheit, Bedingungen und Gültigkeit – ehrlich, kostenlos und ohne Anmeldung.
-          </p>
+          <p className="subtitle">Preise wirklich vergleichbar – pro kg, Liter oder Stück.</p>
           <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt</p>
           <div className="hero-compare-facts" aria-label="Vergleichsmerkmale">
             <span><strong>Preis pro Einheit</strong><small>kg, Liter oder Stück</small></span>
