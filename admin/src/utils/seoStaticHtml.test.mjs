@@ -20,7 +20,10 @@ test('homepage exposes crawlable internal SEO links in initial HTML', () => {
   const page = getStaticSeoPages().find((candidate) => candidate.path === '/')
   const html = buildSeoStaticDocument(template, page)
 
-  assert.match(html, /<h1>Aktuelle Angebote finden und beim Einkauf sparen<\/h1>/)
+  assert.match(html, /<h1>Flugbl\u00e4tter raus\. Die besten Angebote rein\.<\/h1>/)
+  assert.match(html, /Preise wirklich vergleichbar \u2013 pro kg, Liter oder St\u00fcck\./)
+  assert.match(html, /BILLA \u00b7 BILLA Plus \u00b7 Lidl \u00b7 PENNY \u00b7 dm \u00b7 BIPA \u00b7 M\u00fcller \u00b7 HOFER eingeschr\u00e4nkt \u00b7 INTERSPAR eingeschr\u00e4nkt/)
+  assert.match(html, /Packungsgr\u00f6\u00dfen und Bedingungen inklusive\./)
   assert.match(html, /<meta name="robots" content="index,follow" \/>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/"/)
   for (const path of ['/top-deals/', '/angebote/billa/', '/angebote/lidl/', '/angebote/waschmittel/']) {

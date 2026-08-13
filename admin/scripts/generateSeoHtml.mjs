@@ -252,9 +252,11 @@ function buildPriceCheckDataScript(candidate) {
 export function buildSeoStaticDocument(template, page, pages) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
+  const staticHomeContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>Flugbl\u00e4tter raus. Die besten Angebote rein.</h1><p class="subtitle">Preise wirklich vergleichbar \u2013 pro kg, Liter oder St\u00fcck.</p><p class="search-landing-hero__markets">BILLA \u00b7 BILLA Plus \u00b7 Lidl \u00b7 PENNY \u00b7 dm \u00b7 BIPA \u00b7 M\u00fcller \u00b7 HOFER eingeschr\u00e4nkt \u00b7 INTERSPAR eingeschr\u00e4nkt</p><p class="hero-compare-facts">Vergleichbar pro kg, Liter oder St\u00fcck \u2013 Packungsgr\u00f6\u00dfen und Bedingungen inklusive.</p><p class="market-check-note">Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.</p>${buildRelatedLinks(page)}</main>`
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
   const staticNavigation = '<nav class="page-nav seo-static-nav" aria-label="Seiten"><span class="page-nav__logo" aria-hidden="true"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></span><span class="page-nav__beta">Beta</span><div class="page-nav__main"><span class="page-nav__button">Suche</span><span class="page-nav__button">Stöbern</span><span class="page-nav__button">Liste</span></div></nav>'
-  const staticShellContent = staticContent
+  const staticContentForRender = path === '/' ? staticHomeContent : staticContent
+  const staticShellContent = staticContentForRender
     .replace('<main class="seo-static-shell">', `<main class="shell">${staticNavigation}<div class="seo-offer-page"><section class="panel seo-offer-hero">`)
     .replace('<p>Aktuelle Angebote werden', '<p class="market-check-note">Aktuelle Angebote werden')
     .replace('</main>', '</section><section class="panel seo-offer-results" aria-busy="true"><div class="panel__header"><h2>Aktuelle Treffer</h2><p>Angebote werden aus den aktuell erkannten Daten geladen.</p></div><div class="browse-loading-status" role="status" aria-live="polite"><span class="browse-loading-status__spinner" aria-hidden="true"></span><span>Angebote werden geladen &hellip;</span></div></section></div></main>')
