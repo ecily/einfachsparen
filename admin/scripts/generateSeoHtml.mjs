@@ -18,6 +18,7 @@ const comparisonQueries = new Map([
   ['waschmittel', 'waschmittel'],
 ])
 const execFileAsync = promisify(execFile)
+const CRITICAL_CSS = `html,body{margin:0;min-width:320px;min-height:100%;background:#f7f9fb;color:#1e2933;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}*,*:before,*:after{box-sizing:border-box}body{line-height:1.5}#root{width:100%;min-width:0}.shell{width:min(1240px,calc(100vw - 2rem));margin:0 auto;padding:2rem 0 3.5rem}.seo-static-shell{width:min(100%,760px);margin:0 auto;padding:1.25rem}.seo-static-shell h1,.seo-static-shell h2,.seo-static-shell p{max-width:100%;overflow-wrap:anywhere;white-space:normal}.seo-static-shell h1{margin:.35rem 0 .75rem;font-family:Manrope,Inter,ui-sans-serif,system-ui,sans-serif;font-size:clamp(1.8rem,5vw,3.2rem);line-height:1.08}.seo-static-shell p{color:#5f6e7c}.seo-static-links,.seo-static-comparison,.seo-static-price-check{max-width:100%;margin-top:1rem;padding:1rem;border:1px solid #d9e1e8;border-radius:1rem;background:#fff}.seo-static-links ul{display:flex;flex-wrap:wrap;gap:.45rem;margin:0;padding:0;list-style:none}.seo-static-links a{display:inline-flex;max-width:100%;padding:.42rem .68rem;border:1px solid #d9e1e8;border-radius:999px;overflow-wrap:anywhere}@media (max-width:600px){.shell{width:calc(100vw - 1rem);padding-top:.55rem}.seo-static-shell{padding:.78rem}.seo-static-shell h1{font-size:clamp(1.55rem,8vw,2.15rem)}}`
 
 const staticPages = [
   {
@@ -261,6 +262,7 @@ export function buildSeoStaticDocument(template, page, pages) {
     .replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:description" content="${escapeHtml(page.description)}" />\n`)
     .replace(/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:url" content="${canonical}" />\n`)
     .replace(/<div id="root"><\/div>/i, `<div id="root">${staticContentWithComparison}</div>`)
+    .replace(/<link rel="stylesheet" crossorigin href="[^"]+">/i, `<style id="kaufklug-critical-css">${CRITICAL_CSS}</style>\n    $&`)
     .replace(/<\/head>/i, `<script type="application/ld+json" id="kaufklug-static-breadcrumb">${buildBreadcrumbJsonLd(page)}</script>\n  </head>`)
 
   return updated
@@ -273,6 +275,42 @@ export function prioritizeStylesheetBeforeModuleScript(template) {
   if (!moduleScript || !stylesheet || template.indexOf(stylesheet) < template.indexOf(moduleScript)) return template
 
   return template.replace(`${moduleScript}\n    ${stylesheet}`, `${stylesheet}\n    ${moduleScript}`)
+}
+
+export async function retryBuildOperation(operation, { attempts = 3, delayMs = 250 } = {}) {
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation(attempt)
+    } catch (error) {
+      lastError = error
+      if (attempt < attempts && delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+  throw lastError
+}
+
+export function validatePriceCheckPagePayload(payload, { expectedTotalCount = null, expectedGeneratedAt = '' } = {}) {
+  const pageOffers = Array.isArray(payload?.rankedOffers) ? payload.rankedOffers : []
+  const summary = payload?.summary || {}
+  const totalCount = Number(summary.totalCount)
+  const generatedAt = String(payload?.generatedAt || '')
+  const generatedDate = new Date(generatedAt)
+
+  if (!Number.isInteger(totalCount) || totalCount < 0 || !pageOffers.every((offer) => offer?.id)) {
+    throw new Error('pricecheck API returned an incomplete result page')
+  }
+  if (!generatedAt || Number.isNaN(generatedDate.getTime())) throw new Error('pricecheck API returned no valid generatedAt')
+  if (expectedTotalCount !== null && totalCount !== expectedTotalCount) throw new Error('pricecheck API totalCount changed during pagination')
+  if (expectedGeneratedAt && generatedAt !== expectedGeneratedAt) throw new Error('pricecheck API generatedAt changed during pagination')
+
+  const hasMore = summary.hasMore === true
+  const nextOffset = Number(summary.nextOffset)
+  const nextToken = String(summary.resultSetToken || '')
+  if (!hasMore && summary.completeResultSetVisible !== true) throw new Error('pricecheck API did not confirm a complete result set')
+  if (hasMore && (!Number.isInteger(nextOffset) || !nextToken)) throw new Error('pricecheck API returned incomplete pagination')
+
+  return { pageOffers, totalCount, generatedAt, hasMore, nextOffset, nextToken }
 }
 
 export function getStaticSeoPages() {
@@ -378,23 +416,23 @@ async function fetchComparisonOffers(pageKey) {
   let offset = 0
   let resultSetToken = ''
   let totalCount = null
+  let generatedAt = ''
   for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
     const payload = await fetchComparisonRanking(query, offset, resultSetToken)
-    const pageOffers = Array.isArray(payload?.rankedOffers) ? payload.rankedOffers : []
-    const summary = payload?.summary || {}
-    const count = Number(summary.totalCount)
-    if (!Number.isInteger(count) || count <= 0 || !pageOffers.every((offer) => offer?.id)) return null
+    const page = validatePriceCheckPagePayload(payload, {
+      expectedTotalCount: totalCount,
+      expectedGeneratedAt: generatedAt,
+    })
+    const { pageOffers, totalCount: count } = page
     if (totalCount === null) totalCount = count
-    if (totalCount !== count) return null
+    if (!generatedAt) generatedAt = page.generatedAt
     for (const offer of pageOffers) if (!seenIds.has(offer.id)) { seenIds.add(offer.id); offers.push(offer) }
-    if (!summary.hasMore) return offers
-    const nextOffset = Number(summary.nextOffset)
-    const nextToken = String(summary.resultSetToken || resultSetToken || '')
-    if (!Number.isInteger(nextOffset) || nextOffset <= offset || !nextToken) return null
-    offset = nextOffset
-    resultSetToken = nextToken
+    if (!page.hasMore) return offers
+    if (page.nextOffset <= offset) throw new Error('pricecheck API pagination did not advance')
+    offset = page.nextOffset
+    resultSetToken = page.nextToken
   }
-  return null
+  throw new Error('pricecheck API exceeded the pagination budget')
 }
 
 async function buildComparisonSummaries() {
@@ -415,13 +453,10 @@ async function buildComparisonSummaries() {
 }
 
 async function buildPriceCheckCandidate() {
-  try {
+  return retryBuildOperation(async () => {
     const offers = await fetchComparisonOffers('bier')
     return deriveBeerPriceCheckCandidate(offers || [])
-  } catch {
-    console.warn('[seo] pricecheck candidate unavailable')
-    return null
-  }
+  }, { attempts: 3, delayMs: 250 })
 }
 
 async function syncRenderedSitemap(candidate) {
@@ -441,6 +476,7 @@ export function buildCatchallDocument(template) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Seite nicht gefunden | kaufklug.at</title>
     <meta name="robots" content="noindex,nofollow" />
+    <style id="kaufklug-critical-css">${CRITICAL_CSS}</style>
     ${styleHref ? `<link rel="stylesheet" crossorigin href="${styleHref}" />` : ''}
   </head>
   <body>

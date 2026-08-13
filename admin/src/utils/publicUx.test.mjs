@@ -8,7 +8,12 @@ import {
   shouldDisplayUnitPrice,
 } from './offers.js'
 import { getInitialPageFromPathname, getPageMeta, getPathForPage } from './seo.js'
-import { prioritizeStylesheetBeforeModuleScript } from '../../scripts/generateSeoHtml.mjs'
+import {
+  buildSeoStaticDocument,
+  prioritizeStylesheetBeforeModuleScript,
+  retryBuildOperation,
+  validatePriceCheckPagePayload,
+} from '../../scripts/generateSeoHtml.mjs'
 
 const appSource = fs.readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const offerCardSource = fs.readFileSync(new URL('../components/search/OfferCardConsumer.jsx', import.meta.url), 'utf8')
@@ -49,6 +54,46 @@ test('static HTML prioritizes the local stylesheet before module hydration', () 
   const prioritized = prioritizeStylesheetBeforeModuleScript(template)
 
   assert.ok(prioritized.indexOf('app.css') < prioritized.indexOf('app.js'))
+
+  const rendered = buildSeoStaticDocument(`${prioritized}<body><div id="root"></div></body>`, {
+    path: '/',
+    title: 'Startseite',
+    description: 'Startseite',
+    robots: 'index,follow',
+    h1: 'Aktuelle Angebote',
+    intro: 'Angebote vergleichen.',
+    relatedLinks: [],
+  }, [])
+  assert.match(rendered, /id="kaufklug-critical-css"/)
+  assert.match(rendered, /min-width:320px/)
+  assert.match(rendered, /@media \(max-width:600px\)/)
+  assert.match(rendered, /seo-static-shell/)
+  assert.ok(rendered.indexOf('kaufklug-critical-css') < rendered.indexOf('app.css'))
+  assert.ok(rendered.indexOf('kaufklug-critical-css') < rendered.indexOf('app.js'))
+  assert.match(rendered, /<div id="root"><main class="seo-static-shell">/)
+})
+
+test('pricecheck transport retries and fails after the bounded budget', async () => {
+  let attempts = 0
+  await assert.rejects(
+    retryBuildOperation(async () => {
+      attempts += 1
+      throw new Error('temporary transport failure')
+    }, { attempts: 3, delayMs: 0 }),
+    /temporary transport failure/,
+  )
+  assert.equal(attempts, 3)
+})
+
+test('pricecheck page validation fails closed for missing generatedAt and incomplete pagination', () => {
+  const base = { rankedOffers: [{ id: 'offer-1' }], summary: { totalCount: 1, hasMore: false, completeResultSetVisible: true } }
+
+  assert.throws(() => validatePriceCheckPagePayload(base), /generatedAt/)
+  assert.throws(() => validatePriceCheckPagePayload({
+    ...base,
+    generatedAt: '2026-08-13T06:32:33.034Z',
+    summary: { totalCount: 2, hasMore: true, nextOffset: null, resultSetToken: '' },
+  }), /incomplete pagination/)
 })
 
 test('mobile offer cards keep content fluid and do not clamp product names', () => {
