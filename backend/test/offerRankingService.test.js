@@ -8126,6 +8126,7 @@ test('safe market comparison exposes a cheaper strongly matched product type wit
     normalizedUnitPrice: { amount: 15.99, unit: 'kg', comparable: true, confidence: 0.9 },
     sourceType: 'dm-official-html',
     rawFacts: { sourceKey: 'dm-official-product-search' },
+    sourceUrl: 'https://example.test/dm-offer',
     conditionsText: 'Nur mit dm App',
     customerProgramRequired: true,
   });
@@ -8158,6 +8159,8 @@ test('safe market comparison exposes a cheaper strongly matched product type wit
       normalizedUnitPrice: { amount: 15.99, unit: 'kg', comparable: true, confidence: 0.9 },
       sourceType: 'dm-official-html',
       sourceKey: 'dm-official-product-search',
+      sourceUrl: 'https://example.test/dm-offer',
+      sourceUrls: [],
     },
   });
 

@@ -23,6 +23,7 @@ import {
   fetchFilterCategories,
   fetchFilterRetailers,
   fetchOfferRankingDirect,
+  prefetchTopDeals,
 } from './utils/apiBase'
 import { configureInternalTesterModeFromUrl, trackAnalyticsEvent } from './utils/analytics'
 import {
@@ -153,12 +154,10 @@ function SearchLandingHero() {
           </h1>
           {/* Flugblätter raus. Die besten Angebote rein. Supermarkt- und Drogerie-Angebote in Österreich bleiben als Produktkontext erhalten; ehrlich, kostenlos und von Menschen für Menschen. */}
           <p className="subtitle">Preise wirklich vergleichbar – pro kg, Liter oder Stück.</p>
-          <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt</p>
-          <div className="hero-compare-facts" aria-label="Vergleichsmerkmale">
-            <span><strong>Preis pro Einheit</strong><small>kg, Liter oder Stück</small></span>
-            <span><strong>Packungsgrößen</strong><small>auch Multipacks</small></span>
-            <span><strong>Bedingungen</strong><small>sichtbar beim Angebot</small></span>
-          </div>
+          <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · HOFER eingeschränkt · INTERSPAR eingeschränkt</p>
+          <p className="hero-compare-facts" aria-label="Vergleichsmerkmale">
+            Vergleichbar pro kg, Liter oder Stück – Packungsgrößen und Bedingungen inklusive.
+          </p>
         </div>
       </section>
     </>
@@ -349,6 +348,25 @@ function App() {
   useEffect(() => {
     configureInternalTesterModeFromUrl()
   }, [])
+
+  useEffect(() => {
+    if (activePage !== 'product-search' || typeof window === 'undefined') return undefined
+
+    const runPrefetch = () => {
+      prefetchTopDeals()
+    }
+    const idleHandle = typeof window.requestIdleCallback === 'function'
+      ? window.requestIdleCallback(runPrefetch, { timeout: 2500 })
+      : window.setTimeout(runPrefetch, 1200)
+
+    return () => {
+      if (typeof window.cancelIdleCallback === 'function' && typeof idleHandle === 'number') {
+        window.cancelIdleCallback(idleHandle)
+      } else {
+        window.clearTimeout(idleHandle)
+      }
+    }
+  }, [activePage])
 
   useEffect(() => {
     if (activePage === 'diagnostics') return

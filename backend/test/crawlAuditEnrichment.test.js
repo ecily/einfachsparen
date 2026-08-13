@@ -8,9 +8,43 @@ const {
 } = require('../src/services/crawl/offerAuditEnrichment');
 const { SEARCH_TOKEN_VERSION } = require('../src/services/offers/searchTokens');
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
-const { inferQuantityFieldsFromText } = require('../src/services/crawl/offerQualityGuards');
+const {
+  assessComparableSafety,
+  inferQuantityFieldsFromText,
+} = require('../src/services/crawl/offerQualityGuards');
 
 const VALIDITY_INCOMPLETE_REASON = 'Gueltigkeitszeitraum unvollstaendig';
+
+test('piece unit price is reconciled against an explicit multi-piece package basis', () => {
+  const result = assessComparableSafety({
+    priceCurrent: { amount: 6.49 },
+    quantityText: '40 Stück',
+    comparableUnit: 'Stk',
+    normalizedUnitPrice: { amount: 6.49, unit: 'Stk', comparable: true, confidence: 0.9 },
+  });
+
+  assert.equal(result.safe, true);
+  assert.equal(result.normalizedUnitPrice.amount, 0.16);
+  assert.equal(result.normalizedUnitPrice.unit, 'Stk');
+});
+
+test('single-piece offers and already reconciled count prices remain unchanged', () => {
+  const single = assessComparableSafety({
+    priceCurrent: { amount: 6.49 },
+    quantityText: '1 Stück',
+    comparableUnit: 'Stk',
+    normalizedUnitPrice: { amount: 6.49, unit: 'Stk', comparable: true, confidence: 0.9 },
+  });
+  const reconciled = assessComparableSafety({
+    priceCurrent: { amount: 6.49 },
+    quantityText: '40 Stück',
+    comparableUnit: 'Stk',
+    normalizedUnitPrice: { amount: 0.16, unit: 'Stk', comparable: true, confidence: 0.9 },
+  });
+
+  assert.equal(single.normalizedUnitPrice.amount, 6.49);
+  assert.equal(reconciled.normalizedUnitPrice.amount, 0.16);
+});
 
 test('explicit product packs produce total quantity but minimum purchase thresholds do not', () => {
   const cases = [

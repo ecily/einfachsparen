@@ -338,7 +338,7 @@ function parseQuantityTextBasis(quantityText, targetUnit) {
   }
 
   const pieceMatch = text.match(
-    /(\d+(?:\.\d+)?)\s*(stk|stueck|stuck|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?)\b/i
+    /(\d+(?:\.\d+)?)\s*(stk|stueck|stuck|stück|tabs?|kapseln?|kapsel|rollen?|waschladungen?|ladungen?|portionen?|beutel|flaschen|dosen|packungen?)\b/i
   );
 
   return pieceMatch ? parsePositiveNumber(pieceMatch[1]) : null;
@@ -376,7 +376,7 @@ function assessComparableSafety(offer = {}) {
   const normalizedUnitPrice = offer.normalizedUnitPrice || {};
   const priceUnit = normalizeComparableUnit(normalizedUnitPrice.unit);
   const comparableUnit = normalizeComparableUnit(offer.comparableUnit);
-  const amount = parsePositiveNumber(normalizedUnitPrice.amount);
+  let amount = parsePositiveNumber(normalizedUnitPrice.amount);
   const reasons = new Set();
 
   if (!comparableUnit) {
@@ -397,6 +397,22 @@ function assessComparableSafety(offer = {}) {
     reasons.add(hasMultipackSignal(offer) ? PACKAGE_SIZE_UNCLEAR_REASON : QUANTITY_INCOMPLETE_REASON);
   }
 
+  // A retailer can expose the pack price under a misleading Stk label. When
+  // the public quantity explicitly contains multiple pieces, the pack price
+  // must never be published as the per-piece price.
+  const currentPrice = parsePositiveNumber(offer?.priceCurrent?.amount);
+  const explicitPieceBasis = resolvedUnit === 'Stk'
+    ? parseQuantityTextBasis(offer?.quantityText, 'Stk')
+    : null;
+  const looksLikePackPrice = currentPrice > 0
+    && explicitPieceBasis > 1
+    && amount > 0
+    && Math.abs(amount - currentPrice) <= 0.01;
+
+  if (looksLikePackPrice) {
+    amount = Number((currentPrice / explicitPieceBasis).toFixed(2));
+  }
+
   const safe = reasons.size === 0 && normalizedUnitPrice.comparable === true;
   const confidence = Number(normalizedUnitPrice.confidence || 0);
 
@@ -405,6 +421,7 @@ function assessComparableSafety(offer = {}) {
     comparableUnit: comparableUnit || '',
     normalizedUnitPrice: {
       ...normalizedUnitPrice,
+      amount: safe ? amount : normalizedUnitPrice.amount,
       unit: safe ? comparableUnit : (priceUnit || normalizedUnitPrice.unit || ''),
       comparable: safe,
       confidence: safe ? Math.max(confidence, 0.75) : Math.min(confidence || 0, 0.4),

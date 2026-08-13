@@ -5622,6 +5622,8 @@ function buildSafeMarketComparisonAlternative(primary, candidates = []) {
       normalizedUnitPrice: publicAlternative.normalizedUnitPrice,
       sourceType: publicAlternative.sourceType,
       sourceKey: publicAlternative.sourceKey,
+      sourceUrl: publicAlternative.sourceUrl || '',
+      sourceUrls: Array.isArray(publicAlternative.sourceUrls) ? publicAlternative.sourceUrls : [],
     },
   };
 }

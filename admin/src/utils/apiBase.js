@@ -252,7 +252,19 @@ export async function fetchTopDeals(limit = 20, filters = {}) {
   if (filters?.category) searchParams.set('category', String(filters.category))
   if (filters?.retailer) searchParams.set('retailer', String(filters.retailer))
 
-  return fetchJson(`/offers/top-deals?${searchParams.toString()}`)
+  const cacheKey = searchParams.toString()
+  const cached = topDealsCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) return cached.payload
+
+  const payload = await fetchJson(`/offers/top-deals?${cacheKey}`)
+  topDealsCache.set(cacheKey, { payload, expiresAt: Date.now() + 45_000 })
+  return payload
+}
+
+const topDealsCache = new Map()
+
+export function prefetchTopDeals() {
+  return fetchTopDeals(20).catch(() => null)
 }
 
 export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0, resultSetToken = '', options = {}) {

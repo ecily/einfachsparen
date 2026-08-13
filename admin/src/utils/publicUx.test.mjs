@@ -25,9 +25,10 @@ test('public hero uses the final positioning and market line', () => {
   assert.match(appSource, /pro kg, Liter oder Stück/)
   const marketLine = appSource.match(/<p className="search-landing-hero__markets">([^<]+)<\/p>/)?.[1]
 
-  assert.equal(marketLine, 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · INTERSPAR eingeschränkt')
+  assert.equal(marketLine, 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · HOFER eingeschränkt · INTERSPAR eingeschränkt')
   assert.match(marketLine, /INTERSPAR eingeschränkt/)
-  assert.doesNotMatch(marketLine, /(?:^| · )(?:SPAR|EUROSPAR|PAGRO|HOFER)(?: · |$)/)
+  assert.match(marketLine, /HOFER eingeschränkt/)
+  assert.doesNotMatch(marketLine, /(?:^| · )(?:SPAR|EUROSPAR|PAGRO)(?: · |$)/)
   assert.doesNotMatch(appSource, /Aktuelle Angebote finden\./)
 })
 
@@ -40,6 +41,8 @@ test('pricecheck route stays on the pricecheck page after direct navigation and 
 
 test('comparison USP facts and card labels stay visible and semantically distinct', () => {
   assert.match(appSource, /hero-compare-facts/)
+  assert.match(appSource, /Vergleichbar pro kg, Liter oder Stück/)
+  assert.doesNotMatch(appSource, /<div className="hero-compare-facts"/)
   assert.match(offerCardSource, /user-card__reference-label.*Referenzpreis/)
   assert.match(offerCardSource, />Kaufbedingung<\/span>/)
   assert.match(fs.readFileSync(new URL('../components/search/SeoOfferLandingPage.jsx', import.meta.url), 'utf8'), /seo-comparison-card/)
@@ -159,4 +162,12 @@ test('comparison accordion distinguishes cheaper and similar alternatives withou
   assert.match(offerCardSource, /formatValidityLabel\(comparisonAlternative\)/)
   assert.match(offerCardSource, /comparisonAlternative\.displayCategory \|\| comparisonAlternative\.categorySecondary/)
   assert.match(offerCardSource, /Auf die Einkaufsliste/)
+})
+
+test('comparison alternatives expose only a safe direct offer action', () => {
+  assert.match(offerCardSource, /function getOfferSourceUrl\(offer\)/)
+  assert.match(offerCardSource, /comparisonOfferUrl/)
+  assert.match(offerCardSource, /href=\{comparisonOfferUrl\}/)
+  assert.match(offerCardSource, /Angebot ansehen/)
+  assert.match(offerCardSource, /rel="noopener noreferrer"/)
 })

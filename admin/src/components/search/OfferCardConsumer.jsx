@@ -44,6 +44,11 @@ function getPriceCurrency(value) {
   return value && typeof value === 'object' ? value.currency : ''
 }
 
+function getOfferSourceUrl(offer) {
+  const candidates = [offer?.sourceUrl, ...(Array.isArray(offer?.sourceUrls) ? offer.sourceUrls : [])]
+  return candidates.find((value) => /^https?:\/\//i.test(String(value || '').trim())) || ''
+}
+
 function getRetailerColorKey(offer) {
   return offer?.retailerKey || normalizeRetailerKey(offer?.retailerName)
 }
@@ -274,6 +279,7 @@ export function OfferCardConsumer({
       ? `Bedingung: ${comparisonAlternative.conditionsText}`
       : 'Bedingung: keine Mindestmenge')
   const retailerTheme = getRetailerTheme(getRetailerColorKey(offer))
+  const comparisonOfferUrl = getOfferSourceUrl(comparisonAlternative)
   const brandLabel = getOfferBrandLabel(offer)
   const displayTitle = removeLeadingBrandToken(offer?.title, brandLabel)
   const cardClassName = [
@@ -428,6 +434,16 @@ export function OfferCardConsumer({
                   .filter(Boolean)
                   .join(' · ')}
               </p>
+              {comparisonOfferUrl ? (
+                <a
+                  className="user-card__comparison-action"
+                  href={comparisonOfferUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Angebot ansehen
+                </a>
+              ) : null}
             </div>
           </details>
         ) : null}
