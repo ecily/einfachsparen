@@ -8383,3 +8383,19 @@ test('ranking quality issue only demotes and does not remove equal query match',
   assert.equal(scoreOfferAgainstQuery(review, 'ariel waschmittel') > 0, true);
   assert.equal(compareOffersByRanking(clean, review, { query: 'ariel waschmittel' }) < 0, true);
 });
+
+test('public ranking fails closed when stored comparison safety conflicts with pack semantics', () => {
+  const ranked = buildRankedOffer(offer({
+    title: 'Selbst Aktiv WC-Steine Eukalyptus',
+    quantityText: '3 Stück',
+    priceCurrent: { amount: 5.49 },
+    comparableUnit: 'Stk',
+    totalComparableAmount: 1,
+    normalizedUnitPrice: { amount: 5.49, unit: 'Stk', comparable: true, confidence: 0.9 },
+    quality: { comparisonSafe: true, issues: [] },
+  }), null, null);
+
+  assert.equal(ranked.normalizedUnitPrice.amount, null);
+  assert.equal(ranked.normalizedUnitPrice.comparable, false);
+  assert.equal(ranked.quality.comparisonSafe, false);
+});

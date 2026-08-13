@@ -4748,6 +4748,23 @@ function withResponseInferredQuantityFields(offer = {}) {
     next.reviewReasons = Array.isArray(next.reviewReasons)
       ? next.reviewReasons.filter((reason) => !PUBLIC_QUANTITY_REVIEW_REASONS.has(reason))
       : next.reviewReasons;
+  } else {
+    next.comparableUnit = '';
+    next.normalizedUnitPrice = {
+      ...(next.normalizedUnitPrice || {}),
+      amount: null,
+      unit: '',
+      comparable: false,
+      confidence: Math.min(Number(next.normalizedUnitPrice?.confidence || 0), 0.4),
+    };
+    next.quality = {
+      ...(next.quality || {}),
+      comparisonSafe: false,
+      issues: [...new Set([
+        ...(Array.isArray(next.quality?.issues) ? next.quality.issues : []),
+        ...comparableSafety.reviewReasons,
+      ])],
+    };
   }
 
   return next;
