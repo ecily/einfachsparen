@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## Landingpage-/USP-Deep-Audit am 2026-08-13
+
+- Der lokale HEAD `ef93ca67` enthÃ¤lt den gepushten Landingpage-Retailer-Fix aus `694e8aa4`: BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, MÃ¼ller sowie HOFER/INTERSPAR eingeschrÃ¤nkt. Der neue Suchfeld-Placeholder und die bestehende Beta-/Trust-Kommunikation sind lokal vorhanden; Admin-Lint, Production-Build, relevante UI-Tests und `git diff --check` waren grÃ¼n.
+- Der read-only Live-Smoke auf `/` antwortet HTTP 200, liefert aber weiterhin den vorherigen Static-HTML-Build: alte Hero-/Footer-Copy, BILLA/Lidl/BIPA/dm/PENNY/HOFER-Links, keine neue MÃ¼ller-/BILLA-Plus-/INTERSPAR-Liste. CDN-HIT und `Last-Modified` belegen keinen aktuellen Commit. Kein Produktiv-Code wurde geÃ¤ndert; der Static-Deploy-/Build-Trigger bleibt der Stopper.
+- USP, Beta-Trust, Top Deals, SEO-Landingpages, interne Links und mobile Containment sind lokal klar angelegt bzw. teilweise live verifiziert. Keine weitere Parser-, SPAR-, HÃ¤ndler- oder DatenqualitÃ¤tsarbeit in diesem Task.
+
 ## HOFER-/Müller-Coverage-P0 am 2026-08-13
 
 - Coverage-Folgefix am 2026-08-13: `publicValidity` akzeptiert bei offizieller, offer-genauer `crawlJobId`-/`crawlRunId`-Lineage auch fehlendes `rawFacts.snapshotCurrent`; reine Source-Nähe bleibt fail-closed. Der Offer-Writer übernimmt nun die konkrete `source._id`, wenn der Parser kein `sourceId` liefert. Commits `a27626d9` und `3ba711b5` sind gepusht; gezielte Tests 58/58 grün. Der aktuelle DO-Deploy meldet `/api/health` HTTP 200, Mongo connected, BuildTime `2026-08-13T13:03:27.999Z`. Der erforderliche gezielte Müller-Re-Crawl wurde vom bestehenden Startup-Schutz mit 688 Sekunden Restzeit abgewiesen und daher nicht umgangen. Live bleibt der Filter-Facet-Stand vor dem Re-Crawl ohne Müller, während offer-genaue Suche bereits 5 Müller-Shampoo-Angebote liefert. HOFER-Alternative `katalog.hofer.at`/offizielles Publitas-PDF ist erreichbar und als nächster Integrationskandidat identifiziert; die aktuelle www.hofer.at-Quelle bleibt 403. P0 daher weiterhin rot; kein DB-Handpatch und kein verbotener Transport-Bypass.

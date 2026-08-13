@@ -49,6 +49,10 @@ SPAR, Müller and thin product/category pages remain governed by their existing 
 
 ## Remaining live verification
 
+## Follow-up live audit 2026-08-13
+
+The pushed landing-page retailer communication is present in `main`, but the read-only live root HTML still serves the previous static footer/hero build. It does not yet expose the intended BILLA Plus/MÃ¼ller entries or the explicit `HOFER eingeschrÃ¤nkt` / `INTERSPAR eingeschrÃ¤nkt` wording. This is a deployment/build-trigger issue, not an SEO copy or Public-Validity issue. No parser, crawler, database, or public-visibility relaxation was made.
+
 The repository now generates `catchall.html`, and the live DigitalOcean Static Site uses `catchall_document=catchall.html`. Unknown URLs therefore return the catchall document with HTTP 200, `noindex,nofollow`, no Canonical and a clear 404 UI. A true HTTP 404 would require switching the catchall to `404.html`, which would break dynamic shared-list SPA routes; therefore `catchall.html` is the safe current contract.
 
 The final live smoke verified homepage, Top Deals, BILLA, Lidl, all utility routes, three unknown paths, robots and sitemap. Unknown paths have no redirect, no Root-Canonical and no indexable SEO metadata. A true HTTP 404 remains a future hosting decision; the current public contract is fail-closed Variant B.
