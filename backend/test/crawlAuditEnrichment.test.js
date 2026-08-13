@@ -109,6 +109,26 @@ function activeComparableOffer(overrides = {}) {
   };
 }
 
+test('inherits the concrete source definition id when an offer has no sourceId', () => {
+  const enriched = enrichOfferForStorage(activeComparableOffer({
+    sourceId: undefined,
+    retailerKey: 'mueller',
+    retailerName: 'Müller',
+    sourceUrl: 'https://www.mueller.at/c/online-angebote/',
+  }), {
+    source: {
+      _id: 'source-from-definition',
+      retailerKey: 'mueller',
+      retailerName: 'Müller',
+      channel: 'official-site',
+      sourceUrl: 'https://www.mueller.at/c/online-angebote/',
+    },
+    sourceType: 'mueller-official-online-offers',
+  });
+
+  assert.equal(String(enriched.sourceId), 'source-from-definition');
+});
+
 test('marks offers without reference price as action price only', () => {
   const offer = enrichOfferForStorage({
     sourceId: '000000000000000000000001',

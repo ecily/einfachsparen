@@ -538,6 +538,7 @@ function enrichOfferForStorage(offer, { source, sourceType = '', parserVersion =
   return {
     ...document,
     ...formatMetadata,
+    sourceId: document.sourceId || source?._id || null,
     dedupeKey,
     sourceType: resolvedSourceType,
     sourceUrls,
