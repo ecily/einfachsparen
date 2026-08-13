@@ -21,12 +21,20 @@ const baseRelatedLinks = [
 
 const retailerRelatedLinks = [
   ['billa', 'BILLA Angebote'],
+  ['billa-plus', 'BILLA Plus Angebote'],
   ['lidl', 'Lidl Angebote'],
   ['dm', 'dm Angebote'],
   ['bipa', 'BIPA Angebote'],
   ['penny', 'PENNY Angebote'],
   ['mueller', 'M\u00fcller Angebote'],
+  ['hofer', 'HOFER eingeschr\u00e4nkt'],
+  ['interspar', 'INTERSPAR eingeschr\u00e4nkt'],
 ]
+
+const retailerLandingPaths = {
+  'billa-plus': '/angebote/billa/',
+  interspar: '/angebote/spar/',
+}
 
 function links(keys) {
   const lookup = new Map([...baseRelatedLinks, ...retailerRelatedLinks])
@@ -458,7 +466,7 @@ export const seoFooterLinkGroups = [
     links: retailerRelatedLinks.map(([key, label]) => ({
       key,
       label,
-      path: `/angebote/${key}`,
+      path: retailerLandingPaths[key] || `/angebote/${key}`,
     })),
   },
 ]

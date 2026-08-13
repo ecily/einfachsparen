@@ -40,7 +40,9 @@ test('faster-offer links omit weak categories and unavailable retailers', () => 
   assert.equal(retailerLabels.includes('SPAR Angebote'), false)
   assert.equal(retailerLabels.includes('EUROSPAR Angebote'), false)
   assert.equal(retailerLabels.includes('PAGRO Angebote'), false)
-  assert.equal(retailerLabels.includes('HOFER Angebote'), false)
+  assert.equal(retailerLabels.includes('BILLA Plus Angebote'), true)
+  assert.equal(retailerLabels.includes('HOFER eingeschr\u00e4nkt'), true)
+  assert.equal(retailerLabels.includes('INTERSPAR eingeschr\u00e4nkt'), true)
   assert.equal(retailerLabels.includes('Müller Angebote'), true)
 })
 
