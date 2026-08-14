@@ -236,7 +236,7 @@ function getFallbackSavingsEvidence(rawOffer, offer) {
   return null;
 }
 
-function buildRetailerFallbackDecision(rawOffer, now = new Date(), profile = null) {
+function buildRetailerFallbackDecision(rawOffer, now = new Date(), profile = null, memo = null) {
   const retailerKey = normalizeRetailerKey(rawOffer?.retailerKey || rawOffer?.retailerName || '');
   if (!ALLOWED_RETAILER_FILTERS.has(retailerKey)) {
     return { accepted: false, reason: 'fallback-retailer-not-allowed' };
@@ -246,7 +246,11 @@ function buildRetailerFallbackDecision(rawOffer, now = new Date(), profile = nul
     return { accepted: false, reason: 'fallback-expired' };
   }
   const freshnessStartedAt = profile ? timingNowMs() : 0;
-  if (!filterFreshActiveOffers([rawOffer], now).length) {
+  const isFreshPublic = memo?.freshness?.has(rawOffer)
+    ? memo.freshness.get(rawOffer)
+    : filterFreshActiveOffers([rawOffer], now).length > 0;
+  if (memo?.freshness && !memo.freshness.has(rawOffer)) memo.freshness.set(rawOffer, isFreshPublic);
+  if (!isFreshPublic) {
     addTiming(profile, 'publicValidityMs', freshnessStartedAt);
     return { accepted: false, reason: 'fallback-not-fresh-public' };
   }
@@ -259,14 +263,20 @@ function buildRetailerFallbackDecision(rawOffer, now = new Date(), profile = nul
   }
 
   const sourceStartedAt = profile ? timingNowMs() : 0;
-  const sourceQuality = classifyOfferSourceQuality(rawOffer, now);
+  const sourceQuality = memo?.sourceQuality?.has(rawOffer)
+    ? memo.sourceQuality.get(rawOffer)
+    : classifyOfferSourceQuality(rawOffer, now);
+  if (memo?.sourceQuality && !memo.sourceQuality.has(rawOffer)) memo.sourceQuality.set(rawOffer, sourceQuality);
   addTiming(profile, 'sourceQualityMs', sourceStartedAt);
   if (!sourceQuality.hasOfficialEvidence || sourceQuality.sourceTrustLevel !== 'high' || sourceQuality.isLowConfidenceAggregator) {
     return { accepted: false, reason: 'fallback-source-not-trusted' };
   }
 
   const normalizationStartedAt = profile ? timingNowMs() : 0;
-  const offer = buildRankedOffer(rawOffer, null, null);
+  const offer = memo?.ranked?.has(rawOffer)
+    ? memo.ranked.get(rawOffer)
+    : buildRankedOffer(rawOffer, null, null);
+  if (memo?.ranked && !memo.ranked.has(rawOffer)) memo.ranked.set(rawOffer, offer);
   addTiming(profile, 'candidateNormalizationMs', normalizationStartedAt);
   if (String(offer?.offerType || '') !== 'product') {
     return { accepted: false, reason: 'fallback-not-product' };
@@ -329,7 +339,7 @@ function buildRetailerFallbackDecision(rawOffer, now = new Date(), profile = nul
   };
 }
 
-function buildCandidateDecision(rawOffer, now = new Date(), profile = null) {
+function buildCandidateDecision(rawOffer, now = new Date(), profile = null, memo = null) {
   const retailerKey = normalizeRetailerKey(rawOffer?.retailerKey || rawOffer?.retailerName || '');
   if (EXCLUDED_RETAILERS.has(retailerKey)) return { accepted: false, reason: 'excluded-retailer' };
   const validTo = rawOffer?.validTo ? new Date(rawOffer.validTo) : null;
@@ -337,7 +347,11 @@ function buildCandidateDecision(rawOffer, now = new Date(), profile = null) {
     return { accepted: false, reason: 'expired' };
   }
   const freshnessStartedAt = profile ? timingNowMs() : 0;
-  if (!filterFreshActiveOffers([rawOffer], now).length) {
+  const isFreshPublic = memo?.freshness?.has(rawOffer)
+    ? memo.freshness.get(rawOffer)
+    : filterFreshActiveOffers([rawOffer], now).length > 0;
+  if (memo?.freshness && !memo.freshness.has(rawOffer)) memo.freshness.set(rawOffer, isFreshPublic);
+  if (!isFreshPublic) {
     addTiming(profile, 'publicValidityMs', freshnessStartedAt);
     return { accepted: false, reason: 'not-fresh-public' };
   }
@@ -346,14 +360,20 @@ function buildCandidateDecision(rawOffer, now = new Date(), profile = null) {
   if (hasRiskyPublishState(rawOffer)) return { accepted: false, reason: 'retained-or-stale' };
 
   const sourceStartedAt = profile ? timingNowMs() : 0;
-  const sourceQuality = classifyOfferSourceQuality(rawOffer, now);
+  const sourceQuality = memo?.sourceQuality?.has(rawOffer)
+    ? memo.sourceQuality.get(rawOffer)
+    : classifyOfferSourceQuality(rawOffer, now);
+  if (memo?.sourceQuality && !memo.sourceQuality.has(rawOffer)) memo.sourceQuality.set(rawOffer, sourceQuality);
   addTiming(profile, 'sourceQualityMs', sourceStartedAt);
   if (!sourceQuality.hasOfficialEvidence || sourceQuality.sourceTrustLevel !== 'high' || sourceQuality.isLowConfidenceAggregator) {
     return { accepted: false, reason: 'source-not-trusted' };
   }
 
   const normalizationStartedAt = profile ? timingNowMs() : 0;
-  const offer = buildRankedOffer(rawOffer, null, null);
+  const offer = memo?.ranked?.has(rawOffer)
+    ? memo.ranked.get(rawOffer)
+    : buildRankedOffer(rawOffer, null, null);
+  if (memo?.ranked && !memo.ranked.has(rawOffer)) memo.ranked.set(rawOffer, offer);
   addTiming(profile, 'candidateNormalizationMs', normalizationStartedAt);
   const price = finitePositive(offer?.priceCurrent?.amount);
   const unitPrice = finitePositive(offer?.normalizedUnitPrice?.amount);
@@ -494,10 +514,15 @@ function buildTopDealsFromOffers(offers = [], {
   const excludedReasons = {};
   const fallbackExcludedReasons = {};
   const accepted = [];
+  const memo = {
+    freshness: new WeakMap(),
+    sourceQuality: new WeakMap(),
+    ranked: new WeakMap(),
+  };
 
   for (const offer of offers) {
     const decisionStartedAt = profile ? timingNowMs() : 0;
-    const decision = buildCandidateDecision(offer, now, profile);
+    const decision = buildCandidateDecision(offer, now, profile, memo);
     addTiming(profile, 'strictDecisionMs', decisionStartedAt);
     if (decision.accepted) {
       accepted.push(decision.deal);
@@ -526,7 +551,7 @@ function buildTopDealsFromOffers(offers = [], {
     if (strictRetailerKeys.has(retailerKey)) continue;
 
     const decisionStartedAt = profile ? timingNowMs() : 0;
-    const fallbackDecision = buildRetailerFallbackDecision(offer, now, profile);
+    const fallbackDecision = buildRetailerFallbackDecision(offer, now, profile, memo);
     addTiming(profile, 'fallbackDecisionMs', decisionStartedAt);
     if (fallbackDecision.accepted) {
       fallbackAccepted.push(fallbackDecision.deal);
