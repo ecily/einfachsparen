@@ -258,13 +258,17 @@ function isStaleRetainedAggregatorWithoutPublicFreshness(offer = {}, sourceQuali
 }
 
 function isOfferFreshForActiveUse(offer = {}, now = new Date()) {
-  if (!isPublicValidityEligible(offer, now).eligible) return false;
+  const publicDecision = isPublicValidityEligible(offer, now);
+  if (!publicDecision.eligible) return false;
+  const publicUpcoming = publicDecision.validityClass === 'upcoming'
+    && offer.status === 'upcoming'
+    && offer.isActiveNow === false;
 
   // Local require avoids a module cycle: sourceQuality uses the date-range parser from this file.
   const { classifyOfferSourceQuality } = require('./sourceQuality');
 
-  if (offer.status && offer.status !== 'active') return false;
-  if (offer.isActiveNow === false) return false;
+  if (offer.status && offer.status !== 'active' && !publicUpcoming) return false;
+  if (offer.isActiveNow === false && !publicUpcoming) return false;
 
   const validTo = toDateOrNull(offer.validTo);
   if (validTo && validTo < now) return false;

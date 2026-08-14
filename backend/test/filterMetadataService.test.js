@@ -573,10 +573,10 @@ test('filter metadata offer select keeps crawl freshness fields aligned with ran
 });
 
 test('filter metadata rebuild scopes offer input to current active offers', () => {
-  assert.deepEqual(buildFilterMetadataOfferMatch(), {
-    status: 'active',
-    isActiveNow: true,
-  });
+  const match = buildFilterMetadataOfferMatch();
+  assert.ok(Array.isArray(match.$or));
+  assert.deepEqual(match.$or[0], { status: 'active', isActiveNow: true });
+  assert.match(JSON.stringify(match.$or[1]), /hofer-official-html/);
 });
 
 test('filter metadata rebuild does not use a full transaction or mutate offers', () => {

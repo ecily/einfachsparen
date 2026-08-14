@@ -4878,7 +4878,9 @@ function parseHoferOffersFromPage({
       explicitUnitPriceText = stateProduct.comparisonPriceText;
     }
     const actionValidity = pageContext === 'hofer-actions' ? extractHoferActionValidity(card, $) : null;
-    let validFrom = actionValidity?.validFrom || extractHoferAvailabilityDate(cardText) || parseDateFromText(cardText) || pageDate || (isSnapshotOfferPage ? new Date() : null);
+    const availabilityDate = extractHoferAvailabilityDate(cardText)
+      || extractHoferAvailabilityDate(stateProduct?.availableText);
+    let validFrom = actionValidity?.validFrom || availabilityDate || parseDateFromText(cardText) || pageDate || (isSnapshotOfferPage ? new Date() : null);
     if (pageContext === 'current-offers' && validFrom) {
       validFrom = new Date(validFrom);
       validFrom.setUTCHours(0, 0, 0, 0);
@@ -4922,7 +4924,7 @@ function parseHoferOffersFromPage({
       return;
     }
 
-    if (pageContext === 'current-offers' && !extractHoferAvailabilityDate(cardText)) {
+    if (pageContext === 'current-offers' && !availabilityDate) {
       if (diagnostics) diagnostics.skipReasons['missing-availability-date'] = (diagnostics.skipReasons['missing-availability-date'] || 0) + 1;
       return;
     }
@@ -4932,7 +4934,8 @@ function parseHoferOffersFromPage({
       return;
     }
 
-    if (statusInfo.status === 'expired' || statusInfo.status === 'upcoming') {
+    const hasExplicitUpcomingEvidence = pageContext === 'current-offers' && Boolean(availabilityDate);
+    if (statusInfo.status === 'expired' || (statusInfo.status === 'upcoming' && !hasExplicitUpcomingEvidence)) {
       if (diagnostics) diagnostics.skipReasons[`status-${statusInfo.status}`] = (diagnostics.skipReasons[`status-${statusInfo.status}`] || 0) + 1;
       return;
     }
@@ -5045,6 +5048,12 @@ function parseHoferOffersFromPage({
         pageUrl,
         productUrl,
         productId,
+        snapshotCurrent: isSnapshotOfferPage && statusInfo.status === 'active',
+        freshnessTtlHours: source?.crawlPolicy?.freshnessTtlHours || 48,
+        ...(availabilityDate ? {
+          hoferAvailabilityEvidence: 'official-availability-date',
+          availabilityText: stateProduct?.availableText || sanitizeWhitespace(cardText.match(/verf(?:\u00fc|ue)gbar\s+(?:ab|seit)\s+\d{2}\.\d{2}\.\d{4}/i)?.[0] || ''),
+        } : {}),
         actionValidityText: actionValidity?.validityText || '',
         validityText: validTo
           ? [validFrom?.toISOString?.().slice(0, 10), validTo.toISOString().slice(0, 10)].filter(Boolean).join(' - ')

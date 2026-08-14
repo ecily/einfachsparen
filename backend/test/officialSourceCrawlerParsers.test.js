@@ -1430,7 +1430,7 @@ test('HOFER current HTML parser rejects missing availability and non-official im
   assert.equal(diagnostics.skipReasons['missing-availability-date'], 1);
 });
 
-test('HOFER current HTML parser rejects future availability without weakening validity', () => {
+test('HOFER current HTML parser keeps explicitly dated future availability as upcoming', () => {
   const diagnostics = {};
   const offers = parseHoferFixture({
     pageUrl: 'https://www.hofer.at/angebote',
@@ -1438,8 +1438,12 @@ test('HOFER current HTML parser rejects future availability without weakening va
     cards: [hoferCurrentOfferCard({ available: 'Verfuegbar ab 14.08.2099' })],
   });
 
-  assert.equal(offers.length, 0);
-  assert.equal(diagnostics.skipReasons['status-upcoming'], 1);
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].status, 'upcoming');
+  assert.equal(offers[0].isActiveNow, false);
+  assert.equal(offers[0].rawFacts.hoferAvailabilityEvidence, 'official-availability-date');
+  assert.equal(offers[0].rawFacts.freshnessTtlHours, 48);
+  assert.equal(diagnostics.skipReasons['status-upcoming'], undefined);
 });
 
 test('HOFER official parser keeps current snapshot offers without validTo and labels them conservatively', () => {
@@ -1458,6 +1462,8 @@ test('HOFER official parser keeps current snapshot offers without validTo and la
   assert.equal(offers[0].validTo, null);
   assert.equal(offers[0].status, 'active');
   assert.equal(offers[0].isActiveNow, true);
+  assert.equal(offers[0].rawFacts.snapshotCurrent, true);
+  assert.equal(offers[0].rawFacts.freshnessTtlHours, 48);
   assert.match(offers[0].conditionsText, /Aktuell gefunden - bitte im Markt pruefen/);
   assert.equal(enriched.length, 1);
   assert.equal(buildValidityLabel(enriched[0]), 'Aktuell gefunden - bitte im Markt pruefen.');

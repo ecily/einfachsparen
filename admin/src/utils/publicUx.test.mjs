@@ -7,6 +7,7 @@ import {
   getUnitPriceLabel,
   shouldDisplayUnitPrice,
 } from './offers.js'
+import { formatValidityLabel } from './formatting.js'
 import { getInitialPageFromPathname, getPageMeta, getPathForPage } from './seo.js'
 import {
   buildSeoStaticDocument,
@@ -174,4 +175,13 @@ test('comparison alternatives expose only a safe direct offer action', () => {
   assert.match(offerCardSource, /href=\{comparisonOfferUrl\}/)
   assert.match(offerCardSource, /Angebot ansehen/)
   assert.match(offerCardSource, /rel="noopener noreferrer"/)
+})
+
+test('upcoming offers are visibly labelled with their start date', () => {
+  const label = formatValidityLabel({
+    status: 'upcoming',
+    validFrom: '2099-08-14T00:00:00.000Z',
+  })
+
+  assert.match(label, /G..tig ab 14\.08\./)
 })

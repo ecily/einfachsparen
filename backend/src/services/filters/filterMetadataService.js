@@ -111,8 +111,19 @@ function withFilterMetadataMaxTime(query) {
 
 function buildFilterMetadataOfferMatch() {
   return {
-    status: 'active',
-    isActiveNow: true,
+    $or: [
+      { status: 'active', isActiveNow: true },
+      {
+        retailerKey: 'hofer',
+        status: 'upcoming',
+        isActiveNow: false,
+        $or: [
+          { sourceType: 'hofer-official-html' },
+          { 'rawFacts.sourceType': 'hofer-official-html' },
+          { 'rawFacts.sourceKey': 'hofer-official-html' },
+        ],
+      },
+    ],
   };
 }
 

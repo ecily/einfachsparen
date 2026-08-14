@@ -3,12 +3,15 @@ const VIENNA_TIME_ZONE = 'Europe/Vienna';
 const PUBLIC_VALIDITY_VERSION = 'public-validity-v1';
 
 const SOURCE_TTL_HOURS = Object.freeze({
+  hofer: 48,
   mueller: 48,
   bipa: 96,
   billa: 72,
   'billa-plus': 72,
   dm: 72,
 });
+
+const HOFER_HTML_SOURCE_KEY = 'hofer-official-html';
 
 function toDateOrNull(value) {
   if (!value) return null;
@@ -117,10 +120,36 @@ function buildPublicValidityMongoMatch(now = new Date()) {
       },
     ],
   };
+  const hoferUpcoming = {
+    retailerKey: 'hofer',
+    validFrom: { $gt: referenceNow },
+    $or: [
+      { validTo: null },
+      { validTo: { $gte: referenceNow } },
+    ],
+    sourceRunStatus: 'success',
+    sourceId: { $exists: true, $ne: null },
+    crawlRunId: { $exists: true, $ne: null },
+    crawlJobId: { $exists: true, $ne: null },
+    lastSeenAt: { $exists: true, $ne: null },
+    'rawFacts.dryRun': { $ne: true },
+    $and: [
+      {
+        $or: [
+          { sourceType: HOFER_HTML_SOURCE_KEY },
+          { sourceTypes: HOFER_HTML_SOURCE_KEY },
+          { 'rawFacts.sourceType': HOFER_HTML_SOURCE_KEY },
+          { 'rawFacts.sourceKey': HOFER_HTML_SOURCE_KEY },
+        ],
+      },
+      { 'rawFacts.hoferAvailabilityEvidence': 'official-availability-date' },
+    ],
+  };
 
   return {
     $or: [
       explicit,
+      hoferUpcoming,
       {
         ...snapshotBase,
         $or: [
@@ -165,6 +194,37 @@ function normalizeSourceText(offer = {}) {
     offer.rawFacts?.sourceKey,
     offer.sourceUrl,
   ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function isHoferHtmlSource(offer = {}) {
+  return [
+    offer.sourceType,
+    ...(Array.isArray(offer.sourceTypes) ? offer.sourceTypes : []),
+    offer.rawFacts?.sourceType,
+    offer.rawFacts?.sourceKey,
+  ].some((value) => String(value || '').trim().toLowerCase() === HOFER_HTML_SOURCE_KEY);
+}
+
+function hasHoferExplicitAvailabilityEvidence(offer = {}) {
+  if (offer.rawFacts?.hoferAvailabilityEvidence === 'official-availability-date') {
+    return true;
+  }
+
+  return [
+    offer.rawFacts?.stateAvailableText,
+    offer.rawFacts?.availabilityText,
+    offer.rawFacts?.validityText,
+    offer.conditionsText,
+  ].some((value) => /verf(?:u|ü)gbar\s+(?:ab|seit)\s+\d{2}\.\d{2}\.\d{4}/i.test(String(value || '')));
+}
+
+function isPublicHoferUpcomingOffer(offer = {}, validFrom, validTo) {
+  return Boolean(
+    isHoferHtmlSource(offer)
+    && hasHoferExplicitAvailabilityEvidence(offer)
+    && hasOfferSpecificConfirmation(offer)
+    && (!validTo || !validFrom || validTo >= validFrom)
+  );
 }
 
 function isOfficialSnapshotSource(offer = {}) {
@@ -250,6 +310,15 @@ function isPublicValidityEligible(offer = {}, now = new Date()) {
     return buildDecision({ validityClass: 'contradictory-validity', reasonCode: 'contradictory-validity' });
   }
   if (validFrom && validFrom > referenceNow) {
+    if (isPublicHoferUpcomingOffer(offer, validFrom, validTo)) {
+      return buildDecision({
+        eligible: true,
+        validityClass: 'upcoming',
+        reasonCode: 'upcoming-explicit-validity',
+        publicUntil: validTo || validFrom,
+        evidenceType: 'official-availability-date',
+      });
+    }
     return buildDecision({ validityClass: 'future', reasonCode: 'future-validFrom' });
   }
   if (validTo && validTo < referenceNow) {
@@ -322,6 +391,7 @@ module.exports = {
   getSourceTtlHours,
   buildPublicValidityMongoMatch,
   isOfficialSnapshotSource,
+  isPublicHoferUpcomingOffer,
   isPublicValidityEligible,
   parseValidityDate,
   viennaLocalDateToUtc,

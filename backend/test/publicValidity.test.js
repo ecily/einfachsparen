@@ -45,6 +45,44 @@ test('explicit validity rejects expired, future and contradictory windows', () =
   assert.equal(isPublicValidityEligible({ validFrom: '2026-01-20', validTo: '2026-01-10' }, NOW).reasonCode, 'contradictory-validity');
 });
 
+test('HOFER HTML upcoming offer with explicit availability evidence is public as upcoming', () => {
+  const decision = isPublicValidityEligible({
+    retailerKey: 'hofer',
+    sourceType: 'hofer-official-html',
+    validFrom: '2026-01-16',
+    sourceId: 'source-1',
+    crawlRunId: 'run-1',
+    crawlJobId: 'job-1',
+    lastSeenAt: new Date('2026-01-15T00:00:00.000Z'),
+    sourceRunStatus: 'success',
+    publishStatus: 'crawl-run-success',
+    status: 'upcoming',
+    isActiveNow: false,
+    rawFacts: {
+      sourceType: 'hofer-official-html',
+      hoferAvailabilityEvidence: 'official-availability-date',
+    },
+  }, NOW);
+
+  assert.equal(decision.eligible, true);
+  assert.equal(decision.validityClass, 'upcoming');
+  assert.equal(decision.reasonCode, 'upcoming-explicit-validity');
+});
+
+test('future offers without exact HOFER availability evidence remain fail-closed', () => {
+  const decision = isPublicValidityEligible({
+    ...snapshotOffer({
+      retailerKey: 'hofer',
+      sourceType: 'hofer-official-html',
+      validFrom: '2026-01-16',
+      rawFacts: { freshnessTtlHours: 48 },
+    }),
+  }, NOW);
+
+  assert.equal(decision.eligible, false);
+  assert.equal(decision.reasonCode, 'future-validFrom');
+});
+
 test('snapshot confirmation is offer-specific and eligible inside its TTL', () => {
   const decision = isPublicValidityEligible(snapshotOffer(), NOW);
 
@@ -191,4 +229,38 @@ test('ranking freshness filter applies the same public contract to snapshot and 
 
   assert.equal(visible.length, 1);
   assert.equal(visible[0].sourceType, 'billa-official-algolia');
+});
+
+test('ranking freshness filter includes evidence-backed HOFER upcoming offers', () => {
+  const visible = filterFreshActiveOffers([
+    {
+      title: 'HOFER Testangebot',
+      retailerKey: 'hofer',
+      sourceType: 'hofer-official-html',
+      sourceId: 'source-1',
+      crawlRunId: 'run-1',
+      crawlJobId: 'job-1',
+      lastSeenAt: new Date('2026-01-15T00:00:00.000Z'),
+      sourceRunStatus: 'success',
+      publishStatus: 'crawl-run-success',
+      status: 'upcoming',
+      isActiveNow: false,
+      validFrom: '2026-01-16',
+      rawFacts: {
+        sourceType: 'hofer-official-html',
+        hoferAvailabilityEvidence: 'official-availability-date',
+      },
+    },
+    {
+      retailerKey: 'hofer',
+      sourceType: 'hofer-official-html',
+      status: 'upcoming',
+      isActiveNow: false,
+      validFrom: '2026-01-16',
+      rawFacts: { sourceType: 'hofer-official-html' },
+    },
+  ], NOW);
+
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].retailerKey, 'hofer');
 });
