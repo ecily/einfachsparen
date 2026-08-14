@@ -468,6 +468,13 @@
 
 ## HOFER-HTML-Asset-/Quantity-Join am 2026-08-14
 
+## Initial-Refresh-Overlay-Fix am 2026-08-14
+
+- Root Cause des langen Vollbild-Overlays: `SearchPage` hielt `HeroLoaderModal` direkt an `filtersLoading`. Der kalte Public-Facet-Snapshot brauchte live beim ersten `/api/filters/retailers`-Request ca. 6,4-7,0 s; Kategorien liefen separat ca. 0,13-0,21 s. Top Deals war kein Overlay-Blocker und lief bereits als Idle-Prefetch, kalt ca. 14,7 s.
+- Minimalfix in Commit `748dcf61`: Das initiale Browse-Overlay ist auf maximal 1,5 s begrenzt und oeffnet sich bei spaeteren Filter-Nachladevorgaengen nicht erneut. Browse-Intro, Navigation und Suchfeld bleiben danach bedienbar; Filterchips zeigen ihren bestehenden Ladezustand, bis die strikten Daten eintreffen. Keine Backend-, Ranking-, HOFER- oder Public-Validity-Aenderung.
+- Lokal: 23 relevante Frontend-Tests, ESLint, Production-Build und `git diff --check` gruen. Live Static Deploy bestaetigt mit HTTP 200, neuen Assets `/assets/index-C-DF0E9x.css` und `/assets/index-Cc6ggDes.js`, alten Static-Hashes nicht mehr vorhanden. Chrome-Smoke auf `/stoebern` nach 1,5 s: Browse-Intro sichtbar, Overlay nicht mehr sichtbar, Markt-/Ladezustand vorhanden. API-Regression: BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, Mueller und HOFER sowie `q=bier` HTTP 200; HOFER-HTML-Ranking bleibt intakt.
+- Der vorhandene Full-Web-Smoke meldete weiterhin externe/alte globale 404-/504-Ressourcen; die Browse-/Search-/Top-Deals-Pruefungen liefen durch. Dieser Restpunkt ist nicht durch den Overlay-Fix verursacht.
+
 ## HOFER-HTML-Public-Validity-Recovery am 2026-08-14
 
 - Root Cause des Live-Ranking-Counts `0`: Die neue HTML-Offer-Projektion uebernahm die Source-TTL `48h` nicht in `rawFacts`; Offers ohne `validTo` wurden deshalb trotz erfolgreicher offer-genauer Lineage als `missing-source-ttl` fail-closed ausgeschlossen. Der Parser schreibt nun `snapshotCurrent`, `freshnessTtlHours=48` und `hoferAvailabilityEvidence=official-availability-date`.
