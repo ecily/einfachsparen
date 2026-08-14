@@ -16,7 +16,7 @@ const FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT = 5000;
 const PUBLIC_DISABLED_RETAILER_KEYS = new Set(['eurospar']);
 const HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS = 72;
 const SPAR_FAMILY_CURRENT_DISCOVERY_MAX_AGE_HOURS = 72;
-const PUBLIC_FACET_SNAPSHOT_TTL_MS = 15 * 1000;
+const PUBLIC_FACET_SNAPSHOT_TTL_MS = 60 * 1000;
 
 let publicFacetSnapshot = null;
 let publicFacetSnapshotExpiresAt = 0;
@@ -178,6 +178,10 @@ async function getPublicFacetSnapshot() {
   }
 
   return publicFacetSnapshotPromise;
+}
+
+function warmPublicFacetSnapshot() {
+  return getPublicFacetSnapshot();
 }
 
 function normalizeFilterKey(value, fallback = 'unknown') {
@@ -1378,6 +1382,7 @@ function buildCategoryResponseFromStats(stats) {
 
 module.exports = {
   rebuildFilterMetadata,
+  warmPublicFacetSnapshot,
   getRetailerFilters,
   getCategoryFilters,
   normalizeRetailerKey,

@@ -153,9 +153,11 @@ const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
 const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-public-validity-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v2-image-tiebreak-v1-public-candidate-validity-v1-hofer-html-primary-upcoming-v2`;
 const RANKING_CANDIDATE_CAP = 1000;
+const RANKING_BROWSE_CANDIDATE_CAP = 240;
 const SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT = 100;
 const SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT = 120;
 const RANKING_QUERY_MAX_TIME_MS = 1500;
+const RANKING_BROWSE_QUERY_MAX_TIME_MS = 5000;
 const RANKING_SEARCH_TOKEN_FALLBACK_MODE = String(process.env.RANKING_SEARCH_TOKEN_FALLBACK_MODE || '').trim().toLowerCase();
 const RANKING_SORT = { sortScoreDefault: -1, 'normalizedUnitPrice.amount': 1, validTo: 1, retailerName: 1, title: 1 };
 
@@ -548,6 +550,7 @@ function buildRankingCacheKey({
 }) {
   return JSON.stringify({
     cacheSchemaVersion: RANKING_CACHE_SCHEMA_VERSION,
+    candidateStrategyVersion: 'browse-cap-v1',
     categories: normalizeStringList(categories).sort(),
     query: String(query || '').trim().toLowerCase(),
     unit: String(unit || 'all').trim().toLowerCase(),
@@ -570,6 +573,7 @@ function buildRankingBaseCacheKey({
 }) {
   return JSON.stringify({
     cacheSchemaVersion: RANKING_CACHE_SCHEMA_VERSION,
+    candidateStrategyVersion: 'browse-cap-v1',
     categories: normalizeStringList(categories).sort(),
     query: String(query || '').trim().toLowerCase(),
     unit: String(unit || 'all').trim().toLowerCase(),
@@ -7695,8 +7699,27 @@ function getVisibleCardVariantDifference(left, right) {
   return '';
 }
 
+function getVisibleCardDedupeBucket(offer) {
+  const currentAmount = centsValue(offer?.priceCurrent?.amount);
+  const unitAmount = centsValue(offer?.normalizedUnitPrice?.amount);
+  const priceKey = currentAmount !== null
+    ? `current:${currentAmount}`
+    : `unit:${unitAmount ?? ''}:${normalizeQuantityUnit(offer?.normalizedUnitPrice?.unit || offer?.comparableUnit || '')}`;
+  const minimum = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || offer?.minQuantity || 1);
+
+  return [
+    normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || ''),
+    priceKey,
+    normalizeSearchText(offer?.conditionsText || offer?.conditionLabel),
+    Boolean(offer?.customerProgramRequired),
+    Boolean(offer?.isMultiBuy),
+    Number.isFinite(minimum) ? minimum : '',
+  ].join('::');
+}
+
 function dedupeVisibleCardResponseOffers(offers, query = '', { collectDiagnostics = false } = {}) {
   const unique = [];
+  const bucketToIndexes = new Map();
   const diagnostics = {
     visibleRepeatCountBefore: Math.max(0, offers.length - new Set(offers.map((offer) => getOfferIdentity(offer)).filter(Boolean)).size),
     visibleRepeatCountAfter: 0,
@@ -7706,9 +7729,11 @@ function dedupeVisibleCardResponseOffers(offers, query = '', { collectDiagnostic
   };
 
   for (const offer of offers) {
-    const duplicateIndex = unique.findIndex((candidate) => hasSameVisibleCardFingerprint(candidate, offer));
+    const bucket = getVisibleCardDedupeBucket(offer);
+    const bucketIndexes = bucketToIndexes.get(bucket) || [];
+    const duplicateIndex = bucketIndexes.find((index) => hasSameVisibleCardFingerprint(unique[index], offer));
 
-    if (duplicateIndex < 0) {
+    if (duplicateIndex === undefined) {
       if (collectDiagnostics && diagnostics.examplesKeptBecauseVariant.length < 8) {
         const related = unique.find((candidate) => {
           const leftTitle = getOfferTitleKey(candidate);
@@ -7728,6 +7753,10 @@ function dedupeVisibleCardResponseOffers(offers, query = '', { collectDiagnostic
       }
 
       unique.push(offer);
+      if (!bucketToIndexes.has(bucket)) {
+        bucketToIndexes.set(bucket, []);
+      }
+      bucketToIndexes.get(bucket).push(unique.length - 1);
       continue;
     }
 
@@ -8768,9 +8797,7 @@ async function findRankingCandidateOffers({
   const queryMetadata = buildRankingCandidateQueryMetadata({ query });
   const dbQuery = buildRankingOfferQuery(primaryMatch, candidateLimit);
 
-  if (query) {
-    dbQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
-  }
+  dbQuery.maxTimeMS(query ? RANKING_QUERY_MAX_TIME_MS : RANKING_BROWSE_QUERY_MAX_TIME_MS);
 
   try {
     const primaryStartedAt = nowMs();
@@ -8911,7 +8938,7 @@ async function findRankingCandidateOffers({
       mongo,
     };
   } catch (error) {
-    if (query && (error?.code === 50 || /maxTimeMS|time limit/i.test(String(error?.message || '')))) {
+    if (error?.code === 50 || /maxTimeMS|time limit/i.test(String(error?.message || ''))) {
       return collectExecutionStats
         ? {
           offers: [],
@@ -8956,9 +8983,7 @@ async function explainRankingCandidateQuery({
   });
   const explainQuery = buildRankingOfferQuery(match, candidateLimit);
 
-  if (query) {
-    explainQuery.maxTimeMS(RANKING_QUERY_MAX_TIME_MS);
-  }
+  explainQuery.maxTimeMS(query ? RANKING_QUERY_MAX_TIME_MS : RANKING_BROWSE_QUERY_MAX_TIME_MS);
 
   try {
     return {
@@ -9441,11 +9466,18 @@ async function buildOfferRanking({
   const retailerMatch = selectedRetailers.length > 0
     ? { isActive: true, retailerKey: { $in: selectedRetailers } }
     : { isActive: true };
-  const candidateLimit = buildRankingCandidateLimit({
+  const isUnscopedBrowse = !hasQuery
+    && selectedRetailers.length === 0
+    && selectedCategories.length === 0
+    && !showAllMatching;
+  const requestedCandidateLimit = buildRankingCandidateLimit({
     safeLimit: showAllMatching || offsetExplicit ? RANKING_CANDIDATE_CAP : safeOffset + safeLimit,
     showAllMatching,
     hasQuery,
   });
+  const candidateLimit = isUnscopedBrowse
+    ? Math.min(requestedCandidateLimit, RANKING_BROWSE_CANDIDATE_CAP)
+    : requestedCandidateLimit;
   const dbLoadStartedAt = nowMs();
   const retailerLoadTiming = { ms: 0 };
   const [candidateResult, retailerOptions] = await Promise.all([

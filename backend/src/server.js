@@ -5,6 +5,8 @@ const { connectToDatabase } = require('./config/mongodb');
 const { ensureSourceRegistry } = require('./services/sources/sourceRegistry');
 const { startCrawlScheduler } = require('./services/crawl/crawlScheduler');
 const { interruptCurrentProcessCrawlRuns } = require('./services/crawl/crawlRunService');
+const { warmPublicFacetSnapshot } = require('./services/filters/filterMetadataService');
+const { buildTopDeals } = require('./services/offers/topDealsService');
 const {
   installProcessLifecycleDiagnostics,
   logBackendRuntimeStarted,
@@ -84,6 +86,20 @@ function installShutdownHandlers(server) {
   process.once('SIGINT', () => shutdown('SIGINT'));
 }
 
+async function warmReadCaches() {
+  const startedAt = Date.now();
+  const results = await Promise.allSettled([
+    warmPublicFacetSnapshot(),
+    buildTopDeals({ limit: 20 }),
+  ]);
+
+  logger.info('Backend read-cache warmup completed', {
+    durationMs: Date.now() - startedAt,
+    filters: results[0].status,
+    topDeals: results[1].status,
+  });
+}
+
 async function start() {
   installProcessLifecycleDiagnostics({ loggerImpl: logger });
   logBackendRuntimeStarted({ loggerImpl: logger });
@@ -100,6 +116,9 @@ async function start() {
   });
 
   installShutdownHandlers(server);
+  void warmReadCaches().catch((error) => {
+    logger.warn('Backend read-cache warmup failed', { message: error.message });
+  });
   startCrawlScheduler();
 }
 

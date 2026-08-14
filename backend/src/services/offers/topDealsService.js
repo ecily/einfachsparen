@@ -34,7 +34,8 @@ const ALLOWED_CATEGORY_FILTERS = new Set([
   'sonnencreme',
   'toilettenpapier',
 ]);
-let cachedTopDeals = null;
+const cachedTopDeals = new Map();
+const topDealsBuildPromises = new Map();
 
 function finitePositive(value) {
   const amount = Number(value);
@@ -570,49 +571,63 @@ async function buildTopDeals({
   const filters = normalizeTopDealsFilters({ category, retailer });
   const cacheKey = [safeLimit, filters.category, filters.retailer, filters.invalid].join('|');
   const nowMs = now.getTime();
-  if (cachedTopDeals && cachedTopDeals.expiresAt > nowMs && cachedTopDeals.cacheKey === cacheKey) {
-    return cachedTopDeals.response;
+  const cachedEntry = cachedTopDeals.get(cacheKey);
+  if (cachedEntry && cachedEntry.expiresAt > nowMs) {
+    return cachedEntry.response;
   }
 
-  const baseQuery = {
-    status: 'active',
-    isActiveNow: true,
-    'priceCurrent.amount': { $gt: 0 },
-    $or: [
-      { 'priceReference.amount': { $gt: 0 } },
-      { discountPercent: { $gt: 0 } },
-      { 'rawFacts.discountPercentage': { $gt: 0 } },
-      { 'rawFacts.discountPercent': { $gt: 0 } },
-    ],
-  };
-  const retailerOfferLists = await Promise.all(
-    [...ALLOWED_RETAILER_FILTERS].map((retailerKey) => Offer.find({
-      ...baseQuery,
-      retailerKey,
-    })
-      .select(`${OFFER_RANKING_FIELDS} needsReview`)
-      .limit(TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT)
-      .maxTimeMS(2500)
-      .lean())
-  );
-  const offers = retailerOfferLists.flat();
+  const inFlight = topDealsBuildPromises.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
 
-  const response = buildTopDealsFromOffers(offers, {
-    limit: safeLimit,
-    now,
-    category,
-    retailer,
-  });
-  cachedTopDeals = {
-    expiresAt: nowMs + TOP_DEALS_CACHE_TTL_MS,
-    cacheKey,
-    response,
-  };
-  return response;
+  const buildPromise = (async () => {
+    const baseQuery = {
+      status: 'active',
+      isActiveNow: true,
+      'priceCurrent.amount': { $gt: 0 },
+      $or: [
+        { 'priceReference.amount': { $gt: 0 } },
+        { discountPercent: { $gt: 0 } },
+        { 'rawFacts.discountPercentage': { $gt: 0 } },
+        { 'rawFacts.discountPercent': { $gt: 0 } },
+      ],
+    };
+    const retailerOfferLists = await Promise.all(
+      [...ALLOWED_RETAILER_FILTERS].map((retailerKey) => Offer.find({
+        ...baseQuery,
+        retailerKey,
+      })
+        .select(`${OFFER_RANKING_FIELDS} needsReview`)
+        .limit(TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT)
+        .maxTimeMS(2500)
+        .lean())
+    );
+    const offers = retailerOfferLists.flat();
+
+    const response = buildTopDealsFromOffers(offers, {
+      limit: safeLimit,
+      now,
+      category,
+      retailer,
+    });
+    cachedTopDeals.set(cacheKey, {
+      expiresAt: nowMs + TOP_DEALS_CACHE_TTL_MS,
+      response,
+    });
+    return response;
+  })();
+
+  topDealsBuildPromises.set(cacheKey, buildPromise);
+  try {
+    return await buildPromise;
+  } finally {
+    topDealsBuildPromises.delete(cacheKey);
+  }
 }
 
 function clearTopDealsCache() {
-  cachedTopDeals = null;
+  cachedTopDeals.clear();
 }
 
 module.exports = {
