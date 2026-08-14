@@ -6,6 +6,7 @@ const HOFER_TECHNICAL_TITLE_PATTERN = /^(?:max\.?\s|gr\.?\s|ca\.?\s|kapazit(?:ae
 const HOFER_UNSAFE_QUANTITY_PATTERN = /(?:belastbarkeit|kapazit(?:aet|ät)|kochkapazit(?:aet|ät)|wassertank|ma(?:ss|ß)e|hoehe|höhe|umfang|durchmesser|seiten|designs?|modelle?|sortimentsartikel|werbetermin|statt[- ]?preis)/i;
 const HOFER_QUANTITY_PATTERN = /\b(?:\d+(?:[,.]\d+)?\s*[x×]\s*)?\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|cl)\b/i;
 const HOFER_PACKAGE_CONTEXT_PATTERN = /(?:pack(?:ung)?|becher|dose|flasche|beutel|kapsel(?:n)?|portion|glas|tube|stück|stk|[x×])/i;
+const HOFER_KITCHEN_TITLE_PATTERN = /\b(?:springform|gugelhupf|kastenform|pizzablech|kasserole|backform|auflaufform|pfanne|topf|geschirr)\b/i;
 
 function isHoferPublitasOffer(offer = {}) {
   const sourceText = [
@@ -60,6 +61,11 @@ function hasHoferPublicQuantityEvidence(offer = {}) {
 
 function getHoferDisplayCategory(offer = {}) {
   const title = cleanHoferTitle(offer.title);
+
+  if (HOFER_KITCHEN_TITLE_PATTERN.test(title)) {
+    return 'Kuechenhelfer';
+  }
+
   const decision = determineCategoryDecision({
     title,
     contextText: title,

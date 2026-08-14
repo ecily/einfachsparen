@@ -45,3 +45,10 @@ test('HOFER public presentation keeps a neutral category when no reliable catego
   assert.equal(presentation.quantityText, '');
   assert.equal(presentation.comparable, false);
 });
+
+test('HOFER kitchen product title is not misclassified as pet accessory', () => {
+  assert.equal(getHoferPublicPresentation({
+    retailerKey: 'hofer',
+    title: 'kleine Spring-, Gugelhupf- oder Kastenform, Pizzablech oder Kasserole',
+  }).displayCategory, 'Kuechenhelfer');
+});
