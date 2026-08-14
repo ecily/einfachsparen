@@ -16,6 +16,11 @@ const FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT = 5000;
 const PUBLIC_DISABLED_RETAILER_KEYS = new Set(['eurospar']);
 const HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS = 72;
 const SPAR_FAMILY_CURRENT_DISCOVERY_MAX_AGE_HOURS = 72;
+const PUBLIC_FACET_SNAPSHOT_TTL_MS = 15 * 1000;
+
+let publicFacetSnapshot = null;
+let publicFacetSnapshotExpiresAt = 0;
+let publicFacetSnapshotPromise = null;
 const INTERSPAR_LIMITED_COVERAGE_MESSAGE = 'INTERSPAR derzeit eingeschränkt: Aktuelle Spezialangebote können sichtbar sein; das aktuelle Hauptflugblatt ist derzeit nicht zuverlässig automatisiert verfügbar.';
 
 const FILTER_METADATA_OFFER_SELECT_FIELDS = [
@@ -109,6 +114,59 @@ function buildFilterMetadataOfferMatch() {
     status: 'active',
     isActiveNow: true,
   };
+}
+
+async function readPublicFacetSnapshot() {
+  const now = new Date();
+  const [offers, existingRetailers, sources] = await Promise.all([
+    withFilterMetadataMaxTime(
+      Offer.find(buildFilterMetadataOfferMatch())
+        .select(FILTER_METADATA_OFFER_SELECT_FIELDS.join(' '))
+    ).lean(),
+    withFilterMetadataMaxTime(
+      Retailer.find({ retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] } })
+        .select('retailerKey retailerName offerCount activeOfferCount firstSeenAt lastSeenAt lastSuccessfulCrawlAt isActive sortOrder')
+    ).lean(),
+    withFilterMetadataMaxTime(
+      Source.find({
+        retailerKey: { $in: ['spar', 'interspar'] },
+        parserHint: 'spar-family-flyer-discovery',
+        'crawlPolicy.currentDiscovery': true,
+      })
+        .select('_id retailerKey retailerName sourceRetailerName sourceRetailerFormat appliesToRetailerFormats retailerFormatLabel label channel sourceUrl active enabled disabledReason notes latestRunAt latestStatus parserHint crawlPolicy')
+    ).lean(),
+  ]);
+
+  return {
+    now,
+    offers,
+    retailers: buildRetailerDocuments(existingRetailers, offers, now, sources, []),
+    categories: buildCategoryDocuments(offers, now),
+    retailerCategoryStats: buildRetailerCategoryStatDocuments(offers, now),
+    sources,
+  };
+}
+
+async function getPublicFacetSnapshot() {
+  const now = Date.now();
+
+  if (publicFacetSnapshot && publicFacetSnapshotExpiresAt > now) {
+    return publicFacetSnapshot;
+  }
+
+  if (!publicFacetSnapshotPromise) {
+    publicFacetSnapshotPromise = readPublicFacetSnapshot()
+      .then((snapshot) => {
+        publicFacetSnapshot = snapshot;
+        publicFacetSnapshotExpiresAt = Date.now() + PUBLIC_FACET_SNAPSHOT_TTL_MS;
+        return snapshot;
+      })
+      .finally(() => {
+        publicFacetSnapshotPromise = null;
+      });
+  }
+
+  return publicFacetSnapshotPromise;
 }
 
 function normalizeFilterKey(value, fallback = 'unknown') {
@@ -1213,31 +1271,25 @@ async function rebuildFilterMetadata({ trigger = 'manual', loggerContext = {} } 
 }
 
 async function getRetailerFilters() {
-  const [retailers, currentDiscoverySources] = await Promise.all([
-    Retailer.find({
-      isActive: true,
-      activeOfferCount: { $gt: 0 },
-      retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] },
-    })
-      .sort({ coveragePriorityScore: -1, sortOrder: 1, retailerName: 1 })
-      .lean(),
-    Source.find({
-      retailerKey: { $in: ['spar', 'interspar'] },
-      parserHint: 'spar-family-flyer-discovery',
-      'crawlPolicy.currentDiscovery': true,
-    })
-      .select('retailerKey enabled active parserHint crawlPolicy latestStatus latestRunAt')
-      .lean(),
-  ]);
+  const snapshot = await getPublicFacetSnapshot();
+  const currentDiscoverySources = snapshot.sources.filter((source) => (
+    ['spar', 'interspar'].includes(String(source.retailerKey || '').trim().toLowerCase())
+    && source.parserHint === 'spar-family-flyer-discovery'
+    && source.crawlPolicy?.currentDiscovery === true
+  ));
   const sourceLookup = buildCurrentDiscoverySourceLookup(currentDiscoverySources);
-  const now = new Date();
+  const now = snapshot.now;
 
-  return retailers
+  return snapshot.retailers
+    .filter((retailer) => retailer.isActive && Number(retailer.activeOfferCount || 0) > 0)
+    .filter((retailer) => !PUBLIC_DISABLED_RETAILER_KEYS.has(retailer.retailerKey))
     .filter((retailer) => shouldExposePublicRetailer(retailer, sourceLookup, now))
     .map((retailer) => withPublicRetailerTrustMetadata(retailer, sourceLookup, now));
 }
 
 async function getCategoryFilters({ retailerKeys = [] } = {}) {
+  const snapshot = await getPublicFacetSnapshot();
+
   if (Array.isArray(retailerKeys) && retailerKeys.length > 0) {
     const publicRetailerKeys = retailerKeys.filter(isPublicRetailerEnabled);
 
@@ -1245,30 +1297,15 @@ async function getCategoryFilters({ retailerKeys = [] } = {}) {
       return [];
     }
 
-    const stats = await RetailerCategoryStat.find({
-      retailerKey: { $in: publicRetailerKeys },
-      activeOfferCount: { $gt: 0 },
-    })
-      .sort({ mainCategoryLabel: 1, subcategoryLabel: 1 })
-      .lean();
+    const stats = snapshot.retailerCategoryStats.filter((stat) => (
+      publicRetailerKeys.includes(stat.retailerKey)
+      && Number(stat.activeOfferCount || 0) > 0
+    ));
 
     return buildCategoryResponseFromStats(stats);
   }
 
-  const categories = await Category.find({ isActive: true }).sort({ mainCategoryLabel: 1 }).lean();
-
-  return categories.map((category) => ({
-    mainCategoryKey: category.mainCategoryKey,
-    mainCategoryLabel: category.mainCategoryLabel,
-    offerCount: category.offerCount,
-    subcategories: (category.subcategories || []).map((subcategory) => ({
-      subcategoryKey: subcategory.subcategoryKey,
-      subcategoryLabel: subcategory.subcategoryLabel,
-      offerCount: subcategory.offerCount,
-    })),
-    lastSeenAt: category.lastSeenAt,
-    isActive: category.isActive,
-  }));
+  return snapshot.categories;
 }
 
 function buildCategoryResponseFromStats(stats) {
@@ -1353,6 +1390,11 @@ module.exports = {
     buildKeyFilter,
     buildStableKey,
     isSameFilterDocument,
+    resetPublicFacetSnapshot: () => {
+      publicFacetSnapshot = null;
+      publicFacetSnapshotExpiresAt = 0;
+      publicFacetSnapshotPromise = null;
+    },
     syncFilterMetadataCollection,
   },
 };

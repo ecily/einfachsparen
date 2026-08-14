@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const Category = require('../src/models/Category');
+const Offer = require('../src/models/Offer');
 const Retailer = require('../src/models/Retailer');
 const RetailerCategoryStat = require('../src/models/RetailerCategoryStat');
 const Source = require('../src/models/Source');
@@ -24,6 +25,7 @@ const {
     withPublicFreshnessWarning,
     withPublicRetailerTrustMetadata,
     isPublicRetailerEnabled,
+    resetPublicFacetSnapshot,
     syncFilterMetadataCollection,
   },
 } = require('../src/services/filters/filterMetadataService');
@@ -36,6 +38,40 @@ function stableValue(value) {
 
     return nestedValue;
   });
+}
+
+function mockOfferFind(documents) {
+  return () => ({
+    select() {
+      return {
+        async lean() {
+          return documents.map((document) => ({ ...document }));
+        },
+      };
+    },
+  });
+}
+
+function currentFacetOffer(overrides = {}) {
+  return {
+    retailerKey: 'spar',
+    retailerName: 'SPAR',
+    title: 'SPAR Bio Bier',
+    sourceType: 'spar-official-flyer',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: new Date(Date.now() - 60 * 60 * 1000),
+    validTo: new Date(Date.now() + 60 * 60 * 1000),
+    lastSeenAt: new Date(),
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Bier',
+    priceCurrent: { amount: 1.49, currency: 'EUR' },
+    quantityText: '0,5 l',
+    unitValue: 0.5,
+    comparableUnit: 'l',
+    quality: { parsingConfidence: 0.9, comparisonSafe: true },
+    ...overrides,
+  };
 }
 
 function createMemoryModel(initialDocuments = []) {
@@ -155,6 +191,20 @@ test('syncFilterMetadataCollection keeps existing filter data when a collection 
 
 test('category filter response shape stays compatible', async () => {
   const originalFind = Category.find;
+  const originalOfferFind = Offer.find;
+  const originalRetailerFind = Retailer.find;
+  const originalSourceFind = Source.find;
+  Offer.find = mockOfferFind([currentFacetOffer()]);
+  Retailer.find = () => ({
+    select() {
+      return { async lean() { return []; } };
+    },
+  });
+  Source.find = () => ({
+    select() {
+      return { async lean() { return []; } };
+    },
+  });
 
   Category.find = () => ({
     sort() {
@@ -194,12 +244,21 @@ test('category filter response shape stays compatible', async () => {
     ]);
   } finally {
     Category.find = originalFind;
+    Offer.find = originalOfferFind;
+    Retailer.find = originalRetailerFind;
+    Source.find = originalSourceFind;
+    resetPublicFacetSnapshot();
   }
 });
 
 test('public retailer facets hide temporarily disabled retailers', async () => {
   const originalFind = Retailer.find;
   const originalSourceFind = Source.find;
+  const originalOfferFind = Offer.find;
+  Offer.find = mockOfferFind([
+    currentFacetOffer({ retailerKey: 'spar', retailerName: 'SPAR' }),
+    currentFacetOffer({ retailerKey: 'interspar', retailerName: 'INTERSPAR' }),
+  ]);
   const documents = [
     { retailerKey: 'spar', retailerName: 'SPAR', activeOfferCount: 12, isActive: true },
     { retailerKey: 'eurospar', retailerName: 'EUROSPAR', activeOfferCount: 8, isActive: true },
@@ -210,7 +269,7 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
     assert.deepEqual(filter.retailerKey?.$nin, ['eurospar']);
 
     return {
-      sort() {
+      select() {
         return {
           async lean() {
             return documents.filter((document) => !filter.retailerKey.$nin.includes(document.retailerKey));
@@ -268,6 +327,8 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
   } finally {
     Retailer.find = originalFind;
     Source.find = originalSourceFind;
+    Offer.find = originalOfferFind;
+    resetPublicFacetSnapshot();
   }
 });
 
@@ -377,43 +438,23 @@ test('freshness warning stays scoped to HOFER and does not alter other retailers
 });
 
 test('category facets ignore public-disabled retailer scopes', async () => {
-  const originalFind = RetailerCategoryStat.find;
-  const stats = [
-    {
-      retailerKey: 'spar',
-      mainCategoryKey: 'getraenke',
-      mainCategoryLabel: 'Getraenke',
-      subcategoryKey: 'bier',
-      subcategoryLabel: 'Bier',
-      activeOfferCount: 3,
-      lastSeenAt: new Date('2026-06-14T10:00:00.000Z'),
+  const originalOfferFind = Offer.find;
+  const originalRetailerFind = Retailer.find;
+  const originalSourceFind = Source.find;
+  Offer.find = mockOfferFind([
+    currentFacetOffer({ retailerKey: 'spar', retailerName: 'SPAR' }),
+    currentFacetOffer({ retailerKey: 'eurospar', retailerName: 'EUROSPAR' }),
+  ]);
+  Retailer.find = () => ({
+    select() {
+      return { async lean() { return []; } };
     },
-    {
-      retailerKey: 'eurospar',
-      mainCategoryKey: 'drogerie',
-      mainCategoryLabel: 'Drogerie',
-      subcategoryKey: 'waschmittel',
-      subcategoryLabel: 'Waschmittel',
-      activeOfferCount: 4,
-      lastSeenAt: new Date('2026-06-14T10:00:00.000Z'),
+  });
+  Source.find = () => ({
+    select() {
+      return { async lean() { return []; } };
     },
-  ];
-
-  let findCalls = 0;
-  RetailerCategoryStat.find = (filter) => {
-    findCalls += 1;
-    assert.deepEqual(filter.retailerKey?.$in, ['spar']);
-
-    return {
-      sort() {
-        return {
-          async lean() {
-            return stats.filter((stat) => filter.retailerKey.$in.includes(stat.retailerKey));
-          },
-        };
-      },
-    };
-  };
+  });
 
   try {
     const categories = await getCategoryFilters({ retailerKeys: ['spar', 'eurospar'] });
@@ -421,9 +462,11 @@ test('category facets ignore public-disabled retailer scopes', async () => {
 
     const hiddenOnly = await getCategoryFilters({ retailerKeys: ['eurospar'] });
     assert.deepEqual(hiddenOnly, []);
-    assert.equal(findCalls, 1);
   } finally {
-    RetailerCategoryStat.find = originalFind;
+    Offer.find = originalOfferFind;
+    Retailer.find = originalRetailerFind;
+    Source.find = originalSourceFind;
+    resetPublicFacetSnapshot();
   }
 });
 
