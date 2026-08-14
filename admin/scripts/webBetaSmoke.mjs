@@ -472,6 +472,8 @@ function pageAuditExpression() {
       element.getAttribute('src'),
     ].filter(Boolean).join(' '))).filter(Boolean)
     const heroMarketLine = document.querySelector('.search-landing-hero__markets')
+    const browseIntro = document.querySelector('.browse-page .browse-intro')
+    const browseMarketHeading = document.querySelector('.browse-page .selection-block__header h2')
     const unitPriceLabels = Array.from(document.querySelectorAll('.user-card__unit-price-label'))
       .filter(isVisible)
       .map((element) => normalize(element.textContent))
@@ -533,6 +535,8 @@ function pageAuditExpression() {
       h1Texts: Array.from(document.querySelectorAll('h1')).map((element) => normalize(element.innerText)),
       visibleSignals,
       heroMarketLine: isVisible(heroMarketLine) ? normalize(heroMarketLine.textContent) : '',
+      browseIntroVisible: isVisible(browseIntro),
+      browseMarketHeadingVisible: isVisible(browseMarketHeading),
       unitPriceLabels,
       topDealsNavVisible: isVisible(topDealsNav),
       topDealsNavClass: normalize(topDealsNav?.className),
@@ -747,14 +751,14 @@ async function runBrowseCheck(cdp) {
   )
 
   const audit = await auditCurrentPage(cdp, 'browse')
-  assert(/Stöbern|StÃ¶bern/.test(audit.bodyText), 'browse: intro must be visible')
-  assert(/Märkte auswählen|MÃ¤rkte auswÃ¤hlen/.test(audit.bodyText), 'browse: market selector must be visible')
+  assert(audit.browseIntroVisible, 'browse: intro panel must be visible')
+  assert(audit.browseMarketHeadingVisible, 'browse: market selector heading must be visible')
   assert(audit.browseRetailerButtons.length >= 2, 'browse: expected visible market buttons')
   const browseRetailerText = audit.browseRetailerButtons.map((button) => button.text).join(' | ')
-  for (const retailer of ['Billa', 'Billa Plus', 'Lidl', 'PENNY', 'dm', 'BIPA', 'Müller', 'INTERSPAR']) {
+  for (const retailer of ['Billa', 'Billa Plus', 'Lidl', 'PENNY', 'dm', 'BIPA', 'Müller', 'HOFER']) {
     assert(audit.browseRetailerButtons.some((button) => new RegExp(`^${retailer}(?:\\d|\\s|$)`, 'i').test(button.text)), `browse: ${retailer} market button must be visible`, { browseRetailerText })
   }
-  assert(!audit.browseRetailerButtons.some((button) => /^(?:SPAR|EUROSPAR|PAGRO|HOFER)(?:\d|\s|$)/i.test(button.text)), 'browse: unavailable public market button found', { browseRetailerText })
+  assert(!audit.browseRetailerButtons.some((button) => /^(?:SPAR|EUROSPAR|INTERSPAR|PAGRO)(?:\d|\s|$)/i.test(button.text)), 'browse: unavailable public market button found', { browseRetailerText })
   assert(audit.bodyText.includes(SPAR_TRUST_TITLE), 'browse: SPAR trust notice must remain visible')
   assert(!audit.sparDetailsOpen && audit.sparDetailsSummary === 'Mehr erfahren', 'browse: SPAR details must start compact')
   assert(!audit.unitPriceLabels.some((label) => /vergleichspreis/i.test(label)), 'browse: old unit-price label found')
