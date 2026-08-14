@@ -7625,10 +7625,13 @@ function getResponseFallbackBucketKey(offer) {
   ].join('::');
 }
 
-function dedupeResponseOffers(offers, query = '') {
+function dedupeResponseOffers(offers, query = '', profiling = null) {
   const unique = [];
   const exactKeyToIndex = new Map();
   const fallbackBucketToIndexes = new Map();
+  const startedAt = profiling ? nowMs() : 0;
+  let fallbackComparisons = 0;
+  let duplicateCount = 0;
 
   for (const offer of offers) {
     const exactKeys = [
@@ -7643,7 +7646,10 @@ function dedupeResponseOffers(offers, query = '') {
     if (duplicateIndex === undefined) {
       const bucket = getResponseFallbackBucketKey(offer);
       const bucketIndexes = fallbackBucketToIndexes.get(bucket) || [];
-      duplicateIndex = bucketIndexes.find((index) => hasSameResponseFallbackIdentity(unique[index], offer));
+      duplicateIndex = bucketIndexes.find((index) => {
+        fallbackComparisons += 1;
+        return hasSameResponseFallbackIdentity(unique[index], offer);
+      });
     }
 
     if (duplicateIndex === undefined) {
@@ -7656,6 +7662,7 @@ function dedupeResponseOffers(offers, query = '') {
       continue;
     }
 
+    duplicateCount += 1;
     const preferred = choosePreferredQueryDuplicate(unique[duplicateIndex], offer, query);
     unique[duplicateIndex] = preferred;
     const preferredKeys = [
@@ -7669,6 +7676,14 @@ function dedupeResponseOffers(offers, query = '') {
     if (!fallbackBucketToIndexes.get(preferredBucket).includes(duplicateIndex)) {
       fallbackBucketToIndexes.get(preferredBucket).push(duplicateIndex);
     }
+  }
+
+  if (profiling) {
+    profiling.responseDedupeOffers = offers.length;
+    profiling.responseDedupeUnique = unique.length;
+    profiling.responseDedupeDuplicates = duplicateCount;
+    profiling.responseDedupeComparisons = fallbackComparisons;
+    profiling.responseDedupeElapsedMs = nowMs() - startedAt;
   }
 
   return unique;
@@ -7992,7 +8007,7 @@ function prepareQueryOffersForResponse(offers, query, profiling = null) {
   if (profiling) profiling.queryDedupeResponseMs = nowMs() - queryDedupeStartedAt;
 
   const responseDedupeStartedAt = profiling ? nowMs() : 0;
-  const responseDedupedOffers = dedupeResponseOffers(queryDedupedOffers, query);
+  const responseDedupedOffers = dedupeResponseOffers(queryDedupedOffers, query, profiling);
   if (profiling) profiling.responseDedupeMs = nowMs() - responseDedupeStartedAt;
 
   const adjacentDedupeStartedAt = profiling ? nowMs() : 0;
@@ -8738,6 +8753,11 @@ function buildCacheDebugTiming({
     responsePreparationMs: roundTiming(timings.responsePreparationMs),
     queryDedupeResponseMs: roundTiming(timings.queryDedupeResponseMs),
     responseDedupeMs: roundTiming(timings.responseDedupeMs),
+    responseDedupeOffers: timings.responseDedupeOffers || 0,
+    responseDedupeUnique: timings.responseDedupeUnique || 0,
+    responseDedupeDuplicates: timings.responseDedupeDuplicates || 0,
+    responseDedupeComparisons: timings.responseDedupeComparisons || 0,
+    responseDedupeElapsedMs: roundTiming(timings.responseDedupeElapsedMs),
     adjacentDedupeMs: roundTiming(timings.adjacentDedupeMs),
     finalDedupeMs: roundTiming(timings.finalDedupeMs),
     visibleDedupeMs: roundTiming(timings.visibleDedupeMs),
