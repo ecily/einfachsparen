@@ -11,6 +11,8 @@ test('HOFER presentation removes PDF bullet fragments without inventing a title'
   assert.equal(cleanHoferTitle('\u2022 ISOLIERBECHER \u2022 Kapazität: 1.120 ml'), 'ISOLIERBECHER');
   assert.equal(cleanHoferTitle('• max. Belastbarkeit (Tischplatte) 20 kg'), '');
   assert.equal(cleanHoferTitle('HOFER | 30HOFER | 30Alle Angebote sind online buchbar von 0 Uhr'), '');
+  assert.equal(cleanHoferTitle('GARTENGERÄTE Beim „statt“-Preis'), 'GARTENGERÄTE');
+  assert.equal(cleanHoferTitle('Beim „statt“-Preis handelt es sich um unseren Verkaufspreis'), '');
 });
 
 test('HOFER technical specifications are not comparison quantity evidence', () => {

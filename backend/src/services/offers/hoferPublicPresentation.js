@@ -26,6 +26,8 @@ function cleanHoferTitle(value) {
   let title = sanitizeWhitespace(value)
     .replace(/^[\u2022\u00b7]\s*/, '')
     .split(/\s*[\u2022\u00b7]\s*/)[0]
+    .replace(/\s+beim\s+[^a-z0-9]{0,8}statt(?:['"“”„‚,\s-]|preis|$).*$/i, '')
+    .replace(/\s+werbetermin\b.*$/i, '')
     .replace(/\s*:\s*$/, '')
     .replace(/^\d+\.\s+/, '')
     .trim();
