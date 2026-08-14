@@ -8,6 +8,11 @@
 - Commits `a8273f48`, `a7493e30`, `3adedcfb`, `0cfa02a2`, `f96085af` sind auf `origin/main`. Live-Backend nach dem letzten Deploy: HTTP 200, Mongo verbunden, `buildTime=2026-08-14T05:42:00.801Z`; HOFER-Ranking 57 sichtbar, 0 vergleichbare Unit-Prices, 0 Roh-/Footer-Fragmente, 0 Bilder. `kaffee` liefert 1 sauberes HOFER-Ergebnis, `eis` 5 ohne technische Titel-Fragmente, `waschmittel` 0.
 - Live-Static-Shell liefert die neuen HOFER-Fallback-Assets/CSS; der bestehende Browser-Smoke auf kaufklug.at mit 390px Mobile und Desktop/Reduced-Motion ist gruen. Kein Crawl, keine DB-Mutation, keine manuelle Offer-Aktivierung und keine SPAR-/PAGRO-/ZGONC-Arbeit.
 
+## Browse-Smoke-Vertrag am 2026-08-14
+
+- Der Browse-Stopper war kein UI-Rendering-Fehler: Der Smoke pruefte fragile, encodingabhaengige sichtbare Textstrings und erwartete zusaetzlich INTERSPAR, obwohl die aktuelle Public-Browse-Auswahl korrekt die acht verfuegbaren Haendler inklusive HOFER zeigt.
+- Commit `18942b22` prueft das sichtbare Browse-Intro und die Marktueberschrift ueber DOM-Sichtbarkeit und erwartet BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, Mueller und HOFER; SPAR, EUROSPAR, INTERSPAR und PAGRO bleiben ausgeschlossen. 390px, 320px und Desktop-Smokes wurden read-only ausgefuehrt; Browse selbst passiert den korrigierten Vertrag. Der nachgelagerte Full-Smoke meldet weiterhin globale 404/504-Ressourcen, nicht den Browse-Intro-Check.
+
 ## Public-Coverage-Recovery-P0 am 2026-08-14
 
 - Read-only Live-Evidence zeigte eine fragmentierte globale Browse-Antwort (teilweise nur 1 Offer), waehrend retailer-scoped Ranking, Suche und Facets deutlich groessere Mengen lieferten. BILLA/BILLA Plus und HOFER waren dabei ohne belastbare Bilder; die bestehende Image-Evidence erlaubt keinen sicheren Join und wurde nicht gelockert.
