@@ -5377,7 +5377,9 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
     imageUrl: offer.imageUrl || '',
     sourceType: getOfferSourceType(offer),
     sourceKey: offer.rawFacts?.sourceKey
-      || (getOfferSourceType(offer) === 'hofer-official-html' ? 'hofer-official-html' : ''),
+      || (/^hofer-official-html$/i.test(String(getOfferSourceType(offer) || '').trim())
+        ? 'hofer-official-html'
+        : ''),
     sourceUrl: offer.sourceUrl || '',
     sourceUrls: offer.sourceUrls || [],
     sourceTypes: [...new Set([
