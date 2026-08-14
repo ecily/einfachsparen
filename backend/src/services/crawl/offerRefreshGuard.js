@@ -45,6 +45,54 @@ function buildActiveSourceOfferFilter(sourceId) {
   };
 }
 
+function buildActiveSourceReplacementFilter({ sourceId, fallbackRetirement = {} } = {}) {
+  const fallbackSourceTypes = Array.isArray(fallbackRetirement.sourceTypes)
+    ? fallbackRetirement.sourceTypes.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
+  const fallbackSourceKeys = Array.isArray(fallbackRetirement.sourceKeys)
+    ? fallbackRetirement.sourceKeys.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
+  const retailerKey = String(fallbackRetirement.retailerKey || '').trim();
+  const sourceIds = [sourceId, ...(Array.isArray(fallbackRetirement.sourceIds) ? fallbackRetirement.sourceIds : [])]
+    .map((value) => value || null)
+    .filter(Boolean);
+  const sourceScope = sourceIds.length === 1
+    ? { sourceId: sourceIds[0] }
+    : { sourceId: { $in: sourceIds } };
+
+  if (!retailerKey || (fallbackSourceTypes.length === 0 && fallbackSourceKeys.length === 0)) {
+    return buildActiveSourceOfferFilter(sourceId);
+  }
+
+  const fallbackBranches = [];
+  if (fallbackSourceTypes.length > 0) {
+    fallbackBranches.push({ sourceType: { $in: fallbackSourceTypes } });
+    fallbackBranches.push({ 'rawFacts.sourceType': { $in: fallbackSourceTypes } });
+  }
+  if (fallbackSourceKeys.length > 0) {
+    fallbackBranches.push({ 'rawFacts.sourceKey': { $in: fallbackSourceKeys } });
+  }
+
+  return {
+    $or: [
+      sourceScope,
+      {
+        retailerKey,
+        $or: fallbackBranches,
+      },
+    ],
+    $and: [
+      {
+        $or: [
+          { status: 'active' },
+          { isActiveNow: true },
+          { isActiveToday: true },
+        ],
+      },
+    ],
+  };
+}
+
 function evaluateReplacementCoverageRisk({
   previousActiveCount = 0,
   nextCount = 0,
@@ -147,6 +195,7 @@ async function replaceOffersForSource({
   replacementQuality = 'complete',
   deactivationReason = 'source-replacement-not-seen',
   coverageGuard = {},
+  fallbackRetirement = {},
   OfferModel = Offer,
   CrawlJobModel = CrawlJob,
 } = {}) {
@@ -259,7 +308,7 @@ async function replaceOffersForSource({
       : [];
     const deactivateResult = await OfferModel.updateMany(
       {
-        ...buildActiveSourceOfferFilter(sourceId),
+        ...buildActiveSourceReplacementFilter({ sourceId, fallbackRetirement }),
         crawlJobId: { $ne: crawlJobId },
       },
       {
@@ -301,6 +350,7 @@ module.exports = {
     evaluateReplacementCoverageRisk,
     isTransactionUnsupportedError,
     resolveCrawlRunId,
+    buildActiveSourceReplacementFilter,
     runWithOptionalTransaction,
   },
 };

@@ -344,3 +344,45 @@ test('replaceOffersForSource allows legitimate small sources below baseline', as
   assert.equal(calls.insertMany.length, 1);
   assert.equal(calls.updateMany.length, 1);
 });
+
+test('replaceOffersForSource retires HOFER PDF fallback rows after a complete HTML replacement', async () => {
+  const calls = buildCalls();
+
+  await replaceOffersForSource({
+    sourceId: 'hofer-html-source',
+    crawlJobId: 'hofer-html-job',
+    offerDocuments: [
+      { sourceId: 'hofer-html-source', crawlJobId: 'hofer-html-job', title: 'HOFER Kaffee' },
+    ],
+    deactivationReason: 'hofer-html-primary-replaced-pdf-fallback',
+    fallbackRetirement: {
+      retailerKey: 'hofer',
+      sourceTypes: ['hofer-official-publitas-pdf'],
+      sourceKeys: ['hofer-official-publitas-pdf'],
+    },
+    OfferModel: buildOfferModel(calls),
+  });
+
+  assert.deepEqual(calls.updateMany[0].filter, {
+    $or: [
+      { sourceId: 'hofer-html-source' },
+      {
+        retailerKey: 'hofer',
+        $or: [
+          { sourceType: { $in: ['hofer-official-publitas-pdf'] } },
+          { 'rawFacts.sourceType': { $in: ['hofer-official-publitas-pdf'] } },
+          { 'rawFacts.sourceKey': { $in: ['hofer-official-publitas-pdf'] } },
+        ],
+      },
+    ],
+    $and: [{
+      $or: [
+        { status: 'active' },
+        { isActiveNow: true },
+        { isActiveToday: true },
+      ],
+    }],
+    crawlJobId: { $ne: 'hofer-html-job' },
+  });
+  assert.equal(calls.updateMany[0].update.$set.deactivationReason, 'hofer-html-primary-replaced-pdf-fallback');
+});

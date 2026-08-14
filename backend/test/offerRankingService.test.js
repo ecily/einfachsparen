@@ -41,6 +41,7 @@ const {
   paginateVisibleRankingOffers,
   parseRankingCategories,
   prepareQueryOffersForResponse,
+  preferHoferHtmlCandidates,
   scoreOfferAgainstQuery,
   tokenizeSearchText,
 } = require('../src/services/offers/offerRankingService');
@@ -8448,4 +8449,40 @@ test('HOFER public response keeps only explicitly evidenced product quantity com
   assert.equal(ranked.quantityText, '500 g Packung');
   assert.equal(ranked.comparableUnit, 'kg');
   assert.equal(ranked.normalizedUnitPrice.comparable, true);
+});
+
+test('HOFER HTML candidates suppress legacy PDF candidates when HTML is public', () => {
+  const common = {
+    retailerKey: 'hofer',
+    retailerName: 'HOFER',
+    title: 'HOFER Kaffee Angebot',
+    quantityText: '500 g',
+    priceCurrent: { amount: 4.99 },
+    status: 'active',
+    isActiveNow: true,
+    sourceRunStatus: 'success',
+    publishStatus: 'source-written',
+    lastSeenAt: new Date(),
+    validFrom: new Date(Date.now() - 60 * 60 * 1000),
+    validTo: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  };
+  const html = { ...common, _id: 'html', sourceType: 'hofer-official-html' };
+  const pdf = { ...common, _id: 'pdf', sourceType: 'hofer-official-publitas-pdf' };
+
+  assert.deepEqual(preferHoferHtmlCandidates([pdf, html]).map((item) => item._id), ['html']);
+});
+
+test('HOFER PDF remains the bounded fallback when no public HTML candidate exists', () => {
+  const pdf = {
+    retailerKey: 'hofer',
+    retailerName: 'HOFER',
+    title: 'HOFER Kaffee Angebot',
+    quantityText: '500 g',
+    priceCurrent: { amount: 4.99 },
+    status: 'active',
+    isActiveNow: true,
+    sourceType: 'hofer-official-publitas-pdf',
+  };
+
+  assert.equal(preferHoferHtmlCandidates([pdf]).length, 1);
 });

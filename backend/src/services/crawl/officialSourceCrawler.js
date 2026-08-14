@@ -8898,6 +8898,12 @@ async function crawlHoferOfficialHtml({
       crawlJobId,
       sourceRunStatus: 'success',
       replacementQuality: 'complete',
+      deactivationReason: 'hofer-html-primary-replaced-pdf-fallback',
+      fallbackRetirement: {
+        retailerKey: 'hofer',
+        sourceTypes: [HOFER_PDF_SOURCE_TYPE],
+        sourceKeys: ['hofer-official-publitas-pdf'],
+      },
     });
 
     return {
