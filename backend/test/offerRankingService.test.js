@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  OFFER_RANKING_CANDIDATE_FIELDS,
   applyProgramEligibility,
   applyQueryMatch,
   buildRankingCandidateLimit,
@@ -93,6 +94,32 @@ function sparOffer(overrides = {}) {
     ...overrides,
   });
 }
+
+test('ranking candidate projection keeps public ranking fields and defers response-only detail fields', () => {
+  const fields = new Set(OFFER_RANKING_CANDIDATE_FIELDS.split(/\s+/));
+
+  for (const required of [
+    '_id',
+    'retailerKey',
+    'title',
+    'titleNormalized',
+    'priceCurrent',
+    'priceReference',
+    'normalizedUnitPrice',
+    'validFrom',
+    'validTo',
+    'crawlJobId',
+    'lastSeenSourceRunId',
+    'rawFacts.sourceKey',
+    'rawFacts.freshnessTtlHours',
+  ]) {
+    assert.equal(fields.has(required), true, required);
+  }
+
+  for (const deferred of ['description', 'sourceUrls', 'evidenceUrls', 'publishStatusUpdatedAt']) {
+    assert.equal(fields.has(deferred), false, deferred);
+  }
+});
 
 function sparPdfOffer(overrides = {}) {
   return sparOffer({

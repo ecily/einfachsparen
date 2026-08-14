@@ -149,6 +149,91 @@ const OFFER_RANKING_FIELD_LIST = [
 ];
 const OFFER_RANKING_FIELDS = OFFER_RANKING_FIELD_LIST.join(' ');
 
+// Stage 1 deliberately excludes response-only descriptions, source URL arrays
+// and evidence payloads. Every field used by public validity, freshness,
+// source-quality, scoring, dedupe and ordering remains present here.
+const OFFER_RANKING_CANDIDATE_FIELD_LIST = [
+  '_id',
+  'retailerKey',
+  'retailerName',
+  'sourceId',
+  'title',
+  'titleNormalized',
+  'brand',
+  'searchTokens',
+  'searchTokenVersion',
+  'searchText',
+  'categoryKey',
+  'categoryPrimary',
+  'categorySecondary',
+  'subcategoryKey',
+  'categoryConfidence',
+  'subcategoryConfidence',
+  'conditionsText',
+  'customerProgramRequired',
+  'hasConditions',
+  'isMultiBuy',
+  'comparisonGroup',
+  'offerKey',
+  'dedupeKey',
+  'status',
+  'isActiveNow',
+  'isActiveToday',
+  'quantityText',
+  'validFrom',
+  'validTo',
+  'packCount',
+  'unitValue',
+  'unitType',
+  'totalComparableAmount',
+  'comparableUnit',
+  'packageType',
+  'normalizedUnitPrice',
+  'priceCurrent',
+  'priceReference',
+  'imageUrl',
+  'quality',
+  'sortScoreDefault',
+  'minimumPurchaseQty',
+  'sourceType',
+  'sourceUrl',
+  'sourceTypes',
+  'crawlRunId',
+  'crawlJobId',
+  'lastSeenAt',
+  'lastSeenRunId',
+  'lastSeenSourceRunId',
+  'sourceRunStatus',
+  'publishStatus',
+  'deactivationReason',
+  'reviewReasons',
+  'rawFacts.sourceKey',
+  'rawFacts.sourceId',
+  'rawFacts.sourceType',
+  'rawFacts.snapshotCurrent',
+  'rawFacts.freshnessTtlHours',
+  'rawFacts.retainedPreviousData',
+  'rawFacts.retained',
+  'rawFacts.retainedGraceHours',
+  'rawFacts.lastSeenSourceRunId',
+  'rawFacts.dryRun',
+  'rawFacts.validFrom',
+  'rawFacts.explicitExpired',
+  'rawFacts.validTo',
+  'rawFacts.validitySource',
+  'rawFacts.clickoutUrl',
+  'rawFacts.leafletHref',
+  'rawFacts.crawlRunId',
+  'rawFacts.crawlJobId',
+  'rawFacts.sourceRunId',
+  'rawFacts.sourceRunStatus',
+  'rawFacts.hoferAvailabilityEvidence',
+  'rawFacts.stateAvailableText',
+  'rawFacts.availabilityText',
+  'rawFacts.validityText',
+];
+const OFFER_RANKING_CANDIDATE_FIELDS = OFFER_RANKING_CANDIDATE_FIELD_LIST.join(' ');
+
 const RANKING_CACHE_TTL_MS = 3 * 60 * 1000;
 const RANKING_RESULT_CACHE_TTL_MS = 5 * 60 * 1000;
 const RANKING_CACHE_SCHEMA_VERSION = `ranking-cache-v8-source-quality-fresh-crawl-v1-public-validity-v1-search-token-v${SEARCH_TOKEN_VERSION}-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v2-image-tiebreak-v1-public-candidate-validity-v1-hofer-html-primary-upcoming-v2`;
@@ -8471,12 +8556,34 @@ function mergeCandidateOffers(primaryOffers, fallbackOffers) {
 
 function buildRankingOfferQuery(match, candidateLimit) {
   const dbQuery = Offer.find(match)
-    .select(OFFER_RANKING_FIELDS)
+    .select(OFFER_RANKING_CANDIDATE_FIELDS)
     .sort(RANKING_SORT)
     .limit(candidateLimit)
     .lean();
 
   return dbQuery;
+}
+
+async function hydrateFinalRankingOffers(offers = []) {
+  const offerIds = offers
+    .map((offer) => offer?._id || offer?.id)
+    .filter(Boolean);
+
+  if (offerIds.length === 0) {
+    return { offers, durationMs: 0, hydratedCount: 0 };
+  }
+
+  const startedAt = nowMs();
+  const hydratedOffers = await Offer.find({ _id: { $in: offerIds } })
+    .select(OFFER_RANKING_FIELDS)
+    .lean();
+  const hydratedById = new Map(hydratedOffers.map((offer) => [String(offer._id), offer]));
+
+  return {
+    offers: offers.map((offer) => hydratedById.get(String(offer?._id || offer?.id)) || offer),
+    durationMs: nowMs() - startedAt,
+    hydratedCount: hydratedOffers.length,
+  };
 }
 
 function buildRankingCandidateLimit({ safeLimit = 30, showAllMatching = false, hasQuery = false }) {
@@ -8910,7 +9017,7 @@ async function findRankingCandidateOffers({
       limit: candidateLimit,
       supplementalLimit: SPAR_CONDITION_SUPPLEMENTAL_CANDIDATE_LIMIT,
       productSupplementalLimit: SPAR_PRODUCT_SUPPLEMENTAL_CANDIDATE_LIMIT,
-      fields: OFFER_RANKING_FIELDS.split(' '),
+      fields: OFFER_RANKING_CANDIDATE_FIELDS.split(' '),
       queryMetadata,
       fallbackQueryMetadata,
       loadTimings: {
@@ -8948,7 +9055,7 @@ async function findRankingCandidateOffers({
             fallbackMatch: null,
             sort: RANKING_SORT,
             limit: candidateLimit,
-            fields: OFFER_RANKING_FIELDS.split(' '),
+            fields: OFFER_RANKING_CANDIDATE_FIELDS.split(' '),
             queryMetadata,
             executionStats: null,
             primaryExecutionStats: null,
@@ -9664,6 +9771,9 @@ async function buildOfferRanking({
     collectDiagnostics: Boolean(debugStages),
   });
   timings.visibleDedupeMs = nowMs() - visibleDedupeStartedAt;
+  const hydratedVisible = await hydrateFinalRankingOffers(visibleDedupeResult.offers);
+  visibleDedupeResult.offers = filterFreshActiveOffers(hydratedVisible.offers);
+  timings.responseHydrationMs = hydratedVisible.durationMs;
   const pagination = paginateVisibleRankingOffers(visibleDedupeResult.offers, {
     limit: safeLimit || visibleDedupeResult.offers.length,
     offset: safeOffset,
@@ -9920,6 +10030,7 @@ async function buildOfferRanking({
 
 module.exports = {
   OFFER_RANKING_FIELDS,
+  OFFER_RANKING_CANDIDATE_FIELDS,
   buildOfferRanking,
   buildBasketSuggestions,
   buildRankedOffer,
