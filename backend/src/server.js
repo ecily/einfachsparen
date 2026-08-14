@@ -7,6 +7,7 @@ const { startCrawlScheduler } = require('./services/crawl/crawlScheduler');
 const { interruptCurrentProcessCrawlRuns } = require('./services/crawl/crawlRunService');
 const { warmPublicFacetSnapshot } = require('./services/filters/filterMetadataService');
 const { buildTopDeals } = require('./services/offers/topDealsService');
+const { buildOfferRanking } = require('./services/offers/offerRankingService');
 const {
   installProcessLifecycleDiagnostics,
   logBackendRuntimeStarted,
@@ -91,12 +92,14 @@ async function warmReadCaches() {
   const results = await Promise.allSettled([
     warmPublicFacetSnapshot(),
     buildTopDeals({ limit: 20 }),
+    buildOfferRanking({ limit: 20 }),
   ]);
 
   logger.info('Backend read-cache warmup completed', {
     durationMs: Date.now() - startedAt,
     filters: results[0].status,
     topDeals: results[1].status,
+    ranking: results[2].status,
   });
 }
 

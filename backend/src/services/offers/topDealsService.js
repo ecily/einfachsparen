@@ -10,6 +10,7 @@ const { classifyOfferSourceQuality } = require('./sourceQuality');
 const DEFAULT_TOP_DEALS_LIMIT = 20;
 const MAX_TOP_DEALS_LIMIT = 20;
 const TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT = 2500;
+const TOP_DEALS_TOTAL_CANDIDATE_LIMIT = TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT * 8;
 const TOP_DEALS_CACHE_TTL_MS = 2 * 60 * 1000;
 const ALLOWED_UNITS = new Set(['kg', 'l', 'Stk']);
 const EXCLUDED_RETAILERS = new Set(['spar', 'eurospar', 'interspar', 'hofer', 'pagro']);
@@ -593,17 +594,14 @@ async function buildTopDeals({
         { 'rawFacts.discountPercent': { $gt: 0 } },
       ],
     };
-    const retailerOfferLists = await Promise.all(
-      [...ALLOWED_RETAILER_FILTERS].map((retailerKey) => Offer.find({
-        ...baseQuery,
-        retailerKey,
-      })
-        .select(`${OFFER_RANKING_FIELDS} needsReview`)
-        .limit(TOP_DEALS_PER_RETAILER_CANDIDATE_LIMIT)
-        .maxTimeMS(2500)
-        .lean())
-    );
-    const offers = retailerOfferLists.flat();
+    const offers = await Offer.find({
+      ...baseQuery,
+      retailerKey: { $in: [...ALLOWED_RETAILER_FILTERS] },
+    })
+      .select(`${OFFER_RANKING_FIELDS} needsReview`)
+      .limit(TOP_DEALS_TOTAL_CANDIDATE_LIMIT)
+      .maxTimeMS(2500)
+      .lean();
 
     const response = buildTopDealsFromOffers(offers, {
       limit: safeLimit,

@@ -103,6 +103,79 @@ const FILTER_METADATA_OFFER_SELECT_FIELDS = [
   'createdAt',
 ];
 
+const PUBLIC_FACET_OFFER_SELECT_FIELDS = [
+  'retailerKey',
+  'retailerName',
+  'sourceRetailerName',
+  'sourceRetailerFormat',
+  'retailerFormats',
+  'appliesToRetailerFormats',
+  'retailerFormatLabel',
+  'sourceId',
+  'sourceUrl',
+  'sourceUrls',
+  'evidenceUrls',
+  'sourceType',
+  'sourceTypes',
+  'supportingSources.sourceId',
+  'supportingSources.sourceUrl',
+  'supportingSources.observedUrl',
+  'supportingSources.channel',
+  'categoryPrimary',
+  'categorySecondary',
+  'validFrom',
+  'validTo',
+  'status',
+  'isActiveNow',
+  'title',
+  'quantityText',
+  'unitValue',
+  'totalComparableAmount',
+  'comparableUnit',
+  'conditionsText',
+  'customerProgramRequired',
+  'priceCurrent.amount',
+  'quality.comparisonSafe',
+  'quality.parsingConfidence',
+  'publishStatus',
+  'sourceRunStatus',
+  'crawlRunId',
+  'crawlJobId',
+  'lastSeenAt',
+  'lastSeenRunId',
+  'lastSeenSourceRunId',
+  'updatedAt',
+  'createdAt',
+  'deactivationReason',
+  'rawFacts.sourceType',
+  'rawFacts.sourceKey',
+  'rawFacts.validityText',
+  'rawFacts.infoText',
+  'rawFacts.validitySource',
+  'rawFacts.validFrom',
+  'rawFacts.validTo',
+  'rawFacts.clickoutUrl',
+  'rawFacts.leafletHref',
+  'rawFacts.hoferAvailabilityEvidence',
+  'rawFacts.stateAvailableText',
+  'rawFacts.availabilityText',
+  'rawFacts.freshnessTtlHours',
+  'rawFacts.snapshotCurrent',
+  'rawFacts.sourceRunStatus',
+  'rawFacts.sourceId',
+  'rawFacts.crawlRunId',
+  'rawFacts.sourceRunId',
+  'rawFacts.lastSeenSourceRunId',
+  'rawFacts.crawlJobId',
+  'rawFacts.dryRun',
+  'rawFacts.retainedPreviousData',
+  'rawFacts.retained',
+  'rawFacts.retainedGraceHours',
+  'rawFacts.explicitExpired',
+  'rawFacts.conditionsText',
+  'rawFacts.loyaltyTags',
+];
+
 function withFilterMetadataMaxTime(query) {
   return query && typeof query.maxTimeMS === 'function'
     ? query.maxTimeMS(FILTER_METADATA_QUERY_MAX_TIME_MS)
@@ -132,7 +205,7 @@ async function readPublicFacetSnapshot() {
   const [offers, existingRetailers, sources] = await Promise.all([
     withFilterMetadataMaxTime(
       Offer.find(buildFilterMetadataOfferMatch())
-        .select(FILTER_METADATA_OFFER_SELECT_FIELDS.join(' '))
+        .select(PUBLIC_FACET_OFFER_SELECT_FIELDS.join(' '))
     ).lean(),
     withFilterMetadataMaxTime(
       Retailer.find({ retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] } })
@@ -1390,6 +1463,7 @@ module.exports = {
   _private: {
     FILTER_METADATA_CRAWL_JOB_HISTORY_LIMIT,
     FILTER_METADATA_OFFER_SELECT_FIELDS,
+    PUBLIC_FACET_OFFER_SELECT_FIELDS,
     FILTER_METADATA_QUERY_MAX_TIME_MS,
     HOFER_FRESHNESS_WARNING_THRESHOLD_HOURS,
     INTERSPAR_LIMITED_COVERAGE_MESSAGE,
