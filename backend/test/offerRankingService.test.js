@@ -191,8 +191,9 @@ test('pushes ranking query into Mongo searchTokens candidate filtering before JS
   assert.equal(match.comparableUnit, 'kg');
   assert.equal(match.customerProgramRequired, false);
   assert.ok(Array.isArray(match.$and));
-  assert.equal(match.$and.length, 1);
+  assert.equal(match.$and.length, 2);
   assert.ok(JSON.stringify(match.$and).includes('searchTokens'));
+  assert.ok(JSON.stringify(match.$and).includes('snapshotCurrent'));
   assert.ok(JSON.stringify(match.$and).includes('kaffee'));
   assert.doesNotMatch(JSON.stringify(match), /titleNormalized|comparisonGroup|brand/);
   assert.deepEqual(buildRankingCandidateQueryMetadata({ query: 'kaffee' }), {
@@ -309,9 +310,9 @@ test('ranking retailer filter finds legacy EUROSPAR and INTERSPAR offers by form
   });
 
   assert.ok(Array.isArray(match.$and));
-  assert.equal(match.$and.length, 2);
-  assert.ok(JSON.stringify(match.$and[0]).includes('interspar'));
-  assert.ok(JSON.stringify(match.$and[1]).includes('searchTokens'));
+  assert.equal(match.$and.length, 3);
+  assert.ok(JSON.stringify(match.$and).includes('interspar'));
+  assert.ok(JSON.stringify(match.$and).includes('searchTokens'));
 });
 
 test('ranking retailer filter does not show legacy INTERSPAR-only offers for SPAR-only requests', () => {
@@ -2150,7 +2151,8 @@ test('generic oil query recalls Bellasan rapeseed oil without broad substring fa
   });
   const match = buildRankingCandidateMatch({ query: 'oel' });
 
-  assert.equal(match.$and[0].searchTokens.$in.includes('rapsoel'), true);
+  const searchTokenClause = match.$and.find((clause) => clause.searchTokens);
+  assert.equal(searchTokenClause.searchTokens.$in.includes('rapsoel'), true);
   assert.equal(buildRankingCandidateQueryMetadata({ query: 'oel' }).candidateQueryMode, 'searchTokensOnly');
   assert.deepEqual(applyQueryMatch([sideHit, offerDocument], '\u00f6l').map((item) => item.title), [
     'BELLASAN Raps\u00f6l*, 1 l',
@@ -2180,7 +2182,8 @@ test('separate regex fallback is not mixed into the searchTokens primary match',
 
   assert.match(JSON.stringify(primary), /searchTokens/);
   assert.doesNotMatch(JSON.stringify(primary), /titleNormalized|comparisonGroup|brand/);
-  assert.doesNotMatch(JSON.stringify(primary), /\$or/);
+  const primarySearchClause = primary.$and.find((clause) => clause.searchTokens);
+  assert.equal(primarySearchClause.$or, undefined);
   assert.doesNotMatch(JSON.stringify(fallback), /searchTokens/);
   assert.match(JSON.stringify(fallback), /titleNormalized/);
 });
@@ -2489,7 +2492,9 @@ test('generic rice Mongo prefilter avoids broad pasta category flooding', () => 
     useSearchTokens: false,
   });
 
-  const searchedFields = match.$and[0].$or.flatMap((item) => Object.keys(item));
+  const searchClause = match.$and.find((clause) => Array.isArray(clause.$or)
+    && clause.$or.some((item) => Object.prototype.hasOwnProperty.call(item, 'title')));
+  const searchedFields = searchClause.$or.flatMap((item) => Object.keys(item));
 
   assert.deepEqual(searchedFields.sort(), ['brand', 'comparisonGroup', 'title', 'titleNormalized'].sort());
 });
