@@ -1311,9 +1311,12 @@ function buildHoferDatedOfferUrl(date = new Date()) {
 }
 
 function hoferHtmlLooksBlocked({ html = '', status = null, title = '' } = {}) {
-  const haystack = `${title || ''} ${html || ''}`;
+  const document = cheerio.load(String(html || ''));
+  document('script,style,noscript,template').remove();
+  const visibleText = sanitizeWhitespace(document('body').text() || document.root().text());
+  const haystack = `${title || ''} ${visibleText}`;
   return [401, 403, 407, 429, 451].includes(Number(status))
-    || /access denied|you don't have permission|captcha|cloudflare|datadome|bot detection|just a moment/i.test(haystack);
+    || /access denied|you don't have permission|captcha\s+(?:challenge|verification|required)|cloudflare\s+(?:challenge|verification)|datadome\s+(?:challenge|verification)|bot detection|just a moment/i.test(haystack);
 }
 
 function hoferHtmlHasOfferSignals(html = '') {
@@ -1800,6 +1803,122 @@ function extractHoferStructuredOffers($) {
   });
 
   return candidates;
+}
+
+function extractHoferNuxtProductState($, pageUrl = 'https://www.hofer.at/angebote') {
+  const raw = $('#__NUXT_DATA__').first().html() || '';
+  if (!raw) return new Map();
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch (error) {
+    return new Map();
+  }
+
+  if (!Array.isArray(payload)) return new Map();
+
+  const resolving = new Set();
+  const resolveIndex = (index, depth = 0) => {
+    if (depth > 40 || !Number.isInteger(index) || index < 0 || index >= payload.length) return null;
+    if (resolving.has(index)) return null;
+    resolving.add(index);
+    const result = resolveStored(payload[index], depth + 1);
+    resolving.delete(index);
+    return result;
+  };
+  const resolveReference = (value, depth = 0) => (
+    typeof value === 'number' ? resolveIndex(value, depth + 1) : resolveStored(value, depth + 1)
+  );
+  const resolveStored = (value, depth = 0) => {
+    if (depth > 40) return null;
+    if (Array.isArray(value)) {
+      if (value.length === 2 && typeof value[0] === 'string' && ['ShallowReactive', 'Reactive'].includes(value[0])) {
+        return resolveReference(value[1], depth + 1);
+      }
+      return value.map((item) => resolveReference(item, depth + 1));
+    }
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveReference(item, depth + 1)]));
+    }
+    return value;
+  };
+
+  const productsBySku = new Map();
+
+  payload.forEach((value, index) => {
+    if (!value || Array.isArray(value) || typeof value !== 'object' || !value.sku || !value.name || !value.assets) return;
+
+    const product = {
+      sku: resolveReference(value.sku),
+      name: resolveReference(value.name),
+      brandName: resolveReference(value.brandName),
+      urlSlugText: resolveReference(value.urlSlugText),
+      sellingSize: resolveReference(value.sellingSize),
+      quantityUnit: resolveReference(value.quantityUnit),
+      quantityMin: resolveReference(value.quantityMin),
+      price: resolveReference(value.price),
+      assets: resolveReference(value.assets),
+      onSaleDateDisplay: resolveReference(value.onSaleDateDisplay),
+    };
+    const sku = sanitizeWhitespace(product?.sku);
+    const slug = sanitizeWhitespace(product?.urlSlugText);
+    const name = sanitizeWhitespace(product?.name);
+    if (!sku || !slug || !name) return;
+
+    const productUrl = toAbsoluteUrl(`/produkt/${slug}-${sku}`, pageUrl);
+    const assets = (Array.isArray(product.assets) ? product.assets : [])
+      .map((asset) => ({
+        url: sanitizeWhitespace(asset?.url),
+        assetType: sanitizeWhitespace(asset?.assetType),
+        alt: sanitizeWhitespace(asset?.alt),
+      }))
+      .filter((asset) => asset.url);
+
+    productsBySku.set(sku, {
+      sku,
+      name,
+      brand: sanitizeWhitespace(product.brandName),
+      slug,
+      productUrl,
+      sellingSize: sanitizeWhitespace(product.sellingSize),
+      quantityUnit: sanitizeWhitespace(product.quantityUnit),
+      quantityMin: product.quantityMin,
+      priceText: sanitizeWhitespace(product.price?.amountRelevantDisplay || product.price?.amountRelevant),
+      comparisonPriceText: sanitizeWhitespace(product.price?.comparisonDisplay || product.price?.comparison),
+      availableText: sanitizeWhitespace(product.onSaleDateDisplay),
+      assets,
+    });
+  });
+
+  return productsBySku;
+}
+
+function extractHoferAssetKey(value) {
+  const match = String(value || '').match(/\/([a-f0-9]{8}-[a-f0-9-]{20,})\//i);
+  return sanitizeWhitespace(match?.[1] || '').toLowerCase();
+}
+
+function joinHoferStateAsset({ stateProduct = null, cardImageUrl = '' } = {}) {
+  if (!stateProduct) {
+    return { imageUrl: cardImageUrl, evidence: '' };
+  }
+
+  const stateAssets = (stateProduct.assets || [])
+    .filter((asset) => /https?:\/\/dm\.emea\.cms\.aldi\.cx/i.test(asset.url || ''));
+  const stateKeys = new Set(stateAssets.map((asset) => extractHoferAssetKey(asset.url)).filter(Boolean));
+  const cardKey = extractHoferAssetKey(cardImageUrl);
+
+  if (cardImageUrl && cardKey && stateKeys.has(cardKey)) {
+    return { imageUrl: cardImageUrl, evidence: 'nuxt-product-asset-to-card-join' };
+  }
+
+  const directStateAsset = stateAssets.find((asset) => asset.url && !/[{}]/.test(asset.url));
+  if (directStateAsset) {
+    return { imageUrl: directStateAsset.url, evidence: 'nuxt-product-asset-direct' };
+  }
+
+  return { imageUrl: '', evidence: 'nuxt-product-asset-mismatch' };
 }
 
 function escapeHoferHtml(value) {
@@ -4727,6 +4846,9 @@ function parseHoferOffersFromPage({
 
   const offers = [];
   const cards = extractHoferCards($, pageContext, pageUrl);
+  const nuxtProductsBySku = pageContext === 'current-offers'
+    ? extractHoferNuxtProductState($, pageUrl)
+    : new Map();
   const isSnapshotOfferPage = !pageDate && pageContext !== 'unknown' && pageContext !== 'hofer-actions';
 
   if (diagnostics) {
@@ -4738,11 +4860,23 @@ function parseHoferOffersFromPage({
   cards.each((index, element) => {
     const card = $(element);
     const cardText = sanitizeWhitespace(card.text());
-    const title = extractHoferCardTitle(card, pageContext);
-    const currentPrice = extractHoferCurrentPrice(card, cardText, pageContext);
+    const productUrl = extractHoferProductUrl(card, pageUrl);
+    const productId = extractHoferProductId({ card, productUrl, imageUrl: '' });
+    const stateProduct = nuxtProductsBySku.get(productId) || null;
+    const title = stateProduct?.name || extractHoferCardTitle(card, pageContext);
+    const brand = stateProduct?.brand || '';
+    const statePrice = stateProduct?.priceText ? parseNumericAmount(stateProduct.priceText) : null;
+    const currentPrice = statePrice || extractHoferCurrentPrice(card, cardText, pageContext);
     const oldPrice = extractHoferOldPrice(card, cardText, pageContext);
-    const additionalInfo = extractHoferAdditionalInfo(card, cardText, pageContext, $);
-    const explicitUnitPriceText = extractHoferExplicitUnitPriceText(cardText);
+    let additionalInfo = extractHoferAdditionalInfo(card, cardText, pageContext, $);
+    let explicitUnitPriceText = extractHoferExplicitUnitPriceText(cardText);
+    if (stateProduct?.sellingSize) {
+      const stateQuantity = normalizeHoferQuantityCandidate(stateProduct.sellingSize, stateProduct.quantityUnit);
+      if (stateQuantity) additionalInfo = stateQuantity;
+    }
+    if (stateProduct?.comparisonPriceText) {
+      explicitUnitPriceText = stateProduct.comparisonPriceText;
+    }
     const actionValidity = pageContext === 'hofer-actions' ? extractHoferActionValidity(card, $) : null;
     let validFrom = actionValidity?.validFrom || extractHoferAvailabilityDate(cardText) || parseDateFromText(cardText) || pageDate || (isSnapshotOfferPage ? new Date() : null);
     if (pageContext === 'current-offers' && validFrom) {
@@ -4770,7 +4904,7 @@ function parseHoferOffersFromPage({
     const unitPriceEvidence = explicitUnitPriceText
       ? 'explicit-unit-price'
       : (isHoferMassVolumeQuantity(quantityText) ? 'calculated-from-mass-volume' : '');
-    const brandAndTitle = title;
+    const brandAndTitle = `${brand} ${title}`.trim();
     const categoryPrimary = determineOfferCategory({
       title: brandAndTitle,
       contextText: additionalInfo,
@@ -4812,12 +4946,13 @@ function parseHoferOffersFromPage({
     }
 
     const conditionsText = extractHoferConditionsText({ cardText, pageContext, validTo });
-    const productUrl = extractHoferProductUrl(card, pageUrl);
     const imageCandidate = pageContext === 'current-offers'
       ? extractHoferOfficialImageUrl(card, pageUrl, $)
       : extractImageUrl(card);
-    const imageUrl = normalizeHoferOfficialImageUrl(imageCandidate, pageUrl, pageContext);
-    const productId = extractHoferProductId({ card, productUrl, imageUrl });
+    const stateAssetJoin = pageContext === 'current-offers'
+      ? joinHoferStateAsset({ stateProduct, cardImageUrl: imageCandidate })
+      : { imageUrl: imageCandidate, evidence: '' };
+    const imageUrl = normalizeHoferOfficialImageUrl(stateAssetJoin.imageUrl, pageUrl, pageContext);
     const dedupeKey = buildHoferDedupeKey({
       title,
       currentPrice,
@@ -4833,7 +4968,7 @@ function parseHoferOffersFromPage({
       retailerName: source.retailerName,
       region,
       title,
-      brand: '',
+      brand,
       categoryPrimary,
       categorySecondary: determineOfferSubcategory({
         primaryCategory: categoryPrimary,
@@ -4885,13 +5020,27 @@ function parseHoferOffersFromPage({
       },
       rawFacts: {
         sourceType: 'hofer-official-html',
+        ...(stateProduct ? {
+          stateSku: stateProduct.sku,
+          stateSlug: stateProduct.slug,
+          stateAssetCount: stateProduct.assets.length,
+          stateAssetJoin: stateAssetJoin.evidence,
+          stateSellingSize: stateProduct.sellingSize,
+          stateQuantityUnit: stateProduct.quantityUnit,
+          stateComparisonPriceText: stateProduct.comparisonPriceText,
+          stateAvailableText: stateProduct.availableText,
+        } : {}),
         additionalInfo,
         explicitUnitPriceText,
         ...(pageContext === 'current-offers' && normalizedUnitPrice.comparable && quantityEvidence
           ? { hoferQuantityEvidence: quantityEvidence }
           : {}),
         unitPriceEvidence,
-        quantityEvidenceSource: quantityText ? (extractHoferStructuredQuantity(card, $) ? 'structured-offer-field' : 'offer-card-text') : '',
+        quantityEvidenceSource: quantityText
+          ? (stateProduct?.sellingSize
+            ? 'nuxt-product-state'
+            : (extractHoferStructuredQuantity(card, $) ? 'structured-offer-field' : 'offer-card-text'))
+          : '',
         pageContext,
         pageUrl,
         productUrl,
@@ -10476,6 +10625,8 @@ module.exports = {
     dedupeMuellerOffers,
     muellerHasChallengeLikeHtml,
     parseHoferOffersFromPage,
+    extractHoferNuxtProductState,
+    joinHoferStateAsset,
     dedupeHoferOffers,
     isHoferOfferPageUrl,
     isHoferOfficialFlyerSource,

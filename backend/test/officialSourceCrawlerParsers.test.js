@@ -1626,6 +1626,84 @@ test('HOFER HTML transport 403 is fail-closed and cannot be parsed as a clean HT
   assert.equal(evidence.productLinkCount, 1);
 });
 
+test('HOFER real HTML challenge marker in a script does not block an offer page', () => {
+  assert.equal(__private.hoferHtmlLooksBlocked({
+    html: '<html><title>Angebote | HOFER</title><body>Ab Freitag Angebote 1,99 €</body><script>FRIENDLY_CAPTCHA_SITE_KEY:""</script></html>',
+    status: 200,
+  }), false);
+});
+
+test('HOFER Nuxt state joins SKU assets, title, selling size and explicit comparison price', () => {
+  const payload = Array.from({ length: 30 }, () => null);
+  payload[10] = {
+    sku: 11,
+    name: 12,
+    brandName: 13,
+    urlSlugText: 14,
+    sellingSize: 15,
+    quantityUnit: 16,
+    price: 17,
+    assets: 18,
+    onSaleDateDisplay: 19,
+  };
+  payload[11] = '000000000000700123';
+  payload[12] = 'Test Kaffee';
+  payload[13] = 'TEST';
+  payload[14] = 'test-kaffee';
+  payload[15] = '0,5 l';
+  payload[16] = 'ea';
+  payload[17] = { amountRelevantDisplay: 20, comparisonDisplay: 21 };
+  payload[18] = [22];
+  payload[19] = 'Verfügbar seit 14.08.2026';
+  payload[20] = '€ 1,99';
+  payload[21] = '€ 3,98/1 l';
+  payload[22] = { url: 23, assetType: 24 };
+  payload[23] = 'https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/{width}/11111111-2222-3333-4444-555555555555/{slug}';
+  payload[24] = 'FR01';
+
+  const html = `
+    <html><body>
+      <a href="/produkt/test-kaffee-000000000000700123">
+        <div class="product-tile">
+          <span>Verfügbar seit 14.08.2026</span>
+          <h2>TEST</h2><h3>Test Kaffee</h3><span>€ 1,99</span>
+          <img src="https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/232/11111111-2222-3333-4444-555555555555/Test%20Kaffee">
+        </div>
+      </a>
+      <script id="__NUXT_DATA__" type="application/json">${JSON.stringify(payload)}</script>
+    </body></html>
+  `;
+  const diagnostics = { skipReasons: {}, pages: [] };
+  const offers = __private.parseHoferOffersFromPage({
+    html,
+    pageUrl: 'https://www.hofer.at/angebote',
+    source: source({
+      _id: new Types.ObjectId(),
+      retailerKey: 'hofer',
+      retailerName: 'Hofer',
+      channel: 'official-flyer',
+      sourceUrl: 'https://www.hofer.at/angebote',
+      sourceType: 'hofer-official-html',
+      parserHint: 'hofer-official-html',
+    }),
+    crawlJobId: new Types.ObjectId(),
+    region: 'AT',
+    diagnostics,
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'Test Kaffee');
+  assert.equal(offers[0].brand, 'TEST');
+  assert.equal(offers[0].priceCurrent.amount, 1.99);
+  assert.equal(offers[0].quantityText, '0,5 l');
+  assert.equal(offers[0].normalizedUnitPrice.amount, 3.98);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
+  assert.match(offers[0].imageUrl, /dm\.emea\.cms\.aldi\.cx/);
+  assert.equal(offers[0].rawFacts.stateSku, '000000000000700123');
+  assert.equal(offers[0].rawFacts.stateAssetJoin, 'nuxt-product-asset-to-card-join');
+  assert.equal(offers[0].rawFacts.quantityEvidenceSource, 'nuxt-product-state');
+});
+
 test('HOFER HTML quality gate makes asset/quantity loss partial instead of green', () => {
   const gate = __private.buildHoferHtmlQualityGate({
     offerDocuments: Array.from({ length: 5 }, () => ({
