@@ -85,6 +85,7 @@ router.get('/top-deals', offersRateLimit, async (req, res, next) => {
       limit: req.query.limit,
       category: req.query.category,
       retailer: req.query.retailer,
+      debugTiming: req.query.debugTiming === 'true',
     });
     res.json(topDeals);
   } catch (error) {

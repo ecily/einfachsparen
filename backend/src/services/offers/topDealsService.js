@@ -38,6 +38,14 @@ const ALLOWED_CATEGORY_FILTERS = new Set([
 const cachedTopDeals = new Map();
 const topDealsBuildPromises = new Map();
 
+function timingNowMs() {
+  return Number(process.hrtime.bigint()) / 1e6;
+}
+
+function addTiming(profile, key, startedAt) {
+  if (profile) profile[key] = (profile[key] || 0) + (timingNowMs() - startedAt);
+}
+
 function finitePositive(value) {
   const amount = Number(value);
   return Number.isFinite(amount) && amount > 0 ? amount : null;
@@ -228,7 +236,7 @@ function getFallbackSavingsEvidence(rawOffer, offer) {
   return null;
 }
 
-function buildRetailerFallbackDecision(rawOffer, now = new Date()) {
+function buildRetailerFallbackDecision(rawOffer, now = new Date(), profile = null) {
   const retailerKey = normalizeRetailerKey(rawOffer?.retailerKey || rawOffer?.retailerName || '');
   if (!ALLOWED_RETAILER_FILTERS.has(retailerKey)) {
     return { accepted: false, reason: 'fallback-retailer-not-allowed' };
@@ -237,9 +245,12 @@ function buildRetailerFallbackDecision(rawOffer, now = new Date()) {
   if (validTo && !Number.isNaN(validTo.getTime()) && validTo.getTime() < now.getTime()) {
     return { accepted: false, reason: 'fallback-expired' };
   }
+  const freshnessStartedAt = profile ? timingNowMs() : 0;
   if (!filterFreshActiveOffers([rawOffer], now).length) {
+    addTiming(profile, 'publicValidityMs', freshnessStartedAt);
     return { accepted: false, reason: 'fallback-not-fresh-public' };
   }
+  addTiming(profile, 'publicValidityMs', freshnessStartedAt);
   if (String(rawOffer?.sourceRunStatus || '') !== 'success') {
     return { accepted: false, reason: 'fallback-source-run-not-success' };
   }
@@ -247,12 +258,16 @@ function buildRetailerFallbackDecision(rawOffer, now = new Date()) {
     return { accepted: false, reason: 'fallback-retained-or-stale' };
   }
 
+  const sourceStartedAt = profile ? timingNowMs() : 0;
   const sourceQuality = classifyOfferSourceQuality(rawOffer, now);
+  addTiming(profile, 'sourceQualityMs', sourceStartedAt);
   if (!sourceQuality.hasOfficialEvidence || sourceQuality.sourceTrustLevel !== 'high' || sourceQuality.isLowConfidenceAggregator) {
     return { accepted: false, reason: 'fallback-source-not-trusted' };
   }
 
+  const normalizationStartedAt = profile ? timingNowMs() : 0;
   const offer = buildRankedOffer(rawOffer, null, null);
+  addTiming(profile, 'candidateNormalizationMs', normalizationStartedAt);
   if (String(offer?.offerType || '') !== 'product') {
     return { accepted: false, reason: 'fallback-not-product' };
   }
@@ -314,23 +329,32 @@ function buildRetailerFallbackDecision(rawOffer, now = new Date()) {
   };
 }
 
-function buildCandidateDecision(rawOffer, now = new Date()) {
+function buildCandidateDecision(rawOffer, now = new Date(), profile = null) {
   const retailerKey = normalizeRetailerKey(rawOffer?.retailerKey || rawOffer?.retailerName || '');
   if (EXCLUDED_RETAILERS.has(retailerKey)) return { accepted: false, reason: 'excluded-retailer' };
   const validTo = rawOffer?.validTo ? new Date(rawOffer.validTo) : null;
   if (validTo && !Number.isNaN(validTo.getTime()) && validTo.getTime() < now.getTime()) {
     return { accepted: false, reason: 'expired' };
   }
-  if (!filterFreshActiveOffers([rawOffer], now).length) return { accepted: false, reason: 'not-fresh-public' };
+  const freshnessStartedAt = profile ? timingNowMs() : 0;
+  if (!filterFreshActiveOffers([rawOffer], now).length) {
+    addTiming(profile, 'publicValidityMs', freshnessStartedAt);
+    return { accepted: false, reason: 'not-fresh-public' };
+  }
+  addTiming(profile, 'publicValidityMs', freshnessStartedAt);
   if (String(rawOffer?.sourceRunStatus || '') !== 'success') return { accepted: false, reason: 'source-run-not-success' };
   if (hasRiskyPublishState(rawOffer)) return { accepted: false, reason: 'retained-or-stale' };
 
+  const sourceStartedAt = profile ? timingNowMs() : 0;
   const sourceQuality = classifyOfferSourceQuality(rawOffer, now);
+  addTiming(profile, 'sourceQualityMs', sourceStartedAt);
   if (!sourceQuality.hasOfficialEvidence || sourceQuality.sourceTrustLevel !== 'high' || sourceQuality.isLowConfidenceAggregator) {
     return { accepted: false, reason: 'source-not-trusted' };
   }
 
+  const normalizationStartedAt = profile ? timingNowMs() : 0;
   const offer = buildRankedOffer(rawOffer, null, null);
+  addTiming(profile, 'candidateNormalizationMs', normalizationStartedAt);
   const price = finitePositive(offer?.priceCurrent?.amount);
   const unitPrice = finitePositive(offer?.normalizedUnitPrice?.amount);
   const unit = String(offer?.normalizedUnitPrice?.unit || '');
@@ -464,13 +488,17 @@ function buildTopDealsFromOffers(offers = [], {
   now = new Date(),
   category = '',
   retailer = '',
+  debugTiming = false,
 } = {}) {
+  const profile = debugTiming ? { candidateCount: offers.length, startedAt: timingNowMs() } : null;
   const excludedReasons = {};
   const fallbackExcludedReasons = {};
   const accepted = [];
 
   for (const offer of offers) {
-    const decision = buildCandidateDecision(offer, now);
+    const decisionStartedAt = profile ? timingNowMs() : 0;
+    const decision = buildCandidateDecision(offer, now, profile);
+    addTiming(profile, 'strictDecisionMs', decisionStartedAt);
     if (decision.accepted) {
       accepted.push(decision.deal);
     } else {
@@ -480,12 +508,14 @@ function buildTopDealsFromOffers(offers = [], {
 
   const uniqueGuardedDeals = [];
   const seen = new Set();
+  const strictSortStartedAt = profile ? timingNowMs() : 0;
   for (const deal of accepted.sort(compareTopDeals)) {
     const identity = getDealIdentity(deal);
     if (seen.has(identity)) continue;
     seen.add(identity);
     uniqueGuardedDeals.push(deal);
   }
+  addTiming(profile, 'strictSortDedupeMs', strictSortStartedAt);
 
   const strictRetailerKeys = new Set(uniqueGuardedDeals.map((deal) => (
     normalizeRetailerKey(deal?.retailerKey || deal?.retailerName || '')
@@ -495,7 +525,9 @@ function buildTopDealsFromOffers(offers = [], {
     const retailerKey = normalizeRetailerKey(offer?.retailerKey || offer?.retailerName || '');
     if (strictRetailerKeys.has(retailerKey)) continue;
 
-    const fallbackDecision = buildRetailerFallbackDecision(offer, now);
+    const decisionStartedAt = profile ? timingNowMs() : 0;
+    const fallbackDecision = buildRetailerFallbackDecision(offer, now, profile);
+    addTiming(profile, 'fallbackDecisionMs', decisionStartedAt);
     if (fallbackDecision.accepted) {
       fallbackAccepted.push(fallbackDecision.deal);
     } else {
@@ -507,12 +539,14 @@ function buildTopDealsFromOffers(offers = [], {
 
   const uniqueFallbackDeals = [];
   const fallbackSeen = new Set();
+  const fallbackSortStartedAt = profile ? timingNowMs() : 0;
   for (const deal of fallbackAccepted.sort(compareRetailerFallbackDeals)) {
     const identity = getDealIdentity(deal);
     if (fallbackSeen.has(identity)) continue;
     fallbackSeen.add(identity);
     uniqueFallbackDeals.push(deal);
   }
+  addTiming(profile, 'fallbackSortDedupeMs', fallbackSortStartedAt);
 
   const safeLimit = normalizeLimit(limit);
   const filters = normalizeTopDealsFilters({ category, retailer });
@@ -527,7 +561,8 @@ function buildTopDealsFromOffers(offers = [], {
   const uniqueDeals = useRetailerFallback ? retailerFallbackDeals : strictDeals;
   const mode = useRetailerFallback ? 'retailer_discount_fallback' : 'strict';
   const selectedPoolCount = useRetailerFallback ? uniqueFallbackDeals.length : uniqueGuardedDeals.length;
-  return {
+  const responseStartedAt = profile ? timingNowMs() : 0;
+  const response = {
     generatedAt: now.toISOString(),
     count: Math.min(uniqueDeals.length, safeLimit),
     candidateCount: uniqueDeals.length,
@@ -560,6 +595,18 @@ function buildTopDealsFromOffers(offers = [], {
       fewerThanLimitAllowed: true,
     },
   };
+  if (profile) {
+    profile.responseMappingMs = timingNowMs() - responseStartedAt;
+    profile.strictAccepted = accepted.length;
+    profile.strictUnique = uniqueGuardedDeals.length;
+    profile.fallbackAccepted = fallbackAccepted.length;
+    profile.fallbackUnique = uniqueFallbackDeals.length;
+    profile.totalMs = timingNowMs() - profile.startedAt;
+    response.debugTiming = Object.fromEntries(
+      Object.entries(profile).map(([key, value]) => [key, typeof value === 'number' ? Number(value.toFixed(1)) : value])
+    );
+  }
+  return response;
 }
 
 async function buildTopDeals({
@@ -567,18 +614,20 @@ async function buildTopDeals({
   now = new Date(),
   category = '',
   retailer = '',
+  debugTiming = false,
 } = {}) {
+  const startedAt = timingNowMs();
   const safeLimit = normalizeLimit(limit);
   const filters = normalizeTopDealsFilters({ category, retailer });
   const cacheKey = [safeLimit, filters.category, filters.retailer, filters.invalid].join('|');
   const nowMs = now.getTime();
   const cachedEntry = cachedTopDeals.get(cacheKey);
-  if (cachedEntry && cachedEntry.expiresAt > nowMs) {
+  if (!debugTiming && cachedEntry && cachedEntry.expiresAt > nowMs) {
     return cachedEntry.response;
   }
 
   const inFlight = topDealsBuildPromises.get(cacheKey);
-  if (inFlight) {
+  if (!debugTiming && inFlight) {
     return inFlight;
   }
 
@@ -594,6 +643,7 @@ async function buildTopDeals({
         { 'rawFacts.discountPercent': { $gt: 0 } },
       ],
     };
+    const mongoStartedAt = timingNowMs();
     const offers = await Offer.find({
       ...baseQuery,
       retailerKey: { $in: [...ALLOWED_RETAILER_FILTERS] },
@@ -602,25 +652,35 @@ async function buildTopDeals({
       .limit(TOP_DEALS_TOTAL_CANDIDATE_LIMIT)
       .maxTimeMS(2500)
       .lean();
+    const mongoReadMs = timingNowMs() - mongoStartedAt;
 
     const response = buildTopDealsFromOffers(offers, {
       limit: safeLimit,
       now,
       category,
       retailer,
+      debugTiming,
     });
-    cachedTopDeals.set(cacheKey, {
-      expiresAt: nowMs + TOP_DEALS_CACHE_TTL_MS,
-      response,
-    });
+    if (debugTiming) {
+      response.debugTiming = {
+        ...(response.debugTiming || {}),
+        mongoReadMs: Number(mongoReadMs.toFixed(1)),
+        totalMs: Number((timingNowMs() - startedAt).toFixed(1)),
+      };
+    } else {
+      cachedTopDeals.set(cacheKey, {
+        expiresAt: nowMs + TOP_DEALS_CACHE_TTL_MS,
+        response,
+      });
+    }
     return response;
   })();
 
-  topDealsBuildPromises.set(cacheKey, buildPromise);
+  if (!debugTiming) topDealsBuildPromises.set(cacheKey, buildPromise);
   try {
     return await buildPromise;
   } finally {
-    topDealsBuildPromises.delete(cacheKey);
+    if (!debugTiming) topDealsBuildPromises.delete(cacheKey);
   }
 }
 
