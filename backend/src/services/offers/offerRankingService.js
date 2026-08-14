@@ -9702,6 +9702,11 @@ async function buildOfferRanking({
     timings.scoreCacheMs = nowMs() - scoreCacheStartedAt;
   }
 
+  const consumerScoreCache = new WeakMap();
+  for (const offer of fullyFilteredOffers) {
+    consumerScoreCache.set(offer, buildConsumerScore(offer));
+  }
+
   const sortStartedAt = nowMs();
   const sortedOffers = fullyFilteredOffers
     .sort((left, right) => {
@@ -9729,8 +9734,8 @@ async function buildOfferRanking({
         }
       }
 
-      const leftConsumerScore = buildConsumerScore(left);
-      const rightConsumerScore = buildConsumerScore(right);
+      const leftConsumerScore = consumerScoreCache.get(left) ?? buildConsumerScore(left);
+      const rightConsumerScore = consumerScoreCache.get(right) ?? buildConsumerScore(right);
 
       if (rightConsumerScore !== leftConsumerScore) {
         return rightConsumerScore - leftConsumerScore;
