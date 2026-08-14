@@ -1,5 +1,13 @@
 # kaufklug.at Kontext
 
+## HOFER-Public-UX-/Datenqualitaets-Fix am 2026-08-14
+
+- Read-only Live-Audit vor dem Fix: 72 HOFER-Public-Offers aus `hofer-official-publitas-pdf`, 0 sichere Bilder, 72 Preise, 0 Bedingungen, 0 belastbare Marken; mehrere PDF-Technikfragmente wurden als Titel/Menge uebernommen und erzeugten falsche kg/l-Vergleiche aus Belastbarkeit, Kapazitaet oder technischen Daten.
+- Die Public-Projektion ist jetzt fail-closed: HOFER-Unit-Prices erscheinen nur mit expliziter Parser-Evidence `rawFacts.hoferQuantityEvidence=explicit-product-quantity`; technische PDF-Mengen werden verworfen. Titel werden fuer Bullet-/Footer-/statt-Preis-Fragmente bereinigt, reine Fragmente nicht publiziert; Kategorien werden aus dem bereinigten Titel abgeleitet, mit neutralem `HOFER Angebot`-Fallback.
+- Bild-Evidence bleibt unveraendert strikt: Die offizielle Publitas-/PDF-Quelle liefert keinen sicheren Offer-Bild-Join. Die Frontend-Karte zeigt deshalb bewusst `HOFER Angebot` und `Bild nicht sicher verfuegbar` statt eines geratenen Bildes.
+- Commits `a8273f48`, `a7493e30`, `3adedcfb`, `0cfa02a2`, `f96085af` sind auf `origin/main`. Live-Backend nach dem letzten Deploy: HTTP 200, Mongo verbunden, `buildTime=2026-08-14T05:42:00.801Z`; HOFER-Ranking 57 sichtbar, 0 vergleichbare Unit-Prices, 0 Roh-/Footer-Fragmente, 0 Bilder. `kaffee` liefert 1 sauberes HOFER-Ergebnis, `eis` 5 ohne technische Titel-Fragmente, `waschmittel` 0.
+- Live-Static-Shell liefert die neuen HOFER-Fallback-Assets/CSS; der bestehende Browser-Smoke auf kaufklug.at mit 390px Mobile und Desktop/Reduced-Motion ist gruen. Kein Crawl, keine DB-Mutation, keine manuelle Offer-Aktivierung und keine SPAR-/PAGRO-/ZGONC-Arbeit.
+
 ## Public-Coverage-Recovery-P0 am 2026-08-14
 
 - Read-only Live-Evidence zeigte eine fragmentierte globale Browse-Antwort (teilweise nur 1 Offer), waehrend retailer-scoped Ranking, Suche und Facets deutlich groessere Mengen lieferten. BILLA/BILLA Plus und HOFER waren dabei ohne belastbare Bilder; die bestehende Image-Evidence erlaubt keinen sicheren Join und wurde nicht gelockert.
