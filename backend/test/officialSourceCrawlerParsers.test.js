@@ -1346,6 +1346,54 @@ test('HOFER current HTML parser extracts product links, availability and officia
   assert.equal(offers[0].rawFacts.hoferQuantityEvidence, 'explicit-product-quantity');
 });
 
+test('HOFER current HTML parser joins an adjacent official asset to its product offer', () => {
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    cards: [`
+      <li class="offer-tile" data-product-id="000000000000513802" data-selling-size="0,4 l">
+        <a href="/produkt/dr-beckmann-polster-flecken-buerste-000000000000513802">
+          <h2>DR. BECKMANN Polster Flecken-Bürste</h2>
+          <div>Verfügbar seit 14.08.2026</div>
+          <strong>€ 4,99</strong>
+        </a>
+        <a href="https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/500/example/Polster">
+          <img src="/assets/placeholder.svg" alt="Polster Flecken-Bürste">
+        </a>
+        <p>max. Wasserfüllmenge: 250 ml</p>
+      </li>
+    `],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].imageUrl.includes('dm.emea.cms.aldi.cx'), true);
+  assert.equal(offers[0].quantityText, '0,4 l');
+  assert.equal(offers[0].normalizedUnitPrice.amount, 12.48);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
+  assert.equal(offers[0].rawFacts.quantityEvidenceSource, 'structured-offer-field');
+  assert.equal(offers[0].rawFacts.unitPriceEvidence, 'calculated-from-mass-volume');
+});
+
+test('HOFER current HTML parser ignores technical quantities without sale-unit evidence', () => {
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    cards: [`
+      <article class="offer-card">
+        <a href="/produkt/ambiano-handdampfreiniger-000000000000721620">
+          <h2>AMBIANO Handdampfreiniger</h2>
+          <div>Verfügbar seit 14.08.2026</div>
+          <strong>€ 19,99</strong>
+        </a>
+        <p>max. Wasserfüllmenge: 250 ml</p>
+        <p>Leistung: 1000 W</p>
+      </article>
+    `],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].quantityText, '');
+  assert.equal(offers[0].normalizedUnitPrice.comparable, false);
+});
+
 test('HOFER current HTML parser accepts embedded public JSON product state', () => {
   const json = JSON.stringify({
     products: [{
