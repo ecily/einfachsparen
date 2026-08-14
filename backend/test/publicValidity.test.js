@@ -131,6 +131,15 @@ test('snapshot rejects missing, wrong, partial, failed and dry-run lineage evide
   }
 });
 
+test('successful source lineage remains eligible when the aggregate crawl run is partial', () => {
+  const decision = isPublicValidityEligible(snapshotOffer({
+    publishStatus: 'crawl-run-partial',
+  }), NOW);
+
+  assert.equal(decision.eligible, true);
+  assert.equal(decision.validityClass, 'snapshot-confirmed');
+});
+
 test('retained snapshot uses the last real confirmation and does not extend without configured grace', () => {
   const inside = isPublicValidityEligible(snapshotOffer({
     lastSeenAt: new Date('2026-01-15T00:00:00.000Z'),

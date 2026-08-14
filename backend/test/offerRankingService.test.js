@@ -193,7 +193,7 @@ test('pushes ranking query into Mongo searchTokens candidate filtering before JS
   assert.ok(Array.isArray(match.$and));
   assert.equal(match.$and.length, 2);
   assert.ok(JSON.stringify(match.$and).includes('searchTokens'));
-  assert.ok(JSON.stringify(match.$and).includes('snapshotCurrent'));
+  assert.ok(JSON.stringify(match.$and).includes('sourceRunStatus'));
   assert.ok(JSON.stringify(match.$and).includes('kaffee'));
   assert.doesNotMatch(JSON.stringify(match), /titleNormalized|comparisonGroup|brand/);
   assert.deepEqual(buildRankingCandidateQueryMetadata({ query: 'kaffee' }), {

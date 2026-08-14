@@ -63,9 +63,9 @@ function buildPublicValidityMongoMatch(now = new Date()) {
     validTo: { $gte: referenceNow },
     $or: [{ validFrom: null }, { validFrom: { $lte: referenceNow } }],
   };
+  const officialSourcePattern = /official|algolia|mueller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer|offers-page/i;
   const snapshotBase = {
     validTo: null,
-    'rawFacts.snapshotCurrent': true,
     sourceRunStatus: 'success',
     crawlJobId: { $exists: true, $ne: null },
     sourceId: { $exists: true, $ne: null },
@@ -73,19 +73,17 @@ function buildPublicValidityMongoMatch(now = new Date()) {
     $and: [
       {
         $or: [
-          { 'rawFacts.snapshotCurrent': true },
-          {
-            sourceRunStatus: 'success',
-            crawlJobId: { $exists: true, $ne: null },
-            sourceId: { $exists: true, $ne: null },
-            lastSeenAt: { $exists: true, $ne: null },
-          },
+          { crawlRunId: { $exists: true, $ne: null } },
+          { 'rawFacts.crawlRunId': { $exists: true, $ne: null } },
         ],
       },
       {
         $or: [
-          { sourceType: /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer/i },
-          { sourceTypes: /official|algolia|mueller|müller|billa|bipa|dm|hofer|lidl|penny|spar|interspar|flyer/i },
+          { sourceType: officialSourcePattern },
+          { sourceTypes: officialSourcePattern },
+          { 'rawFacts.sourceType': officialSourcePattern },
+          { 'rawFacts.sourceKey': officialSourcePattern },
+          { sourceUrl: officialSourcePattern },
         ],
       },
     ],
@@ -203,13 +201,17 @@ function hasOfferSpecificConfirmation(offer = {}) {
   const publishStatus = String(offer.publishStatus || '').toLowerCase();
   const dryRun = offer.rawFacts?.dryRun === true || offer.dryRun === true;
 
+  // publishStatus is assigned from the aggregate CrawlRun by
+  // markOfferPublishStatusForRun(). A partial aggregate run therefore does
+  // not invalidate an offer whose own source/job lineage is successful.
+  // sourceRunStatus remains the source-specific fail-closed gate.
   return Boolean(
     sourceId
     && exactRunId
     && (exactJobId || sourceRunId)
     && sourceRunStatus === 'success'
     && !dryRun
-    && !/partial|failed|blocked|zero|retained|stale|unknown/.test(publishStatus)
+    && !/failed|blocked|zero|retained|stale|unknown/.test(publishStatus)
   );
 }
 
