@@ -58,7 +58,7 @@ function normalizeCandidate(candidate, { source, crawlJobId, region, pdfUrl, val
   const titleNormalized = normalizeTitleForMatch(title);
   const categoryDecision = determineCategoryDecision({
     title,
-    contextText: `${title} ${candidate.rawText || ''}`,
+    contextText: title,
     sourceCategory: '',
   });
   const categoryPrimary = categoryDecision.primaryCategory && categoryDecision.primaryCategory !== 'Unkategorisiert'

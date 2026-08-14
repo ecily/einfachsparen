@@ -2,7 +2,7 @@ const { normalizeTitleForMatch, sanitizeWhitespace } = require('../crawl/sourceE
 const { determineCategoryDecision } = require('../crawl/categoryClassifier');
 
 const HOFER_SOURCE_PATTERN = /\bhofer\b/i;
-const HOFER_TECHNICAL_TITLE_PATTERN = /^(?:max\.?\s|gr\.?\s|ca\.?\s|kapazit(?:aet|ät)|kochkapazit(?:aet|ät)|umfang\s*:|verschi(?:e|ä)dene\s+(?:farben|groessen|größen|modelle|designs)|(?:und\s+)?modelle\b|beim\s+[„"']?statt|werbetermin\b|t\s*ef\b|tiefpreis\s*$|xxl[- ]?packung\s+sortiments|xxl\s+kefir\s+sortiments|sortiments[- ]?artikel)/i;
+const HOFER_TECHNICAL_TITLE_PATTERN = /^(?:max\.?\s|gr\.?\s|ca\.?\s|kapazit(?:aet|ät)|kochkapazit(?:aet|ät)|umfang\s*:|verschi(?:e|ä)dene\s+(?:farben|groessen|größen|modelle|designs)|(?:und\s+)?modelle\b|beim\s+[„"']?statt|werbetermin\b|t\s*ef\b|tiefpreis\s*$|xxl[- ]?packung\s+sortiments|xxl\s+kefir\s+sortiments|sortiments[- ]?artikel|hofer\s*\|\s*\d+hofer\s*\|\s*\d+|alle\s+angebote\s+sind\s+online\s+buchbar)/i;
 const HOFER_UNSAFE_QUANTITY_PATTERN = /(?:belastbarkeit|kapazit(?:aet|ät)|kochkapazit(?:aet|ät)|wassertank|ma(?:ss|ß)e|hoehe|höhe|umfang|durchmesser|seiten|designs?|modelle?|sortimentsartikel|werbetermin|statt[- ]?preis)/i;
 const HOFER_QUANTITY_PATTERN = /\b(?:\d+(?:[,.]\d+)?\s*[x×]\s*)?\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|cl)\b/i;
 const HOFER_PACKAGE_CONTEXT_PATTERN = /(?:pack(?:ung)?|becher|dose|flasche|beutel|kapsel(?:n)?|portion|glas|tube|stück|stk|[x×])/i;
@@ -62,7 +62,7 @@ function getHoferDisplayCategory(offer = {}) {
   const title = cleanHoferTitle(offer.title);
   const decision = determineCategoryDecision({
     title,
-    contextText: `${title} ${offer.rawFacts?.sourceText || ''}`,
+    contextText: title,
     sourceCategory: '',
   });
 
