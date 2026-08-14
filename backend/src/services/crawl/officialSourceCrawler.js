@@ -468,12 +468,12 @@ function buildOfferStatus(validFrom, validTo, snapshotCurrent = false) {
 
   let status = 'unknown';
 
-  if (snapshotCurrent) {
-    status = 'active';
-  } else if (validFrom && validFrom > now) {
+  if (validFrom && validFrom > now) {
     status = 'upcoming';
   } else if (validTo && validTo < now) {
     status = 'expired';
+  } else if (snapshotCurrent) {
+    status = 'active';
   } else if ((validFrom || validTo) && (!validFrom || validFrom <= now) && (!validTo || validTo >= now)) {
     status = 'active';
   }
@@ -1210,7 +1210,7 @@ function extractHoferProductUrl(card, pageUrl) {
   const href = sanitizeWhitespace(card.closest('a[href]').attr('href') || card.find('a[href]').first().attr('href'));
   const absoluteUrl = href ? toAbsoluteUrl(href, pageUrl) : '';
 
-  if (!/hofer\.at\/de\/p\./i.test(absoluteUrl)) {
+  if (!/hofer\.at\/(?:de\/p\.|produkt\/)/i.test(absoluteUrl)) {
     return '';
   }
 
@@ -1218,7 +1218,7 @@ function extractHoferProductUrl(card, pageUrl) {
 }
 
 function extractHoferAvailabilityDate(cardText) {
-  const match = String(cardText || '').match(/verf(?:\u00fc|ue)gbar\s+ab\s+(\d{2})\.(\d{2})\.(\d{4})/i);
+  const match = String(cardText || '').match(/verf(?:\u00fc|ue)gbar\s+(?:ab|seit)\s+(\d{2})\.(\d{2})\.(\d{4})/i);
 
   if (!match) {
     return null;
@@ -1234,7 +1234,7 @@ function isHoferSoldOutCard(cardText) {
 
 function isHoferOfferPageUrl(url) {
   const value = String(url || '');
-  return /\/de\/angebote\/(?:d\.\d{2}-\d{2}-\d{4}|angebote-im-ueberblick|aktionen|hofer-preiswochen|hofer-preis-dauerhaft-guenstiger|technik-und-haushalt|handys-und-router)\.html/i.test(value);
+  return /(?:\/angebote(?:[/?#]|$)|\/de\/angebote\/(?:d\.\d{2}-\d{2}-\d{4}|angebote-im-ueberblick|aktionen|hofer-preiswochen|hofer-preis-dauerhaft-guenstiger|technik-und-haushalt|handys-und-router)\.html)/i.test(value);
 }
 
 function isHoferOfficialFlyerSource(source = {}) {
@@ -1268,7 +1268,7 @@ function hoferHtmlLooksBlocked({ html = '', status = null, title = '' } = {}) {
 function hoferHtmlHasOfferSignals(html = '') {
   const text = String(html || '');
   const hasPrice = /(?:€|\u20ac)\s*\d|\d+[,.]\d{2}\s*(?:€|\u20ac|eur)|\(\s*(?:€|\u20ac)\s*\d/i.test(text);
-  const hasProductSignal = /\/de\/p\.|class=["'][^"']*product-title|at-product-price|gallery|is\/image\/aldi|scene7\.com\/is\/image\/aldi/i.test(text);
+  const hasProductSignal = /\/de\/p\.|\/produkt\/|class=["'][^"']*product-title|at-product-price|gallery|dm\.emea\.cms\.aldi\.cx|is\/image\/aldi|scene7\.com\/is\/image\/aldi/i.test(text);
   return hasPrice && hasProductSignal && !hoferHtmlLooksBlocked({ html: text });
 }
 
@@ -1297,6 +1297,10 @@ function buildHoferFallbackLinks({ source = {}, now = new Date() } = {}) {
 
 function hoferPageOfferContext(url) {
   const value = String(url || '');
+
+  if (/\/angebote(?:[/?#]|$)/i.test(value) && !/\/de\/angebote\//i.test(value)) {
+    return 'current-offers';
+  }
 
   if (/\/de\/angebote\/d\.\d{2}-\d{2}-\d{4}\.html/i.test(value)) {
     return 'dated-offers';
@@ -1330,6 +1334,11 @@ function hoferPageOfferContext(url) {
 }
 
 function extractHoferCards($, pageContext) {
+  if (pageContext === 'current-offers') {
+    return $('a[href*="/produkt/"]')
+      .filter((index, element) => /(?:\u20ac|eur|\d+[,.]\d{2})/i.test(sanitizeWhitespace($(element).text())));
+  }
+
   if (pageContext === 'hofer-actions') {
     return $('.gallery .wrapper')
       .filter((index, element) => {
@@ -1342,6 +1351,25 @@ function extractHoferCards($, pageContext) {
 }
 
 function extractHoferCardTitle(card, pageContext) {
+  if (pageContext === 'current-offers') {
+    const candidates = [
+      card.find('h1, h2, h3, h4').first().text(),
+      card.find('[class*="title"], [class*="name"]').first().text(),
+    ];
+    const structuredTitle = candidates.find((value) => value && !/verf(?:\u00fc|ue)gbar|onlineshop|(?:\u20ac|eur)\s*\d|\d+[,.]\d{2}\s*(?:\u20ac|eur)/i.test(value));
+
+    if (structuredTitle) {
+      return sanitizeWhitespace(structuredTitle);
+    }
+
+    return sanitizeWhitespace(card.text())
+      .replace(/verf(?:\u00fc|ue)gbar\s+(?:ab|seit)\s+\d{2}\.\d{2}\.\d{4}/i, '')
+      .replace(/(?:\u20ac|eur)\s*\d+(?:[,.]\d{1,2})?/gi, '')
+      .replace(/\d+[,.]\d{1,2}\s*(?:\u20ac|eur)/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   if (pageContext === 'hofer-actions') {
     return sanitizeWhitespace(card.find('h3').first().text());
   }
@@ -1350,6 +1378,15 @@ function extractHoferCardTitle(card, pageContext) {
 }
 
 function extractHoferCurrentPrice(card, cardText, pageContext) {
+  if (pageContext === 'current-offers') {
+    const unitPriceText = extractHoferExplicitUnitPriceText(cardText);
+    const priceText = unitPriceText ? String(cardText).replace(unitPriceText, '') : cardText;
+    const explicit = extractEuroPriceTexts(priceText);
+    // Strip an explicitly printed unit price first; the remaining current
+    // price is the last euro amount in the card.
+    return explicit.length > 0 ? explicit[explicit.length - 1].amount : null;
+  }
+
   if (pageContext !== 'hofer-actions') {
     return parseNumericAmount(card.find('.at-product-price_lbl').text());
   }
@@ -1368,12 +1405,164 @@ function extractHoferOldPrice(card, cardText, pageContext) {
 }
 
 function extractHoferAdditionalInfo(card, cardText, pageContext) {
+  if (pageContext === 'current-offers') {
+    const quantity = String(cardText || '').match(/\b\d+(?:[,.]\d+)?\s*(?:kg|g|l|ml|cl)\b|\b\d+\s+pro\s+(?:Stk|Stueck|Stück)\b/i);
+    return sanitizeWhitespace(quantity?.[0] || '');
+  }
+
   if (pageContext !== 'hofer-actions') {
     return sanitizeWhitespace(card.find('.additional-product-info').text());
   }
 
   const title = extractHoferCardTitle(card, pageContext);
   return sanitizeWhitespace(String(cardText || '').replace(title, ''));
+}
+
+function extractHoferExplicitUnitPriceText(cardText) {
+  const text = sanitizeWhitespace(cardText);
+  const match = text.match(/(?:\u20ac|eur)?\s*\d+(?:[,.]\d{1,2})?\s*\/\s*(?:1\s*)?(?:kg|kilogramm|g|gramm|l|liter|ml|milliliter|st(?:u|ü)ck|stk|waschgang)\b/i);
+  return sanitizeWhitespace(match?.[0] || '');
+}
+
+function normalizeHoferOfficialImageUrl(value, pageUrl, pageContext) {
+  const normalized = normalizeImageUrl(value, pageUrl);
+
+  if (!normalized || pageContext !== 'current-offers') {
+    return normalized;
+  }
+
+  try {
+    const hostname = new URL(normalized).hostname.toLowerCase();
+    return hostname === 'dm.emea.cms.aldi.cx' ? normalized : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function hoferJsonValue(value, keys = []) {
+  if (!value || typeof value !== 'object') return '';
+
+  for (const key of keys) {
+    if (value[key] !== undefined && value[key] !== null && value[key] !== '') {
+      return value[key];
+    }
+  }
+
+  return '';
+}
+
+function hoferJsonScalar(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return hoferJsonScalar(value.find(Boolean));
+  if (typeof value === 'object') return hoferJsonScalar(hoferJsonValue(value, ['amount', 'value', 'price', 'formatted', 'label', 'url']));
+  return '';
+}
+
+function hoferJsonImage(value) {
+  if (Array.isArray(value)) return hoferJsonImage(value.find(Boolean));
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') return hoferJsonScalar(hoferJsonValue(value, ['url', 'src', 'srcset', 'assetUrl']));
+  return '';
+}
+
+function hoferJsonOfferValue(value, keys = []) {
+  const direct = hoferJsonValue(value, keys);
+  if (direct !== '') return direct;
+  return value?.offers && typeof value.offers === 'object'
+    ? hoferJsonValue(value.offers, keys)
+    : '';
+}
+
+function formatHoferStructuredAvailability(value) {
+  const text = sanitizeWhitespace(value);
+  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+  if (isoDate) return `Verfuegbar seit ${isoDate[3]}.${isoDate[2]}.${isoDate[1]}`;
+  return text;
+}
+
+function collectHoferStructuredObjects(value, result = [], depth = 0) {
+  if (!value || depth > 12) return result;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectHoferStructuredObjects(item, result, depth + 1));
+    return result;
+  }
+  if (typeof value !== 'object') return result;
+
+  const url = hoferJsonScalar(hoferJsonOfferValue(value, ['url', 'productUrl', 'href', 'link']));
+  const title = hoferJsonScalar(hoferJsonValue(value, ['name', 'title', 'productName', 'displayName']));
+  const price = hoferJsonScalar(hoferJsonOfferValue(value, ['price', 'currentPrice', 'salePrice', 'offerPrice']));
+  if (/\/produkt\//i.test(url) && title && price) {
+    result.push(value);
+  }
+
+  Object.values(value).forEach((item) => collectHoferStructuredObjects(item, result, depth + 1));
+  return result;
+}
+
+function extractHoferStructuredOffers($) {
+  const candidates = [];
+  const seen = new Set();
+
+  $('script#__NEXT_DATA__, script[type="application/ld+json"], script[type="application/json"], script[data-state]').each((index, element) => {
+    const raw = $(element).contents().text() || $(element).html() || '';
+    if (!raw) return;
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      return;
+    }
+
+    for (const value of collectHoferStructuredObjects(parsed)) {
+      const url = hoferJsonScalar(hoferJsonOfferValue(value, ['url', 'productUrl', 'href', 'link']));
+      const title = hoferJsonScalar(hoferJsonValue(value, ['name', 'title', 'productName', 'displayName']));
+      const price = hoferJsonScalar(hoferJsonOfferValue(value, ['price', 'currentPrice', 'salePrice', 'offerPrice']));
+      const availability = formatHoferStructuredAvailability(hoferJsonScalar(hoferJsonValue(value, ['availabilityText', 'availableSince', 'availableFrom', 'validFrom', 'availability']) || value?.offers?.availability));
+      const quantity = hoferJsonScalar(hoferJsonValue(value, ['quantity', 'packageSize', 'size', 'content']));
+      const unitPrice = hoferJsonScalar(hoferJsonValue(value, ['unitPrice', 'basePrice', 'pricePerUnit', 'referencePrice']));
+      const image = hoferJsonImage(hoferJsonValue(value, ['image', 'imageUrl', 'imageURL', 'images', 'media']) || value?.offers?.image);
+      const key = `${url}::${price}`;
+
+      if (!availability || seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({ url, title, price, availability, quantity, unitPrice, image });
+    }
+  });
+
+  return candidates;
+}
+
+function escapeHoferHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatHoferStructuredPrice(value) {
+  const text = sanitizeWhitespace(value);
+  return /(?:\u20ac|eur)/i.test(text) ? text : (text ? `\u20ac ${text}` : '');
+}
+
+function buildHoferStructuredOfferHtml($) {
+  const offers = extractHoferStructuredOffers($);
+  if (offers.length === 0) return '';
+
+  return offers.map((offer) => `
+    <a href="${escapeHoferHtml(offer.url)}">
+      <article class="offer-card">
+        ${offer.image ? `<img src="${escapeHoferHtml(offer.image)}">` : ''}
+        <h2>${escapeHoferHtml(offer.title)}</h2>
+        <div>${escapeHoferHtml(offer.availability)}</div>
+        <div>${escapeHoferHtml(offer.quantity)}${offer.unitPrice ? ` (${escapeHoferHtml(offer.unitPrice)})` : ''}</div>
+        <strong>${escapeHoferHtml(formatHoferStructuredPrice(offer.price))}</strong>
+      </article>
+    </a>
+  `).join('');
 }
 
 function parseHoferActionDateRange(pageText) {
@@ -1475,6 +1664,7 @@ function extractHoferProductId({ card, productUrl, imageUrl }) {
   return sanitizeWhitespace(
     card.attr('data-productid')
     || productUrl.match(/\.([0-9]{10,})\.html/i)?.[1]
+    || productUrl.match(/-(\d{10,})(?:[/?#]|$)/i)?.[1]
     || imageUrl.match(/\/([A-Za-z0-9_-]+)(?:\?|$)/)?.[1]
     || ''
   );
@@ -1503,11 +1693,17 @@ function buildHoferDedupeKey({ title, currentPrice, productUrl, productId, quant
 function hoferOfferPreferenceScore(offer) {
   let score = 0;
   const pageContext = offer?.rawFacts?.pageContext || '';
+  const sourceType = offer?.rawFacts?.sourceType || offer?.sourceType || '';
 
+  // HTML is the primary source for the current HOFER adapter. Keep this
+  // preference dominant so a bounded PDF fallback cannot replace stronger
+  // product-level HTML evidence during dedupe.
+  if (sourceType === 'hofer-official-html' || pageContext === 'current-offers') score += 60;
+  if (offer?.imageUrl) score += 5;
   if (offer?.validTo) score += 30;
   if (offer?.validFrom) score += 10;
   if (offer?.priceReference?.amount) score += 8;
-  if (offer?.productUrl || offer?.sourceUrl?.includes('/de/p.')) score += 6;
+  if (offer?.productUrl || offer?.sourceUrl?.includes('/de/p.') || offer?.sourceUrl?.includes('/produkt/')) score += 6;
   if (pageContext === 'dated-offers') score += 12;
   if (pageContext === 'hofer-actions') score += 10;
   if (pageContext === 'offers-overview') score -= 2;
@@ -4243,8 +4439,25 @@ function parseHoferOffersFromPage({
   diagnostics,
 }) {
   const $ = cheerio.load(html);
-  const offers = [];
   const pageContext = hoferPageOfferContext(pageUrl);
+
+  if (pageContext === 'current-offers') {
+    const structuredHtml = buildHoferStructuredOfferHtml($);
+    if (structuredHtml) {
+      return parseHoferOffersFromPage({
+        html: `<html><body>${structuredHtml}</body></html>`,
+        pageUrl,
+        source,
+        crawlJobId,
+        region,
+        pageDate,
+        nextPageDate,
+        diagnostics,
+      });
+    }
+  }
+
+  const offers = [];
   const cards = extractHoferCards($, pageContext);
   const isSnapshotOfferPage = !pageDate && pageContext !== 'unknown' && pageContext !== 'hofer-actions';
 
@@ -4261,12 +4474,24 @@ function parseHoferOffersFromPage({
     const currentPrice = extractHoferCurrentPrice(card, cardText, pageContext);
     const oldPrice = extractHoferOldPrice(card, cardText, pageContext);
     const additionalInfo = extractHoferAdditionalInfo(card, cardText, pageContext);
+    const explicitUnitPriceText = extractHoferExplicitUnitPriceText(cardText);
     const actionValidity = pageContext === 'hofer-actions' ? extractHoferActionValidity(card, $) : null;
-    const validFrom = actionValidity?.validFrom || extractHoferAvailabilityDate(cardText) || parseDateFromText(cardText) || pageDate || (isSnapshotOfferPage ? new Date() : null);
+    let validFrom = actionValidity?.validFrom || extractHoferAvailabilityDate(cardText) || parseDateFromText(cardText) || pageDate || (isSnapshotOfferPage ? new Date() : null);
+    if (pageContext === 'current-offers' && validFrom) {
+      validFrom = new Date(validFrom);
+      validFrom.setUTCHours(0, 0, 0, 0);
+    }
     const validTo = actionValidity?.validTo || (validFrom && nextPageDate ? endOfUtcDay(addDays(nextPageDate, -1)) : null);
     const statusInfo = buildOfferStatus(validFrom, validTo, isSnapshotOfferPage);
     const quantityText = additionalInfo || '';
-    const normalizedUnitPrice = buildUnitPriceFromLabel(quantityText, currentPrice);
+    const normalizedUnitPrice = pageContext === 'current-offers'
+      ? (explicitUnitPriceText ? buildUnitPriceFromLabel(explicitUnitPriceText, currentPrice) : {
+        amount: null,
+        unit: '',
+        comparable: false,
+        confidence: 0,
+      })
+      : buildUnitPriceFromLabel(quantityText, currentPrice);
     const brandAndTitle = title;
     const categoryPrimary = determineOfferCategory({
       title: brandAndTitle,
@@ -4282,6 +4507,11 @@ function parseHoferOffersFromPage({
 
     if (!currentPrice) {
       if (diagnostics) diagnostics.skipReasons['missing-current-price'] = (diagnostics.skipReasons['missing-current-price'] || 0) + 1;
+      return;
+    }
+
+    if (pageContext === 'current-offers' && !extractHoferAvailabilityDate(cardText)) {
+      if (diagnostics) diagnostics.skipReasons['missing-availability-date'] = (diagnostics.skipReasons['missing-availability-date'] || 0) + 1;
       return;
     }
 
@@ -4305,7 +4535,7 @@ function parseHoferOffersFromPage({
 
     const conditionsText = extractHoferConditionsText({ cardText, pageContext, validTo });
     const productUrl = extractHoferProductUrl(card, pageUrl);
-    const imageUrl = normalizeImageUrl(extractImageUrl(card), pageUrl);
+    const imageUrl = normalizeHoferOfficialImageUrl(extractImageUrl(card), pageUrl, pageContext);
     const productId = extractHoferProductId({ card, productUrl, imageUrl });
     const dedupeKey = buildHoferDedupeKey({
       title,
@@ -4375,6 +4605,10 @@ function parseHoferOffersFromPage({
       rawFacts: {
         sourceType: 'hofer-official-html',
         additionalInfo,
+        explicitUnitPriceText,
+        ...(pageContext === 'current-offers' && normalizedUnitPrice.comparable
+          ? { hoferQuantityEvidence: 'explicit-product-quantity' }
+          : {}),
         pageContext,
         pageUrl,
         productUrl,
@@ -8409,6 +8643,88 @@ async function crawlHoferOfficialPages({
   };
 }
 
+async function crawlHoferOfficialHtml({
+  source,
+  crawlJobId,
+  region,
+  html,
+  pageUrl,
+}) {
+  const diagnostics = {
+    sourceType: 'hofer-official-html',
+    pageUrl,
+    rawCards: 0,
+    parsedOffers: 0,
+    skipReasons: {},
+    pages: [],
+  };
+  const parsedOffers = html
+    ? parseHoferOffersFromPage({
+      html,
+      pageUrl,
+      source,
+      crawlJobId,
+      region,
+      diagnostics,
+    })
+    : [];
+  const dedupedOffers = dedupeHoferOffers(parsedOffers, diagnostics);
+
+  if (dedupedOffers.length > 0) {
+    const offerDocuments = enrichOffersForStorage(dedupedOffers, {
+      source,
+      sourceType: 'hofer-official-html',
+      parserVersion: `${PARSER_VERSION}:hofer-html-v1`,
+      normalizationVersion: NORMALIZATION_VERSION,
+    });
+    const refreshResult = await replaceOffersForSource({
+      sourceId: source._id,
+      offerDocuments,
+      crawlJobId,
+      sourceRunStatus: 'success',
+      replacementQuality: 'complete',
+    });
+
+    return {
+      offerDocuments,
+      rawDocumentCount: 0,
+      rawCandidateCount: diagnostics.rawCards,
+      diagnostics,
+      rejectionReasons: Object.entries(diagnostics.skipReasons).map(([reason, count]) => ({ reason, count })),
+      refreshResult,
+      usedPdfFallback: false,
+    };
+  }
+
+  const fallbackSource = {
+    ...source,
+    sourceUrl: source.fallbackSourceUrl || 'https://katalog.hofer.at/',
+    parserHint: source.fallbackParserHint || 'hofer-publitas-pdf',
+  };
+  const pdfResult = await crawlHoferPublitasPdf({
+    source: fallbackSource,
+    crawlJobId,
+    region,
+  });
+
+  return {
+    offerDocuments: pdfResult.offerDocuments,
+    rawDocumentCount: pdfResult.rawDocumentCount,
+    rawCandidateCount: Math.max(diagnostics.rawCards, 0) + (pdfResult.rawCandidateCount || 0),
+    diagnostics: {
+      html: diagnostics,
+      pdfFallback: pdfResult.diagnostics || {},
+    },
+    rejectionReasons: [
+      ...Object.entries(diagnostics.skipReasons).map(([reason, count]) => ({ reason, count })),
+      { reason: 'html-fallback-pdf', count: 1 },
+      ...(pdfResult.rejectionReasons || []),
+    ],
+    refreshResult: pdfResult.refreshResult,
+    usedPdfFallback: true,
+  };
+}
+
 async function crawlHoferPublitasPdf({ source, crawlJobId, region }) {
   const catalogRoot = source.sourceUrl;
   const root = await fetchHtml(catalogRoot);
@@ -9323,7 +9639,25 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
     let extraRejectionReasons = [];
     let forcePartialStatus = false;
 
-    if (source.retailerKey === 'hofer' && source.parserHint === 'hofer-publitas-pdf') {
+    if (source.retailerKey === 'hofer' && source.parserHint === 'hofer-official-html') {
+      const hoferResult = await crawlHoferOfficialHtml({
+        source,
+        crawlJobId: crawlJob._id,
+        region,
+        html,
+        pageUrl: canonicalUrl,
+      });
+
+      offersStored += hoferResult.offerDocuments.length;
+      extraRawDocuments += hoferResult.rawDocumentCount;
+      rawCandidateCount += hoferResult.rawCandidateCount || 0;
+      allStoredOffers.push(...hoferResult.offerDocuments);
+      parserDetails.hoferOfficialHtml = hoferResult.diagnostics || {};
+      extraRejectionReasons = extraRejectionReasons.concat(hoferResult.rejectionReasons || []);
+      if (hoferResult.usedPdfFallback) {
+        warningMessages = warningMessages.concat('HOFER HTML yielded no trusted offers; official Publitas/PDF fallback was used.');
+      }
+    } else if (source.retailerKey === 'hofer' && source.parserHint === 'hofer-publitas-pdf') {
       const hoferResult = await crawlHoferPublitasPdf({
         source,
         crawlJobId: crawlJob._id,

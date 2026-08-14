@@ -33,6 +33,18 @@ test('dead Aktionsfinder /pv fallback sources stay disabled until a replacement 
   }
 });
 
+test('HOFER official HTML source is primary and keeps Publitas only as fallback', () => {
+  const definition = RETAILER_DEFINITIONS.find((source) => source.sourceType === 'hofer-official-html');
+
+  assert.ok(definition);
+  assert.equal(definition.sourceUrl, 'https://www.hofer.at/angebote');
+  assert.equal(definition.parserHint, 'hofer-official-html');
+  assert.equal(definition.fallbackSourceUrl, 'https://katalog.hofer.at/');
+  assert.equal(definition.fallbackParserHint, 'hofer-publitas-pdf');
+  assert.equal(definition.crawlPolicy.currentSnapshot, true);
+  assert.equal(definition.crawlPolicy.freshnessTtlHours, 48);
+});
+
 test('Müller official online offers source is enabled with bounded pagination and no flyer integration', () => {
   const definition = RETAILER_DEFINITIONS.find((source) => source.sourceType === 'mueller-official-online-offers');
 

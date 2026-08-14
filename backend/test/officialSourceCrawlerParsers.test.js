@@ -1330,6 +1330,70 @@ test('HOFER official parser extracts multiple offer cards with prices, unit pric
   assert.equal(offers[1].normalizedUnitPrice.unit, 'l');
 });
 
+test('HOFER current HTML parser extracts product links, availability and official CMS images', () => {
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    cards: [hoferCurrentOfferCard({ quantity: '0,4 l', unitPrice: '\u20ac 12,48/1 l' })],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].sourceUrl, 'https://www.hofer.at/produkt/ambiano-handdampfreiniger-000000000000721620');
+  assert.equal(offers[0].priceCurrent.amount, 19.99);
+  assert.equal(offers[0].validFrom.toISOString(), '2026-08-14T00:00:00.000Z');
+  assert.equal(offers[0].imageUrl.includes('dm.emea.cms.aldi.cx'), true);
+  assert.equal(offers[0].normalizedUnitPrice.amount, 12.48);
+  assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
+  assert.equal(offers[0].rawFacts.hoferQuantityEvidence, 'explicit-product-quantity');
+});
+
+test('HOFER current HTML parser accepts embedded public JSON product state', () => {
+  const json = JSON.stringify({
+    products: [{
+      name: 'DR. BECKMANN Polster Flecken-Bürste',
+      url: '/produkt/dr-beckmann-polster-flecken-buerste-000000000000513802',
+      price: '4,99',
+      availabilityText: 'Verfuegbar seit 14.08.2026',
+      packageSize: '0,4 l',
+      unitPrice: '€ 12,48/1 l',
+      image: 'https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/500/example/Polster',
+    }],
+  });
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    cards: [`<script type="application/json">${json}</script>`],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'DR. BECKMANN Polster Flecken-Bürste');
+  assert.equal(offers[0].priceCurrent.amount, 4.99);
+  assert.equal(offers[0].sourceUrl.includes('/produkt/'), true);
+  assert.equal(offers[0].imageUrl.includes('dm.emea.cms.aldi.cx'), true);
+});
+
+test('HOFER current HTML parser rejects missing availability and non-official images', () => {
+  const diagnostics = {};
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    diagnostics,
+    cards: [hoferCurrentOfferCard({ available: '', image: 'https://example.com/unknown.jpg' })],
+  });
+
+  assert.equal(offers.length, 0);
+  assert.equal(diagnostics.skipReasons['missing-availability-date'], 1);
+});
+
+test('HOFER current HTML parser rejects future availability without weakening validity', () => {
+  const diagnostics = {};
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    diagnostics,
+    cards: [hoferCurrentOfferCard({ available: 'Verfuegbar ab 14.08.2099' })],
+  });
+
+  assert.equal(offers.length, 0);
+  assert.equal(diagnostics.skipReasons['status-upcoming'], 1);
+});
+
 test('HOFER official parser keeps current snapshot offers without validTo and labels them conservatively', () => {
   const hoferSource = hoferOfficialSource();
   const offers = parseHoferFixture({
@@ -1397,6 +1461,7 @@ test('HOFER official parser reports reject reasons for non-offer cards', () => {
 });
 
 test('HOFER official source only treats explicit offer pages as additional HTML offer inputs', () => {
+  assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/angebote'), true);
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/hofer-preiswochen.html'), true);
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/hofer-preis-dauerhaft-guenstiger.html'), true);
   assert.equal(__private.isHoferOfferPageUrl('https://www.hofer.at/de/angebote/aktionen.html'), true);
@@ -1521,14 +1586,17 @@ test('HOFER official parser rejects future Aktionen gallery cards', () => {
 });
 
 test('HOFER official dedupe prefers dated offer evidence over overview duplicates', () => {
+  const now = new Date();
+  const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12, 0, 0));
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 12, 0, 0));
   const overview = parseHoferFixture({
     pageUrl: 'https://www.hofer.at/de/angebote/angebote-im-ueberblick.html',
     cards: [hoferCard()],
   })[0];
   const dated = parseHoferFixture({
     pageUrl: 'https://www.hofer.at/de/angebote/d.20-05-2026.html',
-    pageDate: new Date(Date.UTC(2026, 4, 20, 12, 0, 0)),
-    nextPageDate: new Date(Date.UTC(2026, 5, 2, 12, 0, 0)),
+    pageDate: yesterday,
+    nextPageDate: tomorrow,
     cards: [hoferCard()],
   })[0];
   const diagnostics = {};
@@ -1536,6 +1604,29 @@ test('HOFER official dedupe prefers dated offer evidence over overview duplicate
 
   assert.equal(deduped.length, 1);
   assert.equal(deduped[0].rawFacts.pageContext, 'dated-offers');
+  assert.equal(diagnostics.skipReasons.duplicate, 1);
+});
+
+test('HOFER official HTML evidence wins over bounded PDF duplicate', () => {
+  const htmlOffer = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    cards: [hoferCurrentOfferCard()],
+  })[0];
+  const pdfOffer = {
+    ...htmlOffer,
+    imageUrl: '',
+    rawFacts: {
+      ...htmlOffer.rawFacts,
+      sourceType: 'hofer-official-publitas-pdf',
+      pageContext: 'dated-offers',
+    },
+    validTo: new Date('2026-08-31T23:59:59.999Z'),
+  };
+  const diagnostics = {};
+  const deduped = __private.dedupeHoferOffers([pdfOffer, htmlOffer], diagnostics);
+
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0], htmlOffer);
   assert.equal(diagnostics.skipReasons.duplicate, 1);
 });
 
@@ -3388,6 +3479,28 @@ function muellerListHtml({ products = [], bodyPrefix = '' } = {}) {
         ${tiles}
       </body>
     </html>
+  `;
+}
+
+function hoferCurrentOfferCard({
+  title = 'AMBIANO Handdampfreiniger',
+  price = '\u20ac 19,99',
+  quantity = '',
+  unitPrice = '',
+  available = 'Verfuegbar seit 14.08.2026',
+  href = '/produkt/ambiano-handdampfreiniger-000000000000721620',
+  image = 'https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/500/3852e769-f5ed-4bd1-98e9-aabc5bba3bd9/Handdampfreiniger',
+} = {}) {
+  return `
+    <a href="${href}">
+      <article class="offer-card">
+        <img src="${image}" alt="${title}">
+        <h2>${title}</h2>
+        <div>${available}</div>
+        <div>${quantity}${unitPrice ? ` (${unitPrice})` : ''}</div>
+        <strong>${price}</strong>
+      </article>
+    </a>
   `;
 }
 

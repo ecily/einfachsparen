@@ -56,6 +56,7 @@ function deriveSourceKey(source = {}) {
   if (url.includes('view.publitas.com/billa-at/billa-fb-kw24-2026-steiermark') || url.includes('view.publitas.com/billa-at/billa_fb_kw24_2026_steiermark')) return 'billa-official-flyer-steiermark';
   if (url.includes('view.publitas.com/billa-plus/billa-plus-fb-kw24-2026-steiermark') || url.includes('view.publitas.com/billa-plus/billa_plus_fb_kw24_2026_steiermark')) return 'billa-plus-official-flyer-steiermark';
   if (url.includes('billa.at')) return `${format || 'billa'}-${source.channel || 'official'}-${source.sourceType || 'source'}`;
+  if (parserHint === 'hofer-official-html' || /hofer\.at\/angebote(?:[/?#]|$)/i.test(url)) return 'hofer-official-html';
   if (url.includes('hofer.at')) return 'hofer-official-flyer';
   if (url.includes('lidl.at')) return 'lidl-official-flyer';
   if (url.includes('penny.at/sortiment/dauer-guenstig')) return 'penny-official-dauer-guenstig';
