@@ -9825,6 +9825,9 @@ async function buildOfferRanking({
   const responsePreparationStartedAt = nowMs();
   const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query, rankingProfiling);
   timings.responsePreparationMs = nowMs() - responsePreparationStartedAt;
+  if (rankingProfiling) {
+    Object.assign(timings, rankingProfiling);
+  }
   const finalDedupeStartedAt = nowMs();
   const finalResponseOffers = dedupeFinalResponseOffers(responseCandidateOffers, query);
   timings.finalDedupeMs = nowMs() - finalDedupeStartedAt;
