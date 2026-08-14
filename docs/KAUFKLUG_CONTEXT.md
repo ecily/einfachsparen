@@ -442,6 +442,11 @@
 - Neue Regressionen decken HTML-vor-PDF-Ranking und Soft-Deactivation der Legacy-PDF-Fallbacks ab. Gezielt 308/308 Ranking-/Refresh-Tests, HOFER-Parser-Tests, Syntax, Admin-Lint, Production-Build und `git diff --check` wurden ausgefuehrt. Der vollstaendige gemischte Parser-Testlauf hat 13 bereits ausserhalb dieses HOFER-Diffs liegende PENNY-/BILLA-Fixturefehler; die HOFER-Tests selbst sind gruen.
 - Der Fix ist lokal bereit fuer Push/Deploy. Ein neuer autorisierter DO-Crawl `sourceKeys:["hofer-official-html"]` ist aus dieser Sitzung noch nicht gestartet; deshalb sind neue Run-ID, HTML/PDF-Public-Counts und Live-Smoke nach diesem Fix noch offen. Keine DB-Handkorrektur, keine manuelle Offer-Aktivierung, keine Umgehung und keine Public-Validity-Lockerung.
 
+## HOFER-HTML-Nuxt-State-Join-Deploy am 2026-08-14
+
+- Commit `ed6ed512` ist live: `/api/health` HTTP 200, Mongo verbunden, `buildTime=2026-08-14T10:30:48.136Z`. Vor einem neuen Crawl zeigt das Ranking weiterhin 20/20 alte `hofer-official-publitas-pdf`-Offers; das ist kein Nachweis gegen den reparierten Parser.
+- Der gezielte neue Crawl ist noch offen, weil aus dieser Sitzung weder `ADMIN_API_KEY` noch `doctl` vorhanden ist. Kein unauthorisierter Request, kein Secret-Output und keine DB-Mutation.
+
 ## HOFER-HTML-Nuxt-State-Asset-Join am 2026-08-14
 
 - Der neue DO-Befund `HTTP 200 / 57 Raw / 57 Parsed / 57 Stored` blieb rot, weil `hoferHtmlLooksBlocked()` den sichtbaren HTML-Body gemeinsam mit Scripts pruefte und den harmlosen Konfigurationsstring `FRIENDLY_CAPTCHA_SITE_KEY` als Blockade interpretierte. Dadurch lief der 200er-HTML-Request erneut in den PDF-Fallback.
