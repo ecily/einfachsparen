@@ -28,6 +28,26 @@ function hasOfficialSourceSignal(offer) {
   return /\bofficial\b|flyer|flugblatt|prospekt|leaflet|pdf/.test(sourceText)
 }
 
+function isHoferOffer(offer) {
+  const sourceText = [
+    offer?.retailerKey,
+    offer?.sourceType,
+    offer?.sourceTypes,
+    offer?.source,
+    offer?.sources,
+    offer?.sourceName,
+    offer?.sourceKey,
+    offer?.sourceUrl,
+    offer?.sourceUrls,
+    offer?.evidenceUrls,
+  ]
+    .map(asSourceText)
+    .join(' ')
+    .toLowerCase()
+
+  return /\bhofer\b/.test(sourceText)
+}
+
 function getPlaceholderCategory(offer) {
   const categoryText = [
     offer?.displayCategory,
@@ -54,16 +74,26 @@ function getPlaceholderCategory(offer) {
 }
 
 function getPlaceholderCopy(offer) {
+  if (isHoferOffer(offer)) {
+    return {
+      badge: 'HOFER Angebot',
+      label: 'Bild nicht sicher verf\u00fcgbar',
+      showLabel: true,
+    }
+  }
+
   if (hasOfficialSourceSignal(offer)) {
     return {
       badge: 'Offiziell',
       label: 'Bild derzeit nicht verf\u00fcgbar',
+      showLabel: false,
     }
   }
 
   return {
     badge: 'Ohne Bild',
     label: 'Bild derzeit nicht verf\u00fcgbar',
+    showLabel: false,
   }
 }
 
@@ -73,9 +103,10 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
   const [failedSources, setFailedSources] = useState(() => new Set(failedImageSourceCache))
   const imageSources = [primarySrc, directSrc].filter((item, index, items) => item && items.indexOf(item) === index)
   const currentSrc = imageSources.find((item) => !failedSources.has(item)) || ''
+  const isHofer = isHoferOffer(offer)
   const isOfficialPlaceholder = hasOfficialSourceSignal(offer)
   const placeholderCopy = getPlaceholderCopy(offer)
-  const placeholderCategory = getPlaceholderCategory(offer)
+  const placeholderCategory = isHofer ? 'hofer' : getPlaceholderCategory(offer)
 
   if (!currentSrc) {
     return (
@@ -92,6 +123,9 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
         </span>
         <span className="product-image__placeholder-copy">
           <small className="product-image__placeholder-badge">{placeholderCopy.badge}</small>
+          {placeholderCopy.showLabel ? (
+            <small className="product-image__placeholder-label">{placeholderCopy.label}</small>
+          ) : null}
         </span>
       </div>
     )

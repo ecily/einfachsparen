@@ -1,5 +1,6 @@
 const { normalizeTitleForMatch, sanitizeWhitespace } = require('./sourceEvidence');
 const { extractPromotionRequirement, isSunProtectionPlusContext } = require('../offers/promotionMath');
+const { hasHoferPublicQuantityEvidence, isHoferPublitasOffer } = require('../offers/hoferPublicPresentation');
 
 const CLEAR_COMPARABLE_UNITS = new Set(['kg', 'l', 'Stk']);
 const UNIT_UNCLEAR_REASON = 'Vergleichseinheit unklar';
@@ -659,8 +660,11 @@ function inferConditionFields(offer = {}) {
 function isOfferSafelyComparable(offer = {}) {
   const comparableUnit = normalizeComparableUnit(offer.comparableUnit);
   const unit = normalizeComparableUnit(offer.normalizedUnitPrice?.unit);
+  const hoferQuantityEvidenceMissing = isHoferPublitasOffer(offer)
+    && !hasHoferPublicQuantityEvidence(offer);
 
   return Boolean(
+    !hoferQuantityEvidenceMissing &&
     offer.quality?.comparisonSafe === true &&
     offer.normalizedUnitPrice?.comparable === true &&
     comparableUnit &&

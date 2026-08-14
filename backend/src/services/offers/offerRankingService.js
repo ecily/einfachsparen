@@ -35,6 +35,12 @@ const { isExpiredValidToCompensatedByFreshCrawl, isOfferFreshForActiveUse } = re
 const { buildPublicValidityMongoMatch } = require('./publicValidity');
 const { classifyOfferSourceQuality } = require('./sourceQuality');
 const { buildOfferQualityRankingAdjustment } = require('./offerQualityScore');
+const {
+  cleanHoferTitle,
+  getHoferDisplayCategory,
+  getHoferPublicPresentation,
+  isHoferPublitasOffer,
+} = require('./hoferPublicPresentation');
 
 const OFFER_RANKING_FIELD_LIST = [
   'sourceId',
@@ -4564,6 +4570,10 @@ function removeExpiredDateBoundPublicTitleFragments(title, { offer = {}, now = n
 function getPublicTitle(offer, options = {}) {
   const rawTitle = String(offer?.title || '').trim();
 
+  if (isHoferPublitasOffer(offer)) {
+    return cleanHoferTitle(rawTitle);
+  }
+
   if (!rawTitle || !isSparFamilyRetailer(offer) || !isOfficialPdfEvidence(offer)) {
     return rawTitle;
   }
@@ -4969,6 +4979,10 @@ function isBillaOfficialFlyerPdfFragmentTitle(offer = {}) {
 function isPublicResponseEligibleOffer(offer = {}) {
   const retailerKey = String(offer?.retailerKey || '').toLowerCase();
 
+  if (retailerKey === 'hofer' && !cleanHoferTitle(offer.title)) {
+    return false;
+  }
+
   if (!isBillaOfficialFlyerPdfOffer(offer, retailerKey)) {
     return true;
   }
@@ -5215,7 +5229,19 @@ function withResponseCategoryGuardFields(offer = {}) {
 }
 
 function withResponseInferredOfferFields(offer = {}) {
-  return withResponseCategoryGuardFields(withResponseInferredQuantityFields(offer));
+  const hoferPresentation = isHoferPublitasOffer(offer)
+    ? getHoferPublicPresentation(offer)
+    : null;
+  const preparedOffer = hoferPresentation
+    ? {
+      ...offer,
+      title: hoferPresentation.title || offer.title,
+      quantityText: hoferPresentation.quantityText,
+      displayCategory: hoferPresentation.displayCategory,
+    }
+    : offer;
+
+  return withResponseCategoryGuardFields(withResponseInferredQuantityFields(preparedOffer));
 }
 
 function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
@@ -5291,7 +5317,9 @@ function buildRankedOffer(offer, bestUnitPrice, worstUnitPrice, options = {}) {
     subcategoryKey: offer.subcategoryKey || '',
     categoryConfidence: Number(offer.categoryConfidence || 0),
     subcategoryConfidence: Number(offer.subcategoryConfidence || 0),
-    displayCategory: selectDisplayCategory(offer),
+    displayCategory: isHoferPublitasOffer(offer)
+      ? getHoferDisplayCategory(offer)
+      : selectDisplayCategory(offer),
     quantityText: publicQuantityFields.quantityText,
     conditionsText: publicConditionsText,
     discountPercent: offer.discountPercent ?? null,

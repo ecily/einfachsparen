@@ -8404,3 +8404,48 @@ test('public ranking fails closed when stored comparison safety conflicts with p
   assert.equal(ranked.normalizedUnitPrice.comparable, false);
   assert.equal(ranked.quality.comparisonSafe, false);
 });
+
+test('HOFER public response hides technical PDF quantities and keeps the cleaned title', () => {
+  const ranked = buildRankedOffer(offer({
+    retailerKey: 'hofer',
+    retailerName: 'HOFER',
+    sourceType: 'hofer-official-publitas-pdf',
+    title: 'ISOLIERBECHER \u2022 Kapazität: 1.120 ml',
+    quantityText: 'Kapazität: 1.120 ml',
+    comparableUnit: 'kg',
+    totalComparableAmount: 20,
+    normalizedUnitPrice: { amount: 1.25, unit: 'kg', comparable: true, confidence: 0.65 },
+    quality: { comparisonSafe: true },
+    priceCurrent: { amount: 24.99, currency: 'EUR' },
+    rawFacts: { sourceType: 'hofer-official-publitas-pdf' },
+  }));
+
+  assert.equal(ranked.title, 'ISOLIERBECHER');
+  assert.equal(ranked.quantityText, '');
+  assert.equal(ranked.comparableUnit, '');
+  assert.equal(ranked.normalizedUnitPrice.comparable, false);
+});
+
+test('HOFER public response keeps only explicitly evidenced product quantity comparisons', () => {
+  const ranked = buildRankedOffer(offer({
+    retailerKey: 'hofer',
+    retailerName: 'HOFER',
+    sourceType: 'hofer-official-publitas-pdf',
+    title: 'Kaffee 500 g Packung',
+    quantityText: '500 g Packung',
+    comparableUnit: 'kg',
+    totalComparableAmount: 0.5,
+    normalizedUnitPrice: { amount: 10, unit: 'kg', comparable: true, confidence: 0.65 },
+    quality: { comparisonSafe: true },
+    priceCurrent: { amount: 5, currency: 'EUR' },
+    rawFacts: {
+      sourceType: 'hofer-official-publitas-pdf',
+      hoferQuantityEvidence: 'explicit-product-quantity',
+    },
+  }));
+
+  assert.equal(ranked.title, 'Kaffee 500 g Packung');
+  assert.equal(ranked.quantityText, '500 g Packung');
+  assert.equal(ranked.comparableUnit, 'kg');
+  assert.equal(ranked.normalizedUnitPrice.comparable, true);
+});
