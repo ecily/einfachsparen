@@ -8451,6 +8451,17 @@ test('HOFER public response keeps only explicitly evidenced product quantity com
   assert.equal(ranked.normalizedUnitPrice.comparable, true);
 });
 
+test('HOFER HTML public response exposes the canonical source key for legacy stored rows', () => {
+  const ranked = buildRankedOffer(offer({
+    retailerKey: 'hofer',
+    sourceType: 'hofer-official-html',
+    rawFacts: { sourceType: 'hofer-official-html' },
+  }));
+
+  assert.equal(ranked.sourceType, 'hofer-official-html');
+  assert.equal(ranked.sourceKey, 'hofer-official-html');
+});
+
 test('HOFER HTML candidates suppress legacy PDF candidates when HTML is public', () => {
   const common = {
     retailerKey: 'hofer',
