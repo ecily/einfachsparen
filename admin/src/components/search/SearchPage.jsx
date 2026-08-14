@@ -9,6 +9,8 @@ import { ActionBlock } from './ActionBlock'
 import { ResultsBlockConsumer } from './ResultsBlockConsumer'
 import { SparTrustNotice } from './SparTrustNotice'
 
+const INITIAL_FILTER_OVERLAY_MAX_MS = 1500
+
 export function SearchPage({
   retailers,
   categories,
@@ -35,7 +37,21 @@ export function SearchPage({
   onResetAll,
   onAddToShoppingList,
 }) {
-  const isInitialBusy = filtersLoading
+  const [initialOverlayPhase, setInitialOverlayPhase] = useState(() => (filtersLoading ? 'loading' : 'ready'))
+  useEffect(() => {
+    if (initialOverlayPhase !== 'loading') {
+      return undefined
+    }
+
+    const delay = filtersLoading ? INITIAL_FILTER_OVERLAY_MAX_MS : 0
+    const timeoutId = window.setTimeout(() => {
+      setInitialOverlayPhase('ready')
+    }, delay)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [filtersLoading, initialOverlayPhase])
+
+  const isInitialBusy = filtersLoading && initialOverlayPhase === 'loading'
   const hasAppliedRetailerScope = appliedRetailers.length > 0
   const hasDraftSelection = draftRetailers.length > 0 || draftCategoryLabels.length > 0
   const shouldShowBrowseResults = hasAppliedRetailerScope
