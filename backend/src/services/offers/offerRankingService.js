@@ -8651,6 +8651,7 @@ function buildCacheDebugTiming({
   timings = {},
 } = {}) {
   return {
+    profilingSchema: 'ranking-profile-v1',
     instanceMarker: INSTANCE_MARKER,
     processUptimeSec: Math.round(process.uptime()),
     memoryCacheSize: getRankingResponseCacheSize(),
