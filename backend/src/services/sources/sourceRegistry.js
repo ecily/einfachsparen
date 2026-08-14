@@ -38,6 +38,37 @@ function buildSourceUrlDefinitionCounts(definitions = []) {
   return counts;
 }
 
+async function migrateLegacySourceIdentities(definitions = []) {
+  for (const definition of definitions) {
+    const legacySourceUrls = Array.isArray(definition.legacySourceUrls)
+      ? definition.legacySourceUrls.map((url) => String(url || '').trim()).filter(Boolean)
+      : [];
+
+    if (!definition.retailerKey || !definition.sourceUrl || legacySourceUrls.length === 0) {
+      continue;
+    }
+
+    const currentSource = await Source.findOne({
+      retailerKey: definition.retailerKey,
+      sourceUrl: definition.sourceUrl,
+    }).select('_id').lean();
+
+    if (currentSource) continue;
+
+    const legacySource = await Source.findOne({
+      retailerKey: definition.retailerKey,
+      sourceUrl: { $in: legacySourceUrls },
+    }).select('_id').lean();
+
+    if (legacySource) {
+      await Source.updateOne(
+        { _id: legacySource._id },
+        { $set: { sourceUrl: definition.sourceUrl } }
+      );
+    }
+  }
+}
+
 async function preserveUniqueSourceIdsForRetailerSplit(definitions = []) {
   const sourceUrlCounts = buildSourceUrlDefinitionCounts(definitions);
 
@@ -71,6 +102,7 @@ async function ensureSourceRegistry() {
   const validSourceUrls = RETAILER_DEFINITIONS.map((definition) => definition.sourceUrl);
   const validSourceIdentities = new Set(RETAILER_DEFINITIONS.map(sourceIdentity));
 
+  await migrateLegacySourceIdentities(RETAILER_DEFINITIONS);
   await preserveUniqueSourceIdsForRetailerSplit(RETAILER_DEFINITIONS);
 
   await Source.updateMany(
@@ -148,5 +180,6 @@ module.exports = {
   __private: {
     sourceIdentity,
     buildSourceUrlDefinitionCounts,
+    migrateLegacySourceIdentities,
   },
 };

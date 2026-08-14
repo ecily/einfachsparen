@@ -114,6 +114,7 @@ const RETAILER_DEFINITIONS = [
     sourceUrl: 'https://www.hofer.at/angebote',
     sourceType: 'hofer-official-html',
     parserHint: 'hofer-official-html',
+    legacySourceUrls: ['https://katalog.hofer.at/'],
     fallbackSourceUrl: 'https://katalog.hofer.at/',
     fallbackParserHint: 'hofer-publitas-pdf',
     crawlPolicy: {

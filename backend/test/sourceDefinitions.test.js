@@ -41,6 +41,7 @@ test('HOFER official HTML source is primary and keeps Publitas only as fallback'
   assert.equal(definition.parserHint, 'hofer-official-html');
   assert.equal(definition.fallbackSourceUrl, 'https://katalog.hofer.at/');
   assert.equal(definition.fallbackParserHint, 'hofer-publitas-pdf');
+  assert.deepEqual(definition.legacySourceUrls, ['https://katalog.hofer.at/']);
   assert.equal(definition.crawlPolicy.currentSnapshot, true);
   assert.equal(definition.crawlPolicy.freshnessTtlHours, 48);
 });
