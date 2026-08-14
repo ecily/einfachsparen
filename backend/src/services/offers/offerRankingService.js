@@ -7614,19 +7614,61 @@ function choosePreferredQueryDuplicate(left, right, query) {
   return left;
 }
 
+function getResponseFallbackBucketKey(offer) {
+  return [
+    String(offer?.retailerKey || offer?.retailerName || ''),
+    getOfferScopeKey(offer),
+    getOfferPriceKey(offer),
+    getOfferQuantityKey(offer),
+    getOfferConditionKey(offer),
+    getOfferVariantKey(offer),
+  ].join('::');
+}
+
 function dedupeResponseOffers(offers, query = '') {
   const unique = [];
+  const exactKeyToIndex = new Map();
+  const fallbackBucketToIndexes = new Map();
 
   for (const offer of offers) {
-    const duplicateIndex = unique.findIndex((candidate) => hasSameResponseFallbackIdentity(candidate, offer));
+    const exactKeys = [
+      getOfferIdentity(offer) ? `id:${getOfferIdentity(offer)}` : '',
+      offer?.dedupeKey ? `dedupe:${offer.dedupeKey}` : '',
+      offer?.offerKey ? `offer:${offer.offerKey}` : '',
+    ].filter(Boolean);
+    let duplicateIndex = exactKeys
+      .map((key) => exactKeyToIndex.get(key))
+      .find((index) => index !== undefined);
 
-    if (duplicateIndex < 0) {
+    if (duplicateIndex === undefined) {
+      const bucket = getResponseFallbackBucketKey(offer);
+      const bucketIndexes = fallbackBucketToIndexes.get(bucket) || [];
+      duplicateIndex = bucketIndexes.find((index) => hasSameResponseFallbackIdentity(unique[index], offer));
+    }
+
+    if (duplicateIndex === undefined) {
+      const newIndex = unique.length;
       unique.push(offer);
+      exactKeys.forEach((key) => exactKeyToIndex.set(key, newIndex));
+      const bucket = getResponseFallbackBucketKey(offer);
+      if (!fallbackBucketToIndexes.has(bucket)) fallbackBucketToIndexes.set(bucket, []);
+      fallbackBucketToIndexes.get(bucket).push(newIndex);
       continue;
     }
 
     const preferred = choosePreferredQueryDuplicate(unique[duplicateIndex], offer, query);
     unique[duplicateIndex] = preferred;
+    const preferredKeys = [
+      getOfferIdentity(preferred) ? `id:${getOfferIdentity(preferred)}` : '',
+      preferred?.dedupeKey ? `dedupe:${preferred.dedupeKey}` : '',
+      preferred?.offerKey ? `offer:${preferred.offerKey}` : '',
+    ].filter(Boolean);
+    preferredKeys.forEach((key) => exactKeyToIndex.set(key, duplicateIndex));
+    const preferredBucket = getResponseFallbackBucketKey(preferred);
+    if (!fallbackBucketToIndexes.has(preferredBucket)) fallbackBucketToIndexes.set(preferredBucket, []);
+    if (!fallbackBucketToIndexes.get(preferredBucket).includes(duplicateIndex)) {
+      fallbackBucketToIndexes.get(preferredBucket).push(duplicateIndex);
+    }
   }
 
   return unique;
