@@ -1323,6 +1323,74 @@ function hoferHtmlHasOfferSignals(html = '') {
   return hasPrice && hasProductSignal && !hoferHtmlLooksBlocked({ html: text });
 }
 
+function isHoferOfficialHtmlSource(source = {}) {
+  return source.retailerKey === 'hofer' && source.parserHint === 'hofer-official-html';
+}
+
+function countUniqueHtmlMatches(html, pattern) {
+  return new Set([...String(html || '').matchAll(pattern)].map((match) => match[0])).size;
+}
+
+function buildHoferHtmlTransportEvidence({
+  source = {},
+  response = null,
+  html = '',
+  canonicalUrl = '',
+  transport = '',
+} = {}) {
+  const text = String(html || '');
+  const status = Number(response?.status);
+  const title = sanitizeWhitespace(cheerio.load(text)('title').text());
+  const blocked = !Number.isFinite(status)
+    || status !== 200
+    || hoferHtmlLooksBlocked({ html: text, status, title });
+
+  return {
+    sourceUrl: source.sourceUrl || '',
+    transport: transport || source.crawlPolicy?.transport || 'unknown',
+    transportCodePath: transport === 'curl' || source.crawlPolicy?.transport === 'curl'
+      ? 'fetchSourceHtml -> fetchHtmlViaCurl -> curl'
+      : 'fetchSourceHtml -> fetchHtml -> axios',
+    httpStatus: Number.isFinite(status) ? status : null,
+    finalUrl: canonicalUrl || source.sourceUrl || '',
+    contentType: response?.headers?.['content-type'] || response?.headers?.['Content-Type'] || '',
+    responseBytes: Buffer.byteLength(text, 'utf8'),
+    productLinkCount: countUniqueHtmlMatches(text, /\/produkt\/[^"'\s<>)]+/gi),
+    priceIndicatorCount: (text.match(/(?:€|EUR)\s*\d+[,.]\d{2}|\d+[,.]\d{2}\s*(?:€|EUR)/gi) || []).length,
+    assetUrlCount: countUniqueHtmlMatches(text, /https?:\\?\/\\?\/dm\.emea\.cms\.aldi\.cx[^"'\s<>)]+/gi),
+    blocked,
+    parserInput: blocked ? 'blocked-html-not-parsed' : 'html-body/state-candidate',
+  };
+}
+
+function buildHoferHtmlQualityGate({ offerDocuments = [], transportEvidence = null } = {}) {
+  const offers = Array.isArray(offerDocuments) ? offerDocuments : [];
+  const missingImageCount = offers.filter((offer) => !offer?.imageUrl).length;
+  const missingQuantityCount = offers.filter((offer) => !(
+    offer?.quantityText
+    || offer?.unitValue
+    || offer?.unitType
+    || offer?.totalComparableAmount
+    || offer?.normalizedUnitPrice?.unit
+  )).length;
+  const warnings = [];
+
+  if (offers.length >= 3 && Number(transportEvidence?.assetUrlCount || 0) > 0 && missingImageCount === offers.length) {
+    warnings.push('HOFER HTML exposed official CMS assets, but none joined to stored offers.');
+  }
+  if (offers.length >= 5 && missingQuantityCount / offers.length >= 0.8) {
+    warnings.push(`HOFER HTML stored offers with missing quantity evidence (${missingQuantityCount}/${offers.length}).`);
+  }
+
+  return {
+    forcePartial: warnings.length > 0,
+    missingImageCount,
+    withImageCount: Math.max(0, offers.length - missingImageCount),
+    missingQuantityCount,
+    warnings,
+  };
+}
+
 function buildHoferFallbackLinks({ source = {}, now = new Date() } = {}) {
   const configuredSeeds = Array.isArray(source?.crawlPolicy?.discoverySeedUrls) && source.crawlPolicy.discoverySeedUrls.length > 0
     ? source.crawlPolicy.discoverySeedUrls
@@ -4890,6 +4958,7 @@ async function fetchHtml(url, { signal = null } = {}) {
     response,
     html: String(response.data),
     canonicalUrl: response.request?.res?.responseUrl || url,
+    transport: 'axios',
   };
 }
 
@@ -4937,13 +5006,28 @@ function parseCurlHtmlOutput(stdout = '') {
   };
 }
 
-async function fetchHtmlViaCurl(url, { timeoutMs = 30000 } = {}) {
+const DEFAULT_CURL_TRANSPORT_HEADERS = Object.freeze({
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/json',
+  'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
+});
+
+function buildCurlTransportHeaders(overrides = {}) {
+  return {
+    ...DEFAULT_CURL_TRANSPORT_HEADERS,
+    ...(overrides && typeof overrides === 'object' ? overrides : {}),
+  };
+}
+
+async function fetchHtmlViaCurl(url, { timeoutMs = 30000, headers = {} } = {}) {
   const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const transportHeaders = buildCurlTransportHeaders(headers);
   const args = [
     '--silent',
     '--show-error',
     '--location',
     '--compressed',
+    '--http1.1',
     '--max-time',
     String(timeoutSeconds),
     '--dump-header',
@@ -4954,13 +5038,12 @@ async function fetchHtmlViaCurl(url, { timeoutMs = 30000 } = {}) {
     '\n__KKT_META__%{http_code}|%{content_type}|%{url_effective}|%{http_version}',
     '--request',
     'GET',
-    '--header',
-    'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-    '--header',
-    'Accept: text/html,application/xhtml+xml,application/json',
-    '--header',
-    'Accept-Language: de-AT,de;q=0.9,en;q=0.8',
   ];
+
+  Object.entries(transportHeaders).forEach(([name, value]) => {
+    if (value == null || value === '') return;
+    args.push('--header', `${name}: ${value}`);
+  });
 
   if (process.platform === 'win32') {
     args.push('--ssl-no-revoke');
@@ -4987,6 +5070,7 @@ async function fetchHtmlViaCurl(url, { timeoutMs = 30000 } = {}) {
       },
       html: parsed.html,
       canonicalUrl: parsed.canonicalUrl || url,
+      transport: 'curl',
     };
   } catch (error) {
     throw attachFetchDiagnostic(error, url);
@@ -4995,7 +5079,10 @@ async function fetchHtmlViaCurl(url, { timeoutMs = 30000 } = {}) {
 
 async function fetchSourceHtml(url, source, options = {}) {
   if (source?.crawlPolicy?.transport === 'curl') {
-    return fetchHtmlViaCurl(url, { timeoutMs: source.crawlPolicy?.sourceTimeoutMs || 30000 });
+    return fetchHtmlViaCurl(url, {
+      timeoutMs: source.crawlPolicy?.sourceTimeoutMs || 30000,
+      headers: source.crawlPolicy?.transportHeaders || {},
+    });
   }
   return fetchHtml(url, options);
 }
@@ -8864,7 +8951,10 @@ async function crawlHoferOfficialHtml({
   region,
   html,
   pageUrl,
+  transportEvidence = null,
+  transportBlocked = false,
 }) {
+  const htmlTransportBlocked = transportBlocked || Boolean(transportEvidence?.blocked);
   const diagnostics = {
     sourceType: 'hofer-official-html',
     pageUrl,
@@ -8872,8 +8962,14 @@ async function crawlHoferOfficialHtml({
     parsedOffers: 0,
     skipReasons: {},
     pages: [],
+    transport: transportEvidence,
+    parserInput: htmlTransportBlocked ? 'blocked-html-not-parsed' : 'html-body/state-candidate',
   };
+  if (htmlTransportBlocked) {
+    diagnostics.skipReasons['html-transport-blocked'] = 1;
+  }
   const parsedOffers = html
+    && !htmlTransportBlocked
     ? parseHoferOffersFromPage({
       html,
       pageUrl,
@@ -8914,6 +9010,7 @@ async function crawlHoferOfficialHtml({
       rejectionReasons: Object.entries(diagnostics.skipReasons).map(([reason, count]) => ({ reason, count })),
       refreshResult,
       usedPdfFallback: false,
+      transportBlocked: false,
     };
   }
 
@@ -8943,6 +9040,7 @@ async function crawlHoferOfficialHtml({
     ],
     refreshResult: pdfResult.refreshResult,
     usedPdfFallback: true,
+    transportBlocked: htmlTransportBlocked,
   };
 }
 
@@ -9757,6 +9855,8 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
     let httpLog = {};
     let rootDocument = null;
     let hoferLandingPageDiagnostic = null;
+    let hoferHtmlTransportEvidence = null;
+    let hoferHtmlTransportBlocked = false;
     let useHoferFallbackSeedsOnly = false;
 
     try {
@@ -9764,6 +9864,16 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       response = fetchedRoot.response;
       html = fetchedRoot.html;
       canonicalUrl = fetchedRoot.canonicalUrl;
+      if (isHoferOfficialHtmlSource(source)) {
+        hoferHtmlTransportEvidence = buildHoferHtmlTransportEvidence({
+          source,
+          response,
+          html,
+          canonicalUrl,
+          transport: fetchedRoot.transport,
+        });
+        hoferHtmlTransportBlocked = hoferHtmlTransportEvidence.blocked;
+      }
     } catch (error) {
       const diagnostic = error.diagnostic || buildFetchDiagnostic(source.sourceUrl, error);
       if (!isHoferOfficialFlyerSource(source) || !hoferHtmlLooksBlocked({
@@ -9778,6 +9888,19 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         ...diagnostic,
         landingPageBlocked: true,
       };
+      if (isHoferOfficialHtmlSource(source)) {
+        hoferHtmlTransportEvidence = buildHoferHtmlTransportEvidence({
+          source,
+          response: {
+            status: diagnostic.httpStatus,
+            headers: { 'content-type': diagnostic.contentType || '' },
+          },
+          html: diagnostic.bodyPreview || '',
+          canonicalUrl: diagnostic.finalUrl || source.sourceUrl,
+          transport: source.crawlPolicy?.transport,
+        });
+        hoferHtmlTransportBlocked = true;
+      }
       useHoferFallbackSeedsOnly = true;
       response = {
         status: diagnostic.httpStatus ?? null,
@@ -9797,14 +9920,14 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
     throwIfAborted(signal);
     await clearSourceRawDocuments();
 
-    if (!useHoferFallbackSeedsOnly) {
+    if (!useHoferFallbackSeedsOnly && !hoferHtmlTransportBlocked) {
       httpLog = buildHttpLogFromResponse(response, html);
       links = extractRelevantLinks({
         html,
         baseUrl: canonicalUrl,
         retailerKey: source.retailerKey,
       });
-    } else {
+    } else if (useHoferFallbackSeedsOnly) {
       httpLog = {
         status: hoferLandingPageDiagnostic.httpStatus ?? null,
         contentType: hoferLandingPageDiagnostic.contentType || '',
@@ -9812,6 +9935,9 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         downloadBytes: Number(hoferLandingPageDiagnostic.downloadBytes || 0),
         contentHash: createHash(hoferLandingPageDiagnostic.bodyPreview || ''),
       };
+      links = [];
+    } else {
+      httpLog = buildHttpLogFromResponse(response, html);
       links = [];
     }
 
@@ -9845,6 +9971,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         pageLinkCount: links.filter((item) => item.type === 'page').length,
         pdfLinkCount: links.filter((item) => item.type === 'pdf').length,
         landingPageBlocked: useHoferFallbackSeedsOnly,
+        ...(hoferHtmlTransportEvidence ? { hoferHtmlTransportEvidence } : {}),
         ...(hoferLandingPageDiagnostic ? { landingPageDiagnostic: hoferLandingPageDiagnostic } : {}),
       },
     });
@@ -9859,6 +9986,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
     let sourceMessage = '';
     let extraRejectionReasons = [];
     let forcePartialStatus = false;
+    let hoferHtmlResult = null;
 
     if (source.retailerKey === 'hofer' && source.parserHint === 'hofer-official-html') {
       const hoferResult = await crawlHoferOfficialHtml({
@@ -9867,7 +9995,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
         region,
         html,
         pageUrl: canonicalUrl,
+        transportEvidence: hoferHtmlTransportEvidence,
+        transportBlocked: hoferHtmlTransportBlocked,
       });
+      hoferHtmlResult = hoferResult;
 
       offersStored += hoferResult.offerDocuments.length;
       extraRawDocuments += hoferResult.rawDocumentCount;
@@ -9877,6 +10008,10 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       extraRejectionReasons = extraRejectionReasons.concat(hoferResult.rejectionReasons || []);
       if (hoferResult.usedPdfFallback) {
         warningMessages = warningMessages.concat('HOFER HTML yielded no trusted offers; official Publitas/PDF fallback was used.');
+      }
+      if (hoferResult.transportBlocked) {
+        forcePartialStatus = true;
+        warningMessages = warningMessages.concat('HOFER HTML transport was blocked or non-200; PDF fallback is not a clean HTML success.');
       }
     } else if (source.retailerKey === 'hofer' && source.parserHint === 'hofer-publitas-pdf') {
       const hoferResult = await crawlHoferPublitasPdf({
@@ -10111,6 +10246,18 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       extraRawDocuments += nestedDocuments.filter((item) => item && !item.error).length;
     }
 
+    if (hoferHtmlResult && !hoferHtmlResult.usedPdfFallback && !hoferHtmlResult.transportBlocked) {
+      const qualityGate = buildHoferHtmlQualityGate({
+        offerDocuments: hoferHtmlResult.offerDocuments,
+        transportEvidence: hoferHtmlTransportEvidence,
+      });
+      parserDetails.hoferOfficialHtml.qualityGate = qualityGate;
+      if (qualityGate.forcePartial) {
+        forcePartialStatus = true;
+        warningMessages = warningMessages.concat(qualityGate.warnings);
+      }
+    }
+
     const zeroStoredGate = buildOfficialSourceZeroStoredGate({
       source,
       rawCandidateCount,
@@ -10153,6 +10300,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
           fallbackSeedsUsed: useHoferFallbackSeedsOnly,
           blockedLandingPage: hoferLandingPageDiagnostic,
         } : {}),
+        ...(hoferHtmlTransportEvidence ? { hoferHtmlTransportEvidence } : {}),
         ...parserDetails,
       },
     }));
@@ -10189,6 +10337,7 @@ async function crawlOfficialSource({ source, region, trigger = 'manual', crawlRu
       httpStatus: response.status ?? null,
       contentType: response.headers?.['content-type'] || '',
       finalUrl: canonicalUrl,
+      ...(hoferHtmlTransportEvidence ? { hoferHtmlTransportEvidence } : {}),
       ...(isCategoryActionSource ? {
         sourceKey: sourceKeyForActionSource(source),
         failureStage: status === 'partial' ? 'parser' : '',
@@ -10335,6 +10484,11 @@ module.exports = {
     buildHoferFallbackLinks,
     hoferHtmlLooksBlocked,
     hoferHtmlHasOfferSignals,
+    isHoferOfficialHtmlSource,
+    buildHoferHtmlTransportEvidence,
+    buildHoferHtmlQualityGate,
+    buildCurlTransportHeaders,
+    parseCurlHtmlOutput,
     selectBillaFlyerPdfLinks,
     crawlBillaOfficialFlyers,
     isBillaSteiermarkPublitasSource,

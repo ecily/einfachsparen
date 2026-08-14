@@ -44,6 +44,12 @@ test('HOFER official HTML source is primary and keeps Publitas only as fallback'
   assert.deepEqual(definition.legacySourceUrls, ['https://katalog.hofer.at/']);
   assert.equal(definition.crawlPolicy.currentSnapshot, true);
   assert.equal(definition.crawlPolicy.freshnessTtlHours, 48);
+  assert.equal(definition.crawlPolicy.transport, 'curl');
+  assert.deepEqual(definition.crawlPolicy.transportHeaders, {
+    'User-Agent': 'kaufklug.at crawler (+https://www.kaufklug.at)',
+    Accept: 'text/html,application/xhtml+xml',
+    'Accept-Language': 'de-AT,de;q=0.9',
+  });
 });
 
 test('Müller official online offers source is enabled with bounded pagination and no flyer integration', () => {

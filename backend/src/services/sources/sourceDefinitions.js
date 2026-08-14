@@ -118,6 +118,13 @@ const RETAILER_DEFINITIONS = [
     fallbackSourceUrl: 'https://katalog.hofer.at/',
     fallbackParserHint: 'hofer-publitas-pdf',
     crawlPolicy: {
+      transport: 'curl',
+      sourceTimeoutMs: 30000,
+      transportHeaders: {
+        'User-Agent': 'kaufklug.at crawler (+https://www.kaufklug.at)',
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'de-AT,de;q=0.9',
+      },
       freshnessTtlHours: 48,
       currentSnapshot: true,
       coverageGuard: {

@@ -1571,6 +1571,89 @@ test('HOFER fallback rejects blocked or signal-poor HTML and accepts priced prod
   assert.equal(__private.hoferHtmlLooksBlocked({ html: 'captcha challenge' }), true);
 });
 
+test('HOFER curl transport parses a successful HTML response with offer evidence', () => {
+  const parsed = __private.parseCurlHtmlOutput([
+    'HTTP/1.1 200 OK',
+    'content-type: text/html; charset=utf-8',
+    '',
+    '<html><body><a href="/produkt/test"><img src="https://dm.emea.cms.aldi.cx/image.jpg"></a><span>1,99 €</span></body></html>',
+    '__KKT_META__200|text/html; charset=utf-8|https://www.hofer.at/angebote|1.1',
+  ].join('\r\n'));
+
+  assert.equal(parsed.status, 200);
+  assert.equal(parsed.canonicalUrl, 'https://www.hofer.at/angebote');
+  assert.match(parsed.html, /\/produkt\/test/);
+  assert.match(parsed.html, /dm\.emea\.cms\.aldi\.cx/);
+
+  const evidence = __private.buildHoferHtmlTransportEvidence({
+    source: {
+      sourceUrl: 'https://www.hofer.at/angebote',
+      retailerKey: 'hofer',
+      parserHint: 'hofer-official-html',
+      crawlPolicy: { transport: 'curl' },
+    },
+    response: { status: parsed.status, headers: parsed.headers },
+    html: parsed.html,
+    canonicalUrl: parsed.canonicalUrl,
+    transport: 'curl',
+  });
+
+  assert.equal(evidence.transportCodePath, 'fetchSourceHtml -> fetchHtmlViaCurl -> curl');
+  assert.equal(evidence.httpStatus, 200);
+  assert.equal(evidence.productLinkCount, 1);
+  assert.equal(evidence.priceIndicatorCount, 1);
+  assert.equal(evidence.assetUrlCount, 1);
+  assert.equal(evidence.blocked, false);
+});
+
+test('HOFER HTML transport 403 is fail-closed and cannot be parsed as a clean HTML success', () => {
+  const evidence = __private.buildHoferHtmlTransportEvidence({
+    source: {
+      sourceUrl: 'https://www.hofer.at/angebote',
+      retailerKey: 'hofer',
+      parserHint: 'hofer-official-html',
+      crawlPolicy: { transport: 'curl' },
+    },
+    response: { status: 403, headers: { 'content-type': 'text/html' } },
+    html: '<html><title>Access Denied</title><body><a href="/produkt/not-an-offer">1,99 €</a></body></html>',
+    canonicalUrl: 'https://www.hofer.at/angebote',
+    transport: 'curl',
+  });
+
+  assert.equal(evidence.httpStatus, 403);
+  assert.equal(evidence.blocked, true);
+  assert.equal(evidence.parserInput, 'blocked-html-not-parsed');
+  assert.equal(evidence.productLinkCount, 1);
+});
+
+test('HOFER HTML quality gate makes asset/quantity loss partial instead of green', () => {
+  const gate = __private.buildHoferHtmlQualityGate({
+    offerDocuments: Array.from({ length: 5 }, () => ({
+      quantityText: '',
+      imageUrl: '',
+    })),
+    transportEvidence: { assetUrlCount: 3 },
+  });
+
+  assert.equal(gate.forcePartial, true);
+  assert.equal(gate.withImageCount, 0);
+  assert.equal(gate.missingImageCount, 5);
+  assert.equal(gate.missingQuantityCount, 5);
+  assert.equal(gate.warnings.length, 2);
+});
+
+test('HOFER curl transport uses the explicit legal crawler headers', () => {
+  assert.deepEqual(__private.buildCurlTransportHeaders({
+    'User-Agent': 'kaufklug.at crawler (+https://www.kaufklug.at)',
+    Accept: 'text/html,application/xhtml+xml',
+    'Accept-Language': 'de-AT,de;q=0.9',
+  }), {
+    'User-Agent': 'kaufklug.at crawler (+https://www.kaufklug.at)',
+    Accept: 'text/html,application/xhtml+xml',
+    'Accept-Language': 'de-AT,de;q=0.9',
+  });
+});
+
 test('HOFER official parser accepts offer overview product cards with product ids and conservative validity', () => {
   const offers = parseHoferFixture({
     pageUrl: 'https://www.hofer.at/de/angebote/angebote-im-ueberblick.html?productState=In+der+Filiale+erh%C3%A4ltlich',
