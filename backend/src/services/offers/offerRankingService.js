@@ -777,7 +777,17 @@ function buildCurrentAvailabilityMatch({ includeHoferUpcoming = false } = {}) {
   };
 }
 
-function filterFreshActiveOffers(offers, now = new Date()) {
+function filterFreshActiveOffers(offers, now = new Date(), profiling = null) {
+  if (profiling) {
+    const freshnessStartedAt = nowMs();
+    const freshOffers = offers.filter((offer) => isOfferFreshForActiveUse(offer, now));
+    profiling.freshnessCheckMs = (profiling.freshnessCheckMs || 0) + (nowMs() - freshnessStartedAt);
+    const publicEligibilityStartedAt = nowMs();
+    const publicOffers = freshOffers.filter((offer) => isPublicResponseEligibleOffer(offer));
+    profiling.publicEligibilityMs = (profiling.publicEligibilityMs || 0) + (nowMs() - publicEligibilityStartedAt);
+    return publicOffers;
+  }
+
   return offers.filter((offer) => (
     isOfferFreshForActiveUse(offer, now)
     && isPublicResponseEligibleOffer(offer)
@@ -5854,14 +5864,18 @@ function compareSafeUnitPrice(left, right) {
   return 0;
 }
 
-function buildConsumerScore(offer) {
+function buildConsumerScore(offer, profiling = null) {
   let score = Number(offer?.sortScoreDefault || 0);
   const safelyComparable = isOfferSafelyComparable(offer);
 
   if (offer?.status === 'active' && offer?.isActiveNow) score += 1000;
   if (safelyComparable && offer?.comparisonGroup) score += 500;
   if (hasReliableValidTo(offer)) score += 25;
+  const sourceQualityStartedAt = profiling ? nowMs() : 0;
   score += buildSourceQualityScore(offer);
+  if (profiling) {
+    profiling.sourceQualityMs = (profiling.sourceQualityMs || 0) + (nowMs() - sourceQualityStartedAt);
+  }
   score += buildOfferQualityRankingAdjustment(offer);
 
   const unitAmount = Number(offer?.normalizedUnitPrice?.amount);
@@ -8654,11 +8668,33 @@ function buildCacheDebugTiming({
     candidateCount,
     resultCount,
     finalVisibleCount,
+    candidateNormalizationMs: roundTiming(timings.candidateNormalizationMs),
+    freshnessCheckMs: roundTiming(timings.freshnessCheckMs),
+    publicEligibilityMs: roundTiming(timings.publicEligibilityMs),
+    activeFilterMs: roundTiming(timings.activeFilterMs),
+    programFilterMs: roundTiming(timings.programFilterMs),
+    unitFilterMs: roundTiming(timings.unitFilterMs),
+    queryMatchMs: roundTiming(timings.queryMatchMs),
+    initialDedupeMs: roundTiming(timings.dedupeMs),
+    scoreCacheMs: roundTiming(timings.scoreCacheMs),
+    consumerScoreMs: roundTiming(timings.consumerScoreMs),
+    sourceQualityMs: roundTiming(timings.sourceQualityMs),
+    sortMs: roundTiming(timings.sortMs),
+    responsePreparationMs: roundTiming(timings.responsePreparationMs),
+    finalDedupeMs: roundTiming(timings.finalDedupeMs),
+    visibleDedupeMs: roundTiming(timings.visibleDedupeMs),
     rankingMs: roundTiming(timings.rankingMs),
     dedupeMs: roundTiming((timings.dedupeMs || 0) + (timings.finalDedupeMs || 0) + (timings.visibleDedupeMs || 0)),
-    sliceMs: roundTiming(timings.sliceMs),
+    paginationMs: roundTiming(timings.paginationMs || timings.sliceMs),
+    sliceMs: roundTiming(timings.sliceMs || timings.paginationMs),
     hydrateMs: roundTiming(timings.hydrateMs || timings.responseHydrationMs),
+    responseHydrationMs: roundTiming(timings.responseHydrationMs),
+    comparableFilterMs: roundTiming(timings.comparableFilterMs),
+    rankedOfferMappingMs: roundTiming(timings.rankedOfferMappingMs),
+    responseAssemblyMs: roundTiming(timings.responseAssemblyMs),
     responseBuildMs: roundTiming(timings.responseBuildMs || timings.responseMappingMs),
+    responseMappingMs: roundTiming(timings.responseMappingMs),
+    serializationMs: roundTiming(timings.serializationMs),
     mongoResultCacheMs: roundTiming(timings.mongoResultCacheMs),
     cacheWriteMs: roundTiming(timings.cacheWriteMs),
     totalMs: roundTiming(timings.totalMs),
@@ -9625,8 +9661,9 @@ async function buildOfferRanking({
   }
 
   const rankingStartedAt = nowMs();
+  const rankingProfiling = debugTiming ? {} : null;
   const activeFilterStartedAt = nowMs();
-  const activeCandidateOffers = filterFreshActiveOffers(candidateOffers);
+  const activeCandidateOffers = filterFreshActiveOffers(candidateOffers, new Date(), rankingProfiling);
   timings.activeFilterMs = nowMs() - activeFilterStartedAt;
   const programFilterStartedAt = nowMs();
   const programEligibleOffers = applyProgramEligibility(
@@ -9703,8 +9740,13 @@ async function buildOfferRanking({
   }
 
   const consumerScoreCache = new WeakMap();
+  const consumerScoreStartedAt = nowMs();
   for (const offer of fullyFilteredOffers) {
-    consumerScoreCache.set(offer, buildConsumerScore(offer));
+    consumerScoreCache.set(offer, buildConsumerScore(offer, rankingProfiling));
+  }
+  timings.consumerScoreMs = nowMs() - consumerScoreStartedAt;
+  if (rankingProfiling) {
+    Object.assign(timings, rankingProfiling);
   }
 
   const sortStartedAt = nowMs();
@@ -9779,11 +9821,13 @@ async function buildOfferRanking({
   const hydratedVisible = await hydrateFinalRankingOffers(visibleDedupeResult.offers);
   visibleDedupeResult.offers = filterFreshActiveOffers(hydratedVisible.offers);
   timings.responseHydrationMs = hydratedVisible.durationMs;
+  const paginationStartedAt = nowMs();
   const pagination = paginateVisibleRankingOffers(visibleDedupeResult.offers, {
     limit: safeLimit || visibleDedupeResult.offers.length,
     offset: safeOffset,
     showAllMatching,
   });
+  timings.paginationMs = nowMs() - paginationStartedAt;
   const offers = pagination.offers;
 
   if (debugStages) {
@@ -9880,6 +9924,11 @@ async function buildOfferRanking({
   };
   timings.responseAssemblyMs = nowMs() - responseAssemblyStartedAt;
   timings.responseMappingMs = nowMs() - responseMappingStartedAt;
+  if (debugTiming) {
+    const serializationStartedAt = nowMs();
+    JSON.stringify(response);
+    timings.serializationMs = nowMs() - serializationStartedAt;
+  }
   timings.totalMs = nowMs() - totalStartedAt;
 
   if (diagnostics) {
