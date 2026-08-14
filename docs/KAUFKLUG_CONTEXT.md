@@ -442,6 +442,11 @@
 - Neue Regressionen decken HTML-vor-PDF-Ranking und Soft-Deactivation der Legacy-PDF-Fallbacks ab. Gezielt 308/308 Ranking-/Refresh-Tests, HOFER-Parser-Tests, Syntax, Admin-Lint, Production-Build und `git diff --check` wurden ausgefuehrt. Der vollstaendige gemischte Parser-Testlauf hat 13 bereits ausserhalb dieses HOFER-Diffs liegende PENNY-/BILLA-Fixturefehler; die HOFER-Tests selbst sind gruen.
 - Der Fix ist lokal bereit fuer Push/Deploy. Ein neuer autorisierter DO-Crawl `sourceKeys:["hofer-official-html"]` ist aus dieser Sitzung noch nicht gestartet; deshalb sind neue Run-ID, HTML/PDF-Public-Counts und Live-Smoke nach diesem Fix noch offen. Keine DB-Handkorrektur, keine manuelle Offer-Aktivierung, keine Umgehung und keine Public-Validity-Lockerung.
 
+## HOFER-HTML-DO-Transport-Push am 2026-08-14
+
+- Commit `7c256d8a` ist nach `origin/main` gepusht. Der öffentliche Backend-Prozess blieb nach fünf Polls auf `buildTime=2026-08-14T09:38:44.851Z`; der neue Transport-Fix ist live noch nicht verifiziert. Der Live-Ranking-Smoke zeigt deshalb weiterhin 20/20 `hofer-official-publitas-pdf`-Offers ohne Bilder.
+- Der autorisierte Crawl ist aus dieser Sitzung nicht startbar: der öffentliche POST ohne Admin-Key antwortet erwartungsgemäß `401`; kein Secret wurde ausgegeben oder verwendet. Erforderlicher Operator-Schritt bleibt ein DO-Console-Start mit der vorhandenen Admin-Umgebung und danach die Prüfung der neuen Transport-Evidence.
+
 ## HOFER-HTML-DO-Transport-Fix am 2026-08-14
 
 - Root Cause: Die primaere Source `hofer-official-html` war nicht auf den vorhandenen normalen Curl-Transport geschaltet und lief dadurch ueber Axios; der damalige HTML-Run meldete trotz `httpStatus:403` 57 Parsed/Stored Offers. Die bestehende Curl-Hilfe verwendete ausserdem nicht die explizit bestaetigten DO-Header.
