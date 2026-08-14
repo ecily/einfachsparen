@@ -1,5 +1,13 @@
 # kaufklug.at Kontext
 
+## Public-Coverage-Recovery-P0 am 2026-08-14
+
+- Read-only Live-Evidence zeigte eine fragmentierte globale Browse-Antwort (teilweise nur 1 Offer), waehrend retailer-scoped Ranking, Suche und Facets deutlich groessere Mengen lieferten. BILLA/BILLA Plus und HOFER waren dabei ohne belastbare Bilder; die bestehende Image-Evidence erlaubt keinen sicheren Join und wurde nicht gelockert.
+- Root Cause im Ranking: Der Mongo-Kandidaten-Cap wurde vor der strikten Public-Validity-/Freshness-Pruefung angewendet. Stale/unknown Kandidaten konnten dadurch gueltige Offers aus der begrenzten Auswahl verdraengen. Zusaetzlich hatte die Filter-Metadata einen schwaecheren Lineage-Fallback als Ranking und konnte Facets ueber dem Public-Ranking-Vertrag anzeigen.
+- Commit `7ff2c44e` setzt vor dem Cap einen notwendigen Public-Validity-Mongo-Prefilter, laesst die abschliessende JavaScript-Pruefung autoritativ und invalidiert den Ranking-Cache-Schema-Stand. Facets verwenden nun ausschliesslich `isOfferFreshForActiveUse()` und damit denselben strikten Vertrag. Keine Validity-Lockerung, keine Crawl-/DB-Mutation und keine Bild-Erfindung.
+- Gezielte Contract-Suite (Public Validity, Ranking, Filter Metadata) ist 316/316 gruen; Admin-Lint und Production-Build sind gruen. Der vollstaendige Repo-Testlauf bleibt wegen bereits vorhandener fremder Working-Tree-Aenderungen in 18 unabhaengigen Dashboard-/Parser-Tests nicht als Gesamtgruen wertbar; diese Dateien wurden nicht angefasst.
+- `7ff2c44e` ist auf `origin/main`. Der automatische DO-Deploy blieb aus: Live `/api/health` antwortet weiterhin mit altem Prozessstand `buildTime=2026-08-13T15:18:06.155Z`, Mongo connected, `commitSha=unknown`. Lokal sind kein `doctl`, keine DO-App-Spec/GitHub-Action und keine Deploy-Umgebungsvariablen vorhanden. Erforderlich ist der bestehende DO-Operator-Schritt: Repository `ecily/einfachsparen`, Branch `main`, Build-/Root-/Output-Konfiguration und Deploy-Log im DO-Dashboard prüfen; erst danach den Public-Ranking-Smoke wiederholen.
+
 ## Full Web-/SEO-Audit am 2026-08-13
 
 - Live-React-Smoke bestaetigt auf `/`: die aktuelle Hero-Kommunikation ist sichtbar: BILLA, BILLA Plus, Lidl, PENNY, dm, BIPA, Mueller sowie HOFER/INTERSPAR eingeschraenkt; `Womit willst du heute sparen?`, Beta- und SPAR-Trust-Hinweis sind vorhanden. Die initiale Static-HTML-Huelle war bis Commit `b3520de0` noch alte Copy; der Generator liefert nun vor JavaScript dieselbe aktuelle USP-/Haendlerkommunikation. Static-Deploy kam mit neuer `Last-Modified` an; JS/CSS-Hashes blieben unveraendert, weil keine Bundle-Logik geaendert wurde.
