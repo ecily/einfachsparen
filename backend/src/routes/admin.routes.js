@@ -5,6 +5,7 @@ const OfferFeedback = require('../models/OfferFeedback');
 const { buildSafeBuildInfo } = require('../services/buildInfo');
 const sourceTransportMatrixService = require('../services/diagnostics/sourceTransportMatrix');
 const publicVisibilityDiagnosticsService = require('../services/diagnostics/publicVisibilityDiagnostics');
+const mongoExplainDiagnosticsService = require('../services/diagnostics/mongoExplainDiagnostics');
 const filterMetadataService = require('../services/filters/filterMetadataService');
 
 const FILTER_METADATA_COLLECTIONS = [
@@ -506,6 +507,7 @@ function createAdminRouter({
   filterMetadataServiceImpl = filterMetadataService,
   sourceTransportMatrixServiceImpl = sourceTransportMatrixService,
   publicVisibilityDiagnosticsServiceImpl = publicVisibilityDiagnosticsService,
+  mongoExplainDiagnosticsServiceImpl = mongoExplainDiagnosticsService,
   dbStateProvider = getDatabaseState,
   buildInfoProvider = buildSafeBuildInfo,
   OfferFeedbackModel = OfferFeedback,
@@ -602,6 +604,25 @@ function createAdminRouter({
           readOnly: true,
           allowedRetailers: report.allowedRetailers || [],
           exposesRawOffers: false,
+          mutatesCollections: [],
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/diagnostics/mongo-explain', async (req, res, next) => {
+    try {
+      const report = await mongoExplainDiagnosticsServiceImpl.buildMongoExplainDiagnostics();
+
+      res.json({
+        ...report,
+        adminEndpoint: {
+          path: '/api/admin/diagnostics/mongo-explain',
+          readOnly: true,
+          exposesRawOffers: false,
+          exposesSecrets: false,
           mutatesCollections: [],
         },
       });
