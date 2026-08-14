@@ -134,6 +134,18 @@ function buildTopDealsQuery({ model = Offer } = {}) {
   };
 }
 
+function buildRetailerMetadataQuery({ model = Retailer } = {}) {
+  const shape = { retailerKey: { $nin: ['eurospar'] } };
+  const fields = ['retailerKey', 'retailerName', 'offerCount', 'activeOfferCount', 'isActive', 'sortOrder'];
+
+  return {
+    query: model.find(shape).select(fields.join(' ')),
+    shape,
+    fields,
+    limit: null,
+  };
+}
+
 async function explainQuery({ name, model, query, shape, fields, limit }) {
   try {
     if (typeof query.maxTimeMS === 'function') {
@@ -212,11 +224,13 @@ async function buildMongoExplainDiagnostics({
 } = {}) {
   const filterRetailer = buildFilterQuery({ model: OfferModel });
   const filterCategory = buildFilterQuery({ model: OfferModel, categoryOnly: true });
+  const retailerMetadata = buildRetailerMetadataQuery({ model: RetailerModel });
   const topDeals = buildTopDealsQuery({ model: OfferModel });
 
   const queries = [
     await explainQuery({ name: 'filter-metadata-retailer-facet', model: OfferModel, ...filterRetailer }),
     await explainQuery({ name: 'filter-metadata-category-facet', model: OfferModel, ...filterCategory }),
+    await explainQuery({ name: 'filter-metadata-retailer-document-read', model: RetailerModel, ...retailerMetadata }),
     await explainQuery({ name: 'top-deals-candidate', model: OfferModel, ...topDeals }),
     await explainRankingQuery({ name: 'global-ranking-candidate', rankingBuilder }),
     await explainRankingQuery({ name: 'retailer-ranking-hofer', retailer: 'hofer', rankingBuilder }),

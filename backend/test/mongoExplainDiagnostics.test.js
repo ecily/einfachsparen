@@ -66,9 +66,10 @@ function requestJson(app, path, headers = {}) {
   });
 }
 
-test('Mongo explain summary runs seven read-only query classes without raw explain or secrets', async () => {
+test('Mongo explain summary runs all read-only query classes without raw explain or secrets', async () => {
   const report = await buildMongoExplainDiagnostics({
     OfferModel: fakeModel(),
+    RetailerModel: fakeModel('retailers'),
     rankingBuilder: async ({ retailers }) => ({
       diagnostics: {
         mongo: {
@@ -84,12 +85,12 @@ test('Mongo explain summary runs seven read-only query classes without raw expla
   assert.equal(report.ok, true);
   assert.equal(report.readOnly, true);
   assert.deepEqual(report.mutatedCollections, []);
-  assert.equal(report.queries.length, 7);
+  assert.equal(report.queries.length, 8);
   assert.equal(report.queries[0].collection, 'offers');
   assert.deepEqual(report.queries[0].indexNames, ['status_1_isActiveNow_1']);
   assert.equal(report.queries[0].hasCollscan, false);
   assert.equal(report.queries[0].hasSortStage, false);
-  assert.equal(report.queries[3].estimatedQueryShape['[redacted-key]'], 'string');
+  assert.equal(report.queries[4].estimatedQueryShape['[redacted-key]'], 'string');
   assert.doesNotMatch(JSON.stringify(report), /must-not-appear/);
   assert.doesNotMatch(JSON.stringify(report), /winningPlan/);
 });
