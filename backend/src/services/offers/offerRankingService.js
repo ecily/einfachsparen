@@ -7944,8 +7944,20 @@ function reduceAdjacentQueryDuplicates(offers, query) {
   return ordered;
 }
 
-function prepareQueryOffersForResponse(offers, query) {
-  return reduceAdjacentQueryDuplicates(dedupeResponseOffers(dedupeQueryOffers(offers, query), query), query);
+function prepareQueryOffersForResponse(offers, query, profiling = null) {
+  const queryDedupeStartedAt = profiling ? nowMs() : 0;
+  const queryDedupedOffers = dedupeQueryOffers(offers, query);
+  if (profiling) profiling.queryDedupeResponseMs = nowMs() - queryDedupeStartedAt;
+
+  const responseDedupeStartedAt = profiling ? nowMs() : 0;
+  const responseDedupedOffers = dedupeResponseOffers(queryDedupedOffers, query);
+  if (profiling) profiling.responseDedupeMs = nowMs() - responseDedupeStartedAt;
+
+  const adjacentDedupeStartedAt = profiling ? nowMs() : 0;
+  const preparedOffers = reduceAdjacentQueryDuplicates(responseDedupedOffers, query);
+  if (profiling) profiling.adjacentDedupeMs = nowMs() - adjacentDedupeStartedAt;
+
+  return preparedOffers;
 }
 
 function compareOffersByRanking(left, right, { query = '' } = {}) {
@@ -8682,6 +8694,9 @@ function buildCacheDebugTiming({
     sourceQualityMs: roundTiming(timings.sourceQualityMs),
     sortMs: roundTiming(timings.sortMs),
     responsePreparationMs: roundTiming(timings.responsePreparationMs),
+    queryDedupeResponseMs: roundTiming(timings.queryDedupeResponseMs),
+    responseDedupeMs: roundTiming(timings.responseDedupeMs),
+    adjacentDedupeMs: roundTiming(timings.adjacentDedupeMs),
     finalDedupeMs: roundTiming(timings.finalDedupeMs),
     visibleDedupeMs: roundTiming(timings.visibleDedupeMs),
     rankingMs: roundTiming(timings.rankingMs),
@@ -9808,7 +9823,7 @@ async function buildOfferRanking({
     });
   timings.sortMs = nowMs() - sortStartedAt;
   const responsePreparationStartedAt = nowMs();
-  const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query);
+  const responseCandidateOffers = prepareQueryOffersForResponse(sortedOffers, query, rankingProfiling);
   timings.responsePreparationMs = nowMs() - responsePreparationStartedAt;
   const finalDedupeStartedAt = nowMs();
   const finalResponseOffers = dedupeFinalResponseOffers(responseCandidateOffers, query);
