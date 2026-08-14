@@ -468,6 +468,13 @@
 
 ## HOFER-HTML-Asset-/Quantity-Join am 2026-08-14
 
+## Backend-Performance-Fix fuer Filter, Top Deals und globales Ranking am 2026-08-14
+
+- Root Cause bestaetigt: Filter-Metadata baute bei Cache-Miss einen vollstaendigen Offer-Snapshot mit grossen `rawFacts`-/Evidence-Projektionen auf; Top Deals las acht Retailer-Abfragen parallel mit derselben breiten Ranking-Projektion; der globale Browse-Pfad sortierte und deduplizierte bis zu 1.000 Kandidaten. Scoped Rankings blieben schnell, weil ihre Memory-/Result-Caches meist warm waren.
+- Commit `b59b37f7` fuehrt eine konservative globale Browse-Cap von 240 bereits nach bestehendem Mongo-Ranking ein, setzt fuer globale Reads ein 5-s-Leselimit mit fail-closed leerem Ergebnis bei Timeout, optimiert sichtbare Dedupe-Buckets ohne Aenderung der Fingerprint-Semantik und teilt Top-Deals-/Facet-Cache-Misses inflight. Commit `b8f15368` verschlankt nur die oeffentliche Facet-Projektion, nutzt fuer Top Deals einen gemeinsamen Read mit demselben Gesamtbudget und waermt Facet, Top Deals und globales Ranking nach Backend-Start read-only vor.
+- Live nach Deploy: Filter warm ca. 0,27 s; Top Deals warm ca. 0,71 s mit 20 Deals und 1.653 strikten Kandidaten; globales Ranking HTTP 200, 240 Kandidaten, ca. 2,1 s wall-clock statt >30-s-Timeout; scoped HOFER ca. 0,69 s mit 29 Ergebnissen, 20 HTML-Offers und 0 PDF-Offers. Der kalte Facet-Aufbau fiel in der Messung von ca. 15,8 s auf ca. 5,4 s; der Rest ist ein harter Mongo-/Public-Snapshot-Grenzfall und bleibt durch Startup-Warmup abgefedert.
+- Public Validity, Source-Prioritaet, Offer-Lineage und Public-Counts wurden nicht gelockert. Keine Crawler-/HOFER-/SPAR-/PAGRO-/ZGONC-Arbeit, keine DB-Handkorrektur und keine Schreiboperation; nur vier Performancepfade plus diese Dokumentation geaendert. Relevante Tests: Ranking 295/295, Filter/Validity/Top-Deals zusammen 47/47, Syntax, Admin-Lint, Production-Build und `git diff --check` gruen. Backend besitzt kein ESLint-Paket bzw. keine ESLint-Konfiguration.
+
 ## Initial-Refresh-Overlay-Fix am 2026-08-14
 
 - Root Cause des langen Vollbild-Overlays: `SearchPage` hielt `HeroLoaderModal` direkt an `filtersLoading`. Der kalte Public-Facet-Snapshot brauchte live beim ersten `/api/filters/retailers`-Request ca. 6,4-7,0 s; Kategorien liefen separat ca. 0,13-0,21 s. Top Deals war kein Overlay-Blocker und lief bereits als Idle-Prefetch, kalt ca. 14,7 s.
