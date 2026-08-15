@@ -1258,6 +1258,10 @@ function findHoferCurrentOfferContainer(anchor, pageUrl, $) {
     const hasAvailability = /verf(?:\u00fc|ue)gbar\s+(?:ab|seit)\s+\d{2}\.\d{2}\.\d{4}/i.test(text);
 
     if (hasProduct && hasPrice && hasAvailability) {
+      // A complete product anchor is already the safest offer boundary. Do
+      // not climb into a shared group merely to find an image: the Nuxt
+      // product-state join can provide an official image independently.
+      if (node.is('a[href*="/produkt/"], a[href*="/de/p."]')) return node;
       fallback = node;
       if (hoferCardHasOfficialImage(node, pageUrl, $)) return node;
     }
@@ -1545,7 +1549,7 @@ function extractHoferOldPrice(card, cardText, pageContext) {
 
 function extractHoferAdditionalInfo(card, cardText, pageContext, $) {
   if (pageContext === 'current-offers') {
-    const structuredQuantity = extractHoferStructuredQuantity(card, $);
+    const structuredQuantity = extractHoferCardStructuredQuantity(card, $);
     if (structuredQuantity) return structuredQuantity;
 
     return extractHoferCardTextQuantity(cardText);
@@ -1613,6 +1617,19 @@ function extractHoferStructuredQuantity(card, $) {
         // Ignore non-JSON data attributes and remain fail-closed.
       }
     }
+  }
+
+  return '';
+}
+
+function extractHoferCardStructuredQuantity(card, $) {
+  const directQuantity = extractHoferStructuredQuantity(card, $);
+  if (directQuantity) return directQuantity;
+
+  if (card?.is?.('a[href*="/produkt/"], a[href*="/de/p."]')) {
+    const parent = card.parent();
+    const productLinks = parent.find('a[href*="/produkt/"], a[href*="/de/p."]');
+    if (productLinks.length === 1) return extractHoferStructuredQuantity(parent, $);
   }
 
   return '';
@@ -1686,9 +1703,25 @@ function normalizeHoferOfficialImageUrl(value, pageUrl, pageContext) {
 
 function extractHoferOfficialImageUrl(card, pageUrl, $) {
   const candidates = [extractImageUrl(card)];
+  if (card?.is?.('a[href*="/produkt/"], a[href*="/de/p."]')) {
+    const parent = card.parent();
+    const productLinks = parent.find('a[href*="/produkt/"], a[href*="/de/p."]');
+    if (productLinks.length === 1) {
+      candidates.push(extractImageUrl(parent));
+    }
+  }
   const attributes = ['src', 'data-src', 'srcset', 'data-srcset', 'data-image-url', 'data-image', 'href'];
 
-  card.find('img, source, a, [data-image-url], [data-image], [data-src], [data-srcset]').each((index, element) => {
+  const imageNodes = card.find('img, source, a, [data-image-url], [data-image], [data-src], [data-srcset]').toArray();
+  if (card?.is?.('a[href*="/produkt/"], a[href*="/de/p."]')) {
+    const parent = card.parent();
+    const productLinks = parent.find('a[href*="/produkt/"], a[href*="/de/p."]');
+    if (productLinks.length === 1) {
+      imageNodes.push(...parent.find('img, source, a, [data-image-url], [data-image], [data-src], [data-srcset]').toArray());
+    }
+  }
+
+  imageNodes.forEach((element) => {
     const node = $(element);
     attributes.forEach((attribute) => {
       const value = sanitizeWhitespace(node.attr(attribute));
@@ -5042,7 +5075,7 @@ function parseHoferOffersFromPage({
         quantityEvidenceSource: quantityText
           ? (stateProduct?.sellingSize
             ? 'nuxt-product-state'
-            : (extractHoferStructuredQuantity(card, $) ? 'structured-offer-field' : 'offer-card-text'))
+            : (extractHoferCardStructuredQuantity(card, $) ? 'structured-offer-field' : 'offer-card-text'))
           : '',
         pageContext,
         pageUrl,

@@ -524,6 +524,12 @@
 - Live nach Deploy: Health HTTP 200, Mongo verbunden, neuer Prozessstart `2026-08-14T16:42:32.983Z`. Uncached Profiling liegt nun bei ca. 7,1-7,6 s Gesamtzeit (Mongo 1,5-1,8 s, Normalisierung 4,6-4,8 s, Fallback unter 10 ms). Normaler Top-Deals-Read war ca. 0,67 s beim Aufbau und 0,21 s warm, jeweils HTTP 200 mit 20 Deals und 1.653 strikten Kandidaten.
 - Die verbleibende Kaltzeit ist die erstmalige Normalisierung von rund 4.647 Kandidaten plus Mongo-/Prozess-Kaltkosten. Ein größerer zweistufiger Top-Deals-Projektionsumbau oder persistenter Snapshot wurde nicht begonnen, weil dafür die bestehende fachliche Normalisierungs-/Validity-Semantik separat mit Golden-Result-Tests abgesichert werden muss.
 
+## Mobile-Navigation und HOFER-HTML-Karten am 2026-08-15
+
+- Die mobile Public-Navigation blendete bei Viewports bis 430 px den zweiten Button aus; dadurch war Stöbern auf Smartphone-Breite nicht erreichbar. Der begrenzte CSS-Fix hält Suche, Stöbern, Liste und Top Deals in vier gleich breiten Spalten sichtbar und verhindert horizontalen Seitenüberlauf.
+- Der HOFER-Parser setzte den vollständigen Produkt-Link bisher als Karte und konnte dadurch bei bild-/mengenlosen Karten in einen gemeinsamen Produktgruppen-Container klettern. Das wurde fail-closed korrigiert: vollständige Produktanker bleiben die Offer-Grenze; Bild- und strukturierte Mengenübernahme aus dem Elterncontainer ist nur bei genau einem Produktlink zulässig. Public Validity, Bild-Evidence- und Unit-Price-Regeln wurden nicht gelockert.
+- Lokale gezielte Mobile-Tests und HOFER-Parser-Tests sind grün. Die bestehende Gesamtdatei `officialSourceCrawlerParsers.test.js` enthält weiterhin scope-fremde historische PENNY/BILLA-Fehler. Ein neuer DO-Crawl und Live-Mobile-Smoke benötigen noch den autorisierten Operator-/Browser-Weg; ohne Admin-Key wird kein Crawl gestartet und ohne Live-Browser keine mobile Verifikation behauptet.
+
 ## Ranking-JS-Profiling und Response-Dedupe-Fix am 2026-08-14
 
 - Die diagnostische Ranking-Pipeline misst nun Mongo-Read, Freshness/Public-Eligibility, Consumer-/Source-Quality, Sortierung, Response-Dedupe, finale/sichtbare Dedupe, Hydration, Mapping, Assembly und JSON-Serialisierungs-Schätzung nur bei `debugTiming=true`. Die Messung ist intern und gibt keine Offer-/Secret-Daten aus.

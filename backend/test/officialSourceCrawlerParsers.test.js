@@ -1430,6 +1430,31 @@ test('HOFER current HTML parser rejects missing availability and non-official im
   assert.equal(diagnostics.skipReasons['missing-availability-date'], 1);
 });
 
+test('HOFER current HTML parser keeps separate complete cards without inline images', () => {
+  const diagnostics = {};
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    diagnostics,
+    cards: [
+      hoferCurrentOfferCard({
+        title: 'WORKZONE Angebot A',
+        href: '/produkt/workzone-angebot-a-000000000000700101',
+        image: '',
+      }),
+      hoferCurrentOfferCard({
+        title: 'WORKZONE Angebot B',
+        href: '/produkt/workzone-angebot-b-000000000000700102',
+        image: '',
+      }),
+    ],
+  });
+
+  assert.equal(offers.length, 2);
+  assert.deepEqual(offers.map((offer) => offer.title), ['WORKZONE Angebot A', 'WORKZONE Angebot B']);
+  assert.equal(offers.every((offer) => offer.imageUrl === ''), true);
+  assert.deepEqual(diagnostics.skipReasons || {}, {});
+});
+
 test('HOFER current HTML parser keeps explicitly dated future availability as upcoming', () => {
   const diagnostics = {};
   const offers = parseHoferFixture({
