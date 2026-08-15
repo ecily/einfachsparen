@@ -1466,8 +1466,6 @@ function extractHoferCards($, pageContext, pageUrl = 'https://www.hofer.at/angeb
 
     $('a[href*="/produkt/"], a[href*="/de/p."]').each((index, element) => {
       const anchor = $(element);
-      const text = sanitizeWhitespace(anchor.text());
-      if (!/(?:\u20ac|eur|\d+[,.]\d{2})/i.test(text)) return;
 
       const card = findHoferCurrentOfferContainer(anchor, pageUrl, $);
       const domNode = card?.get?.(0);

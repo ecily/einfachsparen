@@ -1373,6 +1373,32 @@ test('HOFER current HTML parser joins an adjacent official asset to its product 
   assert.equal(offers[0].rawFacts.unitPriceEvidence, 'calculated-from-mass-volume');
 });
 
+test('HOFER current HTML parser keeps a product link when price and availability are on its structured parent', () => {
+  const diagnostics = {};
+  const offers = parseHoferFixture({
+    pageUrl: 'https://www.hofer.at/angebote',
+    diagnostics,
+    cards: [`
+      <article class="offer-card" data-product-id="000000000000700103">
+        <a href="/produkt/ambiano-kaffeemaschine-000000000000700103">
+          <h2>AMBIANO Kaffeemaschine</h2>
+        </a>
+        <div class="offer-details">
+          <span>Verfuegbar seit 14.08.2026</span>
+          <strong>\u20ac 49,99</strong>
+          <img src="https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/500/example/Kaffeemaschine">
+        </div>
+      </article>
+    `],
+  });
+
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].title, 'AMBIANO Kaffeemaschine');
+  assert.equal(offers[0].priceCurrent.amount, 49.99);
+  assert.equal(offers[0].imageUrl.includes('dm.emea.cms.aldi.cx'), true);
+  assert.deepEqual(diagnostics.skipReasons || {}, {});
+});
+
 test('HOFER current HTML parser ignores technical quantities without sale-unit evidence', () => {
   const offers = parseHoferFixture({
     pageUrl: 'https://www.hofer.at/angebote',

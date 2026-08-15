@@ -524,6 +524,12 @@
 - Live nach Deploy: Health HTTP 200, Mongo verbunden, neuer Prozessstart `2026-08-14T16:42:32.983Z`. Uncached Profiling liegt nun bei ca. 7,1-7,6 s Gesamtzeit (Mongo 1,5-1,8 s, Normalisierung 4,6-4,8 s, Fallback unter 10 ms). Normaler Top-Deals-Read war ca. 0,67 s beim Aufbau und 0,21 s warm, jeweils HTTP 200 mit 20 Deals und 1.653 strikten Kandidaten.
 - Die verbleibende Kaltzeit ist die erstmalige Normalisierung von rund 4.647 Kandidaten plus Mongo-/Prozess-Kaltkosten. Ein größerer zweistufiger Top-Deals-Projektionsumbau oder persistenter Snapshot wurde nicht begonnen, weil dafür die bestehende fachliche Normalisierungs-/Validity-Semantik separat mit Golden-Result-Tests abgesichert werden muss.
 
+## HOFER-Parse-Failed-Coverage am 2026-08-15
+
+- Die letzte Live-Evidence weist 74 Raw, 29 Parsed/Stored/Public und 45 Rejects aus; ohne Admin-Key war die Run-Detailprojektion lokal nicht abrufbar. Die öffentliche API liefert keine Reject-Beispiele oder Rohdaten, daher werden für die 45 Items keine erfundenen Gruppen-/Produktbeispiele behauptet.
+- Sicher repariert wurde eine Parsergrenze: `extractHoferCards()` verwarf Produktlinks vor dem Container-/Nuxt-State-Join, wenn der Preis nicht direkt im Linktext stand. Produktlinks werden nun auch ohne Inline-Preis weiterverfolgt; Preis und Verfügbarkeit müssen weiterhin im strukturierten Offer-Container oder im offiziellen Produkt-State vorhanden sein. Fehlende Pflichtfelder bleiben fail-closed.
+- Regression: ein Produktlink mit Preis/Verfügbarkeit/Bild im Elterncontainer wird übernommen; 27 gezielte HOFER-Parser-Tests bleiben grün. Ein neuer DO-Crawl mit `sourceKeys:["hofer-official-html"]` ist für die Coverage-Zahl erforderlich und wurde aus dieser Umgebung nicht ohne Admin-Key gestartet.
+
 ## Mobile-Navigation und HOFER-HTML-Karten am 2026-08-15
 
 - Die mobile Public-Navigation blendete bei Viewports bis 430 px den zweiten Button aus; dadurch war Stöbern auf Smartphone-Breite nicht erreichbar. Der begrenzte CSS-Fix hält Suche, Stöbern, Liste und Top Deals in vier gleich breiten Spalten sichtbar und verhindert horizontalen Seitenüberlauf.
