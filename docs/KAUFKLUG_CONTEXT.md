@@ -556,3 +556,8 @@
 
 - Commit `346249ca` ist auf `origin/main`; lokaler Build, 73 Frontend-Tests, ESLint und `git diff --check` sind gruen. Der Live-Smoke zeigt jedoch weiterhin den Static-Build vom 2026-08-15: `/angebote/deo/` ist live die fail-closed Catchall-Seite, die Sitemap enthaelt 26 statt lokal 27 URLs, und die neuen SEO-Titel sind noch nicht ausgeliefert.
 - Im Repository gibt es keine verifizierbare DO-App-Spec, keinen `doctl`-Zugang und keine GitHub-Action fuer den Static-Deploy. Daher ist die Ursache auf Repo-Seite nicht weiter aufloesbar: Der bestehende DigitalOcean-Static-Site-Deploy muss im DO-Dashboard fuer Repository `ecily/einfachsparen`, Branch `main`, mit dem vorhandenen Admin-Root/Build/Output-Vertrag neu angestossen oder geprueft werden. Keine SEO- oder Public-Validity-Aenderung ist dafuer noetig.
+-
+## SEO-Autopilot Live-Verifikation am 2026-08-16
+
+- Der Static-Deploy fuer `d3470a84` ist live angekommen. Read-only-Smoke: `/angebote/deo/`, `/angebote/lidl/` und `/angebote/billa/` liefern HTTP 200, `index,follow`, route-spezifischen Title/H1, Self-Canonical auf dem `www`-Host und Open-Graph-Metadaten. `/angebote/deo/` ist keine Catchall-/Noindex-Seite mehr.
+- `sitemap.xml` liefert HTTP 200 und exakt 27 URLs; Deo, Lidl und BILLA sind enthalten, Mueller bleibt gemaess bestehendem Noindex-Vertrag ausgeschlossen. Live `Last-Modified`: 2026-08-16 11:30:15 GMT. Es wurden keine Produkt-, Crawler-, Datenbank- oder Public-Validity-Aenderungen vorgenommen.

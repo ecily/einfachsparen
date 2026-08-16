@@ -70,3 +70,7 @@ The data-backed `/angebote/deo/` landing page was added. Static and runtime meta
 ## SEO-Autopilot Live-Status 2026-08-16
 
 Commit `346249ca` is pushed to `origin/main` and the local static build is green. The public Static Site has not consumed it yet: live `Last-Modified` remains 2026-08-15, the new `/angebote/deo/` route is still the noindex catchall and the live sitemap still has 26 URLs. The repository contains no verifiable DigitalOcean app spec, `doctl` access or deploy workflow. The remaining blocker is therefore an operator-side DO Static Site rebuild/trigger for the existing repository/branch/root/output contract; no SEO, database or Public Validity change is required.
+-
+## SEO-Autopilot Live-Verifikation 2026-08-16
+
+The DigitalOcean Static Site now serves the pushed SEO build. `/angebote/deo/`, `/angebote/lidl/` and `/angebote/billa/` return HTTP 200 with `index,follow`, route-specific copy, self-canonicals and Open Graph metadata. The sitemap returns 27 URLs and includes Deo, Lidl and BILLA; Mueller remains excluded by its existing noindex policy. No product, crawler, database or Public Validity logic was changed.
