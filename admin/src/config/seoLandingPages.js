@@ -10,6 +10,7 @@ const baseRelatedLinks = [
   ['drogerie', 'Drogerie Angebote'],
   ['kaffee', 'Kaffee Angebote'],
   ['bier', 'Bier Angebote'],
+  ['deo', 'Deo Angebote'],
   ['softdrinks', 'Softdrinks Angebote'],
   ['waschmittel', 'Waschmittel Angebote'],
   ['schokolade', 'Schokolade Angebote'],
@@ -67,10 +68,10 @@ export const seoLandingPages = [
   {
     key: 'supermarkt',
     path: '/angebote/supermarkt',
-    title: 'Supermarkt Angebote aktuell vergleichen | kaufklug.at',
+    title: 'Supermarkt Angebote in \u00d6sterreich vergleichen | kaufklug.at',
     description:
       'Aktuelle Supermarkt-Angebote vergleichen. Preise, Packungsgr\u00f6\u00dfen und Preis pro kg, Liter oder St\u00fcck transparent auf kaufklug.at.',
-    h1: 'Supermarkt Angebote aktuell vergleichen',
+    h1: 'Supermarkt Angebote vergleichen',
     intro: 'Vergleiche aktuelle Angebote mehrerer Superm\u00e4rkte direkt nach Preis, Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Preis pro Einheit.',
     robots: 'index,follow',
     queries: [
@@ -157,10 +158,10 @@ export const seoLandingPages = [
   {
     key: 'hofer',
     path: '/angebote/hofer',
-    title: 'HOFER Angebote aktuell finden | kaufklug',
+    title: 'HOFER Angebote aktuell vergleichen | kaufklug.at',
     description:
       'Finde aktuelle HOFER Angebote in \u00d6sterreich. kaufklug zeigt Preise, Aktionen und Bedingungen als Orientierungshilfe.',
-    h1: 'HOFER Angebote aktuell finden',
+    h1: 'HOFER Angebote aktuell vergleichen',
     intro:
       'Finde aktuelle HOFER Angebote in \u00d6sterreich und pr\u00fcfe Preise, Packungsgr\u00f6\u00dfen, Aktionen und G\u00fcltigkeit an einem Ort.',
     robots: 'index,follow',
@@ -314,6 +315,19 @@ export const seoLandingPages = [
       offset: 0,
     },
     relatedLinks: links(['angebote', 'supermarkt', 'billa', 'penny', 'lidl', 'bier']),
+  },
+  {
+    key: 'deo',
+    path: '/angebote/deo',
+    title: 'Deo Angebote aktuell vergleichen | kaufklug.at',
+    description:
+      'Aktuelle Deo-Angebote mehrerer Händler vergleichen. Preise, Größen und Preis pro Stück oder ml transparent auf kaufklug.at.',
+    h1: 'Deo Angebote aktuell vergleichen',
+    intro:
+      'Vergleiche aktuelle Deo-Angebote mehrerer Händler und beachte unterschiedliche Größen, Preis pro Stück oder ml sowie Bedingungen, soweit sicher vorhanden.',
+    robots: 'index,follow',
+    query: { q: 'deo', limit: 60, offset: 0 },
+    relatedLinks: links(['angebote', 'drogerie', 'dm', 'bipa', 'waschmittel', 'duschgel']),
   },
   {
     key: 'schokolade',

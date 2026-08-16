@@ -58,3 +58,11 @@ The follow-up static-shell fix `b3520de0` is now live: initial homepage HTML exp
 The repository now generates `catchall.html`, and the live DigitalOcean Static Site uses `catchall_document=catchall.html`. Unknown URLs therefore return the catchall document with HTTP 200, `noindex,nofollow`, no Canonical and a clear 404 UI. A true HTTP 404 would require switching the catchall to `404.html`, which would break dynamic shared-list SPA routes; therefore `catchall.html` is the safe current contract.
 
 The final live smoke verified homepage, Top Deals, BILLA, Lidl, all utility routes, three unknown paths, robots and sitemap. Unknown paths have no redirect, no Root-Canonical and no indexable SEO metadata. A true HTTP 404 remains a future hosting decision; the current public contract is fail-closed Variant B.
+-
+## SEO-Autopilot und Search-Console-Daten 2026-08-16
+
+The operator supplied a three-month Search Console export. The clearest existing-page opportunities are Lidl, BILLA, HOFER, the supermarket overview, BIPA and Waschmittel: these pages already receive impressions around or below page two but have low CTR. Mobile is the larger impression segment. The export is treated as prioritization evidence only; no Search Console API, submission or guessed query data was added.
+
+The static generator now performs a read-only build-time quality check against public ranking and Top Deals responses. Indexable category pages require at least 10 public offers and two retailers. Retailer pages additionally require at least 50% image coverage. Pages with unavailable or weak evidence are fail-closed to `noindex,follow` and removed from the generated sitemap; configured noindex pages are never auto-promoted. This does not alter Public Validity or ranking.
+
+The data-backed `/angebote/deo/` landing page was added. Static and runtime metadata now use the existing trailing-slash canonical convention, route-specific OG/Twitter image metadata, clearer title/description/H1 copy and related internal links. The generated sitemap currently contains 27 URLs; Mueller remains governed by its existing noindex policy. Search Console requests remain an operational next step after the daily limit/window permits them.

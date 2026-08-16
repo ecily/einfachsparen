@@ -37,6 +37,7 @@ const FAQ_ITEMS = [
 ]
 
 const TAB_TITLE = 'kaufklug.at | einfach sparen'
+const SOCIAL_IMAGE_URL = `${SITE_URL}/brand/kaufklug-logo-transparent.png`
 const SEO_TITLE = 'kaufklug.at – Aktuelle Angebote finden und beim Einkauf sparen'
 const BASE_DESCRIPTION =
   'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Suche nach Produkten und Marken, prüfe Aktionen und merke Angebote für deine Einkaufsliste.'
@@ -72,8 +73,8 @@ export function getPageMeta(activePage) {
       path: '/suche',
     },
     'top-deals': {
-      title: 'Top Deals heute | kaufklug.at',
-      description: 'Die stärksten verifizierten Ersparnisse nach Preis pro Einheit – Bedingungen inklusive.',
+      title: 'Top Deals heute: starke Angebote nach Preis pro Einheit | kaufklug.at',
+      description: 'Aktuelle Angebote mit geprüften Preisen, Bedingungen und Einheiten. kaufklug zeigt Top Deals als Orientierungshilfe.',
       path: '/top-deals',
     },
     'shopping-list': {
@@ -213,10 +214,12 @@ export function updateSeoMetadata(activePage) {
   setOrCreateMeta('property', 'og:description', meta.description)
   setOrCreateMeta('property', 'og:url', canonicalUrl)
   setOrCreateMeta('property', 'og:locale', 'de_AT')
+  setOrCreateMeta('property', 'og:image', SOCIAL_IMAGE_URL)
 
   setOrCreateMeta('name', 'twitter:card', 'summary')
   setOrCreateMeta('name', 'twitter:title', meta.title)
   setOrCreateMeta('name', 'twitter:description', meta.description)
+  setOrCreateMeta('name', 'twitter:image', SOCIAL_IMAGE_URL)
 
   if (isUnknownSeoOfferPath) {
     removeLink('canonical')

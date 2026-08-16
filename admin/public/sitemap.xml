@@ -29,6 +29,10 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://www.kaufklug.at/angebote/deo/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://www.kaufklug.at/preischeck/bier-literpreis-vergleich/</loc>
     <priority>0.7</priority>
   </url>

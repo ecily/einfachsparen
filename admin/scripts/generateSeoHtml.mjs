@@ -11,7 +11,28 @@ const scriptDir = dirname(fileURLToPath(import.meta.url))
 const adminDir = dirname(scriptDir)
 const distDir = join(adminDir, 'dist')
 const siteUrl = 'https://www.kaufklug.at'
+const socialImageUrl = `${siteUrl}/brand/kaufklug-logo-transparent.png`
 const comparisonApiBaseUrl = String(process.env.SEO_PUBLIC_API_BASE_URL || 'https://www.kaufklug.at/api').replace(/\/+$/, '')
+const SEO_MIN_PUBLIC_OFFERS = 10
+const SEO_MIN_RETAILERS = 2
+const SEO_MIN_IMAGE_RATIO = 0.5
+const SEO_CATEGORY_KEYS = new Set([
+  'angebote',
+  'supermarkt',
+  'drogerie',
+  'kaffee',
+  'bier',
+  'deo',
+  'softdrinks',
+  'schokolade',
+  'windeln',
+  'duschgel',
+  'nudeln',
+  'chips',
+  'waschmittel',
+  'butter',
+])
+const SEO_RETAILER_KEYS = new Set(['billa', 'hofer', 'lidl', 'dm', 'bipa', 'penny'])
 const comparisonQueries = new Map([
   ['bier', 'bier'],
   ['kaffee', 'kaffee'],
@@ -36,6 +57,7 @@ const staticPages = [
       { label: 'Drogerie Angebote', path: '/angebote/drogerie/' },
       { label: 'Kaffee Angebote', path: '/angebote/kaffee/' },
       { label: 'Bier Angebote', path: '/angebote/bier/' },
+      { label: 'Deo Angebote', path: '/angebote/deo/' },
       { label: 'Bier Literpreis-Preischeck', path: '/preischeck/bier-literpreis-vergleich' },
       { label: 'Softdrinks Angebote', path: '/angebote/softdrinks/' },
       { label: 'Schokolade Angebote', path: '/angebote/schokolade/' },
@@ -71,8 +93,10 @@ const staticPages = [
   },
   {
     path: '/top-deals',
-    title: 'Top Deals heute | kaufklug.at',
-    description: 'Aktuelle Top Deals mit Preis pro Einheit und Bedingungen. kaufklug zeigt belastbare Angebotsinformationen als Orientierungshilfe.',
+    key: 'top-deals',
+    seoAutopilot: 'top-deals',
+    title: 'Top Deals heute: starke Angebote nach Preis pro Einheit | kaufklug.at',
+    description: 'Aktuelle Angebote mit geprüften Preisen, Bedingungen und Einheiten. kaufklug zeigt Top Deals als Orientierungshilfe.',
     robots: 'index,follow',
     h1: 'Top Deals heute',
     intro: 'Entdecke aktuell besonders interessante Angebote und vergleiche Preis pro Einheit, Bedingungen und Gültigkeit.',
@@ -252,8 +276,8 @@ function buildPriceCheckDataScript(candidate) {
 export function buildSeoStaticDocument(template, page, pages) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
-  const staticHomeContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>Flugbl\u00e4tter raus. Die besten Angebote rein.</h1><p class="subtitle">Preise wirklich vergleichbar \u2013 pro kg, Liter oder St\u00fcck.</p><p class="search-landing-hero__markets">BILLA \u00b7 BILLA Plus \u00b7 Lidl \u00b7 PENNY \u00b7 dm \u00b7 BIPA \u00b7 M\u00fcller \u00b7 HOFER eingeschr\u00e4nkt \u00b7 INTERSPAR eingeschr\u00e4nkt</p><p class="hero-compare-facts">Vergleichbar pro kg, Liter oder St\u00fcck \u2013 Packungsgr\u00f6\u00dfen und Bedingungen inklusive.</p><p class="market-check-note">Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.</p>${buildRelatedLinks(page)}</main>`
-  const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page)}</main>`
+  const staticHomeContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>Flugbl\u00e4tter raus. Die besten Angebote rein.</h1><p class="subtitle">Preise wirklich vergleichbar \u2013 pro kg, Liter oder St\u00fcck.</p><p class="search-landing-hero__markets">BILLA \u00b7 BILLA Plus \u00b7 Lidl \u00b7 PENNY \u00b7 dm \u00b7 BIPA \u00b7 M\u00fcller \u00b7 HOFER eingeschr\u00e4nkt \u00b7 INTERSPAR eingeschr\u00e4nkt</p><p class="hero-compare-facts">Vergleichbar pro kg, Liter oder St\u00fcck \u2013 Packungsgr\u00f6\u00dfen und Bedingungen inklusive.</p><p class="market-check-note">Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.</p>${buildRelatedLinks(page, pages)}</main>`
+  const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page, pages)}</main>`
   const staticNavigation = '<nav class="page-nav seo-static-nav" aria-label="Seiten"><span class="page-nav__logo" aria-hidden="true"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></span><span class="page-nav__beta">Beta</span><div class="page-nav__main"><span class="page-nav__button">Suche</span><span class="page-nav__button">Stöbern</span><span class="page-nav__button">Liste</span></div></nav>'
   const staticContentForRender = path === '/' ? staticHomeContent : staticContent
   const staticShellContent = staticContentForRender
@@ -272,6 +296,7 @@ export function buildSeoStaticDocument(template, page, pages) {
     .replace(/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:url" content="${canonical}" />\n`)
     .replace(/<div id="root"><\/div>/i, `<div id="root">${staticContentWithComparison}</div>`)
     .replace(/<link rel="stylesheet" crossorigin href="[^"]+">/i, `<style id="kaufklug-critical-css">${CRITICAL_CSS}${CRITICAL_STATIC_NAV_CSS}</style>\n    $&`)
+    .replace(/<\/head>/i, `<meta property="og:image" content="${socialImageUrl}" />\n    <meta name="twitter:image" content="${socialImageUrl}" />\n  </head>`)
     .replace(/<\/head>/i, `<script type="application/ld+json" id="kaufklug-static-breadcrumb">${buildBreadcrumbJsonLd(page)}</script>\n  </head>`)
 
   return updated
@@ -326,12 +351,15 @@ export function getStaticSeoPages() {
   return [
     ...staticPages,
     ...seoLandingPages.map((page) => ({
+      key: page.key,
       path: page.path,
       title: page.title,
       description: page.description,
       robots: page.robots || 'index,follow',
       h1: page.h1,
       intro: page.intro,
+      query: page.query || null,
+      seoAutopilot: page.seoAutopilot || '',
       comparisonKey: page.comparisonKey || '',
       comparisonSummary: page.comparisonSummary || null,
       priceCheckKey: page.priceCheckKey || '',
@@ -339,6 +367,145 @@ export function getStaticSeoPages() {
       relatedLinks: page.relatedLinks || [],
     })),
   ].filter((page, index, pages) => pages.findIndex((candidate) => candidate.path === page.path) === index)
+}
+
+function buildSeoRankingUrl(query = {}) {
+  const url = new URL(`${comparisonApiBaseUrl}/offers/ranking`)
+  if (query.q) url.searchParams.set('q', String(query.q))
+  if (query.retailers) url.searchParams.set('retailers', String(query.retailers))
+  if (query.categories) url.searchParams.set('categories', String(query.categories))
+  url.searchParams.set('limit', '60')
+  url.searchParams.set('offset', '0')
+  return url
+}
+
+export function buildSeoPageQuality(page, payload) {
+  const summary = payload?.summary || {}
+  const offers = Array.isArray(payload?.rankedOffers) ? payload.rankedOffers : []
+  const totalCount = Number(summary.totalCount)
+  const retailerKeys = new Set(offers.map((offer) => String(offer?.retailerKey || '').trim()).filter(Boolean))
+  const imageCount = offers.filter((offer) => String(offer?.imageUrl || '').trim()).length
+  const imageRatio = offers.length > 0 ? imageCount / offers.length : 0
+  const isCategory = SEO_CATEGORY_KEYS.has(page.key)
+  const isRetailer = SEO_RETAILER_KEYS.has(page.key)
+  const hasMinimumOffers = Number.isInteger(totalCount) && totalCount >= SEO_MIN_PUBLIC_OFFERS
+  const hasRequiredRetailerBreadth = isRetailer || isCategory && retailerKeys.size >= SEO_MIN_RETAILERS
+  const hasSufficientImages = isCategory || imageRatio >= SEO_MIN_IMAGE_RATIO
+
+  return {
+    available: Number.isInteger(totalCount) && totalCount >= 0 && offers.every((offer) => offer?.id),
+    totalCount: Number.isInteger(totalCount) ? totalCount : 0,
+    sampledCount: offers.length,
+    retailerCount: retailerKeys.size,
+    imageCount,
+    imageRatio,
+    indexable: hasMinimumOffers && hasRequiredRetailerBreadth && hasSufficientImages,
+    reason: !hasMinimumOffers
+      ? 'too-few-public-offers'
+      : !hasRequiredRetailerBreadth
+        ? 'insufficient-retailer-breadth'
+        : !hasSufficientImages
+          ? 'insufficient-image-coverage'
+          : 'quality-thresholds-met',
+  }
+}
+
+function buildTopDealsQuality(payload) {
+  const totalCount = Number(payload?.count)
+  return {
+    available: Number.isInteger(totalCount) && totalCount >= 0,
+    totalCount: Number.isInteger(totalCount) ? totalCount : 0,
+    sampledCount: Array.isArray(payload?.deals) ? payload.deals.length : 0,
+    retailerCount: new Set((payload?.deals || []).map((deal) => String(deal?.retailerKey || '').trim()).filter(Boolean)).size,
+    imageCount: (payload?.deals || []).filter((deal) => String(deal?.imageUrl || '').trim()).length,
+    imageRatio: 0,
+    indexable: Number.isInteger(totalCount) && totalCount >= SEO_MIN_PUBLIC_OFFERS,
+    reason: Number.isInteger(totalCount) && totalCount >= SEO_MIN_PUBLIC_OFFERS ? 'quality-thresholds-met' : 'too-few-public-top-deals',
+  }
+}
+
+async function fetchJsonWithCurlFallback(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(30000) })
+    if (!response.ok) throw new Error(`SEO quality API HTTP ${response.status}`)
+    return response.json()
+  } catch (fetchError) {
+    try {
+      const curlArgs = ['--fail', '--silent', '--show-error', '--max-time', '30', url.href]
+      if (process.platform === 'win32') curlArgs.splice(5, 0, '--ssl-no-revoke')
+      const { stdout } = await execFileAsync(process.platform === 'win32' ? 'curl.exe' : 'curl', curlArgs, {
+        maxBuffer: 16 * 1024 * 1024,
+      })
+      return JSON.parse(stdout)
+    } catch {
+      throw fetchError
+    }
+  }
+}
+
+export async function fetchSeoPageQuality(page) {
+  if (page?.seoAutopilot === 'top-deals') {
+    try {
+      const url = new URL(`${comparisonApiBaseUrl}/offers/top-deals`)
+      url.searchParams.set('limit', '20')
+      return buildTopDealsQuality(await fetchJsonWithCurlFallback(url))
+    } catch (error) {
+      return {
+        available: false,
+        totalCount: 0,
+        sampledCount: 0,
+        retailerCount: 0,
+        imageCount: 0,
+        imageRatio: 0,
+        indexable: false,
+        reason: 'quality-data-unavailable',
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  const query = page?.query || {}
+  const url = buildSeoRankingUrl(query)
+
+  try {
+    return buildSeoPageQuality(page, await fetchJsonWithCurlFallback(url))
+  } catch (error) {
+    return {
+      available: false,
+      totalCount: 0,
+      sampledCount: 0,
+      retailerCount: 0,
+      imageCount: 0,
+      imageRatio: 0,
+      indexable: false,
+      reason: 'quality-data-unavailable',
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+export function applySeoAutopilot(pages, qualityByPath = new Map()) {
+  return pages.map((page) => {
+    if (page.robots !== 'index,follow' || !page.key || (!page.query && !page.seoAutopilot)) return page
+
+    const quality = qualityByPath.get(page.path)
+    if (!quality) return { ...page, robots: 'noindex,follow', seoQuality: { reason: 'quality-data-unavailable' } }
+
+    return {
+      ...page,
+      robots: quality.indexable ? 'index,follow' : 'noindex,follow',
+      seoQuality: quality,
+    }
+  })
+}
+
+export function filterSitemapXml(xml, indexablePaths) {
+  const allowed = indexablePaths instanceof Set ? indexablePaths : new Set(indexablePaths || [])
+  const body = String(xml || '').replace(/\s*<url>[\s\S]*?<\/url>/gi, (block) => {
+    const loc = block.match(/<loc>\s*([^<]+?)\s*<\/loc>/i)?.[1] || ''
+    return allowed.has(loc) ? `\n${block.trim()}` : ''
+  })
+  return body.replace(/\n{3,}/g, '\n\n').trimEnd() + '\n'
 }
 
 async function fetchComparisonRanking(query, offset, resultSetToken = '') {
@@ -468,10 +635,12 @@ async function buildPriceCheckCandidate() {
   }, { attempts: 3, delayMs: 250 })
 }
 
-async function syncRenderedSitemap(candidate) {
+async function syncRenderedSitemap(candidate, pages = renderPages || getStaticSeoPages()) {
   const source = await readFile(join(adminDir, 'public', 'sitemap.xml'), 'utf8')
   const block = /\s*<url>\s*<loc>https:\/\/www\.kaufklug\.at\/preischeck\/bier-literpreis-vergleich\/<\/loc>[\s\S]*?<\/url>/i
-  await writeFile(join(distDir, 'sitemap.xml'), candidate ? source : source.replace(block, ''), 'utf8')
+  const priceCheckSource = candidate ? source : source.replace(block, '')
+  const indexablePaths = new Set(pages.filter((page) => page.robots === 'index,follow').map((page) => `${siteUrl}${canonicalPath(page.path)}`))
+  await writeFile(join(distDir, 'sitemap.xml'), filterSitemapXml(priceCheckSource, indexablePaths), 'utf8')
 }
 
 export function buildCatchallDocument(template) {
@@ -505,9 +674,14 @@ async function main() {
   const template = prioritizeStylesheetBeforeModuleScript(await readFile(join(distDir, 'index.html'), 'utf8'))
   const comparisonSummaries = await buildComparisonSummaries()
   const priceCheckCandidate = await buildPriceCheckCandidate()
-  renderPages = getStaticSeoPages().map((page) => page.priceCheckKey === 'bier'
+  const staticSeoPages = getStaticSeoPages().map((page) => page.priceCheckKey === 'bier'
     ? { ...page, robots: priceCheckCandidate ? 'index,follow' : 'noindex,follow', priceCheckCandidate }
     : page)
+  const qualityByPath = new Map()
+  await Promise.all(staticSeoPages
+    .filter((page) => page.robots === 'index,follow' && page.key && (page.query || page.seoAutopilot))
+    .map(async (page) => qualityByPath.set(page.path, await fetchSeoPageQuality(page))))
+  renderPages = applySeoAutopilot(staticSeoPages, qualityByPath)
 
   for (const page of renderPages) {
     const pageWithSummary = comparisonSummaries.has(page.comparisonKey)
@@ -520,7 +694,7 @@ async function main() {
   }
 
   await writeFile(join(distDir, 'catchall.html'), buildCatchallDocument(template), 'utf8')
-  await syncRenderedSitemap(priceCheckCandidate)
+  await syncRenderedSitemap(priceCheckCandidate, renderPages)
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

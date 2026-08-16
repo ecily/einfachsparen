@@ -13,6 +13,7 @@ test('static SEO documents expose route-specific metadata and visible content', 
   assert.match(html, /<title>BILLA Angebote aktuell vergleichen \| kaufklug\.at<\/title>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/angebote\/billa/)
   assert.match(html, /<h1>BILLA Angebote aktuell vergleichen<\/h1>/)
+  assert.match(html, /property="og:image" content="https:\/\/www\.kaufklug\.at\/brand\/kaufklug-logo-transparent\.png"/)
   assert.match(html, /application\/ld\+json/)
 })
 
@@ -61,8 +62,8 @@ test('high-impression landing pages expose comparison metadata and relevant link
       links: ['/angebote/bier/', '/angebote/kaffee/', '/angebote/schokolade/', '/angebote/nudeln/', '/angebote/chips/'],
     },
     supermarkt: {
-      title: 'Supermarkt Angebote aktuell vergleichen | kaufklug.at',
-      h1: 'Supermarkt Angebote aktuell vergleichen',
+      title: 'Supermarkt Angebote in Österreich vergleichen | kaufklug.at',
+      h1: 'Supermarkt Angebote vergleichen',
       signal: 'Preis pro kg, Liter oder Stück',
       links: ['/angebote/bier/', '/angebote/kaffee/', '/angebote/schokolade/', '/angebote/nudeln/', '/angebote/chips/'],
     },
@@ -120,7 +121,7 @@ test('coffee landing page is indexable and complete in initial HTML', () => {
   }
 })
 
-test('coffee is linked from relevant indexable static pages and sitemap has 26 safe URLs', async () => {
+test('coffee is linked from relevant indexable static pages and sitemap has 27 safe URLs', async () => {
   for (const path of ['/', '/angebote', '/angebote/supermarkt', '/angebote/billa', '/angebote/penny']) {
     const page = getStaticSeoPages().find((candidate) => candidate.path === path)
     const html = buildSeoStaticDocument(template, page)
@@ -129,7 +130,7 @@ test('coffee is linked from relevant indexable static pages and sitemap has 26 s
 
   const sitemap = await readFile(resolve('admin/public/sitemap.xml'), 'utf8')
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1])
-  assert.equal(urls.length, 26)
+  assert.equal(urls.length, 27)
   assert.ok(urls.includes('https://www.kaufklug.at/preischeck/bier-literpreis-vergleich/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/kaffee/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/bier/'))
