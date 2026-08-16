@@ -551,3 +551,8 @@
 - Als datengetriebene Erweiterung wurde `/angebote/deo/` mit bestehendem Ranking-Query aufgenommen. Die lokale Build-Evidence ist ausreichend; Mueller bleibt gemaess bestehendem Vertrag `noindex`. Die generierte Sitemap umfasst 27 URLs und wird aus dem aktuellen Indexierbarkeitsstatus gefiltert.
 - Titles, Descriptions, H1/Intro, interne Links sowie statische/runtime Open-Graph-Bilder wurden fuer die bestehenden Landingpages konsistent geschaerft. Die Trailing-Slash-Canonical-Konvention bleibt bestehen; Such-, Query-, Utility- und unbekannte Pfade bleiben aus Sitemap und Index ausgeschlossen.
 - Heute wurde keine Search-Console-Aktion ausgefuehrt. Der technische SEO-Ausbau ist fuer diesen Arbeitsstand abgeschlossen; offen bleiben Search-Console-Antraege und die spaetere Beobachtung von CTR/Positionen.
+-
+## SEO-Autopilot-Live-Blocker am 2026-08-16
+
+- Commit `346249ca` ist auf `origin/main`; lokaler Build, 73 Frontend-Tests, ESLint und `git diff --check` sind gruen. Der Live-Smoke zeigt jedoch weiterhin den Static-Build vom 2026-08-15: `/angebote/deo/` ist live die fail-closed Catchall-Seite, die Sitemap enthaelt 26 statt lokal 27 URLs, und die neuen SEO-Titel sind noch nicht ausgeliefert.
+- Im Repository gibt es keine verifizierbare DO-App-Spec, keinen `doctl`-Zugang und keine GitHub-Action fuer den Static-Deploy. Daher ist die Ursache auf Repo-Seite nicht weiter aufloesbar: Der bestehende DigitalOcean-Static-Site-Deploy muss im DO-Dashboard fuer Repository `ecily/einfachsparen`, Branch `main`, mit dem vorhandenen Admin-Root/Build/Output-Vertrag neu angestossen oder geprueft werden. Keine SEO- oder Public-Validity-Aenderung ist dafuer noetig.
