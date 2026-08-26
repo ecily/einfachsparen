@@ -9063,7 +9063,7 @@ async function buildRankingResponseFromStoredResultCache({
       units: Array.isArray(summaryBasis.units) ? summaryBasis.units : [],
       candidateCount: summaryBasis.candidateCount || 0,
       candidateLimit: summaryBasis.candidateLimit || 0,
-      resultCount: freshVisibleOffers.length,
+      resultCount: summaryBasis.resultCount || 0,
       resultSetToken: cacheEntry.resultSetToken || '',
       visibleOffers: freshVisibleOffers,
     });

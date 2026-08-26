@@ -75,7 +75,7 @@ test('stored ranking hydration publishes the existing memory base without changi
     const cacheEntry = {
       offerIds: ['offer-2', 'offer-1'],
       resultSetToken: 'stable-token',
-      summaryBasis: { units: ['stueck'], candidateCount: 2, candidateLimit: 1000, resultCount: 2 },
+      summaryBasis: { units: ['stueck'], candidateCount: 3, candidateLimit: 1000, resultCount: 3 },
     };
 
     const hydrated = await buildRankingResponseFromStoredResultCache({
@@ -96,6 +96,7 @@ test('stored ranking hydration publishes the existing memory base without changi
     assert.deepEqual(secondPage.rankedOffers.map((offer) => offer.id), ['offer-1']);
     assert.equal(hydrated.summary.totalCount, 2);
     assert.equal(secondPage.summary.totalCount, 2);
+    assert.equal(hydrated.summary.resultCount, 3);
     assert.equal(secondPage.summary.resultCount, hydrated.summary.resultCount);
     assert.equal(secondPage.summary.resultSetToken, 'stable-token');
     assert.equal(offerFindCalls, 1);
