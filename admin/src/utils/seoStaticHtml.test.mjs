@@ -11,10 +11,13 @@ test('static SEO documents expose route-specific metadata and visible content', 
   const html = buildSeoStaticDocument(template, page)
 
   assert.match(html, /<title>BILLA Angebote aktuell vergleichen \| kaufklug\.at<\/title>/)
+  assert.match(html, /<meta name="description" content="Aktuelle BILLA- und BILLA Plus-Angebote und Aktionen in \u00d6sterreich vergleichen \u2013 mit Preisen, Packungsgr\u00f6\u00dfen, G\u00fcltigkeit und Bedingungen\." \/>/)
+  assert.match(html, /<meta property="og:description" content="Aktuelle BILLA- und BILLA Plus-Angebote und Aktionen in \u00d6sterreich vergleichen \u2013 mit Preisen, Packungsgr\u00f6\u00dfen, G\u00fcltigkeit und Bedingungen\." \/>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/angebote\/billa/)
   assert.match(html, /<h1>BILLA Angebote aktuell vergleichen<\/h1>/)
   assert.match(html, /property="og:image" content="https:\/\/www\.kaufklug\.at\/brand\/kaufklug-logo-transparent\.png"/)
   assert.match(html, /application\/ld\+json/)
+  assert.doesNotMatch(page.description, /Prospekt|Flugblatt/i)
 })
 
 test('homepage exposes crawlable internal SEO links in initial HTML', () => {
@@ -58,7 +61,7 @@ test('high-impression landing pages expose comparison metadata and relevant link
     billa: {
       title: 'BILLA Angebote aktuell vergleichen | kaufklug.at',
       h1: 'BILLA Angebote aktuell vergleichen',
-      signal: 'Preis pro kg, Liter oder Stück',
+      signal: 'Preis pro Einheit',
       links: ['/angebote/bier/', '/angebote/kaffee/', '/angebote/schokolade/', '/angebote/nudeln/', '/angebote/chips/'],
     },
     supermarkt: {

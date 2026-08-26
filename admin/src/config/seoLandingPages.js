@@ -142,7 +142,7 @@ export const seoLandingPages = [
     path: '/angebote/billa',
     title: 'BILLA Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Aktuelle BILLA-Angebote vergleichen. Preise, Packungsgr\u00f6\u00dfen, Bedingungen und Preis pro kg, Liter oder St\u00fcck transparent auf kaufklug.at.',
+      'Aktuelle BILLA- und BILLA Plus-Angebote und Aktionen in \u00d6sterreich vergleichen \u2013 mit Preisen, Packungsgr\u00f6\u00dfen, G\u00fcltigkeit und Bedingungen.',
     h1: 'BILLA Angebote aktuell vergleichen',
     intro:
       'Vergleiche aktuelle Angebote von BILLA und BILLA Plus mit Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Preis pro Einheit.',
