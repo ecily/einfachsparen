@@ -97,6 +97,7 @@ test('accepts normal search query with limit 60', () => {
     offset: '60',
     resultSetToken: 'abc_DEF-123',
     debugTiming: 'true',
+    flat: 'true',
   });
 
   assert.equal(error, null);
@@ -106,6 +107,7 @@ test('accepts normal search query with limit 60', () => {
   assert.equal(req.query.offsetExplicit, true);
   assert.equal(req.query.resultSetToken, 'abc_DEF-123');
   assert.equal(req.query.debugTiming, true);
+  assert.equal(req.query.flat, true);
   assert.deepEqual(req.validatedRankingQuery, {
     q: 'butter',
     limit: 60,
@@ -117,6 +119,7 @@ test('accepts normal search query with limit 60', () => {
     unit: 'all',
     resultSetToken: 'abc_DEF-123',
     debugTiming: true,
+    flat: true,
     sort: '',
     onlyWithoutProgram: false,
   });

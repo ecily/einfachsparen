@@ -232,6 +232,7 @@ function validateRankingQuery(req, res, next) {
       maxLength: MAX_RESULT_SET_TOKEN_LENGTH,
     });
     const debugTiming = normalizeBooleanString(rawQuery.debugTiming);
+    const flat = normalizeBooleanString(rawQuery.flat);
 
     const sort = normalizeString(rawQuery.sort || '', { field: 'sort', maxLength: 20 });
     if (!allowedSortValues.has(sort)) {
@@ -250,6 +251,7 @@ function validateRankingQuery(req, res, next) {
       unit,
       resultSetToken,
       debugTiming,
+      flat,
       sort,
       onlyWithoutProgram,
     };

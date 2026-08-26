@@ -5584,11 +5584,6 @@ function hasPlausibleComparisonQuantity(offer, productType) {
   return totalAmount <= 20;
 }
 
-function haveCompatibleComparisonCategory(primary, alternative) {
-  return normalizeSearchText(primary?.categoryPrimary || '') === normalizeSearchText(alternative?.categoryPrimary || '')
-    && normalizeSearchText(primary?.categorySecondary || '') === normalizeSearchText(alternative?.categorySecondary || '');
-}
-
 function hasClearComparisonConditions(offer) {
   const conditionsText = String(getPublicConditionsText(offer) || '').trim();
   const requiredQuantity = Number(offer?.minimumPurchaseQty || offer?.minimumPurchaseQuantity || 1);
@@ -5666,42 +5661,89 @@ function isSafeMarketComparisonCandidate(offer) {
   );
 }
 
-function getSafeMarketComparisonMatch(primary, alternative) {
-  if (!isSafeMarketComparisonCandidate(primary) || !isSafeMarketComparisonCandidate(alternative)) {
+function buildSafeMarketComparisonFacts(offer) {
+  return {
+    eligible: isSafeMarketComparisonCandidate(offer),
+    id: String(offer?._id || offer?.id || ''),
+    retailerFamily: getComparisonRetailerFamily(offer),
+    unit: normalizeComparableUnit(offer?.normalizedUnitPrice?.unit || offer?.comparableUnit),
+    unitPrice: Number(offer?.normalizedUnitPrice?.amount),
+    productType: getStrongComparisonProductType(offer),
+    categoryPrimary: normalizeSearchText(offer?.categoryPrimary || ''),
+    categorySecondary: normalizeSearchText(offer?.categorySecondary || ''),
+  };
+}
+
+function getSafeMarketComparisonFacts(offer, factsCache = null) {
+  if (!factsCache || !offer || typeof offer !== 'object') {
+    return buildSafeMarketComparisonFacts(offer);
+  }
+
+  const cached = factsCache.get(offer);
+  if (cached) return cached;
+
+  const facts = buildSafeMarketComparisonFacts(offer);
+  factsCache.set(offer, facts);
+  return facts;
+}
+
+function buildSafeMarketComparisonBucketKey(facts = {}) {
+  if (!facts.eligible) return '';
+
+  return [
+    facts.productType,
+    facts.categoryPrimary,
+    facts.categorySecondary,
+    facts.unit,
+  ].join('\u001f');
+}
+
+function buildSafeMarketComparisonCandidateIndex(candidates = [], factsCache = new WeakMap()) {
+  const buckets = new Map();
+
+  for (const candidate of candidates) {
+    const facts = getSafeMarketComparisonFacts(candidate, factsCache);
+    const bucketKey = buildSafeMarketComparisonBucketKey(facts);
+    if (!bucketKey) continue;
+
+    if (!buckets.has(bucketKey)) buckets.set(bucketKey, []);
+    buckets.get(bucketKey).push(candidate);
+  }
+
+  return { buckets, factsCache };
+}
+
+function getSafeMarketComparisonMatch(primary, alternative, factsCache = null) {
+  const primaryFacts = getSafeMarketComparisonFacts(primary, factsCache);
+  const alternativeFacts = getSafeMarketComparisonFacts(alternative, factsCache);
+
+  if (!primaryFacts.eligible || !alternativeFacts.eligible) {
     return null;
   }
 
-  if (String(primary?._id || primary?.id || '') === String(alternative?._id || alternative?.id || '')) {
+  if (primaryFacts.id === alternativeFacts.id) {
     return null;
   }
-
-  const primaryRetailer = getComparisonRetailerFamily(primary);
-  const alternativeRetailer = getComparisonRetailerFamily(alternative);
-  const primaryUnit = normalizeComparableUnit(primary?.normalizedUnitPrice?.unit || primary?.comparableUnit);
-  const alternativeUnit = normalizeComparableUnit(alternative?.normalizedUnitPrice?.unit || alternative?.comparableUnit);
-  const primaryUnitPrice = Number(primary?.normalizedUnitPrice?.amount);
-  const alternativeUnitPrice = Number(alternative?.normalizedUnitPrice?.amount);
-  const primaryType = getStrongComparisonProductType(primary);
-  const alternativeType = getStrongComparisonProductType(alternative);
 
   if (
-    !primaryRetailer
-    || !alternativeRetailer
-    || primaryRetailer === alternativeRetailer
-    || primaryType !== alternativeType
-    || !haveCompatibleComparisonCategory(primary, alternative)
-    || primaryUnit !== alternativeUnit
+    !primaryFacts.retailerFamily
+    || !alternativeFacts.retailerFamily
+    || primaryFacts.retailerFamily === alternativeFacts.retailerFamily
+    || primaryFacts.productType !== alternativeFacts.productType
+    || primaryFacts.categoryPrimary !== alternativeFacts.categoryPrimary
+    || primaryFacts.categorySecondary !== alternativeFacts.categorySecondary
+    || primaryFacts.unit !== alternativeFacts.unit
   ) {
     return null;
   }
 
-  if (alternativeUnitPrice < primaryUnitPrice) {
-    return { type: 'cheaper_alternative', productType: primaryType };
+  if (alternativeFacts.unitPrice < primaryFacts.unitPrice) {
+    return { type: 'cheaper_alternative', productType: primaryFacts.productType };
   }
 
-  const relativeDifference = Math.abs(alternativeUnitPrice - primaryUnitPrice) / primaryUnitPrice;
+  const relativeDifference = Math.abs(alternativeFacts.unitPrice - primaryFacts.unitPrice) / primaryFacts.unitPrice;
   return relativeDifference <= MAX_SIMILAR_UNIT_PRICE_DIFFERENCE
-    ? { type: 'similar_alternative', productType: primaryType }
+    ? { type: 'similar_alternative', productType: primaryFacts.productType }
     : null;
 }
 
@@ -5721,28 +5763,41 @@ function getCheaperComparisonLabel(unit) {
   return 'Günstiger pro Stück';
 }
 
-function buildSafeMarketComparisonAlternative(primary, candidates = []) {
-  const matches = candidates
-    .map((candidate) => ({ candidate, match: getSafeMarketComparisonMatch(primary, candidate) }))
-    .filter((item) => item.match)
-    .sort((left, right) => {
-      if (left.match.type !== right.match.type) {
-        return left.match.type === 'cheaper_alternative' ? -1 : 1;
-      }
+function compareSafeMarketComparisonMatches(left, right, primary) {
+  if (left.match.type !== right.match.type) {
+    return left.match.type === 'cheaper_alternative' ? -1 : 1;
+  }
 
-      if (left.match.type === 'cheaper_alternative') {
-        const unitPriceDifference = Number(left.candidate?.normalizedUnitPrice?.amount) - Number(right.candidate?.normalizedUnitPrice?.amount);
-        if (unitPriceDifference !== 0) return unitPriceDifference;
-      } else {
-        const primaryAmount = Number(primary?.normalizedUnitPrice?.amount);
-        const leftDifference = Math.abs(Number(left.candidate?.normalizedUnitPrice?.amount) - primaryAmount);
-        const rightDifference = Math.abs(Number(right.candidate?.normalizedUnitPrice?.amount) - primaryAmount);
-        if (leftDifference !== rightDifference) return leftDifference - rightDifference;
-      }
+  if (left.match.type === 'cheaper_alternative') {
+    const unitPriceDifference = Number(left.candidate?.normalizedUnitPrice?.amount) - Number(right.candidate?.normalizedUnitPrice?.amount);
+    if (unitPriceDifference !== 0) return unitPriceDifference;
+  } else {
+    const primaryAmount = Number(primary?.normalizedUnitPrice?.amount);
+    const leftDifference = Math.abs(Number(left.candidate?.normalizedUnitPrice?.amount) - primaryAmount);
+    const rightDifference = Math.abs(Number(right.candidate?.normalizedUnitPrice?.amount) - primaryAmount);
+    if (leftDifference !== rightDifference) return leftDifference - rightDifference;
+  }
 
-      return compareOffersByRanking(left.candidate, right.candidate);
-    });
-  const selected = matches[0];
+  return compareOffersByRanking(left.candidate, right.candidate);
+}
+
+function buildSafeMarketComparisonAlternative(primary, candidates = [], comparisonIndex = null) {
+  const index = comparisonIndex || buildSafeMarketComparisonCandidateIndex(candidates);
+  const primaryFacts = getSafeMarketComparisonFacts(primary, index.factsCache);
+  const bucketKey = buildSafeMarketComparisonBucketKey(primaryFacts);
+  const compatibleCandidates = bucketKey ? (index.buckets.get(bucketKey) || []) : [];
+  let selected = null;
+
+  for (const candidate of compatibleCandidates) {
+    const match = getSafeMarketComparisonMatch(primary, candidate, index.factsCache);
+    if (!match) continue;
+
+    const current = { candidate, match };
+    if (!selected || compareSafeMarketComparisonMatches(current, selected, primary) < 0) {
+      selected = current;
+    }
+  }
+
   const alternative = selected?.candidate;
 
   if (!alternative) {
@@ -5795,9 +5850,15 @@ function buildSafeMarketComparisonAlternative(primary, candidates = []) {
 }
 
 function buildRankedOffersWithSafeComparisons(offers, comparisonCandidates, bestUnitPrice, worstUnitPrice) {
+  const comparisonIndex = buildSafeMarketComparisonCandidateIndex(comparisonCandidates);
+
   return offers.map((offer) => {
     const rankedOffer = buildRankedOffer(offer, bestUnitPrice, worstUnitPrice);
-    const comparisonAlternative = buildSafeMarketComparisonAlternative(offer, comparisonCandidates);
+    const comparisonAlternative = buildSafeMarketComparisonAlternative(
+      offer,
+      comparisonCandidates,
+      comparisonIndex,
+    );
 
     return comparisonAlternative ? { ...rankedOffer, comparisonAlternative } : rankedOffer;
   });

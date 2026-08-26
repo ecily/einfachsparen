@@ -234,7 +234,7 @@ export async function fetchFilterCategories(retailerKeys = []) {
 }
 
 export async function fetchOfferRankingDirect(params = {}) {
-  const searchParams = new URLSearchParams()
+  const searchParams = new URLSearchParams({ flat: 'true' })
 
   for (const [key, value] of Object.entries(params || {})) {
     if (value === undefined || value === null || value === '') continue
@@ -269,6 +269,7 @@ export function prefetchTopDeals() {
 
 export async function fetchKeywordOfferSearch(query, limit = 60, offset = 0, resultSetToken = '', options = {}) {
   const searchParams = new URLSearchParams()
+  searchParams.set('flat', 'true')
   searchParams.set('q', String(query || '').trim())
   searchParams.set('limit', String(limit))
   searchParams.set('offset', String(offset))

@@ -11,6 +11,13 @@ const { isOfferFreshForActiveUse } = require('../services/offers/offerFreshness'
 
 const router = express.Router();
 
+function buildPublicRankingResponse(ranking, { flat = false } = {}) {
+  if (!flat || !ranking || typeof ranking !== 'object') return ranking;
+
+  const { rankedGroups, ...flatRanking } = ranking;
+  return flatRanking;
+}
+
 function isPrivateHostname(hostname) {
   const host = String(hostname || '').toLowerCase();
 
@@ -57,7 +64,7 @@ router.get('/ranking', offersRateLimit, validateRankingQuery, async (req, res, n
       debugTiming: query.debugTiming === true,
     });
 
-    res.json(ranking);
+    res.json(buildPublicRankingResponse(ranking, { flat: query.flat === true }));
   } catch (error) {
     next(error);
   }
@@ -173,6 +180,7 @@ router.get('/:offerId/image', imageProxyRateLimit, async (req, res, next) => {
 });
 
 router.__private = {
+  buildPublicRankingResponse,
   parseSafeImageUrl,
 };
 
