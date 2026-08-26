@@ -9008,7 +9008,7 @@ async function buildRankingResponseFromStoredResultCache({
     })),
     units: Array.isArray(summaryBasis.units) ? summaryBasis.units : [],
     summary: {
-      resultCount: freshVisibleOffers.length,
+      resultCount: summaryBasis.resultCount || 0,
       displayedCount: rankedOffers.length,
       requestedDisplay: showAllMatching ? 'all' : safeLimit,
       totalCount: pagination.totalCount,

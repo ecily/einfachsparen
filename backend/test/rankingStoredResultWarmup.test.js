@@ -75,7 +75,7 @@ test('stored ranking hydration publishes the existing memory base without changi
     const cacheEntry = {
       offerIds: ['offer-2', 'offer-1'],
       resultSetToken: 'stable-token',
-      summaryBasis: { units: ['stueck'], candidateCount: 3, candidateLimit: 1000, resultCount: 3 },
+      summaryBasis: { units: ['stueck'], candidateCount: 2, candidateLimit: 1000, resultCount: 2 },
     };
 
     const hydrated = await buildRankingResponseFromStoredResultCache({
