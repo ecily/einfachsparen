@@ -1,9 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const Offer = require('../src/models/Offer');
 
 const {
   buildCandidateDecision,
+  buildTopDeals,
   buildTopDealsFromOffers,
+  clearTopDealsCache,
   compareTopDeals,
 } = require('../src/services/offers/topDealsService');
 
@@ -66,6 +69,99 @@ function offer(overrides = {}) {
     ...overrides,
   };
 }
+
+function mockTopDealsFind(documents, { delayMs = 0, fail = false } = {}) {
+  return () => {
+    const query = {
+      select() { return query; },
+      limit() { return query; },
+      maxTimeMS() { return query; },
+      async lean() {
+        if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        if (fail) throw new Error('simulated candidate read failure');
+        return documents.map((document) => ({ ...document }));
+      },
+    };
+    return query;
+  };
+}
+
+test('shares the Top Deals candidate read across filter builds and reloads only after invalidation', async () => {
+  const originalFind = Offer.find;
+  const documents = [offer({ _id: 'pool-deal' })];
+  let findCalls = 0;
+  const findImpl = mockTopDealsFind(documents, { delayMs: 10 });
+  Offer.find = (...args) => {
+    findCalls += 1;
+    return findImpl(...args);
+  };
+  clearTopDealsCache();
+
+  try {
+    const [allDeals, retailerDeals] = await Promise.all([
+      buildTopDeals({ now: NOW }),
+      buildTopDeals({ now: NOW, retailer: 'lidl' }),
+    ]);
+
+    assert.equal(findCalls, 1);
+    assert.deepEqual(allDeals.deals.map((deal) => deal.id), retailerDeals.deals.map((deal) => deal.id));
+
+    clearTopDealsCache();
+    const rebuilt = await buildTopDeals({ now: NOW });
+    assert.equal(findCalls, 2);
+    assert.deepEqual(rebuilt.deals.map((deal) => deal.id), allDeals.deals.map((deal) => deal.id));
+  } finally {
+    Offer.find = originalFind;
+    clearTopDealsCache();
+  }
+});
+
+test('does not publish a failed Top Deals candidate build and permits an exact retry', async () => {
+  const originalFind = Offer.find;
+  let findCalls = 0;
+  Offer.find = (...args) => {
+    findCalls += 1;
+    return mockTopDealsFind([offer({ _id: 'retry-deal' })], { fail: findCalls === 1 })(...args);
+  };
+  clearTopDealsCache();
+
+  try {
+    await assert.rejects(buildTopDeals({ now: NOW }), /simulated candidate read failure/);
+    const response = await buildTopDeals({ now: NOW });
+    assert.equal(findCalls, 2);
+    assert.deepEqual(response.deals.map((deal) => deal.id), ['retry-deal']);
+  } finally {
+    Offer.find = originalFind;
+    clearTopDealsCache();
+  }
+});
+
+test('revalidates cached Top Deals and never serves an offer after validTo', async () => {
+  const originalFind = Offer.find;
+  let findCalls = 0;
+  const expiringOffer = offer({
+    _id: 'expiring-deal',
+    validTo: new Date(NOW.getTime() + 30 * 1000),
+  });
+  const findImpl = mockTopDealsFind([expiringOffer]);
+  Offer.find = (...args) => {
+    findCalls += 1;
+    return findImpl(...args);
+  };
+  clearTopDealsCache();
+
+  try {
+    const current = await buildTopDeals({ now: NOW });
+    const afterExpiry = await buildTopDeals({ now: new Date(NOW.getTime() + 60 * 1000) });
+
+    assert.deepEqual(current.deals.map((deal) => deal.id), ['expiring-deal']);
+    assert.equal(afterExpiry.count, 0);
+    assert.equal(findCalls, 1);
+  } finally {
+    Offer.find = originalFind;
+    clearTopDealsCache();
+  }
+});
 
 test('accepts a fresh official deal and derives a reference unit price from the same package', () => {
   const response = buildTopDealsFromOffers([offer()], { now: NOW });

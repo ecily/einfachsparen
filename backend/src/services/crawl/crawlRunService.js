@@ -831,13 +831,14 @@ async function markOfferPublishStatusForRun({
   runStatus,
   OfferModel = Offer,
   now = new Date(),
+  invalidatePublicReadCachesImpl = null,
 } = {}) {
   if (!runId || !OfferModel || typeof OfferModel.updateMany !== 'function') {
     return { matchedCount: 0, modifiedCount: 0, skipped: true };
   }
 
   const publishStatus = OFFER_PUBLISH_STATUS_BY_RUN_STATUS[runStatus] || 'crawl-run-unknown';
-  return OfferModel.updateMany(
+  const result = await OfferModel.updateMany(
     { crawlRunId: runId },
     {
       $set: {
@@ -846,6 +847,60 @@ async function markOfferPublishStatusForRun({
       },
     }
   );
+
+  const invalidatePublicReadCaches = invalidatePublicReadCachesImpl
+    || (OfferModel === Offer ? invalidateAndWarmPublicReadCaches : null);
+  if (invalidatePublicReadCaches) {
+    try {
+      invalidatePublicReadCaches({ runId, runStatus, publishStatus });
+    } catch (error) {
+      logger.warn('Offer publish completed but public read-cache invalidation failed', {
+        runId: String(runId),
+        runStatus,
+        message: error.message,
+      });
+    }
+  }
+
+  return result;
+}
+
+function invalidateAndWarmPublicReadCaches({ runId, runStatus, publishStatus } = {}) {
+  // Lazy imports keep crawl execution independent from read-service module setup.
+  const {
+    clearPublicFacetCache,
+    warmPublicFacetSnapshot,
+  } = require('../filters/filterMetadataService');
+  const { buildTopDeals, clearTopDealsCache } = require('../offers/topDealsService');
+  const { buildOfferRanking, clearRankingResponseCache } = require('../offers/offerRankingService');
+
+  clearPublicFacetCache();
+  clearTopDealsCache();
+  clearRankingResponseCache();
+
+  if (env.NODE_ENV !== 'production') {
+    return;
+  }
+
+  void Promise.allSettled([
+    warmPublicFacetSnapshot(),
+    buildTopDeals({ limit: 20 }),
+    buildOfferRanking({ limit: 20 }),
+  ]).then((results) => {
+    logger.info('Public read caches invalidated and warmup settled after offer publish', {
+      runId: String(runId || ''),
+      runStatus,
+      publishStatus,
+      fulfilled: results.filter((entry) => entry.status === 'fulfilled').length,
+      rejected: results.filter((entry) => entry.status === 'rejected').length,
+    });
+  }).catch((error) => {
+    logger.warn('Public read-cache warmup failed after offer publish', {
+      runId: String(runId || ''),
+      runStatus,
+      message: error.message,
+    });
+  });
 }
 
 function buildLockExpiry(now = new Date()) {

@@ -37,6 +37,12 @@ const ALLOWED_CATEGORY_FILTERS = new Set([
 ]);
 const cachedTopDeals = new Map();
 const topDealsBuildPromises = new Map();
+let topDealsCandidatePool = null;
+let topDealsCandidatePoolPromise = null;
+let topDealsCandidatePoolDateKey = '';
+let topDealsCacheGeneration = 0;
+let topDealsRankedMemoDateKey = '';
+let topDealsRankedMemo = new WeakMap();
 
 function timingNowMs() {
   return Number(process.hrtime.bigint()) / 1e6;
@@ -44,6 +50,86 @@ function timingNowMs() {
 
 function addTiming(profile, key, startedAt) {
   if (profile) profile[key] = (profile[key] || 0) + (timingNowMs() - startedAt);
+}
+
+function getViennaDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce((result, part) => ({
+    ...result,
+    [part.type]: part.value,
+  }), {});
+
+  return parts.year && parts.month && parts.day ? `${parts.year}-${parts.month}-${parts.day}` : '';
+}
+
+function getTopDealsRankedMemo(now = new Date()) {
+  const dateKey = getViennaDateKey(now);
+  if (dateKey !== topDealsRankedMemoDateKey) {
+    topDealsRankedMemoDateKey = dateKey;
+    topDealsRankedMemo = new WeakMap();
+  }
+  return topDealsRankedMemo;
+}
+
+function buildTopDealsBaseQuery() {
+  return {
+    status: 'active',
+    isActiveNow: true,
+    'priceCurrent.amount': { $gt: 0 },
+    $or: [
+      { 'priceReference.amount': { $gt: 0 } },
+      { discountPercent: { $gt: 0 } },
+      { 'rawFacts.discountPercentage': { $gt: 0 } },
+      { 'rawFacts.discountPercent': { $gt: 0 } },
+    ],
+  };
+}
+
+async function readTopDealsCandidatePool({ publish = true } = {}) {
+  const generation = topDealsCacheGeneration;
+  const dateKey = getViennaDateKey(new Date());
+  const offers = await Offer.find({
+    ...buildTopDealsBaseQuery(),
+    retailerKey: { $in: [...ALLOWED_RETAILER_FILTERS] },
+  })
+    .select(`${OFFER_RANKING_FIELDS} needsReview`)
+    .limit(TOP_DEALS_TOTAL_CANDIDATE_LIMIT)
+    .maxTimeMS(2500)
+    .lean();
+
+  if (publish && generation === topDealsCacheGeneration) {
+    topDealsCandidatePool = offers;
+    topDealsCandidatePoolDateKey = dateKey;
+  }
+  return offers;
+}
+
+async function getTopDealsCandidatePool() {
+  const currentDateKey = getViennaDateKey(new Date());
+  if (topDealsCandidatePool && topDealsCandidatePoolDateKey === currentDateKey) {
+    return topDealsCandidatePool;
+  }
+  if (topDealsCandidatePoolDateKey !== currentDateKey) {
+    topDealsCandidatePool = null;
+  }
+  if (topDealsCandidatePoolPromise) return topDealsCandidatePoolPromise;
+
+  const promise = readTopDealsCandidatePool();
+  topDealsCandidatePoolPromise = promise;
+  try {
+    return await promise;
+  } finally {
+    if (topDealsCandidatePoolPromise === promise) {
+      topDealsCandidatePoolPromise = null;
+    }
+  }
 }
 
 function finitePositive(value) {
@@ -275,7 +361,7 @@ function buildRetailerFallbackDecision(rawOffer, now = new Date(), profile = nul
   const normalizationStartedAt = profile ? timingNowMs() : 0;
   const offer = memo?.ranked?.has(rawOffer)
     ? memo.ranked.get(rawOffer)
-    : buildRankedOffer(rawOffer, null, null);
+    : buildRankedOffer(rawOffer, null, null, { now });
   if (memo?.ranked && !memo.ranked.has(rawOffer)) memo.ranked.set(rawOffer, offer);
   addTiming(profile, 'candidateNormalizationMs', normalizationStartedAt);
   if (String(offer?.offerType || '') !== 'product') {
@@ -372,7 +458,7 @@ function buildCandidateDecision(rawOffer, now = new Date(), profile = null, memo
   const normalizationStartedAt = profile ? timingNowMs() : 0;
   const offer = memo?.ranked?.has(rawOffer)
     ? memo.ranked.get(rawOffer)
-    : buildRankedOffer(rawOffer, null, null);
+    : buildRankedOffer(rawOffer, null, null, { now });
   if (memo?.ranked && !memo.ranked.has(rawOffer)) memo.ranked.set(rawOffer, offer);
   addTiming(profile, 'candidateNormalizationMs', normalizationStartedAt);
   const price = finitePositive(offer?.priceCurrent?.amount);
@@ -509,6 +595,7 @@ function buildTopDealsFromOffers(offers = [], {
   category = '',
   retailer = '',
   debugTiming = false,
+  rankedMemo = null,
 } = {}) {
   const profile = debugTiming ? { candidateCount: offers.length, startedAt: timingNowMs() } : null;
   const excludedReasons = {};
@@ -517,7 +604,7 @@ function buildTopDealsFromOffers(offers = [], {
   const memo = {
     freshness: new WeakMap(),
     sourceQuality: new WeakMap(),
-    ranked: new WeakMap(),
+    ranked: rankedMemo || new WeakMap(),
   };
 
   for (const offer of offers) {
@@ -648,35 +735,24 @@ async function buildTopDeals({
   const nowMs = now.getTime();
   const cachedEntry = cachedTopDeals.get(cacheKey);
   if (!debugTiming && cachedEntry && cachedEntry.expiresAt > nowMs) {
-    return cachedEntry.response;
+    const cachedDeals = Array.isArray(cachedEntry.response?.deals) ? cachedEntry.response.deals : [];
+    if (filterFreshActiveOffers(cachedDeals, now).length === cachedDeals.length) {
+      return cachedEntry.response;
+    }
+    cachedTopDeals.delete(cacheKey);
   }
 
   const inFlight = topDealsBuildPromises.get(cacheKey);
-  if (!debugTiming && inFlight) {
-    return inFlight;
+  if (!debugTiming && inFlight?.generation === topDealsCacheGeneration) {
+    return inFlight.promise;
   }
 
+  const generation = topDealsCacheGeneration;
   const buildPromise = (async () => {
-    const baseQuery = {
-      status: 'active',
-      isActiveNow: true,
-      'priceCurrent.amount': { $gt: 0 },
-      $or: [
-        { 'priceReference.amount': { $gt: 0 } },
-        { discountPercent: { $gt: 0 } },
-        { 'rawFacts.discountPercentage': { $gt: 0 } },
-        { 'rawFacts.discountPercent': { $gt: 0 } },
-      ],
-    };
     const mongoStartedAt = timingNowMs();
-    const offers = await Offer.find({
-      ...baseQuery,
-      retailerKey: { $in: [...ALLOWED_RETAILER_FILTERS] },
-    })
-      .select(`${OFFER_RANKING_FIELDS} needsReview`)
-      .limit(TOP_DEALS_TOTAL_CANDIDATE_LIMIT)
-      .maxTimeMS(2500)
-      .lean();
+    const offers = debugTiming
+      ? await readTopDealsCandidatePool({ publish: false })
+      : await getTopDealsCandidatePool();
     const mongoReadMs = timingNowMs() - mongoStartedAt;
 
     const response = buildTopDealsFromOffers(offers, {
@@ -685,6 +761,7 @@ async function buildTopDeals({
       category,
       retailer,
       debugTiming,
+      rankedMemo: debugTiming ? null : getTopDealsRankedMemo(now),
     });
     if (debugTiming) {
       response.debugTiming = {
@@ -692,7 +769,7 @@ async function buildTopDeals({
         mongoReadMs: Number(mongoReadMs.toFixed(1)),
         totalMs: Number((timingNowMs() - startedAt).toFixed(1)),
       };
-    } else {
+    } else if (generation === topDealsCacheGeneration) {
       cachedTopDeals.set(cacheKey, {
         expiresAt: nowMs + TOP_DEALS_CACHE_TTL_MS,
         response,
@@ -701,16 +778,26 @@ async function buildTopDeals({
     return response;
   })();
 
-  if (!debugTiming) topDealsBuildPromises.set(cacheKey, buildPromise);
+  const buildEntry = { generation, promise: buildPromise };
+  if (!debugTiming) topDealsBuildPromises.set(cacheKey, buildEntry);
   try {
     return await buildPromise;
   } finally {
-    if (!debugTiming) topDealsBuildPromises.delete(cacheKey);
+    if (!debugTiming && topDealsBuildPromises.get(cacheKey) === buildEntry) {
+      topDealsBuildPromises.delete(cacheKey);
+    }
   }
 }
 
 function clearTopDealsCache() {
+  topDealsCacheGeneration += 1;
   cachedTopDeals.clear();
+  topDealsBuildPromises.clear();
+  topDealsCandidatePool = null;
+  topDealsCandidatePoolPromise = null;
+  topDealsCandidatePoolDateKey = '';
+  topDealsRankedMemoDateKey = '';
+  topDealsRankedMemo = new WeakMap();
 }
 
 module.exports = {
@@ -725,4 +812,8 @@ module.exports = {
   matchesTopDealsFilters,
   normalizeLimit,
   normalizeTopDealsFilters,
+  _private: {
+    getTopDealsCandidatePool,
+    getViennaDateKey,
+  },
 };

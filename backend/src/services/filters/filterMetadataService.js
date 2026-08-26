@@ -21,6 +21,10 @@ const PUBLIC_FACET_SNAPSHOT_TTL_MS = 60 * 1000;
 let publicFacetSnapshot = null;
 let publicFacetSnapshotExpiresAt = 0;
 let publicFacetSnapshotPromise = null;
+let publicFacetOfferPool = null;
+let publicFacetOfferPoolPromise = null;
+let publicFacetOfferPoolDateKey = '';
+let publicFacetCacheGeneration = 0;
 const INTERSPAR_LIMITED_COVERAGE_MESSAGE = 'INTERSPAR derzeit eingeschränkt: Aktuelle Spezialangebote können sichtbar sein; das aktuelle Hauptflugblatt ist derzeit nicht zuverlässig automatisiert verfügbar.';
 
 const FILTER_METADATA_OFFER_SELECT_FIELDS = [
@@ -182,6 +186,23 @@ function withFilterMetadataMaxTime(query) {
     : query;
 }
 
+function getViennaDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce((result, part) => ({
+    ...result,
+    [part.type]: part.value,
+  }), {});
+
+  return parts.year && parts.month && parts.day ? `${parts.year}-${parts.month}-${parts.day}` : '';
+}
+
 function buildFilterMetadataOfferMatch() {
   return {
     $or: [
@@ -200,13 +221,49 @@ function buildFilterMetadataOfferMatch() {
   };
 }
 
+async function readPublicFacetOffers() {
+  const generation = publicFacetCacheGeneration;
+  const dateKey = getViennaDateKey(new Date());
+  const offers = await withFilterMetadataMaxTime(
+    Offer.find(buildFilterMetadataOfferMatch())
+      .select(PUBLIC_FACET_OFFER_SELECT_FIELDS.join(' '))
+  ).lean();
+
+  if (generation === publicFacetCacheGeneration) {
+    publicFacetOfferPool = offers;
+    publicFacetOfferPoolDateKey = dateKey;
+  }
+
+  return offers;
+}
+
+async function getPublicFacetOfferPool() {
+  const currentDateKey = getViennaDateKey(new Date());
+  if (publicFacetOfferPool && publicFacetOfferPoolDateKey === currentDateKey) {
+    return publicFacetOfferPool;
+  }
+  if (publicFacetOfferPoolDateKey !== currentDateKey) {
+    publicFacetOfferPool = null;
+  }
+  if (publicFacetOfferPoolPromise) return publicFacetOfferPoolPromise;
+
+  const promise = readPublicFacetOffers();
+  publicFacetOfferPoolPromise = promise;
+
+  try {
+    return await promise;
+  } finally {
+    if (publicFacetOfferPoolPromise === promise) {
+      publicFacetOfferPoolPromise = null;
+    }
+  }
+}
+
 async function readPublicFacetSnapshot() {
+  const startedAt = Date.now();
   const now = new Date();
   const [offers, existingRetailers, sources] = await Promise.all([
-    withFilterMetadataMaxTime(
-      Offer.find(buildFilterMetadataOfferMatch())
-        .select(PUBLIC_FACET_OFFER_SELECT_FIELDS.join(' '))
-    ).lean(),
+    getPublicFacetOfferPool(),
     withFilterMetadataMaxTime(
       Retailer.find({ retailerKey: { $nin: [...PUBLIC_DISABLED_RETAILER_KEYS] } })
         .select('retailerKey retailerName offerCount activeOfferCount firstSeenAt lastSeenAt lastSuccessfulCrawlAt isActive sortOrder')
@@ -221,14 +278,24 @@ async function readPublicFacetSnapshot() {
     ).lean(),
   ]);
 
-  return {
+  const activityCache = new WeakMap();
+  const snapshot = {
     now,
     offers,
-    retailers: buildRetailerDocuments(existingRetailers, offers, now, sources, []),
-    categories: buildCategoryDocuments(offers, now),
-    retailerCategoryStats: buildRetailerCategoryStatDocuments(offers, now),
+    retailers: buildRetailerDocuments(existingRetailers, offers, now, sources, [], activityCache),
+    categories: buildCategoryDocuments(offers, now, activityCache),
+    retailerCategoryStats: buildRetailerCategoryStatDocuments(offers, now, activityCache),
     sources,
   };
+
+  logger.info('Public facet snapshot built', {
+    durationMs: Date.now() - startedAt,
+    offerCount: offers.length,
+    retailerCount: snapshot.retailers.length,
+    categoryCount: snapshot.categories.length,
+  });
+
+  return snapshot;
 }
 
 async function getPublicFacetSnapshot() {
@@ -239,15 +306,21 @@ async function getPublicFacetSnapshot() {
   }
 
   if (!publicFacetSnapshotPromise) {
-    publicFacetSnapshotPromise = readPublicFacetSnapshot()
+    const generation = publicFacetCacheGeneration;
+    const promise = readPublicFacetSnapshot()
       .then((snapshot) => {
-        publicFacetSnapshot = snapshot;
-        publicFacetSnapshotExpiresAt = Date.now() + PUBLIC_FACET_SNAPSHOT_TTL_MS;
+        if (generation === publicFacetCacheGeneration) {
+          publicFacetSnapshot = snapshot;
+          publicFacetSnapshotExpiresAt = Date.now() + PUBLIC_FACET_SNAPSHOT_TTL_MS;
+        }
         return snapshot;
       })
       .finally(() => {
-        publicFacetSnapshotPromise = null;
+        if (publicFacetSnapshotPromise === promise) {
+          publicFacetSnapshotPromise = null;
+        }
       });
+    publicFacetSnapshotPromise = promise;
   }
 
   return publicFacetSnapshotPromise;
@@ -255,6 +328,16 @@ async function getPublicFacetSnapshot() {
 
 function warmPublicFacetSnapshot() {
   return getPublicFacetSnapshot();
+}
+
+function clearPublicFacetCache() {
+  publicFacetCacheGeneration += 1;
+  publicFacetSnapshot = null;
+  publicFacetSnapshotExpiresAt = 0;
+  publicFacetSnapshotPromise = null;
+  publicFacetOfferPool = null;
+  publicFacetOfferPoolPromise = null;
+  publicFacetOfferPoolDateKey = '';
 }
 
 function normalizeFilterKey(value, fallback = 'unknown') {
@@ -458,11 +541,15 @@ function buildCacheRawFacts(rawFacts = {}) {
   );
 }
 
-function isOfferActive(offer, now = new Date()) {
+function isOfferActive(offer, now = new Date(), activityCache = null) {
   // Facets must use exactly the same strict public contract as ranking.
   // A weaker source-level fallback can advertise retailers/categories that
   // the public ranking correctly excludes.
-  return isOfferFreshForActiveUse(offer, now);
+  if (activityCache?.has(offer)) return activityCache.get(offer);
+
+  const active = isOfferFreshForActiveUse(offer, now);
+  activityCache?.set(offer, active);
+  return active;
 }
 
 const RETAILER_ACTIVE_COVERAGE_TARGETS = {
@@ -710,7 +797,7 @@ function finalizeRetailerCoverage(retailer, recentJobs) {
   return retailer;
 }
 
-function buildRetailerDocuments(existingRetailers, offers, now, sources, crawlJobs) {
+function buildRetailerDocuments(existingRetailers, offers, now, sources, crawlJobs, activityCache = null) {
   const retailers = new Map();
   const sourceLookup = new Map(
     sources.map((source) => [
@@ -757,7 +844,7 @@ function buildRetailerDocuments(existingRetailers, offers, now, sources, crawlJo
   for (const offer of offers) {
     const retailerKey = normalizeRetailerKey(offer);
     const retailerName = cleanRetailerName(offer.retailerName, retailerKey);
-    const isActive = isOfferActive(offer, now);
+    const isActive = isOfferActive(offer, now, activityCache);
     const lastSeenAt = getOfferLastSeenAt(offer);
 
     if (!retailers.has(retailerKey)) {
@@ -843,7 +930,7 @@ function buildRetailerDocuments(existingRetailers, offers, now, sources, crawlJo
   });
 }
 
-function buildCategoryDocuments(offers, now) {
+function buildCategoryDocuments(offers, now, activityCache = null) {
   const categories = new Map();
 
   for (const offer of offers) {
@@ -851,7 +938,7 @@ function buildCategoryDocuments(offers, now) {
     const mainCategoryKey = normalizeCategoryKey(mainCategoryLabel);
     const subcategoryLabel = cleanSubcategoryLabel(mainCategoryLabel, offer.categorySecondary);
     const subcategoryKey = subcategoryLabel ? normalizeCategoryKey(subcategoryLabel) : '';
-    const isActive = isOfferActive(offer, now);
+    const isActive = isOfferActive(offer, now, activityCache);
     const lastSeenAt = getOfferLastSeenAt(offer);
 
     if (!categories.has(mainCategoryKey)) {
@@ -921,7 +1008,7 @@ function buildCategoryDocuments(offers, now) {
     .sort((left, right) => left.mainCategoryLabel.localeCompare(right.mainCategoryLabel, 'de'));
 }
 
-function buildRetailerCategoryStatDocuments(offers, now) {
+function buildRetailerCategoryStatDocuments(offers, now, activityCache = null) {
   const stats = new Map();
 
   for (const offer of offers) {
@@ -931,7 +1018,7 @@ function buildRetailerCategoryStatDocuments(offers, now) {
     const subcategoryLabel = cleanSubcategoryLabel(mainCategoryLabel, offer.categorySecondary);
     const subcategoryKey = subcategoryLabel ? normalizeCategoryKey(subcategoryLabel) : '';
     const lastSeenAt = getOfferLastSeenAt(offer);
-    const isActive = isOfferActive(offer, now);
+    const isActive = isOfferActive(offer, now, activityCache);
     const statKey = [retailerKey, mainCategoryKey, subcategoryKey].join('::');
 
     if (!stats.has(statKey)) {
@@ -1456,6 +1543,7 @@ function buildCategoryResponseFromStats(stats) {
 module.exports = {
   rebuildFilterMetadata,
   warmPublicFacetSnapshot,
+  clearPublicFacetCache,
   getRetailerFilters,
   getCategoryFilters,
   normalizeRetailerKey,
@@ -1480,11 +1568,8 @@ module.exports = {
     buildKeyFilter,
     buildStableKey,
     isSameFilterDocument,
-    resetPublicFacetSnapshot: () => {
-      publicFacetSnapshot = null;
-      publicFacetSnapshotExpiresAt = 0;
-      publicFacetSnapshotPromise = null;
-    },
+    getPublicFacetOfferPool,
+    resetPublicFacetSnapshot: clearPublicFacetCache,
     syncFilterMetadataCollection,
   },
 };

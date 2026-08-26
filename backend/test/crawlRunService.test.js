@@ -2101,6 +2101,7 @@ test('recoverInterruptedCrawlRunsAfterRestart does not alter terminal runs retur
 
 test('markOfferPublishStatusForRun marks stale and failed run lineage without changing visibility fields', async () => {
   const calls = [];
+  const invalidations = [];
   const runId = new mongoose.Types.ObjectId();
   const now = new Date('2026-05-21T12:00:00.000Z');
   const OfferModel = {
@@ -2115,6 +2116,7 @@ test('markOfferPublishStatusForRun marks stale and failed run lineage without ch
     runStatus: 'stale',
     OfferModel,
     now,
+    invalidatePublicReadCachesImpl: (metadata) => invalidations.push(metadata),
   });
 
   assert.equal(result.modifiedCount, 3);
@@ -2124,6 +2126,11 @@ test('markOfferPublishStatusForRun marks stale and failed run lineage without ch
   assert.equal(calls[0].update.$set.status, undefined);
   assert.equal(calls[0].update.$set.isActiveNow, undefined);
   assert.equal(calls[0].update.$set.isActiveToday, undefined);
+  assert.deepEqual(invalidations, [{
+    runId,
+    runStatus: 'stale',
+    publishStatus: 'crawl-run-stale',
+  }]);
 });
 
 test('executeCrawlRun starts periodic lock heartbeat and stops it after completion', async () => {

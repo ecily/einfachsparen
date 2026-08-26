@@ -332,6 +332,56 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
   }
 });
 
+test('public facet response rebuilds share the candidate pool until explicit invalidation', async () => {
+  const originalOfferFind = Offer.find;
+  const originalRetailerFind = Retailer.find;
+  const originalSourceFind = Source.find;
+  const originalDateNow = Date.now;
+  let offerFindCalls = 0;
+  let fakeNow = originalDateNow();
+  const findImpl = mockOfferFind([currentFacetOffer({ retailerKey: 'lidl', retailerName: 'Lidl' })]);
+
+  Date.now = () => fakeNow;
+  Offer.find = (...args) => {
+    offerFindCalls += 1;
+    return findImpl(...args);
+  };
+  Retailer.find = () => ({
+    select() { return { async lean() { return []; } }; },
+  });
+  Source.find = () => ({
+    select() { return { async lean() { return []; } }; },
+  });
+  resetPublicFacetSnapshot();
+
+  try {
+    const [firstRetailers, firstCategories] = await Promise.all([
+      getRetailerFilters(),
+      getCategoryFilters(),
+    ]);
+    assert.equal(offerFindCalls, 1);
+
+    fakeNow += 61 * 1000;
+    const [warmRetailers, warmCategories] = await Promise.all([
+      getRetailerFilters(),
+      getCategoryFilters(),
+    ]);
+    assert.equal(offerFindCalls, 1);
+    assert.deepEqual(warmRetailers, firstRetailers);
+    assert.deepEqual(warmCategories, firstCategories);
+
+    resetPublicFacetSnapshot();
+    await getRetailerFilters();
+    assert.equal(offerFindCalls, 2);
+  } finally {
+    Date.now = originalDateNow;
+    Offer.find = originalOfferFind;
+    Retailer.find = originalRetailerFind;
+    Source.find = originalSourceFind;
+    resetPublicFacetSnapshot();
+  }
+});
+
 test('SPAR-family public trust gate requires a fresh successful current discovery source', () => {
   const now = new Date('2026-07-22T12:00:00.000Z');
   const freshSuccess = {
