@@ -8929,6 +8929,7 @@ async function writeRankingResultCache({
 
 async function buildRankingResponseFromStoredResultCache({
   cacheEntry,
+  baseCacheKey = '',
   query = '',
   unit = 'all',
   selectedCategories = [],
@@ -9052,6 +9053,19 @@ async function buildRankingResponseFromStoredResultCache({
       resultCount: summaryBasis.resultCount || 0,
       finalVisibleCount: pagination.totalCount,
       timings,
+    });
+  }
+
+  if (!debugTiming && baseCacheKey) {
+    setCachedRankingResultBase(baseCacheKey, {
+      categoryDocuments,
+      retailerOptions,
+      units: Array.isArray(summaryBasis.units) ? summaryBasis.units : [],
+      candidateCount: summaryBasis.candidateCount || 0,
+      candidateLimit: summaryBasis.candidateLimit || 0,
+      resultCount: freshVisibleOffers.length,
+      resultSetToken: cacheEntry.resultSetToken || '',
+      visibleOffers: freshVisibleOffers,
     });
   }
 
@@ -9631,6 +9645,7 @@ async function buildOfferRanking({
     if (mongoCacheResult.entry) {
       return buildRankingResponseFromStoredResultCache({
         cacheEntry: mongoCacheResult.entry,
+        baseCacheKey: earlyBaseCacheKey,
         query,
         unit,
         selectedCategories: [],
@@ -9729,6 +9744,7 @@ async function buildOfferRanking({
     if (mongoCacheResult.entry) {
       return buildRankingResponseFromStoredResultCache({
         cacheEntry: mongoCacheResult.entry,
+        baseCacheKey,
         query,
         unit,
         selectedCategories,

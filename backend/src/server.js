@@ -94,12 +94,16 @@ async function warmReadCaches() {
     buildTopDeals({ limit: 20 }),
     buildOfferRanking({ limit: 20 }),
   ]);
+  const [billaBrowse] = await Promise.allSettled([
+    buildOfferRanking({ retailers: 'billa', limit: 60, offset: 0, offsetExplicit: true }),
+  ]);
 
   logger.info('Backend read-cache warmup completed', {
     durationMs: Date.now() - startedAt,
     filters: results[0].status,
     topDeals: results[1].status,
     ranking: results[2].status,
+    billaBrowse: billaBrowse.status,
   });
 }
 

@@ -886,13 +886,17 @@ function invalidateAndWarmPublicReadCaches({ runId, runStatus, publishStatus } =
     warmPublicFacetSnapshot(),
     buildTopDeals({ limit: 20 }),
     buildOfferRanking({ limit: 20 }),
-  ]).then((results) => {
+  ]).then(async (results) => {
+    const [billaBrowse] = await Promise.allSettled([
+      buildOfferRanking({ retailers: 'billa', limit: 60, offset: 0, offsetExplicit: true }),
+    ]);
     logger.info('Public read caches invalidated and warmup settled after offer publish', {
       runId: String(runId || ''),
       runStatus,
       publishStatus,
       fulfilled: results.filter((entry) => entry.status === 'fulfilled').length,
       rejected: results.filter((entry) => entry.status === 'rejected').length,
+      billaBrowse: billaBrowse.status,
     });
   }).catch((error) => {
     logger.warn('Public read-cache warmup failed after offer publish', {
