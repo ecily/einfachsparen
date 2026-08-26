@@ -29,6 +29,7 @@ test('faster-offer links omit weak categories and unavailable retailers', () => 
     'Drogerie Angebote',
     'Kaffee Angebote',
     'Bier Angebote',
+    'Deo Angebote',
     'Softdrinks Angebote',
     'Waschmittel Angebote',
     'Schokolade Angebote',

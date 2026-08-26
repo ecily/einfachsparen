@@ -105,6 +105,18 @@ test('high-impression landing pages expose comparison metadata and relevant link
   }
 })
 
+test('HOFER title matches the evidenced action intent without claiming a full prospect', () => {
+  const page = getStaticSeoPages().find((candidate) => candidate.path === '/angebote/hofer')
+  const html = buildSeoStaticDocument(template, page)
+
+  assert.equal(page.title, 'HOFER Aktionen heute: aktuelle Angebote | kaufklug.at')
+  assert.match(html, /<title>HOFER Aktionen heute: aktuelle Angebote \| kaufklug\.at<\/title>/)
+  assert.match(html, /<h1>HOFER Angebote aktuell vergleichen<\/h1>/)
+  assert.match(html, /Aktionen und Gültigkeit an einem Ort/)
+  assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/angebote\/hofer\//)
+  assert.doesNotMatch(`${page.title} ${page.description} ${page.h1} ${page.intro}`, /Prospekt|Flugblatt/i)
+})
+
 test('coffee landing page is indexable and complete in initial HTML', () => {
   const page = getStaticSeoPages().find((candidate) => candidate.path === '/angebote/kaffee')
   const html = buildSeoStaticDocument(template, page)

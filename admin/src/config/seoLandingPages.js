@@ -158,7 +158,7 @@ export const seoLandingPages = [
   {
     key: 'hofer',
     path: '/angebote/hofer',
-    title: 'HOFER Angebote aktuell vergleichen | kaufklug.at',
+    title: 'HOFER Aktionen heute: aktuelle Angebote | kaufklug.at',
     description:
       'Finde aktuelle HOFER Angebote in \u00d6sterreich. kaufklug zeigt Preise, Aktionen und Bedingungen als Orientierungshilfe.',
     h1: 'HOFER Angebote aktuell vergleichen',
