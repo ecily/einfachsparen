@@ -6,6 +6,7 @@ const {
   normalizeRetailerKey,
 } = require('./offerRankingService');
 const { classifyOfferSourceQuality } = require('./sourceQuality');
+const { isPublicValidityEligible } = require('./publicValidity');
 
 const DEFAULT_TOP_DEALS_LIMIT = 20;
 const MAX_TOP_DEALS_LIMIT = 20;
@@ -90,6 +91,14 @@ function buildTopDealsBaseQuery() {
       { 'rawFacts.discountPercent': { $gt: 0 } },
     ],
   };
+}
+
+function getPublicValidityDeadlineMs(offer, now = new Date()) {
+  const decision = isPublicValidityEligible(offer, now);
+  if (!decision.eligible || !decision.publicUntil) return now.getTime();
+
+  const publicUntil = new Date(decision.publicUntil);
+  return Number.isNaN(publicUntil.getTime()) ? now.getTime() : publicUntil.getTime() + 1;
 }
 
 async function readTopDealsCandidatePool({ publish = true } = {}) {
@@ -601,6 +610,7 @@ function buildTopDealsFromOffers(offers = [], {
   const excludedReasons = {};
   const fallbackExcludedReasons = {};
   const accepted = [];
+  let cacheValidUntilMs = now.getTime() + TOP_DEALS_CACHE_TTL_MS;
   const memo = {
     freshness: new WeakMap(),
     sourceQuality: new WeakMap(),
@@ -613,6 +623,7 @@ function buildTopDealsFromOffers(offers = [], {
     addTiming(profile, 'strictDecisionMs', decisionStartedAt);
     if (decision.accepted) {
       accepted.push(decision.deal);
+      cacheValidUntilMs = Math.min(cacheValidUntilMs, getPublicValidityDeadlineMs(offer, now));
     } else {
       excludedReasons[decision.reason] = Number(excludedReasons[decision.reason] || 0) + 1;
     }
@@ -642,6 +653,7 @@ function buildTopDealsFromOffers(offers = [], {
     addTiming(profile, 'fallbackDecisionMs', decisionStartedAt);
     if (fallbackDecision.accepted) {
       fallbackAccepted.push(fallbackDecision.deal);
+      cacheValidUntilMs = Math.min(cacheValidUntilMs, getPublicValidityDeadlineMs(offer, now));
     } else {
       fallbackExcludedReasons[fallbackDecision.reason] = Number(
         fallbackExcludedReasons[fallbackDecision.reason] || 0
@@ -718,6 +730,10 @@ function buildTopDealsFromOffers(offers = [], {
       Object.entries(profile).map(([key, value]) => [key, typeof value === 'number' ? Number(value.toFixed(1)) : value])
     );
   }
+  Object.defineProperty(response, '_cacheValidUntilMs', {
+    value: cacheValidUntilMs,
+    enumerable: false,
+  });
   return response;
 }
 
@@ -735,11 +751,7 @@ async function buildTopDeals({
   const nowMs = now.getTime();
   const cachedEntry = cachedTopDeals.get(cacheKey);
   if (!debugTiming && cachedEntry && cachedEntry.expiresAt > nowMs) {
-    const cachedDeals = Array.isArray(cachedEntry.response?.deals) ? cachedEntry.response.deals : [];
-    if (filterFreshActiveOffers(cachedDeals, now).length === cachedDeals.length) {
-      return cachedEntry.response;
-    }
-    cachedTopDeals.delete(cacheKey);
+    return cachedEntry.response;
   }
 
   const inFlight = topDealsBuildPromises.get(cacheKey);
@@ -771,7 +783,10 @@ async function buildTopDeals({
       };
     } else if (generation === topDealsCacheGeneration) {
       cachedTopDeals.set(cacheKey, {
-        expiresAt: nowMs + TOP_DEALS_CACHE_TTL_MS,
+        expiresAt: Math.min(
+          nowMs + TOP_DEALS_CACHE_TTL_MS,
+          Number(response._cacheValidUntilMs || nowMs)
+        ),
         response,
       });
     }

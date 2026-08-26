@@ -136,7 +136,7 @@ test('does not publish a failed Top Deals candidate build and permits an exact r
   }
 });
 
-test('revalidates cached Top Deals and never serves an offer after validTo', async () => {
+test('expires cached Top Deals at validTo and never serves the offer afterward', async () => {
   const originalFind = Offer.find;
   let findCalls = 0;
   const expiringOffer = offer({
@@ -155,6 +155,43 @@ test('revalidates cached Top Deals and never serves an offer after validTo', asy
     const afterExpiry = await buildTopDeals({ now: new Date(NOW.getTime() + 60 * 1000) });
 
     assert.deepEqual(current.deals.map((deal) => deal.id), ['expiring-deal']);
+    assert.equal(afterExpiry.count, 0);
+    assert.equal(findCalls, 1);
+  } finally {
+    Offer.find = originalFind;
+    clearTopDealsCache();
+  }
+});
+
+test('expires cached snapshot-only Top Deals at the exact public-validity deadline', async () => {
+  const originalFind = Offer.find;
+  let findCalls = 0;
+  const lastSeenAt = new Date(NOW.getTime() - 30 * 60 * 1000);
+  const snapshotOffer = offer({
+    _id: 'snapshot-deal',
+    validFrom: null,
+    validTo: null,
+    sourceId: 'source-1',
+    crawlRunId: 'run-1',
+    crawlJobId: 'job-1',
+    lastSeenAt,
+    rawFacts: {
+      sourceKey: 'lidl-official-html',
+      freshnessTtlHours: 1,
+    },
+  });
+  const findImpl = mockTopDealsFind([snapshotOffer]);
+  Offer.find = (...args) => {
+    findCalls += 1;
+    return findImpl(...args);
+  };
+  clearTopDealsCache();
+
+  try {
+    const current = await buildTopDeals({ now: NOW });
+    const afterExpiry = await buildTopDeals({ now: new Date(NOW.getTime() + 31 * 60 * 1000) });
+
+    assert.deepEqual(current.deals.map((deal) => deal.id), ['snapshot-deal']);
     assert.equal(afterExpiry.count, 0);
     assert.equal(findCalls, 1);
   } finally {
