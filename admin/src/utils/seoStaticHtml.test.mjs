@@ -55,7 +55,7 @@ test('high-impression landing pages expose comparison metadata and relevant link
     lidl: {
       title: 'Lidl Angebote aktuell vergleichen | kaufklug.at',
       h1: 'Lidl Angebote aktuell vergleichen',
-      signal: 'Preis pro kg, Liter oder Stück',
+      signal: 'Preis pro Einheit',
       links: ['/angebote/bier/', '/angebote/kaffee/', '/angebote/schokolade/', '/angebote/nudeln/', '/angebote/chips/'],
     },
     billa: {
@@ -105,6 +105,37 @@ test('high-impression landing pages expose comparison metadata and relevant link
     for (const path of contract.links) {
       assert.ok(html.includes(`<a href="${path}">`), `missing related link ${path} for ${key}`)
     }
+  }
+})
+
+test('Lidl and PENNY descriptions target evidenced offer intent without claiming full prospects', () => {
+  const contracts = [
+    {
+      key: 'lidl',
+      title: 'Lidl Angebote aktuell vergleichen | kaufklug.at',
+      h1: 'Lidl Angebote aktuell vergleichen',
+      description: 'Aktuelle Lidl Angebote und Aktionen in Österreich vergleichen – mit Preisen, Packungsgrößen, Gültigkeit und Bedingungen.',
+    },
+    {
+      key: 'penny',
+      title: 'PENNY Angebote aktuell finden | kaufklug',
+      h1: 'PENNY Angebote aktuell finden',
+      description: 'Aktuelle PENNY Angebote und Aktionen in Österreich vergleichen – mit Preisen, Packungsgrößen, Gültigkeit und Bedingungen.',
+    },
+  ]
+
+  for (const contract of contracts) {
+    const page = getStaticSeoPages().find((candidate) => candidate.path === `/angebote/${contract.key}`)
+    const html = buildSeoStaticDocument(template, page)
+    const escapedDescription = contract.description.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+    assert.equal(page.title, contract.title)
+    assert.equal(page.h1, contract.h1)
+    assert.equal(page.description, contract.description)
+    assert.match(html, new RegExp(`<meta name="description" content="${escapedDescription}" \\/>`))
+    assert.match(html, new RegExp(`<meta property="og:description" content="${escapedDescription}" \\/>`))
+    assert.match(html, new RegExp(`canonical" href="https:\\/\\/www\\.kaufklug\\.at\\/angebote\\/${contract.key}\\/`))
+    assert.doesNotMatch(`${page.title} ${page.description} ${page.h1} ${page.intro}`, /Prospekt|Flugblatt/i)
   }
 })
 

@@ -154,3 +154,36 @@ Der bestehende BILLA-Vertrag bleibt bis auf die Description intakt: `BILLA Angeb
 Der read-only Public-Bestand vor Deployment bestätigt die Nutzerfunktion: BILLA liefert 998 Ergebniszeilen/939 deduplizierte Angebote und initial 24 Treffer von BILLA/BILLA Plus. Die Supermarkt-Landingpage zeigt initial 12 BILLA-/BILLA-Plus-, 8 Lidl- und 8 PENNY-Treffer; alle 28 sichtbaren Angebote haben Gültigkeitsdaten und eindeutige IDs, Pagination bleibt vorhanden. Admin-Utility-/Config-Tests 80/80, ESLint, Production-Build mit System-CA und `git diff --check` sind grün; der Build enthält 27 Sitemap-URLs und den unveränderten HOFER-Vertrag.
 
 Messbaseline des BILLA-Clusters: 90 Tage 4/1.604/0,25 % kombinierte CTR; letzte 28 Tage 3/768/0,39 %. Nach Neucrawl und einem vollständigen 28-Tage-Fenster gilt primär mindestens 6 Klicks bei mindestens 500 Impressionen als Erfolg (+3 gegen die Baseline), sekundär mindestens 0,8 % kombinierte CTR ohne Rückfall von `billa angebote` hinter Position 10,5. Die Maßnahme ist ein CTR-Test; Google kann die Description abweichend umschreiben.
+
+## Vollständiges Opportunity-Modell und autonomer Folgelauf 2026-08-26
+
+Verbindliche Produktregel: Jede zukünftige Produktentscheidung wird auch danach bewertet, ob sie organische Reichweite, Verlässlichkeit, wiederkehrende Nutzung oder den strategischen Unternehmenswert von Kaufklug erhöht.
+
+Die 408 Queries auf Position größer 10 bis einschließlich 20 wurden vollständig geclustert. Händlerbegriffe haben Vorrang vor Produktbegriffen, weil die vorhandene Seitenarchitektur Händlerkombinationen primär auf Händlerseiten bedient. `Potenzial +` ist eine einheitliche Vergleichsgröße: zusätzliche 90-Tage-Klicks bei 0,8 % Cluster-CTR gegenüber dem Ist, keine Rankingprognose.
+
+| Priorität | Cluster / sicherste Zielseite | Queries | 90 Tage Klicks / Impr. / CTR / Pos. | 28 Tage Klicks / Impr. / CTR / Pos. | Potenzial + | Entscheidung |
+| ---: | --- | ---: | --- | --- | ---: | --- |
+| Sperre | BILLA `/angebote/billa/` | 77 | 6 / 2.374 / 0,25 % / 10,85 | 4 / 1.199 / 0,33 % / 10,54 | 13 | 28-Tage-Experiment schützen |
+| Sperre | HOFER `/angebote/hofer/` | 63 | 4 / 1.532 / 0,26 % / 12,86 | 2 / 412 / 0,49 % / 14,30 | 8 | 28-Tage-Experiment schützen |
+| 1 | Lidl `/angebote/lidl/` | 79 | 1 / 718 / 0,14 % / 11,09 | 0 / 306 / 0 % / 11,09 | 5 | Description-Test umgesetzt |
+| 2 | PENNY `/angebote/penny/` | 23 | 0 / 220 / 0 % / 11,05 | 0 / 219 / 0 % / 11,04 | 2 | Description-Test umgesetzt |
+| 3 | BIPA `/angebote/bipa/` | 73 | 1 / 316 / 0,32 % / 12,49 | 1 / 192 / 0,52 % / 12,57 | 2 | Hauptquery verbessert sich; beobachten |
+| 4 | Supermarkt/Lebensmittel, teilweise `/angebote/supermarkt/` | 19 | 3 / 881 / 0,34 % / 16,38 | 3 / 315 / 0,95 % / 16,77 | 4 | Breite Zuordnung/Intention nicht sicher; unverändert |
+| 5 | Generische Angebote, mögliche Konkurrenz `/` und `/angebote/` | 26 | 0 / 399 / 0 % / 13,06 | 0 / 96 / 0 % / 14,32 | 3 | Kein Query-zu-Page-Beleg; unverändert |
+| 6 | Waschmittel `/angebote/waschmittel/` | 19 | 0 / 53 / 0 % / 16,17 | 0 / 7 / 0 % / 17,14 | 0,4 | Zu wenig absolutes Potenzial |
+| 7 | Schokolade `/angebote/schokolade/` | 5 | 0 / 40 / 0 % / 13,05 | 0 / 40 / 0 % / 13,05 | 0,3 | Zu wenig absolutes Potenzial |
+| 8 | dm `/angebote/dm/` | 5 | 0 / 19 / 0 % / 12,42 | 0 / 6 / 0 % / 17,16 | 0,2 | Rückläufig, zu wenig Potenzial |
+| 9 | Kaffee `/angebote/kaffee/` | 4 | 0 / 13 / 0 % / 12,15 | 0 / 13 / 0 % / 12,15 | 0,1 | Zu wenig Potenzial |
+| 10 | Sonstige Produkte | 7 | 0 / 9 / 0 % / 12,89 | 0 / 4 / 0 % / 15,25 | 0,1 | Kein stabiler Seitencase |
+| 11 | Nudeln `/angebote/nudeln/` | 4 | 0 / 4 / 0 % / 13,00 | 0 / 4 / 0 % / 13,00 | 0,0 | Kein messbarer Hebel |
+| 12 | Duschgel `/angebote/duschgel/` | 2 | 0 / 2 / 0 % / 17,00 | 0 / 2 / 0 % / 17,00 | 0,0 | Kein messbarer Hebel |
+| 13 | Chips `/angebote/chips/` | 1 | 0 / 2 / 0 % / 10,50 | 0 / 2 / 0 % / 10,50 | 0,0 | Kein messbarer Hebel |
+| 14 | Butter `/angebote/butter/` | 1 | 0 / 1 / 0 % / 17,00 | 0 / 0 / 0 % / – | 0,0 | Kein messbarer Hebel |
+
+Die beiden Änderungen stützen sich nicht nur auf Clusterannahmen, sondern auf echte Query→Page-Exporte: `lidl prospekt aktuell` → `/angebote/lidl/` mit 0 Klicks/305 Impressionen/Position 10,43 und zuletzt 0/192/10,57; `penny angebote` → `/angebote/penny/` mit 0/177/10,45, identisch im 28-Tage-Fenster. Nur die Descriptions wurden auf aktuelle Angebote/Aktionen in Österreich sowie Preise, Packungsgrößen, Gültigkeit und Bedingungen präzisiert. Die irreführende Behauptung eines vollständigen Prospekts bleibt ausgeschlossen. Live-Abdeckung vor dem Eingriff: Lidl 75 deduplizierte Angebote, PENNY 289; beide initial 24/24 datiert, 24/24 mit Bild und paginiert.
+
+BIPA wurde trotz Clusterpotenzial bewusst nicht verändert: Die exportbelegte Hauptquery `bipa angebote` verbesserte sich zuletzt auf 1 Klick/30 Impressionen/3,33 % CTR/Position 10,03, und Title/Description/H1 erfüllen die Intention bereits. Supermarkt, generische Angebote und neue Landingpages bleiben ohne zusätzlichen Page-Beleg beziehungsweise belastbare Nachfrage unverändert. Der technische Vertrag ist bis auf Non-Slash-Breadcrumb-Items konsistent; deren globale Korrektur ist wegen der BILLA-/HOFER-Sperre vertagt. Öffentliche Trust-Angaben zu Betreiber, kostenloser Nutzung, Quellen-/Prüfgrenzen und Fehlerkorrektur sind vorhanden. Eine Aussage zu Werbeplatzierungen oder Affiliate-Provisionen wurde mangels eigenständigem Geschäftsbeleg nicht ergänzt.
+
+Erfolg nach Neucrawl und vollständigem 28-Tage-Fenster: Lidl mindestens 3 Klicks bei mindestens 100 Impressionen, CTR mindestens 1,0 % und Position höchstens 10,5; PENNY dieselben Schwellen. Primär zählen zusätzliche Klicks, sekundär CTR und Position. Google kann beide Descriptions umschreiben; unmittelbare Wirkung wird nicht behauptet.
+
+Absicherung vor Push: 81/81 Admin-Utility-/Config-Tests, ESLint, Production-Build mit System-CA und `git diff --check` grün. Der generierte Vertrag enthält die beiden neuen Meta-/OG-Descriptions, unveränderte Titles/H1/Self-Canonicals, 27 Sitemap-URLs und unveränderte BILLA-/HOFER-Metadaten. Mobile Navigation, Fluidität, Overflow und Offer-Card-Vertrag sind testseitig abgedeckt; die zusätzliche visuelle Browser-Sitzung war in diesem Lauf nicht verfügbar.

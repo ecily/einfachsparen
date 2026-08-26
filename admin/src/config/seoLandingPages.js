@@ -178,7 +178,7 @@ export const seoLandingPages = [
     path: '/angebote/lidl',
     title: 'Lidl Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Aktuelle Lidl-Angebote vergleichen. Preise, Packungsgr\u00f6\u00dfen und Preis pro kg, Liter oder St\u00fcck transparent auf kaufklug.at.',
+      'Aktuelle Lidl Angebote und Aktionen in \u00d6sterreich vergleichen \u2013 mit Preisen, Packungsgr\u00f6\u00dfen, G\u00fcltigkeit und Bedingungen.',
     h1: 'Lidl Angebote aktuell vergleichen',
     intro:
       'Vergleiche aktuelle Lidl-Angebote mit Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Preis pro Einheit, statt nur einzelne Aktionen zu sammeln.',
@@ -250,7 +250,7 @@ export const seoLandingPages = [
     path: '/angebote/penny',
     title: 'PENNY Angebote aktuell finden | kaufklug',
     description:
-      'Finde aktuelle PENNY Angebote in \u00d6sterreich. kaufklug zeigt Preise, Aktionen und Bedingungen als Orientierungshilfe.',
+      'Aktuelle PENNY Angebote und Aktionen in \u00d6sterreich vergleichen \u2013 mit Preisen, Packungsgr\u00f6\u00dfen, G\u00fcltigkeit und Bedingungen.',
     h1: 'PENNY Angebote aktuell finden',
     intro:
       'Finde aktuelle PENNY Angebote in \u00d6sterreich. kaufklug hilft dir, Preise, Aktionen und Bedingungen schneller zu \u00fcberblicken.',
