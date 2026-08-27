@@ -10,6 +10,7 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:4173'
 const BASE_URL = String(process.env.KAUFKLUG_SMOKE_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, '')
 const SMOKE_API_BASE_URL = String(process.env.KAUFKLUG_SMOKE_API_BASE_URL || '').replace(/\/+$/, '')
 const HOME_ONLY = process.env.KAUFKLUG_SMOKE_HOME_ONLY === 'true'
+const NETWORK_DIAGNOSTICS = process.env.KAUFKLUG_SMOKE_NETWORK_DIAGNOSTICS === 'true'
 const TIMEOUT_MS = Number(process.env.KAUFKLUG_SMOKE_TIMEOUT_MS || 30000)
 const MOBILE_WIDTH = 390
 const MOBILE_HEIGHT = 900
@@ -932,6 +933,8 @@ async function main() {
   logStep(`base url: ${BASE_URL}`)
   const { cdp, cleanup } = await startBrowser()
   const runtimeErrors = []
+  const networkRequests = new Map()
+  const resource404s = []
 
   cdp.on('Runtime.exceptionThrown', (params) => {
     runtimeErrors.push(params.exceptionDetails?.text || params.exceptionDetails?.exception?.description || 'Runtime exception')
@@ -939,8 +942,31 @@ async function main() {
   cdp.on('Log.entryAdded', (params) => {
     if (params.entry?.level === 'error') runtimeErrors.push(params.entry.text)
   })
+  cdp.on('Network.requestWillBeSent', (params) => {
+    networkRequests.set(params.requestId, {
+      url: params.request?.url,
+      documentUrl: params.documentURL,
+      type: params.type,
+      initiator: params.initiator,
+    })
+  })
+  cdp.on('Network.responseReceived', (params) => {
+    if (params.response?.status !== 404) return
+    resource404s.push({
+      ...networkRequests.get(params.requestId),
+      requestId: params.requestId,
+      url: params.response.url,
+      status: params.response.status,
+      type: params.type,
+      mimeType: params.response.mimeType,
+      fromDiskCache: params.response.fromDiskCache,
+      fromServiceWorker: params.response.fromServiceWorker,
+    })
+  })
 
   try {
+    await cdp.command('Network.enable')
+    await cdp.command('Network.setCacheDisabled', { cacheDisabled: true })
     await runHomeCheck(cdp)
     await runReducedMotionCheck(cdp)
     if (!HOME_ONLY) {
@@ -959,6 +985,9 @@ async function main() {
 
     logStep('passed')
   } finally {
+    if (NETWORK_DIAGNOSTICS) {
+      console.log(`[web-beta-smoke] network diagnostics:\n${JSON.stringify({ resource404s }, null, 2)}`)
+    }
     await cleanup()
   }
 }

@@ -8,6 +8,7 @@ const {
   parseSrcsetCandidates,
 } = require('../src/services/images/imageUrl');
 const offerRouter = require('../src/routes/offer.routes');
+const { isOfferFreshForActiveUse } = require('../src/services/offers/offerFreshness');
 
 test('normalizes absolute, relative and srcset image URLs', () => {
   assert.equal(
@@ -64,4 +65,39 @@ test('image proxy headers include image accept and optional referer for retailer
   assert.match(headers.Accept, /image\/webp/);
   assert.match(headers['User-Agent'], /Mozilla/);
   assert.equal(headers.Referer, 'https://www.bipa.at/p/test');
+});
+
+test('image proxy projection preserves official snapshot freshness evidence', () => {
+  const now = new Date('2026-08-27T08:00:00+02:00');
+  const offer = {
+    imageUrl: 'https://images.example.test/coffee.jpg',
+    sourceId: 'source-billa',
+    title: 'Tchibo Kaffee Angebot',
+    retailerKey: 'billa',
+    retailerName: 'BILLA',
+    sourceUrl: 'https://www.billa.at/produkte/tchibo-kaffee',
+    sourceType: 'billa-official-algolia',
+    status: 'active',
+    isActiveNow: true,
+    validFrom: new Date('2026-08-27T04:00:00Z'),
+    validTo: null,
+    lastSeenAt: new Date('2026-08-27T04:40:44Z'),
+    crawlRunId: 'crawl-run-1',
+    crawlJobId: 'crawl-job-1',
+    publishStatus: 'crawl-run-success',
+    sourceRunStatus: 'success',
+    priceCurrent: { amount: 6.99, currency: 'EUR' },
+    quantityText: '500 g',
+    rawFacts: { snapshotCurrent: true },
+  };
+  const projection = offerRouter.__private.imageOfferProjection;
+  const projectedOffer = Object.fromEntries(
+    Object.entries(offer).filter(([field]) => projection[field])
+  );
+
+  assert.equal(projection.crawlRunId, 1);
+  assert.equal(projection.retailerKey, 1);
+  assert.equal(isOfferFreshForActiveUse(projectedOffer, now), true);
+  assert.equal(isOfferFreshForActiveUse({ ...projectedOffer, crawlRunId: undefined }, now), false);
+  assert.equal(isOfferFreshForActiveUse({ ...projectedOffer, retailerKey: undefined }, now), false);
 });

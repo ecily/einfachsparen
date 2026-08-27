@@ -189,3 +189,38 @@ Erfolg nach Neucrawl und vollständigem 28-Tage-Fenster: Lidl mindestens 3 Klick
 Absicherung vor Push: 81/81 Admin-Utility-/Config-Tests, ESLint, Production-Build mit System-CA und `git diff --check` grün. Der generierte Vertrag enthält die beiden neuen Meta-/OG-Descriptions, unveränderte Titles/H1/Self-Canonicals, 27 Sitemap-URLs und unveränderte BILLA-/HOFER-Metadaten. Der repository-eigene 390-px-Live-Smoke passiert sämtliche funktionalen Stationen bis zum globalen Schlusscheck: Homepage, Suche, Händlerabdeckung, mobiles Vergleichsmodul, Browse, Top Deals und Einkaufsliste. Der Schlusscheck bleibt wegen 19 anonymen 404-Ressourcenmeldungen rot; der isolierte mobile Homepage-/Reduced-Motion-Lauf ist grün. Da der Änderungssatz keine Assets, Bild-URLs oder Requests berührt, ist dies kein Description-Regressionssignal, sondern ein unabhängiger Ressourcen-Diagnosehebel.
 
 Produktcommit `d899f90a` wurde regulär automatisch deployed. Der erste stabile Prozess startete `2026-08-26T14:29:59.739Z`; Health 200, Mongo verbunden. Lidl und PENNY liefern die neuen Meta- und OG-Descriptions exakt, ihre Titles/H1/Self-Canonicals und internen Links bleiben unverändert. BIPA, Supermarkt sowie die gesperrten BILLA-/HOFER-Verträge sind unverändert; Sitemap 27 URLs. Live-Pagination: Lidl, PENNY und BIPA jeweils 24+24 ohne Überschneidung; Kaffee-Suche 109 Ergebnisse/60 erste Seite, Top Deals 20. Keine sofortige Google-Wirkung wird behauptet.
+
+## Mobile 390-px-Ressourcen-404s 2026-08-27
+
+Zwei Clean-Profile-Läufe reproduzierten dieselben 20 aktuellen URLs. Die frühere Zahl 19 war kein anderer Fehlertyp, sondern ein leicht anderer dynamischer Angebotsbestand. Gemeinsame Klassifikation aller Zeilen: HTTP 404, Ressourcentyp `Image`, MIME `application/json`, CDP-Initiator `other`, First Party, nicht Cache/Service Worker, in beiden Läufen reproduzierbar, echte Kaufklug-Regression im Bildproxy.
+
+| Seite | exakte 404-URL |
+| --- | --- |
+| `/suche?q=kaffee` | `https://www.kaufklug.at/api/offers/6a8fbfce4a1da42517e5f986/image` |
+| `/suche?q=kaffee` | `https://www.kaufklug.at/api/offers/6a8fbfcf4a1da42517e5fa62/image` |
+| `/suche?q=kaffee` | `https://www.kaufklug.at/api/offers/6a8fbff0fb17158856f22652/image` |
+| `/suche?q=kaffee` | `https://www.kaufklug.at/api/offers/6a8fbfcf4a1da42517e5fa7c/image` |
+| `/suche?q=kaffee` | `https://www.kaufklug.at/api/offers/6a8fbfcd4a1da42517e5f8aa/image` |
+| `/suche?q=kaffee` | `https://www.kaufklug.at/api/offers/6a8fbfeffb17158856f22576/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a19e/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a1bd/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a16a/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a15a/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a178/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a1a2/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a1b9/image` |
+| `/suche?q=waschmittel` | `https://www.kaufklug.at/api/offers/6a8e6e616bbb7e9608a1a1a9/image` |
+| `/suche?q=bier` | `https://www.kaufklug.at/api/offers/6a8fbfce4a1da42517e5f96a/image` |
+| `/suche?q=bier` | `https://www.kaufklug.at/api/offers/6a8fbfcd4a1da42517e5f8ab/image` |
+| `/suche?q=bier` | `https://www.kaufklug.at/api/offers/6a8fbff0fb17158856f22636/image` |
+| `/suche?q=bier` | `https://www.kaufklug.at/api/offers/6a8fbfeffb17158856f22577/image` |
+| `/top-deals` | `https://www.kaufklug.at/api/offers/6a8fbf54a4a868060179ed1e/image` |
+| `/top-deals` | `https://www.kaufklug.at/api/offers/6a8fbfeffb17158856f22574/image` |
+
+Der direkte Einzelabruf aller 20 Endpunkte bestätigte jeweils exakt `{"ok":false,"message":"Offer not found"}`. Ranking-Antworten führten dieselben Offers gleichzeitig als aktiv mit nichtleerer externer `imageUrl`; beispielsweise BILLA/BILLA Plus und Müller. Der Aufruf entsteht in `ProductImage`: bei `offerId` plus `imageUrl` wird zuerst `getOfferImageUrl(offerId)` gesetzt. Der Browser-CDP meldet Bilder deshalb technisch als `other`; der aufrufende React-Code ist dennoch eindeutig.
+
+Ursache ist keine fehlende Händlerdatei: `isOfferFreshForActiveUse()` benötigt für undatierte offizielle Snapshots unter anderem Offer-Lineage und Händler-TTL. Die Route projizierte `crawlRunId` und `retailerKey` nicht und erzeugte deshalb vor jedem Upstream-Abruf den falschen 404. Die Korrektur ergänzt die vollständigen, bereits vom bestehenden Validitätsvertrag gelesenen Felder in der isolierten Bildroute; der Vertrag selbst bleibt unverändert. Ein Regressionstest beweist, dass ein frischer BILLA-Snapshot mit der Route-Projektion zulässig ist und beim Entfernen von `crawlRunId` oder `retailerKey` fail-closed bleibt.
+
+Negativ-Evidence: Die Netzwerkaufzeichnung enthielt keine weiteren 404-Typen. Live-HTML verweist auf den vorhandenen lokalen CSS-/JS-Chunk und `/brand/kaufklug-logo-transparent.png`; alle antworten 200. Das Logo dient auch als Favicon und OG-Bild. Es gibt keinen Manifest-Link, keine `@font-face`-Regel und keine `sourceMappingURL`-Referenz im Production-JS/CSS; Analytics-/Extension-Requests und fehlerhafte relative Ressourcenpfade waren nicht vorhanden. Es wurden keine Meldungen unterdrückt und keine Ersatzbilder oder globalen Fallbacks ergänzt.
+
+Lokal: 330 relevante Backend-Tests und 81 Admin-/SEO-/UX-Tests grün, ESLint grün, Production-Build grün, Syntax und `git diff --check` grün. Der vollständige Backend-Lauf endet mit 1.302 bestanden, 18 fehlgeschlagen und 1 übersprungen; sämtliche 18 Fehler sind scope-fremd (3 Dashboard, 12 PENNY, 2 BILLA, 1 SPAR) und keine der betroffenen Dateien wird für diesen Fix committed. Deployment-/Live-Ergebnis wird nach regulärem Auto-Deploy ergänzt.
