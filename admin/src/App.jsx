@@ -17,6 +17,7 @@ import { ShoppingListPage } from './components/shopping/ShoppingListPage'
 import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
 import { FeedbackPage } from './components/feedback/FeedbackPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
+import { TrustPage } from './components/trust/TrustPage'
 import { DiagnosticsPage } from './components/admin/DiagnosticsPage'
 import {
   fetchAdminJson,
@@ -191,6 +192,7 @@ function HowItWorksSection() {
           </article>
         ))}
       </div>
+      <p><a href="/so-funktioniert-kaufklug/">Methodik, Betreiber und Grenzen im Detail</a></p>
     </section>
   )
 }
@@ -1029,6 +1031,8 @@ function App() {
         />
       ) : activePage === 'feedback' ? (
         <FeedbackPage />
+      ) : activePage === 'about' ? (
+        <TrustPage />
       ) : activePage === 'impressum' ? (
         <ImpressumPage />
       ) : activePage === 'privacy' ? (

@@ -97,6 +97,10 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://www.kaufklug.at/so-funktioniert-kaufklug/</loc>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://www.kaufklug.at/datenschutz/</loc>
     <priority>0.3</priority>
   </url>

@@ -30,9 +30,36 @@ test('homepage exposes crawlable internal SEO links in initial HTML', () => {
   assert.match(html, /Packungsgr\u00f6\u00dfen und Bedingungen inklusive\./)
   assert.match(html, /<meta name="robots" content="index,follow" \/>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/"/)
-  for (const path of ['/top-deals/', '/angebote/billa/', '/angebote/lidl/', '/angebote/waschmittel/']) {
+  for (const path of ['/top-deals/', '/angebote/billa/', '/angebote/lidl/', '/angebote/waschmittel/', '/so-funktioniert-kaufklug/']) {
     assert.ok(html.includes(`<a href="${path}">`), `missing crawlable link ${path}`)
   }
+})
+
+test('trust page is indexable, substantive and machine-readable without invented organization claims', () => {
+  const page = getStaticSeoPages().find((candidate) => candidate.path === '/so-funktioniert-kaufklug')
+  const html = buildSeoStaticDocument(template, page, getStaticSeoPages())
+
+  assert.equal(page.robots, 'index,follow')
+  assert.match(html, /<title>So funktioniert kaufklug\.at: Methodik und Betreiber<\/title>/)
+  assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/so-funktioniert-kaufklug\//)
+  assert.match(html, /<h1>So funktioniert kaufklug\.at<\/h1>/)
+  for (const heading of ['Wer hinter kaufklug.at steht', 'Woher die Angebotsinformationen kommen', 'Wie Angebote aufbereitet werden', 'Abdeckung und Grenzen', 'Fehler melden und Korrekturen']) {
+    assert.ok(html.includes(`<h2>${heading}</h2>`), `missing trust section ${heading}`)
+  }
+  for (const path of ['/feedback/', '/impressum/', '/nutzungshinweise/', '/datenschutz/']) {
+    assert.ok(html.includes(`<a href="${path}">`), `missing trust link ${path}`)
+  }
+  assert.match(html, /"@type":"AboutPage"/)
+  assert.doesNotMatch(html, /"@type":"Organization"/)
+  assert.doesNotMatch(html, /vollständig(?:e|en)? Angebote|Bestpreis|Echtzeit|Affiliate|bezahlte Platzierung/i)
+  assert.doesNotMatch(html, /Angebote werden geladen/)
+})
+
+test('offer landing pages do not receive trust-page structured data', () => {
+  const page = getStaticSeoPages().find((candidate) => candidate.path === '/angebote/billa')
+  const html = buildSeoStaticDocument(template, page, getStaticSeoPages())
+
+  assert.doesNotMatch(html, /kaufklug-static-about-page|"@type":"AboutPage"/)
 })
 
 test('indexable landing pages render related links without utility or noindex targets', () => {
@@ -167,7 +194,7 @@ test('coffee landing page is indexable and complete in initial HTML', () => {
   }
 })
 
-test('coffee is linked from relevant indexable static pages and sitemap has 27 safe URLs', async () => {
+test('coffee is linked from relevant indexable static pages and sitemap has 28 safe URLs', async () => {
   for (const path of ['/', '/angebote', '/angebote/supermarkt', '/angebote/billa', '/angebote/penny']) {
     const page = getStaticSeoPages().find((candidate) => candidate.path === path)
     const html = buildSeoStaticDocument(template, page)
@@ -176,7 +203,8 @@ test('coffee is linked from relevant indexable static pages and sitemap has 27 s
 
   const sitemap = await readFile(resolve('admin/public/sitemap.xml'), 'utf8')
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1])
-  assert.equal(urls.length, 27)
+  assert.equal(urls.length, 28)
+  assert.ok(urls.includes('https://www.kaufklug.at/so-funktioniert-kaufklug/'))
   assert.ok(urls.includes('https://www.kaufklug.at/preischeck/bier-literpreis-vergleich/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/kaffee/'))
   assert.ok(urls.includes('https://www.kaufklug.at/angebote/bier/'))

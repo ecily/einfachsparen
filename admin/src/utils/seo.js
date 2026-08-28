@@ -6,6 +6,12 @@ import {
   getSeoLandingPageByRouteId,
   getSeoLandingPageRouteId,
 } from '../config/seoLandingPages.js'
+import {
+  TRUST_PAGE_DESCRIPTION,
+  TRUST_PAGE_PATH,
+  TRUST_PAGE_ROUTE_ID,
+  TRUST_PAGE_TITLE,
+} from '../config/trustPage.js'
 
 const FAQ_ITEMS = [
   {
@@ -55,6 +61,12 @@ export function getPageMeta(activePage) {
   }
 
   const pages = {
+    [TRUST_PAGE_ROUTE_ID]: {
+      title: TRUST_PAGE_TITLE,
+      description: TRUST_PAGE_DESCRIPTION,
+      path: TRUST_PAGE_PATH,
+      robots: 'index,follow',
+    },
     [PRICE_CHECK_ROUTE_ID]: {
       title: 'Bier Literpreis vergleichen: 0,5-l-Dosen bei BILLA und PENNY',
       description: 'Konkreten Literpreis-Vergleich von 0,5-l-Dosenbier bei BILLA und PENNY mit sichtbaren Bedingungen und Public-Gültigkeit prüfen.',
@@ -301,6 +313,24 @@ export function updateSeoMetadata(activePage) {
   } else {
     removeJsonLd('kaufklug-jsonld-faq')
   }
+
+  if (activePage === TRUST_PAGE_ROUTE_ID) {
+    setOrCreateJsonLd('kaufklug-jsonld-about-page', {
+      '@context': 'https://schema.org',
+      '@type': 'AboutPage',
+      name: TRUST_PAGE_TITLE,
+      description: TRUST_PAGE_DESCRIPTION,
+      url: `${SITE_URL}${TRUST_PAGE_PATH}/`,
+      inLanguage: 'de-AT',
+      isPartOf: {
+        '@type': 'WebSite',
+        name: 'kaufklug.at',
+        url: SITE_URL,
+      },
+    })
+  } else {
+    removeJsonLd('kaufklug-jsonld-about-page')
+  }
 }
 
 export function getInitialPageFromPathname(pathname) {
@@ -318,6 +348,7 @@ export function getInitialPageFromPathname(pathname) {
   if (pathname.includes('nutzung') || pathname.includes('haftung') || pathname.includes('legal')) return 'liability'
   if (pathname.includes('cookies') || pathname.includes('cookie')) return 'cookies'
   if (pathname.includes('feedback')) return 'feedback'
+  if (normalizedPath === TRUST_PAGE_PATH) return TRUST_PAGE_ROUTE_ID
   if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
   if (pathname.includes('stoebern') || pathname.includes('stobern')) return 'search'
   if (pathname.includes('top-deals')) return 'top-deals'
@@ -348,6 +379,7 @@ export function getPathForPage(nextPage) {
   if (nextPage === 'liability') return '/nutzungshinweise'
   if (nextPage === 'cookies') return '/cookies'
   if (nextPage === 'feedback') return '/feedback'
+  if (nextPage === TRUST_PAGE_ROUTE_ID) return `${TRUST_PAGE_PATH}/`
 
   return '/'
 }

@@ -27,6 +27,9 @@ export function StickyBottomLine({ onNavigate }) {
     >
       <span className="sticky-bottom-line__content">
         © 2026
+        <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('about')}>
+          Über kaufklug
+        </button>
         <button type="button" className="sticky-bottom-line__button" onClick={() => onNavigate('impressum')}>
           Impressum
         </button>

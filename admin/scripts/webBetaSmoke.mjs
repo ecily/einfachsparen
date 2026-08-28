@@ -663,6 +663,35 @@ async function runHomeCheck(cdp) {
   assertNoHorizontalOverflow(audit, 'home')
 }
 
+async function runTrustPageCheck(cdp) {
+  logStep('checking /so-funktioniert-kaufklug/ on mobile viewport')
+  await configurePage(cdp, { width: MOBILE_WIDTH, height: MOBILE_HEIGHT, mobile: true })
+  await navigate(cdp, makeUrl('/so-funktioniert-kaufklug/'))
+  await waitForCondition(
+    cdp,
+    `Array.from(document.querySelectorAll('h1')).some((element) => element.innerText.trim() === 'So funktioniert kaufklug.at')`
+  )
+
+  const audit = await auditCurrentPage(cdp, 'trust page')
+  const contract = await evaluate(cdp, `(() => ({
+    canonical: document.querySelector('link[rel="canonical"]')?.href || '',
+    robots: document.querySelector('meta[name="robots"]')?.content || '',
+    headings: Array.from(document.querySelectorAll('h2')).map((element) => element.innerText.trim()),
+    aboutPage: Array.from(document.querySelectorAll('script[type="application/ld+json"]')).some((element) => {
+      try { return JSON.parse(element.textContent)?.['@type'] === 'AboutPage' } catch { return false }
+    }),
+  }))()`)
+
+  assert(audit.h1Texts.includes('So funktioniert kaufklug.at'), 'trust page: H1 must be visible')
+  for (const heading of ['Wer hinter kaufklug.at steht', 'Wie Angebote aufbereitet werden', 'Abdeckung und Grenzen', 'Fehler melden und Korrekturen']) {
+    assert(contract.headings.includes(heading), `trust page: missing section ${heading}`)
+  }
+  assert(contract.canonical === 'https://www.kaufklug.at/so-funktioniert-kaufklug/', 'trust page: production self-canonical must be exact', contract)
+  assert(contract.robots === 'index,follow', 'trust page: page must remain indexable', contract)
+  assert(contract.aboutPage, 'trust page: AboutPage structured data must be present')
+  assertNoHorizontalOverflow(audit, 'trust page')
+}
+
 async function runSearchCheck(cdp) {
   logStep('checking /suche?q=kaffee on desktop viewport')
   await configurePage(cdp, { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT, mobile: false })
@@ -1146,6 +1175,7 @@ async function main() {
       await runImagePerformanceMatrix(cdp, performanceState, imageResponses)
     } else {
       await runHomeCheck(cdp)
+      await runTrustPageCheck(cdp)
       await runReducedMotionCheck(cdp)
       if (!HOME_ONLY) {
         await runSearchCheck(cdp)

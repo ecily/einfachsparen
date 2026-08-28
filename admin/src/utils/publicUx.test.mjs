@@ -40,6 +40,13 @@ test('pricecheck route stays on the pricecheck page after direct navigation and 
   assert.match(fs.readFileSync(new URL('../components/search/PriceCheckPage.jsx', import.meta.url), 'utf8'), /kaufklug-price-check-data/)
 })
 
+test('trust page has a stable indexable route and distinct metadata', () => {
+  assert.equal(getInitialPageFromPathname('/so-funktioniert-kaufklug/'), 'about')
+  assert.equal(getPathForPage('about'), '/so-funktioniert-kaufklug/')
+  assert.equal(getPageMeta('about').robots, 'index,follow')
+  assert.equal(getPageMeta('about').title, 'So funktioniert kaufklug.at: Methodik und Betreiber')
+})
+
 test('comparison USP facts and card labels stay visible and semantically distinct', () => {
   assert.match(appSource, /hero-compare-facts/)
   assert.match(appSource, /Vergleichbar pro kg, Liter oder Stück/)

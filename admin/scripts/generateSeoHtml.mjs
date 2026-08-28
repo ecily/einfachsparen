@@ -4,6 +4,15 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { seoLandingPages } from '../src/config/seoLandingPages.js'
+import {
+  TRUST_PAGE_DESCRIPTION,
+  TRUST_PAGE_H1,
+  TRUST_PAGE_INTRO,
+  TRUST_PAGE_LINKS,
+  TRUST_PAGE_PATH,
+  TRUST_PAGE_SECTIONS,
+  TRUST_PAGE_TITLE,
+} from '../src/config/trustPage.js'
 import { buildSeoComparisonSummary } from '../src/utils/seoComparisonSummary.js'
 import { deriveBeerPriceCheckCandidate, isPublishablePriceCheckCandidate } from '../src/utils/priceCheckCandidate.js'
 
@@ -73,8 +82,19 @@ const staticPages = [
       { label: 'Waschmittel Angebote', path: '/angebote/waschmittel/' },
       { label: 'Butter Angebote', path: '/angebote/butter/' },
       { label: 'HOFER Angebote', path: '/angebote/hofer/' },
+      { label: 'So funktioniert kaufklug', path: `${TRUST_PAGE_PATH}/` },
     ],
     intro: 'Vergleiche aktuelle Angebote von Supermärkten und Drogerien in Österreich und prüfe Preis, Bedingungen und Gültigkeit vor dem Einkauf.',
+  },
+  {
+    path: TRUST_PAGE_PATH,
+    title: TRUST_PAGE_TITLE,
+    description: TRUST_PAGE_DESCRIPTION,
+    robots: 'index,follow',
+    h1: TRUST_PAGE_H1,
+    intro: TRUST_PAGE_INTRO,
+    staticSections: TRUST_PAGE_SECTIONS,
+    relatedLinks: TRUST_PAGE_LINKS,
   },
   {
     path: '/preischeck/bier-literpreis-vergleich',
@@ -239,6 +259,36 @@ function buildRelatedLinks(page, pages) {
     .join('')}</ul></nav>`
 }
 
+function buildTrustSections(page) {
+  if (!page.staticSections?.length) return ''
+  return page.staticSections.map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${section.paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join('')}</section>`).join('')
+}
+
+function buildTrustLinks(page) {
+  if (!page.relatedLinks?.length) return ''
+  return `<nav class="seo-static-links" aria-label="Mehr über kaufklug"><h2>Weitere Informationen</h2><ul>${page.relatedLinks
+    .map((link) => `<li><a href="${escapeHtml(canonicalPath(link.path))}">${escapeHtml(link.label)}</a></li>`)
+    .join('')}</ul></nav>`
+}
+
+function buildAboutPageJsonLd(page) {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: page.title,
+    description: page.description,
+    url: `${siteUrl}${canonicalPath(page.path)}`,
+    inLanguage: 'de-AT',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'kaufklug.at',
+      url: siteUrl,
+    },
+  })
+}
+
 function buildComparisonSummaryHtml(summary) {
   if (!summary?.facts?.length) return ''
 
@@ -278,12 +328,17 @@ export function buildSeoStaticDocument(template, page, pages) {
   const canonical = `${siteUrl}${canonicalPath(path)}`
   const staticHomeContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>Flugbl\u00e4tter raus. Die besten Angebote rein.</h1><p class="subtitle">Preise wirklich vergleichbar \u2013 pro kg, Liter oder St\u00fcck.</p><p class="search-landing-hero__markets">BILLA \u00b7 BILLA Plus \u00b7 Lidl \u00b7 PENNY \u00b7 dm \u00b7 BIPA \u00b7 M\u00fcller \u00b7 HOFER eingeschr\u00e4nkt \u00b7 INTERSPAR eingeschr\u00e4nkt</p><p class="hero-compare-facts">Vergleichbar pro kg, Liter oder St\u00fcck \u2013 Packungsgr\u00f6\u00dfen und Bedingungen inklusive.</p><p class="market-check-note">Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.</p>${buildRelatedLinks(page, pages)}</main>`
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page, pages)}</main>`
+  const staticTrustContent = `<main class="seo-static-shell"><p class="eyebrow">Über kaufklug</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p>${buildTrustSections(page)}${buildTrustLinks(page)}</main>`
   const staticNavigation = '<nav class="page-nav seo-static-nav" aria-label="Seiten"><span class="page-nav__logo" aria-hidden="true"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></span><span class="page-nav__beta">Beta</span><div class="page-nav__main"><span class="page-nav__button">Suche</span><span class="page-nav__button">Stöbern</span><span class="page-nav__button">Liste</span></div></nav>'
-  const staticContentForRender = path === '/' ? staticHomeContent : staticContent
-  const staticShellContent = staticContentForRender
-    .replace('<main class="seo-static-shell">', `<main class="shell">${staticNavigation}<div class="seo-offer-page"><section class="panel seo-offer-hero">`)
-    .replace('<p>Aktuelle Angebote werden', '<p class="market-check-note">Aktuelle Angebote werden')
-    .replace('</main>', '</section><section class="panel seo-offer-results" aria-busy="true"><div class="panel__header"><h2>Aktuelle Treffer</h2><p>Angebote werden aus den aktuell erkannten Daten geladen.</p></div><div class="browse-loading-status" role="status" aria-live="polite"><span class="browse-loading-status__spinner" aria-hidden="true"></span><span>Angebote werden geladen &hellip;</span></div></section></div></main>')
+  const staticContentForRender = path === '/' ? staticHomeContent : page.staticSections ? staticTrustContent : staticContent
+  const staticShellContent = page.staticSections
+    ? staticContentForRender
+      .replace('<main class="seo-static-shell">', `<main class="shell">${staticNavigation}<section class="panel seo-static-main">`)
+      .replace('</main>', '</section></main>')
+    : staticContentForRender
+      .replace('<main class="seo-static-shell">', `<main class="shell">${staticNavigation}<div class="seo-offer-page"><section class="panel seo-offer-hero">`)
+      .replace('<p>Aktuelle Angebote werden', '<p class="market-check-note">Aktuelle Angebote werden')
+      .replace('</main>', '</section><section class="panel seo-offer-results" aria-busy="true"><div class="panel__header"><h2>Aktuelle Treffer</h2><p>Angebote werden aus den aktuell erkannten Daten geladen.</p></div><div class="browse-loading-status" role="status" aria-live="polite"><span class="browse-loading-status__spinner" aria-hidden="true"></span><span>Angebote werden geladen &hellip;</span></div></section></div></main>')
   const staticContentWithPriceCheck = staticShellContent.replace('</section>', `${buildPriceCheckHtml(page.priceCheckCandidate)}${buildPriceCheckDataScript(page.priceCheckCandidate)}</section>`)
   const staticContentWithComparison = staticContentWithPriceCheck.replace('<section class="panel seo-offer-results"', `${buildComparisonSummaryHtml(page.comparisonSummary)}<section class="panel seo-offer-results"`)
   const updated = template
@@ -298,6 +353,10 @@ export function buildSeoStaticDocument(template, page, pages) {
     .replace(/<link rel="stylesheet" crossorigin href="[^"]+">/i, `<style id="kaufklug-critical-css">${CRITICAL_CSS}${CRITICAL_STATIC_NAV_CSS}</style>\n    $&`)
     .replace(/<\/head>/i, `<meta property="og:image" content="${socialImageUrl}" />\n    <meta name="twitter:image" content="${socialImageUrl}" />\n  </head>`)
     .replace(/<\/head>/i, `<script type="application/ld+json" id="kaufklug-static-breadcrumb">${buildBreadcrumbJsonLd(page)}</script>\n  </head>`)
+
+  if (page.staticSections) {
+    return updated.replace(/<\/head>/i, `<script type="application/ld+json" id="kaufklug-static-about-page">${buildAboutPageJsonLd(page)}</script>\n  </head>`)
+  }
 
   return updated
 }
