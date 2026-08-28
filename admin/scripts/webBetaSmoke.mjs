@@ -11,6 +11,11 @@ const BASE_URL = String(process.env.KAUFKLUG_SMOKE_BASE_URL || DEFAULT_BASE_URL)
 const SMOKE_API_BASE_URL = String(process.env.KAUFKLUG_SMOKE_API_BASE_URL || '').replace(/\/+$/, '')
 const HOME_ONLY = process.env.KAUFKLUG_SMOKE_HOME_ONLY === 'true'
 const NETWORK_DIAGNOSTICS = process.env.KAUFKLUG_SMOKE_NETWORK_DIAGNOSTICS === 'true'
+const IMAGE_PERFORMANCE_ONLY = process.env.KAUFKLUG_SMOKE_IMAGE_PERFORMANCE_ONLY === 'true'
+const IMAGE_PERFORMANCE_PATHS = String(process.env.KAUFKLUG_SMOKE_IMAGE_PATHS || '')
+  .split('|')
+  .map((value) => value.trim())
+  .filter(Boolean)
 const TIMEOUT_MS = Number(process.env.KAUFKLUG_SMOKE_TIMEOUT_MS || 30000)
 const MOBILE_WIDTH = 390
 const MOBILE_HEIGHT = 900
@@ -929,12 +934,129 @@ async function runShoppingListCheck(cdp) {
   await auditCurrentPage(cdp, 'liste')
 }
 
+function responseHeader(headers = {}, name) {
+  const target = String(name || '').toLowerCase()
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === target)
+  return entry?.[1] || ''
+}
+
+async function runImagePerformanceMatrix(cdp, performanceState, imageResponses) {
+  const defaultPaths = [
+    '/',
+    '/suche?q=kaffee',
+    '/suche?q=bier',
+    '/suche?q=waschmittel',
+    '/angebote/billa/',
+    '/angebote/hofer/',
+    '/angebote/lidl/',
+    '/angebote/penny/',
+    '/angebote/dm/',
+    '/angebote/bipa/',
+    '/angebote/mueller/',
+    '/top-deals',
+  ]
+  const paths = IMAGE_PERFORMANCE_PATHS.length > 0 ? IMAGE_PERFORMANCE_PATHS : defaultPaths
+  const reports = []
+
+  await configurePage(cdp, { width: MOBILE_WIDTH, height: MOBILE_HEIGHT, mobile: true })
+
+  for (const pathname of paths) {
+    performanceState.activeKey = pathname
+    imageResponses.clear()
+    await navigate(cdp, makeUrl(pathname))
+    await delay(3500)
+
+    const page = await evaluate(cdp, `(() => ({
+      url: location.href,
+      viewport: { width: innerWidth, height: innerHeight },
+      lcp: window.__kaufklugPerformance?.lcp || null,
+      cls: Number((window.__kaufklugPerformance?.cls || 0).toFixed(5)),
+      productImageSlots: document.querySelectorAll('.product-image').length,
+      deferredImageSlots: document.querySelectorAll('[data-image-deferred="true"]').length,
+      images: Array.from(document.images).map((image) => {
+        const rect = image.getBoundingClientRect()
+        return {
+          src: image.currentSrc || image.src || '',
+          loading: image.loading || '',
+          fetchPriority: image.fetchPriority || '',
+          complete: image.complete,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+          renderedWidth: Number(rect.width.toFixed(2)),
+          renderedHeight: Number(rect.height.toFixed(2)),
+          top: Number(rect.top.toFixed(2)),
+          visible: rect.bottom > 0 && rect.top < innerHeight && rect.width > 0 && rect.height > 0,
+        }
+      }),
+    }))()`)
+    const domImagesByUrl = new Map(page.images.map((image) => [image.src, image]))
+    const responses = [...imageResponses.values()]
+      .filter((response) => response.measurementKey === pathname)
+      .map((response) => ({
+        ...response,
+        dom: domImagesByUrl.get(response.url) || null,
+      }))
+    const totalBytes = responses.reduce((sum, response) => sum + Number(response.encodedDataLength || 0), 0)
+    const loadedBelowFold = responses.filter((response) => Number(response.dom?.top) >= MOBILE_HEIGHT).length
+    let deferredLoadCheck = null
+
+    if (page.deferredImageSlots > 0) {
+      const responseCountBeforeScroll = imageResponses.size
+      const scrolled = await evaluate(cdp, `(() => {
+        const target = document.querySelector('[data-image-deferred="true"]')
+        if (!target) return false
+        target.scrollIntoView({ block: 'center' })
+        return true
+      })()`)
+      if (scrolled) {
+        await delay(1500)
+        deferredLoadCheck = await evaluate(cdp, `(() => {
+          const visibleImages = Array.from(document.querySelectorAll('.product-image img')).filter((image) => {
+            const rect = image.getBoundingClientRect()
+            return rect.bottom > 0 && rect.top < innerHeight
+          })
+          return {
+            remainingDeferredSlots: document.querySelectorAll('[data-image-deferred="true"]').length,
+            visibleLoadedImages: visibleImages.filter((image) => image.complete && image.naturalWidth > 0).length,
+          }
+        })()`)
+        deferredLoadCheck.requestDelta = Math.max(0, imageResponses.size - responseCountBeforeScroll)
+      }
+    }
+
+    reports.push({
+      path: pathname,
+      finalUrl: page.url,
+      imageRequestCount: responses.length,
+      imageBytes: totalBytes,
+      largestImageBytes: Math.max(0, ...responses.map((response) => Number(response.encodedDataLength || 0))),
+      domImageCount: page.images.length,
+      loadedDomImageCount: page.images.filter((image) => image.complete && image.naturalWidth > 0).length,
+      visibleDomImageCount: page.images.filter((image) => image.visible).length,
+      loadedBelowFold,
+      productImageSlots: page.productImageSlots,
+      deferredImageSlots: page.deferredImageSlots,
+      deferredLoadCheck,
+      lcp: page.lcp,
+      cls: page.cls,
+      largestImages: responses
+        .sort((left, right) => Number(right.encodedDataLength || 0) - Number(left.encodedDataLength || 0))
+        .slice(0, 5),
+    })
+  }
+
+  performanceState.activeKey = ''
+  console.log(`[web-beta-smoke] image performance:\n${JSON.stringify({ reports }, null, 2)}`)
+}
+
 async function main() {
   logStep(`base url: ${BASE_URL}`)
   const { cdp, cleanup } = await startBrowser()
   const runtimeErrors = []
   const networkRequests = new Map()
   const resource404s = []
+  const imageResponses = new Map()
+  const performanceState = { activeKey: '' }
 
   cdp.on('Runtime.exceptionThrown', (params) => {
     runtimeErrors.push(params.exceptionDetails?.text || params.exceptionDetails?.exception?.description || 'Runtime exception')
@@ -948,34 +1070,91 @@ async function main() {
       documentUrl: params.documentURL,
       type: params.type,
       initiator: params.initiator,
+      measurementKey: performanceState.activeKey,
     })
   })
   cdp.on('Network.responseReceived', (params) => {
-    if (params.response?.status !== 404) return
-    resource404s.push({
-      ...networkRequests.get(params.requestId),
-      requestId: params.requestId,
-      url: params.response.url,
-      status: params.response.status,
-      type: params.type,
-      mimeType: params.response.mimeType,
-      fromDiskCache: params.response.fromDiskCache,
-      fromServiceWorker: params.response.fromServiceWorker,
-    })
+    const request = networkRequests.get(params.requestId) || {}
+    if (params.response?.status === 404) {
+      resource404s.push({
+        ...request,
+        requestId: params.requestId,
+        url: params.response.url,
+        status: params.response.status,
+        type: params.type,
+        mimeType: params.response.mimeType,
+        fromDiskCache: params.response.fromDiskCache,
+        fromServiceWorker: params.response.fromServiceWorker,
+      })
+    }
+    if (params.type === 'Image' && request.measurementKey) {
+      imageResponses.set(params.requestId, {
+        ...request,
+        requestId: params.requestId,
+        url: params.response.url,
+        status: params.response.status,
+        mimeType: params.response.mimeType,
+        protocol: params.response.protocol,
+        fromDiskCache: params.response.fromDiskCache,
+        fromServiceWorker: params.response.fromServiceWorker,
+        cacheControl: responseHeader(params.response.headers, 'cache-control'),
+        etag: responseHeader(params.response.headers, 'etag'),
+        age: responseHeader(params.response.headers, 'age'),
+        cfCacheStatus: responseHeader(params.response.headers, 'cf-cache-status'),
+        contentLength: responseHeader(params.response.headers, 'content-length'),
+        lastModified: responseHeader(params.response.headers, 'last-modified'),
+        encodedDataLength: Number(params.response.encodedDataLength || 0),
+      })
+    }
+  })
+  cdp.on('Network.loadingFinished', (params) => {
+    const response = imageResponses.get(params.requestId)
+    if (response) response.encodedDataLength = Number(params.encodedDataLength || response.encodedDataLength || 0)
   })
 
   try {
+    await cdp.command('Page.enable')
+    await cdp.command('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(() => {
+        window.__kaufklugPerformance = { lcp: null, cls: 0 }
+        try {
+          new PerformanceObserver((list) => {
+            const entry = list.getEntries().at(-1)
+            if (!entry) return
+            const rect = entry.element?.getBoundingClientRect?.()
+            window.__kaufklugPerformance.lcp = {
+              value: Number(entry.startTime.toFixed(2)),
+              size: Number(entry.size || 0),
+              url: entry.url || '',
+              tagName: entry.element?.tagName || '',
+              text: String(entry.element?.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 120),
+              renderedWidth: rect ? Number(rect.width.toFixed(2)) : 0,
+              renderedHeight: rect ? Number(rect.height.toFixed(2)) : 0,
+            }
+          }).observe({ type: 'largest-contentful-paint', buffered: true })
+          new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              if (!entry.hadRecentInput) window.__kaufklugPerformance.cls += entry.value
+            }
+          }).observe({ type: 'layout-shift', buffered: true })
+        } catch {}
+      })()`,
+    })
     await cdp.command('Network.enable')
     await cdp.command('Network.setCacheDisabled', { cacheDisabled: true })
-    await runHomeCheck(cdp)
-    await runReducedMotionCheck(cdp)
-    if (!HOME_ONLY) {
-      await runSearchCheck(cdp)
-      await runMultiRetailerCoverageCheck(cdp)
-      await runComparisonMobileCheck(cdp)
-      await runBrowseCheck(cdp)
-      await runTopDealsCheck(cdp)
-      await runShoppingListCheck(cdp)
+    if (IMAGE_PERFORMANCE_ONLY) {
+      await runImagePerformanceMatrix(cdp, performanceState, imageResponses)
+    } else {
+      await runHomeCheck(cdp)
+      await runReducedMotionCheck(cdp)
+      if (!HOME_ONLY) {
+        await runSearchCheck(cdp)
+        await runMultiRetailerCoverageCheck(cdp)
+        await runComparisonMobileCheck(cdp)
+        await runBrowseCheck(cdp)
+        await runTopDealsCheck(cdp)
+        await runShoppingListCheck(cdp)
+      }
     }
 
     const relevantRuntimeErrors = runtimeErrors.filter((message) => {

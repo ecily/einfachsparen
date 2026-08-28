@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getOfferImageUrl } from '../../api'
 
 const failedImageSourceCache = new Set()
+const IMAGE_LOAD_ROOT_MARGIN = '200px 0px'
 
 function asSourceText(value) {
   if (Array.isArray(value)) return value.map(asSourceText).join(' ')
@@ -101,12 +102,33 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
   const directSrc = String(src || '').trim()
   const primarySrc = offerId && directSrc ? getOfferImageUrl(offerId) : directSrc
   const [failedSources, setFailedSources] = useState(() => new Set(failedImageSourceCache))
+  const imageContainerRef = useRef(null)
+  const [shouldLoad, setShouldLoad] = useState(() => typeof IntersectionObserver === 'undefined')
   const imageSources = [primarySrc, directSrc].filter((item, index, items) => item && items.indexOf(item) === index)
   const currentSrc = imageSources.find((item) => !failedSources.has(item)) || ''
   const isHofer = isHoferOffer(offer)
   const isOfficialPlaceholder = hasOfficialSourceSignal(offer)
   const placeholderCopy = getPlaceholderCopy(offer)
   const placeholderCategory = isHofer ? 'hofer' : getPlaceholderCategory(offer)
+
+  useEffect(() => {
+    if (!currentSrc || shouldLoad) return undefined
+
+    const imageContainer = imageContainerRef.current
+    if (!imageContainer) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        setShouldLoad(true)
+        observer.disconnect()
+      },
+      { rootMargin: IMAGE_LOAD_ROOT_MARGIN },
+    )
+
+    observer.observe(imageContainer)
+    return () => observer.disconnect()
+  }, [currentSrc, shouldLoad])
 
   if (!currentSrc) {
     return (
@@ -132,16 +154,23 @@ export function ProductImage({ offerId, src, alt, compact = false, offer = null 
   }
 
   return (
-    <div className={`product-image ${compact ? 'product-image--compact' : ''}`}>
-      <img
-        src={currentSrc}
-        alt={alt || ''}
-        loading="lazy"
-        onError={() => {
-          failedImageSourceCache.add(currentSrc)
-          setFailedSources((current) => new Set(current).add(currentSrc))
-        }}
-      />
+    <div
+      ref={imageContainerRef}
+      className={`product-image ${compact ? 'product-image--compact' : ''}`}
+      data-image-deferred={shouldLoad ? undefined : 'true'}
+    >
+      {shouldLoad ? (
+        <img
+          src={currentSrc}
+          alt={alt || ''}
+          loading="lazy"
+          decoding="async"
+          onError={() => {
+            failedImageSourceCache.add(currentSrc)
+            setFailedSources((current) => new Set(current).add(currentSrc))
+          }}
+        />
+      ) : null}
     </div>
   )
 }
