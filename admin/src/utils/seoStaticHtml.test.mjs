@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { buildSeoStaticDocument, getStaticSeoPages } from '../../scripts/generateSeoHtml.mjs'
+import { seoFooterLinkGroups } from '../config/seoLandingPages.js'
 
 const template = `<!doctype html><html><head><title>Default</title><meta name="description" content="Default" /><meta name="robots" content="index,follow" /><link rel="canonical" href="https://www.kaufklug.at/" /><meta property="og:title" content="Default" /><meta property="og:description" content="Default" /><meta property="og:url" content="https://www.kaufklug.at/" /></head><body><div id="root"></div></body></html>`
 
@@ -17,7 +18,19 @@ test('static SEO documents expose route-specific metadata and visible content', 
   assert.match(html, /<h1>BILLA Angebote aktuell vergleichen<\/h1>/)
   assert.match(html, /property="og:image" content="https:\/\/www\.kaufklug\.at\/brand\/kaufklug-logo-transparent\.png"/)
   assert.match(html, /application\/ld\+json/)
+  assert.match(html, /"item":"https:\/\/www\.kaufklug\.at\/angebote\/billa\/"/)
+  assert.doesNotMatch(html, /"item":"https:\/\/www\.kaufklug\.at\/angebote\/billa"}/)
   assert.doesNotMatch(page.description, /Prospekt|Flugblatt/i)
+})
+
+test('runtime SEO footer links use canonical trailing-slash paths', () => {
+  const links = seoFooterLinkGroups.flatMap((group) => group.links)
+
+  for (const link of links) {
+    assert.match(link.path, /\/$/, `non-canonical footer path for ${link.key}`)
+  }
+  assert.equal(links.find((link) => link.key === 'bier')?.path, '/angebote/bier/')
+  assert.equal(links.find((link) => link.key === 'lidl')?.path, '/angebote/lidl/')
 })
 
 test('homepage exposes crawlable internal SEO links in initial HTML', () => {
@@ -32,6 +45,17 @@ test('homepage exposes crawlable internal SEO links in initial HTML', () => {
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/"/)
   for (const path of ['/top-deals/', '/angebote/billa/', '/angebote/lidl/', '/angebote/waschmittel/', '/so-funktioniert-kaufklug/']) {
     assert.ok(html.includes(`<a href="${path}">`), `missing crawlable link ${path}`)
+  }
+  assert.ok(html.indexOf('/angebote/bier/') < html.indexOf('/angebote/kaffee/'))
+  assert.ok(html.indexOf('/angebote/lidl/') < html.indexOf('/angebote/billa/'))
+})
+
+test('Top Deals gives crawlable priority links to beer and the recovering retailers', () => {
+  const page = getStaticSeoPages().find((candidate) => candidate.path === '/top-deals')
+  const html = buildSeoStaticDocument(template, page)
+
+  for (const path of ['/angebote/bier/', '/angebote/lidl/', '/angebote/billa/', '/angebote/penny/']) {
+    assert.ok(html.includes(`<a href="${path}">`), `missing Top Deals priority link ${path}`)
   }
 })
 
@@ -145,9 +169,10 @@ test('Lidl and PENNY descriptions target evidenced offer intent without claiming
     },
     {
       key: 'penny',
-      title: 'PENNY Angebote aktuell finden | kaufklug',
+      title: 'PENNY Angebote & Aktionen aktuell vergleichen | kaufklug.at',
       h1: 'PENNY Angebote aktuell finden',
       description: 'Aktuelle PENNY Angebote und Aktionen in Österreich vergleichen – mit Preisen, Packungsgrößen, Gültigkeit und Bedingungen.',
+      introSignal: 'Preis pro Einheit',
     },
   ]
 
@@ -159,6 +184,7 @@ test('Lidl and PENNY descriptions target evidenced offer intent without claiming
     assert.equal(page.title, contract.title)
     assert.equal(page.h1, contract.h1)
     assert.equal(page.description, contract.description)
+    if (contract.introSignal) assert.match(page.intro, new RegExp(contract.introSignal))
     assert.match(html, new RegExp(`<meta name="description" content="${escapedDescription}" \\/>`))
     assert.match(html, new RegExp(`<meta property="og:description" content="${escapedDescription}" \\/>`))
     assert.match(html, new RegExp(`canonical" href="https:\\/\\/www\\.kaufklug\\.at\\/angebote\\/${contract.key}\\/`))
@@ -270,8 +296,8 @@ test('beer landing page is indexable and complete in initial HTML', () => {
   const html = buildSeoStaticDocument(template, page)
 
   assert.equal(page.robots, 'index,follow')
-  assert.match(html, /<title>Bier Angebote aktuell vergleichen \| kaufklug\.at<\/title>/)
-  assert.match(html, /<meta name="description" content="Aktuelle Bier-Angebote von mehreren H\u00e4ndlern vergleichen\./)
+  assert.match(html, /<title>Bier Angebote vergleichen: Literpreise &amp; Aktionen \| kaufklug\.at<\/title>/)
+  assert.match(html, /<meta name="description" content="Aktuelle Bier-Angebote mehrerer H\u00e4ndler nach Literpreis vergleichen\./)
   assert.match(html, /<meta name="robots" content="index,follow" \/>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/angebote\/bier\/"/)
   assert.match(html, /<h1>Bier Angebote aktuell vergleichen<\/h1>/)

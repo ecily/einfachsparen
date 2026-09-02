@@ -61,11 +61,14 @@ const staticPages = [
     h1: 'Aktuelle Angebote finden und beim Einkauf sparen',
     relatedLinks: [
       { label: 'Top Deals heute', path: '/top-deals/' },
+      { label: 'Bier Angebote', path: '/angebote/bier/' },
+      { label: 'Lidl Angebote', path: '/angebote/lidl/' },
+      { label: 'BILLA Angebote', path: '/angebote/billa/' },
+      { label: 'PENNY Angebote', path: '/angebote/penny/' },
       { label: 'Alle Angebote', path: '/angebote/' },
       { label: 'Supermarkt Angebote', path: '/angebote/supermarkt/' },
       { label: 'Drogerie Angebote', path: '/angebote/drogerie/' },
       { label: 'Kaffee Angebote', path: '/angebote/kaffee/' },
-      { label: 'Bier Angebote', path: '/angebote/bier/' },
       { label: 'Deo Angebote', path: '/angebote/deo/' },
       { label: 'Bier Literpreis-Preischeck', path: '/preischeck/bier-literpreis-vergleich' },
       { label: 'Softdrinks Angebote', path: '/angebote/softdrinks/' },
@@ -74,11 +77,8 @@ const staticPages = [
       { label: 'Duschgel Angebote', path: '/angebote/duschgel/' },
       { label: 'Nudeln Angebote', path: '/angebote/nudeln/' },
       { label: 'Chips Angebote', path: '/angebote/chips/' },
-      { label: 'BILLA Angebote', path: '/angebote/billa/' },
-      { label: 'Lidl Angebote', path: '/angebote/lidl/' },
       { label: 'BIPA Angebote', path: '/angebote/bipa/' },
       { label: 'dm Angebote', path: '/angebote/dm/' },
-      { label: 'PENNY Angebote', path: '/angebote/penny/' },
       { label: 'Waschmittel Angebote', path: '/angebote/waschmittel/' },
       { label: 'Butter Angebote', path: '/angebote/butter/' },
       { label: 'HOFER Angebote', path: '/angebote/hofer/' },
@@ -120,6 +120,13 @@ const staticPages = [
     robots: 'index,follow',
     h1: 'Top Deals heute',
     intro: 'Entdecke aktuell besonders interessante Angebote und vergleiche Preis pro Einheit, Bedingungen und Gültigkeit.',
+    relatedLinks: [
+      { label: 'Bier Angebote', path: '/angebote/bier/' },
+      { label: 'Lidl Angebote', path: '/angebote/lidl/' },
+      { label: 'BILLA Angebote', path: '/angebote/billa/' },
+      { label: 'PENNY Angebote', path: '/angebote/penny/' },
+      { label: 'Kaffee Angebote', path: '/angebote/kaffee/' },
+    ],
   },
   {
     path: '/impressum',
@@ -227,7 +234,7 @@ function canonicalPath(pathname = '/') {
 function buildBreadcrumbJsonLd(page) {
   const path = normalizePath(page.path)
   const items = [{ name: 'kaufklug.at', item: `${siteUrl}/` }]
-  if (path !== '/') items.push({ name: page.h1, item: `${siteUrl}${path}` })
+  if (path !== '/') items.push({ name: page.h1, item: `${siteUrl}${canonicalPath(path)}` })
 
   return JSON.stringify({
     '@context': 'https://schema.org',

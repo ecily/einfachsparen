@@ -8,8 +8,8 @@ const baseRelatedLinks = [
   ['angebote', 'Alle Angebote'],
   ['supermarkt', 'Supermarkt Angebote'],
   ['drogerie', 'Drogerie Angebote'],
-  ['kaffee', 'Kaffee Angebote'],
   ['bier', 'Bier Angebote'],
+  ['kaffee', 'Kaffee Angebote'],
   ['deo', 'Deo Angebote'],
   ['softdrinks', 'Softdrinks Angebote'],
   ['waschmittel', 'Waschmittel Angebote'],
@@ -21,12 +21,12 @@ const baseRelatedLinks = [
 ]
 
 const retailerRelatedLinks = [
+  ['lidl', 'Lidl Angebote'],
   ['billa', 'BILLA Angebote'],
   ['billa-plus', 'BILLA Plus Angebote'],
-  ['lidl', 'Lidl Angebote'],
+  ['penny', 'PENNY Angebote'],
   ['dm', 'dm Angebote'],
   ['bipa', 'BIPA Angebote'],
-  ['penny', 'PENNY Angebote'],
   ['mueller', 'M\u00fcller Angebote'],
   ['hofer', 'HOFER eingeschr\u00e4nkt'],
   ['interspar', 'INTERSPAR eingeschr\u00e4nkt'],
@@ -63,7 +63,7 @@ export const seoLandingPages = [
     query: {
       limit: 24,
     },
-    relatedLinks: links(['supermarkt', 'drogerie', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'windeln', 'duschgel', 'nudeln', 'chips', 'billa', 'hofer', 'lidl', 'waschmittel', 'butter']),
+    relatedLinks: links(['supermarkt', 'bier', 'lidl', 'billa', 'penny', 'kaffee', 'nudeln', 'duschgel', 'chips', 'schokolade', 'drogerie', 'softdrinks', 'windeln', 'hofer', 'waschmittel', 'butter']),
   },
   {
     key: 'supermarkt',
@@ -100,7 +100,7 @@ export const seoLandingPages = [
       limit: 12,
       offset: 0,
     },
-    relatedLinks: links(['billa', 'lidl', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips']),
+    relatedLinks: links(['bier', 'lidl', 'billa', 'penny', 'kaffee', 'nudeln', 'chips', 'schokolade', 'softdrinks']),
   },
   {
     key: 'drogerie',
@@ -153,7 +153,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'lidl', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips']),
+    relatedLinks: links(['supermarkt', 'bier', 'lidl', 'penny', 'kaffee', 'nudeln', 'chips', 'schokolade', 'softdrinks']),
   },
   {
     key: 'hofer',
@@ -189,7 +189,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'penny', 'kaffee', 'bier', 'softdrinks', 'schokolade', 'nudeln', 'chips']),
+    relatedLinks: links(['supermarkt', 'bier', 'billa', 'penny', 'kaffee', 'nudeln', 'chips', 'schokolade', 'softdrinks']),
   },
   {
     key: 'dm',
@@ -248,12 +248,12 @@ export const seoLandingPages = [
   {
     key: 'penny',
     path: '/angebote/penny',
-    title: 'PENNY Angebote aktuell finden | kaufklug',
+    title: 'PENNY Angebote & Aktionen aktuell vergleichen | kaufklug.at',
     description:
       'Aktuelle PENNY Angebote und Aktionen in \u00d6sterreich vergleichen \u2013 mit Preisen, Packungsgr\u00f6\u00dfen, G\u00fcltigkeit und Bedingungen.',
     h1: 'PENNY Angebote aktuell finden',
     intro:
-      'Finde aktuelle PENNY Angebote in \u00d6sterreich. kaufklug hilft dir, Preise, Aktionen und Bedingungen schneller zu \u00fcberblicken.',
+      'Vergleiche aktuelle PENNY Angebote und Aktionen mit Packungsgr\u00f6\u00dfe, Bedingungen und sicher vorhandenem Preis pro Einheit.',
     robots: 'index,follow',
     query: {
       retailers: 'penny',
@@ -261,7 +261,7 @@ export const seoLandingPages = [
       limit: 24,
       offset: 0,
     },
-    relatedLinks: links(['supermarkt', 'billa', 'hofer', 'lidl', 'kaffee', 'bier', 'softdrinks', 'kaese']),
+    relatedLinks: links(['supermarkt', 'bier', 'lidl', 'billa', 'kaffee', 'softdrinks', 'hofer', 'kaese']),
   },
   {
     key: 'kaffee',
@@ -285,9 +285,9 @@ export const seoLandingPages = [
     key: 'bier',
     path: '/angebote/bier',
     comparisonKey: 'bier',
-    title: 'Bier Angebote aktuell vergleichen | kaufklug.at',
+    title: 'Bier Angebote vergleichen: Literpreise & Aktionen | kaufklug.at',
     description:
-      'Aktuelle Bier-Angebote von mehreren H\u00e4ndlern vergleichen. Preise, Packungsgr\u00f6\u00dfen und Literpreise transparent auf kaufklug.at.',
+      'Aktuelle Bier-Angebote mehrerer H\u00e4ndler nach Literpreis vergleichen. Dosen, Flaschen, Multipacks und Aktionsbedingungen transparent pr\u00fcfen.',
     h1: 'Bier Angebote aktuell vergleichen',
     intro:
       'Vergleiche aktuelle Bier-Angebote mehrerer H\u00e4ndler und beachte Dosen, Flaschen, Multipacks, Kisten und Mengenbedingungen. Der Literpreis wird angezeigt, soweit sicher vorhanden; ein Bestpreisversprechen gibt es nicht.',
@@ -334,7 +334,7 @@ export const seoLandingPages = [
     path: '/angebote/schokolade',
     title: 'Schokolade Angebote aktuell vergleichen | kaufklug.at',
     description:
-      'Aktuelle Schokolade-Angebote verschiedener Händler vergleichen. Preise, Packungsgrößen und Preis pro kg transparent auf kaufklug.at.',
+      'Aktuelle Schokolade-Angebote mehrerer Händler vergleichen – mit Preisen, Packungsgrößen, kg-Preisen und Bedingungen.',
     h1: 'Schokolade Angebote aktuell vergleichen',
     intro:
       'Vergleiche aktuelle Schokolade-Angebote mehrerer Händler, von Tafeln und Packungen bis zu Multipacks. Beachte unterschiedliche Gewichte, den Preis pro kg und Mengenbedingungen.',
@@ -480,7 +480,7 @@ export const seoFooterLinkGroups = [
     links: retailerRelatedLinks.map(([key, label]) => ({
       key,
       label,
-      path: retailerLandingPaths[key] || `/angebote/${key}`,
+      path: retailerLandingPaths[key] || `/angebote/${key}/`,
     })),
   },
 ]
