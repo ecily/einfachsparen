@@ -244,3 +244,42 @@ Der technische und inhaltliche Audit zeigte keinen Anlass für ein erfundenes `O
 Die neue indexierbare Seite bündelt ausschließlich belegte Aussagen: Betreiber und privater Projektstatus, Such-/Vergleichsnutzen, öffentlich zugängliche Händlerseiten/Online-Angebote/Prospekte als mögliche Quellen, automatisierte Strukturierung, sichere Einheitenvergleiche, Angebotsbedingungen, begrenzte Abdeckung, Händlerprüfung vor Kauf und nachvollziehbarer Korrekturweg. Sie behauptet weder vollständige Flugblätter noch Bestpreis, Echtzeit, Partnerschaften, Affiliate-Freiheit oder bezahlungsfreie Platzierung. Eigener SEO-Vertrag: `So funktioniert kaufklug.at: Methodik und Betreiber`, passende Description, H1, `index,follow`, Self-Canonical/OG, crawlbarer Homepage-/Bottom-Line-Link und ein ausschließlich seitenbezogenes `AboutPage`-Objekt ohne `Organization`, `sameAs` oder erfundene Unternehmensdaten.
 
 Produktcommit `d86c8bdd` ist regulär live: Prozessstart `2026-08-28T07:48:13.036Z`, Static-Bundle `index-DGipjjmZ.js`, Health und Mongo 3/3 grün. Live liefert die Route HTTP 200 mit vollständigem Initial-HTML-Inhalt und dem erwarteten SEO-/Schema-Vertrag; die dynamisch gefilterte Sitemap enthält 26 URLs inklusive Trust-Seite. 87/87 Tests, ESLint, Production-Build, `git diff --check`, lokaler Trust-/Reduced-Motion-Mobile-Smoke und vollständiger 390-px-Live-Smoke sind grün, `resource404s: []`. BILLA, HOFER, Lidl und PENNY blieben vollständig unverändert. Wirkung später über Indexierung der neuen URL, organische Einstiege und interne Navigation beobachten; keine unmittelbare Rankingsteigerung wird behauptet.
+
+## SEO-Recovery-/Growth-Batch 2026-09-02
+
+### GSC-Evidence und Root Cause
+
+Die neue 28-Tage-Evidence zeigt 7.440 Impressionen, 40 Klicks, 0,5 % CTR und Position 17,9 gegenüber 11.987 Impressionen, 43 Klicks, 0,4 % CTR und Position 10,8 im vorherigen Fenster. Der Impressionenrückgang beträgt damit 37,9 %. Der stärkste belegte Einzelverlust liegt im Händlercluster Lidl: `lidl angebote` sank von rund 2.609 auf 322 Impressionen und Position 7,95 auf 11,51; `lidl aktionen` von rund 414 auf 54 und Position 8,7 auf 11. Dagegen entstehen neue Seite-1-Signale bei Nudeln, Duschgel, Chips und Kaffee, ein Position-12-15-Signal bei Schokolade sowie ein Quick Win für `penny angebote` um Position 10,5.
+
+Live sind die priorisierten Seiten HTTP 200, `index,follow`, mit route-spezifischem initialem HTML und Self-Canonical. Ein technischer Indexability-Ausfall ist damit nicht belegt. Die historische Slash-/Non-Slash-Aufteilung bleibt ein plausibles Konsolidierungsrisiko, aber keine bewiesene alleinige Ursache. Belastbar ist: Händler-Rankings, besonders Lidl, haben sich verschlechtert, während Produktseiten erstmals relevante Rankings aufbauen. Es werden weder Suchvolumina noch Kausalität über diese Evidence hinaus behauptet.
+
+### Bier Priority 1
+
+Relevante Intentvarianten sind `bier angebote`, `bier angebot`, `bier aktion`, `bier aktionen`, `bier im angebot`, die Österreich-Varianten sowie `bier literpreis` und `bier preisvergleich`; mangels Queryzeilen werden dafür keine Einzelvolumina erfunden. Die aktuelle Public-API liefert 26 deduplizierte Angebote von drei Händlern, 25 sichere vergleichbare Unit-Preise und 23 erkannte Bedingungen. Der neue Title lautet `Bier Angebote vergleichen: Literpreise & Aktionen | kaufklug.at`, die Description nennt mehrere Händler, Literpreis, Dosen, Flaschen, Multipacks und Aktionsbedingungen. H1, Intro, Comparison Layer und Bestpreis-Ausschluss bleiben unverändert.
+
+### Händler und Gewinnerseiten
+
+| Seite | aktuelles Signal / Public-Evidence | Änderung | Ziel |
+| --- | --- | --- | --- |
+| Lidl | größter GSC-Verlust; 150 Public Offers | Snippet/H1 stabil, interne Priorität erhöht | bestehende Position-11-Chance zurück auf Seite 1 |
+| BILLA | Seite-1-Nähe; 945 BILLA-/BILLA-Plus-Offers | SEO-Copy stabil, Bier-Link höher priorisiert | Seite 1 halten, keine BILLA-Plus-Kannibalisierung |
+| PENNY | `penny angebote` rund Position 10,5; 310 Offers | stärkerer Vergleichs-Title und Unit-Preis-Intro | Top 10 |
+| Nudeln | rund Position 8,9; 44 Offers | Copy stabil, interne Priorität erhöht | Seite 1 stabilisieren |
+| Duschgel | rund Position 9,5; 50 Offers | Copy stabil, interne Priorität erhöht | Seite 1 stabilisieren |
+| Chips | mehrere Queries Position 7-11; aktuell 8 Offers | keine Copy-Überoptimierung; Autopilot vorübergehend `noindex,follow` | nach Rückkehr auf mindestens 10 belastbare Offers erneut indexieren |
+| Schokolade | rund Position 12-15; 62 Offers | ausschließlich präzisere Description | CTR und Seite-1-Distanz verbessern |
+| Kaffee | einzelne Queries Position 9-10; 84 Offers | Copy/Comparison USP stabil, interne Priorität erhöht | Seite 1 stabilisieren |
+
+HOFER liefert read-only 42 Public Offers, aber 0 sicher vergleichbare Unit-Preise. Sein bestehender SEO-Vertrag wird nur regressionsgeprüft; es erfolgte keine Source-, Crawl-, Coverage- oder Filterarbeit.
+
+### Canonical-/Slash-Migration und interne Links
+
+Die vollständige Live-Prüfung aller 25 indexierbaren Nicht-Root-URLs der aktuellen Sitemap ergab für jede Non-Slash-Variante HTTP 200 statt 301/308; Slash und Non-Slash haben damit null Redirect-Hops. Alle geprüften Dokumente setzen jedoch Self-Canonical und Open Graph auf Slash, und die Sitemap enthält ausschließlich Slash-URLs. Da keine verifizierbare aktive DigitalOcean-Ingress-Spec im Repo verfügbar ist und Query-Erhaltung historisch nicht zugesichert war, wurde keine partielle Redirect-Konfiguration erzeugt. Der sichere Repo-Hebel ist geschlossen: statische Breadcrumb-Items und Runtime-Footerlinks zeigen nun ebenfalls ausschließlich auf Slash; bestehende Related Links waren bereits canonical-only.
+
+Die vorhandenen Linkmengen wurden nicht vergrößert. Bier steht jetzt auf Homepage, Angebotsübersicht, Supermarkt, BILLA, Lidl und PENNY früher; Top Deals erhält fünf kompakte crawlbare Links zu Bier, Lidl, BILLA, PENNY und Kaffee. Lidl steht in Händlergruppen vor BILLA, passend zur Recovery-Priorität. Utility-/noindex-Ziele werden nicht gestärkt.
+
+### Absicherung und Messung
+
+Produktcommit: `9ebe24e2`. Lokal bestanden 84/84 Admin-/SEO-/UX-Tests, ESLint, Production-Build und `git diff --check`. Generierte Titles, Descriptions, H1, Robots, Canonicals, Breadcrumbs und Links wurden für alle neun priorisierten Seiten geprüft. Der unveränderte Autopilot erzeugt aktuell 25 indexierbare Sitemap-URLs und entfernt Chips (8 Offers), Butter sowie den derzeit unbelegten Preischeck fail-closed; keine Mindestschwelle wurde gelockert.
+
+Nächster Messpunkt: 2026-09-09. Erneut dieselbe GSC-Auswertung als 7 Tage gegen vorherige 7 Tage und 28 Tage gegen vorherige 28 Tage durchführen. Für Bier, Lidl, BILLA, PENNY, Nudeln, Duschgel, Chips, Schokolade und Kaffee jeweils Query-, Page-, CTR-, Positions- und Slash-/Non-Slash-Verteilung vergleichen. Änderungen erst nach Neucrawl und klarer Evidence nachschärfen.
