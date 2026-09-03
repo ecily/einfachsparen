@@ -251,7 +251,7 @@ test('category filter response shape stays compatible', async () => {
   }
 });
 
-test('public retailer facets hide temporarily disabled retailers', async () => {
+test('public retailer facets allow EUROSPAR while retaining SPAR current-source gating', async () => {
   const originalFind = Retailer.find;
   const originalSourceFind = Source.find;
   const originalOfferFind = Offer.find;
@@ -266,7 +266,7 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
   ];
 
   Retailer.find = (filter) => {
-    assert.deepEqual(filter.retailerKey?.$nin, ['eurospar']);
+    assert.deepEqual(filter.retailerKey?.$nin, []);
 
     return {
       select() {
@@ -321,7 +321,7 @@ test('public retailer facets hide temporarily disabled retailers', async () => {
     assert.equal(retailers[0].currentFlyerUnavailable, true);
     assert.equal(retailers[0].officialDigitalSourceUnavailable, true);
     assert.equal(retailers[0].publicTrustWarning.message, INTERSPAR_LIMITED_COVERAGE_MESSAGE);
-    assert.equal(isPublicRetailerEnabled('eurospar'), false);
+    assert.equal(isPublicRetailerEnabled('eurospar'), true);
     assert.equal(isPublicRetailerEnabled('spar'), true);
     assert.equal(isPublicRetailerEnabled('mueller'), true);
   } finally {
@@ -487,7 +487,7 @@ test('freshness warning stays scoped to HOFER and does not alter other retailers
   }, now), null);
 });
 
-test('category facets ignore public-disabled retailer scopes', async () => {
+test('category facets include the public EUROSPAR scope', async () => {
   const originalOfferFind = Offer.find;
   const originalRetailerFind = Retailer.find;
   const originalSourceFind = Source.find;
@@ -510,8 +510,8 @@ test('category facets ignore public-disabled retailer scopes', async () => {
     const categories = await getCategoryFilters({ retailerKeys: ['spar', 'eurospar'] });
     assert.deepEqual(categories.map((category) => category.mainCategoryKey), ['getraenke']);
 
-    const hiddenOnly = await getCategoryFilters({ retailerKeys: ['eurospar'] });
-    assert.deepEqual(hiddenOnly, []);
+    const eurosparOnly = await getCategoryFilters({ retailerKeys: ['eurospar'] });
+    assert.deepEqual(eurosparOnly.map((category) => category.mainCategoryKey), ['getraenke']);
   } finally {
     Offer.find = originalOfferFind;
     Retailer.find = originalRetailerFind;
