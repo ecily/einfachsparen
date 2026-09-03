@@ -22,6 +22,61 @@ const REQUEST_HEADERS = {
   'User-Agent': 'kaufklug-readonly-source-discovery/1.0',
 };
 
+const SPAR_FAMILY_CYCLE_WEEK_OFFSETS = Object.freeze([0, -1, -2]);
+
+function viennaCalendarParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const valueFor = (type) => Number(parts.find((part) => part.type === type)?.value || 0);
+  return {
+    year: valueFor('year'),
+    month: valueFor('month'),
+    day: valueFor('day'),
+  };
+}
+
+function isoWeekCycleForOffset(now = new Date(), weekOffset = 0) {
+  const { year, month, day } = viennaCalendarParts(now);
+  const localDate = new Date(Date.UTC(year, month - 1, day));
+  const mondayOffset = (localDate.getUTCDay() + 6) % 7;
+  const monday = new Date(localDate.getTime() - (mondayOffset * 86400000) + (weekOffset * 7 * 86400000));
+  const thursday = new Date(monday.getTime() + (3 * 86400000));
+  const isoYear = thursday.getUTCFullYear();
+  const januaryFourth = new Date(Date.UTC(isoYear, 0, 4));
+  const januaryFourthMondayOffset = (januaryFourth.getUTCDay() + 6) % 7;
+  const firstMonday = new Date(januaryFourth.getTime() - (januaryFourthMondayOffset * 86400000));
+  const week = Math.floor((monday.getTime() - firstMonday.getTime()) / (7 * 86400000)) + 1;
+
+  return { week, thursday };
+}
+
+function buildSparFamilyCycleViewerUrls(retailerFormat, {
+  now = new Date(),
+  weekOffsets = SPAR_FAMILY_CYCLE_WEEK_OFFSETS,
+} = {}) {
+  const normalizedFormat = String(retailerFormat || '').toLowerCase();
+  if (!['spar', 'eurospar', 'interspar'].includes(normalizedFormat)) return [];
+
+  return [...new Set(weekOffsets.map((weekOffset) => {
+    const { week, thursday } = isoWeekCycleForOffset(now, weekOffset);
+    const paddedWeek = String(week).padStart(2, '0');
+    if (normalizedFormat === 'interspar') {
+      return `https://flugblatt.interspar.at/steiermark/steiermark_kw${paddedWeek}/`;
+    }
+
+    const dateKey = [
+      String(thursday.getUTCFullYear()).slice(-2),
+      String(thursday.getUTCMonth() + 1).padStart(2, '0'),
+      String(thursday.getUTCDate()).padStart(2, '0'),
+    ].join('');
+    return `https://flugblatt.spar.at/steiermark/${normalizedFormat}/${dateKey}-1-flugblatt-kw-${paddedWeek}/`;
+  }))];
+}
+
 const OFFICIAL_PDF_HOSTS = new Set([
   'flugblatt.spar.at',
   'flugblatt.interspar.at',
@@ -872,13 +927,14 @@ function buildSafetyMetadata({
   const flyerClassification = classifySparFamilyFlyerUrl(url);
   const matchedNonFoodTerms = findMatchedTerms(`${url} ${scannedText}`, NON_FOOD_TERMS);
   const matchedValidityTerms = findMatchedTerms(scannedText, VALIDITY_TERMS);
+  const validity = parseActionIndexValidity(scannedText);
 
   return {
     url,
     discoveredFrom,
     kind: flyerClassification.kind,
     sourceGuess: flyerClassification.sourceGuess || sourceClassification.sourceGuess,
-    folderType: inferFolderType(url, scannedText),
+    folderType: inferFolderType(url),
     pageCount,
     wouldExceedDefaultMaxPages: Boolean(pageCount && pageCount > limits.defaultMaxPages),
     wouldExceedSparFamilyMaxPages24: Boolean(pageCount && pageCount > limits.sparFamilyMaxPages24),
@@ -886,6 +942,7 @@ function buildSafetyMetadata({
     containsValidityTerms: matchedValidityTerms.length > 0,
     matchedNonFoodTerms,
     matchedValidityTerms,
+    validity,
     fetchStatus,
     fetchError,
     httpStatus,
@@ -1141,8 +1198,13 @@ async function discoverSparFamilyFlyers({
     maxLinks: effectiveLimits.maxLinks,
   });
 
-  if (fallbackLinks.length > 0) {
-    discovered.push(...fallbackLinks.filter((link) => !allowedKinds || allowedKinds.has(link.kind)));
+  const allowedFallbackLinks = fallbackLinks.filter((link) => !allowedKinds || allowedKinds.has(link.kind));
+  if (allowedFallbackLinks.length > 0) {
+    if (effectiveLimits.prioritizeFallbackViewerUrls === true) {
+      discovered.unshift(...allowedFallbackLinks);
+    } else {
+      discovered.push(...allowedFallbackLinks);
+    }
   }
 
   const uniqueLinks = mergeDiscoveredLinks(discovered, {
@@ -1277,6 +1339,7 @@ module.exports = {
   buildSparFamilyActionIndexMatrix,
   buildSafetyMetadata,
   buildFallbackViewerLinks,
+  buildSparFamilyCycleViewerUrls,
   buildSparFamilyFlyerInventoryReport,
   canonicalDiscoveryUrl,
   classifySparFamilyActionIndexLink,

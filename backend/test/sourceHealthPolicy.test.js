@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { getScheduledHealthPolicy } = require('../src/services/sources/sourceHealthPolicy');
+const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
 
 test('required public official sources define scheduled health', () => {
   const policy = getScheduledHealthPolicy({ retailerKey: 'billa', channel: 'official-site' });
@@ -24,6 +25,17 @@ test('SPAR, INTERSPAR, HOFER and EUROSPAR are non-blocking under current product
     assert.equal(policy.healthCriticality, 'optional', retailerKey);
     assert.equal(policy.requiredForScheduledHealth, false, retailerKey);
   }
+});
+
+test('PENNY offers page remains required while the supplemental flyer is optional', () => {
+  const sources = RETAILER_DEFINITIONS.filter((source) => source.retailerKey === 'penny' && source.enabled !== false);
+  const offersPage = sources.find((source) => source.sourceUrl === 'https://www.penny.at/angebote');
+  const flyer = sources.find((source) => source.sourceUrl === 'https://www.penny.at/angebote/flugblaetter');
+
+  assert.equal(getScheduledHealthPolicy(offersPage).healthCriticality, 'required');
+  assert.equal(getScheduledHealthPolicy(offersPage).requiredForScheduledHealth, true);
+  assert.equal(getScheduledHealthPolicy(flyer).healthCriticality, 'optional');
+  assert.equal(getScheduledHealthPolicy(flyer).requiredForScheduledHealth, false);
 });
 
 test('scoped historical sources are policy-bounded and PAGRO is excluded', () => {

@@ -414,7 +414,7 @@ test('crawlAllSources bounds scoped-only SPAR PDF source before full crawl execu
   assert.equal(createdJobs[0].metadata.boundedSource.notExecutedByPolicy, true);
 });
 
-test('crawlAllSources allows SPAR and INTERSPAR current flyer discovery in full crawls', async () => {
+test('crawlAllSources allows all SPAR-family current flyer discovery sources in full crawls', async () => {
   const runId = new mongoose.Types.ObjectId();
   const sparSourceId = new mongoose.Types.ObjectId();
   const intersparSourceId = new mongoose.Types.ObjectId();
@@ -527,14 +527,11 @@ test('crawlAllSources allows SPAR and INTERSPAR current flyer discovery in full 
     async ensureManualCategoryOverrideCacheLoadedImpl() {},
   });
 
-  assert.deepEqual(sourceCalls.map((source) => source.sourceRetailerFormat), ['spar', 'interspar']);
+  assert.deepEqual(sourceCalls.map((source) => source.sourceRetailerFormat), ['spar', 'eurospar', 'interspar']);
   assert.equal(result.sources.find((source) => source.sourceKey === 'spar-official-flyer-current').status, 'success');
   assert.equal(result.sources.find((source) => source.sourceKey === 'interspar-official-flyer-current').status, 'success');
-  const eurosparResult = result.sources.find((source) => source.sourceKey === 'eurospar-official-flyer-current');
-  assert.equal(eurosparResult.status, 'skipped');
-  assert.equal(eurosparResult.skippedReason, 'full-crawl-scoped-only-source');
-  assert.equal(createdJobs.length, 1);
-  assert.equal(createdJobs[0].metadata.sourceKey, 'eurospar-official-flyer-current');
+  assert.equal(result.sources.find((source) => source.sourceKey === 'eurospar-official-flyer-current').status, 'success');
+  assert.equal(createdJobs.length, 0);
 });
 
 test('source timeout helper keeps configured source timeout bounded', () => {

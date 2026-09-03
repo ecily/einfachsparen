@@ -77,13 +77,13 @@ const {
   resolveIssuuOriginalPdfUrl,
 } = require('./issuuPdfResolver');
 const {
+  buildSparFamilyCycleViewerUrls,
   discoverSparFamilyFlyers,
   isOfficialSparFamilyViewerUrl,
 } = require('./sparFamilyFlyerDiscovery');
 const {
   buildSparFamilyMultiLinkReplacementPlan,
 } = require('./sparFamilyMultiLinkReplacementPlan');
-const { RETAILER_DEFINITIONS } = require('../sources/sourceDefinitions');
 const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const { inferQuantityFieldsFromText } = require('./offerQualityGuards');
@@ -93,7 +93,7 @@ const execFile = promisify(execFileCallback);
 const PARSER_VERSION = 'official-v3-coverage';
 const SPAR_PRODUCTWORLD_SOURCE_TYPE = 'spar-family-official-productworld';
 const SPAR_PRODUCTWORLD_PARSER_VERSION = 'spar-productworld-bff-v1';
-const SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION = 'spar-family-flyer-discovery-v3';
+const SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION = 'spar-family-flyer-discovery-v4';
 const SPAR_PRODUCTWORLD_BFF_ORIGIN = 'https://api-scp.spar-ics.com';
 const SPAR_PRODUCTWORLD_SEARCH_PATH = '/ecom/pw/v1/search/v1/search';
 const SPAR_PRODUCTWORLD_FILTERS = ['inAngebot:true', 'isPreisGesenkt:true'];
@@ -5722,26 +5722,33 @@ function isSparFamilyMultiLinkCurrentSource(source = {}, sourceKey = '') {
     );
 }
 
-function fallbackViewerUrlsFromCodeDefinitions(source = {}, sourceKey = '') {
-  const effectiveSourceKey = sourceKey || `${source.sourceRetailerFormat || source.retailerKey || 'spar'}-official-flyer-current`;
-  const retailerFormat = source.sourceRetailerFormat || source.retailerKey || effectiveSourceKey.replace(/-official-flyer-current$/, '');
-  const definition = RETAILER_DEFINITIONS.find((candidate) => (
-    candidate.crawlPolicy?.currentDiscovery === true
-    && candidate.sourceRetailerFormat === retailerFormat
-    && `${candidate.sourceRetailerFormat || candidate.retailerKey || 'spar'}-official-flyer-current` === effectiveSourceKey
-  ));
-
-  return Array.isArray(definition?.crawlPolicy?.fallbackViewerUrls)
-    ? definition.crawlPolicy.fallbackViewerUrls
-    : [];
-}
-
-function mergeCurrentFallbackViewerUrls(source = {}, sourceKey = '') {
+function mergeCurrentFallbackViewerUrls(source = {}, sourceKey = '', now = new Date()) {
   if (!isSparFamilyMultiLinkCurrentSource(source, sourceKey)) return [];
 
-  return fallbackViewerUrlsFromCodeDefinitions(source, sourceKey)
+  const retailerFormat = source.sourceRetailerFormat || source.retailerKey || '';
+  return buildSparFamilyCycleViewerUrls(retailerFormat, { now })
     .map((url) => String(url || '').trim())
     .filter((url) => isAllowedSparFamilyPublicHtmlUrl(url));
+}
+
+function viennaDateKey(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+function hasCurrentSparFamilyDiscoveryMetadata(link = {}, now = new Date()) {
+  const validFrom = String(link.validity?.validFrom || '');
+  const validTo = String(link.validity?.validTo || '');
+  const today = viennaDateKey(now);
+  return link.fetchStatus === 'ok'
+    && /^\d{4}-\d{2}-\d{2}$/.test(validFrom)
+    && /^\d{4}-\d{2}-\d{2}$/.test(validTo)
+    && validFrom <= today
+    && validTo >= today;
 }
 
 function isAllowedSparFamilyMultiLinkCurrentLink(link = {}, source = {}) {
@@ -5775,7 +5782,9 @@ function isAllowedSparFamilyMultiLinkCurrentLink(link = {}, source = {}) {
 function selectSparFamilyMultiLinkCurrentLinks(discoveredLinks = [], source = {}) {
   if (!isSparFamilyMultiLinkCurrentSource(source)) return [];
   return (Array.isArray(discoveredLinks) ? discoveredLinks : [])
-    .filter((link) => isAllowedSparFamilyMultiLinkCurrentLink(link, source));
+    .filter((link) => isAllowedSparFamilyMultiLinkCurrentLink(link, source))
+    .filter((link) => source.crawlPolicy?.requireCurrentDiscoveryMetadata !== true
+      || hasCurrentSparFamilyDiscoveryMetadata(link));
 }
 
 function buildActiveSourceOfferFilterForCrawler(sourceId) {
@@ -6224,6 +6233,7 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRu
     maxPdfMetadataLookups: Number(source.crawlPolicy?.maxPdfMetadataLookups || 0),
     timeoutMs: Number(source.crawlPolicy?.timeoutMs || 15000),
     allowedKinds: source.crawlPolicy?.allowedFlyerKinds,
+    prioritizeFallbackViewerUrls: true,
   };
   const discovery = await discoverSparFamilyFlyers({
     entryPoints,
@@ -10797,6 +10807,7 @@ module.exports = {
     buildRetiredBillaPublitasSourceResult,
     isSparFamilyMultiLinkCurrentSource,
     mergeCurrentFallbackViewerUrls,
+    hasCurrentSparFamilyDiscoveryMetadata,
     isAllowedSparFamilyMultiLinkCurrentLink,
     selectSparFamilyMultiLinkCurrentLinks,
     buildMultiLinkStopRejectionReasons,

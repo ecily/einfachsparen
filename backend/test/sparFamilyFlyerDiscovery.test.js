@@ -9,6 +9,7 @@ const {
 const {
   buildSparFamilyActionIndexMatrix,
   buildFallbackViewerLinks,
+  buildSparFamilyCycleViewerUrls,
   buildSparFamilyFlyerInventoryReport,
   classifySparFamilyActionIndexLink,
   classifySparFamilyFlyerUrl,
@@ -575,23 +576,36 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   assert.equal(currentSources.every((source) => source.parserHint !== 'official-category-actions'), true);
   assert.equal(currentSources.every((source) => !/^(?:[A-Z]:\\|file:|https?:\/\/(?:www\.)?aktionsfinder\.at|https?:\/\/(?:www\.)?marktguru\.at)/i.test(source.sourceUrl)), true);
   const byKey = new Map(currentSources.map((source) => [deriveSourceKey(source), source]));
-  assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
-    'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
-    'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
-    'https://flugblatt.spar.at/steiermark/spar/260827-1-flugblatt-kw-35/',
-  ]);
+  assert.equal(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
   assert.equal(byKey.get('spar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
-  assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
-    'https://flugblatt.interspar.at/steiermark/steiermark_kw35/',
-  ]);
+  assert.equal(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
   assert.equal(byKey.get('interspar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
-  assert.deepEqual(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
-    'https://flugblatt.spar.at/steiermark/eurospar/260827-1-flugblatt-kw-35/',
-  ]);
+  assert.equal(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
   assert.equal(currentSources.every((source) => source.crawlPolicy?.transport === 'strict-curl'), true);
-  assert.equal(currentSources.every((source) => source.crawlPolicy?.maxPdfMetadataLookups === 0), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.maxPdfMetadataLookups === 12), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.requireCurrentDiscoveryMetadata === true), true);
   assert.equal(currentSources.every((source) => source.crawlPolicy?.allowedFlyerKinds?.join(',') === 'viewer'), true);
   assert.equal(currentSources.every((source) => source.crawlPolicy?.entryPoints?.[0] === 'https://www.spar.at/aktionen/steiermark'), true);
+});
+
+test('derives each SPAR-family viewer cycle across a weekly rollover without maintained URLs', () => {
+  const oldCycle = new Date('2026-09-03T10:00:00.000Z');
+  const newCycle = new Date('2026-09-10T10:00:00.000Z');
+
+  assert.equal(buildSparFamilyCycleViewerUrls('spar', { now: oldCycle })[0],
+    'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/');
+  assert.equal(buildSparFamilyCycleViewerUrls('spar', { now: newCycle })[0],
+    'https://flugblatt.spar.at/steiermark/spar/260910-1-flugblatt-kw-37/');
+  assert.equal(buildSparFamilyCycleViewerUrls('eurospar', { now: oldCycle })[0],
+    'https://flugblatt.spar.at/steiermark/eurospar/260903-1-flugblatt-kw-36/');
+  assert.equal(buildSparFamilyCycleViewerUrls('eurospar', { now: newCycle })[0],
+    'https://flugblatt.spar.at/steiermark/eurospar/260910-1-flugblatt-kw-37/');
+  assert.deepEqual(buildSparFamilyCycleViewerUrls('interspar', { now: oldCycle }).slice(0, 2), [
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw36/',
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw35/',
+  ]);
+  assert.equal(buildSparFamilyCycleViewerUrls('interspar', { now: newCycle })[0],
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw37/');
 });
 
 test('classifies official SPAR-family action index links into diagnostic matrix fields', () => {

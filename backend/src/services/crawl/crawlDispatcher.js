@@ -26,6 +26,7 @@ const FULL_CRAWL_BOUNDED_SOURCE_KEYS = new Set([
 ]);
 const FULL_CRAWL_ALLOWED_CURRENT_DISCOVERY_FORMATS = new Set([
   'spar',
+  'eurospar',
   'interspar',
 ]);
 

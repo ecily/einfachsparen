@@ -101,7 +101,7 @@ test('SPAR multi-link selection keeps regular, enjoy and vetted fresh links but 
   ]);
 });
 
-test('SPAR current discovery uses only code-reviewed public viewer fallbacks', () => {
+test('SPAR current discovery derives bounded public viewer cycles and ignores DB fallbacks', () => {
   const source = currentSource({
     sourceRetailerFormat: 'spar',
     crawlPolicy: {
@@ -111,12 +111,16 @@ test('SPAR current discovery uses only code-reviewed public viewer fallbacks', (
     },
   });
 
-  const merged = __private.mergeCurrentFallbackViewerUrls(source, 'spar-official-flyer-current');
+  const merged = __private.mergeCurrentFallbackViewerUrls(
+    source,
+    'spar-official-flyer-current',
+    new Date('2026-09-03T10:00:00.000Z')
+  );
 
   assert.deepEqual(merged, [
     'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
-    'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
     'https://flugblatt.spar.at/steiermark/spar/260827-1-flugblatt-kw-35/',
+    'https://flugblatt.spar.at/steiermark/spar/260820-1-flugblatt-kw-34/',
   ]);
 });
 
@@ -143,14 +147,44 @@ test('current discovery ignores legacy DB fallbacks and restores code-reviewed v
   delete intersparSource.sourceRetailerFormat;
   delete intersparSource.regionScope;
 
-  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current'), [
+  const now = new Date('2026-09-03T10:00:00.000Z');
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current', now), [
     'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
-    'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
     'https://flugblatt.spar.at/steiermark/spar/260827-1-flugblatt-kw-35/',
+    'https://flugblatt.spar.at/steiermark/spar/260820-1-flugblatt-kw-34/',
   ]);
-  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(intersparSource, 'interspar-official-flyer-current'), [
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(intersparSource, 'interspar-official-flyer-current', now), [
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw36/',
     'https://flugblatt.interspar.at/steiermark/steiermark_kw35/',
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw34/',
   ]);
+});
+
+test('validated cycle selection fails closed for missing, stale or failed viewer metadata', () => {
+  const source = currentSource({
+    sourceRetailerFormat: 'spar',
+    crawlPolicy: {
+      currentDiscovery: true,
+      currentSnapshot: true,
+      requireCurrentDiscoveryMetadata: true,
+    },
+  });
+  const base = {
+    kind: 'viewer',
+    sourceGuess: 'spar',
+    folderType: 'regular flyer',
+  };
+  const links = [
+    { ...base, url: 'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/', fetchStatus: 'ok', validity: { validFrom: '2026-09-03', validTo: '2026-09-09' } },
+    { ...base, url: 'https://flugblatt.spar.at/steiermark/spar/260827-1-flugblatt-kw-35/', fetchStatus: 'ok', validity: { validFrom: '2026-08-27', validTo: '2026-09-02' } },
+    { ...base, url: 'https://flugblatt.spar.at/steiermark/spar/260820-1-flugblatt-kw-34/', fetchStatus: 'fetchFailed', validity: { validFrom: '2026-09-03', validTo: '2026-09-09' } },
+  ];
+
+  const selected = links.filter((link) => __private.hasCurrentSparFamilyDiscoveryMetadata(
+    link,
+    new Date('2026-09-03T10:00:00.000Z')
+  ));
+  assert.deepEqual(selected.map((link) => link.url), [links[0].url]);
 });
 
 test('EUROSPAR selection accepts only its current public main viewer', () => {
