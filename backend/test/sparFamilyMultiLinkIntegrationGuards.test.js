@@ -101,7 +101,7 @@ test('SPAR multi-link selection keeps regular, enjoy and vetted fresh links but 
   ]);
 });
 
-test('SPAR current discovery ignores stale DB asset fallbacks', () => {
+test('SPAR current discovery uses only code-reviewed public viewer fallbacks', () => {
   const source = currentSource({
     sourceRetailerFormat: 'spar',
     crawlPolicy: {
@@ -113,10 +113,14 @@ test('SPAR current discovery ignores stale DB asset fallbacks', () => {
 
   const merged = __private.mergeCurrentFallbackViewerUrls(source, 'spar-official-flyer-current');
 
-  assert.deepEqual(merged, []);
+  assert.deepEqual(merged, [
+    'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260827-1-flugblatt-kw-35/',
+  ]);
 });
 
-test('current discovery remains fallback-free for legacy DB source shapes', () => {
+test('current discovery ignores legacy DB fallbacks and restores code-reviewed viewer roots', () => {
   const sparSource = currentSource({
     retailerKey: 'spar',
     crawlPolicy: {
@@ -139,8 +143,14 @@ test('current discovery remains fallback-free for legacy DB source shapes', () =
   delete intersparSource.sourceRetailerFormat;
   delete intersparSource.regionScope;
 
-  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current'), []);
-  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(intersparSource, 'interspar-official-flyer-current'), []);
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current'), [
+    'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260827-1-flugblatt-kw-35/',
+  ]);
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(intersparSource, 'interspar-official-flyer-current'), [
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw35/',
+  ]);
 });
 
 test('EUROSPAR selection accepts only its current public main viewer', () => {

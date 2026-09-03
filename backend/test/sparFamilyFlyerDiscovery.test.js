@@ -286,7 +286,7 @@ test('merges configured current PDF fallbacks with official entrypoint links', a
   assert.equal(result.pdfs[1].folderType, 'grocery/fresh');
 });
 
-test('ignores stale configured current fallbacks without fetching them', async () => {
+test('accepts official viewer fallback and defers freshness to parsed validity guards', async () => {
   const entrypointUrl = 'https://www.spar.at/aktionen/steiermark';
   const historicalViewerUrl = 'https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/';
   const httpClient = createHttpClient({
@@ -306,9 +306,10 @@ test('ignores stale configured current fallbacks without fetching them', async (
     limits: { maxPdfMetadataLookups: 1 },
   });
 
-  assert.deepEqual(httpClient.calls, [entrypointUrl]);
-  assert.deepEqual(result.fallbackViewerUrls, []);
-  assert.equal(result.pdfs.length, 0);
+  assert.deepEqual(httpClient.calls, [entrypointUrl, historicalViewerUrl]);
+  assert.deepEqual(result.fallbackViewerUrls, [historicalViewerUrl]);
+  assert.equal(result.pdfs.length, 1);
+  assert.equal(result.pdfs[0].kind, 'viewer');
 });
 
 test('only accepts current SPAR-family fallback URLs', () => {
@@ -319,7 +320,7 @@ test('only accepts current SPAR-family fallback URLs', () => {
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/'), true);
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx'), true);
   assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.spar.at/steiermark/spar/260611-1-flugblatt-kw-24/getPdf.ashx'), false);
-  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw24/'), false);
+  assert.equal(isCurrentFallbackViewerUrl('https://flugblatt.interspar.at/steiermark/steiermark_kw24/'), true);
   assert.equal(isCurrentFallbackViewerUrl('https://example.test/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx'), false);
 });
 
@@ -574,11 +575,19 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   assert.equal(currentSources.every((source) => source.parserHint !== 'official-category-actions'), true);
   assert.equal(currentSources.every((source) => !/^(?:[A-Z]:\\|file:|https?:\/\/(?:www\.)?aktionsfinder\.at|https?:\/\/(?:www\.)?marktguru\.at)/i.test(source.sourceUrl)), true);
   const byKey = new Map(currentSources.map((source) => [deriveSourceKey(source), source]));
-  assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, []);
+  assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
+    'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260827-1-flugblatt-kw-35/',
+  ]);
   assert.equal(byKey.get('spar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
-  assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, []);
+  assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
+    'https://flugblatt.interspar.at/steiermark/steiermark_kw35/',
+  ]);
   assert.equal(byKey.get('interspar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
-  assert.deepEqual(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, []);
+  assert.deepEqual(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
+    'https://flugblatt.spar.at/steiermark/eurospar/260827-1-flugblatt-kw-35/',
+  ]);
   assert.equal(currentSources.every((source) => source.crawlPolicy?.transport === 'strict-curl'), true);
   assert.equal(currentSources.every((source) => source.crawlPolicy?.maxPdfMetadataLookups === 0), true);
   assert.equal(currentSources.every((source) => source.crawlPolicy?.allowedFlyerKinds?.join(',') === 'viewer'), true);

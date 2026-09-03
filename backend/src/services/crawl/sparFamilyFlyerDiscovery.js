@@ -72,7 +72,7 @@ const VALIDITY_TERMS = [
   'pickerl',
 ];
 
-const CURRENT_FALLBACK_VIEWER_PATTERNS = [
+const LEGACY_PDF_FALLBACK_PATTERNS = [
   /kw[-_ ]?26\b/i,
   /kw[-_ ]?25\b/i,
   /steiermark_kw26/i,
@@ -80,13 +80,6 @@ const CURRENT_FALLBACK_VIEWER_PATTERNS = [
   /260625/i,
   /260622/i,
   /260618/i,
-];
-
-const STALE_CURRENT_FALLBACK_PATTERNS = [
-  /kw[-_ ]?24\b/i,
-  /steiermark_kw24/i,
-  /260611/i,
-  /260603/i,
 ];
 
 const ACTION_INDEX_FOLDER_TYPES = Object.freeze({
@@ -262,15 +255,12 @@ function isCurrentFallbackViewerUrl(value) {
     return false;
   }
 
-  if (STALE_CURRENT_FALLBACK_PATTERNS.some((pattern) => pattern.test(url))) {
-    return false;
+  if (isRelevantSparFamilyViewerUrl(url) && !isOfficialSparFamilyPdfUrl(url)) {
+    return true;
   }
 
-  if (!isRelevantSparFamilyViewerUrl(url) && !isRelevantSparFamilyPdfUrl(url)) {
-    return false;
-  }
-
-  return CURRENT_FALLBACK_VIEWER_PATTERNS.some((pattern) => pattern.test(url));
+  return isRelevantSparFamilyPdfUrl(url)
+    && LEGACY_PDF_FALLBACK_PATTERNS.some((pattern) => pattern.test(url));
 }
 
 function buildFallbackViewerLinks(fallbackViewerUrls = [], {
