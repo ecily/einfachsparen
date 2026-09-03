@@ -24,7 +24,14 @@ function currentSource(overrides = {}) {
   };
 }
 
-test('multi-link production scope is enabled only for SPAR and INTERSPAR Steiermark current sources', () => {
+test('strict SPAR-family HTML allowlist rejects PDF assets and foreign redirects', () => {
+  assert.equal(__private.isAllowedSparFamilyPublicHtmlUrl('https://www.spar.at/aktionen/steiermark'), true);
+  assert.equal(__private.isAllowedSparFamilyPublicHtmlUrl('https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/'), true);
+  assert.equal(__private.isAllowedSparFamilyPublicHtmlUrl('https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/getPdf.ashx'), false);
+  assert.equal(__private.isAllowedSparFamilyPublicHtmlUrl('https://example.test/steiermark/spar/260903-1-flugblatt-kw-36/'), false);
+});
+
+test('multi-link production scope is enabled only for SPAR-family Steiermark current sources', () => {
   assert.equal(__private.isSparFamilyMultiLinkCurrentSource(currentSource({
     sourceRetailerFormat: 'spar',
   }), 'spar-official-flyer-current'), true);
@@ -36,7 +43,7 @@ test('multi-link production scope is enabled only for SPAR and INTERSPAR Steierm
   assert.equal(__private.isSparFamilyMultiLinkCurrentSource(currentSource({
     retailerKey: 'eurospar',
     sourceRetailerFormat: 'eurospar',
-  }), 'eurospar-official-flyer-current'), false);
+  }), 'eurospar-official-flyer-current'), true);
 
   assert.equal(__private.isSparFamilyMultiLinkCurrentSource(currentSource({
     sourceRetailerFormat: 'spar',
@@ -54,19 +61,19 @@ test('SPAR multi-link selection keeps regular, enjoy and vetted fresh links but 
   const source = currentSource({ sourceRetailerFormat: 'spar' });
   const links = [
     {
-      url: 'https://flugblatt.spar.at/steiermark/spar/kw26',
+      url: 'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
       kind: 'viewer',
       sourceGuess: 'spar',
       folderType: 'regular flyer',
     },
     {
-      url: 'https://flugblatt.spar.at/steiermark/spar/obst-gemuese',
+      url: 'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
       kind: 'viewer',
       sourceGuess: 'spar',
       folderType: 'grocery/fresh',
     },
     {
-      url: 'https://flugblatt.spar.at/steiermark/spar/enjoy',
+      url: 'https://flugblatt.spar.at/steiermark/spar/260903-2-spar-enjoy-kw-36/',
       kind: 'viewer',
       sourceGuess: 'spar',
       folderType: 'enjoy',
@@ -88,13 +95,13 @@ test('SPAR multi-link selection keeps regular, enjoy and vetted fresh links but 
   const selected = __private.selectSparFamilyMultiLinkCurrentLinks(links, source);
 
   assert.deepEqual(selected.map((link) => link.url), [
-    'https://flugblatt.spar.at/steiermark/spar/kw26',
-    'https://flugblatt.spar.at/steiermark/spar/obst-gemuese',
-    'https://flugblatt.spar.at/steiermark/spar/enjoy',
+    'https://flugblatt.spar.at/steiermark/spar/260903-1-flugblatt-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260831-1-obst-gemuse-kw-36/',
+    'https://flugblatt.spar.at/steiermark/spar/260903-2-spar-enjoy-kw-36/',
   ]);
 });
 
-test('SPAR current discovery merges code fallbacks with stale DB source policy fallbacks', () => {
+test('SPAR current discovery ignores stale DB asset fallbacks', () => {
   const source = currentSource({
     sourceRetailerFormat: 'spar',
     crawlPolicy: {
@@ -106,15 +113,10 @@ test('SPAR current discovery merges code fallbacks with stale DB source policy f
 
   const merged = __private.mergeCurrentFallbackViewerUrls(source, 'spar-official-flyer-current');
 
-  assert.deepEqual(merged, [
-    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
-  ]);
+  assert.deepEqual(merged, []);
 });
 
-test('current discovery merges code fallbacks for DB sources without sourceRetailerFormat', () => {
+test('current discovery remains fallback-free for legacy DB source shapes', () => {
   const sparSource = currentSource({
     retailerKey: 'spar',
     crawlPolicy: {
@@ -137,15 +139,37 @@ test('current discovery merges code fallbacks for DB sources without sourceRetai
   delete intersparSource.sourceRetailerFormat;
   delete intersparSource.regionScope;
 
-  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current'), [
-    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
-  ]);
-  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(intersparSource, 'interspar-official-flyer-current'), [
-    'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx',
-    'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(sparSource, 'spar-official-flyer-current'), []);
+  assert.deepEqual(__private.mergeCurrentFallbackViewerUrls(intersparSource, 'interspar-official-flyer-current'), []);
+});
+
+test('EUROSPAR selection accepts only its current public main viewer', () => {
+  const source = currentSource({
+    retailerKey: 'eurospar',
+    sourceRetailerFormat: 'eurospar',
+    crawlPolicy: {
+      currentDiscovery: true,
+      currentSnapshot: true,
+      allowedFlyerKinds: ['viewer'],
+    },
+  });
+  const selected = __private.selectSparFamilyMultiLinkCurrentLinks([
+    {
+      url: 'https://flugblatt.spar.at/steiermark/eurospar/260827-1-flugblatt-kw-35/',
+      kind: 'viewer',
+      sourceGuess: 'eurospar',
+      folderType: 'regular flyer',
+    },
+    {
+      url: 'https://flugblatt.spar.at/steiermark/eurospar/260827-1-flugblatt-kw-35/getPdf.ashx',
+      kind: 'pdf',
+      sourceGuess: 'eurospar',
+      folderType: 'regular flyer',
+    },
+  ], source);
+
+  assert.deepEqual(selected.map((link) => link.url), [
+    'https://flugblatt.spar.at/steiermark/eurospar/260827-1-flugblatt-kw-35/',
   ]);
 });
 

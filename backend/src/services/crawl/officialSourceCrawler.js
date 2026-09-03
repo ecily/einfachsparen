@@ -78,6 +78,7 @@ const {
 } = require('./issuuPdfResolver');
 const {
   discoverSparFamilyFlyers,
+  isOfficialSparFamilyViewerUrl,
 } = require('./sparFamilyFlyerDiscovery');
 const {
   buildSparFamilyMultiLinkReplacementPlan,
@@ -92,7 +93,7 @@ const execFile = promisify(execFileCallback);
 const PARSER_VERSION = 'official-v3-coverage';
 const SPAR_PRODUCTWORLD_SOURCE_TYPE = 'spar-family-official-productworld';
 const SPAR_PRODUCTWORLD_PARSER_VERSION = 'spar-productworld-bff-v1';
-const SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION = 'spar-family-flyer-discovery-v1';
+const SPAR_FAMILY_FLYER_DISCOVERY_PARSER_VERSION = 'spar-family-flyer-discovery-v2';
 const SPAR_PRODUCTWORLD_BFF_ORIGIN = 'https://api-scp.spar-ics.com';
 const SPAR_PRODUCTWORLD_SEARCH_PATH = '/ecom/pw/v1/search/v1/search';
 const SPAR_PRODUCTWORLD_FILTERS = ['inAngebot:true', 'isPreisGesenkt:true'];
@@ -5208,7 +5209,11 @@ function buildCurlTransportHeaders(overrides = {}) {
   };
 }
 
-async function fetchHtmlViaCurl(url, { timeoutMs = 30000, headers = {} } = {}) {
+async function fetchHtmlViaCurl(url, {
+  timeoutMs = 30000,
+  headers = {},
+  allowWindowsSslNoRevoke = true,
+} = {}) {
   const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
   const transportHeaders = buildCurlTransportHeaders(headers);
   const args = [
@@ -5234,7 +5239,7 @@ async function fetchHtmlViaCurl(url, { timeoutMs = 30000, headers = {} } = {}) {
     args.push('--header', `${name}: ${value}`);
   });
 
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' && allowWindowsSslNoRevoke) {
     args.push('--ssl-no-revoke');
   }
 
@@ -5274,6 +5279,93 @@ async function fetchSourceHtml(url, source, options = {}) {
     });
   }
   return fetchHtml(url, options);
+}
+
+const SPAR_FAMILY_PUBLIC_HTML_HOSTS = new Set([
+  'www.spar.at',
+  'www.interspar.at',
+  'flugblatt.spar.at',
+  'flugblatt.interspar.at',
+]);
+const sparFamilyDiscoveryHtmlCache = new Map();
+
+function isAllowedSparFamilyPublicHtmlUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:'
+      && SPAR_FAMILY_PUBLIC_HTML_HOSTS.has(parsed.hostname.toLowerCase())
+      && !/\.ashx$/i.test(parsed.pathname);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function fetchSparFamilyPublicHtmlViaCurl(url, { timeoutMs = 30000, headers = {} } = {}) {
+  if (!isAllowedSparFamilyPublicHtmlUrl(url)) {
+    throw new Error(`SPAR-family public HTML transport rejected URL: ${url}`);
+  }
+
+  const result = await fetchHtmlViaCurl(url, {
+    timeoutMs,
+    headers,
+    allowWindowsSslNoRevoke: false,
+  });
+  const finalUrl = result.canonicalUrl || url;
+  const status = Number(result.response?.status || 0);
+  const contentType = String(result.response?.headers?.['content-type'] || '');
+  const blocked = [401, 403, 407, 429, 451].includes(status)
+    || /just a moment|attention required|cf-browser-verification|cf-chl|challenge-platform/i.test(result.html || '');
+
+  if (!isAllowedSparFamilyPublicHtmlUrl(finalUrl)) {
+    throw new Error(`SPAR-family public HTML transport rejected redirect: ${finalUrl}`);
+  }
+
+  if (status < 200 || status >= 300 || blocked || !/html|xhtml/i.test(contentType)) {
+    const error = new Error(`SPAR-family public HTML returned unusable response (${status || 'unknown status'}; ${contentType || 'unknown content type'})`);
+    error.response = {
+      ...result.response,
+      data: result.html,
+    };
+    throw attachFetchDiagnostic(error, url);
+  }
+
+  return result;
+}
+
+function createSparFamilyStrictCurlHttpClient(source = {}) {
+  return {
+    async get(url, options = {}) {
+      const discoveryHeaders = { ...(options.headers || {}) };
+      delete discoveryHeaders['User-Agent'];
+      delete discoveryHeaders['user-agent'];
+      const cacheTtlMs = Math.max(0, Number(source.crawlPolicy?.discoveryCacheTtlMs || 0));
+      const cached = sparFamilyDiscoveryHtmlCache.get(url);
+      if (cacheTtlMs > 0 && cached?.expiresAt > Date.now()) {
+        return cached.promise;
+      }
+
+      const request = fetchSparFamilyPublicHtmlViaCurl(url, {
+        timeoutMs: Number(options.timeout || source.crawlPolicy?.sourceTimeoutMs || 30000),
+        headers: {
+          ...(source.crawlPolicy?.transportHeaders || {}),
+          ...discoveryHeaders,
+        },
+      }).then((result) => ({
+        ...result.response,
+        data: result.html,
+      }));
+
+      if (cacheTtlMs > 0) {
+        sparFamilyDiscoveryHtmlCache.set(url, {
+          expiresAt: Date.now() + cacheTtlMs,
+          promise: request,
+        });
+        request.catch(() => sparFamilyDiscoveryHtmlCache.delete(url));
+      }
+
+      return request;
+    },
+  };
 }
 
 async function fetchLidlOfficialPageHtml(url) {
@@ -5625,6 +5717,7 @@ function isSparFamilyMultiLinkCurrentSource(source = {}, sourceKey = '') {
     && hasSparFamilySteiermarkCurrentScope(source)
     && (
       (effectiveSourceKey === 'spar-official-flyer-current' && retailerFormat === 'spar')
+      || (effectiveSourceKey === 'eurospar-official-flyer-current' && retailerFormat === 'eurospar')
       || (effectiveSourceKey === 'interspar-official-flyer-current' && retailerFormat === 'interspar')
     );
 }
@@ -5644,39 +5737,38 @@ function fallbackViewerUrlsFromCodeDefinitions(source = {}, sourceKey = '') {
 }
 
 function mergeCurrentFallbackViewerUrls(source = {}, sourceKey = '') {
-  const fromSource = Array.isArray(source.crawlPolicy?.fallbackViewerUrls)
-    ? source.crawlPolicy.fallbackViewerUrls
-    : [];
-  const fromCode = isSparFamilyMultiLinkCurrentSource(source, sourceKey)
-    ? fallbackViewerUrlsFromCodeDefinitions(source, sourceKey)
-    : [];
-  const merged = [];
-  const seen = new Set();
+  if (!isSparFamilyMultiLinkCurrentSource(source, sourceKey)) return [];
 
-  for (const url of [...fromCode, ...fromSource]) {
-    const text = String(url || '').trim();
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    merged.push(text);
-  }
-
-  return merged;
+  return fallbackViewerUrlsFromCodeDefinitions(source, sourceKey)
+    .map((url) => String(url || '').trim())
+    .filter((url) => isAllowedSparFamilyPublicHtmlUrl(url));
 }
 
 function isAllowedSparFamilyMultiLinkCurrentLink(link = {}, source = {}) {
   const retailerFormat = source.sourceRetailerFormat || source.retailerKey || '';
   const kind = link.kind || '';
   const folderType = String(link.folderType || '').toLowerCase();
+  const allowedFlyerKinds = Array.isArray(source.crawlPolicy?.allowedFlyerKinds)
+    ? source.crawlPolicy.allowedFlyerKinds
+    : ['viewer', 'pdf'];
+  const url = String(link.url || '');
 
-  if (!['viewer', 'pdf'].includes(kind)) return false;
+  if (!allowedFlyerKinds.includes(kind)) return false;
   if (link.sourceGuess && link.sourceGuess !== retailerFormat) return false;
   if (retailerFormat === 'spar') {
-    return folderType === 'regular flyer'
-      || folderType === 'enjoy'
-      || folderType === 'grocery/fresh'
-      || folderType === 'fruit-vegetable';
+    return (folderType === 'regular flyer' && /\/steiermark\/spar\/\d{6}-1-flugblatt-kw-\d+\/?(?:\?|$)/i.test(url))
+      || (folderType === 'enjoy' && /\/steiermark\/spar\/\d{6}-\d+-spar-enjoy-kw-\d+\/?(?:\?|$)/i.test(url))
+      || (['grocery/fresh', 'fruit-vegetable'].includes(folderType)
+        && /\/steiermark\/spar\/\d{6}-\d+-(?:obst|gemuse|gemuese|frisch)/i.test(url));
   }
-  if (retailerFormat === 'interspar') return folderType === 'regular flyer';
+  if (retailerFormat === 'eurospar') {
+    return folderType === 'regular flyer'
+      && /\/steiermark\/eurospar\/\d{6}-1-flugblatt-kw-\d+\/?(?:\?|$)/i.test(url);
+  }
+  if (retailerFormat === 'interspar') {
+    return folderType === 'regular flyer'
+      && /\/steiermark\/steiermark_kw\d+\/?(?:\?|$)/i.test(url);
+  }
   return false;
 }
 
@@ -5939,10 +6031,14 @@ async function crawlSparOfficialViewerLink({
   const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
   const maxViewerBytes = Number(source.crawlPolicy?.maxViewerBytes || source.crawlPolicy?.maxPdfBytes || 20 * 1024 * 1024);
   const maxPages = Number(source.crawlPolicy?.maxPdfPages || 24);
-  const { response, buffer, canonicalUrl } = await fetchBinary(viewerUrl, 'text/html,application/xhtml+xml,*/*', {
+  if (!isOfficialSparFamilyViewerUrl(viewerUrl) || !isAllowedSparFamilyPublicHtmlUrl(viewerUrl)) {
+    throw new Error(`SPAR viewer URL is outside the official public HTML allowlist: ${viewerUrl}`);
+  }
+  const { response, html, canonicalUrl } = await fetchSparFamilyPublicHtmlViaCurl(viewerUrl, {
     timeoutMs: Number(source.crawlPolicy?.timeoutMs || 120000),
-    maxContentLength: maxViewerBytes,
+    headers: source.crawlPolicy?.transportHeaders || {},
   });
+  const buffer = Buffer.from(html || '', 'utf8');
 
   if (buffer.length > maxViewerBytes) {
     throw new Error(`SPAR viewer exceeds configured maxViewerBytes ${maxViewerBytes}.`);
@@ -6126,10 +6222,12 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRu
     maxLinks: Number(source.crawlPolicy?.maxLinks || 20),
     maxPdfMetadataLookups: Number(source.crawlPolicy?.maxPdfMetadataLookups || 0),
     timeoutMs: Number(source.crawlPolicy?.timeoutMs || 15000),
+    allowedKinds: source.crawlPolicy?.allowedFlyerKinds,
   };
   const discovery = await discoverSparFamilyFlyers({
     entryPoints,
     fallbackViewerUrls,
+    httpClient: createSparFamilyStrictCurlHttpClient(source),
     limits,
   });
   const discoveredLinks = discovery.pdfs || [];
@@ -6269,6 +6367,7 @@ async function crawlSparFamilyFlyerDiscoverySource({ source, crawlJobId, crawlRu
       stopRules: source.crawlPolicy?.multiLinkStopRules || source.crawlPolicy?.coverageGuard || {},
       diagnosticOnly: false,
       productionEnabled: true,
+      requireCurrentValidity: true,
     });
     const parseRejectionReasons = parsedLinkResults.flatMap(({ parsedResult }) => parsedResult?.rejectionReasons || []);
     const stopRejectionReasons = buildMultiLinkStopRejectionReasons(plan.stopReasons);
@@ -10680,6 +10779,9 @@ module.exports = {
     buildHoferHtmlQualityGate,
     buildCurlTransportHeaders,
     parseCurlHtmlOutput,
+    isAllowedSparFamilyPublicHtmlUrl,
+    fetchSparFamilyPublicHtmlViaCurl,
+    createSparFamilyStrictCurlHttpClient,
     selectBillaFlyerPdfLinks,
     crawlBillaOfficialFlyers,
     isBillaSteiermarkPublitasSource,

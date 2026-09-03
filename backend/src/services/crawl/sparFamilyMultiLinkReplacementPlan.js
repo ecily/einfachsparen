@@ -55,6 +55,15 @@ function hasValidity(value = {}) {
   return isPresentDate(validity.validFrom) && isPresentDate(validity.validTo);
 }
 
+function isCurrentValidity(value = {}, referenceNow = new Date()) {
+  const validity = normalizeValidity(value);
+  if (!hasValidity(validity)) return false;
+  const now = new Date(referenceNow);
+  const validFrom = new Date(validity.validFrom);
+  const validTo = new Date(validity.validTo);
+  return !Number.isNaN(now.getTime()) && validFrom <= now && validTo >= now;
+}
+
 function isTransportBlocked(link = {}) {
   const parseResult = link.parseResult || {};
   const status = number(parseResult.httpStatus ?? link.httpStatus, 0);
@@ -190,6 +199,8 @@ function buildSparFamilyMultiLinkReplacementPlan({
   stopRules = {},
   diagnosticOnly = true,
   productionEnabled = false,
+  requireCurrentValidity = false,
+  referenceNow = new Date(),
 } = {}) {
   const rules = { ...DEFAULT_STOP_RULES, ...(stopRules || {}) };
   const normalizedGroup = {
@@ -225,6 +236,8 @@ function buildSparFamilyMultiLinkReplacementPlan({
 
     if (!hasValidity(linkValidity)) {
       stopReasons.push('missing-validity');
+    } else if (requireCurrentValidity && !isCurrentValidity(linkValidity, referenceNow)) {
+      stopReasons.push('not-current-validity');
     }
 
     for (const offer of offers) {
@@ -234,6 +247,8 @@ function buildSparFamilyMultiLinkReplacementPlan({
       }
       if (!hasValidity(enriched)) {
         stopReasons.push('missing-validity');
+      } else if (requireCurrentValidity && !isCurrentValidity(enriched, referenceNow)) {
+        stopReasons.push('not-current-validity');
       }
       collectedOffers.push(enriched);
     }
@@ -290,6 +305,7 @@ function buildSparFamilyMultiLinkReplacementPlan({
   return {
     diagnosticOnly,
     productionEnabled,
+    requireCurrentValidity,
     replacementScope,
     status: ready ? 'ready-for-atomic-replacement' : 'blocked',
     shouldReplaceOnce: ready,

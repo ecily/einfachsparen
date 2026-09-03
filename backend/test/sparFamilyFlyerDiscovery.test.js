@@ -137,6 +137,32 @@ test('extracts and classifies official SPAR-family flyer viewer links', () => {
   assert.equal(classifySparFamilyFlyerUrl(urls[1]).kind, 'viewer');
 });
 
+test('derives public viewer roots from official action-index asset links without requesting ashx endpoints', async () => {
+  const entrypointUrl = 'https://www.spar.at/aktionen/steiermark';
+  const assetUrl = 'https://flugblatt.spar.at/steiermark/eurospar/260827-1-flugblatt-kw-35/getPdf.ashx';
+  const httpClient = createHttpClient({
+    htmlByUrl: {
+      [entrypointUrl]: `<a href="${assetUrl}">EUROSPAR Flugblatt</a>`,
+    },
+  });
+
+  const result = await discoverSparFamilyFlyers({
+    entryPoints: [entrypointUrl],
+    httpClient,
+    limits: {
+      allowedKinds: ['viewer'],
+      maxPdfMetadataLookups: 0,
+    },
+  });
+
+  assert.deepEqual(httpClient.calls, [entrypointUrl]);
+  assert.deepEqual(result.pdfs.map((item) => item.url), [
+    'https://flugblatt.spar.at/steiermark/eurospar/260827-1-flugblatt-kw-35/',
+  ]);
+  assert.equal(result.pdfs[0].kind, 'viewer');
+  assert.equal(result.pdfs[0].sourceGuess, 'eurospar');
+});
+
 test('classifies SPAR-family source guesses conservatively', () => {
   assert.equal(classifySparFamilyPdfUrl('https://flugblatt.spar.at/steiermark/spar/kw22/getPdf.ashx').sourceGuess, 'spar');
   assert.equal(classifySparFamilyPdfUrl('https://flugblatt.spar.at/steiermark/eurospar/kw22/getPdf.ashx').sourceGuess, 'eurospar');
@@ -250,7 +276,7 @@ test('merges configured current PDF fallbacks with official entrypoint links', a
         error: '',
       };
     },
-    limits: { maxPdfMetadataLookups: 2 },
+    limits: { maxPdfMetadataLookups: 2, allowedKinds: ['pdf'] },
   });
 
   assert.deepEqual(httpClient.calls, [entrypointUrl]);
@@ -548,19 +574,15 @@ test('SPAR-family current flyer discovery definitions are registered without loc
   assert.equal(currentSources.every((source) => source.parserHint !== 'official-category-actions'), true);
   assert.equal(currentSources.every((source) => !/^(?:[A-Z]:\\|file:|https?:\/\/(?:www\.)?aktionsfinder\.at|https?:\/\/(?:www\.)?marktguru\.at)/i.test(source.sourceUrl)), true);
   const byKey = new Map(currentSources.map((source) => [deriveSourceKey(source), source]));
-  assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
-    'https://flugblatt.spar.at/steiermark/spar/260625-1-flugblatt-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260625-2-spar-enjoy-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260622-1-obst-gemuse-kw-26/getPdf.ashx',
-    'https://flugblatt.spar.at/steiermark/spar/260618-1-flugblatt-kw-25/getPdf.ashx',
-  ]);
+  assert.deepEqual(byKey.get('spar-official-flyer-current').crawlPolicy.fallbackViewerUrls, []);
   assert.equal(byKey.get('spar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
-  assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, [
-    'https://flugblatt.interspar.at/steiermark/steiermark_kw26/getPdf.ashx',
-    'https://flugblatt.interspar.at/steiermark/steiermark_kw25/getPdf.ashx',
-  ]);
+  assert.deepEqual(byKey.get('interspar-official-flyer-current').crawlPolicy.fallbackViewerUrls, []);
   assert.equal(byKey.get('interspar-official-flyer-current').crawlPolicy.maxPdfPages, 24);
-  assert.equal(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, undefined);
+  assert.deepEqual(byKey.get('eurospar-official-flyer-current').crawlPolicy.fallbackViewerUrls, []);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.transport === 'strict-curl'), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.maxPdfMetadataLookups === 0), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.allowedFlyerKinds?.join(',') === 'viewer'), true);
+  assert.equal(currentSources.every((source) => source.crawlPolicy?.entryPoints?.[0] === 'https://www.spar.at/aktionen/steiermark'), true);
 });
 
 test('classifies official SPAR-family action index links into diagnostic matrix fields', () => {

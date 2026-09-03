@@ -320,6 +320,26 @@ function derivePdfCandidateUrls(value) {
   return [...new Set(candidates.map(canonicalDiscoveryUrl).filter(Boolean))];
 }
 
+function deriveViewerCandidateUrls(value) {
+  const url = canonicalDiscoveryUrl(value);
+  if (!url) return [];
+
+  const candidates = [url];
+
+  try {
+    const parsed = new URL(url);
+    if (OFFICIAL_PDF_HOSTS.has(parsed.hostname.toLowerCase()) && /\/(?:getPdf|ViewPdf|Image)\.ashx$/i.test(parsed.pathname)) {
+      parsed.pathname = parsed.pathname.replace(/\/(?:getPdf|ViewPdf|Image)\.ashx$/i, '/');
+      parsed.search = '';
+      candidates.push(parsed.toString());
+    }
+  } catch (error) {
+    return candidates;
+  }
+
+  return [...new Set(candidates.map(canonicalDiscoveryUrl).filter(Boolean))];
+}
+
 function extractUrlCandidatesFromText(text, baseUrl = '') {
   const decoded = decodeUrlText(text);
   const urls = [];
@@ -377,6 +397,7 @@ function extractSparFamilyPdfLinksFromHtml(html, {
     links.push({
       url: candidate,
       discoveredFrom,
+      kind: 'pdf',
     });
 
     if (links.length >= maxLinks) {
@@ -408,7 +429,7 @@ function extractSparFamilyViewerLinksFromHtml(html, {
   const seen = new Set();
   const links = [];
 
-  for (const candidate of candidates.map(canonicalDiscoveryUrl).filter(Boolean)) {
+  for (const candidate of candidates.flatMap(deriveViewerCandidateUrls)) {
     if (
       !isOfficialSparFamilyViewerUrl(candidate)
       || (relevantOnly && !isRelevantSparFamilyViewerUrl(candidate))
@@ -1109,6 +1130,9 @@ async function discoverSparFamilyFlyers({
   limits = {},
 } = {}) {
   const effectiveLimits = { ...DEFAULT_LIMITS, ...limits };
+  const allowedKinds = Array.isArray(effectiveLimits.allowedKinds) && effectiveLimits.allowedKinds.length > 0
+    ? new Set(effectiveLimits.allowedKinds)
+    : null;
   const selectedEntryPoints = entryPoints.slice(0, effectiveLimits.maxEntryPoints);
   const entrypointResults = [];
   const discovered = [];
@@ -1120,7 +1144,7 @@ async function discoverSparFamilyFlyers({
       maxLinks: effectiveLimits.maxLinks,
     });
     entrypointResults.push(result);
-    discovered.push(...result.links);
+    discovered.push(...result.links.filter((link) => !allowedKinds || allowedKinds.has(link.kind)));
   }
 
   const fallbackLinks = buildFallbackViewerLinks(fallbackViewerUrls, {
@@ -1128,7 +1152,7 @@ async function discoverSparFamilyFlyers({
   });
 
   if (fallbackLinks.length > 0) {
-    discovered.push(...fallbackLinks);
+    discovered.push(...fallbackLinks.filter((link) => !allowedKinds || allowedKinds.has(link.kind)));
   }
 
   const uniqueLinks = mergeDiscoveredLinks(discovered, {
@@ -1270,6 +1294,7 @@ module.exports = {
   classifySparFamilyFlyerUrl,
   decodeUrlText,
   discoverSparFamilyFlyers,
+  deriveViewerCandidateUrls,
   extractSparFamilyPdfLinksFromHtml,
   extractSparFamilyViewerLinksFromHtml,
   fetchEntrypoint,

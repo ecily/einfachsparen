@@ -29,7 +29,7 @@ test('maps SPAR code sources with activation and parser hints', () => {
   assert.deepEqual(source.retailerKeys, ['spar', 'interspar', 'eurospar']);
 });
 
-test('SPAR source definitions include separated aggregators, PDF flyers and resource-gated action sources', () => {
+test('SPAR source definitions include separated aggregators, PDF flyers and active current discovery', () => {
   const sources = getSparCodeSources();
   const keys = sources.map((source) => source.sourceKey);
 
@@ -42,11 +42,7 @@ test('SPAR source definitions include separated aggregators, PDF flyers and reso
   assert.ok(keys.includes('spar-official-actions-steiermark'));
   assert.ok(keys.includes('eurospar-official-actions-steiermark'));
   assert.ok(keys.includes('interspar-official-actions-steiermark'));
-  assert.equal(sources.find((source) => source.sourceKey === 'spar-official-actions-steiermark').appearsActive, false);
-  assert.match(
-    sources.find((source) => source.sourceKey === 'spar-official-actions-steiermark').disabledReason,
-    /resource-required/
-  );
+  assert.equal(sources.find((source) => source.sourceKey === 'spar-official-actions-steiermark').appearsActive, true);
   assert.equal(sources.find((source) => source.sourceKey === 'interspar-official-actions-steiermark').appearsActive, false);
   assert.equal(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').appearsActive, true);
   assert.match(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').parserOrAdapter, /text-layer/i);

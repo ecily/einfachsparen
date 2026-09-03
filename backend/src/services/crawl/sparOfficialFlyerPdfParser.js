@@ -22,7 +22,7 @@ const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidi
 const { extractSparFamilyPdfLayoutCandidates } = require('./sparFamilyPdfLayoutExtractor');
 const { getStaticSparPdfCropForCandidate } = require('./sparPdfStaticImageCrops');
 
-const PARSER_VERSION = 'spar-official-flyer-pdf-v6';
+const PARSER_VERSION = 'spar-official-flyer-pdf-v7';
 const SOURCE_TYPE = 'spar-official-pdf';
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 6;
@@ -5074,6 +5074,10 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
   addKnownCandidateIf(candidates, page, hasText(text, /aperol/) && /0[,\s]*7\s*liter/i.test(normalized) && /8[,\s]*99/i.test(normalized), groceryCandidate({
     title: 'Aperol',
     brand: 'Aperol',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Spirituosen',
+    categoryKey: 'spirituosen',
+    searchKeywords: 'aperol spirituosen aperitif getraenke',
     price: 8.99,
     quantityText: '0.7 l',
     conditionsText: '',
@@ -5100,7 +5104,7 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
     rawText: 'Puntigamer Maerzen, 0,5 l Dose, ab 24 Dosen je 0,69',
   }));
 
-  addKnownCandidateIf(candidates, page, hasText(text, /ariel\s+pulver/) && /23[,\s]*99/i.test(normalized), drugstoreCandidate({
+  addKnownCandidateIf(candidates, page, hasText(text, /ariel\s+pulver/) && /23[,\s]*99/i.test(normalized), householdCandidate({
     title: 'Ariel Pulver, Fluessig oder Pods',
     brand: 'Ariel',
     price: 23.99,
@@ -5323,6 +5327,8 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
   addKnownCandidateIf(candidates, page, /cosy\s*toilettenpapier/i.test(normalized) && /6[,\s]*79/i.test(normalized), drugstoreCandidate({
     title: 'Cosy Toilettenpapier',
     brand: 'Cosy',
+    categorySecondary: 'Papier & Hygiene',
+    categoryKey: 'papier-hygiene',
     price: 6.79,
     quantityText: '20 Rollen',
     conditionsText: '',
@@ -5765,6 +5771,15 @@ function normalizeSparPdfCandidateToOffer({
   const sourceRetailerFormat = source.sourceRetailerFormat || 'spar';
   const sourceKey = sourceKeyForFormat(sourceRetailerFormat);
   const validity = inferValidity(candidate, pdfReference.validity || {});
+  if (
+    source.crawlPolicy?.currentSnapshot === true
+    && candidate.validToOverride
+    && validity.validFrom
+    && validity.validTo
+    && new Date(validity.validTo).getTime() < new Date(validity.validFrom).getTime()
+  ) {
+    return null;
+  }
   const statusInfo = buildOfferStatus(validity.validFrom, validity.validTo);
   const parsedUnit = buildNormalizedUnitPrice({
     price: candidate.price,

@@ -155,6 +155,18 @@ test('blocks missing per-link or per-offer validity', () => {
   assert.equal(plan.previousDataRetention, 'keep-existing');
 });
 
+test('blocks an expired flyer when production requires current validity', () => {
+  const fixture = structuredClone(fixtures.sparHappyPath);
+  const plan = buildPlan(fixture, {
+    requireCurrentValidity: true,
+    referenceNow: new Date('2026-09-03T12:00:00.000Z'),
+  });
+
+  assert.equal(plan.status, 'blocked');
+  assert.equal(plan.shouldReplaceOnce, false);
+  assert.ok(plan.stopReasons.includes('not-current-validity'));
+});
+
 test('blocks transport failures such as 403 or 429 without partial replacement', () => {
   const plan = buildPlan(fixtures.stopRuleCases.transportBlocked);
 

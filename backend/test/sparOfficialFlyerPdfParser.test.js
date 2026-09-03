@@ -2225,6 +2225,7 @@ test('extracts current KW24 offers from official SPAR viewer pageTexts', async (
   const recheisFrSa = offers.find((offer) => /Recheis/i.test(offer.title) && offer.priceCurrent.amount === 1.49);
   const wassermelone = offers.find((offer) => /Wassermelone/i.test(offer.title));
   const ariel = offers.find((offer) => /Ariel/i.test(offer.title));
+  const aperol = offers.find((offer) => /Aperol/i.test(offer.title));
 
   assert.ok(titles.some((title) => /Recheis/i.test(title)));
   assert.ok(titles.some((title) => /Stiegl Goldbraeu/i.test(title)));
@@ -2251,6 +2252,41 @@ test('extracts current KW24 offers from official SPAR viewer pageTexts', async (
   assert.equal(dateKey(wassermelone.validTo), '2026-06-13');
   assert.equal(ariel.priceCurrent.amount, 23.99);
   assert.match(ariel.conditionsText, /SPAR-App-Gutschein 19,99/);
+  assert.equal(ariel.categoryPrimary, 'Haushalt');
+  assert.equal(ariel.categorySecondary, 'Waschmittel & Reinigung');
+  assert.equal(aperol.categoryPrimary, 'Getraenke');
+  assert.equal(aperol.categorySecondary, 'Spirituosen');
+});
+
+test('current viewer normalization rejects an offer-level validity ending before the flyer starts', () => {
+  const currentSource = {
+    ...source('interspar'),
+    crawlPolicy: { currentSnapshot: true },
+  };
+  const offers = normalizeSparPdfCandidatesToOffers({
+    pdfReference: {
+      validity: {
+        validFrom: new Date('2026-08-26T22:00:00.000Z'),
+        validTo: new Date('2026-09-09T21:59:59.999Z'),
+      },
+      candidates: [{
+        id: 'stale-offer-override',
+        page: 20,
+        title: 'SIMPEX BASIC Stabmixer',
+        brand: 'SIMPEX BASIC',
+        price: 9.99,
+        quantityText: '1 Stueck',
+        validToOverride: new Date('2026-07-31T21:59:59.999Z'),
+        rawText: 'SIMPEX BASIC Stabmixer 9,99',
+      }],
+    },
+    source: currentSource,
+    crawlJobId: '000000000000000000000778',
+    region: 'Steiermark',
+    pdfUrl: 'https://flugblatt.interspar.at/steiermark/steiermark_kw35/',
+  });
+
+  assert.deepEqual(offers, []);
 });
 
 test('extracts current KW24 offers from official INTERSPAR viewer pageTexts', async () => {
