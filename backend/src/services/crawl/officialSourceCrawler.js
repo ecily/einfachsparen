@@ -6054,6 +6054,7 @@ async function crawlSparOfficialViewerLink({
     validity,
     maxPages,
   });
+  const effectiveValidity = resolveSparViewerEffectiveValidity(pdfReference, validity);
   const normalizedOffers = normalizeSparPdfCandidatesToOffers({
     pdfReference,
     source,
@@ -6068,9 +6069,9 @@ async function crawlSparOfficialViewerLink({
     sourceKey,
     retailerKey: source.retailerKey,
     sourceRetailerFormat,
-    validityContext: validity.validityText || [
-      validity.validFrom ? validity.validFrom.toISOString().slice(0, 10) : '',
-      validity.validTo ? validity.validTo.toISOString().slice(0, 10) : '',
+    validityContext: effectiveValidity.validityText || [
+      effectiveValidity.validFrom ? effectiveValidity.validFrom.toISOString().slice(0, 10) : '',
+      effectiveValidity.validTo ? effectiveValidity.validTo.toISOString().slice(0, 10) : '',
     ].filter(Boolean).join(' - '),
     maxSamplesPerSourceReason: 5,
     maxSnippetLength: 220,
@@ -6112,11 +6113,11 @@ async function crawlSparOfficialViewerLink({
       viewerSha256,
       detectedPageCount: pdfReference.file.pages,
       detectedValidity: {
-        validFrom: validity.validFrom ? validity.validFrom.toISOString() : null,
-        validTo: validity.validTo ? validity.validTo.toISOString() : null,
-        validityText: validity.validityText || '',
-        validitySource: validity.validitySource || '',
-        validityConfidence: validity.validityConfidence ?? validity.confidence ?? 0,
+        validFrom: effectiveValidity.validFrom ? effectiveValidity.validFrom.toISOString() : null,
+        validTo: effectiveValidity.validTo ? effectiveValidity.validTo.toISOString() : null,
+        validityText: effectiveValidity.validityText || '',
+        validitySource: effectiveValidity.validitySource || '',
+        validityConfidence: effectiveValidity.validityConfidence ?? effectiveValidity.confidence ?? 0,
       },
       pageCandidateCounts: pdfReference.pages,
       rejectedCandidateSamples,
@@ -6184,7 +6185,7 @@ async function crawlSparOfficialViewerLink({
     rawDocuments: 1,
     rawCandidateCount: pdfReference.candidates.length,
     rejectionReasons,
-    validity,
+    validity: effectiveValidity,
     pdfReports: [{
       sourceKey,
       sourceRetailerFormat,
@@ -7339,6 +7340,12 @@ function buildBillaPromotionTitle(hit = {}) {
   return normalizedName === normalizedBrand || normalizedName.startsWith(`${normalizedBrand} `)
     ? name
     : sanitizeWhitespace(`${brand} ${name}`);
+}
+
+function resolveSparViewerEffectiveValidity(pdfReference = {}, sourceValidity = {}) {
+  return pdfReference.validity?.validTo
+    ? pdfReference.validity
+    : sourceValidity;
 }
 
 function normalizeBillaPromotionToOffer({ hit, source, crawlJobId, region, observedUrl }) {
@@ -10793,6 +10800,7 @@ module.exports = {
     isAllowedSparFamilyMultiLinkCurrentLink,
     selectSparFamilyMultiLinkCurrentLinks,
     buildMultiLinkStopRejectionReasons,
+    resolveSparViewerEffectiveValidity,
     parseLidlOfficialSiteOffersFromHtml,
     dedupeLidlOffers,
     extractLidlFlyerIdentifiers,

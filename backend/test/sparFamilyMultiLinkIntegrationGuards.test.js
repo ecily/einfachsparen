@@ -224,3 +224,20 @@ test('multi-link stop reasons are exposed as crawl rejection reasons', () => {
     { reason: 'multi-link-fragment-heavy', count: 1 },
   ]);
 });
+
+test('viewer validity extracted from public page text reaches the multi-link replacement gate', () => {
+  const embeddedValidity = {
+    validFrom: new Date('2026-09-02T22:00:00.000Z'),
+    validTo: new Date('2026-09-09T21:59:59.999Z'),
+    validitySource: 'official-pdf-page-1',
+  };
+
+  assert.equal(
+    __private.resolveSparViewerEffectiveValidity({ validity: embeddedValidity }, {}).validitySource,
+    'official-pdf-page-1'
+  );
+  assert.equal(
+    __private.resolveSparViewerEffectiveValidity({ validity: {} }, { validitySource: 'crawlPolicy' }).validitySource,
+    'crawlPolicy'
+  );
+});
