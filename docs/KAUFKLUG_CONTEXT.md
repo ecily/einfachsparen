@@ -17,6 +17,7 @@
 - Feedback wurde read-only ausgewertet und nicht umklassifiziert: unter den letzten 200 Meldungen sind 21 `new`, 165 `resolved`, 14 `duplicate`; alle 21 offenen Eintraege sind gespeichert `normal`. Kein P0. Die zwei alten BILLA/BILLA-Plus-Griesson-als-Bier-Meldungen gelten wegen eines aktuell reproduzierbaren aehnlichen BILLA-Nachfolgers als P1-Cluster-Evidence. Die uebrigen 19 offenen Eintraege sind P2, historisch, nicht mehr reproduzierbar oder enthalten eine Nutzerkorrektur. Es gab keine Feedback-, Ranking-, Search-, Kategorie- oder DB-Mutation.
 - Verifikation: fokussierte Backend-Suite 106/106, App-Load enthalten, Syntax und Diff-Check gruen; Admin-Lint und Production-Build gruen. Der vollstaendige Backend-Lauf hat 1.311/1.329 bestanden, 17 bekannte scope-fremde Dashboard-/PENNY-/BILLA-Fehler und 1 Skip. Der Admin-Testlauf hat 88/89 bestanden; offen bleibt nur die vorhandene Kaffee-/Bier-Reihenfolge-Erwartung in `searchDiscovery.test.mjs`. Fremde Dirty-/Untracked-Dateien blieben unberuehrt.
 - Deployment: `17f9d088` ist auf `origin/main` und produktiv; der dazugehoerige Backend-Prozess startete `2026-09-03T16:29:14.305Z`. Health meldete vor und nach dem Crawl HTTP 200 sowie MongoDB verbunden. Der Crawl-Fix erzeugt keine unmittelbare SEO-Behauptung; der Messvertrag fuer 2026-09-09 ist separat dokumentiert.
+- Damit ist der Haendler-/Crawler-/SPAR-Stabilisierungsblock abgeschlossen. Der naechste Produktblock ist **User Journey mit Schwerpunkt Einkaufsliste**.
 
 ## SPAR-Family Current-Flyer-Recovery am 2026-09-03
 
