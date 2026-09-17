@@ -1,5 +1,16 @@
 # Reliability-Audit 2026-09-17
 
+## Aktueller Abschlussstatus – ersetzt frühere Zwischenabschlüsse
+
+- **Reliability/Coverage/Product-Trust ist abgeschlossen; nächster Produktblock ist User Journey / Einkaufsliste.**
+- **BILLA-Plus-P1 ist live behoben:** Parser v2 trennt Rindsgulasch und Milch; 12,99 EUR/kg beziehungsweise 0,90 EUR/l sind mit korrekter Kategorie und Lineage abgenommen. Der alte Mischtitel ist deaktiviert.
+- **Müller ist `temporarily unsupported – official public source currently unavailable`:** versioniert deaktiviert, nicht als required failure ausgeführt und ohne Public-Coverage.
+- **SPAR-Family ist produktiv mit geringer Coverage:** SPAR/EUROSPAR/INTERSPAR 7/1/1 Public Offers; die geringe Extraktionsabdeckung bleibt transparent, aber nicht blockierend.
+- **PENNY ist produktiv:** Primärquelle success; der optionale Supplemental-Flyer bleibt partial/zero-store und blockiert den Gesamtstatus nicht.
+- **PAGRO bleibt ausgeschlossen:** 0 Public-/Facet-/Search-Angebote, keine Source-Aktivierung.
+
+Alle anderslautenden Abschlussformulierungen in den folgenden datierten Diagnose- und Umsetzungsabschnitten beschreiben historische Zwischenstände. Die technische Evidence bleibt erhalten; für den aktuellen Status gelten dieser Abschnitt und der abschließende BILLA-Plus-Nachtrag.
+
 ## Finale Mueller-Entscheidung am 17.09.2026
 
 Dieser Abschnitt ersetzt die Mueller-Recovery-Pflicht des vorherigen Auftrags: Der Nutzer hat ausdruecklich auch den Endzustand **B, temporarily unsupported**, autorisiert. Die historischen Runs und ihre damaligen required failures bleiben unveraendert.
@@ -42,11 +53,11 @@ Alle elf direkt geprueften Website-URLs lieferten denselben 3.038-Byte-HTML-Chal
 - 279/279 gezielte Backend-Tests gruen: Policy/Persistenz, Unsupported-Auswahl inklusive allowDisabled, Full-Terminalsemantik, historische Mueller-Exclusion in Ranking/Facets, SourceDefinitionen, Scheduler/Dispatcher/Routes, SPAR-Discovery/Kategorien, Public Validity und App-Load. Nach der Matrix-Ergaenzung weitere 10/10 relevante Tests gruen.
 - 30/30 SEO-Tests, Admin-Lint, Production-Build und Diff-Check gruen. Zwei anfangs falsche Test-Arbeitsverzeichnisse wurden korrigiert; kein verbleibender Testfehler in diesen Laeufen. Bekannte fremde ImageEvidence-Arbeiten nicht geaendert oder gestaged.
 - Feedback weiterhin read-only: letzte 200 = 21 new / 165 resolved / 14 duplicate, offene Eintraege gespeichert normal. Griesson unter BILLA/BILLA Plus jeweils 0, Bier-Suchen 14/10 mit Bieridentitaet. Lidl Somat Pulver liefert Ariel-Variantenartikel statt historischem Feuerloescher: P2-Suchpraezision. SPAR bietet weiterhin keine geratenen Bilder.
-- **Aktueller P1, nicht zu P2 heruntergestuft:** BILLA-Plus-Flyerangebot `6aab6f1b4e400b808c2babd3`, Titel `Oesterreichisches Rindsgulasch-fleisch Formil H-Milch 3 5 od. Formil Hafer`, Preis 12,99 EUR, Kategorie Milchprodukte, vergleichbarer UnitPrice **12,99 EUR/l**. Die Produkt-/Einheitenzuordnung ist widerspruechlich. Der Schwester-Treffer `6aab6f1b4e400b808c2babd1` zeigt Formil-Milch 0,90 EUR/l. Quelle ist der offizielle BILLA-Plus-KW38-Wien-PDF. Read-only Mongo bestaetigt Seite 20, Parser `billa-official-flyer-pdf-v1`, Hint `billa-pdf-positioned-frontloaded-produce`, vermischte Evidence mit Fleisch, Milch, `per Kilo` und `1 Liter`; trotzdem `quality.comparisonSafe=true`, keine Issues. Das verhindert eine pauschale fachliche Aussage, es gebe keine unsicheren Angebote im gesamten Produkt. Der ausdruecklich lesende Feedback-Scope erlaubt hier keinen Parser-/Offer-Fix; technische Crawl-Abnahme und dieser fachliche P1 sind getrennt zu dokumentieren.
+- **Damals aktueller, inzwischen behobener P1:** BILLA-Plus-Flyerangebot `6aab6f1b4e400b808c2babd3`, Titel `Oesterreichisches Rindsgulasch-fleisch Formil H-Milch 3 5 od. Formil Hafer`, Preis 12,99 EUR, Kategorie Milchprodukte, vergleichbarer UnitPrice **12,99 EUR/l**. Dieser Absatz dokumentiert die Evidence vor dem Parser-v2-Fix; der Abschlussnachtrag unten ersetzt seinen offenen Status.
 
 ### Produktive Abschlussmessung
 
-**Technische Reliability-Abnahme bestanden; Mueller-Endzustand B umgesetzt. Fachliche Gesamtfreigabe wegen des separaten BILLA-Plus-P1 nicht uneingeschraenkt erteilt.**
+**Historischer Zwischenstand vor dem BILLA-Plus-Fix:** Technische Reliability-Abnahme bestanden und Mueller-Endzustand B umgesetzt; die fachliche Gesamtfreigabe war zu diesem Zeitpunkt wegen des separaten BILLA-Plus-P1 noch eingeschraenkt. Der Abschlussnachtrag unten hebt diese Einschraenkung auf.
 
 Deploy des letzten Produktstands `f6dcd25e`: Prozessstart **2026-09-17T09:28:17.844Z**, Health HTTP 200, Mongo verbunden. Direkte Funktionsnachweise: Mueller enabled=false, Policy unsupported, Dashboard-Matrix unsupported/yellow/Public 0, Landingpage mit Nichtverfuegbarkeitscopy. Runtime-SHA bleibt unknown, daher keine behauptete SHA aus Health. Vor Start: Uptime **923 Sekunden**, Lock frei, keine aktive CrawlRun-Situation. Genau **ein** POST auf den regulaeren Full-Crawl-Endpunkt, HTTP 202, `startupGraceBypassed=false`, dryRun=false, trigger manual, mode full. Kein Mueller-Scoped-Crawl: die read-only Scoped-Selection inkl. allowDisabled bestaetigt 0 ausfuehrbare Mueller-Sources.
 
@@ -65,7 +76,7 @@ Public bezeichnet unten **tatsaechlich vollstaendig paginierte Ranking-Angebote*
 | Haendler | Public / Facet | Source Status | Filter | Search | Browse | Validity | Ergebnis |
 |---|---|---|---|---|---|---|---|
 | BILLA | 950 / 1.029 | aktuelle Quellen success | ja | bier 14 | 950 | 0 ungueltig | technisch gruen |
-| BILLA Plus | 950 / 1.121 | aktuelle Quellen success | ja | bier 10 | 950 | 0 ungueltig | technisch gruen; separater P1 Produkt/Einheit |
+| BILLA Plus | 950 / 1.121 | aktuelle Quellen success | ja | bier 10 | 950 | 0 ungueltig | technisch gruen; damaliger P1 spaeter behoben |
 | Lidl | 142 / 142 | success | ja | PARKSIDE 36 | 142 | 0 ungueltig | gruen; Somat-Suchpraezision P2 |
 | PENNY | 249 / 249 | primary success, Flyer optional partial | ja | Always 1 | 249 | 0 ungueltig | gruen, optionale Luecke sichtbar |
 | HOFER | 45 / 45 | success | ja | TOPCRAFT 5 | 45 | 0 ungueltig | technisch gruen, bestehende Bild-/Vergleichsgrenzen |
@@ -81,13 +92,13 @@ Alle **3.738 eindeutigen Public-Angebote** wurden read-only direkt aus Mongo geg
 
 Mueller intern unveraendert **118 aktive Altangebote**, letzte Offer-Bestaetigung **2026-09-07T04:41:19.861Z**, alter Run **6a9e3f6c19269b36129e610b**. Kein Offer aus dem neuen Full Run, keine Erneuerung der Freshness. PENNY primary **224 Raw / 161 Stored success**, optionaler Flyer **11/0 partial**. Feedbackstatus/IDs der 200 Eintraege vor/nach Run exakt gleich (21 new / 165 resolved / 14 duplicate).
 
-**P1 nach Full Crawl weiterhin reproduziert:** neuer BILLA-Plus-Treffer **6aabb72ce628a8af09ddde50** hat denselben Fleisch-/Milch-Mischtitel und **12,99 EUR/l**. Das ist ein separater fachlicher Integritaetsbefund, kein Mueller- oder Crawl-Lock-Problem. Er wird weder durch den gruenen technischen Status versteckt noch zu P2 umetikettiert. Keine weitere Crawl-Schleife und keine ungenehmigte Feedback-/Parser-/DB-Korrektur. Vor uneingeschraenkter Produktfreigabe bzw. Wechsel zu User Journey/Einkaufsliste ist dieser P1 gezielt zu beheben. Niedrige SPAR-Extraktionsabdeckung/Bildluecke und optionaler PENNY-Flyer bleiben bekannte Restgrenzen.
+**Historischer Befund direkt nach dem Full Crawl:** Der neue BILLA-Plus-Treffer **6aabb72ce628a8af09ddde50** reproduzierte den Fleisch-/Milch-Mischtitel mit **12,99 EUR/l**. Der Abschlussnachtrag dokumentiert dessen spaetere Behebung und ersetzt die damalige Produktsperre. Niedrige SPAR-Extraktionsabdeckung/Bildluecke und optionaler PENNY-Flyer bleiben bekannte, nicht blockierende Grenzen.
 
 ## Produktive Umsetzung am 17.09.2026 (Folgeauftrag)
 
 Dieser Abschnitt ersetzt die Aussagen der darunter archivierten Erstdiagnose zu lokalem Patch, fehlendem Deploy und nicht beauftragtem SPAR-Fix. Der historische 6-Run-Befund bleibt erhalten.
 
-**Abschlussstatus: NICHT GRUEN.** Health-Policy und SPAR-Kategoriefix sind committed/gepusht und regulaer deployed; Mueller ist noch nicht wiederhergestellt. Ein abschliessender Full Crawl ist ausdruecklich an Mueller-Public > 0 gebunden und wurde deshalb nicht gestartet.
+**Historischer Zwischenstatus dieses Folgeauftrags: NICHT GRUEN.** Health-Policy und SPAR-Kategoriefix waren committed/gepusht und regulaer deployed; Mueller war damals noch als required failure bewertet. Die spaetere Entscheidung `temporarily unsupported`, der erfolgreiche Full Crawl und der BILLA-Plus-Abschluss ersetzen diesen Status.
 
 ### Commits / Deploy
 
@@ -172,7 +183,7 @@ Zusaetzlicher Smoke-Befund fuer spaetere Triage: zwei BILLA-Plus-Flyertitel enth
 
 ### Rest / Abschluss
 
-Mueller bleibt required coverage failure; der Produktblock ist **nicht abgeschlossen**. Fuer Fortsetzung benoetigt die Quelle eine nachweisbar oeffentlich erreichbare aktuelle Angebots-/PDF-Discovery im vereinbarten Sortiment, danach Adaptertests, gezielten Mueller-Crawl und erst danach den einen finalen Full Crawl. Kein Schutz-Bypass. SEO-Audit unveraendert, da keine materielle SEO-/Indexierbarkeitsaenderung vorgenommen wurde.
+Historischer Zwischenstand: Mueller galt hier noch als required coverage failure und der Produktblock als **nicht abgeschlossen**. Die spaetere autorisierte Entscheidung `temporarily unsupported`, der erfolgreiche regulaere Full Crawl und der BILLA-Plus-P1-Abschluss ersetzen diese Abschlussaussage. Kein Schutz-Bypass; die damalige Source-Evidence bleibt gueltig.
 
 ---
 
@@ -270,7 +281,7 @@ Read-only: letzte 200 Feedbacks, 21 new, 165 resolved, 14 duplicate. Keine Statu
 
 - BILLA/BILLA Plus Griesson/Weizen-Knusperbrot als Bier: aktuelle `bier`-Abfrage liefert 24 plausible Bierangebote; `Griesson` liefert 0. Das konkrete gemeldete Muster ist aktuell nicht reproduzierbar, daher historisch/P2 in dieser Runde, kein Fix.
 - Lidl `Somat pulver`: gemeldet war ein Pulver-Feuerloescher. Dieser ist aktuell nicht reproduzierbar; die Suche liefert heute einen generischen Waschmittel-Varianten-Treffer. Suchpraezision bleibt P2, ohne Zusammenhang zum scheduled Partial oder Mueller-Transport.
-- Historische SPAR-Image-/Kategoriehaeufung: aktuelle 9 Public-Offers haben weiterhin keine geratenen Bilder. **Aktueller P1-Kategoriebeleg:** Coca-Cola Limonaden ist bei SPAR, EUROSPAR und INTERSPAR als Bier ausgegeben. Das ist ein aktuelles Trust-Problem, aber keine Ursache des Mueller-Ausfalls oder der erfolgreichen Zyklusdiscovery. Gemaess dem ausdruecklich lesenden Feedback-Scope kein Kategorie-/Search-Fix und kein Feedbackstatuswechsel.
+- Historische SPAR-Image-/Kategoriehaeufung: Die damaligen 9 Public-Offers hatten keine geratenen Bilder. **Damals aktueller, spaeter behobener P1-Kategoriebeleg:** Coca-Cola Limonaden war bei SPAR, EUROSPAR und INTERSPAR als Bier ausgegeben. Der spaetere SPAR-P1-Fix und die produktive Abnahme ersetzen diesen offenen Status; die historische Evidence bleibt erhalten.
 - Kein neuer P0-Runtime-/Preis-/Validity-Fehler aus dieser Feedback-Triage belegt.
 
 ## J. Tests
@@ -302,7 +313,7 @@ Fremde Aenderungen in `env.js`, `Offer.js`, `dashboardService.test.js` sowie bes
 
 ## N. Abschluss
 
-Die sechs Partial-Runs sind fachlich und technisch erklaert. Die globale Crawl-Semantik meldet den echten Mueller-Ausfall korrekt. Der davon getrennte Policy-Verlust in Speicherung/Diagnose ist lokal behoben. **Kein gruener Mueller-/Gesamt-Recovery-Abschluss**, solange der externe Block besteht und der Patch nicht produktiv abgenommen wurde.
+Historischer Archivabschluss: Die sechs Partial-Runs waren fachlich und technisch erklaert; zu diesem Zeitpunkt fehlten noch Deploy, Mueller-Endentscheidung und produktive Abnahme. Dieser Archivstatus ist durch `temporarily unsupported`, den erfolgreichen Full Crawl und den nachfolgenden BILLA-Plus-P1-Abschluss ersetzt.
 
 ## Nachtrag 2026-09-17: BILLA-Plus-P1 geschlossen
 
