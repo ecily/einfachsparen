@@ -1,5 +1,88 @@
 # Reliability-Audit 2026-09-17
 
+## Finale Mueller-Entscheidung am 17.09.2026
+
+Dieser Abschnitt ersetzt die Mueller-Recovery-Pflicht des vorherigen Auftrags: Der Nutzer hat ausdruecklich auch den Endzustand **B, temporarily unsupported**, autorisiert. Die historischen Runs und ihre damaligen required failures bleiben unveraendert.
+
+### Entscheidung und letzte offizielle Recherche
+
+**Entscheidung B: temporarily unsupported – official public source currently unavailable.** Genau ein abschliessender systematischer Recherchepass; der bekannte blockierte `/c/online-angebote/`-Endpoint wurde nicht erneut abgerufen. Normale direkte HTTPS-GETs mit gueltiger System-CA, ohne Cookies, Auth, private Tokens, Challenge-Loesung, Proxyrotation oder Fingerprinting.
+
+Die folgende Matrix bezeichnet direkte Abrufe, nicht Suchmaschinen-Cache als produktiven Datenzugang. `nicht abrufbar` bedeutet keine pruefbare aktuelle Evidence, nicht bewiesenes Fehlen im Shop.
+
+| Source | HTTP | Public | Auth | Challenge | Product | Price | Quantity | Validity | Conditions | Images | Current Discovery | Stable |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| www.mueller.at/ | 403 | vorgesehen | nein | Client Challenge | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | blockiert | nein |
+| /online-angebote/ | 403 | vorgesehen | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | blockiert | nein |
+| /c/sale/ | 403 | vorgesehen | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | blockiert | nein |
+| /aktuelles/aktionen/ | 403 | vorgesehen | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | blockiert | nein |
+| /prospekte/ | 403 | vorgesehen | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nur Suchindex zeigt Schulprospekt-Link | nein |
+| /c/schreibwaren/aktionen/online-angebote-aus-dem-prospekt/ | 403 | vorgesehen | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | blockiert | nein |
+| /c/haushalt/aktionen/haushalt-online-angebote-aus-dem-prospekt/ | 403 | vorgesehen | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | blockiert | nein |
+| /p/marc-jacobs-just-perfect-eau-de-parfum-PPN3206161/ | 403 | vorgesehen | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | blockiert | nein |
+| /robots.txt und /sitemap.xml | jeweils 403 | Discovery | nein | ja | n/a | n/a | n/a | n/a | n/a | n/a | blockiert | nein |
+| /service/app/ | 403 | Information | nein | ja | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | nicht abrufbar | kein nutzbarer Feed nachgewiesen | nein |
+| Verlinkter offizieller CDN-Schulprospekt West KW36 AT | 200 PDF, 27.853.300 Bytes | ja | nein | nein | ja, layoutgebunden | ja | artikelbezogen | 31.08.-23.09.2026, auch Steiermark | im PDF | kein verifizierter Offer-Join | festes Kampagnenasset, laufender Index direkt blockiert | Asset ja, laufende Source nein |
+| static.prod.ecom.mueller.de/products/2200299837280/2200299837280-VS.jpg | 200 JPEG, 257.868 Bytes | ja | nein | nein | nur bestehende Bildidentitaet | nein | nein | nein | nein | ja | keine Angebotsdiscovery | Bildasset allein ungeeignet |
+| JSON-LD / State / XHR / Manifest / RSS / statisches JSON | kein oeffentlicher Einstieg verifiziert | unbestaetigt | nein | Website-HTML blockiert | unbestaetigt | unbestaetigt | unbestaetigt | unbestaetigt | unbestaetigt | unbestaetigt | kein sichtbarer aktueller Datenpfad gefunden | nicht belegt |
+
+Alle elf direkt geprueften Website-URLs lieferten denselben 3.038-Byte-HTML-Challenge-Befund. Offizielle Suchindex-Recherche liefert weiterhin den [Prospekt-Einstieg](https://www.mueller.at/prospekte/) mit [Schulwaren-PDF West](https://mueller-dam-bucket.s3.eu-central-1.amazonaws.com/prod/public/shop-master/prospekte/schreibware/Schulanfang-2026/Schulanfang_West_KW36_2026_AT); das ist kein direkter laufender Discovery-Beweis. Zusaetzlich gefundene Drogerie-PDFs sind abgelaufen oder nicht fuer Oesterreich. Keine CDN-Prefix-Enumeration und keine geratenen privaten Datenendpunkte im abschliessenden Pass. Ein erreichbares, bald ablaufendes Einzelasset erfuellt den Auftrag einer stabil reproduzierbaren laufenden Quelle nicht. Weitere Experimente beendet.
+
+### Implementierung und Semantik
+
+- `42fcfc24`: versionierte Mueller-Source `enabled=false`, explizite `healthCriticality=unsupported`, weder required noch publicRequired. Die normale SourceRegistry setzt das beim Deploy um; kein DB-Handpatch. URL, Parser, Historie und `latestStatus=failed` bleiben erhalten.
+- Unsupported ist ein eigener Zustand, kein optional weiterhin ausgefuehrter 403. SourceSelection verweigert auch mit `allowDisabled` die Ausfuehrung, bis die Policy bewusst nach neuer offizieller Evidence geaendert wird.
+- `f6dcd25e`: Dashboard-Matrix zeigt unsupported/source unavailable mit Coverage-Warnung. Interne 118 Altangebote werden nicht als aktuelle Public-Coverage ausgegeben. Historische Mengen/KPIs bleiben ablesbar; eine funktionierende spaetere Ersatzquelle kann den Retailer wieder aus diesem Coverage-Zustand herausfuehren.
+- Executive-Systemstatus bewertet den neuesten regulaeren Full Run und nennt Referenz-ID/Trigger; scoped/dry-run koennen einen gescheiterten Full Run nicht ueberdecken. Die separate Scheduled-Daily-Kachel und historische Fehler bleiben wahrheitsgemaess erhalten. Kein Umschreiben alter Runs.
+- Mueller-Landingpage zeigt die Nichtverfuegbarkeit in Title/H1/Intro/Note, bleibt `noindex,follow` und ausserhalb der Sitemap. Keine neue UX, keine neuen SEO-Seiten.
+- Public Validity, TTL, Ranking-/Search-Algorithmus, SPAR-, PENNY- und PAGRO-Parser bleiben unveraendert. Kein Retain-/Stale-Rescue und keine Aggregator-Ersatzquelle.
+
+### Tests und Feedback
+
+- 279/279 gezielte Backend-Tests gruen: Policy/Persistenz, Unsupported-Auswahl inklusive allowDisabled, Full-Terminalsemantik, historische Mueller-Exclusion in Ranking/Facets, SourceDefinitionen, Scheduler/Dispatcher/Routes, SPAR-Discovery/Kategorien, Public Validity und App-Load. Nach der Matrix-Ergaenzung weitere 10/10 relevante Tests gruen.
+- 30/30 SEO-Tests, Admin-Lint, Production-Build und Diff-Check gruen. Zwei anfangs falsche Test-Arbeitsverzeichnisse wurden korrigiert; kein verbleibender Testfehler in diesen Laeufen. Bekannte fremde ImageEvidence-Arbeiten nicht geaendert oder gestaged.
+- Feedback weiterhin read-only: letzte 200 = 21 new / 165 resolved / 14 duplicate, offene Eintraege gespeichert normal. Griesson unter BILLA/BILLA Plus jeweils 0, Bier-Suchen 14/10 mit Bieridentitaet. Lidl Somat Pulver liefert Ariel-Variantenartikel statt historischem Feuerloescher: P2-Suchpraezision. SPAR bietet weiterhin keine geratenen Bilder.
+- **Aktueller P1, nicht zu P2 heruntergestuft:** BILLA-Plus-Flyerangebot `6aab6f1b4e400b808c2babd3`, Titel `Oesterreichisches Rindsgulasch-fleisch Formil H-Milch 3 5 od. Formil Hafer`, Preis 12,99 EUR, Kategorie Milchprodukte, vergleichbarer UnitPrice **12,99 EUR/l**. Die Produkt-/Einheitenzuordnung ist widerspruechlich. Der Schwester-Treffer `6aab6f1b4e400b808c2babd1` zeigt Formil-Milch 0,90 EUR/l. Quelle ist der offizielle BILLA-Plus-KW38-Wien-PDF. Read-only Mongo bestaetigt Seite 20, Parser `billa-official-flyer-pdf-v1`, Hint `billa-pdf-positioned-frontloaded-produce`, vermischte Evidence mit Fleisch, Milch, `per Kilo` und `1 Liter`; trotzdem `quality.comparisonSafe=true`, keine Issues. Das verhindert eine pauschale fachliche Aussage, es gebe keine unsicheren Angebote im gesamten Produkt. Der ausdruecklich lesende Feedback-Scope erlaubt hier keinen Parser-/Offer-Fix; technische Crawl-Abnahme und dieser fachliche P1 sind getrennt zu dokumentieren.
+
+### Produktive Abschlussmessung
+
+**Technische Reliability-Abnahme bestanden; Mueller-Endzustand B umgesetzt. Fachliche Gesamtfreigabe wegen des separaten BILLA-Plus-P1 nicht uneingeschraenkt erteilt.**
+
+Deploy des letzten Produktstands `f6dcd25e`: Prozessstart **2026-09-17T09:28:17.844Z**, Health HTTP 200, Mongo verbunden. Direkte Funktionsnachweise: Mueller enabled=false, Policy unsupported, Dashboard-Matrix unsupported/yellow/Public 0, Landingpage mit Nichtverfuegbarkeitscopy. Runtime-SHA bleibt unknown, daher keine behauptete SHA aus Health. Vor Start: Uptime **923 Sekunden**, Lock frei, keine aktive CrawlRun-Situation. Genau **ein** POST auf den regulaeren Full-Crawl-Endpunkt, HTTP 202, `startupGraceBypassed=false`, dryRun=false, trigger manual, mode full. Kein Mueller-Scoped-Crawl: die read-only Scoped-Selection inkl. allowDisabled bestaetigt 0 ausfuehrbare Mueller-Sources.
+
+| Run | Status | Required OK | Required Fail | Optional Partial/Fail | Unsupported | Final Offers | Publish | Lock |
+|---|---|---|---|---|---|---|---|---|
+| 6aabb64cc56de9111124f124 | success | 11 success + 2 bestehende retired/skipped | 0 failed / 0 partial | 1 partial, PENNY-Flyer / 0 failed | 1 Mueller in Registry, nicht ausgefuehrt | 3.977 im Run final geschrieben | publish-status-finished, 3.977/3.977 | frei, kein aktiver Run |
+
+Zeit: **09:43:41.040-09:47:39.706 UTC**, Publish-Stage **09:47:40.201 UTC**. Summary: 34 matched, 13 required matched, 16 source-success, 1 optional partial, 17 skipped (15 historische scoped SPAR-Sources und 2 vorhandene BILLA-/BILLA-Plus-Publitas-Snapshots mit `retired-publitas-issue`), 5.074 Raw, 4.349 Stored, 725 konservative Rejects. Die beiden retired Quellen sind in der gespeicherten Source-Policy weiter required markiert, werden aber durch den bestehenden Retirement-Vertrag bewusst uebersprungen; sie sind keine 13 ausgefuehrten required Erfolge. Ihre aktuellen offiziellen Primaer-/PDF-Quellen sind erfolgreich. Diese bestehende Semantik wurde nicht geaendert.
+
+Dashboard danach: executiveStatus green mit Referenz auf genau diesen manuellen Full Run, currentCrawlSystem green, sourceFailures green/0 required/1 optional, policyEvidence=source-results, keine unknown Einzelpolicy. Die separate historische Scheduled-Daily-Kachel zeigt weiterhin den unveraenderten Morgen-Partial; das ist kein neuer technischer Fehler. Mueller-Warnung bleibt sichtbar. PublishSummary: 8.460 intern aktive Zeilen, openCount=0, status=final. Deren finalCount=8.460 ist die bestehende Aggregatsemantik ohne offene Zwischenstaende und beinhaltet 1.382 historische unknown-Publish-Zeilen; nicht als 8.460 erfolgreiche neue oder public Offers interpretieren. Die 3.977 Writes dieses Runs sind separat belegt.
+
+### Finale Haendlermatrix / Public-Regression
+
+Public bezeichnet unten **tatsaechlich vollstaendig paginierte Ranking-Angebote**; Facets sind bewusst separat, da Ranking-Kandidatenbegrenzung/Dedupe die Zahlen unterscheiden. HTTP-Smokes fuer Homepage, Suche, Browse, Top Deals, Mueller-Landingpage und Sitemap jeweils 200. Keine neue Browser-Interaktionsabnahme behauptet.
+
+| Haendler | Public / Facet | Source Status | Filter | Search | Browse | Validity | Ergebnis |
+|---|---|---|---|---|---|---|---|
+| BILLA | 950 / 1.029 | aktuelle Quellen success | ja | bier 14 | 950 | 0 ungueltig | technisch gruen |
+| BILLA Plus | 950 / 1.121 | aktuelle Quellen success | ja | bier 10 | 950 | 0 ungueltig | technisch gruen; separater P1 Produkt/Einheit |
+| Lidl | 142 / 142 | success | ja | PARKSIDE 36 | 142 | 0 ungueltig | gruen; Somat-Suchpraezision P2 |
+| PENNY | 249 / 249 | primary success, Flyer optional partial | ja | Always 1 | 249 | 0 ungueltig | gruen, optionale Luecke sichtbar |
+| HOFER | 45 / 45 | success | ja | TOPCRAFT 5 | 45 | 0 ungueltig | technisch gruen, bestehende Bild-/Vergleichsgrenzen |
+| dm | 421 / 439 | success | ja | Pampers 1 | 421 | 0 ungueltig | gruen |
+| BIPA | 972 / 1.031 | success | ja | BABYWELL 3 | 972 | 0 ungueltig | gruen |
+| Mueller | 0 / 0 | temporarily unsupported, deaktiviert | nein | 0 | 0 | kein alter Snapshot publiziert | B korrekt, Coverage nicht verfuegbar |
+| SPAR | 7 / 7 | success | ja | Cola 1, Bier 2 | 7 | 0 ungueltig | Regression gruen |
+| EUROSPAR | 1 / 1 | success | ja | Cola 1, Bier 0 | 1 | 0 ungueltig | Regression gruen |
+| INTERSPAR | 1 / 1 | success | ja | Cola 1, Bier 0 | 1 | 0 ungueltig | Regression gruen |
+| PAGRO (Kontrolle) | 0 / 0 | ausgeschlossen | nein | 0 | 0 | keine Public-Offers | unveraendert ausgeschlossen |
+
+Alle **3.738 eindeutigen Public-Angebote** wurden read-only direkt aus Mongo gegen PublicValidity geprueft: **0 ungueltig, 0 future**. Kategorie-Endpunkte positiv fuer die zehn aktiven Haendler, Mueller/PAGRO jeweils 0. Alle neun SPAR-Family-Offers tragen den neuen erfolgreichen Full Run, Parser v8, eindeutige Steiermark-Viewer und aktuelle Geltungszeit bis 23.09. Coca-Cola ist je Format softdrinks, Stiegl/Hirter bleiben bier. Radler-/Energy-Trennung ist durch unveraenderte Parser-Regressionen abgesichert; kein aktueller Radler-/Energy-Treffer wird erfunden. Alle neun Bilder bleiben bewusst leer.
+
+Mueller intern unveraendert **118 aktive Altangebote**, letzte Offer-Bestaetigung **2026-09-07T04:41:19.861Z**, alter Run **6a9e3f6c19269b36129e610b**. Kein Offer aus dem neuen Full Run, keine Erneuerung der Freshness. PENNY primary **224 Raw / 161 Stored success**, optionaler Flyer **11/0 partial**. Feedbackstatus/IDs der 200 Eintraege vor/nach Run exakt gleich (21 new / 165 resolved / 14 duplicate).
+
+**P1 nach Full Crawl weiterhin reproduziert:** neuer BILLA-Plus-Treffer **6aabb72ce628a8af09ddde50** hat denselben Fleisch-/Milch-Mischtitel und **12,99 EUR/l**. Das ist ein separater fachlicher Integritaetsbefund, kein Mueller- oder Crawl-Lock-Problem. Er wird weder durch den gruenen technischen Status versteckt noch zu P2 umetikettiert. Keine weitere Crawl-Schleife und keine ungenehmigte Feedback-/Parser-/DB-Korrektur. Vor uneingeschraenkter Produktfreigabe bzw. Wechsel zu User Journey/Einkaufsliste ist dieser P1 gezielt zu beheben. Niedrige SPAR-Extraktionsabdeckung/Bildluecke und optionaler PENNY-Flyer bleiben bekannte Restgrenzen.
+
 ## Produktive Umsetzung am 17.09.2026 (Folgeauftrag)
 
 Dieser Abschnitt ersetzt die Aussagen der darunter archivierten Erstdiagnose zu lokalem Patch, fehlendem Deploy und nicht beauftragtem SPAR-Fix. Der historische 6-Run-Befund bleibt erhalten.

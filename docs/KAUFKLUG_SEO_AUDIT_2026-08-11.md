@@ -1,5 +1,9 @@
 # kaufklug.at SEO-P0-Audit – 2026-08-11
 
+## Mueller-Verfuegbarkeitscopy am 2026-09-17
+
+Im finalen Reliability-Auftrag wurde Mueller nach dokumentierter letzter offizieller Source-Recherche temporaer unsupported. Commit `42fcfc24` passt deshalb ausschliesslich die bestehende `/angebote/mueller/`-Seite in Title, Description, H1, Intro und Note an: Angebote derzeit nicht verfuegbar, keine alten Angebote als aktuell. Der Vertrag bleibt `noindex,follow`, bestehender Self-Canonical und kein Sitemap-Eintrag. Keine neue SEO-Seite, keine Indexierungsfreigabe und kein UX-Redesign. Live-HTML bestaetigt Nichtverfuegbarkeitscopy und noindex; Public bleibt 0. 30/30 SEO-Tests, Admin-Lint und Production-Build gruen.
+
 ## Executive summary
 
 The live site currently serves the same Vite SPA shell for `/`, `/top-deals`, known SEO landing pages, query URLs and unknown `/angebote/<slug>` paths. Before JavaScript, non-root routes therefore expose the root title and root canonical. Unknown offer slugs return HTTP 200 and are a soft-404 risk.
