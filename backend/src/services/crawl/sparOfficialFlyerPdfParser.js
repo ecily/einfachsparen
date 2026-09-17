@@ -13,6 +13,7 @@ const {
 const {
   determineOfferCategory,
   determineOfferSubcategory,
+  classifyOfferCategory,
   buildInclusiveScopeDecision,
 } = require('./categoryClassifier');
 const { inferAustrianBeerCrateQuantityFields } = require('./offerQualityGuards');
@@ -22,7 +23,7 @@ const { extractOfficialFlyerValidityFromPages } = require('./officialFlyerValidi
 const { extractSparFamilyPdfLayoutCandidates } = require('./sparFamilyPdfLayoutExtractor');
 const { getStaticSparPdfCropForCandidate } = require('./sparPdfStaticImageCrops');
 
-const PARSER_VERSION = 'spar-official-flyer-pdf-v7';
+const PARSER_VERSION = 'spar-official-flyer-pdf-v8';
 const SOURCE_TYPE = 'spar-official-pdf';
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 6;
@@ -4584,7 +4585,11 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
     rawText: 'Stiegl Goldbraeu 0,5 Liter, 20er-Kiste 29,60, Aktionspreis 14,80',
   }));
 
-  addKnownCandidateIf(candidates, page, hasText(text, /coca-cola\s+limonaden/) && /24er-tray\s*16[,\s]*56/i.test(normalized), beerCandidate({
+  addKnownCandidateIf(candidates, page, hasText(text, /coca-cola\s+limonaden/) && /24er-tray\s*16[,\s]*56/i.test(normalized), {
+    productKind: 'generic-flyer-product',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Softdrinks',
+    categoryKey: 'softdrinks',
     title: 'Coca-Cola Limonaden',
     brand: 'Coca-Cola',
     price: 16.56,
@@ -4592,7 +4597,7 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
     quantityText: '24 x 0.33 l',
     conditionsText: '12+12 gratis / ab 24 Dosen je 0,69 laut Flugblatt',
     rawText: 'Coca-Cola Limonaden, 0,33 Liter, 24er-Tray 16,56, ab 24 Dosen je 0,69',
-  }));
+  });
 
   addKnownCandidateIf(candidates, page, hasText(text, /milka\s*schokolade/) && /(?:2[,\s]*66|\b266\b)/i.test(normalized), sweetCandidate({
     title: 'Milka Schokolade',
@@ -5833,10 +5838,18 @@ function normalizeSparPdfCandidateToOffer({
     candidate.title,
     candidate.rawText,
   ].join(' ')));
-  const categoryPrimary = candidate.categoryPrimary || (forcedCoffeeCategory ? 'Getraenke' : inferredCategoryPrimary) || 'Unkategorisiert';
-  const categorySecondary = candidate.categorySecondary || (forcedCoffeeCategory ? 'Kaffee & Tee' : inferredCategorySecondary) || categoryPrimary;
-  const categoryKey = candidate.categoryKey || (forcedCoffeeCategory ? 'kaffee-tee' : buildKey(categorySecondary || categoryPrimary, 'unkategorisiert'));
-  const searchKeywords = candidate.searchKeywords || [
+  // Product evidence wins over an erroneous beer template. Do not use page
+  // context or template keywords here; preserve explicit beer/mixed beverages.
+  const productText = normalizeTitleForMatch([candidate.title, candidate.brand].join(' '));
+  const productCategory = classifyOfferCategory({ title: productText });
+  const correctBeerTemplate = (candidate.categoryKey === 'bier' || candidate.categorySecondary === 'Bier')
+    && !/\b(?:bier|beer|radler|naturradler|biermischgetraenk|biermischgetrank|pils|maerzen|marzen)\b/.test(productText)
+    && productCategory.primaryCategory === 'Getraenke'
+    && ['Softdrinks', 'Energy Drinks'].includes(productCategory.secondaryCategory);
+  const categoryPrimary = correctBeerTemplate ? productCategory.primaryCategory : candidate.categoryPrimary || (forcedCoffeeCategory ? 'Getraenke' : inferredCategoryPrimary) || 'Unkategorisiert';
+  const categorySecondary = correctBeerTemplate ? productCategory.secondaryCategory : candidate.categorySecondary || (forcedCoffeeCategory ? 'Kaffee & Tee' : inferredCategorySecondary) || categoryPrimary;
+  const categoryKey = correctBeerTemplate ? buildKey(categorySecondary) : candidate.categoryKey || (forcedCoffeeCategory ? 'kaffee-tee' : buildKey(categorySecondary || categoryPrimary, 'unkategorisiert'));
+  const searchKeywords = (!correctBeerTemplate && candidate.searchKeywords) || [
     candidate.brand,
     candidate.title,
     candidate.quantityText,

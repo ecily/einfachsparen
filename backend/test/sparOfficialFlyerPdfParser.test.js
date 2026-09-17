@@ -2788,3 +2788,42 @@ test('extracts KW25 current target offers from productive textlayer variants', (
   assert.equal(byTitle(/Felix Katzensnacks/i).priceCurrent.amount, 3.49);
   assert.equal(intersparOffers.some((offer) => /Prozentaktion|Stattpreise|GRATIS/i.test(offer.title)), false);
 });
+
+
+test('SPAR family cola extraction has softdrink evidence without beer keywords', () => {
+  for (const format of ['spar', 'eurospar', 'interspar']) {
+    const validity = activeValidityForTest();
+    const candidates = extractSparPdfCandidates({ sourceRetailerFormat: format, validity,
+      pages: [{ pageNumber: 2, text: 'Coca-Cola Limonaden 0,33 Liter 24er-Tray 16,56 ab 24 Dosen je 0,69' }] });
+    const offers = normalizeSparPdfCandidatesToOffers({ pdfReference: { validity, candidates }, source: source(format),
+      crawlJobId: '000000000000000000000654', region: 'Grossraum Graz', pdfUrl: source(format).sourceUrl });
+    const cola = offers.find(offer => offer.title === 'Coca-Cola Limonaden');
+    assert.ok(cola, format);
+    assert.equal(cola.categoryKey, 'softdrinks');
+    assert.equal(cola.retailerKey, format);
+    assert.doesNotMatch(cola.searchText, /bier|radler|pils/i);
+    assert.equal(cola.priceCurrent.amount, 16.56);
+    assert.equal(cola.quantityText, '24 x 0.33 l');
+  }
+});
+
+test('explicit beverage identity overrides polluted beer templates across SPAR formats', () => {
+  for (const format of ['spar', 'eurospar', 'interspar']) {
+    for (const [title, expected] of [
+      ['Coca-Cola Limonaden', 'softdrinks'], ['Pepsi Cola', 'softdrinks'], ['Fanta Orangenlimonade', 'softdrinks'],
+      ['Red Bull Energy Drink', 'energy-drinks'], ['Cola Energy Drink', 'energy-drinks'],
+      ['Stiegl Goldbraeu', 'bier'], ['Goesser Naturradler alkoholfrei', 'bier'], ['Cola Biermischgetraenk', 'bier'],
+    ]) {
+      const [offer] = normalizeSparPdfCandidatesToOffers({
+        pdfReference: { validity: activeValidityForTest(), candidates: [{ id: title, page: 2, title, price: 1.99,
+          quantityText: '0.5 l', productKind: 'beer', categoryPrimary: 'Getraenke', categorySecondary: 'Bier', categoryKey: 'bier',
+          searchKeywords: 'bier radler pils', rawText: title }] }, source: source(format),
+        crawlJobId: '000000000000000000000654', region: 'Grossraum Graz', pdfUrl: source(format).sourceUrl,
+      });
+      assert.ok(offer, title);
+      assert.equal(offer.categoryKey, expected, title);
+      assert.equal(offer.retailerKey, format);
+      if (expected !== 'bier') assert.doesNotMatch(offer.searchText, /bier|radler|pils/i);
+    }
+  }
+});
