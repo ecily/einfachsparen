@@ -180,7 +180,7 @@ function RetailerMatrix({ rows }) {
               <td>{formatInteger(row.safeValidityOffers)} <small>({formatPercent(row.validityConfidenceRate)})</small></td>
               <td>{formatInteger(row.conditionOffers)} <small>({formatPercent(row.conditionDetectionRate)})</small></td>
               <td>{formatInteger(row.imageOffers)} <small>({formatPercent(row.imageCoverageRate)})</small></td>
-              <td><StatusPill value={row.warningStatus} /></td>
+              <td><StatusPill value={row.warningStatus} />{row.coverageStatus === 'unsupported' ? <small title={row.coverageNote}>temporarily unsupported / source unavailable</small> : null}</td>
             </tr>
           ))}
         </tbody>

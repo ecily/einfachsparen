@@ -50,6 +50,11 @@ test('unavailable coverage remains visible independently of successful current f
   const issues = dashboard.buildActionableIssues({ sources: [mueller], retailerMatrix: [] });
   assert.equal(issues[0].kind, 'retailer-coverage-unavailable');
   assert.match(issues[0].title, /unsupported/);
+  const matrix = dashboard.withUnsupportedCoverage([{ retailerKey: 'mueller', activeOffers: 118, publicValidityEligibleOffers: 0, warningStatus: 'green' }], [mueller]);
+  assert.equal(matrix[0].warningStatus, 'yellow');
+  assert.equal(matrix[0].coverageStatus, 'unsupported');
+  assert.equal(matrix[0].activeOffers, 118);
+  assert.equal(matrix[0].publicValidityEligibleOffers, 0);
 });
 
 test('historical Mueller snapshot stays excluded from ranking and cannot create a zero-count filter', async () => {

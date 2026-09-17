@@ -1340,6 +1340,18 @@ function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, crawlHist
   };
 }
 
+function withUnsupportedCoverage(rows = [], sources = []) {
+  const unavailable = new Set(sources
+    .filter((source) => getScheduledHealthPolicy(source).healthCriticality === 'unsupported')
+    .filter((source) => !sources.some((other) => other.retailerKey === source.retailerKey
+      && other.active !== false && other.enabled !== false
+      && getScheduledHealthPolicy(other).healthCriticality !== 'unsupported'))
+    .map((source) => source.retailerKey));
+  return rows.map((row) => unavailable.has(row.retailerKey)
+    ? { ...row, coverageStatus: 'unsupported', warningStatus: 'yellow', coverageNote: 'Source unavailable; interne Altangebote sind keine aktuelle Public-Coverage.' }
+    : row);
+}
+
 function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, retailerMatrix, offerSummary, feedbackSummary, sources = [] }) {
   const issues = sources.filter((source) => getScheduledHealthPolicy(source).healthCriticality === 'unsupported').map((source) => ({
     severity: 'yellow',
@@ -1390,6 +1402,7 @@ function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, 
 
   for (const retailer of (retailerMatrix || [])
     .filter((item) => item.warningStatus !== 'green')
+    .filter((item) => item.coverageStatus !== 'unsupported')
     .filter((item) => !['pagro', 'eurospar', 'hofer', 'interspar', 'spar'].includes(String(item.retailerKey || '').toLowerCase()))
     .slice(0, 6)) {
     const detailParts = [];
@@ -2791,10 +2804,11 @@ async function buildDashboardSnapshot() {
   const lockStatus = serializeLock(crawlLock);
   const {
     offerSummary,
-    retailerMatrix,
+    retailerMatrix: rawRetailerMatrix,
     sourceTypeSummary,
     publishStatusSummary,
   } = activeOfferDiagnostics || buildUnavailableOfferDiagnostics('Active offer diagnostics unavailable.');
+  const retailerMatrix = withUnsupportedCoverage(rawRetailerMatrix, sources);
   const qualityKpis = buildQualityKpis(offerSummary);
   const trendSeries = buildTrendSeries(crawlRuns, []);
   const activeOfferDiagnosticsCapped = false;
@@ -2940,7 +2954,7 @@ async function buildDashboardSnapshot() {
     sources,
     latestJobs,
     retailerSummary,
-    retailerCoverage,
+    retailerCoverage: withUnsupportedCoverage(retailerCoverage, sources),
     comparisonSnapshot,
     offerSamples,
     latestEssence,
@@ -2953,6 +2967,7 @@ async function buildDashboardSnapshot() {
 module.exports = {
   buildDashboardSnapshot,
   _private: {
+    withUnsupportedCoverage,
     buildActionableIssues,
     buildExecutiveStatus,
     buildFeedbackSummary,
