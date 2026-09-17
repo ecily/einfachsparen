@@ -17,7 +17,7 @@ const {
 const { applyManualCategoryOverridesToOfferSync } = require('../quality/manualCategoryOverrideService');
 const { normalizeImageUrl } = require('../images/imageUrl');
 
-const PARSER_VERSION = 'billa-official-flyer-pdf-v1';
+const PARSER_VERSION = 'billa-official-flyer-pdf-v2';
 const SOURCE_TYPE = 'billa-official-flyer-pdf';
 const DEFAULT_MAX_PAGES = 8;
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
@@ -1249,8 +1249,9 @@ function isPositionedProduceNoise(value = '') {
 }
 
 function buildPositionedRows(items = []) {
-  return items
-    .map((item) => ({
+  const rows = items
+    .map((item, order) => ({
+      order,
       text: sanitizeWhitespace(normalizePdfText(item.str || item.text || '')),
       x: Number(item.x),
       y: Number(item.y),
@@ -1258,6 +1259,18 @@ function buildPositionedRows(items = []) {
       height: Number(item.height || 0),
     }))
     .filter((item) => item.text && Number.isFinite(item.x) && Number.isFinite(item.y));
+  // PDF text runs can split a single line (for example the '%' in milk fat).
+  const joined = [];
+  for (const row of rows.sort((a, b) => b.y - a.y || a.x - b.x)) {
+    const previous = joined.find((other) => Math.abs(other.y - row.y) < 1
+      && other.height < 20 && row.height < 20
+      && row.x - other.x - other.width >= -1 && row.x - other.x - other.width <= 2);
+    if (previous) {
+      previous.text = `${previous.text} ${row.text}`;
+      previous.width = row.x + row.width - previous.x;
+    } else joined.push({ ...row });
+  }
+  return joined.sort((a, b) => a.order - b.order);
 }
 
 function extractPositionedBillaPriceClusters(rows = []) {
@@ -1301,6 +1314,7 @@ function extractPositionedBillaPriceClusters(rows = []) {
       referencePrice,
       x: euro.x,
       y: euro.y,
+      right: cents.x + cents.width,
       lines: referencePrice ? [`${euro.text}${cents.text}`, `statt ${referencePrice.toFixed(2)}`] : [`${euro.text}${cents.text}`],
     });
   }
@@ -1316,13 +1330,26 @@ function extractPositionedBillaProduceBlocks(rows = []) {
     .sort((a, b) => a.y - b.y || a.x - b.x);
 
   for (const anchor of anchors) {
-    const sameColumnRows = rows
-      .filter((row) => {
-        if (Math.abs(row.y - anchor.y) > 110) return false;
-        if (Math.abs(row.x - anchor.x) > 95) return false;
-        if (isPositionedProduceNoise(row.text)) return false;
-        return true;
-      });
+    // A proximity rectangle is not a product boundary. Follow only consecutive,
+    // edge-aligned text lines; whitespace or another quantity anchor ends the block.
+    const sameColumnRows = [anchor];
+    for (const direction of [-1, 1]) {
+      let previous = anchor;
+      while (sameColumnRows.length < 16) {
+        const nextRows = rows.filter((row) => {
+          const gap = direction * (row.y - previous.y);
+          const aligned = Math.abs(row.x - previous.x) <= 6
+            || Math.abs(row.x + row.width - previous.x - previous.width) <= 6;
+          return !sameColumnRows.includes(row) && aligned && gap > 0.5
+            && gap <= Math.max(12, previous.height * 2, row.height * 2)
+            && !isPositionedProduceNoise(row.text);
+        }).sort((a, b) => Math.abs(a.y - previous.y) - Math.abs(b.y - previous.y));
+        const next = nextRows[0];
+        if (!next || lineHasQuantity(next.text)) break;
+        sameColumnRows.push(next);
+        previous = next;
+      }
+    }
 
     const titleRows = sameColumnRows.filter((row) => !lineHasQuantity(row.text));
     const quantityRows = sameColumnRows.filter((row) => lineHasQuantity(row.text));
@@ -1339,12 +1366,15 @@ function extractPositionedBillaProduceBlocks(rows = []) {
     blocks.push({
       key,
       lines: block,
+      evidenceRows: sameColumnRows,
       x: anchor.x,
       y: anchor.y,
     });
   }
 
-  return blocks;
+  // A text run claimed by two quantity anchors is not an unambiguous offer.
+  return blocks.filter((block) => !blocks.some((other) => other !== block
+    && block.evidenceRows.some((row) => other.evidenceRows.includes(row))));
 }
 
 function choosePositionedPriceForBlock(block, priceClusters = [], usedPrices = new Set()) {
@@ -1380,20 +1410,35 @@ function extractPositionedFrontloadedProduceBillaPdfCandidatesFromPage(page, { v
 
   const priceClusters = extractPositionedBillaPriceClusters(rows);
   const productBlocks = extractPositionedBillaProduceBlocks(rows);
-  const usedPrices = new Set();
 
   if (priceClusters.length < 3 || productBlocks.length < 3) {
     return candidates;
   }
 
-  for (const productBlock of productBlocks) {
-    const match = choosePositionedPriceForBlock(productBlock, priceClusters, usedPrices);
-    if (!match) continue;
-    usedPrices.add(match.index);
+  const matches = productBlocks.map((block) => choosePositionedPriceForBlock(block, priceClusters));
+  for (const [blockIndex, productBlock] of productBlocks.entries()) {
+    const match = matches[blockIndex];
+    // Never assign the next-nearest price when another product already owns it.
+    if (!match || matches.filter((other) => other?.index === match.index).length !== 1) {
+      addCandidate(candidates, page.pageNumber, {
+        ...buildCandidateFromPair({ productBlock: productBlock.lines, priceGroup: { price: null, lines: [] }, pageNumber: page.pageNumber, validity, sourceRetailerFormat, allowShortProduceTitle: true }),
+        parserHint: 'billa-pdf-positioned-frontloaded-produce',
+        comparisonSafe: false,
+      });
+      continue;
+    }
+    const priceContext = rows.filter((row) => row.x >= match.price.x - 4
+      && row.x + row.width <= match.price.right + 4
+      && row.y >= match.price.y && row.y <= match.price.y + 140);
+    // This recovery path cannot safely derive a pack price or a free-item price.
+    if (productBlock.lines.some((line) => /\b(?:kiste|traeger|träger)\b/i.test(line))
+      || priceContext.some((row) => /\d+\s*\+\s*\d+/.test(row.text))) continue;
+    const conditions = priceContext.filter((row) => isPriceContextLine(row.text))
+      .sort((a, b) => b.y - a.y).map((row) => row.text);
 
     const candidate = buildCandidateFromPair({
       productBlock: productBlock.lines,
-      priceGroup: match.price,
+      priceGroup: { ...match.price, lines: [...match.price.lines, ...conditions] },
       pageNumber: page.pageNumber,
       validity,
       sourceRetailerFormat,
@@ -1472,13 +1517,24 @@ function extractBillaPdfCandidatesFromPage(page, { validity = {}, sourceRetailer
     addRejectedCandidate(candidates, page.pageNumber, 'price-missing', productBuffer.join(' '));
   }
 
+  const positionedCandidates = extractPositionedFrontloadedProduceBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat });
   const inlineCandidates = [
     ...extractInlineBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
     ...extractRecoveryBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
-    ...extractPositionedFrontloadedProduceBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
+    ...positionedCandidates,
     ...extractSeparatedClusterBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat, now }),
     ...extractForwardProductPriceBillaPdfCandidatesFromPage(page, { validity, sourceRetailerFormat }),
   ];
+  // PDF text order may jump between cards. Do not keep a conflicting linear
+  // fallback when the same product has a positioned price/quantity witness.
+  for (const candidate of [...candidates, ...inlineCandidates]) {
+    if (candidate.exclusionReason || candidate.parserHint === 'billa-pdf-positioned-frontloaded-produce') continue;
+    const witnesses = positionedCandidates.filter((other) => normalizeForScan(other.title) === normalizeForScan(candidate.title));
+    if (witnesses.some((other) => other.exclusionReason || other.price !== candidate.price || other.quantityText !== candidate.quantityText)) {
+      candidate.exclusionReason = 'positioned-product-price-conflict';
+      candidate.comparisonSafe = false;
+    }
+  }
   const seenOfferKeys = new Set(candidates
     .filter((candidate) => !candidate.exclusionReason)
     .map((candidate) => [
