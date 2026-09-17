@@ -3429,8 +3429,8 @@ function extractKnownSparFamilyKw23RecoveryCandidatesFromPage(page, { sourceReta
       rawText: 'Pepsi oder Pepsi Zero, 1,5 Liter, ab 6 Fl. je 0,99, 6er-Tray 5,94',
       comparisonSafe: true,
       categoryPrimary: 'Getraenke',
-      categorySecondary: 'Softdrinks & Energy',
-      categoryKey: 'softdrinks-energy',
+      categorySecondary: 'Softdrinks',
+      categoryKey: 'softdrinks',
       searchKeywords: 'Pepsi Pepsi Zero Cola 1.5 l EUROSPAR',
     }));
   }
@@ -4114,8 +4114,8 @@ function extractKnownSparFamilyKw25CurrentCandidatesFromPage(page, { sourceRetai
       conditionsText: 'ab 2 Dosen je 1,79 laut Flugblatt',
       rawText: 'Nocco, verschiedene Sorten, 0,33-Liter-Dose, ab 2 Dosen je 1,79',
       categoryPrimary: 'Getraenke',
-      categorySecondary: 'Alkoholfreie Getraenke',
-      categoryKey: 'alkoholfreie-getraenke',
+      categorySecondary: 'Energy Drinks',
+      categoryKey: 'energy-drinks',
       searchKeywords: 'nocco energy drink alkoholfrei dose',
     }));
 
@@ -5192,6 +5192,9 @@ function extractKnownSparFamilyKw24CandidatesFromPage(page, { sourceRetailerForm
 
   addKnownCandidateIf(candidates, page, isInterspar && hasText(text, /s-budget\s+energy\s+drink/) && /24er-tray/i.test(normalized) && /6[,\s]*96/i.test(normalized), groceryCandidate({
     title: 'S-BUDGET Energy Drink',
+    categoryPrimary: 'Getraenke',
+    categorySecondary: 'Energy Drinks',
+    categoryKey: 'energy-drinks',
     brand: 'S-BUDGET',
     price: 6.96,
     quantityText: '24 x 0.25 l',

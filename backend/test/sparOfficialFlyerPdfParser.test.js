@@ -2827,3 +2827,20 @@ test('explicit beverage identity overrides polluted beer templates across SPAR f
     }
   }
 });
+
+
+test('SPAR beverage templates keep Pepsi separate from Nocco and S-BUDGET energy', () => {
+  for (const [format, text, title, expected] of [
+    ['eurospar', 'Pepsi oder Pepsi zero 1,5 Liter 1 Fl. 1,99 ab 6 Fl. je 0,99 6er-Tray 5,94', 'Pepsi oder Pepsi Zero', 'softdrinks'],
+    ['interspar', 'S-BUDGET Energy Drink 0,25 Liter 24er-Tray 6,96', 'S-BUDGET Energy Drink', 'energy-drinks'],
+    ['interspar', 'Nocco verschiedene Sorten 0,33-Liter-Dose ab 2 Dosen je 1,79', 'Nocco', 'energy-drinks'],
+  ]) {
+    const validity = activeValidityForTest();
+    const candidates = extractSparPdfCandidates({ sourceRetailerFormat: format, validity, pages: [{ pageNumber: 2, text }] });
+    const offers = normalizeSparPdfCandidatesToOffers({ pdfReference: { validity, candidates }, source: source(format),
+      crawlJobId: '000000000000000000000654', region: 'Grossraum Graz', pdfUrl: source(format).sourceUrl });
+    const offer = offers.find(item => item.title === title);
+    assert.ok(offer, title);
+    assert.equal(offer.categoryKey, expected, title);
+  }
+});
