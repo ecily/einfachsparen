@@ -41,6 +41,7 @@ const compactSourceSummarySchema = new mongoose.Schema(
     contentType: { type: String, default: '' },
     finalUrl: { type: String, default: '' },
     diagnostic: { type: mongoose.Schema.Types.Mixed, default: {} },
+    scheduledHealthPolicy: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { _id: false }
 );

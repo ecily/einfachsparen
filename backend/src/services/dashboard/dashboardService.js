@@ -415,11 +415,29 @@ function buildSourceFailureDiagnosis(run) {
   const failedSources = (run?.sources || []).filter((source) => source.status === 'failed');
   const partialSources = (run?.sources || []).filter((source) => source.status === 'partial');
   const policyBoundedSources = (run?.sources || []).filter(isPolicyBoundedDashboardSource);
+  const unknownPolicyProblems = [...failedSources, ...partialSources].filter((source) =>
+    !source.scheduledHealthPolicy && !source.diagnostic?.scheduledHealthPolicy);
+  // Older CrawlRun schemas dropped the per-source policy. Preserve the recorded
+  // aggregate decision without guessing which historical source was optional.
+  const hasRecordedHealthCounts = unknownPolicyProblems.length > 0
+    && ['requiredFailedSourcesCount', 'requiredPartialSourcesCount', 'optionalProblemSourcesCount']
+      .every((key) => Number.isInteger(run?.summary?.[key]) && run.summary[key] >= 0)
+    && ['failed', 'partial'].every((status) =>
+      run.summary[status === 'failed' ? 'requiredFailedSourcesCount' : 'requiredPartialSourcesCount']
+        >= [...failedSources, ...partialSources].filter((source) => source.status === status
+          && (source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy)?.requiredForScheduledHealth === true).length)
+    && run.summary.requiredFailedSourcesCount + run.summary.requiredPartialSourcesCount
+      + run.summary.optionalProblemSourcesCount === failedSources.length + partialSources.length;
   const requiredProblems = [...failedSources, ...partialSources].filter((source) => {
     const policy = source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy;
-    return !policy || policy.requiredForScheduledHealth === true;
+    return policy ? policy.requiredForScheduledHealth === true : !hasRecordedHealthCounts;
   });
-  const optionalProblems = [...failedSources, ...partialSources].filter((source) => !requiredProblems.includes(source));
+  const optionalProblems = [...failedSources, ...partialSources].filter((source) =>
+    !requiredProblems.includes(source) && !unknownPolicyProblems.includes(source));
+  const requiredProblemCount = hasRecordedHealthCounts
+    ? run.summary.requiredFailedSourcesCount + run.summary.requiredPartialSourcesCount : requiredProblems.length;
+  const optionalProblemCount = hasRecordedHealthCounts
+    ? run.summary.optionalProblemSourcesCount : optionalProblems.length;
   const groups = new Map();
 
   for (const source of requiredProblems) {
@@ -448,16 +466,24 @@ function buildSourceFailureDiagnosis(run) {
     .reduce((sum, group) => sum + group.count, 0);
 
   return {
-    level: requiredProblems.length > 0 ? 'yellow' : 'green',
+    level: requiredProblemCount > 0 ? 'yellow' : 'green',
     failedSourcesCount: failedSources.length,
     partialSourcesCount: partialSources.length,
-    requiredProblemSourcesCount: requiredProblems.length,
-    optionalProblemSourcesCount: optionalProblems.length,
+    requiredProblemSourcesCount: requiredProblemCount,
+    optionalProblemSourcesCount: optionalProblemCount,
+    policyEvidence: hasRecordedHealthCounts ? 'recorded-run-summary' : 'source-results',
+    unknownPolicyProblemSources: unknownPolicyProblems.map((source) => ({
+      sourceKey: source.sourceKey,
+      status: source.status,
+      reason: detectSourceErrorType(source),
+    })),
     p0ReliabilityCount: 0,
-    p1SourceCoverageCount,
+    p1SourceCoverageCount: hasRecordedHealthCounts ? requiredProblemCount : p1SourceCoverageCount,
     policyBoundedSourcesCount: policyBoundedSources.length,
     notExecutedByPolicySourcesCount: policyBoundedSources.length,
-    reason: requiredProblems.length > 0
+    reason: hasRecordedHealthCounts
+      ? `${requiredProblemCount} health-critical and ${optionalProblemCount} optional problem(s) recorded in the run summary. Per-source policy is missing in this historical run; all source failures remain visible without inferred assignments.`
+      : requiredProblems.length > 0
       ? `${requiredProblems.length} health-critical source problem(s) are classified separately from crawl finalization/lock reliability; ${optionalProblems.length} optional problem(s) remain diagnostic and ${policyBoundedSources.length} source(s) were not executed by policy.`
       : optionalProblems.length > 0
         ? `No health-critical source failures in the reference crawl; ${optionalProblems.length} optional problem(s) remain visible diagnostically.`
@@ -1771,7 +1797,7 @@ function classifySourceExtraction(source = {}) {
   if (policy.healthCriticality === 'excluded') return 'excluded/non-blocking';
   if (source.retainedPreviousData) return 'retained-previous-data';
   if (source.skipped && /policy|bounded|scope|not executed/.test(text)) return 'policy-bounded/skipped';
-  if (/transport|http-\d+|blocked|access denied/.test(text)) return nonBlocking ? 'unavailable-nonblocking' : 'transport-blocked';
+  if (Number(source.httpStatus) >= 400 || /transport|http-\d+|blocked|access denied/.test(text)) return nonBlocking ? 'unavailable-nonblocking' : 'transport-blocked';
   if (source.foundRawItems > 0 && source.offersStored === 0 && reasonKeys.includes('official-source-zero-stored')) {
     return 'official-source-zero-stored';
   }
@@ -1810,8 +1836,8 @@ function buildSourceExtractionSummary({ latestScheduledFullCrawl = null, latestJ
     reasonCode: classifySourceExtraction(source),
     rejectionReasons: source.rejectionReasons || [],
     warningClass: source.failureStage || source.skippedReason || source.error || '',
-    healthCriticality: (source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy)?.healthCriticality || 'required',
-    requiredForScheduledHealth: (source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy)?.requiredForScheduledHealth !== false,
+    healthCriticality: (source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy)?.healthCriticality || 'unknown',
+    requiredForScheduledHealth: (source.scheduledHealthPolicy || source.diagnostic?.scheduledHealthPolicy)?.requiredForScheduledHealth ?? null,
   }));
   const problemRows = sourceRows
     .filter((row) => row.reasonCode !== 'success')
@@ -2238,6 +2264,8 @@ function renderAnalysisEssenceText(essence = {}) {
       lines.push(`      rejectedCount: ${scalarYaml(row.rejectedCount)}`);
       lines.push(`      retainedPreviousData: ${scalarYaml(row.retainedPreviousData)}`);
       lines.push(`      reasonCode: ${quoteYaml(row.reasonCode)}`);
+      lines.push(`      healthCriticality: ${quoteYaml(row.healthCriticality)}`);
+      lines.push(`      requiredForScheduledHealth: ${scalarYaml(row.requiredForScheduledHealth)}`);
       if (row.warningClass) lines.push(`      warningClass: ${quoteYaml(row.warningClass)}`);
     }
   } else {
