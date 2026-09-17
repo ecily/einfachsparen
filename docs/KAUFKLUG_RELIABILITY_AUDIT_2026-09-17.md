@@ -303,3 +303,11 @@ Fremde Aenderungen in `env.js`, `Offer.js`, `dashboardService.test.js` sowie bes
 ## N. Abschluss
 
 Die sechs Partial-Runs sind fachlich und technisch erklaert. Die globale Crawl-Semantik meldet den echten Mueller-Ausfall korrekt. Der davon getrennte Policy-Verlust in Speicherung/Diagnose ist lokal behoben. **Kein gruener Mueller-/Gesamt-Recovery-Abschluss**, solange der externe Block besteht und der Patch nicht produktiv abgenommen wurde.
+
+## Nachtrag 2026-09-17: BILLA-Plus-P1 geschlossen
+
+Der zuletzt verbliebene beauftragte P1 Rindsgulasch/Milch ist nach Commit `7d21a932`, regulaerem Backend-Deploy und scoped Run `6aabbf82ac07773c5bd412bc` live geschlossen. Der gemeinsame Positionsparser trennt Produkt-, Mengen- und Preisbloecke; unsichere Zuordnungen und widersprechende lineare Fallbacks werden verworfen. 385/385 gezielte Tests gruen.
+
+Live-Abnahme 10:25-10:26 UTC: Rindsgulasch **12,99 EUR/kg**, Formil-Milch **0,90 EUR/l ab 12 Packungen**, korrekte Kategorien und comparisonSafe, getrennte Original-PDF-Evidence/Source-Lineage. Alter vermischter Offer regulaer deaktiviert. Zwei Sources success, 177 neue v2-Offers, 0 ungueltig, Publish final, Lock frei, keine Feedbackstatusaenderung und kein weiterer Full Crawl.
+
+**Der beauftragte Reliability/Coverage/Product-Trust-Block ist vollstaendig abgeschlossen. Naechster Produktblock: User Journey / Einkaufsliste.** Die bereits entschiedene Mueller-Unsupported-Grenze bleibt bestehen; die getrennten, unveraenderten BILLA-Text-/Rundungsreste sind im aktuellen Kontext dokumentiert und nicht als behoben ausgegeben. Vollstaendige Reproduktion, Regression und Live-IDs: [KAUFKLUG_CONTEXT.md](KAUFKLUG_CONTEXT.md#billa-plus-p1-blocktrennung-live-geschlossen-am-2026-09-17).
