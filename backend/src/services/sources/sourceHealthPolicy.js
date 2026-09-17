@@ -4,12 +4,13 @@ function normalizeHealthPolicy(policy = {}) {
   const criticality = String(policy.healthCriticality || '').trim().toLowerCase();
   const bounded = criticality === 'policy-bounded' || policy.policyBounded === true;
   const excluded = criticality === 'excluded' || policy.healthExcluded === true;
-  const required = !bounded && !excluded && policy.requiredForScheduledHealth === true;
+  const unsupported = criticality === 'unsupported';
+  const required = !bounded && !excluded && !unsupported && policy.requiredForScheduledHealth === true;
 
   return {
     requiredForScheduledHealth: required,
-    healthCriticality: excluded ? 'excluded' : bounded ? 'policy-bounded' : required ? 'required' : 'optional',
-    publicRequired: policy.publicRequired === true,
+    healthCriticality: unsupported ? 'unsupported' : excluded ? 'excluded' : bounded ? 'policy-bounded' : required ? 'required' : 'optional',
+    publicRequired: !unsupported && policy.publicRequired === true,
     policyBounded: bounded,
     healthExcluded: excluded,
     nonBlockingReason: String(policy.nonBlockingReason || ''),

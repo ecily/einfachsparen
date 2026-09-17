@@ -230,13 +230,13 @@ export const seoLandingPages = [
   {
     key: 'mueller',
     path: '/angebote/mueller',
-    title: 'M\u00fcller Angebote aktuell finden | kaufklug',
+    title: 'M\u00fcller Angebote derzeit nicht verf\u00fcgbar | kaufklug',
     description:
-      'Finde aktuelle Online-Angebote von M\u00fcller in \u00d6sterreich. kaufklug zeigt Preise, Produkte und Bedingungen als Orientierungshilfe.',
-    h1: 'M\u00fcller Angebote aktuell finden',
+      'M\u00fcller Angebote sind bei kaufklug derzeit nicht verf\u00fcgbar. Es gibt aktuell keine zuverl\u00e4ssig nutzbare offizielle \u00f6ffentliche Quelle.',
+    h1: 'M\u00fcller Angebote derzeit nicht verf\u00fcgbar',
     intro:
-      'Finde verifiziert aktuelle Online-Angebote von M\u00fcller. kaufklug zeigt Preise, Produkte und Bedingungen, soweit diese erkannt wurden.',
-    note: 'Online-Angebot \u00b7 Verf\u00fcgbarkeit bei M\u00fcller pr\u00fcfen',
+      'Wir k\u00f6nnen derzeit keine verifiziert aktuellen M\u00fcller Angebote zeigen. Die offizielle \u00f6ffentliche Quelle ist aktuell nicht zuverl\u00e4ssig verf\u00fcgbar.',
+    note: 'M\u00fcller ist vor\u00fcbergehend nicht unterst\u00fctzt. Alte Angebote werden nicht als aktuell angezeigt.',
     robots: 'noindex,follow',
     query: {
       retailers: 'mueller',

@@ -15,6 +15,7 @@ const { buildAnalyticsSummary } = require('../analytics/analyticsService');
 const { classifyOfferSourceQuality } = require('../offers/sourceQuality');
 const { buildOperatorIntelligence } = require('../operator/operatorIntelligenceService');
 const logger = require('../../lib/logger');
+const { getScheduledHealthPolicy } = require('../sources/sourceHealthPolicy');
 
 const COMPARISON_SNAPSHOT_TIMEOUT_MS = 3000;
 const DASHBOARD_QUERY_MAX_TIME_MS = 5000;
@@ -1268,8 +1269,12 @@ async function buildFeedbackSummary({
   });
 }
 
-function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCrawlRun, lockStatus, publishStatusSummary }) {
-  const referenceRun = latestScheduledFullCrawl || latestCrawl;
+function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, crawlHistory = [], activeCrawlRun, lockStatus, publishStatusSummary }) {
+  // Current system health uses the newest regular full run. Scheduled history stays unchanged.
+  const referenceRun = [latestScheduledFullCrawl, latestCrawl, ...crawlHistory]
+    .filter((run) => run && run.mode === 'full' && run.dryRun !== true)
+    .sort((a, b) => new Date(b.startedAt || 0) - new Date(a.startedAt || 0))[0]
+    || latestScheduledFullCrawl || latestCrawl;
   const reasons = [];
   let level = 'green';
 
@@ -1282,24 +1287,24 @@ function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCra
       level = isScheduledReplacementExhausted(referenceRun) ? 'red' : replacementStatus ? 'yellow' : 'red';
       reasons.push(replacementStatus
         ? isScheduledReplacementExhausted(referenceRun)
-          ? 'Letzter Daily Crawl ist source-los fehlgeschlagen; automatische Replacement-Versuche sind ausgeschoepft und Operator-Handlung ist erforderlich.'
-          : `Letzter Daily Crawl ist source-los fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
-        : 'Letzter Daily Crawl ist fehlgeschlagen.');
+          ? 'Letzter regulaerer Full Crawl ist source-los fehlgeschlagen; automatische Replacement-Versuche sind ausgeschoepft und Operator-Handlung ist erforderlich.'
+          : `Letzter regulaerer Full Crawl ist source-los fehlgeschlagen; scheduled Replacement ist ${replacementStatus}.`
+        : 'Letzter regulaerer Full Crawl ist fehlgeschlagen.');
     } else if (referenceRun.status === 'stale') {
       level = 'red';
-      reasons.push('Letzter Daily Crawl wurde stale, weil der Heartbeat oder Prozessstatus nicht mehr vertrauenswuerdig war.');
+      reasons.push('Letzter regulaerer Full Crawl wurde stale, weil der Heartbeat oder Prozessstatus nicht mehr vertrauenswuerdig war.');
     } else if (!TERMINAL_CRAWL_STATUSES.has(referenceRun.status)) {
       level = 'yellow';
-      reasons.push('Letzter Daily Crawl ist nicht terminal abgeschlossen.');
+      reasons.push('Letzter regulaerer Full Crawl ist nicht terminal abgeschlossen.');
     } else if (!referenceRun.finishedAt) {
       level = 'red';
-      reasons.push('Letzter Daily Crawl hat kein finishedAt.');
+      reasons.push('Letzter regulaerer Full Crawl hat kein finishedAt.');
     } else if (referenceRun.status === 'partial') {
       level = 'yellow';
-      reasons.push('Letzter Daily Crawl war partial; einzelne Quellen oder Schritte waren eingeschraenkt.');
+      reasons.push('Letzter regulaerer Full Crawl war partial; einzelne Quellen oder Schritte waren eingeschraenkt.');
     } else if (referenceRun.status === 'skipped') {
       level = 'yellow';
-      reasons.push('Letzter Daily Crawl wurde uebersprungen.');
+      reasons.push('Letzter regulaerer Full Crawl wurde uebersprungen.');
     }
   }
 
@@ -1322,19 +1327,27 @@ function buildExecutiveStatus({ latestCrawl, latestScheduledFullCrawl, activeCra
   }
 
   if (level === 'green') {
-    reasons.push('Letzter Daily Crawl terminal abgeschlossen, Lock frei, PublishStatus final.');
+    reasons.push('Letzter regulaerer Full Crawl terminal abgeschlossen, Lock frei, PublishStatus final.');
   }
 
   return {
     level,
+    referenceRunId: referenceRun?.id || '',
+    referenceTrigger: referenceRun?.trigger || '',
     label: level === 'green' ? 'Gruen' : level === 'yellow' ? 'Gelb' : 'Rot',
     reason: reasons[0] || 'Status unbekannt.',
     reasons,
   };
 }
 
-function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, retailerMatrix, offerSummary, feedbackSummary }) {
-  const issues = [];
+function buildActionableIssues({ latestCrawl, lockStatus, publishStatusSummary, retailerMatrix, offerSummary, feedbackSummary, sources = [] }) {
+  const issues = sources.filter((source) => getScheduledHealthPolicy(source).healthCriticality === 'unsupported').map((source) => ({
+    severity: 'yellow',
+    kind: 'retailer-coverage-unavailable',
+    retailerKey: source.retailerKey,
+    title: `${source.retailerName || source.retailerKey}: temporarily unsupported / source unavailable`,
+    detail: source.disabledReason || getScheduledHealthPolicy(source).nonBlockingReason,
+  }));
 
   if (latestCrawl?.status === 'stale') {
     issues.push({
@@ -2811,6 +2824,7 @@ async function buildDashboardSnapshot() {
   const executiveStatus = buildExecutiveStatus({
     latestCrawl,
     latestScheduledFullCrawl,
+    crawlHistory,
     activeCrawlRun,
     lockStatus,
     publishStatusSummary,
@@ -2824,7 +2838,8 @@ async function buildDashboardSnapshot() {
     publishStatusSummary,
   });
   const actionableIssues = buildActionableIssues({
-    latestCrawl: latestScheduledFullCrawl || latestCrawl,
+    latestCrawl: crawlHistory.find((run) => run.id === executiveStatus.referenceRunId) || latestScheduledFullCrawl || latestCrawl,
+    sources,
     lockStatus,
     publishStatusSummary,
     retailerMatrix,

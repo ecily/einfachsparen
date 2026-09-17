@@ -253,12 +253,12 @@ test('source key derivation recognizes Müller official online offers source', (
   );
 });
 
-test('sourceKeys can select registered Müller online offers source exactly', async () => {
+test('sourceKeys identify registered Müller source but reject its unsupported execution', async () => {
   const registeredMuellerSource = RETAILER_DEFINITIONS.find((source) =>
     source.sourceType === 'mueller-official-online-offers'
   );
 
-  const selection = await resolveCrawlSourceSelection({
+  await assert.rejects(resolveCrawlSourceSelection({
     Source: fakeSourceModel([{
       _id: '888888888888888888888888',
       ...registeredMuellerSource,
@@ -268,12 +268,12 @@ test('sourceKeys can select registered Müller online offers source exactly', as
     Offer: fakeOfferModel([{ _id: 'mueller', activeOfferCount: 0 }]),
     sourceKeys: ['mueller-official-online-offers'],
     sourceSelectionRequested: true,
+  }), (error) => {
+    assert.equal(error.statusCode, 400);
+    assert.equal(error.details.disabledSources[0].sourceKey, 'mueller-official-online-offers');
+    assert.equal(error.details.disabledSources[0].skippedReason, 'unsupported-source');
+    return true;
   });
-
-  assert.equal(selection.wouldRunCount, 1);
-  assert.equal(selection.matchedSources[0].sourceKey, 'mueller-official-online-offers');
-  assert.equal(selection.matchedSources[0].retailerKey, 'mueller');
-  assert.deepEqual(selection.effectiveRetailerKeys, ['mueller']);
 });
 
 test('sourceKeys select exactly the requested runnable sources without SPAR official', async () => {

@@ -92,6 +92,7 @@ function isValidObjectId(value) {
 }
 
 function sourceIsRunnable(source = {}, { allowDisabled = false } = {}) {
+  if (getScheduledHealthPolicy(source).healthCriticality === 'unsupported') return false;
   if (source.active === false) return false;
   if (!allowDisabled && source.enabled === false) return false;
   return true;
@@ -257,7 +258,8 @@ function applySourceSelection({ sources = [], retailerKeys = [], sourceKeys = []
     if (!sourceIsRunnable(source, { allowDisabled })) {
       disabledSources.push({
         ...summarizeSource(source),
-        skippedReason: source.active === false ? 'inactive-source' : 'disabled-source',
+        skippedReason: getScheduledHealthPolicy(source).healthCriticality === 'unsupported'
+          ? 'unsupported-source' : source.active === false ? 'inactive-source' : 'disabled-source',
       });
       continue;
     }

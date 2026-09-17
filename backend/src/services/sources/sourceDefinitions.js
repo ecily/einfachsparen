@@ -1040,8 +1040,16 @@ const RETAILER_DEFINITIONS = [
     sourceUrl: 'https://www.mueller.at/c/online-angebote/',
     sourceType: 'mueller-official-online-offers',
     parserHint: 'mueller-official-online-offers',
+    enabled: false,
+    disabledReason: 'temporarily unsupported – official public source currently unavailable',
     priority: 17,
     crawlPolicy: {
+      scheduledHealthPolicy: {
+        healthCriticality: 'unsupported',
+        requiredForScheduledHealth: false,
+        publicRequired: false,
+        nonBlockingReason: 'Official public source unavailable (HTTP 403 / Client Challenge); no reproducible current replacement. Coverage unavailable, historical offers must not be renewed.',
+      },
       maxPages: 2,
       maxOffers: 160,
       delayMs: 750,
@@ -1050,7 +1058,7 @@ const RETAILER_DEFINITIONS = [
       currentSnapshot: true,
     },
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
-    notes: 'Offizielle Müller Online-Angebote. DO/Linux-naher Transport fuer Listen- und Produktdetailseiten ist gruen; Prospekte/PDF werden nicht integriert. Ohne explizites validTo als kurzer Online-Snapshot/Freshness-Modell.',
+    notes: 'Temporarily unsupported seit 2026-09-17: offizieller Zugriff liefert Client Challenge; keine laufende Ersatzquelle verifiziert. Historische Fehler bleiben erhalten. Reaktivierung erst nach belegter offizieller Current-Discovery und scoped Abnahme.',
   },
   {
     retailerKey: 'bipa',

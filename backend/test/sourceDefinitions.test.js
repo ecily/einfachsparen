@@ -52,14 +52,15 @@ test('HOFER official HTML source is primary and keeps Publitas only as fallback'
   });
 });
 
-test('Müller official online offers source is enabled with bounded pagination and no flyer integration', () => {
+test('Müller official online offers source is temporarily unsupported with retained parser configuration', () => {
   const definition = RETAILER_DEFINITIONS.find((source) => source.sourceType === 'mueller-official-online-offers');
 
   assert.ok(definition);
   assert.equal(definition.retailerKey, 'mueller');
   assert.equal(definition.channel, 'official-site');
   assert.equal(definition.sourceUrl, 'https://www.mueller.at/c/online-angebote/');
-  assert.equal(definition.enabled !== false, true);
+  assert.equal(definition.enabled, false);
+  assert.equal(definition.crawlPolicy.scheduledHealthPolicy.healthCriticality, 'unsupported');
   assert.equal(definition.capabilities.parseFlyers, false);
   assert.equal(definition.crawlPolicy.maxPages, 2);
   assert.equal(definition.crawlPolicy.currentSnapshot, true);
