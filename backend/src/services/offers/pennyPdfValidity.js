@@ -74,7 +74,9 @@ function derivePennyLeafletValidity(pages, sourceUrl = '') {
   if (periods.some((period) => !validPeriod(period))) return null;
   if (urlPeriod && periods.some((period) => !containsPeriod(urlPeriod, period))) return null;
   const unique = new Map(periods.map((period) => [`${period.validFrom.toISOString()}/${period.validTo.toISOString()}`, period]));
-  const period = urlPeriod || (unique.size === 1 ? [...unique.values()][0] : null);
+  // A URL can corroborate a printed window, never widen it. Multiple printed
+  // windows without a unique leaflet period are ambiguous rather than an envelope.
+  const period = unique.size === 1 ? [...unique.values()][0] : (periods.length === 0 ? urlPeriod : null);
   if (!period) return null;
   return {
     ...period,

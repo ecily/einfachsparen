@@ -53,6 +53,13 @@ test('explicit periods validate calendar, order, year and campaign agreement fai
   assert.equal(periodFromOfficialUrl(fixture.sourceUrl.replace('issuu.com/pennyat', 'example.test/pennyat')), null);
 });
 
+test('a wider official URL never extends a narrower printed period or resolves competing printed periods', () => {
+  const period = derivePennyLeafletValidity([{ text: 'Gültig von 21.08.2026 bis 22.08.2026' }], fixture.sourceUrl);
+  assert.equal(key(period.validFrom), '2026-08-21');
+  assert.equal(key(period.validTo), '2026-08-22');
+  assert.equal(derivePennyLeafletValidity([{ text: 'Gültig von 21.08.2026 bis 22.08.2026\nGültig von 24.08.2026 bis 26.08.2026' }], fixture.sourceUrl), null);
+});
+
 function normalize(validity, rawText = 'Kaffee 500 g 4.99', pdfUrl = fixture.sourceUrl) {
   return normalizePennyPdfCandidatesToOffers({
     source: { _id: '000000000000000000000123', retailerKey: 'penny', retailerName: 'PENNY' },
