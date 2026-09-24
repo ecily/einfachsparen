@@ -1,3 +1,4 @@
+const { pennyPdfPeriodIsConsistent } = require('./pennyPdfValidity');
 const DAY_MS = 24 * 60 * 60 * 1000;
 const VIENNA_TIME_ZONE = 'Europe/Vienna';
 const PUBLIC_VALIDITY_VERSION = 'public-validity-v1';
@@ -303,6 +304,9 @@ function buildDecision({
 
 function isPublicValidityEligible(offer = {}, now = new Date()) {
   const referenceNow = toDateOrNull(now) || new Date();
+  if (!pennyPdfPeriodIsConsistent(offer)) {
+    return buildDecision({ validityClass: 'contradictory-validity', reasonCode: 'penny-pdf-period-unverified-or-contradictory' });
+  }
   const validFrom = parseValidityDate(offer.validFrom ?? offer.rawFacts?.validFrom);
   const validTo = parseValidityDate(offer.validTo ?? offer.rawFacts?.validTo, { endOfDay: true });
 

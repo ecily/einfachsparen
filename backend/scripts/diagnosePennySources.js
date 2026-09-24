@@ -6,7 +6,7 @@ const CrawlJob = require('../src/models/CrawlJob');
 
 const PENNY_PDF_SOURCE_TYPE = 'penny-official-pdf';
 const PENNY_PDF_SOURCE_KEY = 'penny-official-flyer-pdf';
-const PENNY_PDF_PARSER_VERSION = 'penny-pdf-v1';
+const { PARSER_VERSION: PENNY_PDF_PARSER_VERSION } = require('../src/services/crawl/pennyPdfLeafletParser');
 
 function mapOfferSourceDistribution(sourceDistribution = []) {
   return sourceDistribution.map((item) => ({

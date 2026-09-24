@@ -36,6 +36,7 @@ function pennyKw24Validity() {
     validFrom: new Date('2026-06-11T12:00:00.000Z'),
     validTo: new Date('2026-06-17T12:00:00.000Z'),
     detectedDates: ['2026-06-11', '2026-06-17'],
+    evidenceType: 'penny-pdf-explicit-period-v2',
   };
 }
 
@@ -374,7 +375,7 @@ test('builds compact reusable PDF source metadata', () => {
     sourceKey: 'penny-official-flyer-pdf',
     pdfUrl: 'https://example.test/flyer.pdf',
     page: 4,
-    parserVersion: 'penny-pdf-v1',
+    parserVersion: 'penny-pdf-v2',
     evidence: 'Kaffee Crema 500 g 4.99',
   });
 
@@ -383,7 +384,7 @@ test('builds compact reusable PDF source metadata', () => {
   assert.equal(metadata.retailerKey, 'penny');
   assert.equal(metadata.retailerName, 'PENNY');
   assert.equal(metadata.flyer.page, 4);
-  assert.equal(metadata.parserVersion, 'penny-pdf-v1');
+  assert.equal(metadata.parserVersion, 'penny-pdf-v2');
   assert.equal(metadata.evidence, 'Kaffee Crema 500 g 4.99');
 });
 
@@ -405,6 +406,7 @@ test('normalizes PENNY PDF offers with consistent metadata for storage', () => {
         validFrom: new Date(Date.now() - 60 * 60 * 1000),
         validTo: new Date(Date.now() + 24 * 60 * 60 * 1000),
         detectedDates: [],
+        evidenceType: 'penny-pdf-explicit-period-v2',
       },
       candidates: [
         {
@@ -429,8 +431,8 @@ test('normalizes PENNY PDF offers with consistent metadata for storage', () => {
   assert.equal(storedOffer.sourceType, 'penny-official-pdf');
   assert.equal(storedOffer.retailerKey, 'penny');
   assert.equal(storedOffer.retailerName, 'PENNY');
-  assert.equal(storedOffer.parserVersion, 'penny-pdf-v1');
-  assert.equal(storedOffer.rawFacts.parserVersion, 'penny-pdf-v1');
+  assert.equal(storedOffer.parserVersion, 'penny-pdf-v2');
+  assert.equal(storedOffer.rawFacts.parserVersion, 'penny-pdf-v2');
   assert.equal(storedOffer.rawFacts.sourceKind, 'pdf');
   assert.equal(storedOffer.rawFacts.sourceKey, PENNY_PDF_SOURCE_KEY);
   assert.equal(storedOffer.rawFacts.sourceMetadata.sourceKey, PENNY_PDF_SOURCE_KEY);
@@ -457,11 +459,11 @@ test('builds PENNY diagnostics report without database access', () => {
     latestPdfDocuments: [
       {
         sourceType: 'penny-official-pdf',
-        parserVersion: 'penny-pdf-v1',
+        parserVersion: 'penny-pdf-v2',
         payload: {
           sourceKind: 'pdf',
           sourceKey: 'penny-official-flyer-pdf',
-          parserVersion: 'penny-pdf-v1',
+          parserVersion: 'penny-pdf-v2',
           retailerKey: 'penny',
           retailerName: 'PENNY',
           detectedPageCount: 28,
@@ -480,11 +482,11 @@ test('builds PENNY diagnostics report without database access', () => {
         title: 'Kaffee Crema',
         priceCurrent: { amount: 4.99 },
         sourceType: 'penny-official-pdf',
-        parserVersion: 'penny-pdf-v1',
+        parserVersion: 'penny-pdf-v2',
         rawFacts: {
           sourceKind: 'pdf',
           sourceKey: 'penny-official-flyer-pdf',
-          parserVersion: 'penny-pdf-v1',
+          parserVersion: 'penny-pdf-v2',
           page: 3,
           evidenceText: 'Kaffee Crema 500 g 4.99',
         },
@@ -494,9 +496,9 @@ test('builds PENNY diagnostics report without database access', () => {
   });
 
   assert.equal(report.ok, true);
-  assert.equal(report.expectedPdfMetadata.parserVersion, 'penny-pdf-v1');
+  assert.equal(report.expectedPdfMetadata.parserVersion, 'penny-pdf-v2');
   assert.equal(report.pdfOfferMetadataCounts.missingSourceKey, 0);
   assert.equal(report.latestPdfDocuments[0].sourceKey, 'penny-official-flyer-pdf');
-  assert.equal(report.samplePdfOffers[0].parserVersion, 'penny-pdf-v1');
+  assert.equal(report.samplePdfOffers[0].parserVersion, 'penny-pdf-v2');
   assert.equal(report.suspiciousPdfTitles.length, 0);
 });

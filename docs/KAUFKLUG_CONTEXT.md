@@ -16,6 +16,14 @@
 - **PAGRO bleibt ausgeschlossen.** Keine aktive Public-Quelle und 0 Public-/Facet-/Search-Angebote; historischer interner Bestand ist keine Coverage.
 - **Nächster Produktblock: User Journey / Einkaufsliste.** Ältere Abschnitte dieses Dokuments sind datierte Verlaufsevidence. Bei widersprechenden Statusaussagen gilt ausschließlich dieser aktuelle Endstand.
 
+## PENNY-PDF-Gueltigkeit P0 am 2026-09-24 – lokale Abnahme, produktiv noch offen
+
+- Enger Folgeauftrag nach der Reliability-Abnahme; ausschliesslich PENNY-PDF-Gueltigkeit, keine HTML-, Dashboard-, SEO- oder anderen Haendlerfixes.
+- Root Cause am offiziellen 28-Seiten-Original `penny_flugblatt_do_20.08._bis_mi_26.08.2026` reproduziert (SHA256 `3c1c33b99e32b6883312502f7f818505891923a9de3973619cccb6c4155a8893`): Seite 1/11 enthaelt `Sonderpreis um € 6.49.`. Die freie Kurzdatumssuche liest Tag 6/Monat 49; Date.UTC normalisiert zu 06.01.2030. Der echte Kopf `Gueltig von Do 20.08. bis Mi 26.08.2026` wurde wegen Wochentagen/einmaligem Jahr verfehlt. Der Fallback waehlte den groessten Treffer und PublicValidity akzeptierte ihn. Vollstaendiger Vorher-Replay reproduziert exakt die gespeicherte Datumsliste; Normalisierung/Persistenz uebernahmen bereits falsche Parserdaten.
+- Parser v2 nutzt kalendarisch gepruefte explizite Prospektzeiträume und vorhandene offizielle Dokument-URLs, niemals freie Preis-/Datumstokens oder das aktuelle Jahr als Ersatz. Artikelzeitraeume muessen innerhalb des Prospektfensters liegen. Dieselbe PDF-spezifische Public-Grenze sperrt widerspruechliche Altangebote ohne DB-Handpatch; primaere HTML-Angebote bleiben ausgenommen, auch mit PDF-SupportingEvidence.
+- Lokaler read-only Bestandsvergleich: 271 zuvor public-faehige PENNY-Dokumente -> 183; genau 88 alte PDFs ausgeschlossen, alle 183 HTML-Angebote erhalten. Original-PDF-Replay: weiterhin 119 Kandidaten/89 normalisierbare Angebote, korrektes Fenster 20.-26.08. und erhaltene kuerzere Aktionsfenster. Reale Textfixture versioniert; keine Produkt-/Offer-ID-Sonderregel.
+- Regression: 36/36 gezielte Tests bestanden. Breitere 534 Tests: 520 bestanden, 14 bestehende Fehler; identische 14 Fehler mit den unveraenderten HEAD-Modulen reproduziert (12 PENNY-HTML/API-, 2 BILLA-HTML-Tests). Diese fremden Fehler nicht repariert. Produktivabnahme/Scoped-Lauf stehen noch aus; kein Full Crawl, kein Reindex/Repair, keine Feedback-Mutation.
+
 ## BILLA-Plus-P1 Blocktrennung: live geschlossen am 2026-09-17
 
 - **Abnahme:** Der beauftragte Rindsgulasch-/Milch-P1 ist live behoben. Der Reliability/Coverage/Product-Trust-Arbeitsblock ist damit abgeschlossen; naechster Produktblock ist User Journey / Einkaufsliste. Das ist keine pauschale Fehlerfreiheitsgarantie fuer alle bestehenden PDF-Fallbacks; der separat beobachtete Bestandsfall unten bleibt dokumentiert.

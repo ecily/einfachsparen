@@ -21,7 +21,16 @@ const {
   buildPdfSourceMetadata,
 } = require('./pdfOfferParsing');
 
-const PARSER_VERSION = 'penny-pdf-v1';
+const {
+  PENNY_PDF_VALIDITY_SOURCE,
+  derivePennyLeafletValidity,
+  explicitPeriods,
+  validPeriod,
+  containsPeriod,
+  periodFromOfficialUrl,
+} = require('../offers/pennyPdfValidity');
+
+const PARSER_VERSION = 'penny-pdf-v2';
 const PENNY_PDF_SOURCE_KEY = 'penny-official-flyer-pdf';
 
 const STOP_WORDS = new Set([
@@ -205,58 +214,6 @@ function isProductishLine(line) {
     || /\b\d+(?:[,.]\d+)?\s*(?:g|kg|ml|l|stk|stueck|stuck|cm)\b/i.test(normalized)
     || /\b(od|oder|div|versch|sorten)\b/i.test(normalized)
   );
-}
-
-function extractDatesFromText(text) {
-  const fullDates = [...String(text || '').matchAll(/\b(\d{1,2})\.(\d{1,2})\.(20\d{2})\b/g)].map((match) => ({
-    day: Number(match[1]),
-    month: Number(match[2]),
-    year: Number(match[3]),
-  }));
-  const year = fullDates[0]?.year || new Date().getFullYear();
-  const shortDates = [...String(text || '').matchAll(/\b(\d{1,2})\.(\d{1,2})\.(?!\d)/g)].map((match) => ({
-    day: Number(match[1]),
-    month: Number(match[2]),
-    year,
-  }));
-  const dates = [...fullDates, ...shortDates]
-    .map((item) => new Date(Date.UTC(item.year, item.month - 1, item.day, 12, 0, 0)))
-    .filter((date) => !Number.isNaN(date.getTime()))
-    .sort((left, right) => left.getTime() - right.getTime());
-  const unique = [];
-
-  for (const date of dates) {
-    if (!unique.some((item) => item.getTime() === date.getTime())) {
-      unique.push(date);
-    }
-  }
-
-  return unique;
-}
-
-function deriveLeafletValidity(pages) {
-  const text = pages.map((page) => page.text).join('\n');
-  const explicitRange = text.match(/Gültig\s+von\s+(\d{1,2}\.\d{1,2}\.20\d{2})\s+bis\s+(\d{1,2}\.\d{1,2}\.20\d{2})/i)
-    || text.match(/Gueltig\s+von\s+(\d{1,2}\.\d{1,2}\.20\d{2})\s+bis\s+(\d{1,2}\.\d{1,2}\.20\d{2})/i);
-
-  if (explicitRange) {
-    const dates = extractDatesFromText(explicitRange[0]);
-
-    return {
-      validFrom: dates[0] || null,
-      validTo: dates[dates.length - 1] || null,
-      detectedDates: dates.map(dateKey),
-    };
-  }
-
-  const firstPageDates = extractDatesFromText(pages[0]?.text || '');
-  const dates = firstPageDates.length >= 2 ? firstPageDates : extractDatesFromText(text);
-
-  return {
-    validFrom: dates[0] || null,
-    validTo: dates[dates.length - 1] || null,
-    detectedDates: dates.map(dateKey),
-  };
 }
 
 function extractQuantityText(lines) {
@@ -591,7 +548,9 @@ async function extractPennyPdfReference({ pdfBuffer, pdfPath = '', sourceUrl = '
       });
     }
 
-    const validity = deriveLeafletValidity(pages);
+    const validity = derivePennyLeafletValidity(pages, sourceUrl) || {
+      validFrom: null, validTo: null, detectedDates: [],
+    };
     const candidates = pages.flatMap(extractCandidatesFromPage);
 
     return {
@@ -692,40 +651,18 @@ function buildNormalizedUnitPrice({ price, quantityText, hasConditions }) {
   };
 }
 
-function parseDate(day, month, year) {
-  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
-}
-
 function detectSpecialValidity(candidate, fallbackValidity) {
-  const text = candidate.rawText;
-  const fullRange = text.match(/(\d{1,2})\.(\d{1,2})\.(20\d{2})\s+bis\s+(?:\w+\s+)?(\d{1,2})\.(\d{1,2})\.(20\d{2})/i);
-
-  if (fullRange) {
-    return {
-      validFrom: parseDate(fullRange[1], fullRange[2], fullRange[3]),
-      validTo: parseDate(fullRange[4], fullRange[5], fullRange[6]),
-      validityText: fullRange[0],
-      confidence: 0.84,
-    };
-  }
-
-  const shortRange = text.match(/(?:do|fr|sa|mo|di|mi|so)?\s*(\d{1,2})\.(\d{1,2})\.\s*(?:bis|und)\s*(?:do|fr|sa|mo|di|mi|so)?\s*(\d{1,2})\.(\d{1,2})\./i);
-  const year = fallbackValidity.validFrom ? fallbackValidity.validFrom.getUTCFullYear() : new Date().getUTCFullYear();
-
-  if (shortRange) {
-    return {
-      validFrom: parseDate(shortRange[1], shortRange[2], year),
-      validTo: parseDate(shortRange[3], shortRange[4], year),
-      validityText: shortRange[0],
-      confidence: 0.68,
-    };
-  }
-
+  if (fallbackValidity.evidenceType !== PENNY_PDF_VALIDITY_SOURCE || !validPeriod(fallbackValidity)) return null;
+  const text = String(candidate.rawText || '');
+  const periods = explicitPeriods(text, fallbackValidity.validFrom.getUTCFullYear(), true);
+  if (periods.length > 1 || (/(?:g[üu]ltig|gueltig)\s+(?:von|vom)/i.test(text) && periods.length === 0)) return null;
+  const period = periods[0] || fallbackValidity;
+  if (!containsPeriod(fallbackValidity, period)) return null;
   return {
-    validFrom: fallbackValidity.validFrom || null,
-    validTo: fallbackValidity.validTo || null,
-    validityText: [dateKey(fallbackValidity.validFrom), dateKey(fallbackValidity.validTo)].filter(Boolean).join(' - '),
-    confidence: 0.52,
+    validFrom: period.validFrom,
+    validTo: period.validTo,
+    validityText: period.evidenceText || [dateKey(period.validFrom), dateKey(period.validTo)].join(' - '),
+    confidence: 0.84,
   };
 }
 
@@ -834,6 +771,9 @@ function normalizePennyPdfCandidateToOffer({
   const categoryKey = buildKey(categorySecondary || categoryPrimary, 'sonstiges');
   const comparisonSignature = buildComparisonSignature(candidate.title);
   const validity = detectSpecialValidity(candidate, pdfReference.validity || {});
+  if (!validity) return null;
+  const campaign = periodFromOfficialUrl(pdfUrl || source.sourceUrl);
+  if (campaign && !containsPeriod(campaign, pdfReference.validity)) return null;
   const statusInfo = buildOfferStatus(validity.validFrom, validity.validTo);
   const issues = [];
 
@@ -982,6 +922,9 @@ function normalizePennyPdfCandidateToOffer({
       candidateId: candidate.id,
       pdfUrl: pdfUrl || '',
       sourceMetadata,
+      validitySource: PENNY_PDF_VALIDITY_SOURCE,
+      validFrom: pdfReference.validity.validFrom,
+      validTo: pdfReference.validity.validTo,
       validityText: validity.validityText,
       validityConfidence: validity.confidence,
       detectedLeafletDates: pdfReference.validity?.detectedDates || [],
