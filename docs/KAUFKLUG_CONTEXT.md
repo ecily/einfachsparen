@@ -828,3 +828,14 @@
 - **Codex-Kosten-/Tokenregel:** Standardmodell fuer kaufklug ist GPT-5.6 Sol Medium. GPT-6 Astra Medium nur bei echten schwierigen Grenzfaellen. Prompts bleiben MD-first, kurz und ohne Wiederholung historischer Projektinhalte. Wenn Root Cause und Scope klar sind, Analyse + Fix + Tests + sichere Verifikation moeglichst in einem Run.
 - **Context-Struktur wird weiter verschlankt:** Die operative Source of Truth soll kompakt oben bleiben; historische Detailbloecke sollen ohne Informationsverlust in Archiv-MDs ausgelagert werden. Codex soll standardmaessig nur die kompakte Context-MD lesen und Archive nur bei Bedarf.
 - **900-Sekunden-Startup-Grace ist zu pruefen, nicht automatisch beizubehalten.** Die starre 15-Minuten-Wartezeit wurde nicht als Produktanforderung des Owners gesetzt. Spaeter separat read-only/technisch pruefen, ob ein belastbarer Readiness-/Health-/Lock-Guard sie ersetzen oder verkuerzen kann. Bis zu dieser Pruefung nicht nebenbei aendern oder umgehen.
+
+
+## Kosten-/Betriebseffizienz 2026-09-24
+
+- **15 historische SPAR-Family-PDF-Sources deaktiviert:** Sie lieferten 0 Public-Angebote, erzeugten aber pro Full/Daily unnötige skipped CrawlJobs und Fortschrittseinträge. Die drei aktuellen SPAR-/EUROSPAR-/INTERSPAR-Discovery-Sources bleiben aktiv.
+- **Produktcommit:** `9a85a4ff` auf `origin/main`, regulär deployed; Health ok, Mongo verbunden. Live sind alle 15 historischen Sources `inactive`/disabled; aktuelle Discovery-Sources aktiv. EUROSPAR und INTERSPAR blieben bei je 3 Public-Angeboten. Kein Crawl, kein offener Run, kein aktiver Lock.
+- **Nutzen:** Künftige Full Crawls sparen 15 unnötige skipped CrawlJobs plus Progress-Einträge. Keine behauptete Netzwerkersparnis, da diese Sources schon zuvor keine PDF-Requests mehr ausführten.
+- **900-Sekunden-Startup-Grace bleibt vorerst bestehen.** Zweck: produktive Crawls während Deploy-/Restart-Phasen nicht starten. Mongo-Health, Active-Run und Lock beweisen Verfügbarkeit/Exklusivität, aber keinen stabil abgeschlossenen Plattform-Rollout. Eine sichere Verkürzung ist derzeit nicht belegt; daher nicht ändern oder umgehen.
+- **RawDocument-Retention:** 14-Tage-TTL ist im Modell definiert, live fehlt jedoch der TTL-Index. 102/128 RawDocuments waren beim Audit älter. Wegen kleinen Bestands und fehlender Kosten-/Risiko-Evidence wurde bewusst keine löschende Indexmigration ausgeführt. Später nur mit klarer Storage-/Retention-Begründung erneut prüfen.
+- **Weitere Kostenhebel bewusst nicht umgesetzt:** Daily-Frequenz bleibt einmal täglich; aktive Flyer-/Source-Pfade mit Public-Coverage bleiben aktiv; Bildproxy-Cache bleibt bei 1h mangels Traffic-Evidence unverändert.
+- **Tests:** 78/78 gezielte Regressionen, Syntax und `git diff --check` grün.
