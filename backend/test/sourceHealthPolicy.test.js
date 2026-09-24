@@ -27,14 +27,16 @@ test('SPAR, INTERSPAR, HOFER and EUROSPAR are non-blocking under current product
   }
 });
 
-test('PENNY offers page remains required while the supplemental flyer is optional', () => {
-  const sources = RETAILER_DEFINITIONS.filter((source) => source.retailerKey === 'penny' && source.enabled !== false);
+test('PENNY offers page remains required while the disabled flyer is excluded', () => {
+  const sources = RETAILER_DEFINITIONS.filter((source) => source.retailerKey === 'penny');
   const offersPage = sources.find((source) => source.sourceUrl === 'https://www.penny.at/angebote');
   const flyer = sources.find((source) => source.sourceUrl === 'https://www.penny.at/angebote/flugblaetter');
 
   assert.equal(getScheduledHealthPolicy(offersPage).healthCriticality, 'required');
   assert.equal(getScheduledHealthPolicy(offersPage).requiredForScheduledHealth, true);
-  assert.equal(getScheduledHealthPolicy(flyer).healthCriticality, 'optional');
+  assert.equal(offersPage.enabled, undefined);
+  assert.equal(flyer.enabled, false);
+  assert.equal(getScheduledHealthPolicy(flyer).healthCriticality, 'excluded');
   assert.equal(getScheduledHealthPolicy(flyer).requiredForScheduledHealth, false);
 });
 

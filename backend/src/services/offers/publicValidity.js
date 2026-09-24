@@ -1,4 +1,3 @@
-const { pennyPdfPeriodIsConsistent } = require('./pennyPdfValidity');
 const DAY_MS = 24 * 60 * 60 * 1000;
 const VIENNA_TIME_ZONE = 'Europe/Vienna';
 const PUBLIC_VALIDITY_VERSION = 'public-validity-v1';
@@ -302,10 +301,37 @@ function buildDecision({
   };
 }
 
+function isPennyPdfDerivedOffer(offer = {}) {
+  if (offer.retailerKey !== 'penny') return false;
+
+  const sourceTypes = [
+    offer.sourceType,
+    offer.rawFacts?.sourceType,
+    offer.rawFacts?.sourceKey,
+    ...(Array.isArray(offer.sourceTypes) ? offer.sourceTypes : []),
+  ];
+  if (sourceTypes.some((type) => [
+    'penny-official-pdf',
+    'penny-official-flyer-pdf',
+    'official-flyer',
+  ].includes(String(type || '').toLowerCase()))) return true;
+  if (offer.rawFacts?.sourceKind === 'pdf') return true;
+
+  const supportingSources = Array.isArray(offer.supportingSources) ? offer.supportingSources : [];
+  if (supportingSources.some((source) => source?.channel === 'official-flyer')) return true;
+  const urls = [
+    offer.sourceUrl,
+    ...(Array.isArray(offer.sourceUrls) ? offer.sourceUrls : []),
+    ...(Array.isArray(offer.evidenceUrls) ? offer.evidenceUrls : []),
+    ...supportingSources.flatMap((source) => [source?.sourceUrl, source?.observedUrl]),
+  ];
+  return urls.some((url) => /(?:issuu\.com\/pennyat\/docs\/|penny\.at\/angebote\/flugblaetter(?:[/?#]|$)|\.pdf(?:[?#]|$))/i.test(String(url || '')));
+}
+
 function isPublicValidityEligible(offer = {}, now = new Date()) {
   const referenceNow = toDateOrNull(now) || new Date();
-  if (!pennyPdfPeriodIsConsistent(offer)) {
-    return buildDecision({ validityClass: 'contradictory-validity', reasonCode: 'penny-pdf-period-unverified-or-contradictory' });
+  if (isPennyPdfDerivedOffer(offer)) {
+    return buildDecision({ validityClass: 'source-disabled', reasonCode: 'penny-pdf-source-disabled' });
   }
   const validFrom = parseValidityDate(offer.validFrom ?? offer.rawFacts?.validFrom);
   const validTo = parseValidityDate(offer.validTo ?? offer.rawFacts?.validTo, { endOfDay: true });

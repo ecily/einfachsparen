@@ -24,15 +24,16 @@ test('unsupported cannot be required or executed, including allowDisabled scoped
   }
 });
 
-test('full selection excludes unsupported while PENNY optional partial stays visible and required failure blocks success', () => {
+test('full selection excludes disabled PENNY flyer while primary failure still blocks success', () => {
   const selected = applySourceSelection({ sources: RETAILER_DEFINITIONS }).selectedSources;
   assert.equal(selected.some((s) => s.retailerKey === 'mueller'), false);
   assert.equal(selected.some((s) => s.retailerKey === 'pagro'), false);
   const primary = selected.find((s) => s.sourceUrl === 'https://www.penny.at/angebote');
   const flyer = selected.find((s) => s.sourceUrl === 'https://www.penny.at/angebote/flugblaetter');
-  const rows = [primary, flyer].map((s, i) => ({ ...s, sourceKey: i ? 'penny-official-flyer' : 'penny-official-site', status: i ? 'partial' : 'success', scheduledHealthPolicy: getScheduledHealthPolicy(s) }));
+  assert.equal(flyer, undefined);
+  const rows = [{ ...primary, sourceKey: 'penny-official-site', status: 'success', scheduledHealthPolicy: getScheduledHealthPolicy(primary) }];
   const result = crawl.buildRunSummary({ sources: rows, matchedSources: rows });
-  assert.equal(result.summary.optionalProblemSourcesCount, 1);
+  assert.equal(result.summary.optionalProblemSourcesCount, 0);
   assert.equal(crawl.determineFinalStatus({ summary: result.summary }), 'success');
   rows[0].status = 'failed';
   assert.equal(crawl.determineFinalStatus({ summary: crawl.buildRunSummary({ sources: rows, matchedSources: rows }).summary }), 'partial');

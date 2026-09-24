@@ -92,6 +92,7 @@ function isValidObjectId(value) {
 }
 
 function sourceIsRunnable(source = {}, { allowDisabled = false } = {}) {
+  if (source.crawlPolicy?.disableOfferExtraction === true) return false;
   if (getScheduledHealthPolicy(source).healthCriticality === 'unsupported') return false;
   if (source.active === false) return false;
   if (!allowDisabled && source.enabled === false) return false;

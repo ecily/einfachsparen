@@ -3142,6 +3142,42 @@ test('PENNY official API collector follows product-group pagination', async () =
   assert.equal(result.offers.length, 2);
 });
 
+test('PENNY HTML/API crawl does not request PDF evidence and keeps API offer output', async () => {
+  const sourceDefinition = pennyOfficialSource();
+  const crawlJobId = new Types.ObjectId();
+  const apiOffer = {
+    sourceType: 'penny-official-html',
+    sourceUrl: 'https://www.penny.at/angebote/kaffee',
+    validFrom: new Date('2026-09-24T00:00:00Z'),
+    validTo: new Date('2026-09-30T00:00:00Z'),
+    priceCurrent: { amount: 4.99 },
+  };
+  let apiCalls = 0;
+  let savedOffers;
+  const result = await __private.crawlPennyOfficialOffers({
+    source: sourceDefinition,
+    crawlJobId,
+    region: 'AT',
+    html: '',
+    canonicalUrl: 'https://www.penny.at/angebote',
+  }, {
+    collectApiOffers: async (args) => {
+      apiCalls += 1;
+      assert.equal(Object.hasOwn(args, 'pdfReferences'), false);
+      return { offers: [apiOffer], diagnostics: { productsFetched: 1 } };
+    },
+    enrichOffers: (offers) => offers,
+    replaceOffers: async ({ offerDocuments }) => {
+      savedOffers = offerDocuments;
+      return { storedOffers: offerDocuments.length };
+    },
+  });
+  assert.equal(apiCalls, 1);
+  assert.equal(result.offerDocuments.length, 1);
+  assert.equal(savedOffers[0].sourceType, 'penny-official-html');
+  assert.equal(result.diagnostics.pdfEvidenceBridge, undefined);
+});
+
 function lidlOfficialSource(overrides = {}) {
   return source({
     retailerKey: 'lidl',

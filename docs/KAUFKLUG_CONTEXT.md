@@ -8,11 +8,13 @@
 
 ## Aktueller operativer Endstand – verbindliche Single Source of Truth
 
+- **PENNY-PDF-Aus (2026-09-24):** `penny-official-flyer` / Source-ID `69e4e290cd8b0568f4235cc9` ist im Code deaktiviert, fuer Scheduled Health ausgeschlossen und auch mit `allowDisabled` nicht ausführbar. Der PENNY-HTML/API-Pfad ruft keine PDF-Evidence mehr ab; die Public-Grenze schliesst PDF-getragene PENNY-Angebote einschliesslich gemischter historischer Lineage aus. HTML/API-Primärquelle und deren Produkt-/Preis-/Bedingungsverarbeitung bleiben aktiv. Keine DB-Handkorrektur und kein Crawl. Live-Abnahme folgt nach dem regulären Deploy.
+- **Produktentscheidung:** Aktive Angebotsgewinnung nur aus belastbar maschinenlesbaren offiziellen Quellen. PDF-Parser, PDF-Datumserkennung, OCR, PDF-Fallbacks und PDF-Scoped-Crawls werden nicht weiterverfolgt. Die bereits deployten PENNY-PDF-Fixes bis `cd998528` werden weder weiterentwickelt noch für Coverage reaktiviert. Dieser Code-Schritt ändert nur PENNY; andere Händler bleiben unberührt.
 - **Reliability/Coverage/Product-Trust ist abgeschlossen.** Der produktive Abschluss beruht auf dem erfolgreichen regulären Full Crawl `6aabb64cc56de9111124f124` und der anschließenden gezielten BILLA/BILLA-Plus-Abnahme `6aabbf82ac07773c5bd412bc`.
 - **BILLA-Plus-P1 ist behoben.** Rindsgulasch und Formil-Milch sind live getrennt, korrekt kategorisiert und mit 12,99 EUR/kg beziehungsweise 0,90 EUR/l normalisiert; der alte Mischtitel ist regulär deaktiviert.
 - **Müller ist `temporarily unsupported – official public source currently unavailable`.** Die Source ist versioniert deaktiviert, wird nicht als required failure ausgeführt und hat 0 Public-/Filter-/Search-/Browse-Coverage. Historische Altangebote bleiben nur intern nachvollziehbar.
 - **SPAR-Family ist produktiv, aber mit geringer Coverage.** SPAR, EUROSPAR und INTERSPAR laufen über aktuelle offizielle Steiermark-Viewer; der letzte Endstand umfasst 7/1/1 Public Offers. Die geringe Extraktionsabdeckung und bewusst fehlende, nicht sicher zuordenbare Bilder bleiben transparente Produktgrenzen und blockieren den abgeschlossenen Reliability-Block nicht.
-- **PENNY bleibt produktiv.** Die offizielle Primärquelle ist erfolgreich; nur der redundante optionale Flyer bleibt `partial`/zero-store. Dieser optionale Teilpfad ist sichtbar, aber nicht blockierend.
+- **PENNY bleibt produktiv.** Die offizielle HTML/API-Primärquelle bleibt aktiv; der Flyer-PDF-Pfad ist deaktiviert und kein Health-Blocker.
 - **PAGRO bleibt ausgeschlossen.** Keine aktive Public-Quelle und 0 Public-/Facet-/Search-Angebote; historischer interner Bestand ist keine Coverage.
 - **Nächster Produktblock: User Journey / Einkaufsliste.** Ältere Abschnitte dieses Dokuments sind datierte Verlaufsevidence. Bei widersprechenden Statusaussagen gilt ausschließlich dieser aktuelle Endstand.
 

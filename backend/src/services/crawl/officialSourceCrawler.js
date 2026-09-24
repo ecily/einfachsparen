@@ -7824,7 +7824,6 @@ async function collectPennyOfficialApiOffers({
   region,
   pageUrl,
   fetchProductsPage = fetchPennyProductGroupProducts,
-  pdfReferences = [],
 }) {
   const categorySlugs = extractPennyProductGroupSlugsFromHtml(html).slice(0, 1);
   const offers = [];
@@ -7873,10 +7872,6 @@ async function collectPennyOfficialApiOffers({
         region,
         pageUrl,
         categorySlug,
-        pdfEvidenceByProduct: buildPennyPdfEvidenceByProduct({
-          pdfReferences,
-          products,
-        }),
       }));
 
       page += 1;
@@ -7895,7 +7890,11 @@ async function collectPennyOfficialApiOffers({
   };
 }
 
-async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
+async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }, {
+  collectApiOffers = collectPennyOfficialApiOffers,
+  enrichOffers = enrichOffersForStorage,
+  replaceOffers = replaceOffersForSource,
+} = {}) {
   const htmlOffers = parsePennyOffersFromHtml({
     html,
     source,
@@ -7903,17 +7902,12 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
     region,
     pageUrl: canonicalUrl || source.sourceUrl,
   });
-  const pdfEvidenceResult = await collectPennyOfficialPdfEvidenceReferences({
-    source,
-    pageUrl: 'https://www.penny.at/angebote/flugblaetter',
-  });
-  const apiResult = await collectPennyOfficialApiOffers({
+  const apiResult = await collectApiOffers({
     html,
     source,
     crawlJobId,
     region,
     pageUrl: canonicalUrl || source.sourceUrl,
-    pdfReferences: pdfEvidenceResult.pdfReferences,
   });
   const seen = new Set();
   const normalizedOffers = [];
@@ -7934,14 +7928,14 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
     normalizedOffers.push(offer);
   }
 
-  const offerDocuments = enrichOffersForStorage(normalizedOffers, {
+  const offerDocuments = enrichOffers(normalizedOffers, {
     source,
     sourceType: 'penny-official-html',
     parserVersion: PARSER_VERSION,
     normalizationVersion: NORMALIZATION_VERSION,
   });
 
-  const refreshResult = await replaceOffersForSource({
+  const refreshResult = await replaceOffers({
     sourceId: source._id,
     offerDocuments,
   });
@@ -7952,7 +7946,6 @@ async function crawlPennyOfficialOffers({ source, crawlJobId, region, html, cano
     rawCandidateCount: htmlOffers.length + apiResult.diagnostics.productsFetched,
     diagnostics: {
       ...apiResult.diagnostics,
-      pdfEvidenceBridge: pdfEvidenceResult.diagnostics,
     },
     refreshResult,
   };
@@ -10766,6 +10759,7 @@ module.exports = {
     buildPennyOfficialConditionExtraction,
     normalizePennyApiProductsToOffers,
     collectPennyOfficialApiOffers,
+    crawlPennyOfficialOffers,
     buildOfficialSourceZeroStoredGate,
     diagnosePennyOfficialSiteHtml,
     parseDmSaleOffersFromHtml,

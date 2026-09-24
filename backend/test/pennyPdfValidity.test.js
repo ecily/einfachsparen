@@ -91,29 +91,30 @@ test('public boundary and ranking reject the legacy August PDF without mutating 
   assert.equal(isPublicValidityEligible(offer, now).eligible, false);
   assert.deepEqual(filterFreshActiveOffers([offer], now), []);
   assert.deepEqual(offer, before);
-  assert.equal(isPublicValidityEligible(pdf({ validTo: new Date('2026-08-26T12:00:00Z') }), now).reasonCode, 'expired-validTo');
-  assert.equal(isPublicValidityEligible(pdf({ validTo: new Date('2026-08-26T12:00:00Z') }), new Date('2026-08-24')).eligible, true);
+  assert.equal(isPublicValidityEligible(pdf({ validTo: new Date('2026-08-26T12:00:00Z') }), now).reasonCode, 'penny-pdf-source-disabled');
+  assert.equal(isPublicValidityEligible(pdf({ validTo: new Date('2026-08-26T12:00:00Z') }), new Date('2026-08-24')).eligible, false);
 });
 
-test('verified current PDF survives enrichment and public validation without an URL date', (t) => {
+test('verified current PDF remains excluded from public after enrichment', (t) => {
   t.mock.timers.enable({ apis: ['Date'], now });
   const validity = derivePennyLeafletValidity([{ text: 'Gültig von 24.09.2026 bis 30.09.2026' }]);
   assert.deepEqual(normalize(validity), []);
   const [offer] = normalize(validity, 'Kaffee 500 g 4.99', 'https://www.penny.at/current.pdf');
   const stored = enrichOfferForStorage(offer, { sourceType: 'penny-official-pdf' });
   assert.ok(stored);
-  assert.equal(isPublicValidityEligible(stored, now).eligible, true);
+  assert.equal(isPublicValidityEligible(stored, now).eligible, false);
+  assert.equal(isPublicValidityEligible(stored, now).reasonCode, 'penny-pdf-source-disabled');
   assert.equal(isPublicValidityEligible({ ...stored, rawFacts: {} }, now).eligible, false);
 });
 
-test('current HTML primary offers and their PDF supporting evidence remain unchanged', () => {
+test('historical HTML primary with PDF supporting evidence is no longer public', () => {
   const html = pdf({
     sourceType: 'penny-official-html', validFrom: new Date('2026-09-24T00:00:00Z'), validTo: new Date('2026-09-30T23:59:59Z'),
     sourceTypes: ['penny-official-html', 'penny-official-pdf'],
     rawFacts: { sourceType: 'penny-official-html' },
   });
   const before = structuredClone(html);
-  assert.equal(isPublicValidityEligible(html, now).eligible, true);
-  assert.equal(filterFreshActiveOffers([html], now).length, 1);
+  assert.equal(isPublicValidityEligible(html, now).eligible, false);
+  assert.equal(filterFreshActiveOffers([html], now).length, 0);
   assert.deepEqual(html, before);
 });
