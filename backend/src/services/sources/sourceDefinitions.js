@@ -1179,7 +1179,29 @@ const RETAILER_DEFINITIONS = [
     capabilities: { discoverOffers: true, parseOfferPages: true, parseFlyers: false },
     notes: 'Deaktiviert: Marktguru lieferte wiederholt 0 brauchbare Offers; BIPA offizielle Quelle und Aktionsfinder liefern aktuell verlaesslicher. Spaeter erneut pruefen.',
   },
-];
+].map((definition) => {
+  if (definition.sourceType !== 'pdf'
+    || definition.crawlPolicy?.scopedOnly !== true
+    || definition.crawlPolicy?.currentSnapshot !== false) return definition;
+
+  return {
+    ...definition,
+    enabled: false,
+    latestStatus: 'inactive',
+    disabledReason: 'product-policy-historical-pdf-disabled',
+    crawlPolicy: {
+      ...definition.crawlPolicy,
+      disableOfferExtraction: true,
+      scheduledHealthPolicy: {
+        requiredForScheduledHealth: false,
+        healthCriticality: 'excluded',
+        healthExcluded: true,
+        nonBlockingReason: 'Historical PDF source is disabled by product policy.',
+      },
+    },
+    capabilities: { discoverOffers: false, parseOfferPages: false, parseFlyers: false },
+  };
+});
 
 module.exports = {
   RETAILER_DEFINITIONS,

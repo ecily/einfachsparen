@@ -2,6 +2,30 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { RETAILER_DEFINITIONS } = require('../src/services/sources/sourceDefinitions');
+const { applySourceSelection, deriveSourceKey } = require('../src/services/crawl/crawlSourceSelection');
+const { getScheduledHealthPolicy } = require('../src/services/sources/sourceHealthPolicy');
+
+test('expired scoped SPAR-family PDFs are disabled without changing current source selection', () => {
+  const historical = RETAILER_DEFINITIONS.filter((source) => source.sourceType === 'pdf'
+    && source.crawlPolicy?.scopedOnly === true
+    && source.crawlPolicy?.currentSnapshot === false);
+  assert.equal(historical.length, 15);
+  const full = applySourceSelection({ sources: RETAILER_DEFINITIONS }).selectedSources;
+  for (const source of historical) {
+    assert.equal(source.enabled, false);
+    assert.equal(source.crawlPolicy.disableOfferExtraction, true);
+    assert.equal(getScheduledHealthPolicy(source).requiredForScheduledHealth, false);
+    assert.equal(full.includes(source), false);
+    const scoped = applySourceSelection({
+      sources: [source], sourceKeys: [deriveSourceKey(source)], allowDisabled: true,
+    });
+    assert.equal(scoped.selectedSources.length, 0);
+  }
+  for (const retailerKey of ['spar', 'eurospar', 'interspar']) {
+    assert.ok(full.some((source) => source.retailerKey === retailerKey
+      && source.crawlPolicy?.currentDiscovery === true));
+  }
+});
 
 const DEAD_AKTIONSFINDER_PV_URLS = [
   'https://www.aktionsfinder.at/pv/spar/',
