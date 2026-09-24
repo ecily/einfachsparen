@@ -13,7 +13,7 @@ import {
   TRUST_PAGE_SECTIONS,
   TRUST_PAGE_TITLE,
 } from '../src/config/trustPage.js'
-import { buildSeoComparisonSummary } from '../src/utils/seoComparisonSummary.js'
+import { buildSeoComparisonSummary, seoRetailerGroupKey } from '../src/utils/seoComparisonSummary.js'
 import { deriveBeerPriceCheckCandidate, isPublishablePriceCheckCandidate } from '../src/utils/priceCheckCandidate.js'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
@@ -425,6 +425,7 @@ export function getStaticSeoPages() {
       h1: page.h1,
       intro: page.intro,
       query: page.query || null,
+      queries: page.queries || null,
       seoAutopilot: page.seoAutopilot || '',
       comparisonKey: page.comparisonKey || '',
       comparisonSummary: page.comparisonSummary || null,
@@ -445,28 +446,40 @@ function buildSeoRankingUrl(query = {}) {
   return url
 }
 
+export function getSeoQualityQueries(page = {}) {
+  return Array.isArray(page.queries) && page.queries.length > 0
+    ? page.queries
+    : [page.query || {}]
+}
+
 export function buildSeoPageQuality(page, payload) {
   const summary = payload?.summary || {}
   const offers = Array.isArray(payload?.rankedOffers) ? payload.rankedOffers : []
   const totalCount = Number(summary.totalCount)
-  const retailerKeys = new Set(offers.map((offer) => String(offer?.retailerKey || '').trim()).filter(Boolean))
+  const retailerKeys = new Set(offers.map((offer) => seoRetailerGroupKey(offer?.retailerKey)).filter(Boolean))
   const imageCount = offers.filter((offer) => String(offer?.imageUrl || '').trim()).length
   const imageRatio = offers.length > 0 ? imageCount / offers.length : 0
   const isCategory = SEO_CATEGORY_KEYS.has(page.key)
   const isRetailer = SEO_RETAILER_KEYS.has(page.key)
+  const hasCompletePublicSample = Number.isInteger(totalCount)
+    && totalCount >= offers.length
+    && offers.length > 0
+    && offers.every((offer) => offer?.id)
   const hasMinimumOffers = Number.isInteger(totalCount) && totalCount >= SEO_MIN_PUBLIC_OFFERS
   const hasRequiredRetailerBreadth = isRetailer || isCategory && retailerKeys.size >= SEO_MIN_RETAILERS
   const hasSufficientImages = isCategory || imageRatio >= SEO_MIN_IMAGE_RATIO
 
   return {
-    available: Number.isInteger(totalCount) && totalCount >= 0 && offers.every((offer) => offer?.id),
+    available: hasCompletePublicSample,
     totalCount: Number.isInteger(totalCount) ? totalCount : 0,
     sampledCount: offers.length,
     retailerCount: retailerKeys.size,
     imageCount,
     imageRatio,
-    indexable: hasMinimumOffers && hasRequiredRetailerBreadth && hasSufficientImages,
-    reason: !hasMinimumOffers
+    indexable: hasCompletePublicSample && hasMinimumOffers && hasRequiredRetailerBreadth && hasSufficientImages,
+    reason: !hasCompletePublicSample
+      ? 'quality-data-unavailable'
+      : !hasMinimumOffers
       ? 'too-few-public-offers'
       : !hasRequiredRetailerBreadth
         ? 'insufficient-retailer-breadth'
@@ -530,11 +543,13 @@ export async function fetchSeoPageQuality(page) {
     }
   }
 
-  const query = page?.query || {}
-  const url = buildSeoRankingUrl(query)
-
   try {
-    return buildSeoPageQuality(page, await fetchJsonWithCurlFallback(url))
+    const payloads = await Promise.all(getSeoQualityQueries(page)
+      .map((query) => fetchJsonWithCurlFallback(buildSeoRankingUrl(query))))
+    return buildSeoPageQuality(page, {
+      summary: { totalCount: payloads.reduce((sum, payload) => sum + Number(payload?.summary?.totalCount), 0) },
+      rankedOffers: payloads.flatMap((payload) => payload?.rankedOffers || []),
+    })
   } catch (error) {
     return {
       available: false,

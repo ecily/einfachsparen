@@ -13,6 +13,11 @@ function formatNumber(value, maximumFractionDigits = 2) {
   }).format(value)
 }
 
+export function seoRetailerGroupKey(retailerKey) {
+  const key = String(retailerKey || '').trim().toLowerCase()
+  return key === 'billa-plus' ? 'billa' : key
+}
+
 function displayUnit(unit) {
   if (unit === 'stk') return 'Stück'
   return unit
@@ -57,7 +62,7 @@ function buildBeerForms(offers) {
 function buildPublicFacts(pageKey, offers) {
   if (!Array.isArray(offers) || !offers.length) return null
 
-  const retailers = new Set(offers.map((offer) => String(offer?.retailerKey || '').trim()).filter(Boolean))
+  const retailers = new Set(offers.map((offer) => seoRetailerGroupKey(offer?.retailerKey)).filter(Boolean))
   if (!retailers.size) return null
 
   const comparableOffers = offers.filter((offer) => getComparableUnitPrice(offer))
@@ -65,7 +70,7 @@ function buildPublicFacts(pageKey, offers) {
   const unitFacts = buildUnitFacts(offers)
   const facts = [
     `${formatNumber(offers.length, 0)} aktuelle Angebote`,
-    `${formatNumber(retailers.size, 0)} Händler`,
+    `${formatNumber(retailers.size, 0)} Handelsgruppen`,
   ]
 
   if (pageKey === 'bier') {

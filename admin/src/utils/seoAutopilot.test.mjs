@@ -4,6 +4,7 @@ import {
   applySeoAutopilot,
   buildSeoPageQuality,
   filterSitemapXml,
+  getSeoQualityQueries,
   getStaticSeoPages,
 } from '../../scripts/generateSeoHtml.mjs'
 
@@ -26,6 +27,32 @@ test('SEO quality keeps a useful public category indexable', () => {
   assert.equal(quality.indexable, true)
   assert.equal(quality.totalCount, 12)
   assert.equal(quality.retailerCount, 2)
+})
+
+test('SEO quality cannot index an incomplete Public sample', () => {
+  const incomplete = payload()
+  incomplete.rankedOffers[0].id = ''
+  const quality = buildSeoPageQuality(page, incomplete)
+  assert.equal(quality.available, false)
+  assert.equal(quality.indexable, false)
+  assert.equal(quality.reason, 'quality-data-unavailable')
+})
+
+test('BILLA and BILLA Plus alone do not satisfy category trade-group breadth', () => {
+  const familyOnly = buildSeoPageQuality(page, payload({ retailers: ['billa', 'billa-plus'] }))
+  assert.equal(familyOnly.retailerCount, 1)
+  assert.equal(familyOnly.indexable, false)
+  assert.equal(familyOnly.reason, 'insufficient-retailer-breadth')
+
+  const independentGroup = buildSeoPageQuality(page, payload({ retailers: ['billa', 'billa-plus', 'penny'] }))
+  assert.equal(independentGroup.retailerCount, 2)
+  assert.equal(independentGroup.indexable, true)
+})
+
+test('supermarket quality checks every already-rendered retailer query', () => {
+  const supermarket = getStaticSeoPages().find((candidate) => candidate.key === 'supermarkt')
+  const queries = getSeoQualityQueries(supermarket)
+  assert.deepEqual(queries.map((query) => query.retailers), ['billa,billa-plus', 'lidl', 'penny'])
 })
 
 test('SEO autopilot demotes weak pages without promoting configured noindex pages', () => {

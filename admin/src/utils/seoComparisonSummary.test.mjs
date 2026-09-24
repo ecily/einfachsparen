@@ -29,9 +29,22 @@ test('beer summary exposes only liter-comparable facts and recognized package fo
 
   assert.ok(summary)
   assert.ok(summary.facts.some((fact) => fact.includes('3 aktuelle Angebote')))
-  assert.ok(summary.facts.some((fact) => fact.includes('3 Händler')))
+  assert.ok(summary.facts.some((fact) => fact.includes('3 Handelsgruppen')))
   assert.ok(summary.facts.some((fact) => fact.includes('Literpreis-Abdeckung ist ausgewiesen')))
   assert.ok(summary.facts.some((fact) => fact.includes('Dosen, Flaschen, Multipacks')))
+})
+
+test('BILLA and BILLA Plus count as one trade group in a current comparison', () => {
+  const summary = buildSeoComparisonSummary({
+    pageKey: 'bier', totalCount: 3, generatedAt,
+    offers: [
+      offer('a', { retailerKey: 'billa' }),
+      offer('b', { retailerKey: 'billa-plus' }),
+      offer('c', { retailerKey: 'penny', normalizedUnitPrice: { amount: null, unit: '', comparable: false } }),
+    ],
+  })
+  assert.ok(summary.facts.includes('2 Handelsgruppen'))
+  assert.ok(summary.facts.includes('2 mit Literpreis vergleichbar'))
 })
 
 test('coffee keeps incompatible unit ranges separate', () => {
