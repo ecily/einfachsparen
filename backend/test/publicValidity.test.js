@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  buildPublicValidityMongoMatch,
   isPublicValidityEligible,
   parseValidityDate,
 } = require('../src/services/offers/publicValidity');
@@ -37,6 +38,52 @@ test('explicit current validity is eligible and uses Europe/Vienna date-only end
   assert.equal(decision.validityClass, 'explicit-validity');
   assert.equal(decision.evidenceType, 'explicit-validity');
   assert.equal(decision.publicUntil, '2026-01-15T22:59:59.999Z');
+});
+
+test('BILLA family Site-Offers-Page evidence stays public while PDF-only and mixed PDF lineage do not', () => {
+  for (const retailerKey of ['billa', 'billa-plus']) {
+    const html = snapshotOffer({
+      retailerKey,
+      sourceType: 'billa-official-action-html',
+      sourceTypes: ['billa-official-action-html', 'official-site'],
+      sourceUrl: 'https://www.billa.at/unsere-aktionen/aktionen',
+      rawFacts: { sourceType: 'billa-official-action-html', sourceKey: `${retailerKey}-official-site-offers-page` },
+      validFrom: '2026-01-15',
+      validTo: '2026-01-20',
+    });
+    assert.equal(isPublicValidityEligible(html, NOW).eligible, true);
+
+    const pdf = {
+      ...html,
+      sourceType: 'billa-official-flyer-pdf',
+      sourceTypes: ['billa-official-flyer-pdf', 'official-flyer'],
+      sourceUrl: 'https://www.billa.at/unsere-aktionen/flugblatt',
+      rawFacts: { sourceType: 'billa-official-flyer-pdf', sourceKey: `${retailerKey}-official-flyer-flyer` },
+    };
+    assert.equal(isPublicValidityEligible(pdf, NOW).reasonCode, 'billa-pdf-source-disabled');
+    assert.equal(isPublicValidityEligible({ ...html, sourceTypes: [...html.sourceTypes, 'billa-official-flyer-pdf'] }, NOW).eligible, false);
+    assert.equal(isPublicValidityEligible({ ...html, rawFacts: pdf.rawFacts }, NOW).eligible, false);
+    assert.equal(isPublicValidityEligible({ ...html, seenInSources: [{ sourceType: 'billa-official-flyer-pdf' }] }, NOW).eligible, false);
+    assert.equal(isPublicValidityEligible({ ...html, supportingSources: [{ channel: 'official-flyer' }] }, NOW).eligible, false);
+    assert.equal(isPublicValidityEligible({ ...html, evidenceUrls: ['https://example.com/BILLA.pdf'] }, NOW).eligible, false);
+  }
+
+  const unrelated = snapshotOffer({ retailerKey: 'lidl', sourceType: 'lidl-official-flyer-api', validTo: '2026-01-20' });
+  assert.equal(isPublicValidityEligible(unrelated, NOW).eligible, true);
+});
+
+test('Mongo PublicValidity prefilter excludes the same BILLA PDF lineage fields', () => {
+  const match = buildPublicValidityMongoMatch(NOW);
+  const guard = match.$nor[0];
+  assert.deepEqual(guard.retailerKey.$in, ['billa', 'billa-plus']);
+  assert.ok(guard.$or.some((clause) => clause['rawFacts.sourceKind'] === 'pdf'));
+  for (const field of ['sourceType', 'sourceTypes', 'rawFacts.sourceType', 'rawFacts.sourceKey',
+    'sourceUrl', 'sourceUrls', 'evidenceUrls', 'seenInSources.sourceType',
+    'supportingSources.channel', 'supportingSources.sourceUrl']) {
+    const pattern = guard.$or.find((clause) => clause[field])?.[field];
+    assert.ok(pattern instanceof RegExp, field);
+    assert.equal(pattern.test(field.includes('Url') ? 'https://example.com/BILLA.pdf' : 'billa-official-flyer-pdf'), true, field);
+  }
 });
 
 test('explicit validity rejects expired, future and contradictory windows', () => {

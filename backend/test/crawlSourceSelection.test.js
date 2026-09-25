@@ -418,6 +418,31 @@ test('retailerKeys-only path remains compatible and excludes disabled sources', 
   assert.deepEqual(seenFilters[0].enabled, { $ne: false });
 });
 
+test('BILLA family PDF flyers never enter crawl jobs, even with allowDisabled', () => {
+  const sources = RETAILER_DEFINITIONS
+    .filter((source) => ['billa', 'billa-plus'].includes(source.retailerKey)
+      && ['official-flyer', 'official-site'].includes(source.channel))
+    .map((source, index) => ({
+      ...source,
+      _id: String(index + 1).repeat(24),
+      sourceType: source.sourceType || (source.channel === 'official-flyer' ? 'flyer' : 'offers-page'),
+      active: true,
+    }));
+  const flyerKeys = sources.filter((source) => source.channel === 'official-flyer').map(deriveSourceKey);
+  assert.deepEqual(flyerKeys.sort(), [
+    'billa-official-flyer-flyer', 'billa-official-flyer-steiermark',
+    'billa-plus-official-flyer-flyer', 'billa-plus-official-flyer-steiermark',
+  ].sort());
+
+  for (const allowDisabled of [false, true]) {
+    const selection = applySourceSelection({ sources, allowDisabled });
+    assert.deepEqual(selection.selectedSources.map(deriveSourceKey).sort(), [
+      'billa-official-site-offers-page', 'billa-plus-official-site-offers-page',
+    ]);
+    assert.deepEqual(selection.disabledSources.map((source) => source.sourceKey).sort(), flyerKeys);
+  }
+});
+
 test('dryRun with empty selection is rejected to avoid accidental full crawl preview', async () => {
   await assert.rejects(
     resolveCrawlSourceSelection({

@@ -1180,6 +1180,28 @@ const RETAILER_DEFINITIONS = [
     notes: 'Deaktiviert: Marktguru lieferte wiederholt 0 brauchbare Offers; BIPA offizielle Quelle und Aktionsfinder liefern aktuell verlaesslicher. Spaeter erneut pruefen.',
   },
 ].map((definition) => {
+  if (['billa', 'billa-plus'].includes(definition.retailerKey)
+    && definition.channel === 'official-flyer') {
+    return {
+      ...definition,
+      enabled: false,
+      latestStatus: 'inactive',
+      disabledReason: 'product-policy-pdf-disabled',
+      crawlPolicy: {
+        ...definition.crawlPolicy,
+        disableOfferExtraction: true,
+        scheduledHealthPolicy: {
+          requiredForScheduledHealth: false,
+          healthCriticality: 'excluded',
+          healthExcluded: true,
+          nonBlockingReason: 'BILLA family PDF offer extraction is disabled by product policy.',
+        },
+      },
+      capabilities: { discoverOffers: false, parseOfferPages: false, parseFlyers: false },
+      notes: 'Produktentscheidung: keine PDF-Angebotsgewinnung; die offizielle Site-Offers-Page bleibt aktiv.',
+    };
+  }
+
   if (definition.sourceType !== 'pdf'
     || definition.crawlPolicy?.scopedOnly !== true
     || definition.crawlPolicy?.currentSnapshot !== false) return definition;

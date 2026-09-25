@@ -1,6 +1,6 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const VIENNA_TIME_ZONE = 'Europe/Vienna';
-const PUBLIC_VALIDITY_VERSION = 'public-validity-v1';
+const PUBLIC_VALIDITY_VERSION = 'public-validity-v2-billa-pdf-disabled';
 
 const SOURCE_TTL_HOURS = Object.freeze({
   hofer: 48,
@@ -12,6 +12,16 @@ const SOURCE_TTL_HOURS = Object.freeze({
 });
 
 const HOFER_HTML_SOURCE_KEY = 'hofer-official-html';
+const BILLA_FAMILY_KEYS = ['billa', 'billa-plus'];
+const BILLA_PDF_LINEAGE_PATTERN = /(?:^|[-/])(?:official-)?flyer(?:$|[-/])|\.pdf(?:[?#]|$)|view\.publitas\.com\/billa(?:-at|-plus)\/|billa\.at\/unsere-aktionen\/flugblatt(?:[/?#]|$)/i;
+const BILLA_PDF_LINEAGE_FIELDS = [
+  'sourceType', 'sourceTypes', 'rawFacts.sourceType', 'rawFacts.sourceKey',
+  'sourceUrl', 'sourceUrls', 'evidenceUrls',
+  'seenInSources.sourceType', 'seenInSources.channel',
+  'seenInSources.sourceUrl', 'seenInSources.observedUrl',
+  'supportingSources.sourceType', 'supportingSources.sourceKey',
+  'supportingSources.channel', 'supportingSources.sourceUrl', 'supportingSources.observedUrl',
+];
 
 function toDateOrNull(value) {
   if (!value) return null;
@@ -147,6 +157,13 @@ function buildPublicValidityMongoMatch(now = new Date()) {
   };
 
   return {
+    $nor: [{
+      retailerKey: { $in: BILLA_FAMILY_KEYS },
+      $or: [
+        { 'rawFacts.sourceKind': 'pdf' },
+        ...BILLA_PDF_LINEAGE_FIELDS.map((field) => ({ [field]: BILLA_PDF_LINEAGE_PATTERN })),
+      ],
+    }],
     $or: [
       explicit,
       hoferUpcoming,
@@ -328,8 +345,35 @@ function isPennyPdfDerivedOffer(offer = {}) {
   return urls.some((url) => /(?:issuu\.com\/pennyat\/docs\/|penny\.at\/angebote\/flugblaetter(?:[/?#]|$)|\.pdf(?:[?#]|$))/i.test(String(url || '')));
 }
 
+function isBillaPdfDerivedOffer(offer = {}) {
+  if (!BILLA_FAMILY_KEYS.includes(String(offer.retailerKey || '').toLowerCase())) return false;
+  if (String(offer.rawFacts?.sourceKind || '').toLowerCase() === 'pdf') return true;
+
+  const supportingSources = Array.isArray(offer.supportingSources) ? offer.supportingSources : [];
+  const seenInSources = Array.isArray(offer.seenInSources) ? offer.seenInSources : [];
+  const signals = [
+    offer.sourceType,
+    ...(Array.isArray(offer.sourceTypes) ? offer.sourceTypes : []),
+    offer.rawFacts?.sourceType,
+    offer.rawFacts?.sourceKey,
+    offer.sourceUrl,
+    ...(Array.isArray(offer.sourceUrls) ? offer.sourceUrls : []),
+    ...(Array.isArray(offer.evidenceUrls) ? offer.evidenceUrls : []),
+    ...seenInSources.flatMap((source) => [
+      source?.sourceType, source?.channel, source?.sourceUrl, source?.observedUrl,
+    ]),
+    ...supportingSources.flatMap((source) => [
+      source?.sourceType, source?.sourceKey, source?.channel, source?.sourceUrl, source?.observedUrl,
+    ]),
+  ];
+  return signals.some((signal) => BILLA_PDF_LINEAGE_PATTERN.test(String(signal || '')));
+}
+
 function isPublicValidityEligible(offer = {}, now = new Date()) {
   const referenceNow = toDateOrNull(now) || new Date();
+  if (isBillaPdfDerivedOffer(offer)) {
+    return buildDecision({ validityClass: 'source-disabled', reasonCode: 'billa-pdf-source-disabled' });
+  }
   if (isPennyPdfDerivedOffer(offer)) {
     return buildDecision({ validityClass: 'source-disabled', reasonCode: 'penny-pdf-source-disabled' });
   }

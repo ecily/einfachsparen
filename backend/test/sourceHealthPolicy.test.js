@@ -40,6 +40,24 @@ test('PENNY offers page remains required while the disabled flyer is excluded', 
   assert.equal(getScheduledHealthPolicy(flyer).requiredForScheduledHealth, false);
 });
 
+test('BILLA family site offers remain required while all four PDF flyers are excluded', () => {
+  for (const retailerKey of ['billa', 'billa-plus']) {
+    const sources = RETAILER_DEFINITIONS.filter((source) => source.retailerKey === retailerKey);
+    const site = sources.find((source) => source.channel === 'official-site');
+    const flyers = sources.filter((source) => source.channel === 'official-flyer');
+    assert.equal(site?.enabled, undefined);
+    assert.equal(getScheduledHealthPolicy(site).requiredForScheduledHealth, true);
+    assert.equal(flyers.length, 2);
+    for (const flyer of flyers) {
+      assert.equal(flyer.enabled, false);
+      assert.equal(flyer.latestStatus, 'inactive');
+      assert.equal(flyer.crawlPolicy.disableOfferExtraction, true);
+      assert.equal(getScheduledHealthPolicy(flyer).healthCriticality, 'excluded');
+      assert.equal(getScheduledHealthPolicy(flyer).requiredForScheduledHealth, false);
+    }
+  }
+});
+
 test('scoped historical sources are policy-bounded and PAGRO is excluded', () => {
   assert.equal(getScheduledHealthPolicy({
     retailerKey: 'billa',

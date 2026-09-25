@@ -1780,7 +1780,7 @@ test('ranking response corrects billa plus official algolia uncategorized anchor
   assert.equal(felixPaprika.categorySecondary, 'Pasta, Reis & Konserven');
 });
 
-test('ranking response corrects billa plus official flyer pdf anchors and drops fragments', () => {
+test('legacy BILLA Plus PDF category shaping stays internal and its offers are not public', () => {
   const baseBillaFlyer = {
     retailerKey: 'billa-plus',
     retailerName: 'BILLA Plus',
@@ -1865,7 +1865,7 @@ test('ranking response corrects billa plus official flyer pdf anchors and drops 
   assert.equal(alreadyCorrect.categoryPrimary, 'Lebensmittel');
   assert.equal(alreadyCorrect.categorySecondary, 'Obst & Gemuese');
   assert.equal(spar.categoryPrimary, 'Unkategorisiert');
-  assert.deepEqual(visible.map((item) => item._id), ['good', 'product-with-variant']);
+  assert.deepEqual(visible.map((item) => item._id), []);
 });
 
 test('ranking response corrects stale active categories from remaining category feedback clusters', () => {
@@ -7759,7 +7759,7 @@ test('ranking result cache token is opaque and cache key hash is stable', () => 
 
 test('ranking cache capabilities expose token resultset support without secrets', () => {
   const capabilities = getRankingCacheCapabilities();
-  assert.match(capabilities.schemaVersion, /public-validity-v1/);
+  assert.match(capabilities.schemaVersion, /public-validity-v2-billa-pdf-disabled/);
   assert.deepEqual({
     resultSetTokens: capabilities.resultSetTokens,
     mongoBackedResultSets: capabilities.mongoBackedResultSets,
