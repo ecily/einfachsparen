@@ -9450,9 +9450,6 @@ body,
 .home-compact__links a { display: inline-flex; align-items: center; min-height: 36px; }
 .home-compact__secondary { margin: 1rem 0; }
 .home-compact__note { color: var(--kk-text-muted); font-size: .9rem; margin: .6rem 0 0; }
-.home-compact__sponsor { margin: 1.1rem 0; font-size: .9rem; }
-.home-compact__sponsor summary { cursor: pointer; padding: .4rem 0; }
-.home-compact__sponsor p { line-height: 1.6; overflow-wrap: anywhere; }
 .home-compact__footer { border-top: 1px solid var(--kk-border); padding: 1rem 0; font-size: .85rem; }
 .home-compact__footer > nav + nav { margin-top: .8rem; }
 .home-compact__footer strong { display: block; margin-bottom: .3rem; }
@@ -9462,7 +9459,6 @@ body,
 .home-compact__suggestions { gap: .4rem; }
 .home-compact__suggestions a { max-width: 100%; padding: .25rem .65rem; border: 1px solid var(--kk-border); border-radius: .5rem; background: #fff; text-decoration: none; overflow-wrap: anywhere; }
 .home-compact__suggestions a:hover { text-decoration: underline; border-color: var(--kk-brand-primary); }
-.home-compact__sponsor p { max-width: 70ch; }
 
 @media (min-width: 601px) and (max-width: 1100px) {
   .shell:has(> .home-compact) { width: calc(100% - 2rem) !important; max-width: calc(100% - 2rem) !important; }

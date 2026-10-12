@@ -1,5 +1,4 @@
-import { CONTACT_EMAIL } from '../../config/constants'
-import { HOME_DESCRIPTION, HOME_LEGAL_LINKS, HOME_OFFER_LINKS, getRenderedHomeSuggestions, HOME_TITLE, SPONSOR_CONTACT, SPONSOR_OFFER } from '../../config/homepage'
+import { HOME_DESCRIPTION, HOME_LEGAL_LINKS, HOME_OFFER_LINKS, getRenderedHomeSuggestions, HOME_TITLE } from '../../config/homepage'
 
 export function HomeLanding() {
   return (
@@ -23,13 +22,6 @@ export function HomeLanding() {
         <p className="home-compact__note">Kostenlos und ohne Konto. Angebote auf deiner <a href="/einkaufsliste">Einkaufsliste</a> merken.</p>
         <p className="home-compact__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. <a href="/so-funktioniert-kaufklug/">Methodik und Grenzen</a></p>
       </section>
-      <aside className="home-compact__sponsor" aria-label="kaufklug unterstützen">
-        <details>
-          <summary>kaufklug unterstützen / Sponsor werden</summary>
-          <p>{SPONSOR_OFFER}</p>
-          <p>Ziel: 100 EUR monatlich zur Kostendeckung. <a href={SPONSOR_CONTACT}>Anfragen an {CONTACT_EMAIL}</a></p>
-        </details>
-      </aside>
       <footer className="home-compact__footer">
         <nav aria-label="Angebotsseiten"><strong>Angebotsseiten</strong><div className="home-compact__links">{HOME_OFFER_LINKS.map((link) => <a key={link.path} href={link.path}>{link.label}</a>)}</div></nav>
         <nav className="home-compact__links" aria-label="Rechtliches">{HOME_LEGAL_LINKS.map((link) => <a key={link.path} href={link.path}>{link.label}</a>)}</nav>

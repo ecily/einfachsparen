@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## Sponsorbereich entfernt 2026-10-12 - nur lokal
+
+- Gesamter Sponsorblock samt Angebot, Preisen, Kostendeckungsziel und Kontaktlink aus React-Homepage und initialem HTML entfernt; ungenutzte Homepage-Konstanten/CSS bereinigt. Footer folgt direkt ohne Restflaeche.
+- Production-Build, ESLint und 36 gezielte Tests bestanden. Kurzer Browsercheck 375/768/1440 px: kein Sponsor/Overflow, 19 Vorschlaege erhalten; restlicher Homepage-Inhalt und SEO-Vertrag exakt unveraendert gegen Vorher-Stand verglichen. Fremde Aenderungen erhalten; kein Push/Deployment.
+
+
 ## Homepage-Anpassung 2026-10-12 - veroeffentlicht
 
 - Homepage nutzt Menue-Aussenbreite fuer Suchpanel, Sponsor und Footer; Tablet-Seitenabstand nur auf Homepage begrenzt. H1: `Womit willst du heute sparen?`; bestehender SEO-Title/Description erhalten.

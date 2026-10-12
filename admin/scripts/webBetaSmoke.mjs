@@ -648,12 +648,12 @@ async function runHomeCheck(cdp) {
     formMethod: document.querySelector('.home-compact__search')?.getAttribute('method'),
     fieldName: document.querySelector('#home-search')?.name,
     quickLinks: document.querySelectorAll('[aria-label="Schnellsuchen"] a').length,
-    sponsor: Boolean(document.querySelector('.home-compact__sponsor summary')),
+    sponsor: Boolean(document.querySelector('.home-compact__sponsor')),
     footerLinks: document.querySelectorAll('.home-compact__footer a').length,
     oldSections: document.querySelectorAll('.home-steps-section, .faq-section, .home-discovery-section').length,
   }))()`)
   assert(home.formAction === '/suche' && home.formMethod === 'get' && home.fieldName === 'q', 'home: native Enter/button search must submit q to /suche', home)
-  assert(home.quickLinks >= 3 && home.sponsor && home.footerLinks >= 10, 'home: compact discovery, sponsor and footer must exist', home)
+  assert(home.quickLinks >= 3 && !home.sponsor && home.footerLinks >= 10, 'home: compact discovery and footer must exist without a sponsor block', home)
   assert(home.oldSections === 0, 'home: redundant explanation blocks must be removed', home)
   assertNoHorizontalOverflow(audit, 'home')
 }
