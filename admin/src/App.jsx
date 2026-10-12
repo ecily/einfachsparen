@@ -814,7 +814,6 @@ function App() {
         </div>
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
-          <h1>Angebote suchen</h1>
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
