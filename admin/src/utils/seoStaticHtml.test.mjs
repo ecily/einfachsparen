@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { buildSeoStaticDocument, getStaticSeoPages } from '../../scripts/generateSeoHtml.mjs'
 import { seoFooterLinkGroups } from '../config/seoLandingPages.js'
+import { HOME_DESCRIPTION } from '../config/homepage.js'
 
 const template = `<!doctype html><html><head><title>Default</title><meta name="description" content="Default" /><meta name="robots" content="index,follow" /><link rel="canonical" href="https://www.kaufklug.at/" /><meta property="og:title" content="Default" /><meta property="og:description" content="Default" /><meta property="og:url" content="https://www.kaufklug.at/" /></head><body><div id="root"></div></body></html>`
 
@@ -40,6 +41,7 @@ test('homepage exposes crawlable internal SEO links in initial HTML', () => {
   assert.match(html, /Aktuelle Angebote in \u00d6sterreich vergleichen\./)
   assert.match(html, /action="\/suche" method="get" role="search"/)
   assert.match(html, /type="search" name="q"/)
+  assert.equal(page.description, HOME_DESCRIPTION)
   assert.match(html, /mailto:andreas\.franz@ecily\.com/)
   assert.match(html, /100 EUR/)
   assert.doesNotMatch(html, /Aktuelle Treffer|Angebote werden geladen|Flugbl/)

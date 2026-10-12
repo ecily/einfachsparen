@@ -58,7 +58,7 @@ const staticPages = [
   {
     path: '/',
     title: `${HOME_TITLE} | kaufklug.at`,
-    description: 'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Preise, Aktionen, Bedingungen und Einkaufsliste übersichtlich vergleichen.',
+    description: HOME_DESCRIPTION,
     robots: 'index,follow',
     h1: HOME_TITLE,
     relatedLinks: [
