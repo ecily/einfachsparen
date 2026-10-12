@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## Homepage/Suchsortierung 2026-10-12 - Live-Abnahme
+
+- Produktcommit `c41246ad253faa46d93cfb1ac8e8ce8b42ed9e3c`, regulaerer Auto-Deploy `27413077-dffc-48c7-87b8-94248b145183` ACTIVE. Ausschliesslich neun gepruefte Frontend-/Testdateien plus zugehoeriger Kontext aus sauberem Release-Worktree; fremde Aenderungen nicht enthalten. Build/Lint/99 Tests auch im isolierten Release bestanden, SEO-/Qualitaets-Schutz unveraendert.
+- Live: Homepage 375/768/1440 px, go, 37 Vorschlaege, CTA, Enter/Button je 59 Kaffee-Treffer; keine Sponsor-Reste/Overflow. Empfohlen nur erste API-Seite; Nachladen per Klick. Globale Sortierungen ueber Waschmittel 160 bzw. 150 belastbare Ersparnistreffer, Filter/Reset/neue Suche, Cache, sichtbare Karten beim Laden und gezielte Seitenwiederholung geprueft; veraltete Requests ignoriert. Globale Sortierung benoetigt weiterhin alle API-Seiten.
+- 32 initiale Seiten/26 Sitemap-URLs und React-Robots/Canonicals/interne SEO-Links konsistent; neun Vergleichshinweise erhalten. Homepage-Metadaten exakt unveraendert. Health 200/Mongo verbunden. Live-Zeit bis erste Liste (Median je drei Navigationsstichproben, inklusive Rendering, Cache/Netzwerk nicht kontrolliert): swiffer 1.154 ms, waschmittel 987 ms. Analytics separat: acht beobachtete Live-Antworten HTTP 200; bekannter lokaler 500 unveraendert. Keine Rankingwirkung behauptet. Nachweise/Screenshots: `evidence/speed-2026-10-12/live/`.
+
 ## Suchgeschwindigkeit 2026-10-12 - nur lokal
 
 - Ersetzt den unten beschriebenen Vollvorlade-Tradeoff: Empfohlen zeigt nur API-Seite 1, Nachladen auf Klick. Globale Markt-/Ersparnissortierung ben?tigt weiterhin alle Seiten, erh?lt sichtbare Karten bis zum Abschluss und kennzeichnet Fortschritt/Fehler; gezielte Seitenwiederholung, Cache je Suche/Filter und sichere Request-Entwertung. Backend/Vergleichssicherheit/Homepage erhalten.
