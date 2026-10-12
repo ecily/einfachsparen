@@ -653,7 +653,7 @@ async function runHomeCheck(cdp) {
     oldSections: document.querySelectorAll('.home-steps-section, .faq-section, .home-discovery-section').length,
   }))()`)
   assert(home.formAction === '/suche' && home.formMethod === 'get' && home.fieldName === 'q', 'home: native Enter/button search must submit q to /suche', home)
-  assert(home.quickLinks === 3 && home.sponsor && home.footerLinks >= 10, 'home: compact discovery, sponsor and footer must exist', home)
+  assert(home.quickLinks >= 3 && home.sponsor && home.footerLinks >= 10, 'home: compact discovery, sponsor and footer must exist', home)
   assert(home.oldSections === 0, 'home: redundant explanation blocks must be removed', home)
   assertNoHorizontalOverflow(audit, 'home')
 }
@@ -930,9 +930,12 @@ async function runReducedMotionCheck(cdp) {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
   })
   await navigate(cdp, makeUrl('/'))
-  await waitForCondition(cdp, `Boolean(document.querySelector('.search-entry-guidance'))`, TIMEOUT_MS)
+  await waitForCondition(cdp, `Boolean(document.querySelector('.home-compact__search'))`, TIMEOUT_MS)
 
-  const audit = await auditCurrentPage(cdp, 'reduced-motion')
+  const audit = await evaluate(cdp, `({
+    topDealsAnimationName: getComputedStyle(document.querySelector('.home-compact__secondary a')).animationName,
+    mainSearchAnimationName: getComputedStyle(document.querySelector('.home-compact__search button')).animationName,
+  })`)
   assert(audit.topDealsAnimationName === 'none', 'reduced-motion: Top Deals animation must be disabled', {
     animationName: audit.topDealsAnimationName,
   })

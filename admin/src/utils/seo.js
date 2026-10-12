@@ -1,4 +1,4 @@
-import { HOME_TITLE, HOME_DESCRIPTION } from '../config/homepage.js'
+import { HOME_SEO_TITLE, HOME_DESCRIPTION } from '../config/homepage.js'
 import { CONTACT_EMAIL, SITE_URL } from '../config/constants.js'
 import {
   PRICE_CHECK_PATH,
@@ -33,7 +33,7 @@ export function getPageMeta(activePage) {
   }
 
   const pages = {
-    home: { title: `${HOME_TITLE} | kaufklug.at`, description: HOME_DESCRIPTION, path: '/', robots: 'index,follow' },
+    home: { title: HOME_SEO_TITLE, description: HOME_DESCRIPTION, path: '/', robots: 'index,follow' },
     [TRUST_PAGE_ROUTE_ID]: {
       title: TRUST_PAGE_TITLE,
       description: TRUST_PAGE_DESCRIPTION,

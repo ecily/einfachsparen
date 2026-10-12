@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { buildSeoStaticDocument, getStaticSeoPages } from '../../scripts/generateSeoHtml.mjs'
 import { seoFooterLinkGroups } from '../config/seoLandingPages.js'
-import { HOME_DESCRIPTION } from '../config/homepage.js'
+import { HOME_DESCRIPTION, HOME_TITLE, HOME_SEO_TITLE, getHomeSuggestions } from '../config/homepage.js'
 
 const template = `<!doctype html><html><head><title>Default</title><meta name="description" content="Default" /><meta name="robots" content="index,follow" /><link rel="canonical" href="https://www.kaufklug.at/" /><meta property="og:title" content="Default" /><meta property="og:description" content="Default" /><meta property="og:url" content="https://www.kaufklug.at/" /></head><body><div id="root"></div></body></html>`
 
@@ -50,8 +50,9 @@ test('homepage exposes crawlable internal SEO links in initial HTML', () => {
   for (const path of ['/top-deals/', '/angebote/billa/', '/angebote/lidl/', '/angebote/waschmittel/', '/so-funktioniert-kaufklug/']) {
     assert.ok(html.includes(`<a href="${path}">`), `missing crawlable link ${path}`)
   }
-  assert.ok(html.indexOf('/angebote/bier/') < html.indexOf('/angebote/kaffee/'))
-  assert.ok(html.indexOf('/angebote/lidl/') < html.indexOf('/angebote/billa/'))
+  assert.ok(html.includes(`<h1 id="home-title">${HOME_TITLE}</h1>`))
+  assert.ok(html.includes(`<title>${HOME_SEO_TITLE}</title>`))
+  assert.ok(html.indexOf('/angebote/waschmittel/') < html.indexOf('/angebote/billa/'))
 })
 
 test('Top Deals gives crawlable priority links to beer and the recovering retailers', () => {
@@ -367,4 +368,17 @@ test('comparison summary is visible in initial HTML only when supplied', () => {
 
 test('unknown routes are not emitted as SEO pages', () => {
   assert.equal(getStaticSeoPages().some((page) => page.path === '/angebote/does-not-exist'), false)
+})
+
+test('homepage suggestions respect final indexing decisions and share static/runtime data', () => {
+  const pages = getStaticSeoPages().map((page) => page.key === 'kaffee' ? { ...page, robots: 'noindex,follow' } : page)
+  const suggestions = getHomeSuggestions(pages)
+  assert.ok(!suggestions.some((link) => link.path === '/angebote/kaffee/'))
+  assert.ok(suggestions.some((link) => link.path === '/suche?q=Kaffee'))
+  assert.ok(!suggestions.some((link) => link.path === '/angebote/mueller/'))
+  assert.equal(new Set(suggestions.map((link) => link.path)).size, suggestions.length)
+  const html = buildSeoStaticDocument(template, pages.find((page) => page.path === '/'), pages)
+  const embedded = JSON.parse(html.match(/id="kaufklug-home-suggestions">(.*?)<\/script>/)[1])
+  assert.deepEqual(embedded, suggestions)
+  for (const link of embedded) assert.ok(html.includes(`<a href="${link.path}">${link.label}</a>`))
 })

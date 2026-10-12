@@ -1,5 +1,15 @@
 # kaufklug.at Kontext
 
+## Homepage-Anpassung 2026-10-12 - lokal zur Abnahme
+
+- Homepage nutzt Menue-Aussenbreite fuer Suchpanel, Sponsor und Footer; Tablet-Seitenabstand nur auf Homepage begrenzt. H1: `Womit willst du heute sparen?`; bestehender SEO-Title/Description erhalten.
+- 19 sichtbare kompakte Vorschlagslinks: Produkte, Haendler, Themen. Aus SEO-Registry plus finaler Build-Indexierungspruefung abgeleitet; Initial-HTML und React verwenden identische Build-Daten. Historische GSC-Belege sind kein aktueller Indexierungsnachweis: berichtet wird **indexierbar**.
+- Build/Lint und 89/89 utils-Tests gruen; zwei bekannte Discovery-Fehler im unveraenderten HEAD reproduziert. Browser 375/768/1440 px: gleiche Aussenkanten, saubere Umbrueche, kein Overflow; Enter/Button-Kaffeesuche je 59 Karten, alle 19 kanonischen Ziele geprueft. Bericht/Screenshots: `evidence/homepage-2026-10-12/REPORT.md`.
+- Allgemeiner Homepage-Smoke bleibt wegen HTTP 500 von `/api/analytics/event` rot; UI/Methodik/Reduced-Motion bestanden. Analytics/Backend unveraendert.
+- Analytics-Unabhaengigkeit vor Veroeffentlichung nachgewiesen: sauberer Ausgangscommit `14bce273` und Homepage-Build senden bei gleicher Proxy-/API-Konfiguration dieselben drei Ereignisse mit identischen Pfaden/Metadaten und jeweils HTTP 500. Analytics-Code/Aufrufstellen unveraendert; keine Reparatur.
+- Erneute Release-Pruefung: Build/Lint, 89/89 utils-Tests sowie Browser 375/768/1440 px, 19 Links und Enter/Button je 59 Kaffee-Karten bestanden. Bedingte Nutzerfreigabe erfuellt. Veroeffentlichung ausschliesslich aus sauberem Worktree `C:/coding/einfachsparen-home-release`; keine fremden Backend-/Dokumentationsaenderungen enthalten.
+
+
 ## Priorität 2026-10-12: kurze Homepage und Kostendeckung
 
 - Vorrang haben der direkte Sucheinstieg und zunächst 100 EUR monatliche Kostendeckung als Vertriebsziel. Dashboard-Metriken, Lidl-Kampagnen und SPAR-Recovery sind zurückgestellt. Die bereits gelöschten 22 Testfeedbacks bleiben abgeschlossen; keine weitere Löschung.

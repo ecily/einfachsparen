@@ -1,5 +1,5 @@
 import { CONTACT_EMAIL } from '../../config/constants'
-import { HOME_DESCRIPTION, HOME_LEGAL_LINKS, HOME_OFFER_LINKS, HOME_QUICK_SEARCHES, HOME_TITLE, SPONSOR_CONTACT, SPONSOR_OFFER } from '../../config/homepage'
+import { HOME_DESCRIPTION, HOME_LEGAL_LINKS, HOME_OFFER_LINKS, getRenderedHomeSuggestions, HOME_TITLE, SPONSOR_CONTACT, SPONSOR_OFFER } from '../../config/homepage'
 
 export function HomeLanding() {
   return (
@@ -14,8 +14,8 @@ export function HomeLanding() {
             <button type="submit">Suchen</button>
           </div>
         </form>
-        <nav className="home-compact__links" aria-label="Schnellsuchen">
-          {HOME_QUICK_SEARCHES.map((term) => <a key={term} href={`/suche?q=${encodeURIComponent(term)}`}>{term}</a>)}
+        <nav className="home-compact__links home-compact__suggestions" aria-label="Schnellsuchen">
+          {getRenderedHomeSuggestions().map((link) => <a key={link.path} href={link.path}>{link.label}</a>)}
         </nav>
         <nav className="home-compact__links home-compact__secondary" aria-label="Weitere Einstiege">
           <a href="/top-deals/">Top Deals</a><a href="/stoebern">Stöbern</a>

@@ -9437,10 +9437,10 @@ body,
 }
 
 /* A short homepage with one primary search entry. */
-.home-compact { max-width: 850px; margin: 0 auto; }
+.home-compact { width: 100%; min-width: 0; }
 .home-compact__hero { padding: clamp(1.2rem, 4vw, 2.4rem); }
 .home-compact h1 { margin: 0; font-size: clamp(1.85rem, 4.5vw, 3rem); line-height: 1.12; max-width: 20ch; }
-.home-compact__hero > p { line-height: 1.6; }
+.home-compact__hero > p { line-height: 1.6; max-width: 70ch; }
 .home-compact__search { margin: 1.5rem 0 1rem; }
 .home-compact__search label { display: block; margin-bottom: .5rem; font-weight: 750; }
 .home-compact__search > div { display: flex; gap: .5rem; }
@@ -9450,11 +9450,20 @@ body,
 .home-compact__links a { display: inline-flex; align-items: center; min-height: 36px; }
 .home-compact__secondary { margin: 1rem 0; }
 .home-compact__note { color: var(--kk-text-muted); font-size: .9rem; margin: .6rem 0 0; }
-.home-compact__sponsor { margin: 1.1rem .3rem; font-size: .9rem; }
+.home-compact__sponsor { margin: 1.1rem 0; font-size: .9rem; }
 .home-compact__sponsor summary { cursor: pointer; padding: .4rem 0; }
 .home-compact__sponsor p { line-height: 1.6; overflow-wrap: anywhere; }
-.home-compact__footer { border-top: 1px solid var(--kk-border); padding: 1rem .3rem; font-size: .85rem; }
+.home-compact__footer { border-top: 1px solid var(--kk-border); padding: 1rem 0; font-size: .85rem; }
 .home-compact__footer > nav + nav { margin-top: .8rem; }
 .home-compact__footer strong { display: block; margin-bottom: .3rem; }
 .home-compact :is(a, button, input, summary):focus-visible { outline: 3px solid #287058; outline-offset: 3px; }
 @media (max-width: 480px) { .home-compact__hero { padding: 1rem; } .home-compact__search button { padding: .7rem .8rem; } }
+
+.home-compact__suggestions { gap: .4rem; }
+.home-compact__suggestions a { max-width: 100%; padding: .25rem .65rem; border: 1px solid var(--kk-border); border-radius: .5rem; background: #fff; text-decoration: none; overflow-wrap: anywhere; }
+.home-compact__suggestions a:hover { text-decoration: underline; border-color: var(--kk-brand-primary); }
+.home-compact__sponsor p { max-width: 70ch; }
+
+@media (min-width: 601px) and (max-width: 1100px) {
+  .shell:has(> .home-compact) { width: calc(100% - 2rem) !important; max-width: calc(100% - 2rem) !important; }
+}
