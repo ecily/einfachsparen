@@ -1,0 +1,861 @@
+[
+  {
+    "key": "home",
+    "title": "Aktuelle Angebote in Österreich vergleichen. | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/",
+    "h1": "Womit willst du heute sparen?",
+    "cards": 0,
+    "h2": [
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": []
+  },
+  {
+    "key": "billa",
+    "title": "BILLA Angebote aktuell vergleichen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/billa/",
+    "h1": "BILLA Angebote aktuell vergleichen",
+    "cards": 24,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/bier/",
+      "/angebote/lidl/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/schokolade/",
+      "/angebote/softdrinks/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=billa%2Cbilla-plus&programRetailers=billa%2Cbilla-plus&limit=24&offset=0",
+        "duration": 3780
+      }
+    ]
+  },
+  {
+    "key": "lidl",
+    "title": "Lidl Angebote aktuell vergleichen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/lidl/",
+    "h1": "Lidl Angebote aktuell vergleichen",
+    "cards": 24,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/bier/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/schokolade/",
+      "/angebote/softdrinks/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=lidl&programRetailers=lidl&limit=24&offset=0",
+        "duration": 355
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc640bdf8ac5c1f0b973d7/image",
+        "duration": 230
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc640bdf8ac5c1f0b973ff/image",
+        "duration": 156
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc640bdf8ac5c1f0b973fd/image",
+        "duration": 216
+      }
+    ]
+  },
+  {
+    "key": "hofer",
+    "title": "HOFER Aktionen heute: aktuelle Angebote | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/hofer/",
+    "h1": "HOFER Angebote aktuell vergleichen",
+    "cards": 24,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/lidl/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=hofer&programRetailers=hofer&limit=24&offset=0",
+        "duration": 513
+      }
+    ]
+  },
+  {
+    "key": "bipa",
+    "title": "BIPA Angebote aktuell vergleichen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/bipa/",
+    "h1": "BIPA Angebote aktuell vergleichen",
+    "cards": 24,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/drogerie/",
+      "/angebote/dm/",
+      "/angebote/waschmittel/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=bipa&programRetailers=bipa&limit=24&offset=0",
+        "duration": 3428
+      }
+    ]
+  },
+  {
+    "key": "penny",
+    "title": "PENNY Angebote & Aktionen aktuell vergleichen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/penny/",
+    "h1": "PENNY Angebote aktuell finden",
+    "cards": 24,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/bier/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/kaffee/",
+      "/angebote/softdrinks/",
+      "/angebote/hofer/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=penny&programRetailers=penny&limit=24&offset=0",
+        "duration": 657
+      }
+    ]
+  },
+  {
+    "key": "supermarkt",
+    "title": "Supermarkt Angebote in Österreich vergleichen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/supermarkt/",
+    "h1": "Supermarkt Angebote vergleichen",
+    "cards": 28,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/bier/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/schokolade/",
+      "/angebote/softdrinks/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=billa%2Cbilla-plus&programRetailers=billa%2Cbilla-plus&limit=12&offset=0",
+        "duration": 450
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=lidl&programRetailers=lidl&limit=8&offset=0",
+        "duration": 608
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&retailers=penny&programRetailers=penny&limit=8&offset=0",
+        "duration": 532
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc647ae492aec2ac397262/image",
+        "duration": 2
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc648542ad74798ad8e676/image",
+        "duration": 3
+      }
+    ]
+  },
+  {
+    "key": "bier",
+    "title": "Bier Angebote vergleichen: Literpreise & Aktionen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/bier/",
+    "h1": "Bier Angebote aktuell vergleichen",
+    "cards": 28,
+    "h2": [
+      "Preise sinnvoll vergleichen",
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/preischeck/bier-literpreis-vergleich",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&q=bier&limit=60&offset=0",
+        "duration": 338
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc647ae492aec2ac397262/image",
+        "duration": 0
+      }
+    ]
+  },
+  {
+    "key": "kaffee",
+    "title": "Kaffee Angebote aktuell vergleichen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/kaffee/",
+    "h1": "Kaffee Angebote aktuell vergleichen",
+    "cards": 59,
+    "h2": [
+      "Preise sinnvoll vergleichen",
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/bipa/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&q=kaffee&limit=60&offset=0",
+        "duration": 767
+      }
+    ]
+  },
+  {
+    "key": "schokolade",
+    "title": "Schokolade Angebote aktuell vergleichen | kaufklug.at",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/schokolade/",
+    "h1": "Schokolade Angebote aktuell vergleichen",
+    "cards": 13,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/lidl/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&q=schokolade&limit=60&offset=0",
+        "duration": 243
+      }
+    ]
+  },
+  {
+    "key": "butter",
+    "title": "Butter Angebote aktuell finden | kaufklug",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/butter/",
+    "h1": "Butter Angebote aktuell finden",
+    "cards": 2,
+    "h2": [
+      "Aktuelle Treffer",
+      "Verwandte Angebote",
+      "Direkt zu beliebten Angeboten",
+      "Cookie- und Speicherhinweis"
+    ],
+    "overflow": false,
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/hofer/",
+      "/angebote/lidl/",
+      "/angebote/penny/",
+      "/angebote/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/deo/",
+      "/angebote/softdrinks/",
+      "/angebote/waschmittel/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/mueller/",
+      "/angebote/hofer/",
+      "/angebote/spar/"
+    ],
+    "jsonld": [
+      {
+        "id": "",
+        "type": "WebSite"
+      },
+      {
+        "id": "",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-static-breadcrumb",
+        "type": "BreadcrumbList"
+      },
+      {
+        "id": "kaufklug-jsonld-website",
+        "type": "WebSite"
+      },
+      {
+        "id": "kaufklug-jsonld-webapp",
+        "type": "WebApplication"
+      },
+      {
+        "id": "kaufklug-jsonld-person",
+        "type": "Person"
+      }
+    ],
+    "resources": [
+      {
+        "url": "https://www.kaufklug.at/api/offers/ranking?flat=true&q=butter&limit=24",
+        "duration": 192
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc647ae492aec2ac397263/image",
+        "duration": 259
+      },
+      {
+        "url": "https://www.kaufklug.at/api/offers/6acc648542ad74798ad8e677/image",
+        "duration": 247
+      }
+    ]
+  }
+]

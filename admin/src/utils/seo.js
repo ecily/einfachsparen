@@ -1,3 +1,4 @@
+import { getRenderedSeoRobots } from './seoBuildPolicy.js'
 import { HOME_SEO_TITLE, HOME_DESCRIPTION } from '../config/homepage.js'
 import { CONTACT_EMAIL, SITE_URL } from '../config/constants.js'
 import {
@@ -28,7 +29,7 @@ export function getPageMeta(activePage) {
       title: seoLandingPage.title,
       description: seoLandingPage.description,
       path: seoLandingPage.path,
-      robots: seoLandingPage.robots,
+      robots: getRenderedSeoRobots(seoLandingPage.path, seoLandingPage.robots),
     }
   }
 
@@ -108,7 +109,9 @@ export function getPageMeta(activePage) {
     },
   }
 
-  return pages[activePage] || pages.search
+  const meta = pages[activePage] || pages.search
+  const fallbackRobots = meta.robots || (activePage === 'diagnostics' ? 'noindex,nofollow' : activePage === 'shared-shopping-list' ? 'noindex,noarchive' : ['search', 'product-search', 'shopping-list', 'feedback'].includes(activePage) ? 'noindex,follow' : 'index,follow')
+  return { ...meta, robots: getRenderedSeoRobots(meta.path, fallbackRobots) }
 }
 
 export function setOrCreateMeta(attribute, key, content) {

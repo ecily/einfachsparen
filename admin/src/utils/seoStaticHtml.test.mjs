@@ -352,16 +352,16 @@ test('comparison summary is visible in initial HTML only when supplied', () => {
   const html = buildSeoStaticDocument(template, {
     ...page,
     comparisonSummary: {
-      facts: ['23 aktuelle Angebote', '3 HÃ¤ndler', '23 mit Literpreis vergleichbar'],
+      facts: ['23 ausgewertete Angebote', '3 HÃ¤ndler', '23 mit Literpreis vergleichbar'],
       note: 'Literpreise werden nur innerhalb kompatibler Einheiten verglichen.',
       dataStand: '2026-08-12T09:44:22.113Z',
     },
   })
 
   assert.match(html, /<section class="seo-static-comparison"/)
-  assert.match(html, /Aktueller Vergleich/)
-  assert.match(html, /<strong>23<\/strong><span>aktuelle Angebote<\/span>/)
-  assert.match(html, /Stand:/)
+  assert.match(html, /Vergleich zum Datenstand/)
+  assert.match(html, /<strong>23<\/strong><span>ausgewertete Angebote<\/span>/)
+  assert.match(html, /Auswertung vom/)
   assert.doesNotMatch(html, /undefined|NaN/)
 })
 

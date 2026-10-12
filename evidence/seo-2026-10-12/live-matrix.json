@@ -1,0 +1,358 @@
+[
+  {
+    "key": "home",
+    "status": 200,
+    "seconds": 0.27,
+    "bytes": 12254,
+    "title": "Aktuelle Angebote in Österreich vergleichen. | kaufklug.at",
+    "description": "Suche Produkte oder Marken und prüfe Preise, Gültigkeit und Bedingungen aus Supermärkten und Drogerien.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/",
+    "h1": "Womit willst du heute sparen?",
+    "h2": [],
+    "links": [
+      "/",
+      "/suche",
+      "/stoebern",
+      "/einkaufsliste",
+      "/top-deals/",
+      "/angebote/kaffee/",
+      "/angebote/bier/",
+      "/angebote/softdrinks/",
+      "/angebote/deo/",
+      "/angebote/schokolade/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/waschmittel/",
+      "/angebote/billa/",
+      "/angebote/hofer/",
+      "/angebote/lidl/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/penny/",
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/top-deals/",
+      "/stoebern",
+      "/einkaufsliste",
+      "/so-funktioniert-kaufklug/",
+      "/angebote/bier/",
+      "/angebote/kaffee/",
+      "/angebote/waschmittel/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/hofer/",
+      "/angebote/dm/",
+      "/angebote/bipa/",
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/drogerie/",
+      "/angebote/softdrinks/",
+      "/impressum/",
+      "/datenschutz/",
+      "/nutzungshinweise/",
+      "/cookies/",
+      "/feedback/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 3
+  },
+  {
+    "key": "billa",
+    "status": 200,
+    "seconds": 0.3,
+    "bytes": 11019,
+    "title": "BILLA Angebote aktuell vergleichen | kaufklug.at",
+    "description": "Aktuelle BILLA- und BILLA Plus-Angebote und Aktionen in Österreich vergleichen – mit Preisen, Packungsgrößen, Gültigkeit und Bedingungen.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/billa/",
+    "h1": "BILLA Angebote aktuell vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/bier/",
+      "/angebote/lidl/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/schokolade/",
+      "/angebote/softdrinks/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 8
+  },
+  {
+    "key": "lidl",
+    "status": 200,
+    "seconds": 0.34,
+    "bytes": 11000,
+    "title": "Lidl Angebote aktuell vergleichen | kaufklug.at",
+    "description": "Aktuelle Lidl Angebote und Aktionen in Österreich vergleichen – mit Preisen, Packungsgrößen, Gültigkeit und Bedingungen.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/lidl/",
+    "h1": "Lidl Angebote aktuell vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/bier/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/schokolade/",
+      "/angebote/softdrinks/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 8
+  },
+  {
+    "key": "hofer",
+    "status": 200,
+    "seconds": 0.33,
+    "bytes": 10733,
+    "title": "HOFER Aktionen heute: aktuelle Angebote | kaufklug.at",
+    "description": "Finde aktuelle HOFER Angebote in Österreich. kaufklug zeigt Preise, Aktionen und Bedingungen als Orientierungshilfe.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/hofer/",
+    "h1": "HOFER Angebote aktuell vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/lidl/",
+      "/angebote/penny/",
+      "/angebote/kaffee/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 3
+  },
+  {
+    "key": "bipa",
+    "status": 200,
+    "seconds": 0.23,
+    "bytes": 10750,
+    "title": "BIPA Angebote aktuell vergleichen | kaufklug.at",
+    "description": "Aktuelle BIPA-Angebote vergleichen. Preise, Packungsgrößen, Liter- oder Stückpreise und Bedingungen transparent auf kaufklug.at.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/bipa/",
+    "h1": "BIPA Angebote aktuell vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/drogerie/",
+      "/angebote/dm/",
+      "/angebote/waschmittel/",
+      "/angebote/windeln/",
+      "/angebote/duschgel/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 8
+  },
+  {
+    "key": "penny",
+    "status": 200,
+    "seconds": 0.22,
+    "bytes": 10887,
+    "title": "PENNY Angebote & Aktionen aktuell vergleichen | kaufklug.at",
+    "description": "Aktuelle PENNY Angebote und Aktionen in Österreich vergleichen – mit Preisen, Packungsgrößen, Gültigkeit und Bedingungen.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/penny/",
+    "h1": "PENNY Angebote aktuell finden",
+    "h2": [
+      "Weitere Angebote",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/supermarkt/",
+      "/angebote/bier/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/kaffee/",
+      "/angebote/softdrinks/",
+      "/angebote/hofer/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 6
+  },
+  {
+    "key": "supermarkt",
+    "status": 200,
+    "seconds": 0.22,
+    "bytes": 11030,
+    "title": "Supermarkt Angebote in Österreich vergleichen | kaufklug.at",
+    "description": "Aktuelle Supermarkt-Angebote vergleichen. Preise, Packungsgrößen und Preis pro kg, Liter oder Stück transparent auf kaufklug.at.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/supermarkt/",
+    "h1": "Supermarkt Angebote vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/bier/",
+      "/angebote/lidl/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/kaffee/",
+      "/angebote/nudeln/",
+      "/angebote/chips/",
+      "/angebote/schokolade/",
+      "/angebote/softdrinks/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 8
+  },
+  {
+    "key": "bier",
+    "status": 200,
+    "seconds": 0.27,
+    "bytes": 12028,
+    "title": "Bier Angebote vergleichen: Literpreise & Aktionen | kaufklug.at",
+    "description": "Aktuelle Bier-Angebote mehrerer Händler nach Literpreis vergleichen. Dosen, Flaschen, Multipacks und Aktionsbedingungen transparent prüfen.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/bier/",
+    "h1": "Bier Angebote aktuell vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktueller Vergleich",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/kaffee/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 11
+  },
+  {
+    "key": "kaffee",
+    "status": 200,
+    "seconds": 0.22,
+    "bytes": 11988,
+    "title": "Kaffee Angebote aktuell vergleichen | kaufklug.at",
+    "description": "Aktuelle Kaffee-Angebote von mehreren Händlern vergleichen. Preise, Packungsgrößen und Preis pro kg oder Stück transparent auf kaufklug.at.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/kaffee/",
+    "h1": "Kaffee Angebote aktuell vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktueller Vergleich",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/bipa/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 11
+  },
+  {
+    "key": "schokolade",
+    "status": 200,
+    "seconds": 0.33,
+    "bytes": 10924,
+    "title": "Schokolade Angebote aktuell vergleichen | kaufklug.at",
+    "description": "Aktuelle Schokolade-Angebote mehrerer Händler vergleichen – mit Preisen, Packungsgrößen, kg-Preisen und Bedingungen.",
+    "robots": "index,follow",
+    "canonical": "https://www.kaufklug.at/angebote/schokolade/",
+    "h1": "Schokolade Angebote aktuell vergleichen",
+    "h2": [
+      "Weitere Angebote",
+      "Aktuelle Treffer"
+    ],
+    "links": [
+      "/angebote/",
+      "/angebote/supermarkt/",
+      "/angebote/billa/",
+      "/angebote/penny/",
+      "/angebote/lidl/",
+      "/angebote/nudeln/",
+      "/angebote/chips/"
+    ],
+    "jsonld": [
+      "WebSite",
+      "WebApplication",
+      "BreadcrumbList"
+    ],
+    "xrobots": null,
+    "modified": "Mon, 12 Oct 2026 14:41:47 GMT",
+    "unitText": 8
+  }
+]

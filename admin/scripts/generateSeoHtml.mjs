@@ -1,3 +1,5 @@
+import { buildSeoPolicy } from '../src/utils/seoBuildPolicy.js'
+import { getSeoComparisonGuide } from '../src/config/seoComparisonGuides.js'
 import { HOME_SEO_TITLE, HOME_TITLE, HOME_DESCRIPTION, getHomeSuggestions, HOME_OFFER_LINKS, HOME_LEGAL_LINKS } from '../src/config/homepage.js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
@@ -305,9 +307,9 @@ function buildComparisonSummaryHtml(summary) {
     timeZone: 'Europe/Vienna',
   }).format(new Date(summary.dataStand))
 
-  return `<section class="seo-static-comparison" aria-labelledby="seo-static-comparison-title"><div class="seo-static-comparison__heading"><div><p class="eyebrow">Vergleichs-Fakten</p><h2 id="seo-static-comparison-title">Aktueller Vergleich</h2></div><p>${escapeHtml(summary.note)}</p></div><div class="seo-static-comparison__facts">${summary.facts
+  return `<section class="seo-static-comparison" aria-labelledby="seo-static-comparison-title"><div class="seo-static-comparison__heading"><div><p class="eyebrow">Vergleichs-Fakten</p><h2 id="seo-static-comparison-title">Vergleich zum Datenstand</h2></div><p>${escapeHtml(summary.note)}</p></div><div class="seo-static-comparison__facts">${summary.facts
     .map((fact) => `<div class="comparison-fact-card seo-static-comparison__fact"><strong>${escapeHtml(fact.split(' ')[0] || '')}</strong><span>${escapeHtml(fact.split(' ').slice(1).join(' ') || fact)}</span></div>`)
-    .join('')}</div><p>Stand: ${escapeHtml(dataStand)}</p></section>`
+    .join('')}</div><p>Auswertung vom ${escapeHtml(dataStand)}. Die aktuellen Treffer werden separat geladen.</p></section>`
 }
 
 function formatPrice(value) {
@@ -336,7 +338,7 @@ export function buildSeoStaticDocument(template, page, pages) {
   const canonical = `${siteUrl}${canonicalPath(path)}`
   const homeLinks = (links) => links.map((link) => `<a href="${escapeHtml(link.path)}">${escapeHtml(link.label)}</a>`).join(' ')
   const staticHomeContent = `<main class="shell"><nav class="page-nav seo-static-nav" aria-label="Seiten"><a href="/" class="page-nav__logo" aria-label="kaufklug Startseite"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></a><span class="page-nav__beta">Beta</span><div class="page-nav__main"><a class="page-nav__button" href="/suche">Suche</a><a class="page-nav__button" href="/stoebern">St\u00f6bern</a><a class="page-nav__button" href="/einkaufsliste">Liste</a><a class="page-nav__button" href="/top-deals/">Top Deals</a></div></nav><div class="home-compact"><section class="panel home-compact__hero" aria-labelledby="home-title"><h1 id="home-title">${escapeHtml(HOME_TITLE)}</h1><p>${escapeHtml(HOME_DESCRIPTION)}</p><form class="home-compact__search" action="/suche" method="get" role="search"><label for="home-search">Produkt oder Marke suchen</label><div><input id="home-search" type="search" name="q" placeholder="z. B. Kaffee" required /><button type="submit">Suchen</button></div></form><nav class="home-compact__links home-compact__suggestions" aria-label="Schnellsuchen">${homeLinks(getHomeSuggestions(pages))}</nav><nav class="home-compact__links home-compact__secondary" aria-label="Weitere Einstiege"><a href="/top-deals/">Top Deals</a><a href="/stoebern">St\u00f6bern</a></nav><p class="home-compact__note">Kostenlos und ohne Konto. Angebote auf deiner <a href="/einkaufsliste">Einkaufsliste</a> merken.</p><p class="home-compact__note">Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen. <a href="/so-funktioniert-kaufklug/">Methodik und Grenzen</a></p></section><footer class="home-compact__footer"><nav aria-label="Angebotsseiten"><strong>Angebotsseiten</strong><div class="home-compact__links">${homeLinks(HOME_OFFER_LINKS)}</div></nav><nav class="home-compact__links" aria-label="Rechtliches">${homeLinks(HOME_LEGAL_LINKS)}</nav><small>\u00a9 2026 kaufklug.at</small></footer></div></main>`
-  const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page, pages)}</main>`
+  const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p>${page.note ? `<p class="seo-offer-page__note">${escapeHtml(page.note)}</p>` : ''}<p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page, pages)}</main>`
   const staticTrustContent = `<main class="seo-static-shell"><p class="eyebrow">Über kaufklug</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p>${buildTrustSections(page)}${buildTrustLinks(page)}</main>`
   const staticNavigation = '<nav class="page-nav seo-static-nav" aria-label="Seiten"><span class="page-nav__logo" aria-hidden="true"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></span><span class="page-nav__beta">Beta</span><div class="page-nav__main"><span class="page-nav__button">Suche</span><span class="page-nav__button">Stöbern</span><span class="page-nav__button">Liste</span></div></nav>'
   const staticContentForRender = path === '/' ? staticHomeContent : page.staticSections ? staticTrustContent : staticContent
@@ -350,9 +352,13 @@ export function buildSeoStaticDocument(template, page, pages) {
       .replace('</main>', '</section><section class="panel seo-offer-results" aria-busy="true"><div class="panel__header"><h2>Aktuelle Treffer</h2><p>Angebote werden aus den aktuell erkannten Daten geladen.</p></div><div class="browse-loading-status" role="status" aria-live="polite"><span class="browse-loading-status__spinner" aria-hidden="true"></span><span>Angebote werden geladen &hellip;</span></div></section></div></main>')
   const staticContentWithPriceCheck = staticShellContent.replace('</section>', `${buildPriceCheckHtml(page.priceCheckCandidate)}${buildPriceCheckDataScript(page.priceCheckCandidate)}</section>`)
   const staticContentWithComparison = staticContentWithPriceCheck.replace('<section class="panel seo-offer-results"', `${buildComparisonSummaryHtml(page.comparisonSummary)}<section class="panel seo-offer-results"`)
+  const guide = getSeoComparisonGuide(page)
+  const guideHtml = guide ? `<section class="panel seo-comparison-guide" aria-labelledby="seo-comparison-guide-title"><h2 id="seo-comparison-guide-title">${escapeHtml(guide.title)}</h2>${guide.paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join('')}<a href="/so-funktioniert-kaufklug/">Datenquellen, Methodik und Grenzen</a></section>` : ''
+  const contentWithGuide = staticContentWithComparison.replace('</div></main>', `${guideHtml}</div></main>`)
+  const policyData = `<script type="application/json" id="kaufklug-seo-policy">${JSON.stringify(buildSeoPolicy(pages || getStaticSeoPages())).replace(/</g, '\\u003c')}</script>`
   const suggestionData = `<script type="application/json" id="kaufklug-home-suggestions">${JSON.stringify(getHomeSuggestions(pages)).replace(/</g, '\\u003c')}</script>`
   const updated = template
-    .replace(/<\/head>/i, `${suggestionData}\n</head>`)
+    .replace(/<\/head>/i, `${suggestionData}\n${policyData}\n</head>`)
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(page.title)}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta name="description" content="${escapeHtml(page.description)}" />\n`)
     .replace(/<meta\s+name="robots"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta name="robots" content="${escapeHtml(page.robots)}" />\n`)
@@ -360,7 +366,7 @@ export function buildSeoStaticDocument(template, page, pages) {
     .replace(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:title" content="${escapeHtml(page.title)}" />\n`)
     .replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:description" content="${escapeHtml(page.description)}" />\n`)
     .replace(/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>(\r?\n)?/i, `<meta property="og:url" content="${canonical}" />\n`)
-    .replace(/<div id="root"><\/div>/i, `<div id="root">${staticContentWithComparison}</div>`)
+    .replace(/<div id="root"><\/div>/i, `<div id="root">${contentWithGuide}</div>`)
     .replace(/<link rel="stylesheet" crossorigin href="[^"]+">/i, `<style id="kaufklug-critical-css">${CRITICAL_CSS}${CRITICAL_STATIC_NAV_CSS}</style>\n    $&`)
     .replace(/<\/head>/i, `<meta property="og:image" content="${socialImageUrl}" />\n    <meta name="twitter:image" content="${socialImageUrl}" />\n  </head>`)
     .replace(/<\/head>/i, `<script type="application/ld+json" id="kaufklug-static-breadcrumb">${buildBreadcrumbJsonLd(page)}</script>\n  </head>`)
@@ -428,6 +434,7 @@ export function getStaticSeoPages() {
       robots: page.robots || 'index,follow',
       h1: page.h1,
       intro: page.intro,
+      note: page.note || '',
       query: page.query || null,
       queries: page.queries || null,
       seoAutopilot: page.seoAutopilot || '',
@@ -465,7 +472,11 @@ export function buildSeoPageQuality(page, payload) {
   const imageRatio = offers.length > 0 ? imageCount / offers.length : 0
   const isCategory = SEO_CATEGORY_KEYS.has(page.key)
   const isRetailer = SEO_RETAILER_KEYS.has(page.key)
-  const hasCompletePublicSample = Number.isInteger(totalCount)
+  const hasValidPublicPayload = summary.totalCount !== null && summary.totalCount !== undefined
+    && Number.isInteger(totalCount) && totalCount >= 0 && totalCount >= offers.length
+    && offers.every((offer) => offer?.id)
+    && (totalCount === 0 ? offers.length === 0 : offers.length > 0)
+  const hasCompletePublicSample = hasValidPublicPayload && Number.isInteger(totalCount)
     && totalCount >= offers.length
     && offers.length > 0
     && offers.every((offer) => offer?.id)
@@ -474,14 +485,14 @@ export function buildSeoPageQuality(page, payload) {
   const hasSufficientImages = isCategory || imageRatio >= SEO_MIN_IMAGE_RATIO
 
   return {
-    available: hasCompletePublicSample,
+    available: hasValidPublicPayload,
     totalCount: Number.isInteger(totalCount) ? totalCount : 0,
     sampledCount: offers.length,
     retailerCount: retailerKeys.size,
     imageCount,
     imageRatio,
     indexable: hasCompletePublicSample && hasMinimumOffers && hasRequiredRetailerBreadth && hasSufficientImages,
-    reason: !hasCompletePublicSample
+    reason: !hasValidPublicPayload
       ? 'quality-data-unavailable'
       : !hasMinimumOffers
       ? 'too-few-public-offers'
@@ -550,6 +561,9 @@ export async function fetchSeoPageQuality(page) {
   try {
     const payloads = await Promise.all(getSeoQualityQueries(page)
       .map((query) => fetchJsonWithCurlFallback(buildSeoRankingUrl(query))))
+    if (payloads.some((payload) => !buildSeoPageQuality(page, payload).available)) {
+      throw new Error('SEO quality API returned incomplete public data')
+    }
     return buildSeoPageQuality(page, {
       summary: { totalCount: payloads.reduce((sum, payload) => sum + Number(payload?.summary?.totalCount), 0) },
       rankedOffers: payloads.flatMap((payload) => payload?.rankedOffers || []),
@@ -567,6 +581,20 @@ export async function fetchSeoPageQuality(page) {
       error: error instanceof Error ? error.message : String(error),
     }
   }
+}
+
+export function assertSeoQualityAvailable(pages, qualityByPath) {
+  const unavailable = pages.filter((page) => page.robots === 'index,follow' && page.key && (page.query || page.seoAutopilot)
+    && qualityByPath.get(page.path)?.available !== true)
+  if (unavailable.length) throw new Error(`SEO build aborted: public quality evidence unavailable for ${unavailable.map((page) => page.path).join(', ')}`)
+}
+
+export async function fetchSeoQualityWithRetry(page, fetchQuality = fetchSeoPageQuality) {
+  return retryBuildOperation(async () => {
+    const quality = await fetchQuality(page)
+    if (!quality.available) throw new Error(`SEO quality unavailable for ${page.path}: ${quality.reason}`)
+    return quality
+  }, { attempts: 3, delayMs: 500 })
 }
 
 export function applySeoAutopilot(pages, qualityByPath = new Map()) {
@@ -765,7 +793,8 @@ async function main() {
   const qualityByPath = new Map()
   await Promise.all(staticSeoPages
     .filter((page) => page.robots === 'index,follow' && page.key && (page.query || page.seoAutopilot))
-    .map(async (page) => qualityByPath.set(page.path, await fetchSeoPageQuality(page))))
+    .map(async (page) => qualityByPath.set(page.path, await fetchSeoQualityWithRetry(page))))
+  assertSeoQualityAvailable(staticSeoPages, qualityByPath)
   renderPages = applySeoAutopilot(staticSeoPages, qualityByPath)
 
   for (const page of renderPages) {

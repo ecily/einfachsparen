@@ -6,6 +6,8 @@ import {
   filterSitemapXml,
   getSeoQualityQueries,
   getStaticSeoPages,
+  assertSeoQualityAvailable,
+  fetchSeoQualityWithRetry,
 } from '../../scripts/generateSeoHtml.mjs'
 
 const page = { key: 'deo', path: '/angebote/deo', robots: 'index,follow', query: { q: 'deo' } }
@@ -79,4 +81,28 @@ test('Deo landing page is configured for the autopilot', () => {
 
   assert.equal(deo?.robots, 'index,follow')
   assert.equal(deo?.query?.q, 'deo')
+})
+
+test('valid empty public data still demotes a page; an outage aborts publication instead', () => {
+  const empty = buildSeoPageQuality(page, payload({ count: 0 }))
+  assert.equal(empty.available, true)
+  assert.equal(empty.indexable, false)
+  assert.equal(empty.reason, 'too-few-public-offers')
+  assert.equal(buildSeoPageQuality(page, { summary: { totalCount: null }, rankedOffers: [] }).available, false)
+  assert.equal(buildSeoPageQuality(page, { summary: { totalCount: 12 }, rankedOffers: [] }).available, false)
+  assert.doesNotThrow(() => assertSeoQualityAvailable([page], new Map([[page.path, empty]])))
+  assert.throws(() => assertSeoQualityAvailable([page], new Map()), /SEO build aborted/)
+  assert.throws(() => assertSeoQualityAvailable([page], new Map([[page.path, { available: false }]])), /SEO build aborted/)
+})
+
+test('transient unavailable quality is retried without changing the thresholds', async () => {
+  let calls = 0
+  const quality = await fetchSeoQualityWithRetry(page, async () => {
+    calls += 1
+    return calls === 1 ? { available: false, reason: 'quality-data-unavailable' } : buildSeoPageQuality(page, payload({ count: 4 }))
+  })
+  assert.equal(calls, 2)
+  assert.equal(quality.available, true)
+  assert.equal(quality.indexable, false)
+  assert.equal(quality.reason, 'too-few-public-offers')
 })

@@ -472,7 +472,7 @@ export const seoFooterLinkGroups = [
     links: baseRelatedLinks.map(([key, label]) => ({
       key,
       label,
-      path: `/angebote/${key}/`,
+      path: key === 'angebote' ? '/angebote/' : `/angebote/${key}/`,
     })),
   },
   {

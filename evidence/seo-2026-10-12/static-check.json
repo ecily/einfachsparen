@@ -1,0 +1,52 @@
+[
+  {
+    "key": "home",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": false
+  },
+  {
+    "key": "billa",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "lidl",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "hofer",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "bipa",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "penny",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "supermarkt",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "bier",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "kaffee",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  },
+  {
+    "key": "schokolade",
+    "metadataUnchanged": true,
+    "guideReadableWithoutJS": true
+  }
+]

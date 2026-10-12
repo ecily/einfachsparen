@@ -69,7 +69,7 @@ function buildPublicFacts(pageKey, offers) {
   const conditionsCount = offers.filter((offer) => offer?.hasConditions === true).length
   const unitFacts = buildUnitFacts(offers)
   const facts = [
-    `${formatNumber(offers.length, 0)} aktuelle Angebote`,
+    `${formatNumber(offers.length, 0)} ausgewertete Angebote`,
     `${formatNumber(retailers.size, 0)} Handelsgruppen`,
   ]
 

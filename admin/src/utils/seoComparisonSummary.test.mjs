@@ -28,7 +28,7 @@ test('beer summary exposes only liter-comparable facts and recognized package fo
   })
 
   assert.ok(summary)
-  assert.ok(summary.facts.some((fact) => fact.includes('3 aktuelle Angebote')))
+  assert.ok(summary.facts.some((fact) => fact.includes('3 ausgewertete Angebote')))
   assert.ok(summary.facts.some((fact) => fact.includes('3 Handelsgruppen')))
   assert.ok(summary.facts.some((fact) => fact.includes('Literpreis-Abdeckung ist ausgewiesen')))
   assert.ok(summary.facts.some((fact) => fact.includes('Dosen, Flaschen, Multipacks')))
@@ -77,7 +77,7 @@ test('washmittel does not invent a price per washing load', () => {
   })
 
   assert.ok(summary)
-  assert.ok(summary.facts.some((fact) => fact.includes('2 aktuelle Angebote')))
+  assert.ok(summary.facts.some((fact) => fact.includes('2 ausgewertete Angebote')))
   assert.ok(!summary.facts.some((fact) => fact.includes('vergleichbarer Einheit')))
   assert.match(summary.note, /nicht aus Dosierungsannahmen berechnet/)
   assert.doesNotMatch(summary.note, /Waschladung:|€/)

@@ -1,3 +1,5 @@
+import { getSeoComparisonGuide } from '../../config/seoComparisonGuides.js'
+import { filterIndexableSeoLinks } from '../../utils/seoBuildPolicy.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchOfferRankingDirect } from '../../utils/apiBase'
 import { flattenRankingOffers, getOfferStableId, getRankingPagination, mergePaginatedRankingResults } from '../../utils/offers'
@@ -130,6 +132,9 @@ export function SeoOfferLandingPage({ page, categories = [], shoppingListIds, on
     )
   }
 
+  const guide = getSeoComparisonGuide(page)
+  const relatedLinks = filterIndexableSeoLinks(page.relatedLinks || [])
+
   return (
     <div className="seo-offer-page">
       <section className="panel seo-offer-hero">
@@ -230,14 +235,22 @@ export function SeoOfferLandingPage({ page, categories = [], shoppingListIds, on
         ) : null}
       </section>
 
-      {page.relatedLinks?.length ? (
+      {guide ? (
+        <section className="panel seo-comparison-guide" aria-labelledby="seo-comparison-guide-title">
+          <h2 id="seo-comparison-guide-title">{guide.title}</h2>
+          {guide.paragraphs.map((text) => <p key={text}>{text}</p>)}
+          <a href="/so-funktioniert-kaufklug/">Datenquellen, Methodik und Grenzen</a>
+        </section>
+      ) : null}
+
+      {relatedLinks.length ? (
         <nav className="panel seo-offer-related" aria-label="Verwandte Angebotsseiten">
           <div className="panel__header">
             <h2>Verwandte Angebote</h2>
             <p>Weitere stabile Angebotsseiten auf kaufklug.at.</p>
           </div>
           <div className="seo-offer-related__links">
-            {page.relatedLinks.map((link) => (
+            {relatedLinks.map((link) => (
               <a key={link.path} href={link.path}>
                 {link.label}
               </a>

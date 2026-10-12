@@ -1,5 +1,11 @@
 # kaufklug.at Kontext
 
+## SEO-Pruefung 2026-10-12 - Veroeffentlichung freigegeben
+
+- Aktueller AT/Web-GSC-Export ausgewertet: 37 -> 8 Klicks, 5.188 -> 1.896 Impressionen, Position 22,57 -> 31,50; unterschiedliche Tabellenaggregate nicht gleichgesetzt. Verlustursache und Schokolade-noindex vom 09.10. nicht bewiesen; heute 13 Angebote/3 Gruppen, indexierbar.
+- Gemeinsame Build-/React-Robots-Policy und gefilterte interne SEO-Links; falsches Alle-Angebote-Ziel korrigiert. Qualitaets-API-Ausfaelle brechen nach begrenzter Wiederholung den Build ab; echte Datenarmut bleibt noindex, Schwellen/PublicValidity unveraendert. Neun Angebotsseiten erhalten sichtbare spezifische Vergleichshilfe in Initial-HTML/React; statische Zahlen klar datiert.
+- Build/Lint, 93/93 Utility-Tests und Browser/Initial-HTML bestanden; zwei vorbestehende Discovery-Fehler separat. Homepage-DOM/H1/19 Vorschlaege/SEO exakt erhalten, Sponsor bleibt entfernt (Sponsorentfernung bereits mit `048ce020` veroeffentlicht). Fremde Aenderungen erhalten. Nutzerfreigabe fuer isolierten Commit/Push und regulaeren Auto-Deploy liegt vor; Live-Abnahme folgt. Bericht: `docs/KAUFKLUG_SEO_REVIEW_2026-10-12.md`, Belege/Screenshots: `evidence/seo-2026-10-12/`.
+
 ## Sponsorbereich entfernt 2026-10-12 - nur lokal
 
 - Gesamter Sponsorblock samt Angebot, Preisen, Kostendeckungsziel und Kontaktlink aus React-Homepage und initialem HTML entfernt; ungenutzte Homepage-Konstanten/CSS bereinigt. Footer folgt direkt ohne Restflaeche.

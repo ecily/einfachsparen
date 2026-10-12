@@ -1,0 +1,74 @@
+[
+  {
+    "key": "billa",
+    "sampleSize": 60,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 56,
+    "conditionsPresent": 4,
+    "normalizedPricesPresent": 60
+  },
+  {
+    "key": "lidl",
+    "sampleSize": 60,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 0,
+    "conditionsPresent": 16,
+    "normalizedPricesPresent": 60
+  },
+  {
+    "key": "hofer",
+    "sampleSize": 60,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 60,
+    "conditionsPresent": 60,
+    "normalizedPricesPresent": 60
+  },
+  {
+    "key": "bipa",
+    "sampleSize": 60,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 0,
+    "conditionsPresent": 60,
+    "normalizedPricesPresent": 60
+  },
+  {
+    "key": "penny",
+    "sampleSize": 60,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 0,
+    "conditionsPresent": 7,
+    "normalizedPricesPresent": 60
+  },
+  {
+    "key": "bier",
+    "sampleSize": 28,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 22,
+    "conditionsPresent": 21,
+    "normalizedPricesPresent": 28
+  },
+  {
+    "key": "kaffee",
+    "sampleSize": 59,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 52,
+    "conditionsPresent": 36,
+    "normalizedPricesPresent": 59
+  },
+  {
+    "key": "schokolade",
+    "sampleSize": 13,
+    "inactiveNow": 0,
+    "expired": 0,
+    "missingValidity": 11,
+    "conditionsPresent": 11,
+    "normalizedPricesPresent": 13
+  }
+]

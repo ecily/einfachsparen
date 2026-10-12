@@ -9463,3 +9463,6 @@ body,
 @media (min-width: 601px) and (max-width: 1100px) {
   .shell:has(> .home-compact) { width: calc(100% - 2rem) !important; max-width: calc(100% - 2rem) !important; }
 }
+
+/* Visible comparison guidance on offer landing pages only. */
+.seo-comparison-guide p { max-width: 75ch; line-height: 1.6; }

@@ -1,0 +1,112 @@
+[
+  {
+    "key": "supermarkt",
+    "available": true,
+    "totalCount": 1243,
+    "sampledCount": 180,
+    "retailerCount": 3,
+    "imageCount": 180,
+    "imageRatio": 1,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "billa",
+    "available": true,
+    "totalCount": 930,
+    "sampledCount": 60,
+    "retailerCount": 1,
+    "imageCount": 60,
+    "imageRatio": 1,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "hofer",
+    "available": true,
+    "totalCount": 68,
+    "sampledCount": 60,
+    "retailerCount": 1,
+    "imageCount": 60,
+    "imageRatio": 1,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "lidl",
+    "available": true,
+    "totalCount": 88,
+    "sampledCount": 60,
+    "retailerCount": 1,
+    "imageCount": 60,
+    "imageRatio": 1,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "bipa",
+    "available": true,
+    "totalCount": 937,
+    "sampledCount": 60,
+    "retailerCount": 1,
+    "imageCount": 42,
+    "imageRatio": 0.7,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "penny",
+    "available": true,
+    "totalCount": 225,
+    "sampledCount": 60,
+    "retailerCount": 1,
+    "imageCount": 60,
+    "imageRatio": 1,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "kaffee",
+    "available": true,
+    "totalCount": 59,
+    "sampledCount": 59,
+    "retailerCount": 3,
+    "imageCount": 58,
+    "imageRatio": 0.9830508474576272,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "bier",
+    "available": true,
+    "totalCount": 28,
+    "sampledCount": 28,
+    "retailerCount": 2,
+    "imageCount": 28,
+    "imageRatio": 1,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "schokolade",
+    "available": true,
+    "totalCount": 13,
+    "sampledCount": 13,
+    "retailerCount": 3,
+    "imageCount": 11,
+    "imageRatio": 0.8461538461538461,
+    "indexable": true,
+    "reason": "quality-thresholds-met"
+  },
+  {
+    "key": "butter",
+    "available": true,
+    "totalCount": 2,
+    "sampledCount": 2,
+    "retailerCount": 1,
+    "imageCount": 2,
+    "imageRatio": 1,
+    "indexable": false,
+    "reason": "too-few-public-offers"
+  }
+]
