@@ -1,3 +1,4 @@
+import { HOME_TITLE, HOME_DESCRIPTION } from '../config/homepage.js'
 import { CONTACT_EMAIL, SITE_URL } from '../config/constants.js'
 import {
   PRICE_CHECK_PATH,
@@ -12,35 +13,6 @@ import {
   TRUST_PAGE_ROUTE_ID,
   TRUST_PAGE_TITLE,
 } from '../config/trustPage.js'
-
-const FAQ_ITEMS = [
-  {
-    question: 'Was ist kaufklug.at?',
-    answer: 'kaufklug.at hilft dir, aktuelle Angebote zu suchen, zu merken und für deinen Einkauf zu organisieren.',
-  },
-  {
-    question: 'Brauche ich ein Konto?',
-    answer: 'Nein. Du kannst Angebote suchen, merken und deine Einkaufsliste teilen, ohne dich anzumelden.',
-  },
-  {
-    question: 'Sind die Preise verbindlich?',
-    answer: 'Nein. kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.',
-  },
-  {
-    question: 'Funktioniert kaufklug auch ohne App?',
-    answer:
-      'Ja. Die Browser-Version am Handy ist aktuell praktisch gleichwertig nutzbar. Eine neue App-Version kommt wieder, sobald die Datenqualität stabil genug ist.',
-  },
-  {
-    question: 'Kann ich meine Einkaufsliste teilen?',
-    answer: 'Ja. Du kannst einen Link zu deiner Liste erstellen und ihn zum Beispiel per WhatsApp oder SMS teilen.',
-  },
-  {
-    question: 'Warum sehe ich manchmal Bedingungen?',
-    answer:
-      'Manche Angebote gelten nur mit Kundenkarte, App oder ab einer bestimmten Menge. kaufklug zeigt solche Hinweise möglichst verständlich an.',
-  },
-]
 
 const TAB_TITLE = 'kaufklug.at | einfach sparen'
 const SOCIAL_IMAGE_URL = `${SITE_URL}/brand/kaufklug-logo-transparent.png`
@@ -61,6 +33,7 @@ export function getPageMeta(activePage) {
   }
 
   const pages = {
+    home: { title: `${HOME_TITLE} | kaufklug.at`, description: HOME_DESCRIPTION, path: '/', robots: 'index,follow' },
     [TRUST_PAGE_ROUTE_ID]: {
       title: TRUST_PAGE_TITLE,
       description: TRUST_PAGE_DESCRIPTION,
@@ -297,22 +270,7 @@ export function updateSeoMetadata(activePage) {
     },
   })
 
-  if (activePage === 'product-search' || activePage === 'search') {
-    setOrCreateJsonLd('kaufklug-jsonld-faq', {
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: FAQ_ITEMS.map((item) => ({
-        '@type': 'Question',
-        name: item.question,
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: item.answer,
-        },
-      })),
-    })
-  } else {
-    removeJsonLd('kaufklug-jsonld-faq')
-  }
+  removeJsonLd('kaufklug-jsonld-faq')
 
   if (activePage === TRUST_PAGE_ROUTE_ID) {
     setOrCreateJsonLd('kaufklug-jsonld-about-page', {
@@ -335,6 +293,7 @@ export function updateSeoMetadata(activePage) {
 
 export function getInitialPageFromPathname(pathname) {
   const normalizedPath = String(pathname || '').toLowerCase().replace(/\/+$/, '') || '/'
+  if (normalizedPath === '/') return 'home'
   if (normalizedPath === PRICE_CHECK_PATH) return PRICE_CHECK_ROUTE_ID
 
   const seoLandingPage = getSeoLandingPageByPath(pathname)

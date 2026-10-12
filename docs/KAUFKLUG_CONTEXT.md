@@ -1,5 +1,13 @@
 # kaufklug.at Kontext
 
+## Priorität 2026-10-12: kurze Homepage und Kostendeckung
+
+- Vorrang haben der direkte Sucheinstieg und zunächst 100 EUR monatliche Kostendeckung als Vertriebsziel. Dashboard-Metriken, Lidl-Kampagnen und SPAR-Recovery sind zurückgestellt. Die bereits gelöschten 22 Testfeedbacks bleiben abgeschlossen; keine weitere Löschung.
+- Homepage: kurze Hauptaussage, ein Erklärungssatz, native GET-Suche mit Enter/Button, drei bestehende Schnellsuchen, Top Deals/Stöbern, kostenloser Einkaufslistenhinweis und Methodik-Link. Wiederholte Anleitungen/FAQ/Smartphone-Blöcke entfernt; Unterseiten bleiben erreichbar. Kompakte sichtbare Angebots-/Rechtslinks; Initial-HTML und Runtime verwenden dieselben Texte und Links. Keine versteckten SEO-Blöcke oder unbelegten Bestpreis-/Vollständigkeitsversprechen.
+- Sponsorangebot: eine gekennzeichnete Nennung außerhalb der Angebotslisten für 100 EUR monatlich oder zwei Beiträge zu je 50 EUR. Dezent aufklappbarer Einstieg mit dem bestehenden Impressums-Kontakt `andreas.franz@ecily.com`; Ranking unabhängig. Keine Nachricht, kein neuer Zahlungslink, kein Tracking-/Werbenetzwerk. Kein vorhandener Zahlungs-/Affiliate-Zugang gefunden. Offen: Sponsor gewinnen, Nennung/Laufzeit vereinbaren und Rechnung/Zahlungsweg einrichten; bislang keine Einnahmen belegt.
+- Prüfung: Production-Build, ESLint und 88/88 bestehende Frontend-utils-Tests grün. Zwei separate Discovery-Testfehler (Kategorie-Reihenfolge, historische Müller-Notiz) auch im unveränderten HEAD reproduziert und unverändert belassen. Browserprüfung des Production-Builds: Desktop und Mobile bis 320 CSS-px, Enter-/Button-Suche, Filter/Sortierung, Navigation, Top Deals, Einkaufsliste und Methodik; kein Overflow oder Anwendungs-Konsolenfehler. Doppelten React-Key im bestehenden Footer korrigiert. Bestehenden Homepage-Smoke-Vertrag an die neue Seite angepasst; UI-Prüfung über den verbundenen Browser.
+- Deployment vorerst vorbereitet, noch nicht live bestätigt. Änderungen ausschließlich im sauberen Worktree `C:\coding\einfachsparen-landing` auf Basis `49755029`; fremde/uncommittete Änderungen im ursprünglichen Repo bleiben erhalten. Backend, Crawling, Scheduler, Ranking, PublicValidity und Produktionsdaten unverändert. Regulärer Push/Auto-Deploy folgt nach finalem Diff-Check; Live-Abnahme wird hier ergänzt.
+
 ## Strategische Leitlinie
 
 - Kaufklug.at soll Österreichs verlässlichste und sichtbarste Angebotssuche werden – mit besseren, aktuelleren und transparenteren Ergebnissen als bestehende kommerzielle Plattformen. Maximale organische Reichweite, führende Google-Positionen, wiederkehrende Nutzung und ein belastbarer Datenvorsprung sollen Kaufklug zu einem strategisch wertvollen und später verkäuflichen digitalen Produkt machen.

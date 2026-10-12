@@ -17,20 +17,19 @@ import {
 } from '../../scripts/generateSeoHtml.mjs'
 
 const appSource = fs.readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
+const homeSource = fs.readFileSync(new URL('../components/search/HomeLanding.jsx', import.meta.url), 'utf8')
 const offerCardSource = fs.readFileSync(new URL('../components/search/OfferCardConsumer.jsx', import.meta.url), 'utf8')
 const offerUtilsSource = fs.readFileSync(new URL('./offers.js', import.meta.url), 'utf8')
 
-test('public hero uses the final positioning and market line', () => {
-  assert.match(appSource, /Flugblätter raus\. Die besten Angebote rein\./)
-  assert.match(appSource, /Preise wirklich vergleichbar/)
-  assert.match(appSource, /pro kg, Liter oder Stück/)
-  const marketLine = appSource.match(/<p className="search-landing-hero__markets">([^<]+)<\/p>/)?.[1]
-
-  assert.equal(marketLine, 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · HOFER eingeschränkt · INTERSPAR eingeschränkt')
-  assert.match(marketLine, /INTERSPAR eingeschränkt/)
-  assert.match(marketLine, /HOFER eingeschränkt/)
-  assert.doesNotMatch(marketLine, /(?:^| · )(?:SPAR|EUROSPAR|PAGRO)(?: · |$)/)
-  assert.doesNotMatch(appSource, /Aktuelle Angebote finden\./)
+test('homepage has a single native search entry and stable home route', () => {
+  assert.equal(getInitialPageFromPathname('/'), 'home')
+  assert.equal(getPathForPage('home'), '/')
+  assert.equal(getPageMeta('home').robots, 'index,follow')
+  assert.match(homeSource, /action="\/suche" method="get" role="search"/)
+  assert.match(homeSource, /type="search" name="q"/)
+  assert.match(homeSource, /type="submit"/)
+  assert.match(appSource, /activePage !== 'home' \? <form/)
+  assert.doesNotMatch(appSource, /HowItWorksSection|TrustAndFaqSection|DiscoverOffersSection/)
 })
 
 test('pricecheck route stays on the pricecheck page after direct navigation and metadata updates', () => {
@@ -48,9 +47,6 @@ test('trust page has a stable indexable route and distinct metadata', () => {
 })
 
 test('comparison USP facts and card labels stay visible and semantically distinct', () => {
-  assert.match(appSource, /hero-compare-facts/)
-  assert.match(appSource, /Vergleichbar pro kg, Liter oder Stück/)
-  assert.doesNotMatch(appSource, /<div className="hero-compare-facts"/)
   assert.match(offerCardSource, /user-card__reference-label.*Referenzpreis/)
   assert.match(offerCardSource, />Kaufbedingung<\/span>/)
   assert.match(fs.readFileSync(new URL('../components/search/SeoOfferLandingPage.jsx', import.meta.url), 'utf8'), /seo-comparison-card/)
@@ -78,8 +74,8 @@ test('static HTML prioritizes the local stylesheet before module hydration', () 
   assert.ok(rendered.indexOf('kaufklug-critical-css') < rendered.indexOf('app.css'))
   assert.ok(rendered.indexOf('kaufklug-critical-css') < rendered.indexOf('app.js'))
   assert.match(rendered, /<div id="root"><main class="shell"><nav class="page-nav seo-static-nav"[^>]*>/)
-  assert.match(rendered, /seo-offer-page/)
-  assert.match(rendered, /seo-offer-results/)
+  assert.match(rendered, /home-compact/)
+  assert.doesNotMatch(rendered, /seo-offer-results/)
 })
 
 test('mobile UX contract keeps cookie notice and public content fluid', () => {

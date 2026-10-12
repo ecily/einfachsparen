@@ -42,7 +42,7 @@ test('search and Top Deals are presented as distinct guided entries without limi
 })
 
 test('final search guidance and explanation copy stay user-facing and restrained', () => {
-  assert.match(appSource, /\['Vergleichen', 'Preis pro Einheit, Bedingungen und passende Alternativen prüfen\.'\]/)
+  assert.match(fs.readFileSync(new URL('../components/search/HomeLanding.jsx', import.meta.url), 'utf8'), /Methodik und Grenzen/)
   assert.doesNotMatch(appSource, /immer günstiger/i)
 })
 

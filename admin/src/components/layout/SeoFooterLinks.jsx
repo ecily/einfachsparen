@@ -10,7 +10,7 @@ export function SeoFooterLinks() {
             <h3>{group.title}</h3>
             <ul>
               {group.links.map((link) => (
-                <li key={link.path}>
+                <li key={`${link.key}:${link.label}`}>
                   <a href={link.path}>{link.label}</a>
                 </li>
               ))}

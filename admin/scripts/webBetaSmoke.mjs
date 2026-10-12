@@ -1,3 +1,4 @@
+import { HOME_TITLE, HOME_DESCRIPTION } from '../src/config/homepage.js'
 import { spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -21,9 +22,7 @@ const MOBILE_WIDTH = 390
 const MOBILE_HEIGHT = 900
 const DESKTOP_WIDTH = 1280
 const DESKTOP_HEIGHT = 900
-const HERO_TEXT = 'Flugblätter raus. Die besten Angebote rein.'
-const HERO_SUBLINE = 'Preise wirklich vergleichbar – pro kg, Liter oder Stück.'
-const HERO_MARKETS = 'BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · HOFER eingeschränkt · INTERSPAR eingeschränkt'
+const HERO_TEXT = HOME_TITLE
 const SPAR_TRUST_TITLE = 'Warum SPAR derzeit fehlt'
 const FORBIDDEN_VISIBLE_COPY = [
   'bester Preis',
@@ -637,29 +636,25 @@ async function runHomeCheck(cdp) {
   await navigate(cdp, makeUrl('/'))
   await waitForCondition(
     cdp,
-    `document.body.innerText.includes(${JSON.stringify(SPAR_TRUST_TITLE)}) && Array.from(document.querySelectorAll('h1')).some((element) => element.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(HERO_TEXT)})`
+    `Array.from(document.querySelectorAll('h1')).some((element) => element.innerText.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(HERO_TEXT)})`
   )
 
   const audit = await auditCurrentPage(cdp, 'home')
   assert(audit.h1Texts.includes(HERO_TEXT), `home: hero headline must be exactly "${HERO_TEXT}"`, { h1Texts: audit.h1Texts })
-  assert(audit.bodyText.includes(HERO_SUBLINE), 'home: final hero subline must be visible')
-  assert(audit.heroMarketLine === HERO_MARKETS, 'home: final market line must be visible', {
-    actual: audit.heroMarketLine,
-    expected: HERO_MARKETS,
-  })
-  assert(audit.sparNoticeVisible && audit.sparNoticeText.includes(SPAR_TRUST_TITLE), 'home: compact SPAR trust notice must remain visible')
-  assert(!audit.sparDetailsOpen && audit.sparDetailsSummary === 'Mehr erfahren', 'home: SPAR details must start compact and remain accessible')
-  assert(!audit.bodyText.includes('Aktuelle Angebote finden.'), 'home: old hero headline must be absent')
-  assert(audit.topDealsNavVisible, 'home: Top Deals header button must be visible')
-  assert(audit.topDealsNavClass.includes('page-nav__top-deals'), 'home: Top Deals must be a distinct secondary CTA')
-  assert(audit.mainSearchVisible, 'home: primary product search must be visible early')
-  assert(audit.searchEntryGuidance === 'Suche ein Produkt – oder starte mit den Top Deals. Top Deals heute ansehen', 'home: search guidance must be visible', {
-    actual: audit.searchEntryGuidance,
-  })
-  assert(audit.searchTopDealsEntryVisible && audit.searchTopDealsEntryText === 'Top Deals heute ansehen' && audit.searchTopDealsEntryHref === '/top-deals', 'home: secondary Top Deals entry must be usable beside the main search')
-  assert(audit.homeContentText.includes('Direkt zu beliebten Angeboten'), 'home: popular-offer navigation heading must be visible')
-  assert(!audit.bodyText.includes('Angebote schneller finden'), 'home: old technical offer-navigation heading must be absent')
-  assert(/Preis pro Einheit, Bedingungen und passende Alternativen/.test(audit.homeContentText), 'home: comparison step must explain safe alternatives')
+  assert(audit.bodyText.includes(HOME_DESCRIPTION), 'home: concise explanation must be visible')
+  assert(audit.topDealsNavVisible, 'home: Top Deals navigation must remain visible')
+  const home = await evaluate(cdp, `(() => ({
+    formAction: document.querySelector('.home-compact__search')?.getAttribute('action'),
+    formMethod: document.querySelector('.home-compact__search')?.getAttribute('method'),
+    fieldName: document.querySelector('#home-search')?.name,
+    quickLinks: document.querySelectorAll('[aria-label="Schnellsuchen"] a').length,
+    sponsor: Boolean(document.querySelector('.home-compact__sponsor summary')),
+    footerLinks: document.querySelectorAll('.home-compact__footer a').length,
+    oldSections: document.querySelectorAll('.home-steps-section, .faq-section, .home-discovery-section').length,
+  }))()`)
+  assert(home.formAction === '/suche' && home.formMethod === 'get' && home.fieldName === 'q', 'home: native Enter/button search must submit q to /suche', home)
+  assert(home.quickLinks === 3 && home.sponsor && home.footerLinks >= 10, 'home: compact discovery, sponsor and footer must exist', home)
+  assert(home.oldSections === 0, 'home: redundant explanation blocks must be removed', home)
   assertNoHorizontalOverflow(audit, 'home')
 }
 
@@ -703,7 +698,7 @@ async function runSearchCheck(cdp) {
   )
 
   const audit = await auditCurrentPage(cdp, 'search')
-  assert(audit.h1Texts.includes(HERO_TEXT), 'search: final hero headline must remain visible')
+  assert(audit.h1Texts.includes('Angebote suchen'), 'search: search heading must remain visible')
   assert(!audit.unitPriceLabels.some((label) => /vergleichspreis/i.test(label)), 'search: old unit-price label found')
   assert(
     audit.unitPriceLabels.every((label) => ['PREIS PRO LITER', 'PREIS PRO KG', 'PREIS PRO STÜCK', 'PREIS PRO EINHEIT'].includes(label)),

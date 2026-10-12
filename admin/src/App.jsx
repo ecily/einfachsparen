@@ -40,10 +40,8 @@ import { areStringSetsEqual, flattenRankingOffers, getRankingPagination, mergePa
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
 import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 import { getSeoLandingPageByRouteId, SEO_LANDING_PAGE_PREFIX } from './config/seoLandingPages'
-import { QUICK_SEARCH_TERMS } from './config/searchDiscovery'
+import { HomeLanding } from './components/search/HomeLanding'
 
-const BETA_TEST_NOTICE =
-  'Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.'
 const BETA_INFO_TITLE = 'Warum Beta-Test?'
 const BETA_INFO_TEXT =
   'kaufklug lernt gerade, Angebote noch zuverlässiger zu zeigen. Wenn dir ein falscher Preis, eine fehlende Bedingung, ein falsches Bild oder eine falsche Kategorie auffällt, melde es direkt beim Angebot. So können wir die Datenqualität gezielt verbessern.'
@@ -105,189 +103,6 @@ function BetaInfoPanel({ id, onClose, className = '' }) {
   )
 }
 
-function BetaNoticeDisclosure({ onNavigate }) {
-  const [isOpen, setIsOpen] = useState(false)
-
-  return (
-    <section className={`home-beta-notice${isOpen ? ' home-beta-notice--open' : ''}`} aria-label="Beta-Hinweis">
-      <button
-        type="button"
-        className="beta-notice-trigger beta-notice-trigger--hero"
-        aria-expanded={isOpen}
-        aria-controls="beta-info-hero"
-        onClick={() => setIsOpen((current) => !current)}
-      >
-        <strong>Beta</strong>
-        <p>{BETA_TEST_NOTICE}</p>
-      </button>
-      <button type="button" className="beta-notice-feedback" onClick={() => onNavigate?.('feedback')}>
-        Feedback senden
-      </button>
-      {isOpen ? <BetaInfoPanel id="beta-info-hero" className="beta-info-panel--hero" onClose={() => setIsOpen(false)} /> : null}
-    </section>
-  )
-}
-
-function SearchLandingHero() {
-  // Static deploy marker: keep the public landing build tied to the current frontend source.
-  return (
-    <>
-      <section
-        className="panel search-landing-hero"
-        style={{
-          display: 'grid',
-          gap: 'clamp(0.42rem, 1.2vw, 0.72rem)',
-          marginBottom: '0.25rem',
-          minWidth: 0,
-          padding: 'clamp(0.68rem, 1.8vw, 1rem)',
-          width: '100%',
-        }}
-      >
-        <div className="search-landing-hero__usp">
-          <h1
-            style={{
-              fontSize: 'clamp(1.75rem, 4.4vw, 2.8rem)',
-              lineHeight: 1.05,
-              margin: 0,
-              maxWidth: '100%',
-            }}
-          >
-            Flugblätter raus.<br className="mobile-only-break" /> Die besten Angebote rein.
-          </h1>
-          {/* Flugblätter raus. Die besten Angebote rein. Supermarkt- und Drogerie-Angebote in Österreich bleiben als Produktkontext erhalten; ehrlich, kostenlos und von Menschen für Menschen. */}
-          <p className="subtitle">Preise wirklich vergleichbar – pro kg, Liter oder Stück.</p>
-          <p className="search-landing-hero__markets">BILLA · BILLA Plus · Lidl · PENNY · dm · BIPA · Müller · HOFER eingeschränkt · INTERSPAR eingeschränkt</p>
-          <p className="hero-compare-facts" aria-label="Vergleichsmerkmale">
-            Vergleichbar pro kg, Liter oder Stück – Packungsgrößen und Bedingungen inklusive.
-          </p>
-        </div>
-      </section>
-    </>
-  )
-}
-
-function HowItWorksSection() {
-  const steps = [
-    ['Suchen', 'Produkt oder Marke eingeben.'],
-    ['Vergleichen', 'Preis pro Einheit, Bedingungen und passende Alternativen prüfen.'],
-    ['Merken', 'Angebote auf die Einkaufsliste setzen.'],
-    ['Einkaufen', 'Im Markt prüfen und clever einkaufen.'],
-  ]
-
-  return (
-    <section className="panel home-info-section home-steps-section" aria-labelledby="home-steps-title">
-      <div className="home-section-heading">
-        <h2 id="home-steps-title">So funktioniert kaufklug</h2>
-      </div>
-      <div className="home-steps-grid">
-        {steps.map(([title, text], index) => (
-          <article className="home-step-card" key={title}>
-            <span className="home-step-card__index" aria-hidden="true">
-              {index + 1}
-            </span>
-            <div>
-              <h3>{title}</h3>
-              <p>{text}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-      <p><a href="/so-funktioniert-kaufklug/">Methodik, Betreiber und Grenzen im Detail</a></p>
-    </section>
-  )
-}
-
-function DiscoverOffersSection() {
-  return (
-    <section className="panel home-info-section home-discovery-section" aria-labelledby="home-discovery-title">
-      <div className="home-section-heading">
-        <h2 id="home-discovery-title">Aktuelle Angebote entdecken</h2>
-        <p>Starte mit einer Suche und prüfe Preise, Gültigkeit und Bedingungen.</p>
-      </div>
-      <div className="home-discovery-chips" aria-label="Beliebte Angebotssuchen">
-        {QUICK_SEARCH_TERMS.map((term) => (
-          <a href={`/suche?q=${encodeURIComponent(term)}`} key={term}>
-            {term}
-          </a>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function TrustAndFaqSection() {
-  const faqItems = [
-    {
-      question: 'Was ist kaufklug.at?',
-      answer: 'kaufklug.at hilft dir, aktuelle Angebote zu suchen, zu merken und für deinen Einkauf zu organisieren.',
-    },
-    {
-      question: 'Brauche ich ein Konto?',
-      answer: 'Nein. Du kannst Angebote finden, merken und deine Einkaufsliste teilen, ohne dich anzumelden.',
-    },
-    {
-      question: 'Sind die Preise verbindlich?',
-      answer: 'Nein. kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.',
-    },
-    {
-      question: 'Funktioniert kaufklug auch ohne App?',
-      answer:
-        'Ja. Die Browser-Version am Handy ist aktuell praktisch gleichwertig nutzbar. Eine neue App-Version kommt wieder, sobald die Datenqualität stabil genug ist.',
-    },
-    {
-      question: 'Kann ich meine Einkaufsliste teilen?',
-      answer: 'Ja. Du kannst einen Link zu deiner Liste erstellen und ihn zum Beispiel per WhatsApp oder SMS teilen.',
-    },
-    {
-      question: 'Warum sehe ich manchmal Bedingungen?',
-      answer:
-        'Manche Angebote gelten nur mit Kundenkarte, App oder ab einer bestimmten Menge. kaufklug zeigt solche Hinweise möglichst verständlich an.',
-    },
-  ]
-
-  return (
-    <section className="panel faq-section" style={{ display: 'grid', gap: '1rem', marginTop: '1rem', padding: '1rem' }}>
-      <div style={{ display: 'grid', gap: '0.45rem' }}>
-        <h2 style={{ margin: 0 }}>Kurz erklärt</h2>
-        <p style={{ color: 'var(--kk-text-muted)', margin: 0, maxWidth: '48rem' }}>
-          kaufklug ist eine Orientierungshilfe. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gap: '0.65rem' }}>
-        {faqItems.map((item) => (
-          <details key={item.question} style={{ borderTop: '1px solid var(--kk-border)', paddingTop: '0.65rem' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 800 }}>{item.question}</summary>
-            <p style={{ color: 'var(--kk-text-muted)', lineHeight: 1.5, margin: '0.45rem 0 0' }}>{item.answer}</p>
-          </details>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function ScopedPageTuning() {
-  return (
-    <style>
-      {`
-        .search-first-page .keyword-search-hero {
-          margin-top: 0.35rem;
-        }
-
-        @media (max-width: 720px) {
-          .search-first-page .keyword-search-hero {
-            margin-top: -0.5rem;
-          }
-
-          .search-first-page .search-landing-hero__qr {
-            width: min(40vw, 132px) !important;
-          }
-        }
-      `}
-    </style>
-  )
-}
-
 function App() {
   const rawPathname = typeof window !== 'undefined' ? window.location.pathname : ''
   const pathname = rawPathname.toLowerCase()
@@ -295,7 +110,7 @@ function App() {
   const isLegacyQualityPath = pathname === '/quality'
   const isDiagnosticsPath = pathname === '/ecily_web' || isLegacyQualityPath
   const initialPage =
-    isDiagnosticsPath ? 'diagnostics' : routedInitialPage === 'search' && pathname === '/' ? 'product-search' : routedInitialPage
+    isDiagnosticsPath ? 'diagnostics' : routedInitialPage
   const initialSharedListId = getSharedListIdFromPathname(rawPathname)
   const rankingRequestIdRef = useRef(0)
 
@@ -621,7 +436,7 @@ function App() {
 
   function handleLogoClick() {
     setIsHeaderBetaInfoOpen(false)
-    setActivePage('product-search')
+    setActivePage('home')
     setSharedListId('')
 
     if (typeof window === 'undefined') {
@@ -886,7 +701,6 @@ function App() {
 
   return (
     <main className="shell" style={{ paddingBottom: '5.5rem' }}>
-      <ScopedPageTuning />
       <nav className="page-nav" aria-label="Seiten">
         <button className="page-nav__logo" type="button" onClick={handleLogoClick} aria-label="Zur Startseite">
           <img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" />
@@ -938,7 +752,7 @@ function App() {
           </button>
         </div>
 
-        <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
+        {activePage !== 'home' ? <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
           <input
             type="search"
             value={navSearchQuery}
@@ -949,13 +763,15 @@ function App() {
           <button type="submit" className="page-nav__search-button">
             Suchen
           </button>
-        </form>
+        </form> : null}
       </nav>
       {isHeaderBetaInfoOpen ? (
         <BetaInfoPanel id="beta-info-header" className="beta-info-panel--header" onClose={() => setIsHeaderBetaInfoOpen(false)} />
       ) : null}
 
-      {activePage === 'shared-shopping-list' ? (
+      {activePage === 'home' ? (
+        <HomeLanding />
+      ) : activePage === 'shared-shopping-list' ? (
         <SharedShoppingListPage
           shareId={sharedListId}
           onNavigate={handleNavigate}
@@ -998,7 +814,7 @@ function App() {
         </div>
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
-          <SearchLandingHero />
+          <h1>Angebote suchen</h1>
           <KeywordSearchPage
             searchRequest={keywordSearchRequest}
             retailers={retailers}
@@ -1007,10 +823,6 @@ function App() {
             onAddToShoppingList={handleAddToShoppingList}
             onNavigate={handleNavigate}
           />
-          <BetaNoticeDisclosure onNavigate={handleNavigate} />
-          <HowItWorksSection />
-          <DiscoverOffersSection />
-          <TrustAndFaqSection />
         </div>
       ) : activePage === 'pricecheck:bier-literpreis-vergleich' ? (
         <PriceCheckPage />
@@ -1059,9 +871,9 @@ function App() {
         </>
       )}
 
-      <SeoFooterLinks />
+      {activePage !== 'home' ? <SeoFooterLinks /> : null}
       <CookieStorageNotice onNavigate={handleNavigate} />
-      <StickyBottomLine onNavigate={handleNavigate} />
+      {activePage !== 'home' ? <StickyBottomLine onNavigate={handleNavigate} /> : null}
     </main>
   )
 }

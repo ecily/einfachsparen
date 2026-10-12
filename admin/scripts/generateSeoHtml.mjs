@@ -1,3 +1,5 @@
+import { CONTACT_EMAIL } from '../src/config/constants.js'
+import { HOME_TITLE, HOME_DESCRIPTION, HOME_QUICK_SEARCHES, HOME_OFFER_LINKS, HOME_LEGAL_LINKS, SPONSOR_OFFER, SPONSOR_CONTACT } from '../src/config/homepage.js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { dirname, join } from 'node:path'
@@ -55,10 +57,10 @@ const CRITICAL_STATIC_NAV_CSS = `.page-nav{display:flex;align-items:center;gap:.
 const staticPages = [
   {
     path: '/',
-    title: 'Aktuelle Angebote finden und beim Einkauf sparen | kaufklug.at',
+    title: `${HOME_TITLE} | kaufklug.at`,
     description: 'kaufklug.at zeigt aktuelle Angebote aus österreichischen Märkten. Preise, Aktionen, Bedingungen und Einkaufsliste übersichtlich vergleichen.',
     robots: 'index,follow',
-    h1: 'Aktuelle Angebote finden und beim Einkauf sparen',
+    h1: HOME_TITLE,
     relatedLinks: [
       { label: 'Top Deals heute', path: '/top-deals/' },
       { label: 'Bier Angebote', path: '/angebote/bier/' },
@@ -333,12 +335,13 @@ function buildPriceCheckDataScript(candidate) {
 export function buildSeoStaticDocument(template, page, pages) {
   const path = normalizePath(page.path)
   const canonical = `${siteUrl}${canonicalPath(path)}`
-  const staticHomeContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>Flugbl\u00e4tter raus. Die besten Angebote rein.</h1><p class="subtitle">Preise wirklich vergleichbar \u2013 pro kg, Liter oder St\u00fcck.</p><p class="search-landing-hero__markets">BILLA \u00b7 BILLA Plus \u00b7 Lidl \u00b7 PENNY \u00b7 dm \u00b7 BIPA \u00b7 M\u00fcller \u00b7 HOFER eingeschr\u00e4nkt \u00b7 INTERSPAR eingeschr\u00e4nkt</p><p class="hero-compare-facts">Vergleichbar pro kg, Liter oder St\u00fcck \u2013 Packungsgr\u00f6\u00dfen und Bedingungen inklusive.</p><p class="market-check-note">Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen.</p>${buildRelatedLinks(page, pages)}</main>`
+  const homeLinks = (links) => links.map((link) => `<a href="${escapeHtml(link.path)}">${escapeHtml(link.label)}</a>`).join(' ')
+  const staticHomeContent = `<main class="shell"><nav class="page-nav seo-static-nav" aria-label="Seiten"><a href="/" class="page-nav__logo" aria-label="kaufklug Startseite"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></a><span class="page-nav__beta">Beta</span><div class="page-nav__main"><a class="page-nav__button" href="/suche">Suche</a><a class="page-nav__button" href="/stoebern">St\u00f6bern</a><a class="page-nav__button" href="/einkaufsliste">Liste</a><a class="page-nav__button" href="/top-deals/">Top Deals</a></div></nav><div class="home-compact"><section class="panel home-compact__hero" aria-labelledby="home-title"><h1 id="home-title">${escapeHtml(HOME_TITLE)}</h1><p>${escapeHtml(HOME_DESCRIPTION)}</p><form class="home-compact__search" action="/suche" method="get" role="search"><label for="home-search">Produkt oder Marke suchen</label><div><input id="home-search" type="search" name="q" placeholder="z. B. Kaffee" required /><button type="submit">Suchen</button></div></form><nav class="home-compact__links" aria-label="Schnellsuchen">${homeLinks(HOME_QUICK_SEARCHES.map((term) => ({ label: term, path: `/suche?q=${encodeURIComponent(term)}` })))}</nav><nav class="home-compact__links home-compact__secondary" aria-label="Weitere Einstiege"><a href="/top-deals/">Top Deals</a><a href="/stoebern">St\u00f6bern</a></nav><p class="home-compact__note">Kostenlos und ohne Konto. Angebote auf deiner <a href="/einkaufsliste">Einkaufsliste</a> merken.</p><p class="home-compact__note">Preise, Verf\u00fcgbarkeit und Bedingungen bitte im Markt pr\u00fcfen. <a href="/so-funktioniert-kaufklug/">Methodik und Grenzen</a></p></section><aside class="home-compact__sponsor" aria-label="kaufklug unterst\u00fctzen"><details><summary>kaufklug unterst\u00fctzen / Sponsor werden</summary><p>${escapeHtml(SPONSOR_OFFER)}</p><p>Ziel: 100 EUR monatlich zur Kostendeckung. <a href="${escapeHtml(SPONSOR_CONTACT)}">Anfragen an ${escapeHtml(CONTACT_EMAIL)}</a></p></details></aside><footer class="home-compact__footer"><nav aria-label="Angebotsseiten"><strong>Angebotsseiten</strong><div class="home-compact__links">${homeLinks(HOME_OFFER_LINKS)}</div></nav><nav class="home-compact__links" aria-label="Rechtliches">${homeLinks(HOME_LEGAL_LINKS)}</nav><small>\u00a9 2026 kaufklug.at</small></footer></div></main>`
   const staticContent = `<main class="seo-static-shell"><p class="eyebrow">kaufklug.at</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p><p>Aktuelle Angebote werden laufend aus öffentlichen Händlerquellen zusammengeführt. Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>${buildRelatedLinks(page, pages)}</main>`
   const staticTrustContent = `<main class="seo-static-shell"><p class="eyebrow">Über kaufklug</p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.intro)}</p>${buildTrustSections(page)}${buildTrustLinks(page)}</main>`
   const staticNavigation = '<nav class="page-nav seo-static-nav" aria-label="Seiten"><span class="page-nav__logo" aria-hidden="true"><img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" /></span><span class="page-nav__beta">Beta</span><div class="page-nav__main"><span class="page-nav__button">Suche</span><span class="page-nav__button">Stöbern</span><span class="page-nav__button">Liste</span></div></nav>'
   const staticContentForRender = path === '/' ? staticHomeContent : page.staticSections ? staticTrustContent : staticContent
-  const staticShellContent = page.staticSections
+  const staticShellContent = path === '/' ? staticHomeContent : page.staticSections
     ? staticContentForRender
       .replace('<main class="seo-static-shell">', `<main class="shell">${staticNavigation}<section class="panel seo-static-main">`)
       .replace('</main>', '</section></main>')
