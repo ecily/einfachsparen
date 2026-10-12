@@ -1,6 +1,6 @@
 # kaufklug.at Kontext
 
-## Homepage-Anpassung 2026-10-12 - lokal zur Abnahme
+## Homepage-Anpassung 2026-10-12 - veroeffentlicht
 
 - Homepage nutzt Menue-Aussenbreite fuer Suchpanel, Sponsor und Footer; Tablet-Seitenabstand nur auf Homepage begrenzt. H1: `Womit willst du heute sparen?`; bestehender SEO-Title/Description erhalten.
 - 19 sichtbare kompakte Vorschlagslinks: Produkte, Haendler, Themen. Aus SEO-Registry plus finaler Build-Indexierungspruefung abgeleitet; Initial-HTML und React verwenden identische Build-Daten. Historische GSC-Belege sind kein aktueller Indexierungsnachweis: berichtet wird **indexierbar**.
@@ -9,6 +9,7 @@
 - Analytics-Unabhaengigkeit vor Veroeffentlichung nachgewiesen: sauberer Ausgangscommit `14bce273` und Homepage-Build senden bei gleicher Proxy-/API-Konfiguration dieselben drei Ereignisse mit identischen Pfaden/Metadaten und jeweils HTTP 500. Analytics-Code/Aufrufstellen unveraendert; keine Reparatur.
 - Erneute Release-Pruefung: Build/Lint, 89/89 utils-Tests sowie Browser 375/768/1440 px, 19 Links und Enter/Button je 59 Kaffee-Karten bestanden. Bedingte Nutzerfreigabe erfuellt. Veroeffentlichung ausschliesslich aus sauberem Worktree `C:/coding/einfachsparen-home-release`; keine fremden Backend-/Dokumentationsaenderungen enthalten.
 
+- Live-Abnahme: Produktcommit `fad7a8c4`, regulaerer Auto-Deploy `99035880-46bd-47f2-928d-fa7d971d57bb` ACTIVE. H1, Aussenkanten 375/768/1440 px, alle 19 Links und Enter/Button je 59 Kaffee-Angebote bestanden; initiales HTML/React konsistent. SEO-Title, Description, Canonical und Robots exakt unveraendert; Health 200/Mongo verbunden. Analytics lokal im Ausgangsstand/Release jeweils HTTP 500, live alle neun beobachteten Events HTTP 200; keine Analytics-Aenderung. Live-Bundle `index-0hNWbYHh.js`. Belege/Screenshots lokal: `evidence/homepage-2026-10-12/live/`.
 
 ## Priorität 2026-10-12: kurze Homepage und Kostendeckung
 
