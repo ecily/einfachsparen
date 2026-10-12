@@ -1,10 +1,12 @@
 # kaufklug.at Kontext
 
-## SEO-Pruefung 2026-10-12 - Veroeffentlichung freigegeben
+## SEO-Pruefung 2026-10-12 - veroeffentlicht
 
 - Aktueller AT/Web-GSC-Export ausgewertet: 37 -> 8 Klicks, 5.188 -> 1.896 Impressionen, Position 22,57 -> 31,50; unterschiedliche Tabellenaggregate nicht gleichgesetzt. Verlustursache und Schokolade-noindex vom 09.10. nicht bewiesen; heute 13 Angebote/3 Gruppen, indexierbar.
 - Gemeinsame Build-/React-Robots-Policy und gefilterte interne SEO-Links; falsches Alle-Angebote-Ziel korrigiert. Qualitaets-API-Ausfaelle brechen nach begrenzter Wiederholung den Build ab; echte Datenarmut bleibt noindex, Schwellen/PublicValidity unveraendert. Neun Angebotsseiten erhalten sichtbare spezifische Vergleichshilfe in Initial-HTML/React; statische Zahlen klar datiert.
-- Build/Lint, 93/93 Utility-Tests und Browser/Initial-HTML bestanden; zwei vorbestehende Discovery-Fehler separat. Homepage-DOM/H1/19 Vorschlaege/SEO exakt erhalten, Sponsor bleibt entfernt (Sponsorentfernung bereits mit `048ce020` veroeffentlicht). Fremde Aenderungen erhalten. Nutzerfreigabe fuer isolierten Commit/Push und regulaeren Auto-Deploy liegt vor; Live-Abnahme folgt. Bericht: `docs/KAUFKLUG_SEO_REVIEW_2026-10-12.md`, Belege/Screenshots: `evidence/seo-2026-10-12/`.
+- Build/Lint, 93/93 Utility-Tests und Browser/Initial-HTML bestanden; zwei vorbestehende Discovery-Fehler separat. Homepage-DOM/H1/19 Vorschlaege/SEO exakt erhalten, Sponsor bleibt entfernt (Sponsorentfernung bereits mit `048ce020` veroeffentlicht). Fremde Aenderungen erhalten. Isolierter Commit/Push und regulaerer Auto-Deploy nach Nutzerfreigabe erfolgt. Bericht: `docs/KAUFKLUG_SEO_REVIEW_2026-10-12.md`, Belege/Screenshots: `evidence/seo-2026-10-12/`.
+
+- Live-Abnahme bestanden: SEO-Commit `8f96a5be`, Auto-Deploy `149c3248-3f1e-4c27-a34c-36f2516f7e90` ACTIVE. 32 initiale Seiten mit Robots/Canonical geprueft, Sitemap genau 26 indexierbare URLs; React/SEO-Links konsistent (Butter bleibt noindex), neun Vergleichshinweise vorhanden. Homepage/H1/19 Vorschlaege/Sponsorentfernung exakt erhalten, Enter/Button je 59 Kaffee-Treffer; 375/768/1440 px ohne Overflow. API-Health 200/Mongo verbunden. Belege: `evidence/seo-2026-10-12/live/`. Keine Rankingwirkung behauptet.
 
 ## Sponsorbereich entfernt 2026-10-12 - nur lokal
 

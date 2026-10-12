@@ -1,0 +1,345 @@
+{
+  "matrix": [
+    {
+      "path": "/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/",
+      "guide": false
+    },
+    {
+      "path": "/top-deals/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/top-deals/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/supermarkt/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/supermarkt/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/drogerie/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/drogerie/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/kaffee/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/kaffee/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/bier/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/bier/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/deo/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/deo/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/softdrinks/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/softdrinks/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/schokolade/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/schokolade/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/windeln/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/windeln/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/duschgel/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/duschgel/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/nudeln/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/nudeln/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/chips/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/chips/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/billa/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/billa/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/hofer/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/hofer/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/lidl/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/lidl/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/dm/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/dm/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/bipa/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/bipa/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/penny/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/penny/",
+      "guide": true
+    },
+    {
+      "path": "/angebote/waschmittel/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/waschmittel/",
+      "guide": false
+    },
+    {
+      "path": "/impressum/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/impressum/",
+      "guide": false
+    },
+    {
+      "path": "/so-funktioniert-kaufklug/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/so-funktioniert-kaufklug/",
+      "guide": false
+    },
+    {
+      "path": "/datenschutz/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/datenschutz/",
+      "guide": false
+    },
+    {
+      "path": "/nutzungshinweise/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/nutzungshinweise/",
+      "guide": false
+    },
+    {
+      "path": "/cookies/",
+      "status": 200,
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/cookies/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/spar/",
+      "status": 200,
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/spar/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/mueller/",
+      "status": 200,
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/mueller/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/kaese/",
+      "status": 200,
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/kaese/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/butter/",
+      "status": 200,
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/butter/",
+      "guide": false
+    },
+    {
+      "path": "/angebote/wurst/",
+      "status": 200,
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/wurst/",
+      "guide": false
+    },
+    {
+      "path": "/suche/",
+      "status": 200,
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/suche/",
+      "guide": false
+    }
+  ],
+  "policy": {
+    "/": "index,follow",
+    "/so-funktioniert-kaufklug/": "index,follow",
+    "/preischeck/bier-literpreis-vergleich/": "noindex,follow",
+    "/top-deals/": "index,follow",
+    "/impressum/": "index,follow",
+    "/datenschutz/": "index,follow",
+    "/nutzungshinweise/": "index,follow",
+    "/cookies/": "index,follow",
+    "/stoebern/": "noindex,follow",
+    "/suche/": "noindex,follow",
+    "/einkaufsliste/": "noindex,follow",
+    "/liste/": "noindex,noarchive",
+    "/feedback/": "noindex,follow",
+    "/ecily_web/": "noindex,nofollow",
+    "/angebote/": "index,follow",
+    "/angebote/supermarkt/": "index,follow",
+    "/angebote/drogerie/": "index,follow",
+    "/angebote/spar/": "noindex,follow",
+    "/angebote/billa/": "index,follow",
+    "/angebote/hofer/": "index,follow",
+    "/angebote/lidl/": "index,follow",
+    "/angebote/dm/": "index,follow",
+    "/angebote/bipa/": "index,follow",
+    "/angebote/mueller/": "noindex,follow",
+    "/angebote/penny/": "index,follow",
+    "/angebote/kaffee/": "index,follow",
+    "/angebote/bier/": "index,follow",
+    "/angebote/softdrinks/": "index,follow",
+    "/angebote/deo/": "index,follow",
+    "/angebote/schokolade/": "index,follow",
+    "/angebote/windeln/": "index,follow",
+    "/angebote/duschgel/": "index,follow",
+    "/angebote/nudeln/": "index,follow",
+    "/angebote/chips/": "index,follow",
+    "/angebote/waschmittel/": "index,follow",
+    "/angebote/kaese/": "noindex,follow",
+    "/angebote/butter/": "noindex,follow",
+    "/angebote/wurst/": "noindex,follow"
+  },
+  "sitemapPaths": [
+    "/",
+    "/top-deals/",
+    "/angebote/",
+    "/angebote/supermarkt/",
+    "/angebote/drogerie/",
+    "/angebote/kaffee/",
+    "/angebote/bier/",
+    "/angebote/deo/",
+    "/angebote/softdrinks/",
+    "/angebote/schokolade/",
+    "/angebote/windeln/",
+    "/angebote/duschgel/",
+    "/angebote/nudeln/",
+    "/angebote/chips/",
+    "/angebote/billa/",
+    "/angebote/hofer/",
+    "/angebote/lidl/",
+    "/angebote/dm/",
+    "/angebote/bipa/",
+    "/angebote/penny/",
+    "/angebote/waschmittel/",
+    "/impressum/",
+    "/so-funktioniert-kaufklug/",
+    "/datenschutz/",
+    "/nutzungshinweise/",
+    "/cookies/"
+  ],
+  "suggestions": [
+    "/angebote/kaffee/",
+    "/angebote/bier/",
+    "/angebote/softdrinks/",
+    "/angebote/deo/",
+    "/angebote/schokolade/",
+    "/angebote/windeln/",
+    "/angebote/duschgel/",
+    "/angebote/nudeln/",
+    "/angebote/chips/",
+    "/angebote/waschmittel/",
+    "/angebote/billa/",
+    "/angebote/hofer/",
+    "/angebote/lidl/",
+    "/angebote/dm/",
+    "/angebote/bipa/",
+    "/angebote/penny/",
+    "/angebote/",
+    "/angebote/supermarkt/",
+    "/angebote/drogerie/"
+  ],
+  "health": {
+    "ok": true,
+    "status": "ok",
+    "database": {
+      "connected": true
+    },
+    "build": {
+      "packageVersion": "1.0.0",
+      "commitSha": "unknown",
+      "commitShort": "unknown",
+      "commitSource": "unknown",
+      "buildTime": "2026-10-12T15:40:14.348Z",
+      "buildTimeSource": "process-start-fallback",
+      "processStartedAt": "2026-10-12T15:40:14.348Z",
+      "processUptimeSeconds": 75,
+      "nodeEnv": "production"
+    },
+    "features": {
+      "publicValidity": "public-validity-v2-billa-pdf-disabled"
+    },
+    "rankingCache": {
+      "schemaVersion": "ranking-cache-v8-source-quality-fresh-crawl-v1-public-validity-v2-billa-pdf-disabled-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v2-image-tiebreak-v1-public-candidate-validity-v1-hofer-html-primary-upcoming-v2",
+      "resultSetTokens": true,
+      "mongoBackedResultSets": true,
+      "resultSetTtlSeconds": 300
+    },
+    "now": "2026-10-12T15:41:27.429Z"
+  }
+}
