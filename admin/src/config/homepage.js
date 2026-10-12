@@ -5,6 +5,11 @@ export const HOME_SEO_TITLE = 'Aktuelle Angebote in \u00d6sterreich vergleichen.
 export const HOME_TITLE = 'Womit willst du heute sparen?'
 export const HOME_DESCRIPTION = 'Suche Produkte oder Marken und prüfe Preise, Gültigkeit und Bedingungen aus Supermärkten und Drogerien.'
 export const HOME_QUICK_SEARCHES = QUICK_SEARCH_TERMS.slice(0, 3)
+export const HOME_PRODUCT_SEARCHES = [
+  'Milch', 'Butter', 'Käse', 'Naturjoghurt', 'Brot', 'Reis', 'Olivenöl', 'Linsen',
+  'Thunfisch', 'Haferdrink', 'Eistee', 'Zahnpasta', 'Shampoo', 'Toilettenpapier',
+  'Spülmittel', 'Geschirrspültabs', 'Küchenrolle', 'Taschentücher',
+]
 export const HOME_OFFER_LINKS = [
   ['Bier', '/angebote/bier/'], ['Kaffee', '/angebote/kaffee/'], ['Waschmittel', '/angebote/waschmittel/'],
   ['Lidl', '/angebote/lidl/'], ['BILLA', '/angebote/billa/'], ['PENNY', '/angebote/penny/'],
@@ -26,9 +31,11 @@ export function getHomeSuggestions(pages = seoLandingPages) {
     const path = `${page.path.replace(/\/+$/, '')}/`
     return { label: labels.get(path) || page.h1.split(' Angebote')[0], path, group: group(page) }
   })
-  for (const term of HOME_QUICK_SEARCHES) {
+  const normalizeTerm = (term) => term.toLocaleLowerCase('de').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+  for (const term of [...HOME_QUICK_SEARCHES, ...HOME_PRODUCT_SEARCHES]) {
     if (!links.some((link) => link.label.toLocaleLowerCase('de') === term.toLocaleLowerCase('de'))) {
-      links.push({ label: term, path: `/suche?q=${encodeURIComponent(term)}`, group: 0 })
+      const landing = eligible.find((page) => page.query?.q && normalizeTerm(page.query.q) === normalizeTerm(term))
+      links.push({ label: term, path: landing ? `${landing.path.replace(/\/+$/, '')}/` : `/suche?q=${encodeURIComponent(term)}`, group: 0 })
     }
   }
   const seen = new Set()

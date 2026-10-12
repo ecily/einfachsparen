@@ -5,19 +5,20 @@ export function HomeLanding() {
     <div className="home-compact">
       <section className="panel home-compact__hero" aria-labelledby="home-title">
         <h1 id="home-title">{HOME_TITLE}</h1>
-        <p>{HOME_DESCRIPTION}</p>
+        <p className="home-compact__intro">{HOME_DESCRIPTION}</p>
         <form className="home-compact__search" action="/suche" method="get" role="search">
           <label htmlFor="home-search">Produkt oder Marke suchen</label>
           <div>
             <input id="home-search" type="search" name="q" placeholder="z. B. Kaffee" required />
-            <button type="submit">Suchen</button>
+            <button type="submit" aria-label="go, Suche starten">go</button>
           </div>
         </form>
+        <a className="home-compact__top-deals" href="/top-deals/">Top Deals heute</a>
         <nav className="home-compact__links home-compact__suggestions" aria-label="Schnellsuchen">
           {getRenderedHomeSuggestions().map((link) => <a key={link.path} href={link.path}>{link.label}</a>)}
         </nav>
         <nav className="home-compact__links home-compact__secondary" aria-label="Weitere Einstiege">
-          <a href="/top-deals/">Top Deals</a><a href="/stoebern">Stöbern</a>
+          <a href="/stoebern">Stöbern</a>
         </nav>
         <p className="home-compact__note">Kostenlos und ohne Konto. Angebote auf deiner <a href="/einkaufsliste">Einkaufsliste</a> merken.</p>
         <p className="home-compact__note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen. <a href="/so-funktioniert-kaufklug/">Methodik und Grenzen</a></p>

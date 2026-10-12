@@ -933,7 +933,7 @@ async function runReducedMotionCheck(cdp) {
   await waitForCondition(cdp, `Boolean(document.querySelector('.home-compact__search'))`, TIMEOUT_MS)
 
   const audit = await evaluate(cdp, `({
-    topDealsAnimationName: getComputedStyle(document.querySelector('.home-compact__secondary a')).animationName,
+    topDealsAnimationName: getComputedStyle(document.querySelector('.home-compact__top-deals')).animationName,
     mainSearchAnimationName: getComputedStyle(document.querySelector('.home-compact__search button')).animationName,
   })`)
   assert(audit.topDealsAnimationName === 'none', 'reduced-motion: Top Deals animation must be disabled', {

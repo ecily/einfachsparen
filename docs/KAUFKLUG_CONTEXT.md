@@ -1,5 +1,21 @@
 # kaufklug.at Kontext
 
+## Suchgeschwindigkeit 2026-10-12 - nur lokal
+
+- Ersetzt den unten beschriebenen Vollvorlade-Tradeoff: Empfohlen zeigt nur API-Seite 1, Nachladen auf Klick. Globale Markt-/Ersparnissortierung ben?tigt weiterhin alle Seiten, erh?lt sichtbare Karten bis zum Abschluss und kennzeichnet Fortschritt/Fehler; gezielte Seitenwiederholung, Cache je Suche/Filter und sichere Request-Entwertung. Backend/Vergleichssicherheit/Homepage erhalten.
+- Production-Build/Lint und 99 Utility-Tests; gezielte Browserchecks mit Seitenfehlern, Sortier-/Such-/Filterwechseln sowie 375/768/1440 px. Median erste Liste: swiffer 818 -> 843 ms, waschmittel 1.074 -> 813 ms (je drei lokale Navigationsmessungen, Netzwerk/Backend-Cache nicht kontrolliert). Nachweise: `evidence/speed-2026-10-12/REPORT.md`. Fremde ?nderungen erhalten; kein Push/Deployment.
+
+## Suchsortierung 2026-10-12 - nur lokal
+
+- Zusatzauftrag: Frontend sortierte nur geladene 60 Treffer; Ersparnis-Auswahl sortierte Einheitspreis statt bestaetigter EUR-Ersparnis. Swiffer-Maerkte bei acht Treffern bereits korrekt; globaler Fehler mit Waschmittel (160 Treffer) belegt. Nun komplette Public-API-Pagination mit stabilem Token vor Sortieren/Filtern und Anzeige in 60er-Portionen; `limit=all`-Sperre, Backend/Ranking und Vergleichssicherheit unveraendert.
+- Build/Lint, 98/98 Utility-Tests (5 neue Regressionen), Browser alle Optionen/Filter/Reset/neue Suche/Nachladen bestanden: Waschmittel 60/120/160, Ersparnis 60/120/150; Swiffer 375/768/1440 ohne Overflow. Homepage-Regressionscheck weiterhin gruen. Tradeoff: kompletter API-Trefferbestand wird vor erster Anzeige geladen. Bericht: `evidence/sort-2026-10-12/REPORT.md`. Fremde Aenderungen erhalten; kein Push/Deployment.
+
+## Frontpage-Feinschliff 2026-10-12 - nur lokal
+
+- Ausschliesslich sechs Homepage-Anpassungen: responsive H1 ohne schmale Begrenzung, dezenter Erklaerungstext, visuell verborgenes zugaengliches Label, Button `go`, 18 gepruefte neue Produktsuchen (insgesamt 37 Vorschlaege), gruener `Top Deals heute`-CTA vor Vorschlaegen; Stoebern sekundaer. Initial-HTML/React konsistent, Footer/Aussenbreite/SEO/Build-Schutz erhalten; Sponsor entfernt.
+- Build/Lint und 93/93 Utility-Tests bestanden; Browser 375/768/1440 px ohne Overflow, H1 ab 768 px einzeilig, Tastatur/Enter/Button geprueft. Zwei bekannte Discovery-Fehler und lokaler Analytics-500 im allgemeinen Smoke separat; keine Reparatur. Fremde Aenderungen erhalten, kein Push/Deployment. Vollstaendige Liste/Screenshots: `evidence/frontpage-2026-10-12/REPORT.md`.
+
+
 ## SEO-Pruefung 2026-10-12 - veroeffentlicht
 
 - Aktueller AT/Web-GSC-Export ausgewertet: 37 -> 8 Klicks, 5.188 -> 1.896 Impressionen, Position 22,57 -> 31,50; unterschiedliche Tabellenaggregate nicht gleichgesetzt. Verlustursache und Schokolade-noindex vom 09.10. nicht bewiesen; heute 13 Angebote/3 Gruppen, indexierbar.

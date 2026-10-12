@@ -47,9 +47,13 @@ test('homepage exposes crawlable internal SEO links in initial HTML', () => {
   assert.match(html, /<meta name="robots" content="index,follow" \/>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/"/)
   for (const path of ['/top-deals/', '/angebote/billa/', '/angebote/lidl/', '/angebote/waschmittel/', '/so-funktioniert-kaufklug/']) {
-    assert.ok(html.includes(`<a href="${path}">`), `missing crawlable link ${path}`)
+    assert.ok(html.includes(`href="${path}"`), `missing crawlable link ${path}`)
   }
   assert.ok(html.includes(`<h1 id="home-title">${HOME_TITLE}</h1>`))
+  assert.ok(html.includes('<button type="submit" aria-label="go, Suche starten">go</button>'))
+  assert.ok(html.includes('<label for="home-search">Produkt oder Marke suchen</label>'))
+  assert.ok(html.indexOf('home-compact__top-deals') < html.indexOf('home-compact__suggestions'))
+  assert.ok(html.includes('href="/top-deals/">Top Deals heute</a>'))
   assert.ok(html.includes(`<title>${HOME_SEO_TITLE}</title>`))
   assert.ok(html.indexOf('/angebote/waschmittel/') < html.indexOf('/angebote/billa/'))
 })
@@ -370,10 +374,13 @@ test('unknown routes are not emitted as SEO pages', () => {
 })
 
 test('homepage suggestions respect final indexing decisions and share static/runtime data', () => {
-  const pages = getStaticSeoPages().map((page) => page.key === 'kaffee' ? { ...page, robots: 'noindex,follow' } : page)
+  const pages = getStaticSeoPages().map((page) => ['kaffee', 'butter'].includes(page.key) ? { ...page, robots: 'noindex,follow' } : page)
   const suggestions = getHomeSuggestions(pages)
   assert.ok(!suggestions.some((link) => link.path === '/angebote/kaffee/'))
   assert.ok(suggestions.some((link) => link.path === '/suche?q=Kaffee'))
+  assert.ok(suggestions.some((link) => link.path === '/suche?q=Butter'))
+  assert.ok(suggestions.some((link) => link.path === '/suche?q=K%C3%A4se'))
+  assert.ok(suggestions.some((link) => link.path === '/suche?q=Oliven%C3%B6l'))
   assert.ok(!suggestions.some((link) => link.path === '/angebote/mueller/'))
   assert.equal(new Set(suggestions.map((link) => link.path)).size, suggestions.length)
   const html = buildSeoStaticDocument(template, pages.find((page) => page.path === '/'), pages)

@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchKeywordOfferSearch } from '../../utils/apiBase'
 import { trackAnalyticsEvent } from '../../utils/analytics'
+import { collectKeywordSearchResults, sortKeywordSearchItems } from '../../utils/keywordSearchSort'
 import {
   flattenRankingOffers,
-  getOfferStableId,
-  getRankingPagination,
-  hasKnownSavings,
   mergePaginatedRankingResults,
+  getOfferStableId,
+  hasKnownSavings,
   normalizeRetailerKey,
   shouldDisplayUnitPrice,
 } from '../../utils/offers'
@@ -283,6 +283,8 @@ export function KeywordSearchPage({
   const resultsHeadingRef = useRef(null)
   const searchInputRef = useRef(null)
   const requestIdRef = useRef(0)
+  const cacheRef = useRef(new Map())
+  const displayedScopeRef = useRef(null)
   const [queryInput, setQueryInput] = useState(() => getInitialKeywordQuery())
   const [submittedQuery, setSubmittedQuery] = useState(() => {
     const initialQuery = getInitialKeywordQuery().trim()
@@ -296,6 +298,11 @@ export function KeywordSearchPage({
   const [marketFilterEnabled, setMarketFilterEnabled] = useState(false)
   const [selectedRetailerKeys, setSelectedRetailerKeys] = useState([])
   const [sortMode, setSortMode] = useState(SORT_OPTIONS.best)
+  const [appliedSortMode, setAppliedSortMode] = useState(SORT_OPTIONS.best)
+  const [sortPending, setSortPending] = useState(false)
+  const [sortProgress, setSortProgress] = useState(0)
+  const [retryNonce, setRetryNonce] = useState(0)
+  const [visibleLimit, setVisibleLimit] = useState(KEYWORD_SEARCH_LIMIT)
   const [hint, setHint] = useState(() => {
     const initialQuery = getInitialKeywordQuery().trim()
     return initialQuery.length === 1 ? 'Bitte mindestens 2 Zeichen eingeben.' : ''
@@ -307,12 +314,13 @@ export function KeywordSearchPage({
     () => (marketFilterEnabled ? selectedRetailerKeys : []),
     [marketFilterEnabled, selectedRetailerKeys]
   )
-  const visibleOfferItems = useMemo(() => {
+  const scopeKey = JSON.stringify([submittedQuery, marketFilterEnabled, [...activeRetailerKeys].sort()])
+  const sortedOfferItems = useMemo(() => {
     if (marketFilterEnabled && activeRetailerKeys.length === 0) return []
 
     const selectedRetailers = new Set(activeRetailerKeys)
 
-    return offers
+    const items = offers
       .map((offer, index) => ({
         offer,
         index,
@@ -322,43 +330,19 @@ export function KeywordSearchPage({
         hasSavings: hasKnownSavings(offer),
       }))
       .filter((item) => {
-        if (sortMode === SORT_OPTIONS.savings && !item.hasSavings) return false
+        if (appliedSortMode === SORT_OPTIONS.savings && !item.hasSavings) return false
         if (!marketFilterEnabled) return true
         return selectedRetailers.has(item.retailerKey)
       })
-      .sort((left, right) => {
-        if (sortMode === SORT_OPTIONS.retailer) {
-          const retailerSort = left.retailerLabel.localeCompare(right.retailerLabel, 'de-AT')
-          if (retailerSort !== 0) return retailerSort
-        }
-
-        if (sortMode === SORT_OPTIONS.savings) {
-          const leftPrice = left.comparableUnitPrice
-          const rightPrice = right.comparableUnitPrice
-
-          if (leftPrice && !rightPrice) return -1
-          if (!leftPrice && rightPrice) return 1
-          if (!leftPrice && !rightPrice) return left.index - right.index
-
-          const unitSort = getSavingsUnitSortRank(leftPrice.unit.key) - getSavingsUnitSortRank(rightPrice.unit.key)
-          if (unitSort !== 0) return unitSort
-
-          const unitLabelSort = leftPrice.unit.label.localeCompare(rightPrice.unit.label, 'de-AT')
-          if (unitLabelSort !== 0) return unitLabelSort
-
-          const unitPriceSort = leftPrice.amount - rightPrice.amount
-          if (unitPriceSort !== 0) return unitPriceSort
-        }
-
-        return left.index - right.index
-      })
-  }, [activeRetailerKeys, marketFilterEnabled, offers, sortMode])
+    return sortKeywordSearchItems(items, appliedSortMode, getSavingsUnitSortRank)
+  }, [activeRetailerKeys, marketFilterEnabled, offers, appliedSortMode])
+  const visibleOfferItems = useMemo(() => sortedOfferItems.slice(0, visibleLimit), [sortedOfferItems, visibleLimit])
   const visibleOffers = useMemo(() => visibleOfferItems.map((item) => item.offer), [visibleOfferItems])
   const visibleOfferGroups = useMemo(() => buildSavingsOfferGroups(visibleOfferItems), [visibleOfferItems])
-  const showSavingsGroups = sortMode === SORT_OPTIONS.savings && visibleOfferGroups.length > 0
+  const showSavingsGroups = appliedSortMode === SORT_OPTIONS.savings && visibleOfferGroups.length > 0
   const needsMarketSelection = marketFilterEnabled && selectedRetailerKeys.length === 0
   const showResultsPanel = Boolean(submittedQuery || hint || loading || error)
-  const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
+  const pagination = { totalCount: appliedSortMode === SORT_OPTIONS.best ? ranking?.summary?.totalCount : sortedOfferItems.length, hasMore: visibleLimit < sortedOfferItems.length || ranking?.summary?.hasMore === true, nextOffset: ranking?.summary?.nextOffset }
   const emptySearchSuggestions = useMemo(() => getEmptySearchSuggestions(submittedQuery), [submittedQuery])
   const visibleRetailerKeys = useMemo(
     () => [...new Set(visibleOfferItems.map((item) => item.retailerKey).filter(Boolean))],
@@ -372,6 +356,10 @@ export function KeywordSearchPage({
     () => getPublicTrustWarningNotices(marketFilterEnabled ? selectedRetailerKeys : visibleRetailerKeys, availableRetailers),
     [availableRetailers, marketFilterEnabled, selectedRetailerKeys, visibleRetailerKeys]
   )
+
+  useEffect(() => {
+    setVisibleLimit(KEYWORD_SEARCH_LIMIT)
+  }, [activeRetailerKeys, marketFilterEnabled, submittedQuery])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -428,63 +416,69 @@ export function KeywordSearchPage({
   }, [activeSearchScrollKey, loading, submittedQuery])
 
   useEffect(() => {
-    if (!submittedQuery) return undefined
-
-    if (marketFilterEnabled && activeRetailerKeys.length === 0) {
-      setLoading(false)
-      setLoadingMore(false)
-      setLoadMoreError('')
-      return undefined
-    }
-
+    const requestId = ++requestIdRef.current
     let active = true
-    const requestId = requestIdRef.current + 1
-    requestIdRef.current = requestId
-
-    async function loadKeywordResults() {
+    const current = () => active && requestId === requestIdRef.current
+    setLoadingMore(false)
+    setLoadMoreError('')
+    setSortPending(false)
+    if (!submittedQuery || (marketFilterEnabled && activeRetailerKeys.length === 0)) {
+      setLoading(false)
+      return () => { active = false }
+    }
+    async function load() {
+      let data = cacheRef.current.get(scopeKey)
+      const sameScope = displayedScopeRef.current === scopeKey
+      setError('')
+      setHint('')
+      if (!sameScope) {
+        setRanking(data || null)
+        setAppliedSortMode(SORT_OPTIONS.best)
+        displayedScopeRef.current = scopeKey
+      }
+      setLoading(!data)
+      const fetchPage = (offset, token) => fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, offset, token, { retailers: activeRetailerKeys })
       try {
-        setLoading(true)
-        setLoadingMore(false)
-        setError('')
-        setLoadMoreError('')
-        setHint('')
-
-        trackAnalyticsEvent('offer_search_started', {
-          selectedRetailerCount: activeRetailerKeys.length,
-          selectedCategoryCount: 0,
-        })
-
-        const rankingResult = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, 0, '', {
-          retailers: activeRetailerKeys,
-        })
-
-        if (!active || requestId !== requestIdRef.current) return
-
-        const resultCount = flattenRankingOffers(rankingResult).length
-        setRanking(rankingResult)
-
-        trackAnalyticsEvent('offer_search_result', {
-          resultCount,
-          safeOfferCount: 0,
-          actionOfferCount: resultCount,
-          selectedRetailerCount: activeRetailerKeys.length,
-          selectedCategoryCount: 0,
-        })
+        if (!data) {
+          data = await fetchPage(0, '')
+          if (!current()) return
+          cacheRef.current.set(scopeKey, data)
+          setRanking(data)
+          setAppliedSortMode(SORT_OPTIONS.best)
+          setLoading(false)
+          trackAnalyticsEvent('offer_search_result', {
+            resultCount: flattenRankingOffers(data).length,
+            safeOfferCount: 0, actionOfferCount: flattenRankingOffers(data).length,
+            selectedRetailerCount: activeRetailerKeys.length, selectedCategoryCount: 0,
+          })
+        }
+        if (sortMode !== SORT_OPTIONS.best && data.summary.hasMore === true) {
+          setSortPending(true)
+          setSortProgress(flattenRankingOffers(data).length)
+          data = await collectKeywordSearchResults(fetchPage, current, data, (partial) => {
+            if (!current()) return
+            cacheRef.current.set(scopeKey, partial)
+            setSortProgress(flattenRankingOffers(partial).length)
+          })
+        }
+        if (!current()) return
+        setRanking(data)
+        setAppliedSortMode(sortMode)
+        setVisibleLimit(KEYWORD_SEARCH_LIMIT)
+        setSortPending(false)
       } catch {
-        if (!active || requestId !== requestIdRef.current) return
-        setRanking(null)
-        setError('Die Suche konnte nicht geladen werden.')
+        if (!current()) return
+        if (data) {
+          setLoadMoreError('Die globale Sortierung ist noch nicht vollst?ndig. Bisherige Treffer bleiben in ihrer bisherigen Reihenfolge sichtbar.')
+          setSortPending(true)
+        } else setError('Die Suche konnte nicht geladen werden.')
       } finally {
-        if (active && requestId === requestIdRef.current) setLoading(false)
+        if (current()) setLoading(false)
       }
     }
-
-    loadKeywordResults()
-
-    return () => {
-      active = false
-    }
-  }, [activeRetailerKeys, marketFilterEnabled, submittedQuery])
+    load()
+    return () => { active = false }
+  }, [activeRetailerKeys, marketFilterEnabled, submittedQuery, scopeKey, sortMode, retryNonce])
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -562,30 +556,26 @@ export function KeywordSearchPage({
   }
 
   async function handleLoadMoreOffers() {
-    if (!submittedQuery || loading || loadingMore || !pagination.hasMore || pagination.nextOffset === null) return
-
-    const requestId = requestIdRef.current + 1
-    requestIdRef.current = requestId
-
+    if (!submittedQuery || loading || loadingMore || sortPending || !pagination.hasMore) return
+    const cached = cacheRef.current.get(scopeKey)
+    if (visibleLimit < flattenRankingOffers(cached).length || cached?.summary?.hasMore !== true) {
+      setRanking(cached)
+      setVisibleLimit((current) => current + KEYWORD_SEARCH_LIMIT)
+      return
+    }
+    const requestId = requestIdRef.current
+    setLoadingMore(true)
+    setLoadMoreError('')
     try {
-      setLoadingMore(true)
-      setLoadMoreError('')
-      const nextRanking = await fetchKeywordOfferSearch(
-        submittedQuery,
-        KEYWORD_SEARCH_LIMIT,
-        pagination.nextOffset,
-        ranking?.summary?.resultSetToken || '',
-        {
-          retailers: activeRetailerKeys,
-        }
-      )
-
+      const page = await fetchKeywordOfferSearch(submittedQuery, KEYWORD_SEARCH_LIMIT, cached.summary.nextOffset, cached.summary.resultSetToken, { retailers: activeRetailerKeys })
       if (requestId !== requestIdRef.current) return
-
-      setRanking((currentRanking) => mergePaginatedRankingResults(currentRanking, nextRanking))
+      if (page.summary.resultSetToken !== cached.summary.resultSetToken || page.summary.totalCount !== cached.summary.totalCount) throw new Error('Result set changed')
+      const merged = mergePaginatedRankingResults(cached, page)
+      cacheRef.current.set(scopeKey, merged)
+      setRanking(merged)
+      setVisibleLimit((current) => current + KEYWORD_SEARCH_LIMIT)
     } catch {
-      if (requestId !== requestIdRef.current) return
-      setLoadMoreError('Weitere Angebote konnten gerade nicht geladen werden.')
+      if (requestId === requestIdRef.current) setLoadMoreError('Weitere Angebote konnten nicht geladen werden. Die bisherigen Treffer bleiben erhalten.')
     } finally {
       if (requestId === requestIdRef.current) setLoadingMore(false)
     }
@@ -767,7 +757,7 @@ export function KeywordSearchPage({
       </section>
 
       {showResultsPanel ? (
-        <section className="panel keyword-search-results" aria-busy={loading || loadingMore ? 'true' : 'false'}>
+        <section className="panel keyword-search-results" aria-busy={loading || loadingMore || sortPending ? 'true' : 'false'}>
         {hint ? <p className="status">{hint}</p> : null}
         {loading ? (
           <div className="browse-loading-status" role="status" aria-live="polite">
@@ -784,7 +774,8 @@ export function KeywordSearchPage({
             </button>
           </div>
         ) : null}
-        {loadMoreError ? <p className="status status--error">{loadMoreError}</p> : null}
+        {sortPending && !loadMoreError ? <p className="keyword-search-sort-progress" role="status" aria-live="polite">Globale Sortierung wird vorbereitet: {sortProgress} von {ranking?.summary?.totalCount} Treffern geladen. Bisherige Reihenfolge bleibt bis zum Abschluss sichtbar.</p> : null}
+        {loadMoreError ? <div className="status status--error" role="alert"><p>{loadMoreError}</p><button type="button" className="secondary-action-button" onClick={sortPending ? () => setRetryNonce((n) => n + 1) : handleLoadMoreOffers}>Fehlgeschlagene Seite erneut laden</button></div> : null}
         {submittedQuery && needsMarketSelection ? (
           <p className="status">Wähle mindestens einen Markt aus oder suche ohne Marktfilter.</p>
         ) : null}
@@ -796,7 +787,7 @@ export function KeywordSearchPage({
                 Angebote für „{submittedQuery}“
               </h2>
               <p>
-                {sortMode === SORT_OPTIONS.savings
+                {appliedSortMode === SORT_OPTIONS.savings
                   ? `${visibleOffers.length} Angebote mit belastbarer Ersparnis angezeigt`
                   : pagination.totalCount && pagination.totalCount > visibleOffers.length
                   ? `${visibleOffers.length} von ${pagination.totalCount} Angeboten angezeigt`
@@ -804,6 +795,7 @@ export function KeywordSearchPage({
               </p>
             </div>
             <p className="market-check-note">Preise, Verfügbarkeit und Bedingungen bitte im Markt prüfen.</p>
+            {appliedSortMode === SORT_OPTIONS.savings ? <p className="market-check-note">Ersparnis pro Angebot absteigend, getrennt nach Vergleichseinheit.</p> : null}
 
             {visibleOffers.length > 0 ? (
               <>
@@ -883,7 +875,7 @@ export function KeywordSearchPage({
                       type="button"
                       className="load-more-results__button"
                       onClick={handleLoadMoreOffers}
-                      disabled={loadingMore}
+                      disabled={loadingMore || sortPending}
                       aria-busy={loadingMore ? 'true' : 'false'}
                     >
                       {loadingMore ? (
