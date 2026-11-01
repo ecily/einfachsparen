@@ -1,0 +1,64 @@
+{
+  "activeDeployment": {
+    "id": "430fd209-d7a6-4a85-a84e-c7925edaadbe",
+    "phase": "ACTIVE",
+    "components": [
+      {
+        "name": "einfachsparen-backend",
+        "commit": "a60b385ce64b14ca3e5bffdb96e874c23b540af0"
+      },
+      {
+        "name": "einfachsparen-admin",
+        "commit": "a60b385ce64b14ca3e5bffdb96e874c23b540af0"
+      }
+    ]
+  },
+  "inProgressDeployment": null,
+  "health": {
+    "ok": true,
+    "status": "ok",
+    "database": {
+      "connected": true
+    },
+    "build": {
+      "packageVersion": "1.0.0",
+      "commitSha": "unknown",
+      "commitShort": "unknown",
+      "commitSource": "unknown",
+      "buildTime": "2026-11-01T12:25:19.575Z",
+      "buildTimeSource": "process-start-fallback",
+      "processStartedAt": "2026-11-01T12:25:19.575Z",
+      "processUptimeSeconds": 4331,
+      "nodeEnv": "production"
+    },
+    "features": {
+      "publicValidity": "public-validity-v2-billa-pdf-disabled"
+    },
+    "rankingCache": {
+      "schemaVersion": "ranking-cache-v8-source-quality-fresh-crawl-v1-public-validity-v2-billa-pdf-disabled-search-token-v2-pet-food-lip-butter-v2-beer-context-v1-cat-food-v1-multiterm-v1-condition-merge-v1-term-coverage-v2-wurst-context-v3-tee-context-v2-kaffee-context-v1-fisch-context-v1-duft-context-v2-offer-quality-v1-spar-condition-query-v1-spar-condition-supplement-v1-aggregator-trust-v2-program-default-visible-v1-spar-product-supplement-v1-kaffee-official-pdf-v1-human-pet-intent-v1-billa-primary-evidence-v2-lidl-bier-textile-v1-sauce-pet-food-v1-rest-category-guard-v1-dm-wine-cosmetic-v1-felix-human-food-v2-billa-algolia-public-category-v1-dm-wine-drugstore-v1-billa-crate-unit-v1-safe-market-comparison-v2-image-tiebreak-v1-public-candidate-validity-v1-hofer-html-primary-upcoming-v2",
+      "resultSetTokens": true,
+      "mongoBackedResultSets": true,
+      "resultSetTtlSeconds": 300
+    },
+    "now": "2026-11-01T13:37:28.431Z"
+  },
+  "snapshotGeneratedAt": "2026-11-01T13:37:27.613Z",
+  "activeCrawlRun": null,
+  "lockState": "free",
+  "lockStatus": "released",
+  "publish": {
+    "status": "final",
+    "openCount": 0,
+    "finalCount": 8107
+  },
+  "latestRun": {
+    "id": "6ae6cffcfb8541a106574e3c",
+    "status": "success",
+    "trigger": "scheduled",
+    "startedAt": "2026-11-01T05:37:00.050Z",
+    "finishedAt": "2026-11-01T05:40:07.284Z",
+    "lastStage": "publish-status-finished",
+    "publishStatusFinished": true,
+    "publishMatchedCount": 3396
+  }
+}

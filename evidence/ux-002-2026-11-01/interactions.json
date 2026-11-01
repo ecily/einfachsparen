@@ -1,0 +1,96 @@
+[
+  {
+    "test": "pagination",
+    "origin": "built preview / fixture API",
+    "result": "PASS",
+    "counts": [
+      60,
+      120,
+      135
+    ],
+    "note": "Final DOM has 135 cards; pointer then keyboard; wait for completed rendering."
+  },
+  {
+    "test": "browse-draft-reload",
+    "url": "http://127.0.0.1:5182/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel&draftRetailers=bipa",
+    "appliedMarkets": [
+      "dm"
+    ],
+    "draftBipa": "true"
+  },
+  {
+    "test": "320px",
+    "client": 305,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "label": "Suche"
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "label": "Stöbern"
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "label": "Liste"
+      },
+      {
+        "font": "13.6px",
+        "height": 47.5,
+        "label": "Top Deals heuteTop Deals"
+      }
+    ],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "test": "section-memory-reload",
+    "result": "PASS",
+    "query": "waschmittel",
+    "markets": [
+      "dm"
+    ],
+    "sort": "retailer"
+  },
+  {
+    "test": "Back-Forward",
+    "result": "PASS",
+    "queries": [
+      "waschmittel",
+      "kaffee"
+    ],
+    "sort": "retailer"
+  },
+  {
+    "test": "skip-link-keyboard",
+    "result": "PASS",
+    "focus": "main-content",
+    "urlUnchanged": true,
+    "cardsBefore": 60,
+    "cardsAfter": 60
+  },
+  {
+    "test": "list-search-top-deals-reload",
+    "result": "PASS",
+    "localFixtureItems": 2,
+    "firstQuantity": 2,
+    "firstChecked": true,
+    "topDealsCount": 20
+  },
+  {
+    "test": "beta-escape-focus-return",
+    "expanded": "false",
+    "focused": "page-nav__beta"
+  },
+  {
+    "test": "keyboard-tab-order",
+    "method": "native Tab after activating skip link",
+    "headerBottom": 117.60000324249268,
+    "id": "keyword-search-input",
+    "inputTop": 189.7250061035156,
+    "outline": "2.4px"
+  }
+]

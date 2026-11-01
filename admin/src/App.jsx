@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './index.css'
+import { AppShell } from './components/layout/AppShell'
+import { useAppNavigation } from './utils/useAppNavigation'
+import { isBrowseRoutePathname, readBrowseState, browseStateUrl, searchStateUrl } from './utils/navigationState'
 import {
   fetchHealth,
   saveFeedback,
@@ -38,7 +41,7 @@ import {
 } from './utils/categories'
 import { areStringSetsEqual, flattenRankingOffers, getRankingPagination, mergePaginatedRankingResults } from './utils/offers'
 import { buildShoppingListItem, getShoppingListItemId, loadStoredShoppingList } from './utils/shoppingList'
-import { getInitialPageFromPathname, getPathForPage, getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
+import { getSharedListIdFromPathname, updateSeoMetadata } from './utils/seo'
 import { getSeoLandingPageByRouteId, SEO_LANDING_PAGE_PREFIX } from './config/seoLandingPages'
 import { HomeLanding } from './components/search/HomeLanding'
 
@@ -104,25 +107,23 @@ function BetaInfoPanel({ id, onClose, className = '' }) {
 }
 
 function App() {
-  const rawPathname = typeof window !== 'undefined' ? window.location.pathname : ''
+  const { route, page: activePage, navigateUrl, hrefFor } = useAppNavigation()
+  const rawPathname = new URL(route.url, window.location.origin).pathname
+  const isBrowseRoute = isBrowseRoutePathname(rawPathname)
+  const initialBrowse = readBrowseState(isBrowseRoute ? window.location.search : '')
   const pathname = rawPathname.toLowerCase()
-  const routedInitialPage = getInitialPageFromPathname(pathname)
   const isLegacyQualityPath = pathname === '/quality'
-  const isDiagnosticsPath = pathname === '/ecily_web' || isLegacyQualityPath
-  const initialPage =
-    isDiagnosticsPath ? 'diagnostics' : routedInitialPage
-  const initialSharedListId = getSharedListIdFromPathname(rawPathname)
+  const sharedListId = getSharedListIdFromPathname(rawPathname)
   const rankingRequestIdRef = useRef(0)
+  const keywordDrafts = useRef(new Map())
+  const headerBetaRef = useRef(null)
 
-  const [activePage, setActivePage] = useState(initialPage)
-  const [sharedListId, setSharedListId] = useState(initialSharedListId)
   const [shoppingListItems, setShoppingListItems] = useState(() => loadStoredShoppingList())
   const [snapshot, setSnapshot] = useState(null)
   const [health, setHealth] = useState(null)
   const [essence, setEssence] = useState('')
   const [ranking, setRanking] = useState(null)
   const [navSearchQuery, setNavSearchQuery] = useState('')
-  const [keywordSearchRequest, setKeywordSearchRequest] = useState({ query: '', nonce: 0 })
   const [retailers, setRetailers] = useState([])
   const [categories, setCategories] = useState([])
   const [error, setError] = useState('')
@@ -134,34 +135,72 @@ function App() {
   const [rankingLoadingMore, setRankingLoadingMore] = useState(false)
   const [browseAutoRefreshEnabled, setBrowseAutoRefreshEnabled] = useState(false)
   const [isHeaderBetaInfoOpen, setIsHeaderBetaInfoOpen] = useState(false)
-  const [draftSelectedRetailers, setDraftSelectedRetailers] = useState([])
-  const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState([])
-  const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState([])
-  const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState([])
+  const [draftSelectedRetailers, setDraftSelectedRetailers] = useState(initialBrowse.draftRetailers)
+  const [draftSelectedCategoryLabels, setDraftSelectedCategoryLabels] = useState(initialBrowse.draftCategories)
+  const [appliedSelectedRetailers, setAppliedSelectedRetailers] = useState(initialBrowse.appliedRetailers)
+  const [appliedSelectedCategoryLabels, setAppliedSelectedCategoryLabels] = useState(initialBrowse.appliedCategories)
+
+  const browseRestoreRef = useRef(route.restoreKey)
+  const [appliedCategories, setAppliedCategories] = useState({ scope: '', items: [], status: 'loading' })
+  const appliedRetailerScope = appliedSelectedRetailers.join(',')
+  const appliedCategoryMetadataReady = !appliedSelectedCategoryLabels.length ||
+    (appliedCategories.scope === appliedRetailerScope && appliedCategories.status === 'ready')
+  const appliedCategoryMetadataFailed = appliedSelectedCategoryLabels.length > 0 &&
+    appliedCategories.scope === appliedRetailerScope && appliedCategories.status === 'error'
 
   useEffect(() => {
-    function handlePopState() {
-      setActivePage(getInitialPageFromPathname(window.location.pathname.toLowerCase()))
-      setSharedListId(getSharedListIdFromPathname(window.location.pathname))
-    }
+    setIsHeaderBetaInfoOpen(false)
+    if (activePage !== 'search' || !isBrowseRoute) return
+    const state = readBrowseState(new URL(route.url, window.location.origin).search)
+    setDraftSelectedRetailers(state.draftRetailers)
+    setDraftSelectedCategoryLabels(state.draftCategories)
+    setAppliedSelectedRetailers(state.appliedRetailers)
+    setAppliedSelectedCategoryLabels(state.appliedCategories)
+    setBrowseAutoRefreshEnabled(false)
+    // Restore only on navigation/Back/Forward, not on our own URL writes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage, isBrowseRoute, route.restoreKey])
 
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+  useEffect(() => {
+    if (browseRestoreRef.current !== route.restoreKey) {
+      browseRestoreRef.current = route.restoreKey
+      return
+    }
+    if (activePage !== 'search' || !isBrowseRoute) return
+    navigateUrl(browseStateUrl({
+      draftRetailers: draftSelectedRetailers,
+      draftCategories: draftSelectedCategoryLabels,
+      appliedRetailers: appliedSelectedRetailers,
+      appliedCategories: appliedSelectedCategoryLabels,
+    }), { replace: true, focus: false, restore: false })
+  }, [activePage, isBrowseRoute, route.restoreKey, draftSelectedRetailers, draftSelectedCategoryLabels,
+    appliedSelectedRetailers, appliedSelectedCategoryLabels, navigateUrl])
+
+  useEffect(() => {
+    if (!appliedSelectedRetailers.length) return undefined
+    let active = true
+    fetchFilterCategories(appliedSelectedRetailers).then(result => {
+      if (active) setAppliedCategories({ scope: appliedRetailerScope, items: normalizeCategoryDocuments(result), status: 'ready' })
+    }).catch(() => {
+      if (!active) return
+      setAppliedCategories({ scope: appliedRetailerScope, items: [], status: 'error' })
+    })
+    return () => { active = false }
+  }, [appliedSelectedRetailers, appliedRetailerScope])
 
   const shoppingListIds = useMemo(
     () => new Set(shoppingListItems.map((item) => item.id)),
     [shoppingListItems]
   )
 
-  const appliedCategoryQueryLabels = useMemo(
-    () => buildSelectedCategoryQueryLabels(appliedSelectedCategoryLabels, categories),
-    [appliedSelectedCategoryLabels, categories]
+  const appliedCategoryQuery = useMemo(
+    () => buildSelectedCategoryQueryLabels(appliedSelectedCategoryLabels, appliedCategories.items).join(','),
+    [appliedSelectedCategoryLabels, appliedCategories.items]
   )
 
   useEffect(() => {
     updateSeoMetadata(activePage)
-  }, [activePage])
+  }, [activePage, pathname])
 
   useEffect(() => {
     configureInternalTesterModeFromUrl()
@@ -240,14 +279,10 @@ function App() {
         if (!active) return
 
         setRetailers(retailerResult)
-        setDraftSelectedRetailers([])
-        setAppliedSelectedRetailers([])
         setError('')
       } catch (filterError) {
         if (!active) return
         setRetailers([])
-        setDraftSelectedRetailers([])
-        setAppliedSelectedRetailers([])
         setError(getFriendlyErrorMessage(filterError, 'Filterdaten konnten nicht geladen werden.'))
       } finally {
         if (active) setFiltersLoading(false)
@@ -324,7 +359,6 @@ function App() {
         const nextCategories = normalizeCategoryDocuments(categoryResult)
         setCategories(nextCategories)
         setDraftSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
-        setAppliedSelectedCategoryLabels((current) => pruneSelectionTokens(current, nextCategories))
         setError('')
       } catch (filterError) {
         if (!active) return
@@ -354,13 +388,17 @@ function App() {
         setRankingLoadingMore(false)
         return
       }
+      if (!appliedCategoryMetadataReady) {
+        setRankingLoading(!appliedCategoryMetadataFailed)
+        return
+      }
 
       try {
         setRankingLoading(true)
         setRankingLoadingMore(false)
 
         const rankingResult = await fetchOfferRankingDirect({
-          categories: appliedCategoryQueryLabels.join(','),
+          categories: appliedCategoryQuery,
           retailers: appliedSelectedRetailers.join(','),
           programRetailers: appliedSelectedRetailers.join(','),
           unit: 'all',
@@ -400,13 +438,7 @@ function App() {
     return () => {
       active = false
     }
-  }, [appliedSelectedRetailers, appliedCategoryQueryLabels, appliedSelectedCategoryLabels.length])
-
-  useEffect(() => {
-    if (activePage !== 'search' || rankingLoading || !ranking || !appliedSelectedRetailers.length) return
-
-    setBrowseAutoRefreshEnabled(true)
-  }, [activePage, appliedSelectedRetailers.length, ranking, rankingLoading])
+  }, [appliedSelectedRetailers, appliedCategoryQuery, appliedSelectedCategoryLabels.length, appliedCategoryMetadataReady, appliedCategoryMetadataFailed])
 
   async function reloadAll() {
     const [healthResult, snapshotResult, essenceResult] = await Promise.all([
@@ -423,45 +455,23 @@ function App() {
 
   function handleNavigate(nextPage) {
     setIsHeaderBetaInfoOpen(false)
-    setActivePage(nextPage)
-    setSharedListId('')
-
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    window.history.replaceState({}, '', getPathForPage(nextPage))
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    navigateUrl(hrefFor(nextPage))
   }
 
-  function handleLogoClick() {
+  function handleLinkNavigate(url) {
     setIsHeaderBetaInfoOpen(false)
-    setActivePage('home')
-    setSharedListId('')
+    navigateUrl(url)
+  }
 
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    window.history.replaceState({}, '', '/')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  function handleCloseBeta() {
+    setIsHeaderBetaInfoOpen(false)
+    headerBetaRef.current?.focus()
   }
 
   function handleNavSearchSubmit(event) {
     event.preventDefault()
-
-    const nextQuery = navSearchQuery.trim()
     setIsHeaderBetaInfoOpen(false)
-    setActivePage('product-search')
-    setKeywordSearchRequest((current) => ({ query: nextQuery, nonce: current.nonce + 1 }))
-
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    const nextPath = nextQuery ? `/suche?q=${encodeURIComponent(nextQuery)}` : '/suche'
-    window.history.replaceState({}, '', nextPath)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    navigateUrl(searchStateUrl({ query: navSearchQuery, marketFilterEnabled: false, selectedRetailerKeys: [], sortMode: 'best' }))
   }
 
   function handleToggleDraftRetailer(retailerKey) {
@@ -527,6 +537,9 @@ function App() {
   }
 
   function handleApplySearch() {
+    setBrowseAutoRefreshEnabled(true)
+    navigateUrl(browseStateUrl({ draftRetailers: draftSelectedRetailers, draftCategories: draftSelectedCategoryLabels,
+      appliedRetailers: draftSelectedRetailers, appliedCategories: draftSelectedCategoryLabels }), { focus: false, restore: false })
     trackAnalyticsEvent('offer_search_started', {
       selectedRetailerCount: draftSelectedRetailers.length,
       selectedCategoryCount: draftSelectedCategoryLabels.length,
@@ -557,7 +570,7 @@ function App() {
       setError('')
 
       const nextRanking = await fetchOfferRankingDirect({
-        categories: appliedCategoryQueryLabels.join(','),
+        categories: appliedCategoryQuery,
         retailers: appliedSelectedRetailers.join(','),
         programRetailers: appliedSelectedRetailers.join(','),
         unit: 'all',
@@ -584,6 +597,7 @@ function App() {
   }
 
   function handleResetAll() {
+    navigateUrl('/stoebern', { focus: false, restore: false })
     rankingRequestIdRef.current += 1
     setBrowseAutoRefreshEnabled(false)
     setDraftSelectedRetailers([])
@@ -700,12 +714,13 @@ function App() {
   ])
 
   return (
-    <main className="shell" style={{ paddingBottom: '5.5rem' }}>
+    <AppShell onNavigateUrl={handleLinkNavigate} header={<>
       <nav className="page-nav" aria-label="Seiten">
-        <button className="page-nav__logo" type="button" onClick={handleLogoClick} aria-label="Zur Startseite">
+        <a className="page-nav__logo" href="/" aria-label="Zur Startseite">
           <img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" />
-        </button>
+        </a>
         <button
+          ref={headerBetaRef}
           className="page-nav__beta"
           type="button"
           aria-expanded={isHeaderBetaInfoOpen}
@@ -715,44 +730,44 @@ function App() {
           Beta
         </button>
         <div className="page-nav__main">
-          <button
+          <a
             className={`page-nav__button${activePage === 'product-search' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('product-search')}
+            href={hrefFor('product-search')}
             aria-current={activePage === 'product-search' ? 'page' : undefined}
           >
             Suche
-          </button>
+          </a>
 
-          <button
+          <a
             className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('search')}
+            href={hrefFor('search')}
             aria-current={activePage === 'search' ? 'page' : undefined}
           >
             Stöbern
-          </button>
+          </a>
 
-          <button
+          <a
             className={`page-nav__button${activePage === 'shopping-list' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('shopping-list')}
+            href={hrefFor('shopping-list')}
             aria-label="Einkaufsliste"
             aria-current={activePage === 'shopping-list' ? 'page' : undefined}
           >
             Liste
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
-          </button>
+          </a>
 
-          <button
+          <a
             className={`page-nav__button page-nav__top-deals${activePage === 'top-deals' ? ' page-nav__button--active' : ''}`}
-            onClick={() => handleNavigate('top-deals')}
+            href={hrefFor('top-deals')}
             aria-current={activePage === 'top-deals' ? 'page' : undefined}
             aria-label="Top Deals heute"
           >
             <span className="page-nav__top-deals-long">Top Deals heute</span>
             <span className="page-nav__top-deals-short">Top Deals</span>
-          </button>
+          </a>
         </div>
 
-        {activePage !== 'home' ? <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
+        {activePage !== 'home' && activePage !== 'product-search' ? <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
           <input
             type="search"
             value={navSearchQuery}
@@ -766,9 +781,14 @@ function App() {
         </form> : null}
       </nav>
       {isHeaderBetaInfoOpen ? (
-        <BetaInfoPanel id="beta-info-header" className="beta-info-panel--header" onClose={() => setIsHeaderBetaInfoOpen(false)} />
+        <BetaInfoPanel id="beta-info-header" className="beta-info-panel--header" onClose={handleCloseBeta} />
       ) : null}
 
+      </>} footer={<>
+        {activePage !== 'home' ? <SeoFooterLinks /> : null}
+        <CookieStorageNotice onNavigate={handleNavigate} />
+        {activePage !== 'home' ? <StickyBottomLine onNavigate={handleNavigate} /> : null}
+      </>}>
       {activePage === 'home' ? (
         <HomeLanding />
       ) : activePage === 'shared-shopping-list' ? (
@@ -778,7 +798,7 @@ function App() {
           onAdoptItems={handleAdoptSharedShoppingList}
         />
       ) : activePage === 'top-deals' ? (
-        <TopDealsPage
+        <TopDealsPage key={route.restoreKey}
           shoppingListIds={shoppingListIds}
           onAddToShoppingList={handleAddToShoppingList}
           onNavigate={handleNavigate}
@@ -788,6 +808,7 @@ function App() {
           <SearchPage
             retailers={retailers}
             categories={categories}
+            appliedCategories={appliedCategories.items}
             filtersLoading={filtersLoading}
             ranking={ranking}
             rankingLoading={rankingLoading}
@@ -796,7 +817,7 @@ function App() {
             draftCategoryLabels={draftSelectedCategoryLabels}
             appliedRetailers={appliedSelectedRetailers}
             appliedCategoryLabels={appliedSelectedCategoryLabels}
-            error={error}
+            error={error || (appliedCategoryMetadataFailed ? 'Die Kategorien konnten gerade nicht geladen werden. Bitte lade die Seite erneut.' : '')}
             hasPendingChanges={hasPendingChanges}
             shoppingListIds={shoppingListIds}
             onToggleDraftRetailer={handleToggleDraftRetailer}
@@ -815,12 +836,14 @@ function App() {
       ) : activePage === 'product-search' ? (
         <div className="search-first-page">
           <KeywordSearchPage
-            searchRequest={keywordSearchRequest}
+            key={route.restoreKey}
+            onNavigateUrl={navigateUrl}
+            queryDraft={route.fromHistory ? undefined : keywordDrafts.current.get(route.url)}
+            onQueryDraftChange={value => keywordDrafts.current.set(route.url, value)}
             retailers={retailers}
             categories={categories}
             shoppingListIds={shoppingListIds}
             onAddToShoppingList={handleAddToShoppingList}
-            onNavigate={handleNavigate}
           />
         </div>
       ) : activePage === 'pricecheck:bier-literpreis-vergleich' ? (
@@ -870,10 +893,7 @@ function App() {
         </>
       )}
 
-      {activePage !== 'home' ? <SeoFooterLinks /> : null}
-      <CookieStorageNotice onNavigate={handleNavigate} />
-      {activePage !== 'home' ? <StickyBottomLine onNavigate={handleNavigate} /> : null}
-    </main>
+    </AppShell>
   )
 }
 

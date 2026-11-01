@@ -1,0 +1,845 @@
+[
+  {
+    "width": 375,
+    "path": "/",
+    "active": [],
+    "client": 360,
+    "h1": [
+      "Womit willst du heute sparen?"
+    ],
+    "headerHeight": 108.8000030517578,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 7.599999904632568,
+        "right": 89.59999990463257
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 95.20000457763672,
+        "right": 177.20000457763672
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 182.8000030517578,
+        "right": 264.8000030517578
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 270.3999938964844,
+        "right": 352.3999938964844
+      }
+    ],
+    "scroll": 360,
+    "searches": 1
+  },
+  {
+    "width": 375,
+    "path": "/suche?q=waschmittel&markets=dm&sort=retailer",
+    "active": [
+      "Suche"
+    ],
+    "client": 360,
+    "h1": [
+      "Angebote suchen"
+    ],
+    "headerHeight": 108.8000030517578,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 7.599999904632568,
+        "right": 89.59999990463257
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 95.20000457763672,
+        "right": 177.20000457763672
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 182.8000030517578,
+        "right": 264.8000030517578
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 270.3999938964844,
+        "right": 352.3999938964844
+      }
+    ],
+    "scroll": 360,
+    "searches": 1
+  },
+  {
+    "width": 375,
+    "path": "/stoebern?retailers=dm",
+    "active": [
+      "Stöbern"
+    ],
+    "client": 360,
+    "h1": [
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "headerHeight": 160.625,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 7.599999904632568,
+        "right": 89.59999990463257
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 95.20000457763672,
+        "right": 177.20000457763672
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 182.8000030517578,
+        "right": 264.8000030517578
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 270.3999938964844,
+        "right": 352.3999938964844
+      }
+    ],
+    "scroll": 360,
+    "searches": 1
+  },
+  {
+    "width": 375,
+    "path": "/einkaufsliste",
+    "active": [
+      "Liste"
+    ],
+    "client": 360,
+    "h1": [
+      "Noch keine Angebote gemerkt."
+    ],
+    "headerHeight": 160.625,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 7.599999904632568,
+        "right": 89.59999990463257
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 95.20000457763672,
+        "right": 177.20000457763672
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 182.8000030517578,
+        "right": 264.8000030517578
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 270.3999938964844,
+        "right": 352.3999938964844
+      }
+    ],
+    "scroll": 360,
+    "searches": 1
+  },
+  {
+    "width": 375,
+    "path": "/top-deals/?category=waschmittel",
+    "active": [
+      "Top Deals heuteTop Deals"
+    ],
+    "client": 360,
+    "h1": [
+      "Top Deals heute"
+    ],
+    "headerHeight": 160.625,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 7.599999904632568,
+        "right": 89.59999990463257
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 95.20000457763672,
+        "right": 177.20000457763672
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 182.8000030517578,
+        "right": 264.8000030517578
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 270.3999938964844,
+        "right": 352.3999938964844
+      }
+    ],
+    "scroll": 360,
+    "searches": 1
+  },
+  {
+    "width": 375,
+    "path": "/angebote/billa/",
+    "active": [],
+    "client": 360,
+    "h1": [
+      "BILLA Angebote aktuell vergleichen"
+    ],
+    "headerHeight": 160.625,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 7.599999904632568,
+        "right": 89.59999990463257
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 95.20000457763672,
+        "right": 177.20000457763672
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 182.8000030517578,
+        "right": 264.8000030517578
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 270.3999938964844,
+        "right": 352.3999938964844
+      }
+    ],
+    "scroll": 360,
+    "searches": 1
+  },
+  {
+    "width": 375,
+    "path": "/angebote/bier/",
+    "active": [],
+    "client": 360,
+    "h1": [
+      "Bier Angebote aktuell vergleichen"
+    ],
+    "headerHeight": 160.625,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 7.599999904632568,
+        "right": 89.59999990463257
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 95.20000457763672,
+        "right": 177.20000457763672
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 182.8000030517578,
+        "right": 264.8000030517578
+      },
+      {
+        "font": "13.6px",
+        "height": 44,
+        "left": 270.3999938964844,
+        "right": 352.3999938964844
+      }
+    ],
+    "scroll": 360,
+    "searches": 1
+  },
+  {
+    "width": 768,
+    "path": "/",
+    "active": [],
+    "client": 753,
+    "h1": [
+      "Womit willst du heute sparen?"
+    ],
+    "headerHeight": 59.67499923706055,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 131.8125,
+        "right": 206.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 212.1374969482422,
+        "right": 299.3624954223633
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.9624938964844,
+        "right": 368.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 374.1625061035156,
+        "right": 521.6750030517578
+      }
+    ],
+    "scroll": 753,
+    "searches": 1
+  },
+  {
+    "width": 768,
+    "path": "/suche?q=waschmittel&markets=dm&sort=retailer",
+    "active": [
+      "Suche"
+    ],
+    "client": 753,
+    "h1": [
+      "Angebote suchen"
+    ],
+    "headerHeight": 59.67499923706055,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 131.8125,
+        "right": 206.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 212.1374969482422,
+        "right": 299.3624954223633
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.9624938964844,
+        "right": 368.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 374.1625061035156,
+        "right": 521.6750030517578
+      }
+    ],
+    "scroll": 753,
+    "searches": 1
+  },
+  {
+    "width": 768,
+    "path": "/stoebern?retailers=dm",
+    "active": [
+      "Stöbern"
+    ],
+    "client": 753,
+    "h1": [
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "headerHeight": 117.0999984741211,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 131.8125,
+        "right": 206.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 212.1374969482422,
+        "right": 299.3624954223633
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.9624938964844,
+        "right": 368.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 374.1625061035156,
+        "right": 521.6750030517578
+      }
+    ],
+    "scroll": 753,
+    "searches": 1
+  },
+  {
+    "width": 768,
+    "path": "/einkaufsliste",
+    "active": [
+      "Liste"
+    ],
+    "client": 768,
+    "h1": [
+      "Noch keine Angebote gemerkt."
+    ],
+    "headerHeight": 117.0999984741211,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 139.41250610351562,
+        "right": 214.13750457763672
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 219.7375030517578,
+        "right": 306.9625015258789
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 312.5625,
+        "right": 376.1625022888184
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 381.7625122070313,
+        "right": 529.2750091552734
+      }
+    ],
+    "scroll": 768,
+    "searches": 1
+  },
+  {
+    "width": 768,
+    "path": "/top-deals/?category=waschmittel",
+    "active": [
+      "Top Deals heuteTop Deals"
+    ],
+    "client": 753,
+    "h1": [
+      "Top Deals heute"
+    ],
+    "headerHeight": 117.0999984741211,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 131.8125,
+        "right": 206.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 212.1374969482422,
+        "right": 299.3624954223633
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.9624938964844,
+        "right": 368.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 374.1625061035156,
+        "right": 521.6750030517578
+      }
+    ],
+    "scroll": 753,
+    "searches": 1
+  },
+  {
+    "width": 768,
+    "path": "/angebote/billa/",
+    "active": [],
+    "client": 753,
+    "h1": [
+      "BILLA Angebote aktuell vergleichen"
+    ],
+    "headerHeight": 117.0999984741211,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 131.8125,
+        "right": 206.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 212.1374969482422,
+        "right": 299.3624954223633
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.9624938964844,
+        "right": 368.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 374.1625061035156,
+        "right": 521.6750030517578
+      }
+    ],
+    "scroll": 753,
+    "searches": 1
+  },
+  {
+    "width": 768,
+    "path": "/angebote/bier/",
+    "active": [],
+    "client": 753,
+    "h1": [
+      "Bier Angebote aktuell vergleichen"
+    ],
+    "headerHeight": 117.0999984741211,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 131.8125,
+        "right": 206.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 212.1374969482422,
+        "right": 299.3624954223633
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.9624938964844,
+        "right": 368.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 374.1625061035156,
+        "right": 521.6750030517578
+      }
+    ],
+    "scroll": 753,
+    "searches": 1
+  },
+  {
+    "width": 1440,
+    "path": "/",
+    "active": [],
+    "client": 1440,
+    "h1": [
+      "Womit willst du heute sparen?"
+    ],
+    "headerHeight": 59.67499923706055,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 231.4125061035156,
+        "right": 306.1375045776367
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 311.7375183105469,
+        "right": 398.962516784668
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 404.5625,
+        "right": 468.1625022888184
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 473.7625122070313,
+        "right": 621.2750091552734
+      }
+    ],
+    "scroll": 1440,
+    "searches": 1
+  },
+  {
+    "width": 1440,
+    "path": "/suche?q=waschmittel&markets=dm&sort=retailer",
+    "active": [
+      "Suche"
+    ],
+    "client": 1425,
+    "h1": [
+      "Angebote suchen"
+    ],
+    "headerHeight": 59.67499923706055,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 223.8125,
+        "right": 298.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.13751220703125,
+        "right": 391.36251068115234
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 396.9624938964844,
+        "right": 460.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 466.1625061035156,
+        "right": 613.6750030517578
+      }
+    ],
+    "scroll": 1425,
+    "searches": 1
+  },
+  {
+    "width": 1440,
+    "path": "/stoebern?retailers=dm",
+    "active": [
+      "Stöbern"
+    ],
+    "client": 1425,
+    "h1": [
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "headerHeight": 61.10000228881836,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 223.8125,
+        "right": 298.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.13751220703125,
+        "right": 391.36251068115234
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 396.9624938964844,
+        "right": 460.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 466.1625061035156,
+        "right": 613.6750030517578
+      }
+    ],
+    "scroll": 1425,
+    "searches": 1
+  },
+  {
+    "width": 1440,
+    "path": "/einkaufsliste",
+    "active": [
+      "Liste"
+    ],
+    "client": 1440,
+    "h1": [
+      "Noch keine Angebote gemerkt."
+    ],
+    "headerHeight": 61.10000228881836,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 231.4125061035156,
+        "right": 306.1375045776367
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 311.7375183105469,
+        "right": 398.962516784668
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 404.5625,
+        "right": 468.1625022888184
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 473.7625122070313,
+        "right": 621.2750091552734
+      }
+    ],
+    "scroll": 1440,
+    "searches": 1
+  },
+  {
+    "width": 1440,
+    "path": "/top-deals/?category=waschmittel",
+    "active": [
+      "Top Deals heuteTop Deals"
+    ],
+    "client": 1425,
+    "h1": [
+      "Top Deals heute"
+    ],
+    "headerHeight": 61.10000228881836,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 223.8125,
+        "right": 298.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.13751220703125,
+        "right": 391.36251068115234
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 396.9624938964844,
+        "right": 460.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 466.1625061035156,
+        "right": 613.6750030517578
+      }
+    ],
+    "scroll": 1425,
+    "searches": 1
+  },
+  {
+    "width": 1440,
+    "path": "/angebote/billa/",
+    "active": [],
+    "client": 1425,
+    "h1": [
+      "BILLA Angebote aktuell vergleichen"
+    ],
+    "headerHeight": 61.10000228881836,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 223.8125,
+        "right": 298.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.13751220703125,
+        "right": 391.36251068115234
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 396.9624938964844,
+        "right": 460.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 466.1625061035156,
+        "right": 613.6750030517578
+      }
+    ],
+    "scroll": 1425,
+    "searches": 1
+  },
+  {
+    "width": 1440,
+    "path": "/angebote/bier/",
+    "active": [],
+    "client": 1425,
+    "h1": [
+      "Bier Angebote aktuell vergleichen"
+    ],
+    "headerHeight": 61.10000228881836,
+    "mainCount": 1,
+    "nav": [
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 223.8125,
+        "right": 298.5374984741211
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 304.13751220703125,
+        "right": 391.36251068115234
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 396.9624938964844,
+        "right": 460.56249618530273
+      },
+      {
+        "font": "15.2px",
+        "height": 44,
+        "left": 466.1625061035156,
+        "right": 613.6750030517578
+      }
+    ],
+    "scroll": 1425,
+    "searches": 1
+  }
+]

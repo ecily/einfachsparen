@@ -1,0 +1,20 @@
+[
+  {
+    "path": "/angebote/ux-audit-unbekannt/",
+    "page": "search",
+    "canonical": null,
+    "robots": "noindex,follow"
+  },
+  {
+    "path": "/angebote/ux-audit-unbekannt/top-deals/",
+    "page": "top-deals",
+    "canonical": "https://www.kaufklug.at/top-deals/",
+    "robots": "index,follow"
+  },
+  {
+    "path": "/angebote/ux-audit-unbekannt/suche/",
+    "page": "product-search",
+    "canonical": "https://www.kaufklug.at/suche/",
+    "robots": "noindex,follow"
+  }
+]

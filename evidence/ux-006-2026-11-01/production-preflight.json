@@ -1,0 +1,81 @@
+{
+  "checkedAt": "2026-11-01T14:08:47.393017+00:00",
+  "deployment": "430fd209-d7a6-4a85-a84e-c7925edaadbe",
+  "phase": "ACTIVE",
+  "inProgress": false,
+  "components": {
+    "services": [
+      {
+        "name": "einfachsparen-backend",
+        "source_commit_hash": "a60b385ce64b14ca3e5bffdb96e874c23b540af0"
+      }
+    ],
+    "static_sites": [
+      {
+        "name": "einfachsparen-admin",
+        "source_commit_hash": "a60b385ce64b14ca3e5bffdb96e874c23b540af0"
+      }
+    ]
+  },
+  "healthOk": true,
+  "mongoConnected": true,
+  "processStartedAt": "2026-11-01T12:25:19.575Z",
+  "snapshotAt": "2026-11-01T14:08:48.131Z",
+  "activeRun": null,
+  "lock": {
+    "state": "free",
+    "isBlocked": false,
+    "staleHeartbeat": false,
+    "heartbeatAgeMs": 30519399,
+    "staleHeartbeatThresholdMs": 900000,
+    "reason": "Globaler Crawl-Lock ist frei.",
+    "lock": {
+      "runId": "",
+      "status": "released",
+      "acquiredAt": "2026-11-01T05:37:00.021Z",
+      "heartbeatAt": "2026-11-01T05:40:08.731Z",
+      "expiresAt": null,
+      "owner": "einfachsparen-backend-7975ff8785-8lm4w:33:scheduled"
+    }
+  },
+  "publish": {
+    "totalActiveOffers": 8107,
+    "finalCount": 8107,
+    "openCount": 0,
+    "finalRate": 1,
+    "status": "final",
+    "statuses": [
+      {
+        "status": "crawl-run-success",
+        "count": 4050,
+        "final": true,
+        "intermediate": false
+      },
+      {
+        "status": "crawl-run-stale",
+        "count": 2222,
+        "final": true,
+        "intermediate": false
+      },
+      {
+        "status": "unknown",
+        "count": 1382,
+        "final": false,
+        "intermediate": false
+      },
+      {
+        "status": "crawl-run-partial",
+        "count": 453,
+        "final": true,
+        "intermediate": false
+      }
+    ]
+  },
+  "latestRun": {
+    "id": "6ae6cffcfb8541a106574e3c",
+    "status": "success",
+    "lastStage": "publish-status-finished",
+    "publishStatusFinished": true,
+    "finishedAt": "2026-11-01T05:40:07.284Z"
+  }
+}

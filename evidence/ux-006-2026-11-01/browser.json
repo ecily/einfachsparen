@@ -1,0 +1,823 @@
+[
+  {
+    "case": "fixed-catchall",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/ux-audit-unbekannt/top-deals/?category=bier"
+  },
+  {
+    "case": "matrix",
+    "width": 375,
+    "path": "/",
+    "canonical": "https://www.kaufklug.at/",
+    "h1": [
+      "Womit willst du heute sparen?"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/",
+    "viewport": 375
+  },
+  {
+    "case": "matrix",
+    "width": 375,
+    "path": "/suche?q=waschmittel",
+    "canonical": "https://www.kaufklug.at/suche/",
+    "h1": [
+      "Angebote suchen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/suche/?q=waschmittel",
+    "viewport": 375
+  },
+  {
+    "case": "matrix",
+    "width": 375,
+    "path": "/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "canonical": "https://www.kaufklug.at/stoebern/",
+    "h1": [
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "viewport": 375
+  },
+  {
+    "case": "matrix",
+    "width": 375,
+    "path": "/top-deals/",
+    "canonical": "https://www.kaufklug.at/top-deals/",
+    "h1": [
+      "Top Deals heute"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/top-deals/",
+    "viewport": 375
+  },
+  {
+    "case": "matrix",
+    "width": 375,
+    "path": "/einkaufsliste",
+    "canonical": "https://www.kaufklug.at/einkaufsliste/",
+    "h1": [
+      "Noch keine Angebote gemerkt."
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/einkaufsliste/",
+    "viewport": 375
+  },
+  {
+    "case": "matrix",
+    "width": 375,
+    "path": "/angebote/billa/",
+    "canonical": "https://www.kaufklug.at/angebote/billa/",
+    "h1": [
+      "BILLA Angebote aktuell vergleichen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/billa/",
+    "viewport": 375
+  },
+  {
+    "case": "matrix",
+    "width": 375,
+    "path": "/angebote/bier/",
+    "canonical": "https://www.kaufklug.at/angebote/bier/",
+    "h1": [
+      "Bier Angebote aktuell vergleichen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/bier/",
+    "viewport": 375
+  },
+  {
+    "case": "matrix",
+    "width": 768,
+    "path": "/",
+    "canonical": "https://www.kaufklug.at/",
+    "h1": [
+      "Womit willst du heute sparen?"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/",
+    "viewport": 768
+  },
+  {
+    "case": "matrix",
+    "width": 768,
+    "path": "/suche?q=waschmittel",
+    "canonical": "https://www.kaufklug.at/suche/",
+    "h1": [
+      "Angebote suchen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/suche/?q=waschmittel",
+    "viewport": 768
+  },
+  {
+    "case": "matrix",
+    "width": 768,
+    "path": "/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "canonical": "https://www.kaufklug.at/stoebern/",
+    "h1": [
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "viewport": 768
+  },
+  {
+    "case": "matrix",
+    "width": 768,
+    "path": "/top-deals/",
+    "canonical": "https://www.kaufklug.at/top-deals/",
+    "h1": [
+      "Top Deals heute"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/top-deals/",
+    "viewport": 768
+  },
+  {
+    "case": "matrix",
+    "width": 768,
+    "path": "/einkaufsliste",
+    "canonical": "https://www.kaufklug.at/einkaufsliste/",
+    "h1": [
+      "Noch keine Angebote gemerkt."
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/einkaufsliste/",
+    "viewport": 768
+  },
+  {
+    "case": "matrix",
+    "width": 768,
+    "path": "/angebote/billa/",
+    "canonical": "https://www.kaufklug.at/angebote/billa/",
+    "h1": [
+      "BILLA Angebote aktuell vergleichen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/billa/",
+    "viewport": 768
+  },
+  {
+    "case": "matrix",
+    "width": 768,
+    "path": "/angebote/bier/",
+    "canonical": "https://www.kaufklug.at/angebote/bier/",
+    "h1": [
+      "Bier Angebote aktuell vergleichen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/bier/",
+    "viewport": 768
+  },
+  {
+    "case": "matrix",
+    "width": 1440,
+    "path": "/",
+    "canonical": "https://www.kaufklug.at/",
+    "h1": [
+      "Womit willst du heute sparen?"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/",
+    "viewport": 1440
+  },
+  {
+    "case": "matrix",
+    "width": 1440,
+    "path": "/suche?q=waschmittel",
+    "canonical": "https://www.kaufklug.at/suche/",
+    "h1": [
+      "Angebote suchen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/suche/?q=waschmittel",
+    "viewport": 1440
+  },
+  {
+    "case": "matrix",
+    "width": 1440,
+    "path": "/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "canonical": "https://www.kaufklug.at/stoebern/",
+    "h1": [
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "viewport": 1440
+  },
+  {
+    "case": "matrix",
+    "width": 1440,
+    "path": "/top-deals/",
+    "canonical": "https://www.kaufklug.at/top-deals/",
+    "h1": [
+      "Top Deals heute"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/top-deals/",
+    "viewport": 1440
+  },
+  {
+    "case": "matrix",
+    "width": 1440,
+    "path": "/einkaufsliste",
+    "canonical": "https://www.kaufklug.at/einkaufsliste/",
+    "h1": [
+      "Noch keine Angebote gemerkt."
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/einkaufsliste/",
+    "viewport": 1440
+  },
+  {
+    "case": "matrix",
+    "width": 1440,
+    "path": "/angebote/billa/",
+    "canonical": "https://www.kaufklug.at/angebote/billa/",
+    "h1": [
+      "BILLA Angebote aktuell vergleichen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/billa/",
+    "viewport": 1440
+  },
+  {
+    "case": "matrix",
+    "width": 1440,
+    "path": "/angebote/bier/",
+    "canonical": "https://www.kaufklug.at/angebote/bier/",
+    "h1": [
+      "Bier Angebote aktuell vergleichen"
+    ],
+    "main": 1,
+    "nav": [
+      {
+        "height": 44,
+        "text": "Suche"
+      },
+      {
+        "height": 44,
+        "text": "Stöbern"
+      },
+      {
+        "height": 44,
+        "text": "Liste"
+      },
+      {
+        "height": 44,
+        "text": "Top Deals heuteTop Deals"
+      }
+    ],
+    "overflow": false,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/bier/",
+    "viewport": 1440
+  },
+  {
+    "case": "search-first-page",
+    "count": 60
+  },
+  {
+    "case": "search-load-more",
+    "count": 120
+  },
+  {
+    "case": "search-filter-sort",
+    "url": "http://127.0.0.1:4188/suche?q=waschmittel&markets=dm&sort=retailer",
+    "count": 60
+  },
+  {
+    "case": "browse-recalled",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "count": 60
+  },
+  {
+    "case": "top-deals",
+    "count": 20
+  },
+  {
+    "case": "list-reload",
+    "count": 2
+  },
+  {
+    "case": "search-recalled",
+    "url": "http://127.0.0.1:4188/suche?q=waschmittel&markets=dm&sort=retailer",
+    "articles": 60,
+    "query": "waschmittel",
+    "sort": "retailer"
+  },
+  {
+    "case": "back",
+    "url": "http://127.0.0.1:4188/einkaufsliste/"
+  },
+  {
+    "case": "forward-reload",
+    "url": "http://127.0.0.1:4188/suche/?q=waschmittel&markets=dm&sort=retailer",
+    "articles": 60,
+    "query": "waschmittel",
+    "sort": "retailer"
+  },
+  {
+    "case": "skip-focus",
+    "focus": "main-content",
+    "outline": "solid"
+  },
+  {
+    "case": "unknown",
+    "requested": "/angebote/ux-audit-unbekannt/top-deals/?category=bier",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/ux-audit-unbekannt/top-deals/?category=bier"
+  },
+  {
+    "case": "unknown",
+    "requested": "/angebote/ux-audit-unbekannt/suche/",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/ux-audit-unbekannt/suche/"
+  },
+  {
+    "case": "unknown",
+    "requested": "/angebote/billa/top-deals/",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/billa/top-deals/"
+  },
+  {
+    "case": "unknown",
+    "requested": "/top-deals-extra/",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/top-deals-extra/"
+  },
+  {
+    "case": "unknown",
+    "requested": "/foo/liste/abc",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/foo/liste/abc"
+  },
+  {
+    "case": "unknown",
+    "requested": "/angebote/bier//",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/bier//"
+  },
+  {
+    "case": "unknown-to-browse",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel"
+  },
+  {
+    "case": "unknown-history",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/bier//"
+  },
+  {
+    "case": "responsive-top",
+    "width": 768,
+    "count": 20
+  },
+  {
+    "case": "responsive-top",
+    "width": 768,
+    "count": 20
+  },
+  {
+    "case": "responsive-navigation-reload",
+    "width": 768,
+    "articles": 60,
+    "overflow": false,
+    "query": "waschmittel",
+    "sort": "retailer",
+    "url": "http://127.0.0.1:4188/suche/?q=waschmittel&markets=dm&sort=retailer"
+  },
+  {
+    "case": "responsive-top",
+    "width": 1440,
+    "count": 20
+  },
+  {
+    "case": "responsive-navigation-reload",
+    "width": 1440,
+    "articles": 60,
+    "overflow": false,
+    "query": "waschmittel",
+    "sort": "retailer",
+    "url": "http://127.0.0.1:4188/suche/?q=waschmittel&markets=dm&sort=retailer"
+  },
+  {
+    "case": "browse-draft",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel&draftRetailers=dm%2Cbipa"
+  },
+  {
+    "case": "browse-applied-reload",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm%2Cbipa&categories=sub%3Adrogerie%3Awaschmittel",
+    "count": 60
+  }
+]

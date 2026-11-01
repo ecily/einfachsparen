@@ -14,6 +14,7 @@ const INITIAL_FILTER_OVERLAY_MAX_MS = 1500
 export function SearchPage({
   retailers,
   categories,
+  appliedCategories = categories,
   filtersLoading,
   ranking,
   rankingLoading,
@@ -57,8 +58,8 @@ export function SearchPage({
   const shouldShowBrowseResults = hasAppliedRetailerScope
   const allDraftCategoriesSelected = areAllCategoryGroupsSelected(draftCategoryLabels, categories)
   const appliedCategoryQueryLabels = useMemo(
-    () => buildSelectedCategoryQueryLabels(appliedCategoryLabels, categories),
-    [appliedCategoryLabels, categories]
+    () => buildSelectedCategoryQueryLabels(appliedCategoryLabels, appliedCategories),
+    [appliedCategoryLabels, appliedCategories]
   )
   const [activeBrowseScrollKey, setActiveBrowseScrollKey] = useState(0)
   const handledBrowseScrollKeyRef = useRef(0)
@@ -73,9 +74,9 @@ export function SearchPage({
         selectedCategoryTokens: appliedCategoryLabels,
       },
       retailers || [],
-      categories || []
+      appliedCategories || []
     )
-  }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, categories])
+  }, [allOffers, appliedRetailers, appliedCategoryLabels, retailers, appliedCategories])
   const { bestComparableOffers, actionOffers } = useMemo(() => splitRankingOffers(visibleOffers), [visibleOffers])
   const pagination = useMemo(() => getRankingPagination(ranking), [ranking])
 

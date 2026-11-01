@@ -1,0 +1,70 @@
+[
+  {
+    "path": "admin/scripts/generateSeoHtml.mjs",
+    "sha256": "4625b54b2a4599e7d126c2c8f93225467dcb53a07bb9da69aae02f187d7d5b83"
+  },
+  {
+    "path": "admin/scripts/uxNavigationFixtures.mjs",
+    "sha256": "a6689ba47db98d9dc49e00ecdba5e43b8fe51b141e01b80c81cfa6ee86989167"
+  },
+  {
+    "path": "admin/src/App.jsx",
+    "sha256": "9c5c3f6a191f8b9a968962eeb2df5fb5e5ae0961bc644dd5df3a29f2eebc9c5c"
+  },
+  {
+    "path": "admin/src/components/layout/AppShell.jsx",
+    "sha256": "3fe3430fe564d5c394c1767f8276c036eb2b695db4b92180e30770643f59a563"
+  },
+  {
+    "path": "admin/src/components/layout/appShell.css",
+    "sha256": "aca359b5cdc53442eb254ac2967bcaa509a3ee59cd80fe036743f2492e2703cc"
+  },
+  {
+    "path": "admin/src/components/search/KeywordSearchPage.jsx",
+    "sha256": "2dac178e720958a5bfc5f50e781cdc65f02fc0e39e38edeecf507dfabf98d3e8"
+  },
+  {
+    "path": "admin/src/components/search/SearchPage.jsx",
+    "sha256": "34a02f0ca886d649ea56fc3fc83123fdba7b2f17a5e93b11e84159a0e683a698"
+  },
+  {
+    "path": "admin/src/components/shopping/ShoppingListPage.jsx",
+    "sha256": "422952774f95b985124e93fb36ce7028d5ebb46dd873c5146b704cf2315b09fe"
+  },
+  {
+    "path": "admin/src/index.css",
+    "sha256": "f74a9180c1c73b0e4f40252a8b84eaa13ac9321addd76007b79c219ec4776c5b"
+  },
+  {
+    "path": "admin/src/utils/appShell.test.mjs",
+    "sha256": "b31aa4469659359640222f4397e43ffdde8ed708ec43084557221a67a9415391"
+  },
+  {
+    "path": "admin/src/utils/catchallRouting.test.mjs",
+    "sha256": "615edc24c52c64485f1d5caf830d98dc77a8a7e0f6d24a26563be5e0985566eb"
+  },
+  {
+    "path": "admin/src/utils/navigationState.js",
+    "sha256": "8d11d05485a7fee53e7c54c01bc50e4157f3338fcdb263c0b55c9a6d8611bbb5"
+  },
+  {
+    "path": "admin/src/utils/navigationState.test.mjs",
+    "sha256": "296fde804d4e4b47ef3d322c7d230f94b1ce890d85cfcb0f5dfb5450c0d08ba4"
+  },
+  {
+    "path": "admin/src/utils/publicUx.test.mjs",
+    "sha256": "df209db4c56a091da0cbc386e04e900af4d3a38758fd2fd75101c1f324973105"
+  },
+  {
+    "path": "admin/src/utils/seo.js",
+    "sha256": "3441a32b11836bb29f5f4b093fe9480cb7d711f90334fb6ae80441aa523ab25f"
+  },
+  {
+    "path": "admin/src/utils/topDealsUx.test.mjs",
+    "sha256": "238ddfc139d87c081518bef17d7484551873e5f826a1a462750193c9924319f3"
+  },
+  {
+    "path": "admin/src/utils/useAppNavigation.js",
+    "sha256": "2376fcaa2a26b71dd757bd930e6b916a5da36562bd11ca03fbcee956e7d79c74"
+  }
+]

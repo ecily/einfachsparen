@@ -756,7 +756,7 @@ async function syncRenderedSitemap(candidate, pages = renderPages || getStaticSe
   await writeFile(join(distDir, 'sitemap.xml'), filterSitemapXml(priceCheckSource, indexablePaths), 'utf8')
 }
 
-export function buildCatchallDocument(template) {
+export function buildCatchallDocument(template, pages = []) {
   const scriptSrc = (template.match(/<script type="module" crossorigin src="([^"]+)"/i) || [])[1] || ''
   const styleHref = (template.match(/<link rel="stylesheet" crossorigin href="([^"]+)"/i) || [])[1] || ''
 
@@ -777,6 +777,7 @@ export function buildCatchallDocument(template) {
       <p><a href="/">Zur Startseite</a></p>
     </main>
     <div id="root"></div>
+    <script type="application/json" id="kaufklug-seo-policy">${JSON.stringify(buildSeoPolicy(pages)).replace(/</g, '\\u003c')}</script>
     ${scriptSrc ? `<script type="module" crossorigin src="${scriptSrc}"></script>` : ''}
   </body>
 </html>
@@ -807,7 +808,7 @@ async function main() {
     await writeFile(outputPath, buildSeoStaticDocument(template, pageWithSummary, renderPages), 'utf8')
   }
 
-  await writeFile(join(distDir, 'catchall.html'), buildCatchallDocument(template), 'utf8')
+  await writeFile(join(distDir, 'catchall.html'), buildCatchallDocument(template, renderPages), 'utf8')
   await syncRenderedSitemap(priceCheckCandidate, renderPages)
 }
 

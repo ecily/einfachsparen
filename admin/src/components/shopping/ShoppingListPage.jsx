@@ -269,6 +269,7 @@ export function ShoppingListPage({ shoppingListItems, onRemoveItem, onClearList,
 
   return (
     <>
+      <h1 className="app-shell__page-title">Deine Einkaufsliste</h1>
       <section className="shopping-check" aria-label="Einkaufslisten-Zusammenfassung">
         <div className="shopping-check__metrics">
           {canShowOfferTotal ? (

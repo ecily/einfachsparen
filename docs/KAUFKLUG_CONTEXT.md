@@ -1,5 +1,104 @@
 # kaufklug.at Kontext
 
+## UX-007 – freigegebener Produktionsrollout am 01.11.2026
+
+- Ausdrückliche Betreiberfreigabe für ausschließlich UX-002/004/006 samt geprüfter Dokumentation. [Rollout- und Abnahmeprotokoll](KAUFKLUG_UX_007_2026-11-01.md). Dieser neueste Abschnitt ordnet die nachfolgenden datierten lokalen Freigabegrenzen ein; Strategie, SEO P0 und Runde 2 bleiben unverändert.
+- Frisch verifizierte Ausgangsbasis: Remote-main und beide produktiven Komponenten `a60b385c`, Deployment `430fd209-d7a6-4a85-a84e-c7925edaadbe` ACTIVE. Kein laufender Deploy/Crawl, Lock frei, Public-Publish final/open=0. Regulärer letzter Run `6ae6cffcfb8541a106574e3c` unverändert abgeschlossen.
+- Release wird in einem neuen sauberen Worktree `C:\coding\einfachsparen-ux-007-release`, Branch `release/ux-007`, vorbereitet. Nur die 17 unveränderten UX-006-Kandidatendateien, zugehörige geprüfte Dokumentation und einzeln referenzierte Nachweise; Original-Worktree und fremde Änderungen ausgeschlossen. Noch kein produktiver Erfolg behauptet.
+- Nach Commit/Auto-Deploy erfolgt echte Live-Abnahme und ein belegter lokaler Nachtrag. Kein zweiter ungeprüfter Produktionsrelease allein zur Dokumentationspflege; keine zusätzlichen Crawls oder Datenbankkorrekturen.
+
+## Konsolidierter Projektstand 2026-11-01 – KAUFKLUG-DOC-001
+
+Dieser Überblick und die folgende TOP-DEALS-006-Abnahme sind für den Stand vom 01.11.2026 maßgeblich. Ältere Abschnitte bleiben als datierte Historie erhalten; frühere Ziele, Live-Zahlen und Freigaben gelten nicht automatisch weiter. Dieser Dokumentationsabgleich ist kein erneuter Live-, Quellen- oder GSC-Audit.
+
+Die bereits vorhandene Live-Abnahme wurde inhaltlich unverändert vom Dateiende hierher verschoben; keine zweite Kopie der Release-Ergebnisse.
+
+### TOP-DEALS-006 – kontrollierter Rollout 2026-11-01
+
+- Nach ausdrücklicher Produktionsfreigabe ausschließlich die sieben geprüften Dateien auf `release/top-deals-002` committed: `a60b385ce64b14ca3e5bffdb96e874c23b540af0`, Fast-forward `59c7bdb7..a60b385c` nach main. Freigegebener Inhaltsfingerabdruck vor Staging identisch. Erneut 433/433 Backend- und 39/39 SEO-Tests grün; Parser 131/145 mit denselben 14 am unveränderten Basis-Commit reproduzierten Altfehlern.
+- Vor Release read-only: beide Produktionskomponenten und Remote auf `59c7bdb7`, kein offenes Deployment, kein aktiver Crawl, Lock released; letzter Run `6ae6cffcfb8541a106574e3c` success/publish-status-finished, 3.396 zugehörige Offers final. Originaler Dirty-Worktree unangetastet.
+- Regulärer Auto-Deploy `430fd209-d7a6-4a85-a84e-c7925edaadbe` ACTIVE; Backend und Static Site tatsächlich auf `a60b385c`, beide neu gebaut. Health 200/Mongo verbunden; Backend-Prozessstart `2026-11-01T12:25:19.575Z`. Cache-Warmup filters/topDeals/ranking/billaBrowse jeweils fulfilled; keine neuen Fehler in den geprüften Runtime-/Browserlogs. Startup-Grace 900 Sekunden unverändert, runOnStart=false, Daily effektiv 06:37 Europe/Vienna. Nach Deploy weiterhin kein aktiver Run, Lock released und unveränderter letzter regulärer Run.
+- Live-API und Browser: 20 Top Deals, auch limit=99 höchstens 20; Kaffee-Filter ohne Nagelpuder/Handfluid. Nagelpuder jetzt Drogerie/Kosmetik & Make-up, Handfluid Drogerie/Koerperpflege, auch in normalen Suchantworten. Preise, direkte Referenzpreise und Grundpreise der 20 wiedergefundenen Deals vor/nach identisch; bekannte Stichproben 3 EUR/15 g = 200 EUR/kg und 1,10 EUR/75 ml = 14,67 EUR/l. Waschmittel-Suche weiterhin 60+60 Treffer auf zwei überschneidungsfreien Seiten mit stabilem Pagination-Token und weiterem hasMore.
+- Neue SEO-Generation: 38 Policy-Seiten HTTP 200, Robots/Canonical/eingebettete Policy konsistent; Sitemap 24 statt 26 URLs, Stand `2026-11-01T12:24:33Z`. Butter neu indexierbar; Schokolade, Nudeln und Chips noindex und aus Sitemap/SEO-Angebotslinks entfernt. Aktuelle Public-Prüfung mit unveränderter Qualitätsfunktion bestätigt Butter 13 Angebote/2 Handelsgruppen; Schokolade 14/1, Nudeln 38/1, Chips 38/1 scheitern an Händlerbreite. Bier und Top Deals bleiben indexierbar. React-Butter-Policy und Footerlinks im Browser konsistent. Keine SEO-Schwellen manuell geändert.
+- Offen bis zur nächsten erfolgreichen regulären BIPA-/dm-Neuerfassung mit Publish: gespeicherte Fehlgültigkeit und gespeicherte Such-/Filterkategorien prüfen, unbekannte Fristen im unveränderten Snapshot-/TTL-Vertrag bestätigen sowie Cache-Neuaufbau und Quellenersetzung abnehmen. Nagelpuder trägt derzeit weiterhin das alte unbelegte `2026-11-11T23:59:59.999Z`; kein Datenhandpatch und kein zusätzlicher Crawl. Keine neue Regression nachgewiesen, kein Rollback erforderlich.
+- Dieser belegte Live-Nachtrag bleibt bewusst lokal/uncommitted: genau ein Release-Commit/Push, kein zweiter Dokumentationsdeploy. Keine zusätzlichen Features, manuellen Deployments oder Datenbankrücksetzungen.
+
+### Verbindliche strategische Entscheidungen vom 01.11.2026
+
+Quelle: ausdrückliche Betreiberentscheidungen in KAUFKLUG-STRATEGY-001; verbindliche Vision und Leitplanken, keine Behauptung bereits erreichter Funktionen, Reichweite oder Einnahmen. Diese aktuelle Zielsetzung ersetzt abweichende ältere Zielbilder; die historische Chronik bleibt erhalten.
+
+1. Kaufklug soll die beste Suchmaschine für **aktuelle Angebote in Österreich** werden. SEO und maximale qualifizierte Sichtbarkeit bleiben dauerhaft **P0**.
+2. Differenzierung durch intelligente Optimierung des **gesamten Einkaufs**; Hauptnutzen ist möglichst viel tatsächlich gespartes Geld, ausschließlich mit belegbarem Preisvorteil.
+3. Möglichst vollständige österreichische Händlerabdeckung, ausschließlich über legale, verlässliche Datenwege. Österreich zuerst; spätere Expansion bleibt offen.
+4. Nur vollständig belegte Angebotsangaben veröffentlichen; bestehende Trust-Gates schützen. Keine erfundenen Preise, falschen Produktbilder oder unbelegten Angebotsfristen. Normale Suche und Angebotslisten niemals auf das Top-Deals-Limit begrenzen.
+5. Dynamische, qualitätsbasierte Kategorie-Heatmap als zentraler Einstieg. Evidenz zu gültigen Angeboten, Referenzpreisen, Vergleichbarkeit, Frische und Quellenvertrauen; fehlende Evidenz neutral, keine reine Rabattprozent-Heuristik.
+6. Einkaufsliste einfach und schnell halten; passende Angebote perspektivisch automatisch zuordnen. Komplexität ins Backend, einfache User Journey im Frontend: **Heatmap/Suche → Angebot → Einkaufsliste → belegbarer Preisvorteil → Einkaufsentscheidung → Wiederkehr**.
+7. Maximale Automatisierung innerhalb definierter Qualitäts-, Sicherheits- und Freigabegrenzen; daraus folgt keine pauschale Produktions-, Crawl- oder Datenänderungsfreigabe.
+8. Mehrere Einnahmequellen ohne Verlust der Unabhängigkeit. Erstes Einnahmen-Etappenziel **250 EUR/Monat**, ersetzt das historische 100-EUR-Ziel. Organisches Wachstum zuerst; bezahlte Tests nur nach Freigabe und bei belegtem Potenzial. Kein Erreichen des Einnahmenziels belegt.
+9. Kaufklug bleibt eigenständige Marke. Keine aktive Verkaufssuche; auf qualifizierte Übernahmeanfragen vorbereitet sein. Konkrete Vorbereitung bisher nicht nachgewiesen.
+10. Erfolgshorizont zwei Jahre: hohe Reichweite und etablierte österreichische Marke; Zielbild bis November 2028, keine erfundenen Reichweiten-KPIs. **Designrichtung B:** umfassende Modernisierung unter Beibehaltung der Marke.
+
+**Umsetzungsstand getrennt:** Produktiv ist weiterhin `a60b385c` mit den belegten TOP-DEALS-Fixes und der bisherigen Oberfl?che. Gemeinsame Shell, URL-/History-Kontext und Catchall-Korrekturen aus UX-002/004 sind nur lokal/uncommitted. Heatmap, automatische Angebotszuordnung/gesamte Einkaufsoptimierung und die Gesch?ftsziele sind Vision bzw. weitere Arbeit, keine durch diesen Auftrag realisierten Funktionen. Die fr?heren Feature-Roadmap-Bezeichnungen UX-003 bis UX-005 aus UX-001 werden durch die tats?chlich vergebenen Auftr?ge (Rollout-Preflight, Catchall-Fix, erneuter Preflight) nicht als umgesetzt erkl?rt.
+
+### UX/UI-Entscheidung und Freigabegrenze
+
+- Designrichtung und Qualit?ts-Heatmap sind in der obigen verbindlichen Strategie festgelegt; einheitliches Frontend und konsistente Navigation bleiben der lokale UX-002-Umfang.
+- Dynamische Angebots-Heatmap mit belegbarer Qualitätsbewertung als Zielbild. Datenbasis, Qualitätskriterien, Bewertungsverfahren und Darstellung erst spezifizieren und prüfen; kein vorhandener Heatmap-/Qualitäts-Score wird behauptet.
+- **UX-001 am 01.11.2026 abgeschlossen:** [Frontend-/UX/UI-Audit](KAUFKLUG_UX_AUDIT_2026-11-01.md), produktiver Ausgangsstand `a60b385c`, reale Browserpruefung bei 375/768/1440 px und Codeanalyse. Gesamtampel GELB, konkrete Kontrastbarrieren ROT; Evidenzluecken explizit. Genau eine erste Empfehlung: UX-002, gemeinsame Shell und stabile Navigation. Keine Implementierungsfreigabe.
+- UX-001/DOC-001 autorisierten nur Dokumentation. Die anschliessende ausdrueckliche UX-002-Freigabe erlaubt lokale Shell-/Navigationskorrekturen mit Tests; weiterhin keine Produktionsfreigabe.
+
+### UX-002 - lokale Umsetzung am 01.11.2026
+
+- [Ergebnisbericht UX-002](KAUFKLUG_UX_002_2026-11-01.md): gemeinsame App-Shell, echte Navigationslinks/History, URL-Zustand und tabbezogene Bereichswiederkehr, Fokus-/Kontrastkorrekturen. Stoebern und Liste erhalten; keine Heatmap, Backend-, Preis- oder Rankingveraenderung.
+- Lokal 107/107 Frontendtests (darin 8 neue Routing-/Komponententests), Lint und kompletter Frontend-/SEO-Build bestanden. Browser: 21 Ansichten bei 375/768/1440 px plus 320-px-Stichprobe, Back/Forward/Reload, getrennte Stoebern-Entwuerfe, Suche 60/120/135 und Top Deals 20 mit lokalen Fixtures. Generierte 38 Policy-Seiten / 24 Sitemap-URLs konsistent. Keine produktive Angebotsdatenabnahme daraus ableiten.
+- Nur lokal/uncommitted auf Basis `a60b385c`; Produktionsstand unveraendert. Empfehlung GO fuer gesonderten kontrollierten Rollout nach frischem Preflight und ausdruecklicher Freigabe. Test-dist enthaelt lokale Fixture-API und ist kein Releaseartefakt. Kein Commit, Push, Crawl, Datenpatch oder Deployment.
+
+### UX-003 - Produktionsrollout im Preflight gestoppt, 01.11.2026
+
+- Betreiberfreigabe lag vor; trotzdem **ROT / NO-GO** wegen reproduzierter neuer Routing-/Canonical-Regression: unbekannte Angebotsroute wird vom UX-002-Kandidaten ungefragt nach `/stoebern` umgeschrieben und bekommt dessen Canonical. Baseline a60b385c behaelt URL ohne Canonical; noindex bleibt beidseitig gesetzt. [Preflight und Belege](KAUFKLUG_UX_003_PREFLIGHT_2026-11-01.md). Frueheren lokalen GO-Status nicht weiterverwenden.
+- Erneut 107/107 Frontendtests, Lint und vollstaendiger Build gruen; der clientseitige Catchall-Fall war davon nicht abgedeckt. Authentifiziert verifiziert: beide Komponenten auf a60b385c, Deployment `430fd209-d7a6-4a85-a84e-c7925edaadbe` ACTIVE, kein laufender Deploy, Health/Mongo ok, kein aktiver Crawl, Lock frei, letzter regulaerer Run final und Publish open=0.
+- Stop vor Release-Branch, Staging, Commit und Push; kein Deploy, keine produktive neue SEO-Generation, kein Rollback und keine eigenmaechtige Reparatur. Gezielter Fix samt Catchall-Regressionstest benoetigt separaten Auftrag. Original-Worktree und vorhandene Codeaenderungen unveraendert.
+
+### UX-004 - Catchall-Korrektur lokal abgeschlossen, 01.11.2026
+
+- [Befund und Tests UX-004](KAUFKLUG_UX_004_2026-11-01.md): Browse-URL-Synchronisierung nur auf erkannten Stoebern-Routen; unbekannte Pfade bleiben unveraendert, noindex und ohne Canonical. Navigationsziele/gespeicherte Browse-URLs und Metadaten bei Pfadwechsel abgesichert.
+- Catchall liefert jetzt dieselbe bereits berechnete Build-Policy wie regulaere Seiten, damit nachfolgende SPA-Navigation keine qualitaetsbedingten noindex-Entscheidungen verliert. Keine neuen SEO-Schwellen, Rankings, Preise, Crawl- oder Backendveraenderungen.
+- Vorher Browserfehler und neue rote Tests reproduziert; nachher 112/112 Tests einschliesslich der bisherigen 107, Lint und vollstaendiger Build gruen. Lokal 38 Policy-Seiten / 24 Sitemap-URLs plus konsistentes Catchall; Browser: unbekannte URLs, Canonical-Wechsel, Back/Forward/Reload, Hauptbereiche und Filterkontext bestanden.
+- **GO nur fuer erneuten Release-Preflight.** Lokal/uncommitted, keine produktive Abnahme und keine automatische Produktionsfreigabe. Kein Commit, Push, Crawl, Datenpatch oder Deployment. UX-003-Stop bleibt historische Evidence; Original-Worktree unangetastet.
+
+### Produktentscheidungen Runde 2 – Zielbild, bestätigt in UX-006
+
+- Große Suche vor der Heatmap; wenige Hauptkategorien. Heatmap-Farben sollen belegte Angebotsattraktivität ausdrücken, keine pauschalen Rabattversprechen. Verkaufs-/Packungspreis vor Grundpreis; sichere Grundpreise und klar erkennbare Alternativen bleiben verfügbar.
+- Ein-Klick-Liste als einfacher Kernweg; Aktualisierung beim nächsten Besuch, keine personalisierten Rankings. Händlerangebote vollständig zugänglich halten; normale Suche/Listen niemals auf das Top-Deals-Limit begrenzen. SEO bleibt P0.
+- Diese Entscheidungen präzisieren STRATEGY-001, implementieren aber keine Heatmap, neue Preisgestaltung, Personalisierung, Aktualisierungsarchitektur oder Listenautomatik. Produktiv bleibt die bisherige Oberfläche auf a60b385c; die lokale Shell ist noch nicht veröffentlicht.
+
+### UX-006 – gezielte Routenkorrektur und erneuter Preflight, 01.11.2026
+
+- [Ergebnis und Releaseplan](KAUFKLUG_UX_006_2026-11-01.md): vollständige Pfadmatches statt Substring-Routing; dieselbe Routenerkennung schützt React-Canonicals/Robots. Unbekannte verschachtelte Angebots-URLs behalten Pfad/Querystring, noindex und keinen Canonical. Gültige Routen, Aliase und einsegmentige Listen-Deep-Links erhalten.
+- Vorher Catchall-Regression im neuen Test rot; nachher 114/114 Frontend-/SEO-Tests und separat 39/39 SEO-Tests, Lint und vollständiger Build grün. Statische Generation 38 Policy-Seiten / 24 Sitemap-URLs konsistent. Lokale Browsermatrix 375/768/1440, Filter/Sortierung, Kontext, Back/Forward/Reload, normale Suche 60/120, Top Deals 20 und Listenpersistenz bestanden; Testdaten sind keine Produktionsdatenabnahme.
+- **GO als technische Empfehlung für einen gesondert freizugebenden kontrollierten Rollout**, keine Produktionsfreigabe. Produktions-/Remote-Abgleich weiterhin a60b385c, bestehendes Deployment ACTIVE, Health/Mongo ok, Crawl-Lock frei, Publish final. Vor tatsächlichem Release alle operativen Gates erneut prüfen. UX-003/005-NO-GO bleiben historische Befunde, ihre konkreten Catchall-Blocker sind lokal geschlossen.
+- Nur lokal/uncommitted: Router und gezielte Tests sowie diese Dokumentation. Keine Ranking-, Preis-, Angebots-, Public-Validity-, Backend- oder Crawländerung. Kein Commit, Push, Deploy, Crawl oder Datenpatch; Original-Worktree unangetastet.
+
+### Nächste Arbeit – vorgemerkt, keine Ausführungsfreigabe
+
+| Arbeit | Ausgangspunkt / offenes Gate |
+|---|---|
+| TOP-DEALS-Bestandsdatenprüfung | Nach erfolgreicher regulärer BIPA-/dm-Neuerfassung und Public-Publish die oben genannten offenen Gültigkeits-, Kategorie-, Filter- und Cache-Prüfungen durchführen; kein Zusatzcrawl. |
+| Müller-/SPAR-Source-Recovery-Audit | Neuer read-only Audit. Müller laut versioniertem Abschluss vom 17.09. unsupported, SPAR-Coverage begrenzt. Lokale Arbeiten/Transportbefunde vom 15.10. im Original sind keine produktive Recovery. Aktuelle Erreichbarkeit/Discovery neu belegen; Quellen-, PDF-Aus- und Schutzregeln erhalten. |
+| SEO-Refresh-Architektur und kontrollierter Pilot | SEO-Artefakte entstehen beim Frontend-Build; TOP-DEALS-006 erneuerte sie einmalig, keine tägliche Architektur implementiert. Publish-Koordination, geprüften Code-Stand, konsistente Generation, Hysterese, API-Fallback und CDN-Verhalten vor Pilot festlegen; noch keine Pilotfreigabe. |
+| GSC-/Reichweitenmessung | Frische AT/Web-Daten mit Exportdatum und exaktem Zeitraum beschaffen; alte 28-Tage-Vergleiche nicht als aktuellen Stand ausgeben. Indexierbarkeit von tatsächlicher Google-Indexierung trennen. |
+| UX/UI-Modernisierung | UX-006 schließt beide Catchall-Blocker lokal; technische GO-Empfehlung mit dokumentiertem Releaseplan. Ausdrückliche Produktionsfreigabe und frische operative Gates vor Rollout erforderlich; weitere Features separat freigeben. |
+
+### Belege, Dokumentationsgrenzen und offene Nachweise
+
+- Versionierte Referenzen: [SEO-Prüfung 12.10.2026](KAUFKLUG_SEO_REVIEW_2026-10-12.md), [historischer SEO-Audit](KAUFKLUG_SEO_AUDIT_2026-08-11.md), [Reliability-/Quellenabschluss 17.09.2026](KAUFKLUG_RELIABILITY_AUDIT_2026-09-17.md). Damalige Vor-Deploy-/Sitemap-/Quellenstände bleiben historisch; für TOP-DEALS und SEO-Generation gilt die obige Rollout-Abnahme.
+- Der GSC-Export im SEO-Bericht vom 12.10. vergleicht letzte/vorherige 28 Tage, enthält aber keine expliziten Start-/Enddaten. Aktuelle Rankings, Reichweite, Umsatz, Ursache früherer Sichtbarkeitsverluste und Wirkung des November-Deployments sind damit nicht belegt. Separate Abschluss-MDs zu SEO-001/002 vom 01.11. wurden nicht gefunden; Aufgaben/Ursachenanalyse liegen im bisherigen Arbeitskontext, eine täglich laufende Lösung ist nicht nachgewiesen.
+- Worktrees beim Abgleich: isoliert `release/top-deals-002`, HEAD/origin/main `a60b385c`; Original `C:\coding\einfachsparen`, lokales main `14bce273` mit fremden Dirty-/Untracked-Arbeiten. Kein Synchronisieren oder Übernehmen dieser Änderungen. TOP-DEALS-002/004 sind in `a60b385c` versioniert; TOP-DEALS-006-Live-Abnahme und diese Konsolidierung bleiben lokal/uncommitted.
+- Nur im Original vorhandene, unversionierte Zusatzbelege: `docs/KAUFKLUG_QUALITY_AUDIT_2026-10-12.md`, Quellenabschluss vom 15.10. im dortigen Kontext sowie `evidence/*-2026-10-12/REPORT.md` und `evidence/speed-2026-10-12/live/REPORT.md`. Nicht kopiert und nicht als versionierte oder aktuelle Live-Nachweise ausgegeben. Die SEO-Prüfung vom 12.10. ist im isolierten Worktree versioniert; die Originalkopie ist nach Zeilenendennormalisierung inhaltsgleich, dort aber untracked.
+- Das Handoff `codex-handoff-current-state.md` ist auf 08.06.2026 datiert und bleibt historischer Einstieg. genaue neue GSC-Zeiträume, Pilot-/UX-Umsetzungsfreigaben und Bestandsdatenabnahme bleiben offen; Hypothesen werden nicht zu Ergebnissen aufgewertet.
+
+## Historische Projektchronik – unverändert erhalten
+
 ## Homepage/Suchsortierung 2026-10-12 - Live-Abnahme
 
 - Produktcommit `c41246ad253faa46d93cfb1ac8e8ce8b42ed9e3c`, regulaerer Auto-Deploy `27413077-dffc-48c7-87b8-94248b145183` ACTIVE. Ausschliesslich neun gepruefte Frontend-/Testdateien plus zugehoeriger Kontext aus sauberem Release-Worktree; fremde Aenderungen nicht enthalten. Build/Lint/99 Tests auch im isolierten Release bestanden, SEO-/Qualitaets-Schutz unveraendert.

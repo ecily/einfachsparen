@@ -1,0 +1,314 @@
+{
+  "policyCount": 38,
+  "sitemapCount": 24,
+  "sitemapUrls": [
+    "https://www.kaufklug.at/",
+    "https://www.kaufklug.at/top-deals/",
+    "https://www.kaufklug.at/angebote/",
+    "https://www.kaufklug.at/angebote/supermarkt/",
+    "https://www.kaufklug.at/angebote/drogerie/",
+    "https://www.kaufklug.at/angebote/kaffee/",
+    "https://www.kaufklug.at/angebote/bier/",
+    "https://www.kaufklug.at/angebote/deo/",
+    "https://www.kaufklug.at/angebote/softdrinks/",
+    "https://www.kaufklug.at/angebote/windeln/",
+    "https://www.kaufklug.at/angebote/duschgel/",
+    "https://www.kaufklug.at/angebote/billa/",
+    "https://www.kaufklug.at/angebote/hofer/",
+    "https://www.kaufklug.at/angebote/lidl/",
+    "https://www.kaufklug.at/angebote/dm/",
+    "https://www.kaufklug.at/angebote/bipa/",
+    "https://www.kaufklug.at/angebote/penny/",
+    "https://www.kaufklug.at/angebote/waschmittel/",
+    "https://www.kaufklug.at/angebote/butter/",
+    "https://www.kaufklug.at/impressum/",
+    "https://www.kaufklug.at/so-funktioniert-kaufklug/",
+    "https://www.kaufklug.at/datenschutz/",
+    "https://www.kaufklug.at/nutzungshinweise/",
+    "https://www.kaufklug.at/cookies/"
+  ],
+  "pages": [
+    {
+      "path": "/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/so-funktioniert-kaufklug/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/so-funktioniert-kaufklug/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/preischeck/bier-literpreis-vergleich/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/preischeck/bier-literpreis-vergleich/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/top-deals/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/top-deals/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/impressum/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/impressum/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/datenschutz/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/datenschutz/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/nutzungshinweise/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/nutzungshinweise/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/cookies/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/cookies/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/stoebern/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/stoebern/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/suche/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/suche/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/einkaufsliste/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/einkaufsliste/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/liste/",
+      "robots": "noindex,noarchive",
+      "canonical": "https://www.kaufklug.at/liste/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/feedback/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/feedback/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/ecily_web/",
+      "robots": "noindex,nofollow",
+      "canonical": "https://www.kaufklug.at/ecily_web/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/supermarkt/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/supermarkt/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/drogerie/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/drogerie/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/spar/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/spar/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/billa/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/billa/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/hofer/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/hofer/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/lidl/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/lidl/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/dm/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/dm/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/bipa/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/bipa/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/mueller/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/mueller/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/penny/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/penny/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/kaffee/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/kaffee/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/bier/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/bier/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/softdrinks/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/softdrinks/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/deo/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/deo/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/schokolade/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/schokolade/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/windeln/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/windeln/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/duschgel/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/duschgel/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/nudeln/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/nudeln/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/chips/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/chips/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/waschmittel/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/waschmittel/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/kaese/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/kaese/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/butter/",
+      "robots": "index,follow",
+      "canonical": "https://www.kaufklug.at/angebote/butter/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    },
+    {
+      "path": "/angebote/wurst/",
+      "robots": "noindex,follow",
+      "canonical": "https://www.kaufklug.at/angebote/wurst/",
+      "consistentEmbeddedPolicy": true,
+      "validJsonLd": true
+    }
+  ],
+  "unchangedContracts": {
+    "admin/src/utils/seo.js": true,
+    "admin/src/config/seoLandingPages.js": true,
+    "admin/src/utils/seoBuildPolicy.js": true,
+    "admin/scripts/generateSeoHtml.mjs": true,
+    "admin/src/utils/offers.js": true,
+    "admin/src/utils/keywordSearchSort.js": true,
+    "admin/src/utils/apiBase.js": true,
+    "admin/src/components/search/OfferCardConsumer.jsx": true,
+    "admin/src/components/search/TopDealsPage.jsx": true
+  },
+  "finalBuildReverified": true,
+  "localTestAssets": [
+    "/assets/index-DJ2yDj_1.css",
+    "/assets/index-O7jdrvdk.js"
+  ]
+}

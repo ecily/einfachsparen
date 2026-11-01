@@ -1,0 +1,189 @@
+[
+  {
+    "kind": "unknown",
+    "path": "/angebote/ux-audit-unbekannt/",
+    "passed": true,
+    "canonical": null,
+    "policy": true,
+    "robots": "noindex,follow",
+    "stoebernHref": "/stoebern",
+    "url": "http://127.0.0.1:4188/angebote/ux-audit-unbekannt/"
+  },
+  {
+    "kind": "unknown",
+    "path": "/angebote/ux-audit-unbekannt/detail/",
+    "passed": true,
+    "canonical": null,
+    "policy": true,
+    "robots": "noindex,follow",
+    "stoebernHref": "/stoebern",
+    "url": "http://127.0.0.1:4188/angebote/ux-audit-unbekannt/detail/"
+  },
+  {
+    "kind": "unknown",
+    "path": "/ux-audit-unbekannt/?retailers=dm",
+    "passed": true,
+    "canonical": null,
+    "policy": true,
+    "robots": "noindex,follow",
+    "stoebernHref": "/stoebern",
+    "url": "http://127.0.0.1:4188/ux-audit-unbekannt/?retailers=dm"
+  },
+  {
+    "kind": "unknown",
+    "path": "/foo/stoebern",
+    "passed": true,
+    "canonical": null,
+    "policy": true,
+    "robots": "noindex,follow",
+    "stoebernHref": "/stoebern",
+    "url": "http://127.0.0.1:4188/foo/stoebern"
+  },
+  {
+    "kind": "unknown",
+    "path": "/stoebern//",
+    "passed": true,
+    "canonical": null,
+    "policy": true,
+    "robots": "noindex,follow",
+    "stoebernHref": "/stoebern",
+    "url": "http://127.0.0.1:4188/stoebern//"
+  },
+  {
+    "kind": "unknown-to-browse-back-forward",
+    "known": {
+      "canonical": "https://www.kaufklug.at/stoebern/",
+      "robots": "noindex,follow",
+      "url": "http://127.0.0.1:4188/stoebern"
+    },
+    "back": {
+      "canonical": null,
+      "robots": "noindex,follow",
+      "url": "http://127.0.0.1:4188/stoebern//"
+    },
+    "forward": {
+      "canonical": "https://www.kaufklug.at/stoebern/",
+      "robots": "noindex,follow",
+      "url": "http://127.0.0.1:4188/stoebern"
+    }
+  },
+  {
+    "kind": "known",
+    "path": "/",
+    "canonical": "https://www.kaufklug.at/",
+    "policy": true,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/"
+  },
+  {
+    "kind": "known",
+    "path": "/suche?q=waschmittel&markets=dm&sort=retailer",
+    "canonical": "https://www.kaufklug.at/suche/",
+    "policy": true,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/suche/?q=waschmittel&markets=dm&sort=retailer"
+  },
+  {
+    "kind": "known",
+    "path": "/stoebern?retailers=dm",
+    "canonical": "https://www.kaufklug.at/stoebern/",
+    "policy": true,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm"
+  },
+  {
+    "kind": "known",
+    "path": "/top-deals/?category=waschmittel",
+    "canonical": "https://www.kaufklug.at/top-deals/",
+    "policy": true,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/top-deals/?category=waschmittel"
+  },
+  {
+    "kind": "known",
+    "path": "/einkaufsliste",
+    "canonical": "https://www.kaufklug.at/einkaufsliste/",
+    "policy": true,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/einkaufsliste/"
+  },
+  {
+    "kind": "known",
+    "path": "/liste/",
+    "canonical": "https://www.kaufklug.at/einkaufsliste/",
+    "policy": true,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/liste/"
+  },
+  {
+    "kind": "known",
+    "path": "/angebote/billa/",
+    "canonical": "https://www.kaufklug.at/angebote/billa/",
+    "policy": true,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/billa/"
+  },
+  {
+    "kind": "known",
+    "path": "/angebote/bier/",
+    "canonical": "https://www.kaufklug.at/angebote/bier/",
+    "policy": true,
+    "robots": "index,follow",
+    "url": "http://127.0.0.1:4188/angebote/bier/"
+  },
+  {
+    "kind": "known",
+    "path": "/angebote/schokolade/",
+    "canonical": "https://www.kaufklug.at/angebote/schokolade/",
+    "policy": true,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/schokolade/"
+  },
+  {
+    "kind": "mobile-context-tabs-reload",
+    "passed": true,
+    "before": {
+      "markets": true,
+      "query": "waschmittel",
+      "sort": "retailer",
+      "url": "http://127.0.0.1:4188/suche/?q=waschmittel&markets=dm&sort=retailer"
+    },
+    "browse": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "top": {
+      "url": "http://127.0.0.1:4188/top-deals/?category=waschmittel",
+      "cards": 20
+    },
+    "after": {
+      "markets": true,
+      "query": "waschmittel",
+      "sort": "retailer",
+      "url": "http://127.0.0.1:4188/suche/?q=waschmittel&markets=dm&sort=retailer"
+    }
+  },
+  {
+    "kind": "browse-category-reload",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm&categories=sub%3Adrogerie%3Awaschmittel",
+    "canonical": "https://www.kaufklug.at/stoebern/",
+    "cards": 60
+  },
+  {
+    "kind": "legacy-browse-alias",
+    "url": "http://127.0.0.1:4188/stoebern?retailers=dm",
+    "canonical": "https://www.kaufklug.at/stoebern/"
+  },
+  {
+    "kind": "unknown-reload-policy",
+    "canonical": null,
+    "noindexLandingLinks": 0,
+    "robots": "noindex,follow",
+    "schokoladeDecision": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/ux-audit-unbekannt/"
+  },
+  {
+    "kind": "desktop-unknown",
+    "canonical": null,
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4188/angebote/ux-audit-unbekannt/",
+    "width": 1440
+  }
+]

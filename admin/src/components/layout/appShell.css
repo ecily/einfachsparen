@@ -1,0 +1,37 @@
+/* Shell overrides are scoped; offer cards and ranking layout remain unchanged. */
+.app-shell { padding-bottom: 7.5rem; }
+.app-shell__header { position: sticky; top: .5rem; z-index: 40; margin-bottom: 1rem; }
+.app-shell__header .page-nav { display: flex !important; position: relative; top: auto; margin: 0; flex-wrap: wrap; }
+.app-shell__main { min-width: 0; scroll-margin-top: 9rem; }
+.app-shell__main:focus { outline: none; }
+.app-shell__main:focus-visible { outline: 2px solid var(--kk-primary); outline-offset: 4px; }
+.app-shell .app-shell__main .app-shell__page-title { font-size: clamp(1.3rem, 2vw, 1.8rem); margin: 0 0 .7rem; }
+.app-shell__skip { position: fixed; top: .5rem; left: 1rem; z-index: 100; padding: .8rem; background: #fff; color: #243447; border: 2px solid currentColor; transform: translateY(-200%); }
+.app-shell__skip:focus { transform: none; }
+.app-shell .page-nav__main { display: flex !important; flex: 1 1 auto; gap: .35rem; }
+.app-shell .page-nav__button { display: inline-flex !important; align-items: center; justify-content: center; min-height: 44px !important; font-size: .95rem !important; text-decoration: none; padding: .55rem .8rem !important; }
+.app-shell .page-nav__logo { width: 44px !important; height: 44px !important; min-width: 44px; }
+.app-shell .page-nav__beta { width: auto !important; min-height: 44px !important; font-size: .85rem !important; }
+.app-shell .page-nav__search { display: flex; min-width: 0; }
+.app-shell .page-nav__search input { min-height: 44px; }
+.app-shell :is(a, button, input, select, summary):focus-visible { outline: 3px solid var(--kk-brand-primary-dark, #243447); outline-offset: 3px; }
+.app-shell :is(input, select, button, a) { scroll-margin-block: 10rem 8rem; }
+@media (max-width: 1000px) {
+  .app-shell .page-nav__search { flex-basis: 100%; }
+}
+@media (max-width: 600px) {
+  .app-shell__header { top: .25rem; }
+  .app-shell .page-nav { gap: .4rem; padding: .4rem; }
+  .app-shell .page-nav__main { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; flex-basis: 100%; order: 2; width: 100%; }
+  .app-shell .page-nav__button { font-size: .85rem !important; padding: .5rem .2rem !important; white-space: normal; }
+  .app-shell .page-nav__count { margin-left: .2rem; }
+  .app-shell .page-nav__search { order: 3; }
+  .app-shell .page-nav__beta { margin-left: auto !important; }
+  .app-shell .page-nav__top-deals-long { display: none; }
+  .app-shell .page-nav__top-deals-short { display: inline; }
+  .app-shell__main { scroll-margin-top: 14rem; }
+  .app-shell :is(input, select, button, a) { scroll-margin-top: 14rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell { scroll-behavior: auto; }
+}

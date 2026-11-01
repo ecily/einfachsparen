@@ -20,6 +20,7 @@ import {
   hasFreshnessWarning,
   isLimitedCoverageRetailer,
 } from '../../utils/retailerCoverage'
+import { readSearchState, searchStateUrl } from '../../utils/navigationState'
 import { QUICK_SEARCH_TERMS } from '../../config/searchDiscovery'
 
 const KEYWORD_SEARCH_LIMIT = 60
@@ -273,19 +274,21 @@ function buildAvailableRetailers(retailers) {
 }
 
 export function KeywordSearchPage({
-  searchRequest,
+  onNavigateUrl,
+  queryDraft,
+  onQueryDraftChange,
   retailers = [],
   categories = [],
   shoppingListIds,
   onAddToShoppingList,
-  onNavigate,
 }) {
+  const initialState = readSearchState(window.location.search)
   const resultsHeadingRef = useRef(null)
   const searchInputRef = useRef(null)
   const requestIdRef = useRef(0)
   const cacheRef = useRef(new Map())
   const displayedScopeRef = useRef(null)
-  const [queryInput, setQueryInput] = useState(() => getInitialKeywordQuery())
+  const [queryInput, setQueryInput] = useState(() => queryDraft ?? getInitialKeywordQuery())
   const [submittedQuery, setSubmittedQuery] = useState(() => {
     const initialQuery = getInitialKeywordQuery().trim()
     return initialQuery.length >= 2 ? initialQuery : ''
@@ -295,9 +298,9 @@ export function KeywordSearchPage({
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [loadMoreError, setLoadMoreError] = useState('')
-  const [marketFilterEnabled, setMarketFilterEnabled] = useState(false)
-  const [selectedRetailerKeys, setSelectedRetailerKeys] = useState([])
-  const [sortMode, setSortMode] = useState(SORT_OPTIONS.best)
+  const [marketFilterEnabled, setMarketFilterEnabled] = useState(initialState.marketFilterEnabled)
+  const [selectedRetailerKeys, setSelectedRetailerKeys] = useState(initialState.selectedRetailerKeys)
+  const [sortMode, setSortMode] = useState(initialState.sortMode)
   const [appliedSortMode, setAppliedSortMode] = useState(SORT_OPTIONS.best)
   const [sortPending, setSortPending] = useState(false)
   const [sortProgress, setSortProgress] = useState(0)
@@ -362,46 +365,13 @@ export function KeywordSearchPage({
   }, [activeRetailerKeys, marketFilterEnabled, submittedQuery])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) return
+    onQueryDraftChange?.(queryInput)
+  }, [queryInput, onQueryDraftChange])
 
-    window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus({ preventScroll: true })
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!searchRequest?.nonce) return
-
-    const nextQuery = String(searchRequest.query || '').trim()
-    setQueryInput(nextQuery)
-    setError('')
-    setLoadMoreError('')
-
-    if (!nextQuery) {
-      requestIdRef.current += 1
-      setSubmittedQuery('')
-      setRanking(null)
-      setLoadingMore(false)
-      setLoadMoreError('')
-      setHint('')
-      return
-    }
-
-    if (nextQuery.length < 2) {
-      requestIdRef.current += 1
-      setSubmittedQuery('')
-      setRanking(null)
-      setLoadingMore(false)
-      setLoadMoreError('')
-      setHint('Bitte mindestens 2 Zeichen eingeben.')
-      return
-    }
-
-    setActiveSearchScrollKey((current) => current + 1)
-    setHint('')
-    setSubmittedQuery(nextQuery)
-  }, [searchRequest])
+  function commitSearchState(next = {}) {
+    onNavigateUrl?.(searchStateUrl({ query: submittedQuery, marketFilterEnabled, selectedRetailerKeys, sortMode, ...next }),
+      { focus: false, restore: false })
+  }
 
   useEffect(() => {
     if (!activeSearchScrollKey || !submittedQuery || loading) return
@@ -495,13 +465,14 @@ export function KeywordSearchPage({
       requestIdRef.current += 1
 
       if (typeof window !== 'undefined') {
-        window.history.replaceState({}, '', '/suche')
+        commitSearchState({ query: '' })
       }
 
       return
     }
 
     if (nextQuery.length < 2) {
+      commitSearchState({ query: nextQuery })
       setSubmittedQuery('')
       setRanking(null)
       setLoadingMore(false)
@@ -516,7 +487,7 @@ export function KeywordSearchPage({
     setActiveSearchScrollKey((current) => current + 1)
 
     if (typeof window !== 'undefined') {
-      window.history.replaceState({}, '', `/suche?q=${encodeURIComponent(nextQuery)}`)
+      commitSearchState({ query: nextQuery })
     }
   }
 
@@ -551,7 +522,7 @@ export function KeywordSearchPage({
     setActiveSearchScrollKey((current) => current + 1)
 
     if (typeof window !== 'undefined') {
-      window.history.replaceState({}, '', `/suche?q=${encodeURIComponent(nextQuery)}`)
+      commitSearchState({ query: nextQuery })
     }
   }
 
@@ -584,33 +555,22 @@ export function KeywordSearchPage({
   function handleResetMarkets() {
     setSelectedRetailerKeys([])
     setMarketFilterEnabled(false)
+    commitSearchState({ marketFilterEnabled: false, selectedRetailerKeys: [] })
   }
 
   function handleToggleRetailer(retailerKey) {
-    setSelectedRetailerKeys((current) =>
-      current.includes(retailerKey)
-        ? current.filter((key) => key !== retailerKey)
-        : [...current, retailerKey]
-    )
+    const next = selectedRetailerKeys.includes(retailerKey)
+      ? selectedRetailerKeys.filter(key => key !== retailerKey)
+      : [...selectedRetailerKeys, retailerKey]
+    setSelectedRetailerKeys(next)
+    commitSearchState({ selectedRetailerKeys: next })
   }
 
   return (
     <div className="keyword-search-page">
       <section className="panel keyword-search-hero">
+        <h1 className="app-shell__page-title">Angebote suchen</h1>
         <form className="keyword-search-form" onSubmit={handleSubmit}>
-          <div className="search-entry-guidance">
-            <span>Suche ein Produkt – oder starte mit den Top Deals.</span>
-            {' '}
-            <a
-              href="/top-deals"
-              onClick={(event) => {
-                event.preventDefault()
-                onNavigate?.('top-deals')
-              }}
-            >
-              Top Deals heute ansehen
-            </a>
-          </div>
           <div className="keyword-search-form__row">
             <div
               className="keyword-search-form__input-wrap"
@@ -660,6 +620,15 @@ export function KeywordSearchPage({
               Los
             </button>
           </div>
+          <div className="search-entry-guidance">
+            <span>Suche ein Produkt – oder starte mit den Top Deals.</span>
+            {' '}
+            <a
+              href="/top-deals"
+            >
+              Top Deals heute ansehen
+            </a>
+          </div>
           <div className="keyword-search-examples" aria-label="Beispiel-Suchen">
             <span>Beispiele:</span>
             {EXAMPLE_SEARCH_TERMS.map((term) => (
@@ -679,7 +648,7 @@ export function KeywordSearchPage({
               <input
                 type="checkbox"
                 checked={marketFilterEnabled}
-                onChange={(event) => setMarketFilterEnabled(event.target.checked)}
+                onChange={(event) => { setMarketFilterEnabled(event.target.checked); commitSearchState({ marketFilterEnabled: event.target.checked }) }}
               />
               <span>Märkte wählen</span>
             </label>
@@ -687,7 +656,7 @@ export function KeywordSearchPage({
 
           <label className="keyword-search-sort">
             <span>Sortieren</span>
-            <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
+            <select value={sortMode} onChange={(event) => { setSortMode(event.target.value); commitSearchState({ sortMode: event.target.value }) }}>
               <option value={SORT_OPTIONS.best}>Empfohlen</option>
               <option value={SORT_OPTIONS.retailer}>Märkte</option>
               <option value={SORT_OPTIONS.savings}>Belastbare Ersparnis</option>

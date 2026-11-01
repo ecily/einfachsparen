@@ -1,0 +1,36 @@
+{
+  "checkedAt": "2026-11-01T14:15:13.820265+00:00",
+  "deployment": "430fd209-d7a6-4a85-a84e-c7925edaadbe",
+  "phase": "ACTIVE",
+  "inProgress": null,
+  "components": {
+    "services": [
+      {
+        "name": "einfachsparen-backend",
+        "source_commit_hash": "a60b385ce64b14ca3e5bffdb96e874c23b540af0"
+      }
+    ],
+    "static_sites": [
+      {
+        "name": "einfachsparen-admin",
+        "source_commit_hash": "a60b385ce64b14ca3e5bffdb96e874c23b540af0"
+      }
+    ]
+  },
+  "healthOk": true,
+  "mongoConnected": true,
+  "processStartedAt": "2026-11-01T12:25:19.575Z",
+  "uptime": 6598,
+  "snapshotAt": "2026-11-01T14:15:14.564Z",
+  "activeRun": null,
+  "lockFree": true,
+  "publishStatus": "final",
+  "publishOpen": 0,
+  "latestRun": {
+    "id": "6ae6cffcfb8541a106574e3c",
+    "status": "success",
+    "lastStage": "publish-status-finished",
+    "publishStatusFinished": true,
+    "finishedAt": "2026-11-01T05:40:07.284Z"
+  }
+}

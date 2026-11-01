@@ -1,4 +1,5 @@
 import { getRenderedSeoRobots } from './seoBuildPolicy.js'
+import { isBrowseRoutePathname } from './navigationState.js'
 import { HOME_SEO_TITLE, HOME_DESCRIPTION } from '../config/homepage.js'
 import { CONTACT_EMAIL, SITE_URL } from '../config/constants.js'
 import {
@@ -179,13 +180,12 @@ export function updateSeoMetadata(activePage) {
   const meta = getPageMeta(activePage)
   const currentPathname = String(window.location.pathname || '').toLowerCase().replace(/\/+$/, '') || '/'
   const isHomePath = currentPathname === '/'
-  const isUnknownSeoOfferPath = /^\/angebote\/[^/]+$/.test(currentPathname)
-    && !getSeoLandingPageByPath(currentPathname)
+  const isUnknownPath = getKnownPageFromPathname(window.location.pathname) === null
   const canonicalPath = isHomePath ? '/' : `${meta.path.replace(/\/+$/, '')}/`
   const canonicalUrl = `${SITE_URL}${canonicalPath}`
   const isInternalPage = activePage === 'diagnostics'
   const isSharedListPage = activePage === 'shared-shopping-list'
-  const robots = isUnknownSeoOfferPath
+  const robots = isUnknownPath
     ? 'noindex,follow'
     : meta.robots || (isSharedListPage ? 'noindex,noarchive' : isInternalPage ? 'noindex,nofollow' : 'index,follow')
 
@@ -209,7 +209,7 @@ export function updateSeoMetadata(activePage) {
   setOrCreateMeta('name', 'twitter:description', meta.description)
   setOrCreateMeta('name', 'twitter:image', SOCIAL_IMAGE_URL)
 
-  if (isUnknownSeoOfferPath) {
+  if (isUnknownPath) {
     removeLink('canonical')
   } else {
     setOrCreateLink('canonical', canonicalUrl)
@@ -294,35 +294,41 @@ export function updateSeoMetadata(activePage) {
   }
 }
 
-export function getInitialPageFromPathname(pathname) {
-  const normalizedPath = String(pathname || '').toLowerCase().replace(/\/+$/, '') || '/'
+// Match the complete pathname. Unknown paths may render the browse fallback,
+// but must never inherit a known route's indexing or canonical identity.
+export function getKnownPageFromPathname(pathname) {
+  const rawPath = String(pathname || '/')
+  if (!rawPath.startsWith('/') || /\/{2}/.test(rawPath)) return null
+  const normalizedPath = rawPath.toLowerCase().replace(/\/$/, '') || '/'
   if (normalizedPath === '/') return 'home'
   if (normalizedPath === PRICE_CHECK_PATH) return PRICE_CHECK_ROUTE_ID
 
-  const seoLandingPage = getSeoLandingPageByPath(pathname)
+  const seoLandingPage = getSeoLandingPageByPath(normalizedPath)
   if (seoLandingPage) return getSeoLandingPageRouteId(seoLandingPage.key)
 
-  if (/^\/liste\/?$/.test(pathname)) return 'shopping-list'
-  if (pathname.includes('/liste/')) return 'shared-shopping-list'
-  if (pathname.includes('ecily_web')) return 'diagnostics'
-  if (pathname.includes('impressum')) return 'impressum'
-  if (pathname.includes('datenschutz') || pathname.includes('privacy')) return 'privacy'
-  if (pathname.includes('nutzung') || pathname.includes('haftung') || pathname.includes('legal')) return 'liability'
-  if (pathname.includes('cookies') || pathname.includes('cookie')) return 'cookies'
-  if (pathname.includes('feedback')) return 'feedback'
   if (normalizedPath === TRUST_PAGE_PATH) return TRUST_PAGE_ROUTE_ID
-  if (pathname.includes('diagnose') || pathname.includes('diagnostic')) return 'diagnostics'
-  if (pathname.includes('stoebern') || pathname.includes('stobern')) return 'search'
-  if (pathname.includes('top-deals')) return 'top-deals'
-  if (pathname.includes('suche')) return 'product-search'
-  if (pathname.includes('einkaufsliste') || pathname.includes('shopping')) return 'shopping-list'
+  if (isBrowseRoutePathname(rawPath)) return 'search'
+  if (getSharedListIdFromPathname(rawPath)) return 'shared-shopping-list'
+  const routes = {
+    '/liste': 'shopping-list', '/einkaufsliste': 'shopping-list', '/shopping': 'shopping-list',
+    '/ecily_web': 'diagnostics', '/quality': 'diagnostics', '/diagnose': 'diagnostics',
+    '/diagnostic': 'diagnostics', '/diagnostics': 'diagnostics',
+    '/impressum': 'impressum', '/datenschutz': 'privacy', '/privacy': 'privacy',
+    '/nutzungshinweise': 'liability', '/nutzung': 'liability', '/haftung': 'liability', '/legal': 'liability',
+    '/cookies': 'cookies', '/cookie': 'cookies', '/feedback': 'feedback',
+    '/top-deals': 'top-deals', '/suche': 'product-search',
+  }
+  return routes[normalizedPath] || null
+}
 
-  return 'search'
+export function getInitialPageFromPathname(pathname) {
+  return getKnownPageFromPathname(pathname) || 'search'
 }
 
 export function getSharedListIdFromPathname(pathname) {
-  const match = String(pathname || '').match(/\/liste\/([^/?#]+)/i)
-  return match ? decodeURIComponent(match[1]) : ''
+  const match = String(pathname || '').match(/^\/liste\/([^/?#]+)\/?$/i)
+  if (!match) return ''
+  try { return decodeURIComponent(match[1]) } catch { return '' }
 }
 
 export function getPathForPage(nextPage) {

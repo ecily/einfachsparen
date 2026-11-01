@@ -1,0 +1,32 @@
+{
+  "requestedPath": "/angebote/ux-audit-unbekannt/",
+  "productionCommit": "a60b385ce64b14ca3e5bffdb96e874c23b540af0",
+  "production": {
+    "canonical": null,
+    "h1": [
+      "Seite nicht gefunden",
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "robots": "noindex,follow",
+    "url": "https://www.kaufklug.at/angebote/ux-audit-unbekannt/"
+  },
+  "localViteSpaFallback": {
+    "canonical": "https://www.kaufklug.at/stoebern/",
+    "h1": [
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4185/stoebern"
+  },
+  "candidateUsingConfiguredCatchall": {
+    "canonical": "https://www.kaufklug.at/stoebern/",
+    "h1": [
+      "Seite nicht gefunden",
+      "Angebote nach Markt und Kategorie entdecken"
+    ],
+    "robots": "noindex,follow",
+    "url": "http://127.0.0.1:4186/stoebern"
+  },
+  "configuredCatchallDocument": "catchall.html",
+  "outcome": "NO-GO; unexpected URL rewrite and canonical; noindex remains"
+}

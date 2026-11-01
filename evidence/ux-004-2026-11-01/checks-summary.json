@@ -1,0 +1,23 @@
+{
+  "policyCount": 38,
+  "sitemapCount": 24,
+  "catchallPolicyMatchesGeneration": true,
+  "catchallInitialRobots": "noindex,nofollow",
+  "catchallInitialCanonical": null,
+  "registeredHtmlPolicyAndJsonLdChecks": "passed",
+  "unchangedContracts": {
+    "admin/src/utils/offers.js": true,
+    "admin/src/utils/keywordSearchSort.js": true,
+    "admin/src/utils/apiBase.js": true,
+    "admin/src/components/search/OfferCardConsumer.jsx": true,
+    "admin/src/components/search/TopDealsPage.jsx": true,
+    "admin/src/config/seoLandingPages.js": true,
+    "admin/src/utils/seoBuildPolicy.js": true
+  },
+  "backendAndPublicFilesUnchanged": true,
+  "frontendTests": {
+    "passed": 112,
+    "failed": 0,
+    "existingBaselineTests": 107
+  }
+}
