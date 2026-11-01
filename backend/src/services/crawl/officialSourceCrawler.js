@@ -88,6 +88,7 @@ const { normalizeImageUrl } = require('../images/imageUrl');
 const { extractPromotionRequirement } = require('../offers/promotionMath');
 const { inferQuantityFieldsFromText } = require('./offerQualityGuards');
 const logger = require('../../lib/logger');
+const { viennaLocalDateToUtc } = require('../offers/publicValidity');
 
 const execFile = promisify(execFileCallback);
 const PARSER_VERSION = 'official-v3-coverage';
@@ -3941,23 +3942,61 @@ function parseBipaTilePriceInfoV3(card) {
   };
 }
 
-function extractBipaValidityDate(html) {
-  const now = new Date();
-  const startOfTomorrow = new Date(now);
-  startOfTomorrow.setUTCHours(0, 0, 0, 0);
-  startOfTomorrow.setUTCDate(startOfTomorrow.getUTCDate() + 1);
-  const dates = [...String(html || '').matchAll(/(?:Gueltig bis|Gültig bis)\s+(\d{2}\.\d{2}\.\d{4})/gi)]
-    .map((match) => parseDateWithWeekday(match[1]))
-    .filter(Boolean)
-    .map((date) => {
-      const endOfDay = new Date(date);
-      endOfDay.setUTCHours(23, 59, 59, 999);
-      return endOfDay;
-    })
-    .filter((date) => date >= startOfTomorrow)
-    .sort((left, right) => left.getTime() - right.getTime());
+function buildBipaViennaPriceDeadline(dateKey, hour, minute, second) {
+  const start = viennaLocalDateToUtc(dateKey);
+  const end = viennaLocalDateToUtc(dateKey, true);
+  const localMidnight = Date.parse(`${dateKey}T00:00:00.000Z`);
+  const desiredWallTime = localMidnight + (hour * 3600 + minute * 60 + second) * 1000;
+  const offsets = new Set([
+    localMidnight - start.getTime(),
+    localMidnight + 86400000 - 1 - end.getTime(),
+  ]);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Vienna', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  });
+  const matches = [...offsets].map((offset) => new Date(desiredWallTime - offset)).filter((candidate) => {
+    const parts = Object.fromEntries(formatter.formatToParts(candidate).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}` === dateKey
+      && Number(parts.hour) === hour && Number(parts.minute) === minute && Number(parts.second) === second;
+  });
+  // Missing spring-clock times and duplicated autumn-clock times have no unique cutoff.
+  return matches.length === 1 ? matches[0] : null;
+}
 
-  return dates[0] || null;
+function extractBipaProductValidityDate(card, expectedProductId = '', productConditions = '') {
+  if (!card || card.length !== 1) return null;
+  if (card.closest('footer, nav, [role="contentinfo"]').length > 0) return null;
+  const productIds = new Set();
+  card.find('a[href*="/p/"]').add(card.filter('a[href*="/p/"]')).each((index, element) => {
+    const id = extractBipaProductId(element.attribs?.href);
+    if (id) productIds.add(id);
+  });
+  if (productIds.size !== 1) return null;
+  if (expectedProductId && !productIds.has(expectedProductId)) return null;
+  const content = card.clone();
+  content.find('footer, nav, script, style, [role="contentinfo"]').remove();
+  if (content.find('sup').length > 0) return null;
+  content.find('*').prepend(' ').append(' ');
+  const text = sanitizeWhitespace(content.text());
+  // A coupon, SALE/footnote condition or generic validity label cannot prove a product price window.
+  if (/ausgenommen|ausgeschlossen|nicht\s+(?:gueltig|gültig)|gutschein|coupon|voucher|rabattcode|aktionscode|\bsale\b|\*|[¹²³⁴⁵⁶⁷⁸⁹⁰]/i.test(`${text} ${productConditions}`)) return null;
+  if ([...text.matchAll(/\b\d{2}\.\d{2}\.\d{4}\b/g)].length !== 1) return null;
+  const priceValidity = text.match(/\b(?:aktionspreis|angebotspreis|produktpreis|preis)\s+(?:ist\s+)?g(?:ü|ue)ltig\s+bis\s+(\d{2}\.\d{2}\.\d{4})\b(.*)$/i);
+  if (!priceValidity) return null;
+  const [day, month, year] = priceValidity[1].split('.').map(Number);
+  const calendar = new Date(Date.UTC(year, month - 1, day));
+  if (calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day) return null;
+  const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const suffix = priceValidity[2];
+  if (/^\s*[.!]?\s*$/.test(suffix)) return viennaLocalDateToUtc(dateKey, true);
+  const time = suffix.match(/^\s*(?:,\s*|\s+)?(?:um\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(?:Uhr)?\s*[.!]?\s*$/i);
+  if (!time) return null;
+  const hour = Number(time[1]);
+  const minute = Number(time[2]);
+  const second = Number(time[3] || 0);
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  return buildBipaViennaPriceDeadline(dateKey, hour, minute, second);
 }
 
 function extractBipaProductId(value) {
@@ -4194,7 +4233,7 @@ function buildBipaMobifyProductOffer({
   return overrideResult.offer || null;
 }
 
-function parseBipaMobifyOffersFromHtml({ $, source, crawlJobId, region, pageUrl, validTo }) {
+function parseBipaMobifyOffersFromHtml({ $, source, crawlJobId, region, pageUrl }) {
   const productSearchResult = extractBipaMobifyProductSearchResult($);
   const hits = Array.isArray(productSearchResult?.hits)
     ? productSearchResult.hits.filter((hit) => hit?.hitType === 'product' || hit?.productId)
@@ -4205,12 +4244,15 @@ function parseBipaMobifyOffersFromHtml({ $, source, crawlJobId, region, pageUrl,
   }
 
   const validFrom = new Date();
-  const statusInfo = buildOfferStatus(validFrom, validTo, true);
   const productUrlsById = extractBipaProductUrlMap($, pageUrl || source.sourceUrl);
   const offers = [];
 
   for (const hit of hits) {
     const productId = extractBipaProductId(hit?.productId || hit?.representedProduct?.id);
+    const card = $(`[data-testid="product-tile-B3-${productId}"]`);
+    const productConditions = [...normalizeBipaBadges(hit?.c_effectivePriceBadges), ...normalizeBipaBadges(hit?.c_effectiveCornerBadges)].join(' ');
+    const validTo = extractBipaProductValidityDate(card, productId, productConditions);
+    const statusInfo = buildOfferStatus(validFrom, validTo, true);
     const offer = buildBipaMobifyProductOffer({
       hit,
       productUrl: productUrlsById.get(productId) || '',
@@ -4253,12 +4295,10 @@ function dedupeBipaOffers(offerDocuments = []) {
   });
 }
 
-function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, validToHint = null }) {
+function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl }) {
   const $ = cheerio.load(html);
   const offers = [];
   const validFrom = new Date();
-  const validTo = validToHint || extractBipaValidityDate(html);
-  const statusInfo = buildOfferStatus(validFrom, validTo, true);
   const seenProductUrls = new Set();
   const mobifyOffers = parseBipaMobifyOffersFromHtml({
     $,
@@ -4266,7 +4306,6 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
     crawlJobId,
     region,
     pageUrl: pageUrl || source.sourceUrl,
-    validTo,
   });
 
   if (mobifyOffers.length > 0) {
@@ -4275,6 +4314,8 @@ function parseBipaOffersFromHtml({ html, source, crawlJobId, region, pageUrl, va
 
   $('a[href*="/p/"]').each((index, element) => {
     const card = $(element);
+    const validTo = extractBipaProductValidityDate(card);
+    const statusInfo = buildOfferStatus(validFrom, validTo, true);
     const href = sanitizeWhitespace(card.attr('href') || '');
     const productUrl = href ? new URL(href, pageUrl || source.sourceUrl).toString().split(/[?#]/)[0] : '';
 
@@ -8419,7 +8460,6 @@ async function crawlLidlOfficialFlyers({ source, crawlJobId, region, html }) {
 
 async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canonicalUrl }) {
   const collectedOffers = [];
-  const validToHint = extractBipaValidityDate(html);
   const pageCandidates = [
     { url: canonicalUrl || source.sourceUrl, html },
   ];
@@ -8468,7 +8508,6 @@ async function crawlBipaOfficialOffers({ source, crawlJobId, region, html, canon
       crawlJobId,
       region,
       pageUrl: page.url,
-      validToHint,
     });
 
     collectedOffers.push(...pageOffers);

@@ -325,7 +325,7 @@ test('BIPA official parser extracts current sale price, reference price and perf
   assert.match(offers[0].rawFacts.infoText, /100 ml 47,98/);
   assert.equal(offers[0].normalizedUnitPrice.amount, 479.8);
   assert.equal(offers[0].normalizedUnitPrice.unit, 'l');
-  assert.equal(offers[0].validTo.toISOString(), '2099-05-20T23:59:59.999Z');
+  assert.equal(offers[0].validTo, null); // Unscoped page text is not product validity.
   assert.equal(offers[0].rawFacts.availabilityScope.type, 'unknown');
 });
 
@@ -767,7 +767,7 @@ test('BIPA official parser keeps snapshot offers when stale page-level validity 
   assert.equal(enriched[0].reviewReasons.includes('missing-current-price'), false);
 });
 
-test('BIPA official parser ignores same-day page-level validity and keeps future validity evidence', () => {
+test('BIPA official parser ignores both same-day and future page-level validity', () => {
   const today = formatDateAt(new Date());
   const future = new Date();
   future.setUTCDate(future.getUTCDate() + 7);
@@ -802,8 +802,7 @@ test('BIPA official parser ignores same-day page-level validity and keeps future
   assert.equal(sameDayOffers[0].validTo, null);
   assert.equal(sameDayOffers[0].status, 'active');
   assert.equal(sameDayOffers[0].isActiveNow, true);
-  assert.ok(futureOffers[0].validTo instanceof Date);
-  assert.equal(futureOffers[0].validTo.toISOString().slice(0, 10), future.toISOString().slice(0, 10));
+  assert.equal(futureOffers[0].validTo, null);
 });
 
 test('BIPA official parser derives ml unit price from package size when source base price is missing', () => {

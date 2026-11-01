@@ -228,6 +228,25 @@ test('sorts by verified unit savings and caps the default response at twenty', (
   assert.ok(response.deals[0].topDeal.discountPercent >= response.deals[1].topDeal.discountPercent);
 })
 
+test('personal-care flavor names cannot leak into the coffee Top Deals filter', () => {
+  const nailPowder = offer({
+    _id: 'nail-powder', title: 'Dipping Powder Espresso',
+    categoryPrimary: 'Getraenke', categorySecondary: 'Kaffee & Tee',
+  });
+  const handFluid = offer({
+    _id: 'hand-fluid', title: 'Handfluid Zitronentraum',
+    categoryPrimary: 'Lebensmittel', categorySecondary: 'Obst & Gemuese',
+  });
+  const coffee = offer({
+    _id: 'real-coffee', title: 'Kaffee Ganze Bohne', titleNormalized: 'kaffee ganze bohne',
+    categoryPrimary: 'Getraenke', categorySecondary: 'Kaffee & Tee',
+  });
+  const response = buildTopDealsFromOffers([nailPowder, handFluid, coffee], { category: 'kaffee', now: NOW });
+  assert.equal(response.count, 1);
+  assert.equal(response.deals[0].title, 'Kaffee Ganze Bohne');
+  assert.equal(buildCandidateDecision(handFluid, NOW).deal.categoryPrimary, 'Drogerie / Hygiene');
+});
+
 test('keeps an explicit limit of ten and never returns more than requested', () => {
   const candidates = Array.from({ length: 25 }, (_, index) => offer({
     _id: `explicit-${index}`,

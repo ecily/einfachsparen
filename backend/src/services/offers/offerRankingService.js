@@ -29,7 +29,7 @@ const {
   normalizeComparableUnit,
   sanitizePublicOfferQuantityFields,
 } = require('../crawl/offerQualityGuards');
-const { CATEGORY_TAXONOMY, determineCategoryDecision } = require('../crawl/categoryClassifier');
+const { CATEGORY_TAXONOMY, determineCategoryDecision, detectPersonalCareProductType } = require('../crawl/categoryClassifier');
 const { normalizeTitleForMatch } = require('../crawl/sourceEvidence');
 const { isExpiredValidToCompensatedByFreshCrawl, isOfferFreshForActiveUse } = require('./offerFreshness');
 const { buildPublicValidityMongoMatch, PUBLIC_VALIDITY_VERSION } = require('./publicValidity');
@@ -5133,6 +5133,14 @@ function getDmBipaWineCategoryGuardDecision({ titleText = '', contextText = '' }
 }
 
 function withResponseCategoryGuardFields(offer = {}) {
+  const personalCare = detectPersonalCareProductType(offer.title || '');
+  if (personalCare && ['getraenke', 'lebensmittel'].includes(normalizeSearchText(offer.categoryPrimary || ''))) {
+    return categoryGuardPayload(offer, {
+      ...personalCare,
+      categoryConfidence: personalCare.confidence,
+      subcategoryConfidence: personalCare.confidence,
+    }, 'personal-care-product-type');
+  }
   const retailerKey = String(offer?.retailerKey || '').toLowerCase();
   const currentPrimary = normalizeSearchText(offer.categoryPrimary || '');
   const currentSecondary = normalizeSearchText(offer.categorySecondary || '');

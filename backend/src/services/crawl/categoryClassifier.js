@@ -915,6 +915,8 @@ function detectHardCategoryOverride({ title = '', contextText = '', sourceCatego
 }
 
 function classifyOfferCategory({ title = '', contextText = '', sourceCategory = '', productGroups = [] }) {
+  const personalCare = detectPersonalCareProductType(title);
+  if (personalCare) return personalCare;
   const texts = getTexts({ title, contextText, sourceCategory, productGroups });
   if (!hasStrongNonBeverageConflict(texts)) {
     const beverageOverride = detectBeverageSubtypeOverride(texts);
@@ -965,6 +967,17 @@ function classifyOfferCategory({ title = '', contextText = '', sourceCategory = 
   };
 }
 
+function detectPersonalCareProductType(title = '') {
+  const normalized = normalizeTitleForMatch(title);
+  let secondaryCategory = '';
+  if (/\b(?:dipping[ -]+powder|nail[ -]+powder|nagelpuder|nagellackpuder|nagellack)\b/.test(normalized)) {
+    secondaryCategory = 'Kosmetik & Make-up';
+  } else if (/\b(?:handfluid|handcreme|handlotion|handpflege)\b/.test(normalized)) {
+    secondaryCategory = 'Koerperpflege';
+  }
+  return secondaryCategory ? { primaryCategory: 'Drogerie / Hygiene', secondaryCategory, confidence: 0.98 } : null;
+}
+
 function determineOfferCategory({ title = '', contextText = '', sourceCategory = '', productGroups = [] }) {
   return classifyOfferCategory({ title, contextText, sourceCategory, productGroups }).primaryCategory;
 }
@@ -972,7 +985,7 @@ function determineOfferCategory({ title = '', contextText = '', sourceCategory =
 function determineOfferSubcategory({ primaryCategory = '', sourceCategory = '', fallbackLabel = '', title = '', contextText = '', productGroups = [] }) {
   const classified = classifyOfferCategory({ title, contextText, sourceCategory, productGroups });
   const texts = getTexts({ title, contextText, sourceCategory, productGroups });
-  const primary = hasStrongNonBeverageConflict(texts)
+  const primary = detectPersonalCareProductType(title) || hasStrongNonBeverageConflict(texts)
     ? sanitizeWhitespace(classified.primaryCategory)
     : sanitizeWhitespace(primaryCategory || classified.primaryCategory);
   const candidateTexts = [
@@ -1056,6 +1069,7 @@ function buildInclusiveScopeDecision() {
 }
 
 module.exports = {
+  detectPersonalCareProductType,
   CATEGORY_TAXONOMY,
   classifyOfferCategory,
   determineCategoryDecision,
