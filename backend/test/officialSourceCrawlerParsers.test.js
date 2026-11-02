@@ -2019,7 +2019,9 @@ function parsePennyFixture({ cards, products = [] }) {
   });
 }
 
-test('PENNY official parser extracts offer card core fields and Nuxt payload image', () => {
+test('PENNY official parser extracts offer card core fields and Nuxt payload image', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const offers = parsePennyFixture({
     cards: [pennyCard()],
     products: [pennyProduct()],
@@ -2044,7 +2046,9 @@ test('PENNY official parser extracts offer card core fields and Nuxt payload ima
   assert.equal(offers[0].rawFacts.conditionExtraction.reason, 'unstructured-title-footnote-marker');
 });
 
-test('PENNY official parser normalizes relative srcset image URLs', () => {
+test('PENNY official parser normalizes relative srcset image URLs', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const offers = parsePennyFixture({
     cards: [pennyCard({
       href: '/produkte/cremereiniger-78107607',
@@ -2096,7 +2100,9 @@ test('PENNY official parser keeps offers without validTo and rejects expired val
   assert.equal(expired.length, 0);
 });
 
-test('PENNY official parser classifies coffee, cleaner, sweets and alcohol conservatively', () => {
+test('PENNY official parser classifies coffee, cleaner, sweets and alcohol conservatively', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const offers = parsePennyFixture({
     cards: [
       pennyCard(),
@@ -2173,7 +2179,9 @@ test('PENNY official-site is the prioritized stable source key', () => {
   assert.equal(deriveSourceKey({ ...officialSite, sourceType: 'offers-page' }), 'penny-official-site');
 });
 
-test('PENNY official-site diagnostic reports tabs, counts and expected effect', () => {
+test('PENNY official-site diagnostic reports tabs, counts and expected effect', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const html = `<html><body>
     <a href="/angebote?tab=angebote-ab-13-05">Angebote ab 13.05.</a>
     <a href="/angebote?tab=angebote/flugblaetter">Flugblätter</a>
@@ -2208,7 +2216,9 @@ test('PENNY official parser discovers the visible product-group API slug', () =>
   assert.deepEqual(slugs.slice(0, 2), ['angebote-ab-1305', 'angebote-ab-2105']);
 });
 
-test('PENNY official API normalizer keeps missing validTo offers and rejects normal products', () => {
+test('PENNY official API normalizer keeps missing validTo offers and rejects normal products', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const offers = __private.normalizePennyApiProductsToOffers({
     products: [
       pennyApiProduct({
@@ -2814,7 +2824,9 @@ test('official source zero-store gate covers official pdf flyer paths without pe
   assert.deepEqual(emptyRaw.rejectionReasons, []);
 });
 
-test('PENNY official condition extraction reads explicit API promotion tags only', () => {
+test('PENNY official condition extraction reads explicit API promotion tags only', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const cases = [
     {
       tags: ['ab 6 Flaschen'],
@@ -2878,7 +2890,9 @@ test('PENNY official condition extraction reads explicit API promotion tags only
   }
 });
 
-test('PENNY official condition extraction reads structured FROM promotion quantities', () => {
+test('PENNY official condition extraction reads structured FROM promotion quantities', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const cases = [
     {
       name: 'Coca-Cola Original od. Zero',
@@ -2953,7 +2967,9 @@ test('PENNY official condition extraction reads structured FROM promotion quanti
   }
 });
 
-test('PENNY official condition extraction ignores non-threshold promotion quantities', () => {
+test('PENNY official condition extraction ignores non-threshold promotion quantities', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const offers = __private.normalizePennyApiProductsToOffers({
     products: [
       pennyApiProduct({
@@ -2998,7 +3014,9 @@ test('PENNY official condition extraction ignores non-threshold promotion quanti
   assert.equal(offers[1].rawFacts.conditionExtraction, undefined);
 });
 
-test('PENNY official condition extraction ignores package sizes and normal price-action tags', () => {
+test('PENNY official condition extraction ignores package sizes and normal price-action tags', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const offers = __private.normalizePennyApiProductsToOffers({
     products: [
       pennyApiProduct({
@@ -3038,7 +3056,9 @@ test('PENNY official condition extraction ignores package sizes and normal price
   }
 });
 
-test('PENNY official condition extraction adds neutral hint for unstructured API title footnotes', () => {
+test('PENNY official condition extraction adds neutral hint for unstructured API title footnotes', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const [offer] = __private.normalizePennyApiProductsToOffers({
     products: [pennyApiProduct({
       name: 'Coca-Cola Original* od. Zero*',
@@ -3068,7 +3088,9 @@ test('PENNY official condition extraction adds neutral hint for unstructured API
   assert.equal(offer.rawFacts.conditionExtraction.reason, 'unstructured-title-footnote-marker');
 });
 
-test('PENNY official API condition fields survive storage enrichment and public serialization', () => {
+test('PENNY official API condition fields survive storage enrichment and public serialization', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const [offer] = __private.normalizePennyApiProductsToOffers({
     products: [pennyApiProduct({
       tags: ['ab 4 Stück'],
@@ -3099,7 +3121,9 @@ test('PENNY official API condition fields survive storage enrichment and public 
   assert.equal(publicOffer.effectiveDiscountType, 'threshold');
 });
 
-test('PENNY official API collector follows product-group pagination', async () => {
+test('PENNY official API collector follows product-group pagination', async (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const sourceDefinition = pennyOfficialSource();
   const productsByPage = new Map([
     [0, [pennyApiProduct({ slug: 'auslese-klassisch-78114243' })]],
@@ -4874,7 +4898,9 @@ test('BILLA action HTML parser selects the FR-SA threshold price from structured
   assert.equal(parsed.validTo.toISOString(), '2026-07-11T21:59:59.999Z');
 });
 
-test('BILLA action HTML parser uses explicit Hirter crate size for unit price', () => {
+test('BILLA action HTML parser uses explicit Hirter crate size for unit price', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-07-11T10:00:00+02:00') });
   const result = parseBillaActionHtml(`
     <h2>Gueltig bei BILLA & BILLA PLUS</h2>
     <h3>Bis zu -25% auf Bier*</h3>
@@ -4948,7 +4974,9 @@ test('BILLA action HTML parser does not invent an offer from image-only product 
   assert.equal(result.diagnostics.rawTeasers, 0);
 });
 
-test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 condition', () => {
+test('BILLA action HTML parser extracts Egger Extrem Aktion product-near 12+12 condition', (t) => {
+  // Historical offer fixture: pin its observation time, never relax expiry rules.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-06-13T10:00:00+02:00') });
   const result = parseBillaActionHtml(`
     <h2>Gültig bei BILLA & BILLA PLUS</h2>
     <div class="row">

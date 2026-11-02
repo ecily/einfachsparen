@@ -413,6 +413,7 @@ export function buildShoppingListItemFromSnapshot(item) {
   return {
     id,
     offerId: item?.offerId || id,
+    manual: String(id).startsWith('wish:'),
     title: item?.title || 'Unbekanntes Angebot',
     retailerKey: item?.retailerKey || normalizeRetailerKey(item?.retailerName),
     retailerName: item?.retailerName || 'Unbekannter Markt',

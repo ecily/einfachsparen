@@ -13,6 +13,7 @@ import {
 import { formatRetailerName } from '../../utils/retailers'
 
 function formatPrice(amount, currency = 'EUR') {
+  if (amount === null || amount === undefined || amount === '') return 'Preis offen'
   const numericAmount = Number(amount)
 
   if (!Number.isFinite(numericAmount)) {
@@ -38,24 +39,12 @@ function formatShortDate(value) {
   }).format(date)
 }
 
-function isSameDay(left, right) {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  )
-}
-
 function getValidityText(item) {
   const validTo = item?.validTo || item?.validUntil
   const date = validTo ? new Date(validTo) : null
 
   if (date && !Number.isNaN(date.getTime())) {
-    if (isSameDay(date, new Date())) {
-      return 'Heute gültig'
-    }
-
-    return `Gültig bis ${formatShortDate(date)}`
+    return date.getTime() <= Date.now() ? 'Gespeicherte Frist abgelaufen – Angebot neu prüfen' : `Gespeicherte Frist: ${formatShortDate(date)} – aktuell prüfen`
   }
 
   return ''
@@ -66,14 +55,7 @@ function normalizeRetailerName(value) {
 }
 
 function getOfferCountText(count) {
-  return `${count} ${count === 1 ? 'Angebot' : 'Angebote'}`
-}
-
-function getItemsTotal(items = []) {
-  return items.reduce((sum, item) => {
-    const price = Number(item?.priceCurrent?.amount)
-    return Number.isFinite(price) ? sum + price : sum
-  }, 0)
+  return `${count} ${count === 1 ? 'Listenposition' : 'Listenpositionen'}`
 }
 
 function getQuantityText(item) {
@@ -230,7 +212,7 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
         <div className="shopping-list-hero">
           <p className="eyebrow">{getOfferCountText(items.length)}</p>
           <h1>Geteilte Einkaufsliste</h1>
-          <p>Diese Liste wurde mit kaufklug geteilt.</p>
+          <p>Diese Liste wurde mit kaufklug geteilt. Gespeicherte Preisangaben sind kein aktuelles Angebot. Übernimm die Produkte und prüfe sie für deinen Einkauf neu.</p>
         </div>
       </SectionCard>
 
@@ -250,7 +232,6 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
 
       <div className="shopping-market-groups">
         {groupedItems.map((group) => {
-          const groupTotal = getItemsTotal(group.items)
 
           return (
             <section key={group.retailerKey} className="shopping-market-group">
@@ -258,7 +239,6 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
                 <h2>{normalizeRetailerName(group.retailerName)}</h2>
                 <span>
                   {getOfferCountText(group.items.length)}
-                  {groupTotal > 0 ? ` · Aktionspreise ca. ${formatPrice(groupTotal)}` : ''}
                 </span>
               </div>
 
@@ -292,7 +272,7 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
                           </div>
 
                           <strong className="shopping-list-item__price">
-                            {formatPrice(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
+                             {formatPrice(item?.priceCurrent?.amount, item?.priceCurrent?.currency)}
                           </strong>
                         </div>
 

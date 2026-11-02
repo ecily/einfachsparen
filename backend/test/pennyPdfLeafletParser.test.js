@@ -174,7 +174,10 @@ test('extracts PENNY Kirschen as tight short-window coupon fixture', (t) => {
   assert.match(offer.conditionsText, /Gutschein/);
   assert.equal(dateKey(offer.validTo), '2026-06-13');
   assert.equal(offer.status, 'active');
-  assert.equal(isOfferFreshForActiveUse(offer, new Date('2026-06-13T10:00:00+02:00')), true);
+  // Correct parser validity does not override the current public PDF exclusion.
+  assert.equal(isOfferFreshForActiveUse(offer, new Date('2026-06-13T10:00:00+02:00')), false);
+  assert.equal(require('../src/services/offers/publicValidity').isPublicValidityEligible(offer).reasonCode,
+    'penny-pdf-source-disabled');
 });
 
 test('expires PENNY Kirschen short-window fixture after 13.06', (t) => {

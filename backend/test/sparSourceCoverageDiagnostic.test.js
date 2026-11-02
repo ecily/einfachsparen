@@ -44,7 +44,9 @@ test('SPAR source definitions include separated aggregators, PDF flyers and acti
   assert.ok(keys.includes('interspar-official-actions-steiermark'));
   assert.equal(sources.find((source) => source.sourceKey === 'spar-official-actions-steiermark').appearsActive, true);
   assert.equal(sources.find((source) => source.sourceKey === 'interspar-official-actions-steiermark').appearsActive, false);
-  assert.equal(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').appearsActive, true);
+  assert.equal(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').appearsActive, false);
+  assert.ok(sources.filter((source) => /official-flyer-pdf/.test(source.sourceKey))
+    .every((source) => source.appearsActive === false));
   assert.match(sources.find((source) => source.sourceKey === 'eurospar-official-flyer-pdf').parserOrAdapter, /text-layer/i);
 });
 

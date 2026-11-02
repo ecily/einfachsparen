@@ -11,13 +11,25 @@ const sources = [
   { sourceKey: 'penny-official-site', retailerKey: 'penny', channel: 'official-site', status: 'success', foundRawItems: 224, offersStored: 161,
     scheduledHealthPolicy: getScheduledHealthPolicy({ retailerKey: 'penny', channel: 'official-site' }) },
   { sourceKey: 'penny-official-flyer', retailerKey: 'penny', channel: 'official-flyer', status: 'partial', foundRawItems: 11, offersStored: 0,
-    rejectionReasons: [{ reason: 'official-source-zero-stored', count: 11 }], scheduledHealthPolicy: getScheduledHealthPolicy(pennyFlyer) },
+    rejectionReasons: [{ reason: 'official-source-zero-stored', count: 11 }],
+    // Synthetic optional-policy round trip, independent of the disabled real PDF source.
+    scheduledHealthPolicy: { requiredForScheduledHealth: false, healthCriticality: 'optional', publicRequired: false } },
 ];
 
 function roundTrip(rows, summary = {}) {
   const stored = new CrawlRun({ status: 'partial', trigger: 'scheduled', mode: 'full', summary, result: { sources: rows } }).toObject();
   return CrawlRun.hydrate(JSON.parse(JSON.stringify(stored)));
 }
+
+test('real disabled PENNY PDF policy remains excluded after storage', () => {
+  const policy = getScheduledHealthPolicy(pennyFlyer);
+  assert.equal(pennyFlyer.enabled, false);
+  assert.equal(policy.healthCriticality, 'excluded');
+  assert.equal(policy.healthExcluded, true);
+  const serialized = dashboard.serializeCrawlRun(roundTrip([{ ...sources[1], scheduledHealthPolicy: policy }]));
+  assert.equal(serialized.sources[0].scheduledHealthPolicy.healthCriticality, 'excluded');
+  assert.equal(serialized.sources[0].scheduledHealthPolicy.requiredForScheduledHealth, false);
+});
 
 test('source health survives Mongoose storage and dashboard serialization', () => {
   const run = roundTrip(sources);

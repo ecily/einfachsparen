@@ -1,11 +1,11 @@
-import { HOME_DESCRIPTION, HOME_LEGAL_LINKS, HOME_OFFER_LINKS, getRenderedHomeSuggestions, HOME_TITLE } from '../../config/homepage'
+import { HOME_DESCRIPTION, HOME_LEGAL_LINKS, HOME_OFFER_LINKS, getRenderedHomeSuggestions, HOME_TITLE, HOME_JOURNEY, HOME_LIST_TITLE, HOME_LIST_DESCRIPTION } from '../../config/homepage'
 import { CategoryHeatmap } from './CategoryHeatmap'
 
 export function HomeLanding({ retailers = [] }) {
   return (
     <div className="home-compact">
       <section className="panel home-compact__hero" aria-labelledby="home-title">
-        <p className="design-eyebrow">KAUFKLUG · ANGEBOTE IN ÖSTERREICH</p>
+        <p className="design-eyebrow">DEIN EINKAUFSASSISTENT FÜR ÖSTERREICH</p>
         <h1 id="home-title">{HOME_TITLE}</h1>
         <p className="home-compact__intro">{HOME_DESCRIPTION}</p>
         <form className="home-compact__search" action="/suche" method="get" role="search">
@@ -15,6 +15,8 @@ export function HomeLanding({ retailers = [] }) {
             <button type="submit" aria-label="Angebote suchen">Suchen <span aria-hidden="true">↗</span></button>
           </div>
         </form>
+        <div className="assistant-home-steps" aria-label="So funktioniert Kaufklug">{HOME_JOURNEY.map((step, i) => <span key={step}><b>0{i + 1}</b> {step}</span>)}</div>
+        <a className="assistant-home-list" href="/einkaufsliste"><span><strong>{HOME_LIST_TITLE}</strong><small>{HOME_LIST_DESCRIPTION}</small></span><span aria-hidden="true">Zur Liste →</span></a>
         <CategoryHeatmap retailers={retailers} />
         <a className="home-compact__top-deals" href="/top-deals/">Top Deals heute <span aria-hidden="true">→</span></a>
         <nav className="home-compact__links home-compact__suggestions" aria-label="Schnellsuchen">

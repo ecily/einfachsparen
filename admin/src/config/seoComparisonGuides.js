@@ -28,6 +28,10 @@ const guides = {
     'Diese Übersicht zeigt eine Auswahl von BILLA/BILLA Plus, Lidl und PENNY. Sie ist keine vollständige Liste aller Supermarkt-Angebote.',
     'Für einen konkreten Preisvergleich wechsle zur passenden Produktseite. Vergleiche nur kompatible Produktformen über kg, Liter oder Stück.',
     'Packungsgröße, Gültigkeit und Bedingungen gehören zum Preisvergleich. Ein Mengenrabatt lohnt sich nur, wenn du die erforderliche Menge kaufen möchtest.',
+    'Für deinen Einkauf in Österreich: Wähle zuerst die Produkte, die du wirklich brauchst. Merke passende Angebote auf deiner Einkaufsliste und prüfe dort vor dem nächsten Einkauf erneut, ob sie noch gelten.',
+    'BILLA und BILLA Plus gehören zu einer Handelsgruppe. Die Zuordnung am einzelnen Angebot entscheidet, in welchem Markt es gilt. Diese Übersicht umfasst eine Auswahl von BILLA/BILLA Plus, Lidl und PENNY; sie ist weder ein vollständiges Flugblatt noch ein Preisvergleich aller österreichischen Händler.',
+    'Günstigerer Packungspreis bedeutet nicht automatisch günstigerer Einkauf. Achte auf die enthaltene Menge, notwendige Mehrfachkäufe und App- oder Kundenkartenbedingungen. Unbekannte Normalpreise und fehlende Händlerangebote werden nicht geschätzt.',
+    'Beginne beim konkreten Bedarf: Die verlinkten Kaffee-, Bier- oder Schokoladenseiten zeigen passende Produktauswahlen. Auf der Liste kannst du anschließend nach Händlern strukturieren und beim Einkaufen abhaken. Die tatsächliche Marktverfügbarkeit bitte vor Ort prüfen.',
   ]],
   bier: ['Bier: Literpreis, Gebinde und Kaufmenge', [
     'Vergleiche Bierpreise pro Liter bei passenden Produkten. Eine einzelne Dose, ein Multipack und eine Kiste haben unterschiedliche Gesamtmengen.',

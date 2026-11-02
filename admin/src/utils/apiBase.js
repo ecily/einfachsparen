@@ -138,6 +138,7 @@ export async function fetchJson(path, options = {}) {
     adminApiKey = '',
     credentials = 'omit',
     mode = 'cors',
+    signal,
   } = options || {}
 
   const requestOptions = {
@@ -145,6 +146,7 @@ export async function fetchJson(path, options = {}) {
     mode,
     credentials,
     headers: createHeaders(headers, adminApiKey),
+    signal,
   }
 
   if (body !== undefined) {
@@ -233,7 +235,7 @@ export async function fetchFilterCategories(retailerKeys = []) {
   return extractArrayPayload(payload, ['categories'])
 }
 
-export async function fetchOfferRankingDirect(params = {}) {
+export async function fetchOfferRankingDirect(params = {}, options = {}) {
   const searchParams = new URLSearchParams({ flat: 'true' })
 
   for (const [key, value] of Object.entries(params || {})) {
@@ -242,7 +244,7 @@ export async function fetchOfferRankingDirect(params = {}) {
   }
 
   const suffix = searchParams.toString() ? `?${searchParams.toString()}` : ''
-  return fetchJson(`/offers/ranking${suffix}`)
+  return fetchJson(`/offers/ranking${suffix}`, options)
 }
 
 export async function fetchTopDeals(limit = 20, filters = {}) {

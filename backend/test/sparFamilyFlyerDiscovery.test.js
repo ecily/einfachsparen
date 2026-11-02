@@ -459,9 +459,9 @@ test('discovery service does not open a MongoDB connection', async () => {
   assert.equal(mongoose.connection.readyState, 0);
 });
 
-test('SPAR-family PDF SourceDefinitions keep old static regular flyers scoped-only', () => {
-  const sources = getBackendSparFamilyPdfSources(RETAILER_DEFINITIONS)
-    .filter((source) => source.enabled);
+test('SPAR-family PDF SourceDefinitions keep old static regular flyers scoped-only and disabled', () => {
+  const sources = getBackendSparFamilyPdfSources(RETAILER_DEFINITIONS);
+  assert.equal(sources.every((source) => source.enabled === false), true);
   const urls = sources.map((source) => source.url);
   const oldRegularKw23 = sources.filter((source) => /260603-1-flugblatt-kw-23|steiermark_kw23/i.test(source.url));
 
@@ -505,25 +505,25 @@ test('SPAR-family PDF SourceDefinitions keep old static regular flyers scoped-on
   );
 });
 
-test('active SPAR-family PDF definitions reject expired validity windows', () => {
-  const now = new Date('2026-06-03T12:00:00.000Z');
+test('historical SPAR-family PDF definitions cannot enter active crawls after expiry', () => {
+  const now = new Date('2026-11-02T12:00:00.000Z');
   const sources = RETAILER_DEFINITIONS.filter((definition) => (
     definition.channel === 'official-flyer'
     && definition.sourceType === 'pdf'
     && /flugblatt\.(?:spar|interspar)\.at/i.test(definition.sourceUrl)
-    && definition.enabled !== false
   ));
 
   assert.equal(sources.length, 15);
-  assert.equal(
-    sources.some((source) => new Date(source.crawlPolicy.validTo).getTime() <= now.getTime()),
-    false
-  );
+  assert.ok(sources.every((source) => new Date(source.crawlPolicy.validTo).getTime() <= now.getTime()));
+  assert.ok(sources.every((source) => source.enabled === false && source.latestStatus === 'inactive'));
+  assert.ok(sources.every((source) => source.crawlPolicy.disableOfferExtraction === true));
+  assert.ok(sources.every((source) => source.crawlPolicy.scheduledHealthPolicy.healthExcluded === true));
+  assert.equal(sources.filter((source) => source.enabled !== false).length, 0);
 });
 
 test('SPAR-family PDF SourceDefinitions keep retailer formats separated and bounded', () => {
-  const sources = getBackendSparFamilyPdfSources(RETAILER_DEFINITIONS)
-    .filter((source) => source.enabled);
+  const sources = getBackendSparFamilyPdfSources(RETAILER_DEFINITIONS);
+  assert.ok(sources.every((source) => source.enabled === false));
   const byFormat = new Map(
     sources
       .filter((source) => /260603-1-flugblatt-kw-23|steiermark_kw23/i.test(source.url))

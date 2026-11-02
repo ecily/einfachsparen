@@ -2,8 +2,11 @@ import { QUICK_SEARCH_TERMS } from './searchDiscovery.js'
 import { seoLandingPages } from './seoLandingPages.js'
 
 export const HOME_SEO_TITLE = 'Aktuelle Angebote in \u00d6sterreich vergleichen. | kaufklug.at'
-export const HOME_TITLE = 'Womit willst du heute sparen?'
-export const HOME_DESCRIPTION = 'Suche Produkte oder Marken und prüfe Preise, Gültigkeit und Bedingungen aus Supermärkten und Drogerien.'
+export const HOME_TITLE = 'Dein Einkauf. Weniger bezahlen.'
+export const HOME_DESCRIPTION = 'Finde passende Angebote in Österreich, vergleiche belegbare Vorteile und plane deinen Einkauf mit einer Liste, die bleibt.'
+export const HOME_JOURNEY = ['Suchen & vergleichen', 'Einkaufsliste erstellen', 'Bewusst einkaufen']
+export const HOME_LIST_TITLE = 'Was brauchst du beim nächsten Einkauf?'
+export const HOME_LIST_DESCRIPTION = 'Notieren, Angebote prüfen und im Markt abhaken.'
 export const HOME_QUICK_SEARCHES = QUICK_SEARCH_TERMS.slice(0, 3)
 export const HOME_PRODUCT_SEARCHES = [
   'Milch', 'Butter', 'Käse', 'Naturjoghurt', 'Brot', 'Reis', 'Olivenöl', 'Linsen',

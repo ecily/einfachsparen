@@ -16,7 +16,7 @@ import { SearchPage } from './components/search/SearchPage'
 import { KeywordSearchPage } from './components/search/KeywordSearchPage'
 import { TopDealsPage } from './components/search/TopDealsPage'
 import { SeoOfferLandingPage } from './components/search/SeoOfferLandingPage'
-import { ShoppingListPage } from './components/shopping/ShoppingListPage'
+import { ShoppingAssistant } from './components/shopping/ShoppingAssistant'
 import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
 import { FeedbackPage } from './components/feedback/FeedbackPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
@@ -718,6 +718,7 @@ function App() {
       <nav className="page-nav" aria-label="Seiten">
         <a className="page-nav__logo" href="/" aria-label="Zur Startseite">
           <img src="/brand/kaufklug-logo-transparent.png" alt="" width="78" height="78" />
+          <span className="page-nav__wordmark">kaufklug.at</span>
         </a>
         <button
           ref={headerBetaRef}
@@ -782,7 +783,7 @@ function App() {
         <CookieStorageNotice onNavigate={handleNavigate} />
         {activePage !== 'home' ? <StickyBottomLine onNavigate={handleNavigate} /> : null}
       </>}>
-      <nav className="design-context-nav" aria-label="Suche und Auswahl"><a href={hrefFor('product-search')}>Produktsuche</a><a href={hrefFor('search')}>Stöbern</a><span>Ohne Konto. Deine Liste bleibt bei dir.</span></nav>
+      {activePage !== 'home' ? <nav className="design-context-nav" aria-label="Suche und Auswahl"><a href={hrefFor('product-search')}>Produktsuche</a><a href={hrefFor('search')}>Stöbern</a><span>Ohne Konto. Deine Liste bleibt bei dir.</span></nav> : null}
       {activePage === 'home' ? (
         <HomeLanding retailers={retailers} />
       ) : activePage === 'shared-shopping-list' ? (
@@ -850,8 +851,10 @@ function App() {
           onAddToShoppingList={handleAddToShoppingList}
         />
       ) : activePage === 'shopping-list' ? (
-        <ShoppingListPage
+        <ShoppingAssistant
           shoppingListItems={shoppingListItems}
+          onAddWish={(item) => setShoppingListItems(current => [item, ...current])}
+          onEditWish={(id, title) => setShoppingListItems(current => current.map(item => item.id === id && item.manual ? { ...item, title } : item))}
           onRemoveItem={handleRemoveShoppingListItem}
           onClearList={handleClearShoppingList}
           onGoToOffers={() => handleNavigate('product-search')}
