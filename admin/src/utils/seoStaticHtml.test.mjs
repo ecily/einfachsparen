@@ -330,12 +330,15 @@ test('softdrinks landing page is indexable and complete in initial HTML', () => 
   const html = buildSeoStaticDocument(template, page)
 
   assert.equal(page.robots, 'index,follow')
-  assert.match(html, /<title>Softdrinks Angebote aktuell vergleichen \| kaufklug\.at<\/title>/)
-  assert.match(html, /<meta name="description" content="Aktuelle Softdrink-Angebote mehrerer H\u00e4ndler vergleichen\./)
+  assert.match(html, /<title>Softdrinks Angebote &amp; Aktionen in Österreich \| kaufklug\.at<\/title>/)
+  assert.match(html, /<meta name="description" content="Softdrinks-Angebote und Aktionen in Österreich vergleichen:/)
   assert.match(html, /<meta name="robots" content="index,follow" \/>/)
   assert.match(html, /canonical" href="https:\/\/www\.kaufklug\.at\/angebote\/softdrinks\/"/)
-  assert.match(html, /<h1>Softdrinks Angebote aktuell vergleichen<\/h1>/)
+  assert.match(html, /<h1>Softdrinks-Angebote und Aktionen vergleichen<\/h1>/)
   assert.match(html, /Cola und andere Limonaden/)
+  assert.match(html, /Softdrinks-Aktionen: Literpreis und Kaufmenge prüfen/)
+  assert.match(html, /Pfand und tatsächliche Verfügbarkeit/)
+  assert.match(html, /keinen günstigsten Gesamteinkauf/)
   for (const path of ['/angebote/', '/angebote/supermarkt/', '/angebote/billa/', '/angebote/penny/', '/angebote/lidl/', '/angebote/bier/']) {
     assert.ok(html.includes(`<a href="${path}">`), `missing softdrinks landing link ${path}`)
   }

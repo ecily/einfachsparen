@@ -77,7 +77,7 @@ export function ShoppingAssistant({ shoppingListItems: items, onAddWish, onEditW
   async function share() {
     setBusy(true)
     try {
-      const snapshot = buildShareSnapshot(items)
+      const snapshot = buildShareSnapshot(items, quantities)
       // Shared lists carry wishes, never a promise that stored prices are still current.
       snapshot.items = snapshot.items.map(i => ({ ...i, priceCurrent: null }))
       const result = await createSharedShoppingList(snapshot)

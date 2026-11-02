@@ -13,6 +13,7 @@ const sharedShoppingListItemSchema = new mongoose.Schema(
     },
     unit: { type: String, default: '' },
     quantityText: { type: String, default: '' },
+    requestedQuantity: { type: Number, default: 1, min: 1, max: 99, validate: Number.isInteger },
     validUntil: { type: Date, default: null },
     imageUrl: { type: String, default: '' },
   },

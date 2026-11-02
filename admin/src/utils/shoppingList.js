@@ -239,7 +239,7 @@ export function getShoppingListMinimumQuantity(item) {
 export function getShoppingListItemQuantity(item, quantities = {}) {
   const itemId = getShoppingListItemId(item)
   const minimumQuantity = getShoppingListMinimumQuantity(item)
-  const storedQuantity = Number(quantities?.[itemId])
+  const storedQuantity = Number(quantities?.[itemId] ?? item?.requestedQuantity)
   const quantity = Number.isFinite(storedQuantity) && storedQuantity > 0 ? Math.round(storedQuantity) : minimumQuantity
 
   return Math.min(Math.max(quantity, minimumQuantity), MAX_SHOPPING_LIST_QUANTITY)
@@ -414,6 +414,8 @@ export function buildShoppingListItemFromSnapshot(item) {
     id,
     offerId: item?.offerId || id,
     manual: String(id).startsWith('wish:'),
+    requestedQuantity: Number.isInteger(item?.requestedQuantity) && item.requestedQuantity >= 1
+      && item.requestedQuantity <= 99 ? item.requestedQuantity : 1,
     title: item?.title || 'Unbekanntes Angebot',
     retailerKey: item?.retailerKey || normalizeRetailerKey(item?.retailerName),
     retailerName: item?.retailerName || 'Unbekannter Markt',
@@ -562,7 +564,7 @@ export function storeCheckedShoppingListItems(checkedIds, scope = 'default') {
   }
 }
 
-export function buildShareSnapshot(items = []) {
+export function buildShareSnapshot(items = [], quantities = {}) {
   return {
     items: (items || []).map((item) => ({
       offerId: item?.offerId || item?.id || '',
@@ -573,6 +575,7 @@ export function buildShareSnapshot(items = []) {
       priceCurrent: item?.priceCurrent || null,
       unit: item?.normalizedUnitPrice?.unit || '',
       quantityText: item?.quantityText || '',
+      requestedQuantity: getShoppingListItemQuantity(item, quantities),
       validUntil: item?.validTo || '',
       imageUrl: item?.imageUrl || '',
     })),

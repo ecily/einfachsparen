@@ -86,6 +86,8 @@ function sanitizeItem(item) {
     },
     unit: clampString(item.unit || item.normalizedUnitPrice?.unit, MAX_SHORT_TEXT_LENGTH),
     quantityText: clampString(item.quantityText || item.quantity, MAX_SHORT_TEXT_LENGTH),
+    requestedQuantity: typeof item.requestedQuantity === 'number' && Number.isInteger(item.requestedQuantity)
+      && item.requestedQuantity >= 1 && item.requestedQuantity <= 99 ? item.requestedQuantity : 1,
     validUntil: sanitizeDate(item.validUntil || item.validTo),
     imageUrl: sanitizeImageUrl(item.imageUrl),
   };

@@ -302,10 +302,10 @@ export const seoLandingPages = [
   {
     key: 'softdrinks',
     path: '/angebote/softdrinks',
-    title: 'Softdrinks Angebote aktuell vergleichen | kaufklug.at',
+    title: 'Softdrinks Angebote & Aktionen in Österreich | kaufklug.at',
     description:
-      'Aktuelle Softdrink-Angebote mehrerer H\u00e4ndler vergleichen. Literpreise, Flaschen, Dosen und Multipacks transparent auf kaufklug.at.',
-    h1: 'Softdrinks Angebote aktuell vergleichen',
+      'Softdrinks-Angebote und Aktionen in Österreich vergleichen: Literpreise, Flaschen, Dosen und Kaufmengen prüfen, Bedingungen beachten und passende Angebote merken.',
+    h1: 'Softdrinks-Angebote und Aktionen vergleichen',
     intro:
       'Vergleiche aktuelle Softdrink-Angebote mehrerer H\u00e4ndler, darunter Cola und andere Limonaden. Beachte Dosen, Flaschen, Multipacks, Literpreise sowie Mengen- und Aktionsbedingungen.',
     robots: 'index,follow',

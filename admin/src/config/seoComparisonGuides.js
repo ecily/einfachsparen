@@ -1,4 +1,9 @@
 const guides = {
+  softdrinks: ['Softdrinks-Aktionen: Literpreis und Kaufmenge prüfen', [
+    'Cola, Limonade und andere Softdrinks gibt es in Dosen, Flaschen und Multipacks. Vergleiche bei passenden Getränken den sicher erkannten Literpreis und die gesamte Menge, die du kaufen musst. Ein niedriger Packungspreis allein belegt keinen Preisvorteil.',
+    'Eine Mengenaktion kann mehrere Packungen voraussetzen. Prüfe die erforderliche Stückzahl, den Gültigkeitszeitraum und erkannte App- oder Kundenkartenbedingungen am einzelnen Angebot. Pfand und tatsächliche Verfügbarkeit im Markt bitte zusätzlich prüfen; aus einem Literpreis wird keine Pfandaussage abgeleitet.',
+    'Merke nur passende Angebote für deinen Einkauf auf der Liste. Wähle dort die benötigte Packungsanzahl und prüfe gespeicherte Angebote vor dem nächsten Einkauf erneut. Die Auswahl ersetzt kein vollständiges Sortiment und verspricht keinen günstigsten Gesamteinkauf.',
+  ]],
   billa: ['BILLA und BILLA Plus sinnvoll vergleichen', [
     'Diese Seite bündelt BILLA und BILLA Plus. Prüfe beim einzelnen Angebot, welcher Markt genannt ist; die gemeinsame Seite bedeutet nicht, dass jeder Preis in beiden Märkten gilt.',
     'Vergleiche gleiche Produktformen über den Preis pro kg, Liter oder Stück. Ein günstigerer Packungspreis kann eine kleinere Menge enthalten.',

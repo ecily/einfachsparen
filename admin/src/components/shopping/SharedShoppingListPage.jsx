@@ -277,6 +277,9 @@ export function SharedShoppingListPage({ shareId, onNavigate, onAdoptItems }) {
                         </div>
 
                         <div className="shopping-list-item__facts">
+                          <span>{Number.isInteger(item.requestedQuantity) && item.requestedQuantity >= 1 && item.requestedQuantity <= 99
+                            ? `${item.requestedQuantity} ${item.requestedQuantity === 1 ? 'Packung' : 'Packungen'} gewünscht`
+                            : 'Packungsanzahl nicht hinterlegt'}</span>
                           {quantityText ? <span>{quantityText}</span> : null}
                           {validityText ? <span>{validityText}</span> : null}
                           {conditionText ? <span>{conditionText}</span> : null}

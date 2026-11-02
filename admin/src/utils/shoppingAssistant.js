@@ -35,7 +35,7 @@ export function quoteIssue(item, quote, now = Date.now()) {
 export function buildPartialPlan(items, quotes = {}, quantities = {}, checked = new Set(), now = Date.now()) {
   const rows = items.filter(i => !checked.has(String(i.id))).map(item => {
     const issue = quoteIssue(item, quotes[item.id], now)
-    const quantity = Math.max(1, Math.min(99, Math.floor(Number(quantities[item.id]) || 1)))
+    const quantity = Math.max(1, Math.min(99, Math.floor(Number(quantities[item.id] ?? item.requestedQuantity) || 1)))
     return { item, issue, quantity, offer: issue ? null : quotes[item.id].offer,
       cents: issue ? null : Math.round(quotes[item.id].offer.priceCurrent.amount * 100) * quantity }
   })
