@@ -50,7 +50,7 @@ test('homepage exposes crawlable internal SEO links in initial HTML', () => {
     assert.ok(html.includes(`href="${path}"`), `missing crawlable link ${path}`)
   }
   assert.ok(html.includes(`<h1 id="home-title">${HOME_TITLE}</h1>`))
-  assert.ok(html.includes('<button type="submit" aria-label="go, Suche starten">go</button>'))
+  assert.ok(html.includes('<button type="submit" aria-label="Angebote suchen">Suchen</button>'))
   assert.ok(html.includes('<label for="home-search">Produkt oder Marke suchen</label>'))
   assert.ok(html.indexOf('home-compact__top-deals') < html.indexOf('home-compact__suggestions'))
   assert.ok(html.includes('href="/top-deals/">Top Deals heute</a>'))

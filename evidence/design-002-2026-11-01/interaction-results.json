@@ -1,0 +1,6 @@
+{
+  "counts": [
+    60
+  ],
+  "blocker": "locator.click: Timeout 8000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /Weitere.*laden/i })\u001b[22m\n"
+}

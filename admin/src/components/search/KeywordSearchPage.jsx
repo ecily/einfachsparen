@@ -570,6 +570,7 @@ export function KeywordSearchPage({
     <div className="keyword-search-page">
       <section className="panel keyword-search-hero">
         <h1 className="app-shell__page-title">Angebote suchen</h1>
+        <p className="design-search-context">Ein Produkt suchen oder <a href="/stoebern">nach Märkten und Kategorien stöbern</a>.</p>
         <form className="keyword-search-form" onSubmit={handleSubmit}>
           <div className="keyword-search-form__row">
             <div

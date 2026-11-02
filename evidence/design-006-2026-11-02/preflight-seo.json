@@ -1,0 +1,19 @@
+{
+  "policyEntries": 38,
+  "policyChanges": [
+    {
+      "path": "/angebote/schokolade/",
+      "before": "noindex,follow",
+      "after": "index,follow"
+    }
+  ],
+  "sitemapUrls": 25,
+  "previousSitemapUrls": 24,
+  "added": [
+    "https://www.kaufklug.at/angebote/schokolade/"
+  ],
+  "removed": [],
+  "robotsEqual": true,
+  "unknownCanonicalAbsent": true,
+  "unknownNoindex": true
+}

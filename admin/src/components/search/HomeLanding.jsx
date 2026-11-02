@@ -1,19 +1,22 @@
 import { HOME_DESCRIPTION, HOME_LEGAL_LINKS, HOME_OFFER_LINKS, getRenderedHomeSuggestions, HOME_TITLE } from '../../config/homepage'
+import { CategoryHeatmap } from './CategoryHeatmap'
 
-export function HomeLanding() {
+export function HomeLanding({ retailers = [] }) {
   return (
     <div className="home-compact">
       <section className="panel home-compact__hero" aria-labelledby="home-title">
+        <p className="design-eyebrow">KAUFKLUG · ANGEBOTE IN ÖSTERREICH</p>
         <h1 id="home-title">{HOME_TITLE}</h1>
         <p className="home-compact__intro">{HOME_DESCRIPTION}</p>
         <form className="home-compact__search" action="/suche" method="get" role="search">
           <label htmlFor="home-search">Produkt oder Marke suchen</label>
           <div>
             <input id="home-search" type="search" name="q" placeholder="z. B. Kaffee" required />
-            <button type="submit" aria-label="go, Suche starten">go</button>
+            <button type="submit" aria-label="Angebote suchen">Suchen <span aria-hidden="true">↗</span></button>
           </div>
         </form>
-        <a className="home-compact__top-deals" href="/top-deals/">Top Deals heute</a>
+        <CategoryHeatmap retailers={retailers} />
+        <a className="home-compact__top-deals" href="/top-deals/">Top Deals heute <span aria-hidden="true">→</span></a>
         <nav className="home-compact__links home-compact__suggestions" aria-label="Schnellsuchen">
           {getRenderedHomeSuggestions().map((link) => <a key={link.path} href={link.path}>{link.label}</a>)}
         </nav>

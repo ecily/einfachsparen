@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "incompatible_phase",
+    "message": "deployment phase \"active\" is unsuitable for rollback"
+  }
+}

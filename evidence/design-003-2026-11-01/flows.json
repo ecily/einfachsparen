@@ -1,0 +1,16 @@
+{
+  "fixtureOnly": true,
+  "passed": [
+    "skip link focus and main target",
+    "neutral heatmap deep link uses all fixture markets and category",
+    "search pagination 60/120/135",
+    "add to list and reload persistence",
+    "back/forward preserves search and list",
+    "global retailer sort retains pagination and URL",
+    "market filter URL and complete 68-result scope",
+    "top deals remains 20"
+  ],
+  "observations": {
+    "cardSemantics": "- article:\n  - img \"Bild derzeit nicht verfügbar\": Offiziell\n  - text: dm\n  - heading \"UX Test Waschmittel 1\" [level=3]\n  - paragraph: 1 l\n  - strong: 3,00 €\n  - text: Aktionspreis PREIS PRO LITER € 3,00 / l Aktuell gefunden – bitte im Markt prüfen. Waschmittel\n  - button \"Auf die Einkaufsliste\"\n  - button \"Fehler melden\""
+  }
+}

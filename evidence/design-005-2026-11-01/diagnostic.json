@@ -1,0 +1,492 @@
+{
+  "snapshots": [
+    {
+      "time": 43185.200000047684,
+      "rect": {
+        "x": 322.53125,
+        "y": -9472.28125,
+        "width": 358.5625,
+        "height": 48,
+        "top": -9472.28125,
+        "right": 681.09375,
+        "bottom": -9424.28125,
+        "left": 322.53125
+      },
+      "disabled": false,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 10603,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": false,
+      "hitClass": null,
+      "text": "Auf die Einkaufsliste"
+    },
+    {
+      "time": 43297.60000002384,
+      "rect": {
+        "x": 322.53125,
+        "y": -9472.28125,
+        "width": 358.5625,
+        "height": 48,
+        "top": -9472.28125,
+        "right": 681.09375,
+        "bottom": -9424.28125,
+        "left": 322.53125
+      },
+      "disabled": false,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 10603,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": false,
+      "hitClass": null,
+      "text": "Auf die Einkaufsliste"
+    },
+    {
+      "time": 43406.800000071526,
+      "rect": {
+        "x": 322.53125,
+        "y": -9472.28125,
+        "width": 358.5625,
+        "height": 48,
+        "top": -9472.28125,
+        "right": 681.09375,
+        "bottom": -9424.28125,
+        "left": 322.53125
+      },
+      "disabled": false,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 10603,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": false,
+      "hitClass": null,
+      "text": "Auf die Einkaufsliste"
+    },
+    {
+      "time": 43516.700000047684,
+      "rect": {
+        "x": 322.53125,
+        "y": -9472.28125,
+        "width": 358.5625,
+        "height": 48,
+        "top": -9472.28125,
+        "right": 681.09375,
+        "bottom": -9424.28125,
+        "left": 322.53125
+      },
+      "disabled": false,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 10603,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": false,
+      "hitClass": null,
+      "text": "Auf die Einkaufsliste"
+    },
+    {
+      "time": 43626.800000071526,
+      "rect": {
+        "x": 322.53125,
+        "y": -9472.28125,
+        "width": 358.5625,
+        "height": 48,
+        "top": -9472.28125,
+        "right": 681.09375,
+        "bottom": -9424.28125,
+        "left": 322.53125
+      },
+      "disabled": false,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 10603,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": false,
+      "hitClass": null,
+      "text": "Auf die Einkaufsliste"
+    },
+    {
+      "time": 43752.5,
+      "rect": {
+        "x": 322.53125,
+        "y": -9472.28125,
+        "width": 358.5625,
+        "height": 48,
+        "top": -9472.28125,
+        "right": 681.09375,
+        "bottom": -9424.28125,
+        "left": 322.53125
+      },
+      "disabled": false,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 10603,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": false,
+      "hitClass": null,
+      "text": "Auf die Einkaufsliste"
+    },
+    {
+      "time": 61736.89999997616,
+      "rect": {
+        "x": 322.53125,
+        "y": 443.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 443.71875,
+        "right": 681.09375,
+        "bottom": 491.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [
+        {
+          "state": "running"
+        },
+        {
+          "state": "running"
+        },
+        {
+          "state": "running"
+        },
+        {
+          "state": "running"
+        },
+        {
+          "state": "running"
+        },
+        {
+          "state": "running"
+        }
+      ],
+      "fonts": "loaded",
+      "scroll": 687,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 65669,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 65787.30000007153,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 65912.80000007153,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 66022.10000002384,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 66134.39999997616,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 66245.89999997616,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 66367.89999997616,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    },
+    {
+      "time": 66483.10000002384,
+      "rect": {
+        "x": 322.53125,
+        "y": 722.71875,
+        "width": 358.5625,
+        "height": 48,
+        "top": 722.71875,
+        "right": 681.09375,
+        "bottom": 770.71875,
+        "left": 322.53125
+      },
+      "disabled": true,
+      "connected": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "animations": [],
+      "fonts": "loaded",
+      "scroll": 407,
+      "viewport": [
+        1440,
+        900
+      ],
+      "hitOwn": true,
+      "hitClass": "shopping-list-button shopping-list-button--added",
+      "text": "Auf der Einkaufsliste"
+    }
+  ],
+  "pageErrors": [],
+  "click": {
+    "success": false,
+    "error": "locator.click: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.shopping-list-button').first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"shopping-list-button \">Auf die Einkaufsliste</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <article data-retailer-key=\"dm\" class=\"user-card user-card--action-price\">…</article> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n"
+  },
+  "after": {
+    "time": 66604.5,
+    "rect": {
+      "x": 322.53125,
+      "y": 722.71875,
+      "width": 358.5625,
+      "height": 48,
+      "top": 722.71875,
+      "right": 681.09375,
+      "bottom": 770.71875,
+      "left": 322.53125
+    },
+    "disabled": true,
+    "connected": true,
+    "display": "block",
+    "visibility": "visible",
+    "opacity": "1",
+    "pointerEvents": "auto",
+    "animations": [],
+    "fonts": "loaded",
+    "scroll": 407,
+    "viewport": [
+      1440,
+      900
+    ],
+    "hitOwn": true,
+    "hitClass": "shopping-list-button shopping-list-button--added",
+    "text": "Auf der Einkaufsliste"
+  }
+}

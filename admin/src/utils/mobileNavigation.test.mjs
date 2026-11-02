@@ -2,12 +2,13 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import test from 'node:test'
 
+const designCss = fs.readFileSync(new URL('../design001.css', import.meta.url), 'utf8')
+
 const css = fs.readFileSync(new URL('../index.css', import.meta.url), 'utf8')
 
-test('mobile navigation keeps all four public destinations visible through 320px', () => {
-  assert.match(css, /@media \(max-width: 430px\)[\s\S]*?\.page-nav__main\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/)
-  assert.doesNotMatch(css, /\.page-nav__main \.page-nav__button:nth-child\(2\)\s*\{\s*display:\s*none/)
-  assert.match(css, /\.page-nav__button:nth-child\(2\)\s*\{\s*display:\s*inline-flex !important/)
+test('mobile navigation has three main columns without hiding a primary destination', () => {
+  assert.match(designCss, /grid-template-columns: repeat\(3,minmax\(0,1fr\)\)/)
+  assert.doesNotMatch(designCss, /nth-child/)
 })
 
 test('mobile navigation prevents horizontal page overflow', () => {

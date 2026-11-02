@@ -1,0 +1,165 @@
+{
+  "base": "http://127.0.0.1:4238",
+  "fixture": true,
+  "views": [
+    {
+      "name": "home",
+      "width": 390,
+      "scroll": 390,
+      "evidence": [
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown"
+      ],
+      "tiles": [
+        {
+          "text": "01LebensmittelQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        },
+        {
+          "text": "02GetränkeQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        },
+        {
+          "text": "03DrogerieQualitätsbewertung offen↗",
+          "href": "/stoebern?retailers=dm%2Cbipa&categories=main%3Adrogerie-hygiene"
+        },
+        {
+          "text": "04HaushaltQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        },
+        {
+          "text": "05Baby & KinderQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        }
+      ]
+    },
+    {
+      "name": "home",
+      "width": 1440,
+      "scroll": 1440,
+      "evidence": [
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown"
+      ],
+      "tiles": [
+        {
+          "text": "01LebensmittelQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        },
+        {
+          "text": "02GetränkeQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        },
+        {
+          "text": "03DrogerieQualitätsbewertung offen↗",
+          "href": "/stoebern?retailers=dm%2Cbipa&categories=main%3Adrogerie-hygiene"
+        },
+        {
+          "text": "04HaushaltQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        },
+        {
+          "text": "05Baby & KinderQualitätsbewertung offen↗Kein Kategorie-Einstieg verfügbar",
+          "href": null
+        }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "width": 390,
+      "passed": [
+        "neutral category opens complete browse selection",
+        "pagination 60/120",
+        "exact selected article add/reload/history",
+        "remove and reload persist empty list",
+        "retailer sort/pagination/reload",
+        "market filter/reload",
+        "top deals cap and unknown noindex/no canonical"
+      ],
+      "selected": {
+        "title": "UX Test Waschmittel 58",
+        "index": 57
+      },
+      "pointer": {
+        "cardBefore": {
+          "y": 204.9375,
+          "contentVisibility": "auto",
+          "intrinsicSize": "auto 230px"
+        },
+        "wheelSteps": 0,
+        "before": {
+          "x": 134.6875,
+          "y": 454.703125,
+          "width": 205.578125,
+          "height": 48,
+          "viewportHeight": 900,
+          "disabled": false,
+          "display": "block",
+          "visibility": "visible"
+        },
+        "clickState": {
+          "x": 134.6875,
+          "y": 454.703125,
+          "width": 205.578125,
+          "height": 48,
+          "hit": true,
+          "disabled": false
+        }
+      },
+      "topDeals": 20
+    },
+    {
+      "width": 1440,
+      "passed": [
+        "neutral category opens complete browse selection",
+        "pagination 60/120",
+        "exact selected article add/reload/history",
+        "remove and reload persist empty list",
+        "retailer sort/pagination/reload",
+        "market filter/reload",
+        "top deals cap and unknown noindex/no canonical"
+      ],
+      "selected": {
+        "title": "UX Test Waschmittel 55",
+        "index": 54
+      },
+      "pointer": {
+        "cardBefore": {
+          "y": 12.390625,
+          "contentVisibility": "auto",
+          "intrinsicSize": "auto 280px"
+        },
+        "wheelSteps": 0,
+        "before": {
+          "x": 322.53125,
+          "y": 547.953125,
+          "width": 358.5625,
+          "height": 48,
+          "viewportHeight": 900,
+          "disabled": false,
+          "display": "block",
+          "visibility": "visible"
+        },
+        "clickState": {
+          "x": 322.53125,
+          "y": 545.953125,
+          "width": 358.5625,
+          "height": 48,
+          "hit": true,
+          "disabled": false
+        }
+      },
+      "topDeals": 20
+    }
+  ],
+  "pageErrors": [],
+  "api5xx": [],
+  "blockedWrites": 32
+}

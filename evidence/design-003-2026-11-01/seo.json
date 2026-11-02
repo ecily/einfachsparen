@@ -1,0 +1,9 @@
+{
+  "policyEqual": true,
+  "policyEntries": 38,
+  "sitemapEqual": true,
+  "sitemapCount": 24,
+  "robotsEqual": true,
+  "catchallCanonicalAbsent": true,
+  "fixtureApiInAssets": false
+}

@@ -1,0 +1,127 @@
+{
+  "checkedAt": "2026-11-02T15:50:50.329608+00:00",
+  "deployment": "96f7f522-1724-41b5-82e5-be4935b331d5",
+  "phase": "ACTIVE",
+  "inProgress": null,
+  "components": {
+    "services": [
+      {
+        "name": "einfachsparen-backend",
+        "source_commit_hash": "ef85d6da7ec5289104a4a940999ae54ca37b4c8d"
+      }
+    ],
+    "static_sites": [
+      {
+        "name": "einfachsparen-admin",
+        "source_commit_hash": "ef85d6da7ec5289104a4a940999ae54ca37b4c8d"
+      }
+    ]
+  },
+  "healthOk": true,
+  "mongoConnected": true,
+  "processStartedAt": "2026-11-01T14:19:15.231Z",
+  "activeRun": null,
+  "lock": {
+    "state": "free",
+    "isBlocked": false,
+    "staleHeartbeat": false,
+    "heartbeatAgeMs": 36617242,
+    "staleHeartbeatThresholdMs": 900000,
+    "reason": "Globaler Crawl-Lock ist frei.",
+    "lock": {
+      "runId": "",
+      "status": "released",
+      "acquiredAt": "2026-11-02T05:37:00.027Z",
+      "heartbeatAt": "2026-11-02T05:40:33.197Z",
+      "expiresAt": null,
+      "owner": "einfachsparen-backend-569b8b879b-xv57p:32:scheduled"
+    }
+  },
+  "publish": {
+    "totalActiveOffers": 8158,
+    "finalCount": 8158,
+    "openCount": 0,
+    "finalRate": 1,
+    "status": "final",
+    "statuses": [
+      {
+        "status": "crawl-run-success",
+        "count": 4101,
+        "final": true,
+        "intermediate": false
+      },
+      {
+        "status": "crawl-run-stale",
+        "count": 2222,
+        "final": true,
+        "intermediate": false
+      },
+      {
+        "status": "unknown",
+        "count": 1382,
+        "final": false,
+        "intermediate": false
+      },
+      {
+        "status": "crawl-run-partial",
+        "count": 453,
+        "final": true,
+        "intermediate": false
+      }
+    ]
+  },
+  "reliability": {
+    "scheduledDaily": {
+      "level": "green",
+      "status": "success",
+      "runId": "6ae8217c88dec943afc9d2da",
+      "startedAt": "2026-11-02T05:37:00.065Z",
+      "finishedAt": "2026-11-02T05:40:32.731Z",
+      "reason": "Latest scheduled full crawl is terminal."
+    },
+    "currentCrawlSystem": {
+      "level": "green",
+      "lockState": "free",
+      "lockFree": true,
+      "activeRunBlocked": false,
+      "activeRunId": "",
+      "latestManualFullCrawl": null,
+      "finalizationLockBlocker": "green",
+      "finalizationLockBlockerLabel": "Recovered/green",
+      "awaitingNextScheduledDailyConfirmation": false,
+      "reason": "Current crawl lock is free, no active blocked run exists, and active offer publish status is final."
+    },
+    "sourceFailures": {
+      "level": "green",
+      "failedSourcesCount": 0,
+      "partialSourcesCount": 1,
+      "requiredProblemSourcesCount": 0,
+      "optionalProblemSourcesCount": 1,
+      "policyEvidence": "source-results",
+      "unknownPolicyProblemSources": [],
+      "p0ReliabilityCount": 0,
+      "p1SourceCoverageCount": 0,
+      "policyBoundedSourcesCount": 0,
+      "notExecutedByPolicySourcesCount": 0,
+      "reason": "No health-critical source failures in the reference crawl; 1 optional problem(s) remain visible diagnostically.",
+      "groups": [],
+      "optionalProblemSources": [
+        {
+          "sourceKey": "wogibtswas-dm",
+          "retailerKey": "dm",
+          "status": "partial",
+          "reason": "unavailable-nonblocking",
+          "healthCriticality": "optional"
+        }
+      ],
+      "policyBoundedGroups": []
+    }
+  },
+  "latestRun": {
+    "id": "6ae8217c88dec943afc9d2da",
+    "status": "success",
+    "lastStage": "publish-status-finished",
+    "publishStatusFinished": true,
+    "finishedAt": "2026-11-02T05:40:32.731Z"
+  }
+}

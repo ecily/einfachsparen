@@ -1,0 +1,230 @@
+[
+  {
+    "width": 320,
+    "normalContrast": 8.685606419749686,
+    "hoverContrast": 11.794230463952758,
+    "nav": [
+      {
+        "x": 21,
+        "text": "Suche",
+        "order": "0"
+      },
+      {
+        "x": 115,
+        "text": "Top Deals heuteTop Deals",
+        "order": "0"
+      },
+      {
+        "x": 209,
+        "text": "Liste",
+        "order": "0"
+      }
+    ],
+    "tab": [
+      {
+        "text": "Suche",
+        "outline": "none"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ],
+    "orderMatches": true,
+    "scroll": 320
+  },
+  {
+    "width": 375,
+    "normalContrast": 8.685606419749686,
+    "hoverContrast": 11.794230463952758,
+    "nav": [
+      {
+        "x": 21,
+        "text": "Suche",
+        "order": "0"
+      },
+      {
+        "x": 133.328125,
+        "text": "Top Deals heuteTop Deals",
+        "order": "0"
+      },
+      {
+        "x": 245.65625,
+        "text": "Liste",
+        "order": "0"
+      }
+    ],
+    "tab": [
+      {
+        "text": "Suche",
+        "outline": "none"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ],
+    "orderMatches": true,
+    "scroll": 375
+  },
+  {
+    "width": 390,
+    "normalContrast": 8.685606419749686,
+    "hoverContrast": 11.794230463952758,
+    "nav": [
+      {
+        "x": 21,
+        "text": "Suche",
+        "order": "0"
+      },
+      {
+        "x": 138.328125,
+        "text": "Top Deals heuteTop Deals",
+        "order": "0"
+      },
+      {
+        "x": 255.65625,
+        "text": "Liste",
+        "order": "0"
+      }
+    ],
+    "tab": [
+      {
+        "text": "Suche",
+        "outline": "none"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ],
+    "orderMatches": true,
+    "scroll": 390
+  },
+  {
+    "width": 768,
+    "normalContrast": 8.685606419749686,
+    "hoverContrast": 11.794230463952758,
+    "nav": [
+      {
+        "x": 361.53125,
+        "text": "Suche",
+        "order": "0"
+      },
+      {
+        "x": 466.1875,
+        "text": "Top Deals heuteTop Deals",
+        "order": "0"
+      },
+      {
+        "x": 570.859375,
+        "text": "Liste",
+        "order": "0"
+      }
+    ],
+    "tab": [
+      {
+        "text": "Suche",
+        "outline": "none"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ],
+    "orderMatches": true,
+    "scroll": 768
+  },
+  {
+    "width": 1024,
+    "normalContrast": 8.685606419749686,
+    "hoverContrast": 11.794230463952758,
+    "nav": [
+      {
+        "x": 617.53125,
+        "text": "Suche",
+        "order": "0"
+      },
+      {
+        "x": 722.1875,
+        "text": "Top Deals heuteTop Deals",
+        "order": "0"
+      },
+      {
+        "x": 826.859375,
+        "text": "Liste",
+        "order": "0"
+      }
+    ],
+    "tab": [
+      {
+        "text": "Suche",
+        "outline": "none"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ],
+    "orderMatches": true,
+    "scroll": 1024
+  },
+  {
+    "width": 1440,
+    "normalContrast": 8.685606419749686,
+    "hoverContrast": 11.794230463952758,
+    "nav": [
+      {
+        "x": 957.53125,
+        "text": "Suche",
+        "order": "0"
+      },
+      {
+        "x": 1062.1875,
+        "text": "Top Deals heuteTop Deals",
+        "order": "0"
+      },
+      {
+        "x": 1166.859375,
+        "text": "Liste",
+        "order": "0"
+      }
+    ],
+    "tab": [
+      {
+        "text": "Suche",
+        "outline": "none"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ],
+    "orderMatches": true,
+    "scroll": 1440
+  }
+]

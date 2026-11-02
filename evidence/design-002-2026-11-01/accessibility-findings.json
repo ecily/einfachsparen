@@ -1,0 +1,32 @@
+{
+  "fixtureOnly": true,
+  "viewport": 390,
+  "topDealsCta": {
+    "foregroundRgb": [
+      22,
+      84,
+      72
+    ],
+    "backgroundRgb": [
+      47,
+      101,
+      72
+    ],
+    "contrastRatio": 1.2838675478195483,
+    "normalTextRequired": 4.5,
+    "passes": false
+  },
+  "primaryNavigation": {
+    "domOrder": [
+      "Suche",
+      "Top Deals",
+      "Liste"
+    ],
+    "visualOrder": [
+      "Suche",
+      "Liste",
+      "Top Deals"
+    ],
+    "matches": false
+  }
+}

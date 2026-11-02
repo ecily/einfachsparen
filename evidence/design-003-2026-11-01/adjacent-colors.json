@@ -1,0 +1,26 @@
+[
+  {
+    "selector": ".home-compact__search button",
+    "color": "rgb(255, 254, 250)",
+    "background": "rgb(22, 84, 72)",
+    "gradient": "none"
+  },
+  {
+    "selector": ".home-compact__top-deals",
+    "color": "rgb(255, 254, 250)",
+    "background": "rgb(22, 84, 72)",
+    "gradient": "none"
+  },
+  {
+    "selector": ".page-nav__button--active",
+    "color": "rgb(255, 254, 250)",
+    "background": "rgb(22, 84, 72)",
+    "gradient": "none"
+  },
+  {
+    "selector": ".category-map__state",
+    "color": "rgb(82, 101, 105)",
+    "background": "rgb(240, 241, 235)",
+    "gradient": "none"
+  }
+]

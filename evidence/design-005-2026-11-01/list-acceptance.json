@@ -1,0 +1,87 @@
+{
+  "fixtureOnly": true,
+  "runs": [
+    {
+      "width": 390,
+      "passed": [
+        "pagination 60/120",
+        "visible selected article added by normal pointer",
+        "list reload restored exact article",
+        "history restored list",
+        "remove and reload persist empty list",
+        "search add action restored after removal"
+      ],
+      "selected": {
+        "title": "UX Test Waschmittel 58",
+        "index": 57
+      },
+      "pointer": {
+        "cardBefore": {
+          "y": 204.9375,
+          "contentVisibility": "auto",
+          "intrinsicSize": "auto 230px"
+        },
+        "wheelSteps": 0,
+        "before": {
+          "x": 134.6875,
+          "y": 454.703125,
+          "width": 205.578125,
+          "height": 48,
+          "viewportHeight": 900,
+          "disabled": false,
+          "display": "block",
+          "visibility": "visible"
+        },
+        "clickState": {
+          "x": 134.6875,
+          "y": 454.703125,
+          "width": 205.578125,
+          "height": 48,
+          "hit": true,
+          "disabled": false
+        }
+      }
+    },
+    {
+      "width": 1440,
+      "passed": [
+        "pagination 60/120",
+        "visible selected article added by normal pointer",
+        "list reload restored exact article",
+        "history restored list",
+        "remove and reload persist empty list",
+        "search add action restored after removal"
+      ],
+      "selected": {
+        "title": "UX Test Waschmittel 55",
+        "index": 54
+      },
+      "pointer": {
+        "cardBefore": {
+          "y": 12.390625,
+          "contentVisibility": "auto",
+          "intrinsicSize": "auto 280px"
+        },
+        "wheelSteps": 0,
+        "before": {
+          "x": 322.53125,
+          "y": 547.953125,
+          "width": 358.5625,
+          "height": 48,
+          "viewportHeight": 900,
+          "disabled": false,
+          "display": "block",
+          "visibility": "visible"
+        },
+        "clickState": {
+          "x": 322.53125,
+          "y": 545.953125,
+          "width": 358.5625,
+          "height": 48,
+          "hit": true,
+          "disabled": false
+        }
+      }
+    }
+  ]
+}

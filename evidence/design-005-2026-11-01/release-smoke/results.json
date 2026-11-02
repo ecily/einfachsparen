@@ -1,0 +1,126 @@
+{
+  "base": "http://127.0.0.1:4238",
+  "fixture": true,
+  "views": [
+    {
+      "name": "home",
+      "width": 390,
+      "scroll": 390,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/",
+      "robots": "index,follow",
+      "cards": 0,
+      "evidence": [
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown"
+      ]
+    },
+    {
+      "name": "search",
+      "width": 390,
+      "scroll": 390,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/suche/",
+      "robots": "noindex,follow",
+      "cards": 60,
+      "evidence": []
+    },
+    {
+      "name": "top-deals",
+      "width": 390,
+      "scroll": 390,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/top-deals/",
+      "robots": "index,follow",
+      "cards": 20,
+      "evidence": []
+    },
+    {
+      "name": "list",
+      "width": 390,
+      "scroll": 390,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/einkaufsliste/",
+      "robots": "noindex,follow",
+      "cards": 0,
+      "evidence": []
+    },
+    {
+      "name": "unknown",
+      "width": 390,
+      "scroll": 390,
+      "navCount": 3,
+      "canonical": null,
+      "robots": "noindex,follow",
+      "cards": 0,
+      "evidence": []
+    },
+    {
+      "name": "home",
+      "width": 1440,
+      "scroll": 1440,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/",
+      "robots": "index,follow",
+      "cards": 0,
+      "evidence": [
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown"
+      ]
+    },
+    {
+      "name": "search",
+      "width": 1440,
+      "scroll": 1440,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/suche/",
+      "robots": "noindex,follow",
+      "cards": 60,
+      "evidence": []
+    },
+    {
+      "name": "top-deals",
+      "width": 1440,
+      "scroll": 1440,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/top-deals/",
+      "robots": "index,follow",
+      "cards": 20,
+      "evidence": []
+    },
+    {
+      "name": "list",
+      "width": 1440,
+      "scroll": 1440,
+      "navCount": 3,
+      "canonical": "https://www.kaufklug.at/einkaufsliste/",
+      "robots": "noindex,follow",
+      "cards": 0,
+      "evidence": []
+    },
+    {
+      "name": "unknown",
+      "width": 1440,
+      "scroll": 1440,
+      "navCount": 3,
+      "canonical": null,
+      "robots": "noindex,follow",
+      "cards": 0,
+      "evidence": []
+    }
+  ],
+  "flows": [
+    "pagination 60/120",
+    "local list add/reload",
+    "history back/forward"
+  ],
+  "pageErrors": [],
+  "api5xx": [],
+  "blockedWrites": 14
+}

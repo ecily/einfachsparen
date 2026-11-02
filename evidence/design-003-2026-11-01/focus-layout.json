@@ -1,0 +1,110 @@
+[
+  {
+    "width": 320,
+    "initialLocalLayoutShiftSum": 0,
+    "keyboardFocus": [
+      {
+        "text": "Suche",
+        "outline": "solid"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ]
+  },
+  {
+    "width": 375,
+    "initialLocalLayoutShiftSum": 0.0057190452674897125,
+    "keyboardFocus": [
+      {
+        "text": "Suche",
+        "outline": "solid"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "initialLocalLayoutShiftSum": 0.00575929091484647,
+    "keyboardFocus": [
+      {
+        "text": "Suche",
+        "outline": "solid"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ]
+  },
+  {
+    "width": 768,
+    "initialLocalLayoutShiftSum": 0.012907407407407407,
+    "keyboardFocus": [
+      {
+        "text": "Suche",
+        "outline": "solid"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ]
+  },
+  {
+    "width": 1024,
+    "initialLocalLayoutShiftSum": 0.009759012858072916,
+    "keyboardFocus": [
+      {
+        "text": "Suche",
+        "outline": "solid"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "initialLocalLayoutShiftSum": 0.003571844993141289,
+    "keyboardFocus": [
+      {
+        "text": "Suche",
+        "outline": "solid"
+      },
+      {
+        "text": "Top Deals heuteTop Deals",
+        "outline": "solid"
+      },
+      {
+        "text": "Liste",
+        "outline": "solid"
+      }
+    ]
+  }
+]

@@ -731,19 +731,21 @@ function App() {
         </button>
         <div className="page-nav__main">
           <a
-            className={`page-nav__button${activePage === 'product-search' ? ' page-nav__button--active' : ''}`}
+            className={`page-nav__button${['home', 'product-search', 'search'].includes(activePage) ? ' page-nav__button--active' : ''}`}
             href={hrefFor('product-search')}
-            aria-current={activePage === 'product-search' ? 'page' : undefined}
+            aria-current={['home', 'product-search', 'search'].includes(activePage) ? 'page' : undefined}
           >
             Suche
           </a>
 
           <a
-            className={`page-nav__button${activePage === 'search' ? ' page-nav__button--active' : ''}`}
-            href={hrefFor('search')}
-            aria-current={activePage === 'search' ? 'page' : undefined}
+            className={`page-nav__button page-nav__top-deals${activePage === 'top-deals' ? ' page-nav__button--active' : ''}`}
+            href={hrefFor('top-deals')}
+            aria-current={activePage === 'top-deals' ? 'page' : undefined}
+            aria-label="Top Deals heute"
           >
-            Stöbern
+            <span className="page-nav__top-deals-long">Top Deals heute</span>
+            <span className="page-nav__top-deals-short">Top Deals</span>
           </a>
 
           <a
@@ -756,15 +758,6 @@ function App() {
             {shoppingListItems.length > 0 ? <span className="page-nav__count">{shoppingListItems.length}</span> : null}
           </a>
 
-          <a
-            className={`page-nav__button page-nav__top-deals${activePage === 'top-deals' ? ' page-nav__button--active' : ''}`}
-            href={hrefFor('top-deals')}
-            aria-current={activePage === 'top-deals' ? 'page' : undefined}
-            aria-label="Top Deals heute"
-          >
-            <span className="page-nav__top-deals-long">Top Deals heute</span>
-            <span className="page-nav__top-deals-short">Top Deals</span>
-          </a>
         </div>
 
         {activePage !== 'home' && activePage !== 'product-search' ? <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
@@ -789,8 +782,9 @@ function App() {
         <CookieStorageNotice onNavigate={handleNavigate} />
         {activePage !== 'home' ? <StickyBottomLine onNavigate={handleNavigate} /> : null}
       </>}>
+      <nav className="design-context-nav" aria-label="Suche und Auswahl"><a href={hrefFor('product-search')}>Produktsuche</a><a href={hrefFor('search')}>Stöbern</a><span>Ohne Konto. Deine Liste bleibt bei dir.</span></nav>
       {activePage === 'home' ? (
-        <HomeLanding />
+        <HomeLanding retailers={retailers} />
       ) : activePage === 'shared-shopping-list' ? (
         <SharedShoppingListPage
           shareId={sharedListId}
