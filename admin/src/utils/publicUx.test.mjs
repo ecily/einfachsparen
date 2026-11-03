@@ -28,7 +28,7 @@ test('homepage has a single native search entry and stable home route', () => {
   assert.match(homeSource, /action="\/suche" method="get" role="search"/)
   assert.match(homeSource, /type="search" name="q"/)
   assert.match(homeSource, /type="submit"/)
-  assert.match(appSource, /activePage !== 'home' && activePage !== 'product-search' \? <form/)
+  assert.match(appSource, /!\['home', 'product-search', 'shopping-list'\]\.includes\(activePage\) \? <form/)
   assert.doesNotMatch(appSource, /HowItWorksSection|TrustAndFaqSection|DiscoverOffersSection/)
 })
 

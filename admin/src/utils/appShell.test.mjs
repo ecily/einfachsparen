@@ -49,6 +49,12 @@ test('all core views, legacy links and SEO entries retain the shared navigation 
         assert.match(html, /value="kaffee"/)
         assert.match(html, /value="retailer" selected/)
       }
+      if (path === '/einkaufsliste') {
+        assert.match(html, /<h1>Mein Einkauf<\/h1>/)
+        assert.match(html, /id="wish"/)
+        assert.match(html, /Meine Produkte/)
+        assert.equal((html.match(/type="search"/g) || []).length, 0, 'the list has one product input instead of a competing search form')
+      }
       if (path === '/angebote/bier/') assert.match(html, /Bier Angebote aktuell vergleichen/)
     }
   } finally {

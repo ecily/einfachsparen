@@ -1,13 +1,23 @@
+import { buildShoppingListItem, getShoppingListItemQuantity } from './shoppingList.js'
+
 // Prices are deliberately session-only. A persisted list is a wish list, not a current quote.
 export const QUOTE_TTL = 15 * 60 * 1000
 export const REFRESH_LIMIT = 8
 const hosts = { billa: 'billa.at', 'billa-plus': 'billa.at', lidl: 'lidl.at', penny: 'penny.at',
   hofer: 'hofer.at', dm: 'dm.at', bipa: 'bipa.at', spar: 'spar.at', eurospar: 'spar.at', interspar: 'interspar.at' }
 export const itemId = item => String(item?.offerId || item?.id || '')
-export function createWish(title, id) {
+export function createWish(title, id, quantity = 1) {
   const text = String(title || '').trim().slice(0, 160)
   return text ? { id: `wish:${id}`, title: text, manual: true, retailerName: 'Noch ohne Angebot',
+    requestedQuantity: Math.max(1, Math.min(99, Math.floor(Number(quantity)) || 1)),
     priceCurrent: null, addedAt: new Date().toISOString() } : null
+}
+// Only an explicit selection replaces a wish. Never merge a duplicate offer silently.
+export function assignWishOffer(items, wishId, offer, quantity) {
+  if (!items.some(i => i.id === wishId && i.manual)) return items
+  const item = buildShoppingListItem(offer)
+  if (!item.id || items.some(i => i.id === item.id)) return items
+  return items.map(i => i.id === wishId ? { ...item, requestedQuantity: getShoppingListItemQuantity(item, { [item.id]: quantity }) } : i)
 }
 export function sameOffer(item, offer) {
   return !item.manual && Boolean(itemId(item)) && itemId(item) === itemId(offer) && item.retailerKey === offer.retailerKey

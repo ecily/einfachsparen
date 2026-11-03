@@ -1,0 +1,97 @@
+.purchase-page { --purchase-green: #185a43; --purchase-muted: #50635a; padding-top: .6rem; }
+.purchase-heading h1 { margin: .5rem 0; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -.045em; line-height: 1.15; }
+.purchase-heading p { max-width: 660px; margin: .65rem 0 1.2rem; color: var(--purchase-muted); line-height: 1.55; }
+.purchase-add { display: grid; grid-template-columns: minmax(0, 1fr) 80px auto; align-items: end; gap: .65rem; padding: 1rem; background: #fff; border: 1px solid #b6cdbb; border-radius: 1rem; }
+.purchase-add label { display: grid; gap: .4rem; font-weight: 700; font-size: .9rem; }
+.purchase-page input { min-width: 0; min-height: 46px; width: 100%; border: 1px solid #aabdaf; border-radius: .55rem; padding: .7rem; font: inherit; color: #192f29; background: #fff; }
+.purchase-add button { min-height: 48px; }
+.purchase-storage { margin: .55rem 0 1.2rem; font-size: .8rem; color: var(--purchase-muted); line-height: 1.6; }
+.purchase-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr); gap: 1.6rem; align-items: start; }
+.purchase-page .assistant-section-head { flex-wrap: wrap; gap: .4rem; }
+.purchase-page .assistant-section-head h2 { margin: .4rem 0; font-size: 1.3rem; }
+.purchase-page .assistant-section-head > span { font-size: .82rem; color: var(--purchase-muted); }
+.purchase-count { display: inline-flex; justify-content: center; align-items: center; min-width: 1.65rem; height: 1.65rem; padding-inline: .3rem; border-radius: 50%; background: #e5eee4; font-size: .85rem; vertical-align: middle; }
+.purchase-list-tools { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin: .4rem 0 .65rem; }
+.purchase-page a { color: var(--purchase-green); font-weight: 650; text-underline-offset: 3px; }
+.purchase-list-tools a { font-size: .85rem; padding: .75rem .2rem; }
+.purchase-page .assistant-items { display: grid; grid-template-columns: 1fr; gap: .55rem; }
+.purchase-page .assistant-item { padding: .7rem .85rem; border-radius: .75rem; box-shadow: none; }
+.purchase-item-top { display: flex; justify-content: space-between; gap: .5rem; align-items: start; }
+.purchase-page .assistant-check { flex: 1; font-size: 1rem; line-height: 1.4; gap: .65rem; }
+.purchase-page .assistant-check input { width: 24px; height: 24px; min-height: 24px; border-radius: .2rem; padding: 0; }
+.purchase-page button.purchase-remove { min-width: 44px; padding: 0; border-color: transparent; background: transparent; font-size: 1.6rem; font-weight: 400; color: #6b4242; }
+.purchase-item-content { padding-left: 2.15rem; }
+.purchase-page .assistant-item-meta { margin: 0 0 .6rem; font-size: .83rem; line-height: 1.5; overflow-wrap: anywhere; }
+.purchase-item-controls { display: flex; flex-wrap: wrap; gap: .4rem .6rem; align-items: center; }
+.purchase-quantity { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--purchase-muted); }
+.purchase-quantity input { width: 3.8rem; padding: .5rem; min-height: 44px; color: #192f29; }
+.purchase-item-controls button, .purchase-item-controls a { font-size: .82rem; padding: .65rem .6rem; }
+.purchase-item-controls .purchase-find { background: #edf4eb; border-color: #b2cdb5; }
+.purchase-offer-state { margin-top: .65rem; padding: .6rem .7rem; background: #f1f6ee; border-radius: .5rem; font-size: .83rem; line-height: 1.5; }
+.purchase-offer-state > strong { font-size: 1.05rem; }
+.purchase-offer-state p { margin: .2rem 0; }
+.purchase-page .purchase-details summary { font-size: .8rem; min-height: 44px; }
+.purchase-details p, .purchase-details .user-card { font-size: .85rem; line-height: 1.6; }
+.purchase-edit { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.purchase-edit label { width: 100%; font-size: .85rem; font-weight: 650; }
+.purchase-edit input { flex-basis: 100%; }
+.purchase-empty { border: 1px dashed #b6cdbb; border-radius: .8rem; padding: 1.2rem; background: #fff; line-height: 1.6; }
+.purchase-empty h3 { font-size: 1.05rem; margin: 0; }
+.purchase-empty p { margin-block: .5rem; color: var(--purchase-muted); }
+.purchase-empty a { display: inline-flex; align-items: center; min-height: 44px; }
+.purchase-market-name { font-size: 1rem; margin: 1.2rem 0 .5rem; color: var(--purchase-green); }
+.purchase-list-footer { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: 1rem; align-items: start; }
+.purchase-list-footer > button { flex: 1 1 auto; }
+.purchase-list-footer > details { flex-basis: 100%; }
+.purchase-list-footer summary, .purchase-plan-limits summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--purchase-green); text-decoration: underline; text-underline-offset: 3px; font-size: .85rem; }
+.purchase-list-footer details button { margin: .3rem .4rem .3rem 0; }
+.purchase-share { padding: 1rem; border: 1px solid #b6cdbb; border-radius: .75rem; background: #fff; }
+.purchase-share label { display: block; margin-bottom: .5rem; font-weight: 700; }
+.purchase-share p { font-size: .85rem; color: var(--purchase-muted); line-height: 1.6; }
+.purchase-page .assistant-plan { margin: 0; padding: 1.2rem; border-top: 4px solid var(--purchase-green); position: sticky; top: 100px; }
+.purchase-plan-label { font-size: .68rem; font-weight: 800; letter-spacing: .07em; color: var(--purchase-green); }
+.purchase-page .assistant-plan h2 { margin: .45rem 0 .6rem; font-size: 1.5rem; letter-spacing: -.025em; }
+.purchase-page .assistant-plan > p { margin: .65rem 0; font-size: .9rem; line-height: 1.6; }
+.purchase-plan-progress { display: flex; gap: .6rem; align-items: center; margin: 1rem 0; padding-top: .8rem; border-top: 1px solid #d6e0d9; }
+.purchase-plan-progress strong { white-space: nowrap; font-size: 1.35rem; color: var(--purchase-green); }
+.purchase-plan-progress span { color: var(--purchase-muted); font-size: .8rem; line-height: 1.4; }
+.purchase-page .assistant-partial { padding: .9rem; margin-block: 1rem; }
+.purchase-page .assistant-partial > span, .purchase-page .assistant-partial > strong { display: block; }
+.purchase-page .assistant-partial > span { font-size: .85rem; }
+.purchase-page .assistant-partial > strong { font-size: 2rem; letter-spacing: -.035em; margin-top: .3rem; }
+.purchase-page .assistant-partial > p { font-size: .8rem; line-height: 1.5; margin-bottom: 0; }
+.purchase-page .assistant-plan > button { width: 100%; }
+.purchase-open, .purchase-market-totals { border-top: 1px solid #d6e0d9; margin-block: 1rem; padding-top: .7rem; font-size: .85rem; }
+.purchase-open h3, .purchase-market-totals h3 { font-size: .95rem; margin: .3rem 0 .6rem; }
+.purchase-open ul { padding-left: 1.1rem; line-height: 1.6; overflow-wrap: anywhere; }
+.purchase-open p, .purchase-market-totals p { color: var(--purchase-muted); line-height: 1.6; }
+.purchase-market-totals > div { display: flex; justify-content: space-between; gap: .5rem; padding-block: .55rem; }
+.purchase-market-totals strong { white-space: nowrap; }
+.purchase-plan-limits { margin-top: .7rem; }
+.purchase-plan-limits p { color: var(--purchase-muted); line-height: 1.6; font-size: .85rem; }
+.purchase-browse { display: inline-flex; align-items: center; min-height: 44px; font-size: .85rem; }
+.purchase-notice { padding: .65rem .9rem; border-left: 3px solid var(--purchase-green); background: #e7f0e4; border-radius: .4rem; font-size: .85rem; line-height: 1.5; }
+.purchase-matches { border-top: 1px solid #d6e0d9; margin-top: .7rem; padding-top: .5rem; }
+.purchase-matches h4 { margin: .5rem 0; font-size: 1rem; overflow-wrap: anywhere; }
+.purchase-matches > p { font-size: .85rem; line-height: 1.6; }
+.purchase-match { margin-block: 1rem; }
+.purchase-match > button { width: 100%; margin-top: .5rem; }
+.purchase-match .user-card { box-shadow: none; border-radius: .6rem; }
+.purchase-page #deine-liste, .purchase-page #sparplan { scroll-margin-top: 170px; }
+@media (max-width: 899px) {
+  .purchase-layout { grid-template-columns: 1fr; gap: 1.4rem; }
+  .purchase-page .assistant-plan { position: static; }
+}
+@media (max-width: 480px) {
+  .purchase-page { padding-top: .3rem; }
+  .purchase-heading p { font-size: .94rem; margin-bottom: 1rem; }
+  .purchase-add { grid-template-columns: minmax(0, 1fr) 66px; padding: .8rem; gap: .65rem; }
+  .purchase-add button { grid-column: 1 / -1; }
+  .purchase-storage { font-size: .75rem; margin-bottom: .9rem; }
+  .purchase-item-content { padding-left: 0; }
+  .purchase-page .assistant-item-meta { margin-left: 2.15rem; }
+  .purchase-page .assistant-item { padding: .55rem .65rem; }
+  .purchase-item-controls { gap: .4rem; }
+  .purchase-page .assistant-section-head h2 { font-size: 1.15rem; }
+  .purchase-page .assistant-plan { padding: 1rem; }
+}

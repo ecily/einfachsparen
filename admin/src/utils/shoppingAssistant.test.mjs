@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildPartialPlan, createWish, quoteIssue, sameOffer, nextQuoteExpiry, QUOTE_TTL } from './shoppingAssistant.js'
+import { assignWishOffer, buildPartialPlan, createWish, quoteIssue, sameOffer, nextQuoteExpiry, QUOTE_TTL } from './shoppingAssistant.js'
+import { buildShareSnapshot, buildShoppingListItemFromSnapshot } from './shoppingList.js'
 import { sampleSignals } from './heatmapEvidence.js'
 
 const now = Date.parse('2026-11-02T12:00:00Z')
@@ -46,6 +47,32 @@ test('quotes expire at the exact session deadline and completed items are never 
 test('manual wishes reject blank input and preserve a bounded, editable title without price', () => {
   assert.equal(createWish(' ', 'x'), null); const w = createWish(' A '.repeat(200), 'x')
   assert.equal(w.title.length, 160); assert.equal(w.manual, true); assert.equal(w.priceCurrent, null)
+})
+test('wish quantity survives reload-shaped data, share and adoption without a price promise', () => {
+  const wish = createWish('Milch, 1 Liter', 'quantity-test', 3)
+  const reloaded = JSON.parse(JSON.stringify(wish))
+  const snapshot = buildShareSnapshot([reloaded])
+  const adopted = buildShoppingListItemFromSnapshot(snapshot.items[0])
+  assert.equal(adopted.requestedQuantity, 3)
+  assert.equal(adopted.manual, true)
+  assert.equal(adopted.title, wish.title)
+  assert.equal(buildPartialPlan([adopted], {}, {}, new Set(), now).confirmed.length, 0)
+})
+test('explicit selection replaces only its wish, keeps quantity and cannot bypass quote gates', () => {
+  const wish = createWish('Milch', 'select', 3)
+  const other = createWish('Brot', 'keep')
+  const selected = assignWishOffer([wish, other], wish.id, offer, 3)
+  assert.equal(selected.length, 2)
+  assert.equal(selected[0].id, offer.id)
+  assert.equal(selected[0].requestedQuantity, 3)
+  assert.equal(selected[1], other)
+  assert.equal(buildPartialPlan(selected, {}, {}, new Set(), now).confirmed.length, 0)
+  assert.equal(buildPartialPlan(selected, { one: quote(offer) }, {}, new Set(), now).partialCents, 327)
+  const conditional = { ...offer, customerProgramRequired: true }
+  assert.equal(buildPartialPlan(selected, { one: quote(conditional) }, {}, new Set(), now).partialCents, 0)
+  const duplicates = [wish, offer]
+  assert.equal(assignWishOffer(duplicates, wish.id, offer, 3), duplicates)
+  assert.equal(assignWishOffer(selected, wish.id, offer, 3), selected)
 })
 test('heatmap counts only unique current verifiable advantages in its explicit sample', () => {
   const result = sampleSignals([offer, offer, { ...offer, id: 'two', customerProgramRequired: true }], now, now)

@@ -17,6 +17,7 @@ import { KeywordSearchPage } from './components/search/KeywordSearchPage'
 import { TopDealsPage } from './components/search/TopDealsPage'
 import { SeoOfferLandingPage } from './components/search/SeoOfferLandingPage'
 import { ShoppingAssistant } from './components/shopping/ShoppingAssistant'
+import { assignWishOffer } from './utils/shoppingAssistant'
 import { SharedShoppingListPage } from './components/shopping/SharedShoppingListPage'
 import { FeedbackPage } from './components/feedback/FeedbackPage'
 import { CookiesPage, ImpressumPage, LiabilityPage, PrivacyPage } from './components/legal/LegalPages'
@@ -761,7 +762,7 @@ function App() {
 
         </div>
 
-        {activePage !== 'home' && activePage !== 'product-search' ? <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
+        {!['home', 'product-search', 'shopping-list'].includes(activePage) ? <form className="page-nav__search" onSubmit={handleNavSearchSubmit}>
           <input
             type="search"
             value={navSearchQuery}
@@ -783,7 +784,7 @@ function App() {
         <CookieStorageNotice onNavigate={handleNavigate} />
         {activePage !== 'home' ? <StickyBottomLine onNavigate={handleNavigate} /> : null}
       </>}>
-      {activePage !== 'home' ? <nav className="design-context-nav" aria-label="Suche und Auswahl"><a href={hrefFor('product-search')}>Produktsuche</a><a href={hrefFor('search')}>Stöbern</a><span>Ohne Konto. Deine Liste bleibt bei dir.</span></nav> : null}
+      {!['home', 'shopping-list'].includes(activePage) ? <nav className="design-context-nav" aria-label="Suche und Auswahl"><a href={hrefFor('product-search')}>Produktsuche</a><a href={hrefFor('search')}>Stöbern</a><span>Ohne Konto. Deine Liste bleibt bei dir.</span></nav> : null}
       {activePage === 'home' ? (
         <HomeLanding retailers={retailers} />
       ) : activePage === 'shared-shopping-list' ? (
@@ -855,6 +856,7 @@ function App() {
           shoppingListItems={shoppingListItems}
           onAddWish={(item) => setShoppingListItems(current => [item, ...current])}
           onEditWish={(id, title) => setShoppingListItems(current => current.map(item => item.id === id && item.manual ? { ...item, title } : item))}
+          onAssignWish={(id, offer, quantity) => setShoppingListItems(current => assignWishOffer(current, id, offer, quantity))}
           onRemoveItem={handleRemoveShoppingListItem}
           onClearList={handleClearShoppingList}
           onGoToOffers={() => handleNavigate('product-search')}
